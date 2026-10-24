@@ -46,6 +46,7 @@ dependencies = [
  "clazel-cookie",
  "clazel-ipc",
  "clazel-kernel",
+ "clazel-net",
  "clazel-origin",
  "clazel-renderer",
  "clazel-url",
@@ -161,6 +162,9 @@ name = "clazel-net"
 version = "0.0.0"
 dependencies = [
  "clazel-dns",
+ "clazel-fetch",
+ "clazel-http",
+ "clazel-url",
 ]
 
 [[package]]

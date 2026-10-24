@@ -5,12 +5,15 @@
 //!   per line, in `clazel-renderer`'s format) and print what the renderer and
 //!   the kernel say to each other.
 //! - `clazel demo`: the exit demo of phase-2.md item 2.16 (`demo.rs`).
+//! - `clazel fetch URL`: one `http://` GET, printing the response
+//!   (`fetch.rs`, Phase 3 item 3.8; no renderer involved).
 //!
 //! The renderer is `$CLAZEL_RENDERER`, or `clazel-renderer` next to this
 //! binary, built with `cargo build -p clazel-renderer` if it is not there
 //! (`cargo run -p clazel` builds only this package).
 
 mod demo;
+mod fetch;
 
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
@@ -41,6 +44,9 @@ fn renderer() -> Result<PathBuf, String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
+    if let (Some("fetch"), Some(url), None) = (args.get(1).map(String::as_str), args.get(2), args.get(3)) {
+        return fetch::run(url);
+    }
     let renderer = match renderer() {
         Ok(path) => path,
         Err(e) => {
@@ -60,7 +66,7 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
         _ => {
-            eprintln!("usage: clazel URL SCRIPT | clazel demo");
+            eprintln!("usage: clazel URL SCRIPT | clazel demo | clazel fetch URL");
             ExitCode::from(2)
         }
     }
