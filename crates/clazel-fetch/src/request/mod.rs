@@ -6,4 +6,5 @@
 
 pub mod build;
 pub mod contract;
+pub mod examples;
 pub mod spec;

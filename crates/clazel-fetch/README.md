@@ -24,6 +24,9 @@ in what would be sent is refused. Not built yet: redirects, cookies and
 
 Tier 0, target 2. Every executable function is proven in Verus to meet its
 contract (`src/request/contract.rs`) against the spec
-(`src/request/spec.rs`). There are no mutations, independent transcription
-or conformance tests yet; the network shell's `fetch` tests
+(`src/request/spec.rs`). Concrete URLs, their requests and connections, and
+the interim status codes are evaluated on the spec by Verus
+(`src/request/examples.rs`), and 17 mutations of the spec are each killed by
+one of them with a certificate (`mutations.json`). There is no independent
+transcription or conformance test yet; the network shell's `fetch` tests
 (`clazel-net`) exercise it end to end against local servers.
