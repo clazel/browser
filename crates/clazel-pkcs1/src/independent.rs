@@ -616,24 +616,52 @@ pub proof fn lemma_independent_equals_spec(
     if modulus_in_range(n) && exponent_in_range(e) && digest.len() == hash_len(h) {
         crate::lemmas::lemma_modulus_gt_one(n);
         lemma_modulus_len_is_octet_len(n);
-        let k = octet_len(n);
-        if sig.len() == k {
+        if sig.len() == octet_len(n) {
             lemma_os_to_int_is_os2ip(sig);
-            let s = os2ip(sig);
-            if s < n {
-                lemma_hac_14_79_is_modpow(s, e, n);
-                let m = modpow(s, e, n);
-                crate::lemmas::lemma_modpow_below(s, e, n);
-                crate::lemmas::lemma_octet_len_bounds(n);
-                lemma_p256_is_pow256(k);
-                lemma_int_to_os_is_i2osp(m, k);
-                let eb = int_to_os(m, k);
-                lemma_int_to_os_value(m, k);
-                lemma_parse_iff_format(eb, k, digest_info(h, digest));
-                lemma_format_is_emsa(digest, k, h);
+            if os2ip(sig) < n {
+                lemma_equal_for_representative(n, e, digest, h, sig);
             }
         }
     }
+}
+
+/// [`lemma_independent_equals_spec`] where both texts reach their final
+/// comparison: the key and digest are in range, the signature has the
+/// modulus's length, and its representative is below the modulus. A
+/// helper of its own so that each proof stays within Verus's default
+/// resource limit on Linux CI, as `clazel-base64`'s encoder does.
+proof fn lemma_equal_for_representative(n: nat, e: nat, digest: Seq<u8>, h: HashId, sig: Seq<u8>)
+    requires
+        modulus_in_range(n),
+        exponent_in_range(e),
+        digest.len() == hash_len(h),
+        sig.len() == octet_len(n),
+        os2ip(sig) < n,
+    ensures
+        verify_rfc2313(n, e, digest, h, sig) == rsassa_pkcs1_v1_5_verify(n, e, digest, h, sig),
+{
+    lemma_p2_is_two_to(2047);
+    lemma_p2_is_two_to(8192);
+    lemma_p2_is_two_to(64);
+    lemma_digest_len_is_hash_len(h);
+    assert(exponent_in_range(e) == (3 <= e && e < p2(64))) by {
+        crate::lemmas::lemma_two_to_64();
+    }
+    crate::lemmas::lemma_modulus_gt_one(n);
+    lemma_modulus_len_is_octet_len(n);
+    let k = octet_len(n);
+    lemma_os_to_int_is_os2ip(sig);
+    let s = os2ip(sig);
+    lemma_hac_14_79_is_modpow(s, e, n);
+    let m = modpow(s, e, n);
+    crate::lemmas::lemma_modpow_below(s, e, n);
+    crate::lemmas::lemma_octet_len_bounds(n);
+    lemma_p256_is_pow256(k);
+    lemma_int_to_os_is_i2osp(m, k);
+    let eb = int_to_os(m, k);
+    lemma_int_to_os_value(m, k);
+    lemma_parse_iff_format(eb, k, digest_info(h, digest));
+    lemma_format_is_emsa(digest, k, h);
 }
 
 } // verus!
