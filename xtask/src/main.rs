@@ -8,8 +8,10 @@
 //!   since `base` (default `origin/main`) and their dependents (`changed.rs`).
 //!   Ends in `CHANGED CRATES PASSED`; CI's full run is the gate.
 //! - `cargo xtask verify --part (base|crate <name> --metrics <dir>|assemble
-//!   --metrics <dir>)`: the same checks split into parts for separate CI
-//!   jobs (`parts.rs`); `cargo xtask crates` lists the crates for them.
+//!   --metrics <dir> [--write])`: the same checks split into parts for
+//!   separate CI jobs (`parts.rs`); `cargo xtask crates` lists the crates for
+//!   them. `assemble --write` writes README.md's table from the parts, which
+//!   CI does on main.
 //! - `cargo xtask check`: only the fast static checks (no build, no proofs).
 //! - `cargo xtask mutate`: only the proof mutation tests (also part of
 //!   `verify`).
@@ -22,8 +24,9 @@
 //!   differs from its `SOURCE.md`.
 //! - `cargo xtask report [--write] [--changed [base]]`: run the checks that produce the README
 //!   status table (including each crate's conformance suites, see
-//!   `conformance.rs`), print it, and with `--write` update README.md. `verify`
-//!   fails if README.md's table differs from what it measured.
+//!   `conformance.rs`), print it, and with `--write` update README.md. A
+//!   table that differs from what was measured is reported, not a failure:
+//!   CI rewrites it on main.
 
 mod changed;
 mod conformance;
@@ -767,11 +770,13 @@ fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
         r.step(NAME, outcome);
         return;
     }
+    // A stale table is not a failure: CI rewrites it on main from the
+    // measurements of a fully verified commit (the `table` job in
+    // .github/workflows/ci.yml), so a change need not carry it.
     let outcome = match report::current(&readme) {
         Some(cur) if cur == block => Outcome::Pass(Vec::new()),
-        Some(_) => Outcome::Fail(vec![
-            "README.md's table differs from what this run measured.".into(),
-            "Run `cargo xtask report --write` and commit the result. Measured:".into(),
+        Some(_) => Outcome::Pass(vec![
+            "README.md's table differs from what this run measured; CI updates it on main. Measured:".into(),
             block,
         ]),
         None => Outcome::Fail(vec![format!(
@@ -846,7 +851,10 @@ fn main() -> ExitCode {
             Some(Part::Crate((*name).to_owned(), PathBuf::from(dir)))
         }
         ["verify", "--part", "assemble", "--metrics", dir] => {
-            Some(Part::Assemble(PathBuf::from(dir)))
+            Some(Part::Assemble(PathBuf::from(dir), false))
+        }
+        ["verify", "--part", "assemble", "--metrics", dir, "--write"] => {
+            Some(Part::Assemble(PathBuf::from(dir), true))
         }
         ["crates"] => Some(Part::ListCrates),
         _ => None,
@@ -880,7 +888,7 @@ fn main() -> ExitCode {
         (["report", "--write"], _) => (false, false, true, true),
         _ => {
             eprintln!(
-                "usage: cargo xtask <verify [--changed [base]]|verify --part (base|crate <name> --metrics <dir>|assemble --metrics <dir>)|crates|check|mutate [crate]|testdata|tables|report [--write] [--changed [base]]>"
+                "usage: cargo xtask <verify [--changed [base]]|verify --part (base|crate <name> --metrics <dir>|assemble --metrics <dir> [--write])|crates|check|mutate [crate]|testdata|tables|report [--write] [--changed [base]]>"
             );
             return ExitCode::from(64);
         }
@@ -1004,7 +1012,9 @@ fn main() -> ExitCode {
 enum Part {
     Base,
     Crate(String, PathBuf),
-    Assemble(PathBuf),
+    /// The crate parts' directory, and whether to write README.md's table
+    /// from them (CI does, on main, after every part passed).
+    Assemble(PathBuf, bool),
     /// `cargo xtask crates`: the workspace crates as a JSON array, for CI's
     /// matrix of `crate` parts.
     ListCrates,
@@ -1048,7 +1058,7 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
             }
             format!("CRATE PART PASSED ({name}: Kani, Verus, mutations and conformance)")
         }
-        Part::Assemble(dir) => {
+        Part::Assemble(dir, write) => {
             let res = parts::head().and_then(|commit| {
                 let mut problems = Vec::new();
                 for c in crates {
@@ -1072,9 +1082,9 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
             });
             r.step("read crate parts", from_result(res));
             if !r.failed {
-                readme_table(r, false, None);
+                readme_table(r, write, None);
             }
-            "PARTS ASSEMBLED (README table matches every crate part; the gate is this and every part passing on the same commit)".to_owned()
+            "PARTS ASSEMBLED (every crate part present and from this commit; the gate is this and every part passing on the same commit)".to_owned()
         }
         Part::ListCrates => String::new(),
     };
