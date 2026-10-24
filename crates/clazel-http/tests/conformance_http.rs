@@ -1318,8 +1318,7 @@ fn as_if_response(is_request: bool, data: &[u8]) -> Vec<u8> {
 }
 
 // The reasons llhttp's answer is not ours. Each is one of the choices listed
-// at the top of `src/message/spec.rs`, or the literal reading of an ABNF rule
-// (the ones that are not in that list say so).
+// at the top of `src/message/spec.rs`, or the literal reading of an ABNF rule.
 
 /// `spec.rs`: "§6.3 step 3 (both `Transfer-Encoding` and `Content-Length`)
 /// ought to be handled as an error: `Invalid`, never resolved in favour of
@@ -1327,16 +1326,11 @@ fn as_if_response(is_request: bool, data: &[u8]) -> Vec<u8> {
 const TE_AND_CL: &str = "Transfer-Encoding together with Content-Length is Invalid, never resolved in favour of either (spec.rs, RFC 9112 6.3 step 3 and 11.2); llhttp's `lenient chunked length` flag, which this case turns on, reads one of them";
 /// `spec.rs`: "§6.3 step 4 for codings".
 const CODINGS: &str = "a transfer coding other than a lone `chunked` is Unsupported, not decoded (spec.rs, RFC 9112 6.3 step 4: modelling choice); llhttp decodes `chunked` under another coding, or reads to the end of the connection";
-/// `spec.rs`: "A whitespace-preceded line ... rejected", and the status-line
-/// grammar. Not in the header's list as such: RFC 9112 2.2 allows ignoring
-/// an empty line only "prior to the request-line".
+/// `spec.rs`: "An empty line before the status line is rejected" (RFC 9112
+/// 2.2 allows ignoring one only "prior to the request-line").
 const LEADING_CRLF: &str = "an empty line before a status line is not skipped: RFC 9112 2.2 lets a recipient ignore one only before a request-line, so the status-line grammar starts at the first octet (spec.rs `read_head`); llhttp skips it, here between two pipelined messages";
-/// RFC 9112 4: `status-line = HTTP-version SP status-code SP [ reason-phrase ]`.
-/// Not in `spec.rs`'s header list: the ABNF read literally.
-const NO_SP: &str = "RFC 9112 4: `status-line = HTTP-version SP status-code SP [ reason-phrase ]`: the SP after the status code is not optional (spec.rs `parse_status_line`, the ABNF read literally; not in the header's list of choices); llhttp accepts `HTTP/1.1 301` with no SP";
-/// RFC 9112 2.3: `HTTP-version = HTTP-name "/" DIGIT "." DIGIT`. Not in the
-/// header's list: the ABNF read literally.
-const ANY_VERSION: &str = "RFC 9112 2.3: `HTTP-version = HTTP-name \"/\" DIGIT \".\" DIGIT`, so HTTP/5.6 parses (spec.rs reads any two digits and only HTTP/1.0 is treated differently, 6.1; not in the header's list of choices); llhttp errors on versions other than 0.9, 1.0 and 1.1";
+/// `spec.rs`: "Only HTTP/1.x responses are parsed".
+const VERSION_1X: &str = "only HTTP/1.x is parsed (spec.rs modelling choice: the major version must be 1); llhttp also reads HTTP/0.9, and any version in its lenient mode";
 const NOT_HTTP: &str = "the status line starts with `HTTP/` (RFC 9112 2.3: HTTP-name is the case-sensitive \"HTTP\"); llhttp also reads RTSP/ and ICE/";
 /// `spec.rs`: "The trailer section (§7.1.2) is parsed with the same
 /// field-line grammar and dropped".
@@ -1371,12 +1365,12 @@ const XFAIL: &[(&str, &str)] = &[
     ("response/connection.md:492", LEADING_CRLF),
     ("response/connection.md:586", LEADING_CRLF),
     ("response/invalid.md:151", BARE_LF),
-    ("response/invalid.md:195", ANY_VERSION),
     ("response/invalid.md:304", BARE_LF),
+    ("response/lenient-version.md:4", VERSION_1X),
     ("response/pipelining.md:4", LEADING_CRLF),
     ("response/sample.md:40", NOT_HTTP),
     ("response/sample.md:60", NOT_HTTP),
-    ("response/sample.md:291", NO_SP),
+    ("response/sample.md:645", VERSION_1X),
     ("response/sample.md:695", LEADING_CRLF),
     ("response/transfer-encoding.md:67", CODINGS),
     ("response/transfer-encoding.md:98", CODINGS),
@@ -1522,18 +1516,16 @@ fn diff(a: &Head, b: &Head) -> Option<String> {
 }
 
 // Why the two parsers may differ. Each is a choice of `spec.rs` or the
-// ABNF read literally (the ones not in its header's list say so).
+// ABNF read literally.
 
 /// `spec.rs`: "Lines end only at CRLF."
 const T_BARE_LF: &str = "a bare LF is not a line end (spec.rs: lines end only at CRLF)";
-/// RFC 9112 2.2 ignores an empty line only before a request-line; not in the
-/// header's list.
-const T_LEADING: &str = "an empty line before the status line is not skipped (RFC 9112 2.2 only before a request-line; not in spec.rs's list)";
-/// RFC 9112 4 ABNF; not in the header's list.
-const T_NO_SP: &str = "no SP after the status code (RFC 9112 4 ABNF; not in spec.rs's list)";
-/// RFC 9112 2.3 ABNF; not in the header's list.
+/// `spec.rs`: "An empty line before the status line is rejected".
+const T_LEADING: &str = "an empty line before the status line is not skipped (spec.rs; RFC 9112 2.2 only before a request-line)";
+/// `spec.rs`: "Only HTTP/1.x responses are parsed"; httparse takes only 1.0
+/// and 1.1.
 const T_VERSION: &str =
-    "a version other than 1.0 and 1.1 (RFC 9112 2.3 ABNF: any DIGIT.DIGIT; not in spec.rs's list)";
+    "HTTP/1.x with x other than 0 and 1 (spec.rs parses every 1.x; httparse only 1.0 and 1.1)";
 /// `spec.rs`: "An obs-fold is replaced by a single SP".
 const T_FOLD: &str =
     "an obs-fold is replaced by one SP (spec.rs, RFC 9112 5.2); httparse rejects it";
@@ -1571,27 +1563,10 @@ fn starts_with_empty_line(b: &[u8]) -> bool {
     b.starts_with(b"\r\n") || b.starts_with(b"\n")
 }
 
-/// `HTTP/d.d SP ddd` and nothing more on the first line.
-fn status_line_without_sp(b: &[u8]) -> bool {
-    let l = first_line(b);
-    l.len() == 12
-        && l.starts_with(b"HTTP/")
-        && at(l, 5).is_ascii_digit()
-        && at(l, 6) == b'.'
-        && at(l, 7).is_ascii_digit()
-        && at(l, 8) == b' '
-        && l.get(9..12)
-            .is_some_and(|c| c.iter().all(u8::is_ascii_digit))
-}
-
-/// `HTTP/d.d` first, with digits other than 1.0 and 1.1.
+/// `HTTP/1.d` first, with a minor digit other than 0 and 1.
 fn other_version(b: &[u8]) -> bool {
     let l = first_line(b);
-    l.starts_with(b"HTTP/")
-        && at(l, 5).is_ascii_digit()
-        && at(l, 6) == b'.'
-        && at(l, 7).is_ascii_digit()
-        && !matches!((at(l, 5), at(l, 7)), (b'1', b'0') | (b'1', b'1'))
+    l.starts_with(b"HTTP/1.") && at(l, 7).is_ascii_digit() && !matches!(at(l, 7), b'0' | b'1')
 }
 
 fn has_fold(b: &[u8]) -> bool {
@@ -1636,16 +1611,6 @@ fn fix_bare_lf(b: &[u8]) -> Vec<u8> {
         out.push(c);
     }
     out
-}
-
-/// `HTTP/d.d ddd` with the SP after the code the first line lacked.
-fn add_sp(b: &[u8]) -> Vec<u8> {
-    let at12 = first_line(b).len();
-    cat(&[
-        b.get(..at12).unwrap_or(&[]),
-        b" ",
-        b.get(at12..).unwrap_or(&[]),
-    ])
 }
 
 fn strip_leading_empty_lines(b: &[u8]) -> Vec<u8> {
@@ -1697,8 +1662,6 @@ fn repair_for_ours_rejects(b: &[u8]) -> Option<(&'static str, Vec<u8>)> {
         Some((T_BARE_LF, fix_bare_lf(b)))
     } else if starts_with_empty_line(b) {
         Some((T_LEADING, strip_leading_empty_lines(b)))
-    } else if status_line_without_sp(b) {
-        Some((T_NO_SP, add_sp(b)))
     } else if past_limits(b) {
         Some((T_LIMIT, Vec::new()))
     } else {
@@ -2201,7 +2164,7 @@ fn handcrafted() -> Vec<(&'static str, Vec<u8>, Expect)> {
     add(
         "no SP after the status code",
         b"HTTP/1.1 301\r\nLocation: /\r\n\r\n".to_vec(),
-        Expect::Explained(T_NO_SP),
+        Expect::Agree,
     );
     add(
         "HTTP/1.2",
@@ -2211,11 +2174,16 @@ fn handcrafted() -> Vec<(&'static str, Vec<u8>, Expect)> {
     add(
         "HTTP/2.0 over HTTP/1",
         b"HTTP/2.0 200 OK\r\n\r\n".to_vec(),
-        Expect::Explained(T_VERSION),
+        Expect::Agree,
     );
     add(
         "HTTP/0.9",
         b"HTTP/0.9 200 OK\r\n\r\n".to_vec(),
+        Expect::Agree,
+    );
+    add(
+        "HTTP/1.2",
+        b"HTTP/1.2 200 OK\r\n\r\n".to_vec(),
         Expect::Explained(T_VERSION),
     );
     add(

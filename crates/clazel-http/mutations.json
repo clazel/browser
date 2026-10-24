@@ -1149,17 +1149,31 @@
       }
     },
     {
-      "id": "status-line-major-must-be-1",
+      "id": "status-line-any-major",
       "file": "src/message/spec.rs",
       "module": "message::examples",
-      "find": "&& is_digit(line[5]) &&",
-      "replace": "&& line[5] == 0x31 &&",
+      "find": "        && line[5] == 0x31\n",
+      "replace": "        && true\n",
       "expect": "killed",
-      "reason": "Accepts only major version 1, though HTTP-version is `DIGIT \".\" DIGIT`: `HTTP/2.0` is rejected. Example lemma_framing_50 is false for the mutant.",
+      "reason": "Drops the HTTP/1.x restriction, so `HTTP/2.0 200 OK` parses. lemma_framing_50 says it is Invalid.",
       "certificate": {
         "file": "src/message/termination.rs",
         "lemma": "super::examples::lemma_framing_50()",
-        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x32, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, Seq::<u8>::empty(), Seq::<u8>::empty()))"
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x32, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "status-line-sp-required",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "&& (line.len() == 12 || (line[12] == 0x20",
+      "replace": "&& (line.len() > 12 && (line[12] == 0x20",
+      "expect": "killed",
+      "reason": "Requires the SP after the status code again, so `HTTP/1.1 301` with no reason phrase is rejected. lemma_framing_27 says it parses. (Written as `line.len() > 12 &&` rather than `false ||`: the latter reads `line[12]` past the end of a 12-octet line, which `compute_only` cannot evaluate and never finishes.)",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_27()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x31, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 301, Seq::<u8>::empty(), Seq::<u8>::empty()))"
       }
     },
     {
