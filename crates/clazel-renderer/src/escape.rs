@@ -1,17 +1,20 @@
 //! Sandbox escape attempts (phase-2.md item 2.16): the calls a compromised
 //! renderer would make to reach something other than its socket, written
-//! with `std` only (the crate has no `unsafe`).
+//! with `std` and the two safe attempt functions of `clazel-sys` (the
+//! crate has no `unsafe`).
 //!
 //! [`try_it`] makes one call and says whether it *succeeded*; succeeding is
 //! the escape. The adversary binary runs it after entering the sandbox,
 //! one attempt per process, because on Linux a forbidden call kills the
 //! process (`SIGSYS`, from the seccomp filter) and that is the pass there.
 //!
-//! What is not here: `fork` and `ptrace` of a sibling. `std` has neither
-//! (`Command::spawn` is `posix_spawn` on macOS and `fork`/`clone` plus `exec`
-//! on Linux, so `execve` below exercises process creation, but not a bare
-//! `fork`), and `clazel-sys` wraps neither; adding them is a change to that
-//! crate and needs its own audit (CLAUDE.md rule 1).
+//! `fork` and `ptrace` of a sibling are not in `std` (`Command::spawn` is
+//! `posix_spawn` on macOS and `fork`/`clone` plus `exec` on Linux, so
+//! `execve` below exercises process execution, not a bare `fork`), so those
+//! two go through `clazel_sys::{linux,macos}::attempt_fork` and
+//! `attempt_ptrace_attach`, which return only whether the OS allowed the
+//! call. A `fork` child that is created exits at once; a `ptrace` attach that
+//! succeeds leaves the sibling traced, and the test kills it.
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
@@ -40,11 +43,16 @@ pub enum Attempt {
     UnixListen,
     /// Start another program (`execve`, through `Command`).
     Execve,
+    /// Create a process with a bare `fork` (the child exits at once).
+    Fork,
+    /// Attach to a sibling process, whose pid is the target
+    /// (`ptrace(PTRACE_ATTACH)` on Linux, `ptrace(PT_ATTACHEXC)` on macOS).
+    PtraceAttach,
 }
 
 impl Attempt {
     /// Every attempt.
-    pub const ALL: [Attempt; 9] = [
+    pub const ALL: [Attempt; 11] = [
         Attempt::OpenCookieJar,
         Attempt::OpenFile,
         Attempt::CreateFile,
@@ -54,6 +62,8 @@ impl Attempt {
         Attempt::UnixConnect,
         Attempt::UnixListen,
         Attempt::Execve,
+        Attempt::Fork,
+        Attempt::PtraceAttach,
     ];
 
     /// The name on the command line.
@@ -68,6 +78,8 @@ impl Attempt {
             Attempt::UnixConnect => "unix-connect",
             Attempt::UnixListen => "unix-listen",
             Attempt::Execve => "execve",
+            Attempt::Fork => "fork",
+            Attempt::PtraceAttach => "ptrace-attach",
         }
     }
 
@@ -121,5 +133,41 @@ pub fn try_it(attempt: Attempt, target: &str) -> io::Result<String> {
                 .status()?;
             Ok(format!("ran {target}: {status}"))
         }
+        Attempt::Fork => {
+            fork()?;
+            Ok("a child process was created".to_owned())
+        }
+        Attempt::PtraceAttach => {
+            let pid: i32 = target
+                .parse()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "target is not a pid"))?;
+            ptrace_attach(pid)?;
+            Ok(format!("attached to process {pid}"))
+        }
     }
+}
+
+#[cfg(target_os = "linux")]
+use clazel_sys::linux as os;
+#[cfg(target_os = "macos")]
+use clazel_sys::macos as os;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn fork() -> io::Result<()> {
+    os::attempt_fork().map_err(|e| io::Error::from_raw_os_error(e.0))
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn ptrace_attach(pid: i32) -> io::Result<()> {
+    os::attempt_ptrace_attach(pid).map_err(|e| io::Error::from_raw_os_error(e.0))
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn fork() -> io::Result<()> {
+    Err(io::ErrorKind::Unsupported.into())
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn ptrace_attach(_pid: i32) -> io::Result<()> {
+    Err(io::ErrorKind::Unsupported.into())
 }
