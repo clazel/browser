@@ -1063,6 +1063,1003 @@
         "lemma": "super::examples::lemma_examples_content_length()",
         "witness": "!(parse_content_length(seq![0x34u8, 0x32, 0x2C, 0x2C, 0x34, 0x32]) is None)"
       }
+    },
+    {
+      "id": "line-includes-cr",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "LineRead::Line { line: s.take(i as int),",
+      "replace": "LineRead::Line { line: s.take((i + 1) as int),",
+      "expect": "killed",
+      "reason": "The line keeps its CR: the status line then ends in CR, which is no reason-phrase octet. Example lemma_framing_00 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_00()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false), 200, seq![0x68u8, 0x65, 0x6C, 0x6C, 0x6F], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "crlf-lf-only",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "s[i] == 0x0D && s[i + 1] == 0x0A",
+      "replace": "s[i + 1] == 0x0A",
+      "expect": "killed",
+      "reason": "Any octet before an LF ends a line, so a bare LF terminates a field line and `A: b\\nC: d` becomes two fields. Example lemma_framing_56 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_56()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x41, 0x3A, 0x20, 0x62, 0x0A, 0x43, 0x3A, 0x20, 0x64, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "crlf-cr-only",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "s[i] == 0x0D && s[i + 1] == 0x0A",
+      "replace": "s[i] == 0x0D",
+      "expect": "killed",
+      "reason": "A bare CR ends a line and the octet after it is skipped as if it were the LF, so `A: b\\r-C: d` becomes two field lines instead of one invalid line. Example lemma_framing_55 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_55()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x41, 0x3A, 0x20, 0x62, 0x0D, 0x2D, 0x43, 0x3A, 0x20, 0x64, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "status-line-http-case-insensitive",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "line.take(5) == lit_http_slash()",
+      "replace": "(line.take(5) == lit_http_slash() || line.take(5) == seq![0x68u8, 0x74, 0x74, 0x70, 0x2F])",
+      "expect": "killed",
+      "reason": "Accepts lower-case `http/` although §2.3 makes HTTP-name case-sensitive. Example lemma_framing_28 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_28()",
+        "witness": "!(parse_response(seq![0x68u8, 0x74, 0x74, 0x70, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "status-line-slash-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "line.take(5) == lit_http_slash()",
+      "replace": "line.take(4) == lit_http_slash().take(4)",
+      "expect": "killed",
+      "reason": "Checks `HTTP` but not the `/` after it. Example lemma_framing_48 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_48()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2E, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "status-line-dot-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "&& line[6] == 0x2E",
+      "replace": "&& true",
+      "expect": "killed",
+      "reason": "Does not check the `.` between the version digits: `HTTP/1x1` is accepted. Example lemma_framing_49 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_49()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x78, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "status-line-major-must-be-1",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "&& is_digit(line[5]) &&",
+      "replace": "&& line[5] == 0x31 &&",
+      "expect": "killed",
+      "reason": "Accepts only major version 1, though HTTP-version is `DIGIT \".\" DIGIT`: `HTTP/2.0` is rejected. Example lemma_framing_50 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_50()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x32, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, Seq::<u8>::empty(), Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "status-line-third-digit-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "&& is_digit(line[9]) && is_digit(line[10]) && is_digit(line[11])",
+      "replace": "&& is_digit(line[9]) && is_digit(line[10])",
+      "expect": "killed",
+      "reason": "status-code is two digits and an arbitrary octet: `20x` is accepted. Example lemma_framing_51 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_51()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x78, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "status-line-reason-required",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "&& all_in(line.skip(13), Class::FieldContent)",
+      "replace": "&& line.len() > 13 && all_in(line.skip(13), Class::FieldContent)",
+      "expect": "killed",
+      "reason": "Makes the reason phrase required, although §4 makes it optional and an empty one legal after the SP. Example lemma_framing_26 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_26()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x34, 0x30, 0x34, 0x20, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 404, Seq::<u8>::empty(), Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "status-line-reason-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "&& all_in(line.skip(13), Class::FieldContent)",
+      "replace": "&& true",
+      "expect": "killed",
+      "reason": "Accepts any octet in the reason phrase, a NUL included. Example lemma_framing_53 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_53()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x00, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "status-line-reason-token-only",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "&& all_in(line.skip(13), Class::FieldContent)",
+      "replace": "&& all_in(line.skip(13), Class::Tchar)",
+      "expect": "killed",
+      "reason": "Allows only token octets in the reason phrase, so `No Content` (with SP) is rejected. Example lemma_framing_21 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_21()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x34, 0x20, 0x4E, 0x6F, 0x20, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], false), 204, Seq::<u8>::empty(), Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "status-code-weights",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "digit_value(line[9]) * 100 + digit_value(line[10]) * 10 + digit_value(line[11])",
+      "replace": "digit_value(line[9]) * 10 + digit_value(line[10]) * 10 + digit_value(line[11])",
+      "expect": "killed",
+      "reason": "Wrong place value for the hundreds digit: 204 is read as 24. Example lemma_framing_21 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_21()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x34, 0x20, 0x4E, 0x6F, 0x20, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], false), 204, Seq::<u8>::empty(), Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "status-version-swap",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "major: digit_value(line[5]),\n            minor: digit_value(line[7]),",
+      "replace": "major: digit_value(line[7]),\n            minor: digit_value(line[5]),",
+      "expect": "killed",
+      "reason": "Swaps major and minor: HTTP/1.0 is read as 0.1, so §6.1 no longer applies to it. Example lemma_framing_16 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_16()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "field-name-may-be-empty",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "if n > 0 && line.len() > n && line[n as int] == 0x3A",
+      "replace": "if line.len() > n && line[n as int] == 0x3A",
+      "expect": "killed",
+      "reason": "An empty field name is accepted. Example lemma_framing_54 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_54()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x3A, 0x20, 0x79, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "field-ows-before-colon",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "let n = run_len(Class::Tchar, line);\n    if n > 0 && line.len() > n && line[n as int] == 0x3A {\n        Some(FieldLine { name: line.take(n as int), value: line.skip((n + 1) as int) })",
+      "replace": "let n = run_len(Class::Tchar, line);\n    let after = strip_leading_ows(line.skip(n as int));\n    if n > 0 && after.len() > 0 && after[0] == 0x3A {\n        Some(FieldLine { name: line.take(n as int), value: after.skip(1) })",
+      "expect": "killed",
+      "reason": "Skips whitespace between the field name and the colon, which §5.1 forbids: `X : y` becomes field X. Example lemma_framing_31 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_31()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x58, 0x20, 0x3A, 0x20, 0x79, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "field-value-leading-ows-kept",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "let value = strip_ows(raw.value);",
+      "replace": "let value = strip_trailing_ows(raw.value);",
+      "expect": "killed",
+      "reason": "Strips only trailing whitespace: the OWS after the colon stays in the value. Example lemma_framing_38 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_38()",
+        "witness": "!(super::examples::field_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x41, 0x3A, 0x09, 0x20, 0x78, 0x20, 0x79, 0x20, 0x20, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), seq![0x41u8], seq![0x78u8, 0x20, 0x79]))"
+      }
+    },
+    {
+      "id": "field-value-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "if is_field_value(value) {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "Does not check the value against RFC 9110 §5.5: a NUL is accepted. Example lemma_framing_33 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_33()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x58, 0x3A, 0x20, 0x61, 0x00, 0x62, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "section-fold-after-status-line",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "// header field: rejected (modelling choice).\n                    None => SectionRead::Invalid,",
+      "replace": "// header field: rejected (modelling choice).\n                    None => read_section(rest, acc, Some(FieldLine { name: seq![], value: strip_leading_ows(line) }), count + 1),",
+      "expect": "killed",
+      "reason": "Accepts a whitespace-preceded line right after the status line, as a field with no name. Example lemma_framing_30 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_30()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x20, 0x58, 0x3A, 0x20, 0x79, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "fold-no-space",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "+ seq![0x20u8] + strip_leading_ows(line)",
+      "replace": "+ strip_leading_ows(line)",
+      "expect": "killed",
+      "reason": "An obs-fold is removed instead of replaced by one SP: `b` and `c` run together. Example lemma_framing_37 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_37()",
+        "witness": "!(super::examples::field_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x41, 0x3A, 0x20, 0x62, 0x20, 0x0D, 0x0A, 0x20, 0x09, 0x20, 0x63, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), seq![0x41u8], seq![0x62u8, 0x20, 0x63]))"
+      }
+    },
+    {
+      "id": "fold-keeps-trailing-ows",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "value: strip_trailing_ows(raw.value) + seq![0x20u8]",
+      "replace": "value: raw.value + seq![0x20u8]",
+      "expect": "killed",
+      "reason": "The OWS before the fold is kept as well as the SP: `b  c`. Example lemma_framing_37 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_37()",
+        "witness": "!(super::examples::field_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x41, 0x3A, 0x20, 0x62, 0x20, 0x0D, 0x0A, 0x20, 0x09, 0x20, 0x63, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), seq![0x41u8], seq![0x62u8, 0x20, 0x63]))"
+      }
+    },
+    {
+      "id": "fold-keeps-leading-ows",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "+ seq![0x20u8] + strip_leading_ows(line),",
+      "replace": "+ seq![0x20u8] + line,",
+      "expect": "killed",
+      "reason": "The RWS of the continuation line is kept: `b \\t  c`. Example lemma_framing_37 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_37()",
+        "witness": "!(super::examples::field_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x41, 0x3A, 0x20, 0x62, 0x20, 0x0D, 0x0A, 0x20, 0x09, 0x20, 0x63, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), seq![0x41u8], seq![0x62u8, 0x20, 0x63]))"
+      }
+    },
+    {
+      "id": "section-last-field-dropped",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "match flush_pending(acc, pending) {\n                    Some(fields) => SectionRead::Done",
+      "replace": "match Some(acc) {\n                    Some(fields) => SectionRead::Done",
+      "expect": "killed",
+      "reason": "The field line pending at the empty line is lost: the last field of every head disappears (here Content-Length). Example lemma_framing_00 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_00()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false), 200, seq![0x68u8, 0x65, 0x6C, 0x6C, 0x6F], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "section-max-lines-off-by-one",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "} else if count >= max_lines() {",
+      "replace": "} else if count > max_lines() {",
+      "expect": "killed",
+      "reason": "One line too many allowed in a field section. Example lemma_framing_42 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_42()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A] + super::examples::repseq(seq![0x41u8, 0x3A, 0x20, 0x62, 0x0D, 0x0A], 256) + seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "step1-head-ignored",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "if request_is_head || (100 <= status",
+      "replace": "if (100 <= status",
+      "expect": "killed",
+      "reason": "A response to HEAD is framed by its Content-Length (step 1 dropped). Example lemma_framing_20 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_20()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], true), 200, Seq::<u8>::empty(), Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "step1-304-dropped",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": " || status == 204 || status == 304 {",
+      "replace": " || status == 204 {",
+      "expect": "killed",
+      "reason": "Drops the 304 case of step 1. Example lemma_framing_22 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_22()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x34, 0x20, 0x0D, 0x0A, 0x0D, 0x0A, 0x72, 0x65, 0x73, 0x74], false), 304, Seq::<u8>::empty(), seq![0x72u8, 0x65, 0x73, 0x74]))"
+      }
+    },
+    {
+      "id": "step1-1xx-to-198",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "(100 <= status && status <= 199)",
+      "replace": "(100 <= status && status <= 198)",
+      "expect": "killed",
+      "reason": "The 1xx range ends at 198: 199 is not informational. Example lemma_framing_57 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_57()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x39, 0x39, 0x20, 0x58, 0x0D, 0x0A, 0x0D, 0x0A], false), 199, Seq::<u8>::empty(), Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "step3-prefers-content-length",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "else if te.len() > 0 && cl.len() > 0 {\n        // 3. \"both a Transfer-Encoding and a Content-Length header field\n        // ... ought to be handled as an error.\"\n        BodyLength::Invalid\n    } else if te.len() > 0 {",
+      "replace": "else if te.len() > 0 && cl.len() == 0 {",
+      "expect": "killed",
+      "reason": "Resolves step 3 in favour of Content-Length instead of an error: the Content-Length frames the body. Example lemma_framing_12 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_12()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "step3-prefers-transfer-encoding",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "else if te.len() > 0 && cl.len() > 0 {\n        // 3. \"both a Transfer-Encoding and a Content-Length header field\n        // ... ought to be handled as an error.\"\n        BodyLength::Invalid\n    } else if te.len() > 0 {",
+      "replace": "else if te.len() > 0 && cl.len() > 0 {\n        BodyLength::Chunked\n    } else if te.len() > 0 {",
+      "expect": "killed",
+      "reason": "Resolves step 3 in favour of Transfer-Encoding: the message is read as chunked. Example lemma_framing_12 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_12()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "http10-te-allowed",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "if head.status_line.major == 1 && head.status_line.minor == 0 {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "Treats HTTP/1.0 with Transfer-Encoding as fine (§6.1 dropped). Example lemma_framing_16 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_16()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "http10-too-wide",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "head.status_line.major == 1 && head.status_line.minor == 0 {",
+      "replace": "head.status_line.major == 1 && head.status_line.minor <= 1 {",
+      "expect": "killed",
+      "reason": "Treats HTTP/1.1 like 1.0 for Transfer-Encoding: chunked responses are invalid. Example lemma_framing_05 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_05()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x35, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, seq![0x68u8, 0x65, 0x6C, 0x6C, 0x6F], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "chunked-parameters-allowed",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "if codings.last().parameters.len() > 0 {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "`chunked;q=1` is accepted as chunked. Example lemma_framing_15 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_15()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x3B, 0x71, 0x3D, 0x31, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "chunked-under-codings-allowed",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "} else if codings.len() == 1 {",
+      "replace": "} else if true {",
+      "expect": "killed",
+      "reason": "`gzip, chunked` is decoded as chunked, never mind the gzip. Example lemma_framing_14 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_14()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x2C, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A], false) is Unsupported)"
+      }
+    },
+    {
+      "id": "chunked-name-case-sensitive",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "field_name_eq(codings.last().name, lit_chunked())",
+      "replace": "codings.last().name == lit_chunked()",
+      "expect": "killed",
+      "reason": "Compares the coding name case-sensitively: `Chunked` is not chunked. Example lemma_framing_07 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_07()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x43, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x0D, 0x0A, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x0D, 0x0A, 0x41, 0x0D, 0x0A, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x0D, 0x0A, 0x30, 0x30, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, seq![0x30u8, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "empty-codings-unsupported",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "BodyLength::Invalid\n                } else if field_name_eq(codings.last().name, lit_chunked()) {",
+      "replace": "BodyLength::Unsupported\n                } else if field_name_eq(codings.last().name, lit_chunked()) {",
+      "expect": "killed",
+      "reason": "An empty Transfer-Encoding is `Unsupported` instead of `Invalid`. Example lemma_framing_58 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_58()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "final-coding-not-chunked-reads-to-close",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "// choice).\n                    BodyLength::Unsupported",
+      "replace": "// choice).\n                    BodyLength::Close",
+      "expect": "killed",
+      "reason": "A final coding that is not chunked is framed by close, never marked unsupported. Example lemma_framing_13 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_13()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x0D, 0x0A, 0x0D, 0x0A], false) is Unsupported)"
+      }
+    },
+    {
+      "id": "step5-invalid-content-length-is-close",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "None => BodyLength::Invalid,\n            // 6.",
+      "replace": "None => BodyLength::Close,\n            // 6.",
+      "expect": "killed",
+      "reason": "An invalid Content-Length is ignored: the body is read until close. Example lemma_framing_17 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_17()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x78, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false) is Invalid)"
+      }
+    },
+    {
+      "id": "step6-limit-off-by-one",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "Some(n) => if n > max_body() {",
+      "replace": "Some(n) => if n >= max_body() {",
+      "expect": "killed",
+      "reason": "Content-Length equal to `max_body` is rejected. Example lemma_framing_43 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_43()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x36, 0x37, 0x31, 0x30, 0x38, 0x38, 0x36, 0x34, 0x0D, 0x0A, 0x0D, 0x0A], false) is Incomplete)"
+      }
+    },
+    {
+      "id": "step6-limit-widened",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "Some(n) => if n > max_body() {",
+      "replace": "Some(n) => if n > max_body() + 1 {",
+      "expect": "killed",
+      "reason": "Content-Length of `max_body` + 1 is accepted. Example lemma_framing_44 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_44()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x36, 0x37, 0x31, 0x30, 0x38, 0x38, 0x36, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "step6-length-exact-needs-one-more",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "BodyLength::Length(n) => if rest.len() >= n {",
+      "replace": "BodyLength::Length(n) => if rest.len() > n {",
+      "expect": "killed",
+      "reason": "Waits for one octet more than the Content-Length. Example lemma_framing_00 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_00()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false), 200, seq![0x68u8, 0x65, 0x6C, 0x6C, 0x6F], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "step6-length-one-short",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "BodyLength::Length(n) => if rest.len() >= n {",
+      "replace": "BodyLength::Length(n) => if rest.len() + 1 >= n {",
+      "expect": "killed",
+      "reason": "Accepts a body one octet short. Example lemma_framing_02 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_02()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C], false) is Incomplete)"
+      }
+    },
+    {
+      "id": "step6-extra-octets-kept",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "rest: rest.skip(n as int) }",
+      "replace": "rest: rest }",
+      "expect": "killed",
+      "reason": "The body is not removed from the rest: extra octets after the message include the body. Example lemma_framing_01 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_01()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x58, 0x59, 0x5A], false), 200, seq![0x68u8, 0x65, 0x6C, 0x6C, 0x6F], seq![0x58u8, 0x59, 0x5A]))"
+      }
+    },
+    {
+      "id": "close-body-immediate",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "BodyLength::Close => if rest.len() > max_body() {\n                Parse::Invalid\n            } else {\n                Parse::Incomplete\n            },",
+      "replace": "BodyLength::Close => if rest.len() > max_body() {\n                Parse::Invalid\n            } else {\n                Parse::Done { response: response_of(head, rest), rest: seq![] }\n            },",
+      "expect": "killed",
+      "reason": "A close-delimited body is finished at once, before the server closes the connection. Example lemma_framing_24 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_24()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x62, 0x63], false) is Incomplete)"
+      }
+    },
+    {
+      "id": "close-accepts-truncated-length",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "                BodyLength::Close => Parse::Done { response: response_of(head, rest), rest: seq![] },\n                _ => Parse::Invalid,",
+      "replace": "                BodyLength::Close => Parse::Done { response: response_of(head, rest), rest: seq![] },\n                BodyLength::Length(_) => Parse::Done { response: response_of(head, rest), rest: seq![] },\n                _ => Parse::Invalid,",
+      "expect": "killed",
+      "reason": "A connection closed before Content-Length octets arrived yields the short body instead of an error. Example lemma_framing_03 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_03()",
+        "witness": "!(parse_response_at_close(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C], false) is Invalid)"
+      }
+    },
+    {
+      "id": "close-accepts-truncated-chunked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "                BodyLength::Close => Parse::Done { response: response_of(head, rest), rest: seq![] },\n                _ => Parse::Invalid,",
+      "replace": "                BodyLength::Close => Parse::Done { response: response_of(head, rest), rest: seq![] },\n                BodyLength::Chunked => Parse::Done { response: response_of(head, rest), rest: seq![] },\n                _ => Parse::Invalid,",
+      "expect": "killed",
+      "reason": "A connection closed inside a chunked body yields the raw octets as the response. Example lemma_framing_59 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_59()",
+        "witness": "!(parse_response_at_close(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x31, 0x0D, 0x0A, 0x61, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "close-unfinished-head-incomplete",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "                _ => Parse::Invalid,\n            },\n            _ => Parse::Invalid,\n        },\n        decided",
+      "replace": "                _ => Parse::Invalid,\n            },\n            _ => Parse::Incomplete,\n        },\n        decided",
+      "expect": "killed",
+      "reason": "A connection closed inside the head is reported as incomplete instead of an error. Example lemma_framing_35 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_35()",
+        "witness": "!(parse_response_at_close(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0A, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "head-incomplete-section-invalid",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "SectionRead::Incomplete => HeadRead::Incomplete,",
+      "replace": "SectionRead::Incomplete => HeadRead::Invalid,",
+      "expect": "killed",
+      "reason": "An unfinished field section is an error instead of waiting for more bytes. Example lemma_framing_04 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_04()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A], false) is Incomplete)"
+      }
+    },
+    {
+      "id": "hexdig-upper-g",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "(0x41 <= c && c <= 0x46) || (0x61 <= c && c <= 0x66)\n}\n\n/// The value of a hex digit.\npub open spec fn hexdig_value(c: u8) -> nat {\n    if is_digit(c) {\n        (c - 0x30) as nat\n    } else if 0x41 <= c && c <= 0x46 {",
+      "replace": "(0x41 <= c && c <= 0x47) || (0x61 <= c && c <= 0x66)\n}\n\n/// The value of a hex digit.\npub open spec fn hexdig_value(c: u8) -> nat {\n    if is_digit(c) {\n        (c - 0x30) as nat\n    } else if 0x41 <= c && c <= 0x47 {",
+      "expect": "killed",
+      "reason": "`G` is a hex digit (in both is_hexdig and hexdig_value, as a consistent typo would be). Example lemma_framing_60 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_60()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x47, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "hexdig-lower-g",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "(0x41 <= c && c <= 0x46) || (0x61 <= c && c <= 0x66)",
+      "replace": "(0x41 <= c && c <= 0x46) || (0x61 <= c && c <= 0x67)",
+      "expect": "killed",
+      "reason": "`g` is a hex digit. Example lemma_framing_61 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_61()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x67, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "hexdig-lower-dropped",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "is_digit(c) || (0x41 <= c && c <= 0x46) || (0x61 <= c && c <= 0x66)",
+      "replace": "is_digit(c) || (0x41 <= c && c <= 0x46)",
+      "expect": "killed",
+      "reason": "Lower-case hex digits are rejected. Example lemma_framing_07 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_07()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x43, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x0D, 0x0A, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x0D, 0x0A, 0x41, 0x0D, 0x0A, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x0D, 0x0A, 0x30, 0x30, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, seq![0x30u8, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "hexdig-upper-value",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "(c - 0x41 + 10) as nat",
+      "replace": "(c - 0x41 + 9) as nat",
+      "expect": "killed",
+      "reason": "`A` is worth 9. Example lemma_framing_07 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_07()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x43, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x0D, 0x0A, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x0D, 0x0A, 0x41, 0x0D, 0x0A, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x0D, 0x0A, 0x30, 0x30, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, seq![0x30u8, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "hex-value-base-10",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "hex_value(s.drop_last()) * 16 + hexdig_value(s.last())",
+      "replace": "hex_value(s.drop_last()) * 10 + hexdig_value(s.last())",
+      "expect": "killed",
+      "reason": "The numeral is read in base 10: `10` is 10, not 16. Example lemma_framing_64 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_64()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x31, 0x30, 0x0D, 0x0A, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, seq![0x30u8, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "chunk-data-crlf-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "} else if crlf_at(rest, size as int) {",
+      "replace": "} else if true {",
+      "expect": "killed",
+      "reason": "The CRLF after chunk-data is not checked. Example lemma_framing_65 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_65()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x32, 0x0D, 0x0A, 0x61, 0x62, 0x58, 0x58, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "chunk-data-wait-one-short",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "} else if rest.len() < size + 2 {",
+      "replace": "} else if rest.len() < size {",
+      "expect": "killed",
+      "reason": "Waits for the chunk-data but not its CRLF, so complete data followed by no CRLF yet is invalid. Example lemma_framing_66 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_66()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x35, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false) is Incomplete)"
+      }
+    },
+    {
+      "id": "chunk-trailer-not-consumed",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "SectionRead::Done { fields: _, rest: after } => BodyRead::Done { body: body, rest: after },",
+      "replace": "SectionRead::Done { fields: _, rest: after } => BodyRead::Done { body: body, rest: rest },",
+      "expect": "killed",
+      "reason": "The trailer section is left in the octets after the message. Example lemma_framing_06 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_06()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x34, 0x3B, 0x61, 0x3D, 0x62, 0x3B, 0x63, 0x0D, 0x0A, 0x77, 0x69, 0x6B, 0x69, 0x0D, 0x0A, 0x35, 0x20, 0x3B, 0x20, 0x78, 0x20, 0x3D, 0x20, 0x22, 0x79, 0x22, 0x0D, 0x0A, 0x70, 0x65, 0x64, 0x69, 0x61, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x58, 0x3A, 0x20, 0x79, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, seq![0x77u8, 0x69, 0x6B, 0x69, 0x70, 0x65, 0x64, 0x69, 0x61], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "chunk-ext-bws-before-semicolon-dropped",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "let a = strip_leading_ows(s);",
+      "replace": "let a = s;",
+      "expect": "killed",
+      "reason": "No BWS is allowed before the `;` of a chunk extension. Example lemma_framing_06 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_06()",
+        "witness": "!(super::examples::done_is(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x34, 0x3B, 0x61, 0x3D, 0x62, 0x3B, 0x63, 0x0D, 0x0A, 0x77, 0x69, 0x6B, 0x69, 0x0D, 0x0A, 0x35, 0x20, 0x3B, 0x20, 0x78, 0x20, 0x3D, 0x20, 0x22, 0x79, 0x22, 0x0D, 0x0A, 0x70, 0x65, 0x64, 0x69, 0x61, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x58, 0x3A, 0x20, 0x79, 0x0D, 0x0A, 0x0D, 0x0A], false), 200, seq![0x77u8, 0x69, 0x6B, 0x69, 0x70, 0x65, 0x64, 0x69, 0x61], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "chunk-ext-name-optional",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "let n = run_len(Class::Tchar, b);\n            if n == 0 {",
+      "replace": "let n = run_len(Class::Tchar, b);\n            if false {",
+      "expect": "killed",
+      "reason": "An extension with no name (`1;`) is accepted. Example lemma_framing_10 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_10()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x31, 0x3B, 0x0D, 0x0A, 0x61, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "chunk-size-optional",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "if n > 0 && is_chunk_ext(line.skip(n as int)) {",
+      "replace": "if is_chunk_ext(line.skip(n as int)) {",
+      "expect": "killed",
+      "reason": "A chunk size line with no digits (just an extension) is accepted, as size 0. Example lemma_framing_67 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_67()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x3B, 0x61, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "chunk-limit-off-by-one",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "} else if body.len() + size > max_body() {",
+      "replace": "} else if body.len() + size >= max_body() {",
+      "expect": "killed",
+      "reason": "A chunk reaching `max_body` exactly is rejected. Example lemma_framing_45 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_45()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x34, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x0D, 0x0A], false) is Incomplete)"
+      }
+    },
+    {
+      "id": "chunk-limit-dropped",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "} else if body.len() + size > max_body() {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "reason": "No limit on chunk sizes. Example lemma_framing_46 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_46()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x34, 0x30, 0x30, 0x30, 0x30, 0x30, 0x31, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "chunk-limit-ignores-earlier-chunks",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "} else if body.len() + size > max_body() {",
+      "replace": "} else if size > max_body() {",
+      "expect": "killed",
+      "reason": "The limit does not count the content decoded so far. Example lemma_framing_47 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_47()",
+        "witness": "!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x31, 0x0D, 0x0A, 0x61, 0x0D, 0x0A, 0x34, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x0D, 0x0A], false) is Invalid)"
+      }
+    },
+    {
+      "id": "serialize-sp-after-method",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "r.method + seq![0x20u8] + r.target",
+      "replace": "r.method + seq![0x09u8] + r.target",
+      "expect": "killed",
+      "reason": "HTAB instead of SP after the method. Example lemma_framing_39 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_39()",
+        "witness": "!(serialize_request(Request { method: seq![0x47u8, 0x45, 0x54], target: seq![0x2Fu8, 0x61, 0x3F, 0x62], fields: seq![FieldLine { name: seq![0x48u8, 0x6F, 0x73, 0x74], value: seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D] }, FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E], value: seq![0x63u8, 0x6C, 0x6F, 0x73, 0x65] }] }) == seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x62, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])"
+      }
+    },
+    {
+      "id": "serialize-sp-after-target",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "r.target + seq![0x20u8] + lit_http_1_1()",
+      "replace": "r.target + lit_http_1_1()",
+      "expect": "killed",
+      "reason": "No SP between the target and the version. Example lemma_framing_39 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_39()",
+        "witness": "!(serialize_request(Request { method: seq![0x47u8, 0x45, 0x54], target: seq![0x2Fu8, 0x61, 0x3F, 0x62], fields: seq![FieldLine { name: seq![0x48u8, 0x6F, 0x73, 0x74], value: seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D] }, FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E], value: seq![0x63u8, 0x6C, 0x6F, 0x73, 0x65] }] }) == seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x62, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])"
+      }
+    },
+    {
+      "id": "serialize-colon-without-sp",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "seq![0x3Au8, 0x20u8]",
+      "replace": "seq![0x3Au8]",
+      "expect": "killed",
+      "reason": "No SP after the colon of a field line. Example lemma_framing_39 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_39()",
+        "witness": "!(serialize_request(Request { method: seq![0x47u8, 0x45, 0x54], target: seq![0x2Fu8, 0x61, 0x3F, 0x62], fields: seq![FieldLine { name: seq![0x48u8, 0x6F, 0x73, 0x74], value: seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D] }, FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E], value: seq![0x63u8, 0x6C, 0x6F, 0x73, 0x65] }] }) == seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x62, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])"
+      }
+    },
+    {
+      "id": "serialize-final-crlf-dropped",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "+ serialize_fields(r.fields) + lit_crlf()\n}",
+      "replace": "+ serialize_fields(r.fields)\n}",
+      "expect": "killed",
+      "reason": "The empty line that ends the header section is missing. Example lemma_framing_39 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_39()",
+        "witness": "!(serialize_request(Request { method: seq![0x47u8, 0x45, 0x54], target: seq![0x2Fu8, 0x61, 0x3F, 0x62], fields: seq![FieldLine { name: seq![0x48u8, 0x6F, 0x73, 0x74], value: seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D] }, FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E], value: seq![0x63u8, 0x6C, 0x6F, 0x73, 0x65] }] }) == seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x62, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])"
+      }
+    },
+    {
+      "id": "request-target-may-be-empty",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "t.len() > 0 && all_vchar(t)",
+      "replace": "all_vchar(t)",
+      "expect": "killed",
+      "reason": "An empty request target is valid. Example lemma_framing_68 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_68()",
+        "witness": "!(!is_request_target(Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "request-target-allows-sp",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "s.len() == 0 || (is_vchar(s[0]) && all_vchar(s.drop_first()))",
+      "replace": "s.len() == 0 || (s[0] >= 0x20 && s[0] <= 0x7E && all_vchar(s.drop_first()))",
+      "expect": "killed",
+      "reason": "SP counts as a visible character in a target. Example lemma_framing_40 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_40()",
+        "witness": "!(!is_request_target(seq![0x2Fu8, 0x61, 0x20, 0x62]))"
+      }
+    },
+    {
+      "id": "request-method-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "is_token(r.method) && is_request_target",
+      "replace": "is_request_target",
+      "expect": "killed",
+      "reason": "The method is not checked to be a token. Example lemma_framing_69 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_69()",
+        "witness": "!(!is_valid_request(Request { method: seq![0x47u8, 0x20, 0x54], target: seq![0x2Fu8], fields: seq![] }))"
+      }
+    },
+    {
+      "id": "request-field-value-unchecked",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "is_field_name(fields[0].name) && is_field_value(fields[0].value)",
+      "replace": "is_field_name(fields[0].name)",
+      "expect": "killed",
+      "reason": "A field value is not checked: CRLF in it injects a header. Example lemma_framing_70 is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_70()",
+        "witness": "!(!is_valid_request(Request { method: seq![0x47u8, 0x45, 0x54], target: seq![0x2Fu8], fields: seq![FieldLine { name: seq![0x41u8], value: seq![0x62u8, 0x0D, 0x0A, 0x43, 0x3A, 0x20, 0x64] }] }))"
+      }
+    },
+    {
+      "id": "line-max-off-by-one",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "Some(i) => if i <= max_line() {",
+      "replace": "Some(i) => if i < max_line() {",
+      "expect": "survives",
+      "reason": "A line of exactly `max_line` octets is rejected. Not covered: `max_line` is 8192 and Verus 0.2026.10.04 `compute_only` exceeds its maximum recursion depth evaluating `find_crlf_from` over such a line, so no example can reach the boundary. Closed by a Kani harness or a proven lemma about `read_line` (item 3.3 or later)."
+    },
+    {
+      "id": "line-max-widened",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "Some(i) => if i <= max_line() {",
+      "replace": "Some(i) => if i <= max_line() + 1 {",
+      "expect": "survives",
+      "reason": "A line of `max_line` + 1 octets is accepted. Not covered, for the same reason as line-max-off-by-one."
+    },
+    {
+      "id": "line-incomplete-limit-early",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "None => if s.len() > max_line() + 1 {",
+      "replace": "None => if s.len() > max_line() {",
+      "expect": "survives",
+      "reason": "A partial line is called too long one octet early. Not covered, for the same reason as line-max-off-by-one."
+    },
+    {
+      "id": "line-incomplete-limit-late",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "None => if s.len() > max_line() + 1 {",
+      "replace": "None => if s.len() > max_line() + 2 {",
+      "expect": "survives",
+      "reason": "A partial line is called too long one octet late. Not covered, for the same reason as line-max-off-by-one."
+    },
+    {
+      "id": "close-limit-dropped",
+      "file": "src/message/spec.rs",
+      "module": "message::examples",
+      "find": "BodyLength::Close => if rest.len() > max_body() {\n                Parse::Invalid\n            } else {",
+      "replace": "BodyLength::Close => if false {\n                Parse::Invalid\n            } else {",
+      "expect": "survives",
+      "reason": "A close-delimited body is never too big while open. Not covered: an example needs more than `max_body` (64 MiB) octets, which `compute_only` cannot evaluate. Closed by a lemma over `parse_response` with a symbolic body (item 3.3 or later)."
     }
   ]
 }
