@@ -1065,7 +1065,7 @@ half does not wait on TLS.
 |------|-------|
 | 3.0 TLS decision | done (2026-10-23): option B, our own TLS 1.3 client over libcrux, grounds and accepted costs recorded above |
 | 3.1 HTTP field syntax | built: 146 verified, independent transcription (Fetch), 76 certified mutations, 10 unit tests; tier stays 0 until 3.2 and 3.3 |
-| 3.2 HTTP/1.1 message framing | not started |
+| 3.2 HTTP/1.1 message framing | response side and request serializer built (2026-10-24): spec, contracts, 41 examples evaluated by Verus, implementation proven equal to the spec (`clazel-http` 238 verified, 0 errors). Not yet: the monotonicity and no-early-decision theorems stated in `message/contract.rs`, an incremental parser (`ResponseParser` re-parses everything on each feed, quadratic in the response size), the request parser and round-trip lemma, the independent transcription; mutations in progress. Tier stays 0 |
 | 3.3 HTTP conformance | not started |
 | 3.4 DNS message format | built (see As built); tier 0, target 2, pending CI full verification |
 | 3.5a DER | built (see As built); tier 0, target 2, pending CI full verification |
@@ -1075,9 +1075,9 @@ half does not wait on TLS.
 | 3.5e Key schedule and handshake state machine | not started (after 3.5d) |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |
-| 3.6 Client state machine | not started |
+| 3.6 Client state machine | first part built: `clazel-fetch` `request` module (http GET, Host, Connection: close, interim responses), proven to its contracts; tier 0. Not yet: the transducer, redirects, cookies, `theorem_wire_cookies`, independent transcription, mutations |
 | 3.7 Kernel integration | not started |
-| 3.8 Network shell and `curl` clone | not started |
+| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch`) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Not yet: TLS, the http-state and WPT server tests, the hostile-server tests, the line count in the README table. The CNAME target is converted to a dotted name in the shell (accepted only if `clazel-dns`'s proven encoder maps it back), which should move into `clazel-dns` |
 | 3.9 Status and README | not started |
 
 ## Risks
