@@ -15,6 +15,7 @@ mod cbor_appendix_a;
 mod http_state_dates;
 mod http_state_parser;
 mod js;
+mod llhttp;
 mod wpt_base64;
 mod wpt_cookies;
 mod wpt_encoding;
@@ -52,6 +53,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         http_state_parser::convert,
         http_state_parser::FILES,
     ),
+    ("llhttp", llhttp::convert, llhttp::FILES),
     ("wpt-base64", wpt_base64::convert, wpt_base64::FILES),
     ("wpt-cookies", wpt_cookies::convert, wpt_cookies::FILES),
     ("wpt-encoding", wpt_encoding::convert, wpt_encoding::FILES),

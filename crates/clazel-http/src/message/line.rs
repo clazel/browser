@@ -118,7 +118,7 @@ pub fn parse_status_line_exec(line: &[u8]) -> (out: Option<StatusLineBuf>)
             None => parse_status_line(line@) is None,
         },
 {
-    if line.len() < 13 {
+    if line.len() < 12 {
         return None;
     }
     let b = |i: usize| -> (c: u8)
@@ -151,10 +151,12 @@ pub fn parse_status_line_exec(line: &[u8]) -> (out: Option<StatusLineBuf>)
             assert(line@.take(5)[4] == line@[4]);
         }
     }
-    let reason = sub(line, 13);
-    if name_ok && digit(b(5)) && b(6) == 0x2E && digit(b(7)) && b(8) == 0x20 && digit(b(9)) && digit(b(10))
-        && digit(b(11)) && b(12) == 0x20 && crate::field::string::all_in_exec(reason, &crate::field::spec::Class::FieldContent)
-    {
+    let head_ok = name_ok && digit(b(5)) && b(6) == 0x2E && digit(b(7)) && b(5) == 0x31 && b(8) == 0x20
+        && digit(b(9)) && digit(b(10)) && digit(b(11));
+    // The line ends after the status code, or SP and a reason phrase follow.
+    let tail_ok = line.len() == 12 || (b(12) == 0x20
+        && crate::field::string::all_in_exec(sub(line, 13), &crate::field::spec::Class::FieldContent));
+    if head_ok && tail_ok {
         // None of these saturates: each octet is a digit, so at least 0x30,
         // and the status is at most 999.
         let major = b(5).saturating_sub(0x30);
@@ -162,7 +164,13 @@ pub fn parse_status_line_exec(line: &[u8]) -> (out: Option<StatusLineBuf>)
         let status = (b(9).saturating_sub(0x30) as u16).saturating_mul(100)
             .saturating_add((b(10).saturating_sub(0x30) as u16).saturating_mul(10))
             .saturating_add(b(11).saturating_sub(0x30) as u16);
-        Some(StatusLineBuf { major, minor, status, reason: copy(reason) })
+        let reason = if line.len() == 12 {
+            Vec::new()
+        } else {
+            copy(sub(line, 13))
+        };
+        assert(reason@ =~= (if line@.len() == 12 { seq![] } else { line@.skip(13) }));
+        Some(StatusLineBuf { major, minor, status, reason })
     } else {
         None
     }
