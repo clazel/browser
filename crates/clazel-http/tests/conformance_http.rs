@@ -208,8 +208,11 @@ fn pieces_agree(input: &[u8], head: bool, step: usize) -> Result<(), String> {
     }
 }
 
+/// Pieces of 1, 3 and 16 octets (the incremental parser parses everything
+/// received again for each piece, so Miri runs only the largest).
 fn pieces_all(input: &[u8], head: bool) -> Result<(), String> {
-    for step in [1usize, 3, 16] {
+    let steps: &[usize] = if cfg!(miri) { &[16] } else { &[1, 3, 16] };
+    for &step in steps {
         pieces_agree(input, head, step)?;
     }
     Ok(())
