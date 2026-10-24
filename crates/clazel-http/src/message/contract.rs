@@ -48,14 +48,18 @@ pub open spec fn close_ensures(received: Seq<u8>, request_is_head: bool, output:
     output == parse_response_at_close(received, request_is_head)
 }
 
-/// Precondition of `serialize_request(&RequestBuf) -> Vec<u8>`.
-pub open spec fn serialize_request_requires(r: Request) -> bool {
-    is_valid_request(r)
-}
-
-/// Contract for `serialize_request`.
-pub open spec fn serialize_request_ensures(r: Request, output: Seq<u8>) -> bool {
-    output == serialize_request(r)
+/// Contract for `serialize_request(&RequestBuf) -> Option<Vec<u8>>`: the
+/// bytes of a valid request, and `None` for any other. The check is the
+/// function's, not a precondition, because its callers include unverified
+/// code (the network shell), which cannot be held to a `requires`; so no
+/// caller can put a CR, LF or other control into the request line or a
+/// field.
+pub open spec fn serialize_request_ensures(r: Request, output: Option<Seq<u8>>) -> bool {
+    output == if is_valid_request(r) {
+        Some(serialize_request(r))
+    } else {
+        None
+    }
 }
 
 // ===========================================================================

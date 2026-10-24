@@ -41,7 +41,7 @@ fn take(s: &[u8], n: usize) -> (r: Vec<u8>)
 }
 
 /// `parse_parameter_value` (§5.6.6): the value and what follows it.
-fn parse_parameter_value_exec(input: &[u8]) -> (out: Option<(Vec<u8>, usize)>)
+pub fn parse_parameter_value_exec(input: &[u8]) -> (out: Option<(Vec<u8>, usize)>)
     ensures
         match out {
             Some((v, k)) => k <= input.len() && parse_parameter_value(input@) == Some((v@, input@.skip(k as int))),
