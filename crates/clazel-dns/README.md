@@ -41,8 +41,7 @@ AAAA and CNAME, and the sockets (the network shell, phase-3.md item 3.8).
 
 ## Verification
 
-Currently tier 0, target tier 2; promotion requires CI's full verification
-on a pull request. The executable code has Verus proofs against a
+Tier 2. The executable code has Verus proofs against a
 specification transcribed from the standards. The current numbers are in the
 [status table](../../README.md#verification-status).
 

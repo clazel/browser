@@ -630,8 +630,8 @@ saying how, since no official suite exists), including a truncated one, a
 NXDOMAIN, a CNAME chain and an AAAA answer; and the RFC 1035 §4.1.4
 compression example. **Raise `clazel-dns` to tier 2.**
 
-**As built:** `crates/clazel-dns`, tier 0, target tier 2; promotion waits for
-CI's full verification on a pull request. API (exec, each proven equal
+**As built:** `crates/clazel-dns`, tier 2 (raised 2026-10-24 after CI's
+full verification passed). API (exec, each proven equal
 to its spec): `decode_message`, `decode_udp`, `encode_query(id, dotted_name,
 qtype) -> Option<Vec<u8>>` (names are dotted ASCII; `None` if not a name),
 `answer_addresses(id, dotted_name, qtype, &Msg) -> Option<Resolved>` with
@@ -1067,7 +1067,7 @@ half does not wait on TLS.
 | 3.1 HTTP field syntax | built: 146 verified, independent transcription (Fetch), 76 certified mutations, 10 unit tests; tier stays 0 until 3.2 and 3.3 |
 | 3.2 HTTP/1.1 message framing | response side and request serializer built (2026-10-24): spec, contracts, 41 examples evaluated by Verus, implementation proven equal to the spec (`clazel-http` 238 verified, 0 errors). Not yet: the monotonicity and no-early-decision theorems stated in `message/contract.rs`, an incremental parser (`ResponseParser` re-parses everything on each feed, quadratic in the response size), the request parser and round-trip lemma, the independent transcription; mutations in progress. Tier stays 0 |
 | 3.3 HTTP conformance | not started |
-| 3.4 DNS message format | built (see As built); tier 0, target 2, pending CI full verification |
+| 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
 | 3.5b X.509 and path validation | not started (after 3.5a) |
 | 3.5c RSA PKCS#1 v1.5 | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
