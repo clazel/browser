@@ -695,7 +695,7 @@ a differential against RustCrypto's `der` crate (a `test` row, counting its
 dependencies) on random and mutated TLVs, and the DER cases of the
 `x509-limbo` corpus (3.5b vendors it) that are pure encoding errors.
 
-**As built:** `crates/clazel-der`, tier 0, target tier 2; promotion waits
+**As built** (on the `phase3/tls` branch, not on `main`): `crates/clazel-der`, tier 0, target tier 2; promotion waits
 for CI's full verification on a pull request. Cursor-based DER readers and
 encoders cover the types listed above, with contracts, round-trip,
 canonicity, no-over-read and bounded-reservation lemmas. The independent
@@ -762,7 +762,7 @@ Apache-2.0) and FIPS 186-3 `SigVer15_186-3.rsp`, vendored with converters;
 a differential against the `rsa` crate (RustCrypto) as a `test` row;
 a Kani harness on the limb arithmetic for small widths.
 
-**As built:** `crates/clazel-pkcs1`, tier 0, target tier 2; promotion waits
+**As built** (on the `phase3/tls` branch, not on `main`): `crates/clazel-pkcs1`, tier 0, target tier 2; promotion waits
 for CI's full verification on a pull request. `src/spec.rs` transcribes RFC 8017
 §4.1, §4.2, §5.2.2, §8.2.2 (the steps are `rsassa_pkcs1_v1_5_verify_steps`,
 under the domain restrictions of `rsassa_pkcs1_v1_5_verify`) and §9.2 with
@@ -858,7 +858,7 @@ what the prose parsers accept. Conformance: RFC 8448's handshake traces
 differential against rustls's message codec as a `test` row on random
 and mutated records.
 
-**As built:** `crates/clazel-tls`, `tier = 0`, `target-tier = 2`; the README
+**As built** (on the `phase3/tls` branch, not on `main`): `crates/clazel-tls`, `tier = 0`, `target-tier = 2`; the README
 says the key schedule, the state machine and the cryptography are not here.
 `spec.rs` is one file (the section 3 reader and writer, section 6 alerts
 and the `ErrKind` to alert mapping, section 5 records and the reassembler,
@@ -1068,10 +1068,10 @@ half does not wait on TLS.
 | 3.2 HTTP/1.1 message framing | response side and request serializer built (2026-10-24): spec, contracts, 41 examples evaluated by Verus, implementation proven equal to the spec (`clazel-http` 238 verified, 0 errors). Not yet: the monotonicity and no-early-decision theorems stated in `message/contract.rs`, an incremental parser (`ResponseParser` re-parses everything on each feed, quadratic in the response size), the request parser and round-trip lemma, the independent transcription; mutations in progress. Tier stays 0 |
 | 3.3 HTTP conformance | not started |
 | 3.4 DNS message format | built (see As built); tier 0, target 2, pending CI full verification |
-| 3.5a DER | built (see As built); tier 0, target 2, pending CI full verification |
+| 3.5a DER | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
 | 3.5b X.509 and path validation | not started (after 3.5a) |
-| 3.5c RSA PKCS#1 v1.5 | built (see As built); tier 0, target 2, pending CI full verification |
-| 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
+| 3.5c RSA PKCS#1 v1.5 | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
+| 3.5d TLS record and handshake formats | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
 | 3.5e Key schedule and handshake state machine | not started (after 3.5d) |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |

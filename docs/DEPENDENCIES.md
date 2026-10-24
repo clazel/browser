@@ -85,38 +85,8 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | log | 0.4.34 | test | The `log` facade, required by `cookie_store`. No dependencies. |
 | libc | 0.2.190 | shipped | Rust bindings to the C library: struct layouts and constants (`sock_filter`, `sock_fprog`, `CLONE_NEW*`, `SECCOMP_SET_MODE_FILTER`, `SYS_seccomp`, `SYS_landlock_*`, `PR_SET_NO_NEW_PRIVS`) and the declarations of `prctl`, `syscall` and `unshare`, for `clazel-sys` only (CLAUDE.md rules 1 and 8). Reached only on Linux (`[target.'cfg(target_os = "linux")'.dependencies]`), with default features off, so it has no dependencies; macOS needs none. Getting these layouts wrong by hand is undefined behaviour, which is why it is a dependency rather than our own declarations. It is also reached by `cpufeatures` (class `test`, below the dev-only edge of `sha2` in `clazel-pkcs1`), on every target; that edge compiles into test binaries only. |
 | minicbor | 2.3.1 | test | A small CBOR codec (no_std): the reference engine in `clazel-ipc`'s differential test (`tests/conformance_cbor.rs`). Chosen over `ciborium` (which pulls `serde`, `half` and two more). Used without default features (only `alloc`), so it has no dependencies. It accepts non-shortest arguments, which the test accounts for. |
-| rustls | 0.23.46 | test | The TLS library used by Firefox-adjacent projects and many Rust programs: the reference engine in `clazel-tls`'s differential test (`tests/conformance_tls_formats.rs`). Used without default features, so no cryptography provider is built and nothing but the message codec of `rustls::internal::msgs` (read one handshake message, alert or change_cipher_spec; fragment a payload into records; the number enums) is used. `cargo tree` shows six dependencies under it: `once_cell`, `rustls-pki-types`, `rustls-webpki`, `subtle`, `untrusted` and `zeroize`. rustls forbids `unsafe` (`#![forbid(unsafe_code)]`); `rustls-pki-types` has one `mem::transmute`, and `zeroize`, `once_cell` and `subtle` contain `unsafe`; `rustls-webpki` and `untrusted` have none. Test-class code never ships. |
-| rustls-pki-types | 1.15.1 | test | rustls's shared types for certificates, keys and names, required by `rustls` and `rustls-webpki`. Its only dependency is `zeroize`. |
-| rustls-webpki | 0.103.16 | test | rustls's certificate verifier, required by `rustls`. Compiled without its `ring` and `aws-lc-rs` features, so it has no cryptography, and none of its code runs in the test (only the message codec does). Its dependencies are `rustls-pki-types` and `untrusted`; its optional `ring` is named by weak features and appears in the lock only for that reason. |
-| zeroize | 1.9.1 | test | Zeroing of memory on drop, required by `rustls`, `rustls-pki-types` and `der`'s `alloc` feature. No dependencies as built. |
-| subtle | 2.6.1 | test | Constant-time comparison helpers, required by `rustls`. No dependencies. |
-| once_cell | 1.21.4 | test | Lazily initialised values, required by `rustls`. No dependencies as built. |
-| untrusted | 0.9.0 | test | A zero-copy reader for untrusted input, required by `rustls-webpki`. No dependencies. |
-| ring | 0.17.14 | test | Locked but never compiled: `rustls-webpki` names its optional `ring` dependency in weak features (`ring?/alloc`), so `cargo metadata` lists the edge although `cargo tree` shows none. |
-| cc | 1.10.0 | test | Locked but never compiled: build dependency of `ring`. |
-| find-msvc-tools | 0.1.15 | test | Locked but never compiled: dependency of `cc`. |
-| shlex | 2.0.1 | test | Locked but never compiled: dependency of `cc`. |
-| getrandom | 0.2.17 | test | Locked but never compiled: dependency of `ring`. |
-| wasi | 0.11.1+wasi-snapshot-preview1 | test | Locked but never compiled: `getrandom`'s WASI target dependency. |
-| windows-sys | 0.52.0 | test | Locked but never compiled: `ring`'s and `getrandom`'s Windows target dependency. |
-| windows-targets | 0.52.6 | test | Locked but never compiled: dependency of `windows-sys`. |
-| windows_aarch64_gnullvm | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
-| windows_aarch64_msvc | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
-| windows_i686_gnu | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
-| windows_i686_gnullvm | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
-| windows_i686_msvc | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
-| windows_x86_64_gnu | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
-| windows_x86_64_gnullvm | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
-| windows_x86_64_msvc | 0.52.6 | test | Locked but never compiled: Windows import library, dependency of `windows-targets`. |
 | simple-dns | 0.12.0 | test | A DNS message parser and writer (balliegojr/simple-dns): the reference engine in `clazel-dns`'s differential test (`tests/conformance_dns.rs`), which writes random messages with it (with and without name compression), reads them with `clazel-dns` and compares, and compares what both read from the same mutated octets. Chosen as the full-message parser with the fewest dependencies that also writes responses: `dnsparse` has none but reads only the header, questions and answers (and uses `unsafe`), and `dns-parser` has two (`byteorder`, `quick-error`) and writes only queries. Its only dependency is `bitflags`. |
 | bitflags | 2.13.2 | test | Bit-flag macro, required by `simple-dns`. No dependencies. |
-| sha2 | 0.10.9 | test | RustCrypto's SHA-2: computes the message digests in `clazel-pkcs1`'s conformance test (`tests/conformance_pkcs1.rs`), since the verifier takes the digest as input and Wycheproof gives messages. Used without default features. Not a differential engine for the verifier (no RSA in it). Its dependencies: `cfg-if`, `cpufeatures` and `digest`. |
-| digest | 0.10.7 | test | RustCrypto's hash trait, required by `sha2`. Without default features its dependencies are `block-buffer` and `crypto-common`. |
-| block-buffer | 0.10.4 | test | Block buffering for `digest`. Its only dependency is `generic-array`. |
-| crypto-common | 0.1.7 | test | Common traits of the RustCrypto crates, required by `digest`. Its dependencies are `generic-array` and `typenum`. |
-| generic-array | 0.14.7 | test | Fixed-size arrays with type-level lengths, required by `block-buffer` and `crypto-common`. Its dependencies are `typenum` and, as a build dependency, `version_check` (already listed). |
-| typenum | 1.20.1 | test | Type-level numbers, required by `generic-array` and `crypto-common`. No dependencies. |
-| cpufeatures | 0.2.17 | test | CPU feature detection for `sha2`'s hardware paths. Its only dependency is `libc` (already listed, class `shipped`, which is the stricter class). |
 | serde_json | 1.0.154 | tooling | `xtask` parses `cargo metadata` output. |
 | serde_core | 1.0.229 | test | Required by `serde_json`. |
 | itoa | 1.0.18 | test | Integer formatting, required by `serde_json`. |
@@ -125,8 +95,6 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | serde | 1.0.229 | test | Locked but never compiled: `serde_json` names it under the always-false `cfg(any())` to pin versions. |
 | serde_derive | 1.0.229 | test | Locked but never compiled: `serde_core` names it under `cfg(any())`. |
 | syn | 3.0.9 | test | Locked but never compiled: dependency of `serde_derive`. |
-| der | 0.8.2 | test | RustCrypto's DER implementation (used by `rsa`, `x509-cert` and `pkcs8`): the reference engine in `clazel-der`'s differential test (`tests/conformance_der.rs`). Used with default features off and only `alloc` and `oid`, so its only dependencies are `const-oid` and `zeroize` (the smallest DER crate that parses and writes every type item 3.5a covers; no other candidate was needed). Pinned to 0.8.2, the latest stable release. |
-| const-oid | 0.10.2 | test | `der`'s OBJECT IDENTIFIER type (the `oid` feature). No dependencies with default features off. |
 <!-- END ALLOWLIST -->
 
 The only `shipped` package is `libc`, and only `clazel-sys` depends on it
