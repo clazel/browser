@@ -1721,8 +1721,12 @@ dependency, no `unsafe`, `clazel-sys` untouched.
   `clazel-renderer` do so too (the harness-less `sandbox` test returns early
   under Miri). The generator's unit test runs 200 seeds under Miri.
   Miri was not run here.
-- **CI and user namespaces (needs a maintainer decision; nothing decided
-  here).** `.github/workflows/ci.yml` is not touched. On `ubuntu-24.04`
+- **CI and user namespaces (decided 2026-10-24 by the maintainer: option
+  (2), the AppArmor profile).** `packaging/apparmor/allow-userns.sh` installs
+  a profile granting `userns` and nothing else to the named programs; CI's
+  base and crate jobs run it for the test binaries before the tests, and the
+  release tarball's `install.sh` runs it for the installed renderer. Not yet
+  seen passing in CI. The text below is the analysis it was decided on. On `ubuntu-24.04`
   unprivileged user namespaces are restricted by AppArmor
   (`kernel.apparmor_restrict_unprivileged_userns=1`), the renderer's
   `unshare` layer fails, and it fails closed (exit 71, `sandbox layer

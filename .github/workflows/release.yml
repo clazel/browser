@@ -3,7 +3,9 @@
 # Runs when a release is published. It checks out the release's tag, builds
 # `clazel` and `clazel-renderer` with `cargo build --release --locked` on
 # Linux x86-64 (the platform CI verifies), and uploads a tarball and its
-# SHA-256 to the release with the `gh` CLI that the runner provides.
+# SHA-256 to the release with the `gh` CLI that the runner provides. The
+# tarball holds the two binaries, LICENSE, and `install.sh` with the AppArmor
+# script it runs (packaging/), so `sudo ./install.sh` works on Ubuntu.
 #
 # This is a build, not a check: the binaries are only as verified as the
 # tagged commit's Full verification in ci.yml. Tag a commit whose CI run is
@@ -44,7 +46,9 @@ jobs:
         run: |
           name="clazel-${TAG}-linux-x86_64"
           mkdir -p "dist/$name"
-          cp target/release/clazel target/release/clazel-renderer LICENSE "dist/$name/"
+          mkdir -p "dist/$name/apparmor"
+          cp target/release/clazel target/release/clazel-renderer LICENSE packaging/install.sh "dist/$name/"
+          cp packaging/apparmor/allow-userns.sh "dist/$name/apparmor/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
           echo "NAME=$name" >> "$GITHUB_ENV"

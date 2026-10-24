@@ -101,6 +101,17 @@ target/release/clazel fetch http://example.com/           # one http:// GET, res
 proven code, and frames the response with the proven HTTP/1.1 parser. It
 needs the Internet, and speaks only `http://` for now.
 
+Each GitHub release has a Linux x86-64 tarball with both binaries and an
+installer: unpack it and run `sudo ./install.sh` (or `PREFIX=... ./install.sh`).
+On Ubuntu 23.10 and later, which restrict unprivileged user namespaces, the
+installer also adds an AppArmor profile that lets `clazel-renderer` create the
+one its sandbox needs, and nothing else; without it the renderer refuses to
+start, by design. Built from source, run the same script once:
+
+```sh
+sudo packaging/apparmor/allow-userns.sh clazel-renderer "$PWD/target/release/clazel-renderer"
+```
+
 ## How to get involved
 
 The code is written by AI agents under rules ([CLAUDE.md](CLAUDE.md)) designed

@@ -30,8 +30,11 @@ and storage access. Each tab is a sandboxed renderer process that can only
 send typed messages. Same-origin policy is a proven property of the kernel.
 *Exit:* two renderer processes that provably cannot read each other's cookies.
 Detailed plan: [phases/phase-2.md](phases/phase-2.md).
-**Status: in progress. Items that do not wait on the sandbox decision
-(2.0) may start.**
+**Status: in progress.** Every item is built, and the theorems are proven at
+tier 2. Left: the demo and escape tests passing on Linux (CI now loads the
+AppArmor profile they need, not yet seen passing), the `fork` and `ptrace`
+escape attempts (they need a `clazel-sys` addition and its audit), and a green
+CI run to fill in the README table.
 
 ## Phase 3: Networking
 Verified HTTP/1.1 parser, DNS, and our own TLS 1.3 client with verified

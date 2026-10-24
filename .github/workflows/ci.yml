@@ -25,7 +25,8 @@
 #             next push to main updates the table instead.
 #   release   `cargo build --release --locked` of the shipped binaries
 #             (`clazel` and `clazel-renderer`) for Linux x86-64, uploaded as
-#             a tarball with its SHA-256. It is a build, not a check: the
+#             a tarball with its SHA-256, with `install.sh` and the AppArmor
+#             script it uses (packaging/). It is a build, not a check: the
 #             binaries are only as verified as the commit's Full
 #             verification says.
 #
@@ -107,6 +108,12 @@ jobs:
           key: clazel-tools-${{ runner.os }}-${{ hashFiles('scripts/toolchains.env', 'scripts/checksums.txt') }}
       - name: Install pinned toolchain
         run: scripts/setup.sh
+      # Ubuntu restricts unprivileged user namespaces through AppArmor; the
+      # renderer's sandbox needs one and fails closed without it. Grant
+      # `userns` to the programs that enter the sandbox in the tests, with
+      # the same script the release installer uses.
+      - name: Allow the sandbox's user namespace
+        run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-adversary,deps/sandbox-*}"
       - name: Verify (base)
         run: cargo xtask verify --part base
 
@@ -131,6 +138,12 @@ jobs:
           key: clazel-tools-${{ runner.os }}-${{ hashFiles('scripts/toolchains.env', 'scripts/checksums.txt') }}
       - name: Install pinned toolchain
         run: scripts/setup.sh
+      # Ubuntu restricts unprivileged user namespaces through AppArmor; the
+      # renderer's sandbox needs one and fails closed without it. Grant
+      # `userns` to the programs that enter the sandbox in the tests, with
+      # the same script the release installer uses.
+      - name: Allow the sandbox's user namespace
+        run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-adversary,deps/sandbox-*}"
       - name: Verify ${{ matrix.crate }}
         run: cargo xtask verify --part crate "${{ matrix.crate }}" --metrics parts
       - name: Upload measurements
@@ -209,7 +222,9 @@ jobs:
         run: |
           name="clazel-linux-x86_64-${GITHUB_SHA::12}"
           mkdir -p "dist/$name"
-          cp target/release/clazel target/release/clazel-renderer LICENSE "dist/$name/"
+          mkdir -p "dist/$name/apparmor"
+          cp target/release/clazel target/release/clazel-renderer LICENSE packaging/install.sh "dist/$name/"
+          cp packaging/apparmor/allow-userns.sh "dist/$name/apparmor/"
           tar -C dist -czf "dist/$name.tar.gz" "$name"
           (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
           echo "NAME=$name" >> "$GITHUB_ENV"
