@@ -392,6 +392,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "writes a file")]
     fn resolv_conf_nameservers_are_read_in_order() -> T {
         let path = std::env::temp_dir().join(format!("clazel-net-resolv-{}", std::process::id()));
         std::fs::write(
@@ -412,6 +413,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_query_is_answered_over_udp() -> T {
         let (ns, h) = udp_server(1, |q, _| Some(reply(q, OK, 0, 1, &A_RECORD)))?;
         let got = resolve_with(b"example.test", &cfg(ns));
@@ -421,6 +423,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn aaaa_is_asked_when_a_is_empty() -> T {
         let aaaa: Vec<u8> = {
             let mut r = vec![0xC0, 12, 0, 28, 0, 1, 0, 0, 0, 60, 0, 16];
@@ -444,6 +447,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_cname_is_followed() -> T {
         // example.test CNAME real.test; then real.test A.
         let mut cname = vec![0xC0, 12, 0, 5, 0, 1, 0, 0, 0, 60, 0, 11];
@@ -464,6 +468,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_cname_chain_is_bounded() -> T {
         let count = Arc::new(AtomicUsize::new(0));
         let seen = Arc::clone(&count);
@@ -486,6 +491,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_truncated_reply_is_retried_over_tcp() -> T {
         // The same port over UDP and TCP.
         let mut pair = None;
@@ -536,6 +542,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_reply_with_the_wrong_id_is_ignored() -> T {
         let (ns, h) = udp_server(2, |q, _| Some(reply(q, OK, 1, 1, &A_RECORD)))?;
         let got = resolve_with(b"example.test", &cfg(ns));
@@ -545,6 +552,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_reply_to_another_question_is_ignored() -> T {
         let (ns, h) = udp_server(2, |q, _| {
             let mut r = reply(q, OK, 0, 1, &A_RECORD);
@@ -563,6 +571,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn the_next_nameserver_is_tried() -> T {
         let (dead, h1) = udp_server(2, |_, _| None)?;
         let (live, h2) = udp_server(1, |q, _| Some(reply(q, OK, 0, 1, &A_RECORD)))?;
@@ -581,6 +590,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn nxdomain_is_no_addresses_and_bad_names_fail_early() -> T {
         let (ns, h) = udp_server(2, |q, _| Some(reply(q, [0x81, 0x83], 0, 0, &[])))?;
         assert_eq!(

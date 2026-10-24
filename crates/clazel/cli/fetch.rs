@@ -10,7 +10,9 @@ pub fn run(url: &str) -> ExitCode {
         Ok(r) => {
             let mut out = Vec::new();
             let sl = &r.status_line;
-            out.extend_from_slice(format!("HTTP/{}.{} {:03} ", sl.major, sl.minor, sl.status).as_bytes());
+            out.extend_from_slice(
+                format!("HTTP/{}.{} {:03} ", sl.major, sl.minor, sl.status).as_bytes(),
+            );
             out.extend_from_slice(&sl.reason);
             out.extend_from_slice(b"\n");
             for f in &r.fields {
@@ -22,7 +24,11 @@ pub fn run(url: &str) -> ExitCode {
             out.extend_from_slice(b"\n");
             out.extend_from_slice(&r.body);
             let mut stdout = std::io::stdout().lock();
-            if stdout.write_all(&out).and_then(|()| stdout.flush()).is_err() {
+            if stdout
+                .write_all(&out)
+                .and_then(|()| stdout.flush())
+                .is_err()
+            {
                 return ExitCode::FAILURE;
             }
             ExitCode::SUCCESS

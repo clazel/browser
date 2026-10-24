@@ -8,7 +8,9 @@ use super::spec::*;
 use vstd::prelude::*;
 
 use super::types::StatusLineBuf;
-use crate::field::string::{append, at, copy, is_field_value, run_len_exec, strip_ows, strip_trailing_ows_exec};
+use crate::field::string::{
+    append, at, copy, is_field_value, run_len_exec, strip_ows, strip_trailing_ows_exec,
+};
 use crate::field::types::FieldLineBuf;
 
 verus! {

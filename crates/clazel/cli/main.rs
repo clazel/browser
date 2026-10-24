@@ -44,7 +44,9 @@ fn renderer() -> Result<PathBuf, String> {
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
-    if let (Some("fetch"), Some(url), None) = (args.get(1).map(String::as_str), args.get(2), args.get(3)) {
+    if let (Some("fetch"), Some(url), None) =
+        (args.get(1).map(String::as_str), args.get(2), args.get(3))
+    {
         return fetch::run(url);
     }
     let renderer = match renderer() {

@@ -168,6 +168,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn the_request_is_sent_in_full_and_the_reply_is_carried_until_close() -> T {
         let request = vec![7u8; 100_000];
         let want = request.clone();
@@ -197,6 +198,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_large_reply_arrives_in_bounded_chunks() -> T {
         let (port, h) = server(|mut s| s.write_all(&vec![1u8; 100_000]))?;
         let mut total = 0usize;
@@ -212,6 +214,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn stop_ends_a_connection_that_never_closes() -> T {
         let (port, h) = server(|mut s| {
             s.write_all(b"partial")?;
@@ -241,6 +244,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_silent_server_times_out() -> T {
         let (port, h) = server(|_s| {
             thread::sleep(Duration::from_millis(600));
@@ -255,6 +259,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_refused_connection_is_a_connect_error() -> T {
         let port = {
             let l = TcpListener::bind("127.0.0.1:0")?;
@@ -273,6 +278,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn addresses_are_tried_in_order() -> T {
         let dead = {
             let l = TcpListener::bind("127.0.0.1:0")?;

@@ -38,7 +38,10 @@ impl std::fmt::Display for FetchError {
             FetchError::NotFetched => write!(f, "only http: URLs without userinfo are fetched"),
             FetchError::Net(e) => write!(f, "{e}"),
             FetchError::Invalid => write!(f, "the server sent an invalid HTTP response"),
-            FetchError::Unsupported => write!(f, "the response uses a transfer coding this client cannot decode"),
+            FetchError::Unsupported => write!(
+                f,
+                "the response uses a transfer coding this client cannot decode"
+            ),
         }
     }
 }
@@ -137,7 +140,10 @@ mod tests {
     }
 
     fn quick() -> Timeouts {
-        Timeouts { connect: Duration::from_secs(2), idle: Duration::from_secs(2) }
+        Timeouts {
+            connect: Duration::from_secs(2),
+            idle: Duration::from_secs(2),
+        }
     }
 
     type Outcome = Result<(u16, Vec<u8>), FetchError>;
@@ -147,27 +153,54 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn the_request_on_the_wire() {
         let Some((port, rx)) = serve(b"HTTP/1.1 204 No Content\r\n\r\n", 4096) else {
             return;
         };
-        let r = fetch_with(&format!("http://LocalHost:{port}/a%20b?c=d#frag"), quick(), local);
+        let r = fetch_with(
+            &format!("http://LocalHost:{port}/a%20b?c=d#frag"),
+            quick(),
+            local,
+        );
         assert_eq!(outcome(r), Ok((204, Vec::new())));
         let expected = format!(
             "GET /a%20b?c=d HTTP/1.1\r\nHost: localhost:{port}\r\nConnection: close\r\nAccept: */*\r\nUser-Agent: clazel\r\n\r\n"
         );
-        assert_eq!(rx.recv_timeout(Duration::from_secs(2)).ok(), Some(expected.into_bytes()));
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(2)).ok(),
+            Some(expected.into_bytes())
+        );
     }
 
     #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
     fn framings() {
         let cases: [(&'static [u8], Outcome); 6] = [
-            (b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello", Ok((200, b"hello".to_vec()))),
-            (b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n", Ok((200, b"abc".to_vec()))),
-            (b"HTTP/1.1 200 OK\r\n\r\nuntil close", Ok((200, b"until close".to_vec()))),
-            (b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n", Ok((404, Vec::new()))),
-            (b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nshort", Err(FetchError::Invalid)),
-            (b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n", Err(FetchError::Unsupported)),
+            (
+                b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello",
+                Ok((200, b"hello".to_vec())),
+            ),
+            (
+                b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n3\r\nabc\r\n0\r\n\r\n",
+                Ok((200, b"abc".to_vec())),
+            ),
+            (
+                b"HTTP/1.1 200 OK\r\n\r\nuntil close",
+                Ok((200, b"until close".to_vec())),
+            ),
+            (
+                b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n",
+                Ok((404, Vec::new())),
+            ),
+            (
+                b"HTTP/1.1 200 OK\r\nContent-Length: 9\r\n\r\nshort",
+                Err(FetchError::Invalid),
+            ),
+            (
+                b"HTTP/1.1 200 OK\r\nTransfer-Encoding: gzip\r\n\r\n",
+                Err(FetchError::Unsupported),
+            ),
         ];
         for (reply, expected) in cases {
             for step in [1, 7, 4096] {
@@ -175,15 +208,29 @@ mod tests {
                     return;
                 };
                 let r = fetch_with(&format!("http://localhost:{port}/"), quick(), local);
-                assert_eq!(outcome(r), expected, "{:?} step {step}", String::from_utf8_lossy(reply));
+                assert_eq!(
+                    outcome(r),
+                    expected,
+                    "{:?} step {step}",
+                    String::from_utf8_lossy(reply)
+                );
             }
         }
     }
 
     #[test]
     fn not_fetched() {
-        assert_eq!(fetch_with("https://example.com/", quick(), local).map(|_| ()), Err(FetchError::NotFetched));
-        assert_eq!(fetch_with("http://u:p@example.com/", quick(), local).map(|_| ()), Err(FetchError::NotFetched));
-        assert_eq!(fetch_with("not a url", quick(), local).map(|_| ()), Err(FetchError::Url));
+        assert_eq!(
+            fetch_with("https://example.com/", quick(), local).map(|_| ()),
+            Err(FetchError::NotFetched)
+        );
+        assert_eq!(
+            fetch_with("http://u:p@example.com/", quick(), local).map(|_| ()),
+            Err(FetchError::NotFetched)
+        );
+        assert_eq!(
+            fetch_with("not a url", quick(), local).map(|_| ()),
+            Err(FetchError::Url)
+        );
     }
 }

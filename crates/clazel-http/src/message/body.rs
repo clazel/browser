@@ -8,7 +8,9 @@ use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
-use super::line::{parse_status_line_exec, range, read_line_exec, read_section_exec, sub, LineExec, SectionExec};
+use super::line::{
+    LineExec, SectionExec, parse_status_line_exec, range, read_line_exec, read_section_exec, sub,
+};
 use super::types::{HeadBuf, ParseBuf, ResponseBuf};
 use crate::field::content_length::parse_content_length_lines;
 use crate::field::contract::ContentLengthError;
