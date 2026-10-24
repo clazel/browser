@@ -87,7 +87,6 @@ scripts/setup.sh         # install the pinned, checksummed toolchain (needs rust
 scripts/verify.sh        # every check, fresh proof runs (same as `cargo xtask verify`; CI runs this)
 cargo xtask verify --changed   # every check, but proofs and tests only for crates changed since origin/main
 cargo xtask check        # fast static checks only
-cargo run -p clazel -- fetch http://example.com/   # one http:// GET, response printed (needs the Internet)
 ```
 
 The command-line browser, `clazel`, and the sandboxed renderer it starts for
