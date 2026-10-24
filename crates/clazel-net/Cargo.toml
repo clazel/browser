@@ -1,0 +1,24 @@
+[package]
+name = "clazel-net"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The network shell: the resolver (UDP, TCP on truncation) and TCP connections, carrying bytes between a socket and its caller without looking inside them."
+
+[dependencies]
+# The resolver's every decision is a proven function of this crate: the
+# nameserver lines of resolv.conf, query encoding, reply decoding and
+# acceptance, and the TCP framing.
+clazel-dns = { path = "../clazel-dns" }
+
+# Verification tier (docs/VERIFICATION.md). Tier 0 and staying there: this
+# crate does I/O (sockets, files, clocks), which no proof here covers. It is
+# small and holds no protocol decisions; what is proven lives in the crates
+# it calls. Phase 3 item 3.8.
+[package.metadata.clazel]
+tier = 0
+target-tier = 0
+
+[lints]
+workspace = true
