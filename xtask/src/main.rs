@@ -431,7 +431,9 @@ fn build_checks(r: &mut Runner, only: Option<&[Crate]>) {
             "warnings",
         ]),
     );
-    let mut args = vec!["test", "--locked", "--quiet"];
+    // `--no-fail-fast`: run every test binary even after one fails, so a
+    // single run (CI's especially) reports every failing test.
+    let mut args = vec!["test", "--locked", "--quiet", "--no-fail-fast"];
     match only {
         None => args.push("--workspace"),
         Some([]) => {
@@ -468,7 +470,13 @@ fn miri(r: &mut Runner, pins: &Pins, only: Option<&[Crate]>) {
         );
         return;
     }
-    let mut args = vec![nightly.as_str(), "miri", "test", "--locked"];
+    let mut args = vec![
+        nightly.as_str(),
+        "miri",
+        "test",
+        "--locked",
+        "--no-fail-fast",
+    ];
     match only {
         None => args.push("--workspace"),
         Some([]) => {
