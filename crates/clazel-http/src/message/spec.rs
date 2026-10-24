@@ -49,6 +49,22 @@
 //! - A field value that does not match RFC 9110 §5.5 (a NUL, CR, LF or
 //!   other control in it) makes the message invalid, the first of the
 //!   options RFC 9110 §5.5 gives.
+//! - A status line may end right after its status code (`HTTP/1.1 301`),
+//!   without the SP the grammar requires there. §4: "A server MUST send the
+//!   space that separates the status-code from the reason-phrase even when
+//!   the reason-phrase is absent", but servers that omit it are common and
+//!   every major client accepts them, and §4 lets a recipient "parse on
+//!   whitespace-delimited word boundaries". We take only that omission:
+//!   every other separator is still exactly one SP.
+//! - Only HTTP/1.x responses are parsed: the major version digit must be
+//!   `1` (§2.3 allows any `DIGIT "." DIGIT`). This parser frames HTTP/1.1
+//!   messages to a request sent as HTTP/1.1; a response claiming another
+//!   major version is not one it can frame by these rules, so it is
+//!   `Invalid` rather than read to close.
+//! - An empty line before the status line is rejected. §2.2 asks a server
+//!   to ignore one before a request-line; nothing allows it before a
+//!   status-line, and a client sends one request per connection, so there
+//!   is no earlier response for it to follow.
 //! - A request is never `CONNECT` (§6.3 step 2 is omitted) and never
 //!   expects a response to be anything but HTTP/1.x; whether it was `HEAD`
 //!   is the parameter `request_is_head` (step 1).
@@ -196,30 +212,34 @@ pub open spec fn lit_http_slash() -> Seq<u8> {
 }
 
 /// §4: `status-line = HTTP-version SP status-code SP [ reason-phrase ]`,
-/// over the whole of `line`, with §2.3 `HTTP-version = HTTP-name "/" DIGIT
+/// with the SP after the status code optional at the end of the line and
+/// the version 1.x (see the modelling choices), over the whole of `line`, with §2.3 `HTTP-version = HTTP-name "/" DIGIT
 /// "." DIGIT`, `status-code = 3DIGIT` and `reason-phrase = 1*( HTAB / SP /
 /// VCHAR / obs-text )`.
 pub open spec fn parse_status_line(line: Seq<u8>) -> Option<StatusLine> {
-    if line.len() >= 13
+    if line.len() >= 12
         // HTTP-name "/"
         && line.take(5) == lit_http_slash()
         // DIGIT "." DIGIT
         && is_digit(line[5]) && line[6] == 0x2E && is_digit(line[7])
+        // HTTP/1.x only (modelling choice).
+        && line[5] == 0x31
         // SP
         && line[8] == 0x20
         // status-code = 3DIGIT
         && is_digit(line[9]) && is_digit(line[10]) && is_digit(line[11])
-        // SP
-        && line[12] == 0x20
+        // The line may end after the status code (modelling choice, §4's
+        // leniency); otherwise SP, then [ reason-phrase ].
+        && (line.len() == 12 || (line[12] == 0x20
         // [ reason-phrase ]: the octets of `reason-phrase` are exactly
         // those of `field-content` (SP / HTAB / VCHAR / obs-text).
-        && all_in(line.skip(13), Class::FieldContent)
+        && all_in(line.skip(13), Class::FieldContent)))
     {
         Some(StatusLine {
             major: digit_value(line[5]),
             minor: digit_value(line[7]),
             status: digit_value(line[9]) * 100 + digit_value(line[10]) * 10 + digit_value(line[11]),
-            reason: line.skip(13),
+            reason: if line.len() == 12 { seq![] } else { line.skip(13) },
         })
     } else {
         None
