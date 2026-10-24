@@ -9,6 +9,13 @@ description = "HTTP: field syntax (RFC 9110 §5, §8.6); message framing and chu
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
 
+# Test-only reference engine for the differential test in
+# tests/conformance_http.rs (class `test` in docs/DEPENDENCIES.md: never
+# shipped). httparse is the response-head parser hyper uses; it has no
+# dependencies.
+[dev-dependencies]
+httparse = { version = "=1.10.1", default-features = false }
+
 # Verification tier (docs/VERIFICATION.md). Tier 0 for now, target 2:
 # field syntax (src/field/) is proven against its contracts and has an
 # independent transcription (the Fetch Standard) with certified mutations,
