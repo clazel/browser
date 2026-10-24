@@ -96,11 +96,12 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
   `use vstd::prelude::*;` or `use super::spec::*;` (ghost imports look unused
   to normal builds), and `unsafe_code = "allow"` in `clazel-sys`'s manifest.
   The checker rejects everything else.
-- Never edit README.md's status table by hand. After changing proofs,
-  harnesses, axioms or mutations, run `cargo xtask report --write --changed`
-  and commit the regenerated table together with the change that moved the
-  numbers. It re-measures the changed crates and keeps the other rows' proof
-  and test cells; CI's full run re-measures every row and fails if any
-  differs.
+- Never edit README.md's status table by hand, and do not commit a
+  regenerated one with a change. CI keeps it up to date: after every push to
+  `main` whose full verification passes, its `table` job writes the table
+  from that run's measurements and commits it as github-actions[bot].
+  `cargo xtask report --changed` still shows locally what the table would
+  say; a table that differs from what a run measured is reported, not a
+  failure.
 - Keep changes small: one spec section or one proof per commit where practical.
 - Test against official suites (WPT, html5lib-tests), vendored under `tests/`.

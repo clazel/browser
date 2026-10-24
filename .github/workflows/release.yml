@@ -1,0 +1,55 @@
+# Builds the shipped binaries for a GitHub release and attaches them to it.
+#
+# Runs when a release is published. It checks out the release's tag, builds
+# `clazel` and `clazel-renderer` with `cargo build --release --locked` on
+# Linux x86-64 (the platform CI verifies), and uploads a tarball and its
+# SHA-256 to the release with the `gh` CLI that the runner provides.
+#
+# This is a build, not a check: the binaries are only as verified as the
+# tagged commit's Full verification in ci.yml. Tag a commit whose CI run is
+# green.
+#
+# Actions are pinned by commit SHA (the tag is in the trailing comment).
+
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Release build (Linux x86-64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      # Upload assets to the release.
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      # rustup reads rust-toolchain.toml and installs the pinned toolchain.
+      - name: Install Rust
+        run: rustup toolchain install
+      - name: cargo build --release
+        run: cargo build --release --locked --bin clazel --bin clazel-renderer
+      - name: Package
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          name="clazel-${TAG}-linux-x86_64"
+          mkdir -p "dist/$name"
+          cp target/release/clazel target/release/clazel-renderer LICENSE "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+          echo "NAME=$name" >> "$GITHUB_ENV"
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "dist/$NAME.tar.gz" "dist/$NAME.tar.gz.sha256" --repo "$GITHUB_REPOSITORY" --clobber

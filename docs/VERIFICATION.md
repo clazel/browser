@@ -98,8 +98,13 @@ six-hour limit (`xtask/src/parts.rs`):
   (with `+dirty` if tracked files have uncommitted changes).
 - `verify --part assemble --metrics <dir>`, which runs only after every
   other job passed: static checks, then it requires a file for every
-  workspace crate from this commit, and compares README.md's table with
-  them.
+  workspace crate from this commit, and reports whether README.md's table
+  matches them.
+- On pushes to `main` only, the `table` job runs the same part with
+  `--write` after `assemble` passed, and commits README.md's regenerated
+  table to `main` as github-actions[bot] if it changed. So the committed
+  table always comes from CI's own measurements of a fully verified commit,
+  and no change has to carry it.
 
 The parts together run exactly the checks of one `cargo xtask verify`, which
 `scripts/verify.sh` and the Docker command in README.md still run on one
@@ -129,9 +134,9 @@ keep their Verus, Kani, line, mutation and conformance cells from the
 committed table, since nothing they depend on changed, and the remaining
 cells (tier, axioms, `unsafe`, reviews) come from the static checks, which
 always cover every crate. If the committed table has another column layout,
-or lacks a row to keep, it refuses and asks for a full run. CI's full run
-re-measures every row and fails if the committed table differs, so a kept
-cell that is wrong cannot pass CI.
+or lacks a row to keep, it refuses and asks for a full run. Its table is a
+preview: the committed one is written by CI on `main`, which re-measures
+every row, so a kept cell that is wrong never reaches it.
 
 What this relies on: that a crate's proofs and tests depend only on its own
 files, the workspace crates it depends on, and the shared files listed
@@ -258,9 +263,11 @@ The README's status table is generated, never typed. For each crate it shows
 the tier and target tier, the Verus result, Kani harness results, the number of
 documented axioms (every other escape hatch is rejected outright), spec / proof /
 exec line counts, the three-way mutation result, and conformance pass rates.
-`cargo xtask verify` fails if the committed table differs from what that run
-measured, and `cargo xtask report --write` refuses to update it while any
-check is failing.
+CI writes the committed table on `main` from the measurements of a commit
+whose every verification part passed (the `table` job). `cargo xtask verify`
+reports a committed table that differs from what it measured, and
+`cargo xtask report --write` and `verify --part assemble --write` refuse to
+write one while any check is failing.
 
 The **Conformance** column lists every vendored suite a crate's
 `tests/conformance*.rs` runs (WPT `encoding/`, `url/` percent-encoding,
