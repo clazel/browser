@@ -7,7 +7,13 @@
 //! - [`contract`]: what the executable functions are proven to satisfy,
 //!   and the properties of the spec an incremental parser relies on.
 
+pub mod body;
 pub mod contract;
 pub mod examples;
+pub mod line;
+pub mod serialize;
 pub mod spec;
 pub mod termination;
+#[cfg(test)]
+mod tests;
+pub mod types;
