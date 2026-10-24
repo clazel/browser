@@ -220,7 +220,7 @@ pub fn attempt_ptrace_attach(pid: i32) -> Result<(), Errno> {
     }
     // `syscall` is variadic and reads each argument as an `unsigned long`;
     // the request constant is a `c_uint` or a `c_int` depending on the libc.
-    let request = libc::c_ulong::try_from(libc::PTRACE_ATTACH).map_err(|_| invalid)?;
+    let request = libc::c_ulong::try_from(i64::from(libc::PTRACE_ATTACH)).map_err(|_| invalid)?;
     let target = libc::c_ulong::try_from(pid).map_err(|_| invalid)?;
     let zero: libc::c_ulong = 0;
     // SAFETY: man 2 ptrace: `ptrace(request, pid, addr, data)`; with
