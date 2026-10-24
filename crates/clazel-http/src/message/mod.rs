@@ -8,5 +8,6 @@
 //!   and the properties of the spec an incremental parser relies on.
 
 pub mod contract;
+pub mod examples;
 pub mod spec;
 pub mod termination;
