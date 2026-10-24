@@ -7,8 +7,13 @@
 //! - [`field`]: field syntax (RFC 9110 §5, §8.6): names, values, lists,
 //!   tokens, whitespace, quoted strings, parameters, `Content-Length`,
 //!   `Transfer-Encoding` and `Connection`.
+//! - [`message`]: message framing (RFC 9112 "HTTP/1.1", June 2022,
+//!   <https://www.rfc-editor.org/rfc/rfc9112>): status line, field lines,
+//!   message body length, chunked coding, and the request serializer.
+//!   Phase 3 item 3.2; the spec and contracts come first, the
+//!   implementation and its proof next.
 //!
-//! Message framing (RFC 9112) and the conformance tests are Phase 3 items
-//! 3.2 and 3.3 and do not exist yet.
+//! The conformance tests are Phase 3 item 3.3 and do not exist yet.
 
 pub mod field;
+pub mod message;
