@@ -21,8 +21,8 @@
 #             it to main as github-actions[bot]. Changes therefore never need
 #             to carry the table. It is the only job that may write to the
 #             repository. Its push uses the workflow's own token, which starts
-#             no new CI run, and fails harmlessly if main has moved on: the
-#             next push to main updates the table instead.
+#             no new CI run. If main has moved on since the run started, it
+#             commits nothing: the newer run updates the table instead.
 #   release   `cargo build --release --locked` of the shipped binaries
 #             (`clazel` and `clazel-renderer`) for Linux x86-64, uploaded as
 #             a tarball with its SHA-256, with `install.sh` and the AppArmor
@@ -199,6 +199,13 @@ jobs:
         run: |
           if git diff --quiet -- README.md; then
             echo "README.md's table is up to date."
+            exit 0
+          fi
+          # A newer push to main supersedes this run: its own table job
+          # writes the table from its own measurements.
+          git fetch --quiet origin main
+          if [ "$(git rev-parse origin/main)" != "$GITHUB_SHA" ]; then
+            echo "main has moved on since $GITHUB_SHA; the newer run updates the table."
             exit 0
           fi
           git config user.name "github-actions[bot]"
