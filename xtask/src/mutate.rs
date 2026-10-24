@@ -252,12 +252,18 @@ pub fn run(c: &Crate, root: &Path) -> Result<Report, String> {
     };
 
     // Baseline: the unmutated copy must verify, or every mutation would
-    // look "killed" for the wrong reason.
-    match verus::run(&crate_dir, &c.name, false)? {
+    // look "killed" for the wrong reason. Its time sets each mutant's limit.
+    let started = std::time::Instant::now();
+    match verus::run(&crate_dir, &c.name, false, None)? {
         Run::Verified(s) => report.lines.push(format!("baseline   {s}")),
         Run::ProofFailed(s, _) => return Err(format!("unmutated copy does not verify: {s}")),
         Run::BuildFailed(out) => return Err(format!("unmutated copy does not build:\n{out}")),
+        Run::TimedOut(_) => return Err("unmutated copy timed out".into()),
     }
+    let limit = mutant_limit(started.elapsed());
+    report
+        .lines
+        .push(format!("time limit {}s per mutant run", limit.as_secs()));
 
     for m in &mutations {
         report.total = report.total.saturating_add(1);
@@ -275,13 +281,22 @@ pub fn run(c: &Crate, root: &Path) -> Result<Report, String> {
         let mutated = original.replacen(&m.find, &m.replace, 1);
         std::fs::write(&target, mutated).map_err(|e| format!("{}: {e}", target.display()))?;
         let result = match &m.module {
-            Some(module) => verus::module(&crate_dir, &c.name, module),
-            None => verus::run(&crate_dir, &c.name, false),
+            Some(module) => verus::module(&crate_dir, &c.name, module, Some(limit)),
+            None => verus::run(&crate_dir, &c.name, false, Some(limit)),
         };
         std::fs::write(&target, &original).map_err(|e| format!("{}: {e}", target.display()))?;
         match (result?, m.expect) {
+            (Run::TimedOut(t), _) => {
+                report.problems.push(format!(
+                    "{}: TIMED OUT after {}s and was stopped: the mutant makes Verus run \
+                     without end (for example `compute_only` evaluating a sequence index \
+                     out of range); rewrite the mutation so the examples stay evaluable",
+                    m.id,
+                    t.as_secs()
+                ));
+            }
             (Run::ProofFailed(_, out), Expect::Killed) => {
-                match check_certificate(&crate_dir, &c.name, m, &original) {
+                match check_certificate(&crate_dir, &c.name, m, &original, limit) {
                     Ok(lemma) => {
                         report.killed = report.killed.saturating_add(1);
                         report.lines.push(format!(
@@ -333,6 +348,22 @@ pub fn run(c: &Crate, root: &Path) -> Result<Report, String> {
     Ok(report)
 }
 
+/// How long one mutant (or certificate) run may take: five times the
+/// crate's baseline verification, and at least ten minutes, unless
+/// `CLAZEL_MUTANT_TIMEOUT_SECS` sets it. A mutant that runs longer is
+/// stopped and fails the run, so a hang costs minutes, not CI's six hours.
+fn mutant_limit(baseline: std::time::Duration) -> std::time::Duration {
+    if let Some(secs) = std::env::var("CLAZEL_MUTANT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+    {
+        return std::time::Duration::from_secs(secs);
+    }
+    baseline
+        .saturating_mul(5)
+        .max(std::time::Duration::from_secs(600))
+}
+
 /// Check a `killed` mutation's certificate: it must verify with the mutation
 /// applied and fail without it. Returns the lemma's name. `original` is the
 /// unmutated text of the mutated file; every file is restored before return.
@@ -341,6 +372,7 @@ fn check_certificate(
     name: &str,
     m: &Mutation,
     original: &str,
+    limit: std::time::Duration,
 ) -> Result<String, String> {
     let cert = m
         .certificate
@@ -371,7 +403,7 @@ fn check_certificate(
             cert_original.as_str()
         };
         std::fs::write(&cert_path, format!("{base}{code}")).map_err(|e| e.to_string())?;
-        verus::focus(crate_dir, name, &module, CERTIFICATE_FN)
+        verus::focus(crate_dir, name, &module, CERTIFICATE_FN, Some(limit))
     };
     let in_mutant = attempt(&mutated);
     let in_original = attempt(original);
@@ -389,6 +421,12 @@ fn check_certificate(
             ));
         }
         Run::BuildFailed(out) => return Err(format!("certificate does not build:\n{out}")),
+        Run::TimedOut(t) => {
+            return Err(format!(
+                "certificate TIMED OUT in the mutant after {}s and was stopped",
+                t.as_secs()
+            ));
+        }
     }
     match in_original? {
         Run::ProofFailed(..) => {}
@@ -402,6 +440,12 @@ fn check_certificate(
         Run::BuildFailed(out) => {
             return Err(format!(
                 "certificate does not build on the real spec:\n{out}"
+            ));
+        }
+        Run::TimedOut(t) => {
+            return Err(format!(
+                "certificate TIMED OUT on the real spec after {}s and was stopped",
+                t.as_secs()
             ));
         }
     }

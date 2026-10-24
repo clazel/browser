@@ -590,10 +590,12 @@ fn verus(r: &mut Runner, crates: &[Crate], pins: &Pins) {
 }
 
 fn verus_crate(dir: &Path, name: &str) -> Result<Vec<String>, String> {
-    match verus::run(dir, name, true)? {
+    match verus::run(dir, name, true, None)? {
         verus::Run::Verified(s) => Ok(vec![s]),
         verus::Run::ProofFailed(s, out) => Err(format!("{s}\n{out}")),
         verus::Run::BuildFailed(out) => Err(format!("no verification results reported:\n{out}")),
+        // Not reachable: the proof step runs without a time limit.
+        verus::Run::TimedOut(t) => Err(format!("timed out after {}s", t.as_secs())),
     }
 }
 
