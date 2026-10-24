@@ -34,7 +34,7 @@ impl Errno {
 
     /// The calling thread's `errno`. Call it immediately after the foreign
     /// call that failed, with nothing in between.
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     pub(crate) fn last() -> Errno {
         Errno(std::io::Error::last_os_error().raw_os_error().unwrap_or(-1))
     }

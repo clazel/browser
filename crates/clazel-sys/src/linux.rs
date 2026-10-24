@@ -1,4 +1,5 @@
-//! Linux: `prctl`, `seccomp`, Landlock and `unshare`.
+//! Linux: `prctl`, `seccomp`, Landlock and `unshare`, and the two escape
+//! attempts the sandbox tests make (`fork`, `ptrace`).
 //!
 //! None of these takes a decision: each hands a value to the kernel. The
 //! kernel's rules (a filter needs `no_new_privs` or `CAP_SYS_ADMIN`; Landlock
@@ -177,9 +178,67 @@ pub fn unshare(namespaces: Namespaces) -> Result<(), Errno> {
     if rc == 0 { Ok(()) } else { Err(Errno::last()) }
 }
 
+/// `fork(2)`, as an *attempt* for the sandbox tests: `Ok` means the kernel
+/// created a child, which is an escape. The child, if there is one, calls
+/// `_exit(0)` at once and does nothing else, so it touches no lock or
+/// allocator of this (possibly multithreaded) process. The parent does not
+/// wait for it: a child that was created is reparented and reaped when this
+/// process exits. Under the renderer's seccomp filter the call ends the
+/// process with `SIGSYS` instead of returning.
+pub fn attempt_fork() -> Result<(), Errno> {
+    // SAFETY: man 2 fork: `fork` takes no argument and returns the child's pid
+    // in the parent, 0 in the child, or -1 and sets errno; the
+    // `libc::fork() -> pid_t` declaration matches. No pointer is passed. In a
+    // multithreaded process the child may only call async-signal-safe
+    // functions, and the only thing it does (below) is `_exit`.
+    let pid = unsafe { libc::fork() };
+    if pid < 0 {
+        return Err(Errno::last());
+    }
+    if pid == 0 {
+        // SAFETY: man 2 _exit: `_exit(status)` ends the calling process at
+        // once, runs no atexit handler or destructor, and is
+        // async-signal-safe, so it is the one call a fork child may make in
+        // a multithreaded process. The `libc::_exit(c_int) -> !` declaration
+        // takes an integer; no pointer is involved.
+        unsafe { libc::_exit(0) }
+    }
+    Ok(())
+}
+
+/// `ptrace(PTRACE_ATTACH, pid, 0, 0)`, as an *attempt* for the sandbox tests:
+/// `Ok` means the kernel let this process attach to `pid`, which is an
+/// escape. The tracee is left attached and stopped; the test kills it. A
+/// `pid` that is not positive is refused here with `EINVAL`, before the
+/// kernel is asked. Without a sandbox the kernel may still refuse (`EPERM`:
+/// Yama's `ptrace_scope`, or no common user); under the renderer's seccomp
+/// filter the call ends the process with `SIGSYS`.
+pub fn attempt_ptrace_attach(pid: i32) -> Result<(), Errno> {
+    let invalid = Errno(libc::EINVAL);
+    if pid <= 0 {
+        return Err(invalid);
+    }
+    // `syscall` is variadic and reads each argument as an `unsigned long`;
+    // the request constant is a `c_uint` or a `c_int` depending on the libc.
+    let request = libc::c_ulong::try_from(libc::PTRACE_ATTACH).map_err(|_| invalid)?;
+    let target = libc::c_ulong::try_from(pid).map_err(|_| invalid)?;
+    let zero: libc::c_ulong = 0;
+    // SAFETY: man 2 ptrace: `ptrace(request, pid, addr, data)`; with
+    // PTRACE_ATTACH, `pid` is the tracee and `addr` and `data` are ignored
+    // (0). All four are integers passed as `unsigned long` to the variadic
+    // `libc::syscall`, which calls the raw system call (glibc's `ptrace`
+    // wrapper is variadic too and its request type differs by libc); no
+    // pointer is passed, so nothing can dangle. The number is
+    // `libc::SYS_ptrace`, and the call returns 0 or -1.
+    let rc = unsafe { libc::syscall(libc::SYS_ptrace, request, target, zero, zero) };
+    if rc == 0 { Ok(()) } else { Err(Errno::last()) }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{MAX_BPF_INSNS, Namespaces, SockFilter, seccomp_set_mode_filter};
+    use super::{
+        MAX_BPF_INSNS, Namespaces, SockFilter, attempt_ptrace_attach, seccomp_set_mode_filter,
+    };
     use crate::Errno;
 
     const RET_KILL: SockFilter = SockFilter {
@@ -202,5 +261,11 @@ mod tests {
         let both = Namespaces::USER.union(Namespaces::NETWORK);
         assert_eq!(both.bits(), libc::CLONE_NEWUSER | libc::CLONE_NEWNET);
         assert_eq!(Namespaces::NONE.union(Namespaces::IPC), Namespaces::IPC);
+    }
+
+    #[test]
+    fn a_pid_that_is_not_positive_never_reaches_the_kernel() {
+        assert_eq!(attempt_ptrace_attach(0), Err(Errno(libc::EINVAL)));
+        assert_eq!(attempt_ptrace_attach(-1), Err(Errno(libc::EINVAL)));
     }
 }

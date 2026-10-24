@@ -3,7 +3,7 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 8 `unsafe` blocks (11 lines) that enter the OS sandbox, machine-checked and audited.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 14 `unsafe` blocks (20 lines) that enter the OS sandbox, machine-checked and audited.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Honest about it:** each crate declares its verification tier, and the
@@ -143,7 +143,7 @@ and much of it is work only a person can do.
 - **Run it where we have not.** The Phase 2 process tests (the sandbox, the
   hostile renderer) have only run on macOS arm64, and never on Linux. The README
   says why under the status table.
-- **Read `clazel-sys`.** It is the only crate with `unsafe`: 8 blocks that
+- **Read `clazel-sys`.** It is the only crate with `unsafe`: 14 blocks that
   enter the OS sandbox. Every change is audited by a second model
   ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person reading it too is
   welcome.
