@@ -83,6 +83,18 @@
 //!   allowed, `.` alone the root; every octet below 128. An empty label,
 //!   a label over 63 octets or a name over 255 octets makes the name
 //!   invalid (`None`).
+//! - **A name read from a reply is turned back into a dotted string by
+//!   [`wire_to_dotted`]**, for the shell to ask about again (a CNAME target,
+//!   RFC 1034 §5.3.3 step 3a). It is the inverse of [`dotted_to_wire`] on
+//!   what the encoder can write: an uncompressed wire name (§3.1) of at
+//!   least one label, joined by `.` with no trailing dot. A name that has
+//!   no dotted spelling is `None`: the root (it has no labels, and `.`
+//!   is not a host to ask about), a label that holds a `.` (the dotted form
+//!   would split it in two) or an octet of 128 or more, a compression
+//!   pointer or a reserved length octet (§3.1: the high two bits of a length
+//!   octet are zero), and a name over 255 octets (§2.3.4). Octets other
+//!   than letters, digits and hyphen are kept: §2.3.1's preferred syntax is
+//!   advice ("should"), and the encoder does not enforce it either.
 //! - **Addresses are numbers.** An A record's address is the `u32` its four
 //!   octets spell in network order, an AAAA record's the `u128` its sixteen
 //!   octets spell ([`be_value`]).
@@ -677,6 +689,76 @@ pub open spec fn dotted_to_wire(s: Seq<u8>) -> Option<Seq<u8>> {
                     Some(w + seq![0u8])
                 }
             },
+        }
+    }
+}
+
+/// A label that can stand between dots: no `.` and only ASCII, the octets
+/// [`dotted_scan`] accepts inside a label.
+pub open spec fn is_dotted_label(s: Seq<u8>) -> bool {
+    forall|i: int| 0 <= i < s.len() ==> (#[trigger] s[i]) != 46 && s[i] < 128
+}
+
+/// `a` and `b` are dotted names or empty; the dotted name of both, `a`
+/// first: they are joined by a `.` unless one is empty.
+pub open spec fn join_dotted(a: Seq<u8>, b: Seq<u8>) -> Seq<u8> {
+    if a.len() == 0 {
+        b
+    } else if b.len() == 0 {
+        a
+    } else {
+        a + seq![46u8] + b
+    }
+}
+
+/// §3.1: the labels of the wire name `w` from `pos`, as a dotted string, or
+/// `None` if they are not labels ended by the zero octet that is the last
+/// octet of `w`. `Some` of the empty string is the root label alone.
+pub open spec fn wire_scan(w: Seq<u8>, pos: nat) -> Option<Seq<u8>>
+    decreases w.len() - pos
+{
+    if pos >= w.len() {
+        // §3.1: "a domain name is terminated by a length byte of zero": the
+        // name ended without it.
+        None
+    } else if w[pos as int] == 0 {
+        if pos + 1 == w.len() {
+            Some(seq![])
+        } else {
+            // Octets after the root label: not one name.
+            None
+        }
+    } else if w[pos as int] > MAX_LABEL as u8 || pos + 1 + w[pos as int] as nat > w.len() {
+        // §3.1: "the high order two bits of every length octet must be
+        // zero", so a length over 63 (a compression pointer, §4.1.4, or a
+        // reserved value) is not a label; nor is one that runs past the end.
+        None
+    } else {
+        let label = w.subrange(pos as int + 1, pos as int + 1 + w[pos as int] as int);
+        if !is_dotted_label(label) {
+            None
+        } else {
+            match wire_scan(w, pos + 1 + w[pos as int] as nat) {
+                None => None,
+                Some(rest) => Some(join_dotted(label, rest)),
+            }
+        }
+    }
+}
+
+/// An uncompressed wire name as a dotted ASCII string (the inverse of
+/// [`dotted_to_wire`], see the modelling choices): `None` if it is not a
+/// wire name of 255 octets or less with at least one label, or if a label
+/// has no dotted spelling.
+pub open spec fn wire_to_dotted(w: Seq<u8>) -> Option<Seq<u8>> {
+    if w.len() > MAX_NAME as nat {
+        // §2.3.4: "names 255 octets or less".
+        None
+    } else {
+        match wire_scan(w, 0) {
+            None => None,
+            // The root has no label to write.
+            Some(d) => if d.len() == 0 { None } else { Some(d) },
         }
     }
 }
