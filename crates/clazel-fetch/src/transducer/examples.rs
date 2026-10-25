@@ -32,7 +32,7 @@ pub open spec fn url_a(fragment: Option<Seq<u32>>) -> Url {
 
 /// A state for `url_a(fragment)`.
 pub open spec fn state_a(fragment: Option<Seq<u32>>, redirects: nat, phase: Phase) -> State {
-    State { url: url_a(fragment), redirects: redirects, phase: phase }
+    State { url: url_a(fragment), redirects: redirects, phase: phase, jar: Seq::<Cookie>::empty(), now: 0, tainted: false }
 }
 
 /// `step` with the real functions from `state_a(fragment, redirects, phase)`.
@@ -49,6 +49,10 @@ pub open spec fn ex_step(fragment: Option<Seq<u32>>, redirects: nat, phase: Phas
 /// shell's tests run the transducer with it.)
 pub open spec fn example_urls() -> UrlFns {
     UrlFns {
+        // Every URL has the one opaque origin, and the Public Suffix List
+        // is empty: the rows with an empty jar do not read either.
+        origin: |url: Url| clazel_origin::spec::Origin::Opaque(0),
+        rules: Seq::<clazel_psl::spec::Rule>::empty(),
         location: |base: Url, value: Seq<u8>| if value == seq![0x2Fu8, 0x62] {
             Some(clazel_url::url::spec::Url {
                 scheme: base.scheme,

@@ -42,6 +42,7 @@ use super::types::{ActionBuf, InputBuf, StateBuf};
 use clazel_encoding::utf8::decode::decode_without_bom;
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
+use clazel_origin::exec::{ParsedOrigin, url_origin_exec};
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::record::ParsedUrl;
 
@@ -68,7 +69,13 @@ pub open spec fn real_location(base: Url, value: Seq<u8>) -> Option<Url> {
 
 /// The URL functions of the shipped client.
 pub open spec fn real_urls() -> UrlFns {
-    UrlFns { location: |base: Url, value: Seq<u8>| real_location(base, value) }
+    UrlFns {
+        location: |base: Url, value: Seq<u8>| real_location(base, value),
+        // URL §4.7 "origin" with the real domain parser; the opaque origin
+        // id of a URL with none is 0 (no HTTP(S) URL has one).
+        origin: |url: Url| clazel_origin::spec::url_origin(url, clazel_url::url::contract::url_domain_parser(), 0),
+        rules: clazel_psl::table::psl_rules(),
+    }
 }
 
 /// The shipped parser is prefix-stable
@@ -132,6 +139,13 @@ pub struct RealUrls;
 impl UrlFnsExec for RealUrls {
     open spec fn urls(&self) -> UrlFns {
         real_urls()
+    }
+
+    proof fn rules_are_psl(&self) {
+    }
+
+    fn origin(&self, url: &ParsedUrl) -> (r: ParsedOrigin) {
+        url_origin_exec(url, 0)
     }
 
     fn location(&self, base: &ParsedUrl, value: &[u8]) -> (r: Option<ParsedUrl>) {

@@ -6,6 +6,7 @@ use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
+use clazel_cookie::storage::exec::{CookieRecord, jar_view};
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ResponseBuf;
 use clazel_url::url::record::ParsedUrl;
@@ -46,13 +47,26 @@ pub struct StateBuf {
     pub redirects: u8,
     /// where it is
     pub phase: PhaseBuf,
+    /// the cookie jar
+    pub jar: Vec<CookieRecord>,
+    /// the time (seconds since 1601)
+    pub now: u64,
+    /// the redirect-taint is cross-site
+    pub tainted: bool,
 }
 
 impl View for StateBuf {
     type V = State;
 
     open spec fn view(&self) -> State {
-        State { url: self.url@, redirects: self.redirects as nat, phase: self.phase@ }
+        State {
+            url: self.url@,
+            redirects: self.redirects as nat,
+            phase: self.phase@,
+            jar: jar_view(self.jar@),
+            now: self.now as int,
+            tainted: self.tainted,
+        }
     }
 }
 

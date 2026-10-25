@@ -11,6 +11,10 @@
 //!   current URL;
 //! - [`theorem_silent_until_decided`]: no action on bytes until the parser
 //!   has decided;
+//! - [`theorem_wire_cookies`] and [`theorem_jar_frame`]: the jar reaches the
+//!   wire only as the `Cookie` field value that RFC 6265bis §5.8.3 gives,
+//!   and changes only by retrieval's step 5 and by §5.7 storage of the
+//!   response's own `Set-Cookie` lines;
 //! - [`theorem_split_invariant`]: for a parser that is `prefix_stable`, how
 //!   the bytes are split does not matter. (The real parser is
 //!   prefix-stable: `real::theorem_real_prefix_stable`.)
@@ -91,17 +95,17 @@ pub open spec fn connect_budget(s: State) -> int {
 }
 
 /// `begin` for the request after `redirects` redirects.
-pub proof fn lemma_begin_budget(url: Url, redirects: nat)
+pub proof fn lemma_begin_budget(url: Url, redirects: nat, jar: Seq<Cookie>, now: int, tainted: bool)
     requires
         redirects <= 20,
     ensures
-        begin(url, redirects).0.redirects == redirects,
-        super::contract::count_sends(begin(url, redirects).1) + send_budget(begin(url, redirects).0) <= 21 - redirects,
-        super::contract::count_connects(begin(url, redirects).1) + connect_budget(begin(url, redirects).0) <= 21 - redirects,
-        begin(url, redirects).1.len() == 1,
-        !(begin(url, redirects).1[0] is Send),
+        begin(url, redirects, jar, now, tainted).0.redirects == redirects,
+        super::contract::count_sends(begin(url, redirects, jar, now, tainted).1) + send_budget(begin(url, redirects, jar, now, tainted).0) <= 21 - redirects,
+        super::contract::count_connects(begin(url, redirects, jar, now, tainted).1) + connect_budget(begin(url, redirects, jar, now, tainted).0) <= 21 - redirects,
+        begin(url, redirects, jar, now, tainted).1.len() == 1,
+        !(begin(url, redirects, jar, now, tainted).1[0] is Send),
 {
-    let b = begin(url, redirects);
+    let b = begin(url, redirects, jar, now, tainted);
     lemma_count_one(b.1[0]);
     assert(b.1 =~= seq![b.1[0]]);
 }
@@ -140,22 +144,24 @@ pub proof fn lemma_on_final_budget(urls: UrlFns, s: State, response: Response, o
         super::contract::count_sends(on_final(urls, s, response, open).1) + send_budget(on_final(urls, s, response, open).0) <= send_budget(s),
         super::contract::count_connects(on_final(urls, s, response, open).1) + connect_budget(on_final(urls, s, response, open).0) <= connect_budget(s),
 {
+    let s1 = State { jar: store_response(urls, s, response), ..s };
     match location_url(urls, response, s.url) {
         LocationUrl::Null => {
             lemma_count_closing(open, Action::Done { url: s.url, response: response });
             lemma_count_one(Action::Done { url: s.url, response: response });
         },
         LocationUrl::Failure => {
-            lemma_fail_budget(s, Reason::RedirectLocation, open);
+            lemma_fail_budget(s1, Reason::RedirectLocation, open);
         },
         LocationUrl::Url(location) => {
             if !is_http_s_scheme(location.scheme) {
-                lemma_fail_budget(s, Reason::RedirectScheme, open);
+                lemma_fail_budget(s1, Reason::RedirectScheme, open);
             } else if s.redirects == max_redirects() {
-                lemma_fail_budget(s, Reason::RedirectLimit, open);
+                lemma_fail_budget(s1, Reason::RedirectLimit, open);
             } else {
-                let next = begin(location, s.redirects + 1);
-                lemma_begin_budget(location, s.redirects + 1);
+                let t = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
+                let next = begin(location, s.redirects + 1, store_response(urls, s, response), s.now, t);
+                lemma_begin_budget(location, s.redirects + 1, store_response(urls, s, response), s.now, t);
                 lemma_count_concat(close_if(open), next.1);
                 lemma_count_close_if(open);
             }
@@ -179,11 +185,11 @@ pub proof fn lemma_step_budget(http: HttpFns, urls: UrlFns, s: State, input: Inp
             assert(super::contract::count_connects(Seq::<Action>::empty()) == 0);
         },
         Phase::Connecting => match input {
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+            Input::Connected => match crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s)) {
                 Some(bytes) => {
                     lemma_count_one(Action::Send(bytes));
                 },
-                None => lemma_fail_budget(s, Reason::NotFetched, true),
+                None => lemma_fail_budget(State { jar: jar_after_cookie_string(urls, s), ..s }, Reason::NotFetched, true),
             },
             Input::Bytes(_) => lemma_fail_budget(s, Reason::Shell, true),
             Input::Closed => lemma_fail_budget(s, Reason::Network, false),
@@ -242,12 +248,12 @@ pub proof fn lemma_budget_nonnegative(s: State)
 
 /// **Totality**: a fetch opens at most 21 connections and sends at most
 /// 21 requests, whatever the inputs.
-pub proof fn theorem_requests_bounded(http: HttpFns, urls: UrlFns, url: Url, inputs: Seq<Input>)
+pub proof fn theorem_requests_bounded(http: HttpFns, urls: UrlFns, url: Url, jar: Seq<Cookie>, now: int, inputs: Seq<Input>)
     ensures
-        super::contract::requests_bounded(http, urls, url, inputs),
+        super::contract::requests_bounded(http, urls, url, jar, now, inputs),
 {
-    let s0 = start(url);
-    lemma_begin_budget(url, 0);
+    let s0 = start(url, jar, now);
+    lemma_begin_budget(url, 0, jar, now, false);
     lemma_run_budget(http, urls, s0.0, inputs);
     lemma_budget_nonnegative(run(http, urls, s0.0, inputs).0);
     lemma_count_concat(s0.1, run(http, urls, s0.0, inputs).1);
@@ -340,7 +346,8 @@ pub proof fn lemma_on_final_no_sends(urls: UrlFns, s: State, response: Response,
             } else if s.redirects == max_redirects() {
                 lemma_no_sends_closing(open, seq![Action::Fail(Reason::RedirectLimit)]);
             } else {
-                let next = begin(location, s.redirects + 1);
+                let t = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
+                let next = begin(location, s.redirects + 1, store_response(urls, s, response), s.now, t);
                 assert(no_sends(next.1));
                 lemma_no_sends_closing(open, next.1);
             }
@@ -365,7 +372,7 @@ pub proof fn theorem_sends_are_requests(http: HttpFns, urls: UrlFns, s: State, i
     match s.phase {
         Phase::Finished => {},
         Phase::Connecting => match input {
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+            Input::Connected => match crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s)) {
                 Some(bytes) => {},
                 None => lemma_fail_no_sends(s, Reason::NotFetched, true),
             },
@@ -482,6 +489,95 @@ pub proof fn theorem_split_invariant(http: HttpFns, urls: UrlFns, s: State, a: S
             }
         },
         _ => {},
+    }
+}
+
+// ===========================================================================
+// Cookies.
+// ===========================================================================
+
+/// A request that was built is a wire request: valid, serialized, and
+/// differing from the cookie-less request only by the `Cookie` field.
+pub proof fn lemma_wire_request(url: Url, cookie: Seq<u8>, bytes: Seq<u8>)
+    requires
+        crate::request::spec::request_bytes_cookie(url, cookie) == Some(bytes),
+    ensures
+        super::contract::is_wire_request(url, cookie, bytes),
+{
+}
+
+/// **The jar reaches the wire only as the `Cookie` field**: every `Send`
+/// is the request for the current URL with the cookie-string of §5.8.3's
+/// retrieval, and nothing else of it comes from the jar.
+pub proof fn theorem_wire_cookies(http: HttpFns, urls: UrlFns, s: State, input: Input)
+    ensures
+        super::contract::wire_cookies(http, urls, s, input),
+{
+    theorem_sends_are_requests(http, urls, s, input);
+    let cs = cookie_string(urls, s);
+    assert forall|k: int| 0 <= k < step(http, urls, s, input).1.len() implies match #[trigger] step(http, urls, s, input).1[k] {
+        Action::Send(bytes) => super::contract::is_wire_request(s.url, cs, bytes),
+        _ => true,
+    } by {
+        match step(http, urls, s, input).1[k] {
+            Action::Send(bytes) => {
+                assert(crate::request::spec::request_bytes_cookie(s.url, cs) == Some(bytes));
+                lemma_wire_request(s.url, cs, bytes);
+            },
+            _ => {},
+        }
+    }
+}
+
+/// `on_final` leaves the jar of storing the response's cookies and the
+/// same time.
+pub proof fn lemma_on_final_jar(urls: UrlFns, s: State, response: Response, open: bool)
+    ensures
+        on_final(urls, s, response, open).0.jar == store_response(urls, s, response),
+        on_final(urls, s, response, open).0.now == s.now,
+{
+}
+
+/// `fail` keeps the jar and the time.
+pub proof fn lemma_fail_jar(s: State, reason: Reason, open: bool)
+    ensures
+        fail(s, reason, open).0.jar == s.jar,
+        fail(s, reason, open).0.now == s.now,
+{
+}
+
+/// **The jar changes only by retrieval's step 5 and by storing the
+/// response's own `Set-Cookie` lines**, one step at a time; so, over a
+/// fetch, only by the functions of `clazel-cookie`.
+pub proof fn theorem_jar_frame(http: HttpFns, urls: UrlFns, s: State, input: Input)
+    ensures
+        super::contract::jar_frame(http, urls, s, input),
+{
+    match s.phase {
+        Phase::Finished => {},
+        Phase::Connecting => match input {
+            Input::Connected => match crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s)) {
+                Some(bytes) => {},
+                None => lemma_fail_jar(State { jar: jar_after_cookie_string(urls, s), ..s }, Reason::NotFetched, true),
+            },
+            Input::Bytes(_) => lemma_fail_jar(s, Reason::Shell, true),
+            Input::Closed => lemma_fail_jar(s, Reason::Network, false),
+            Input::Error => lemma_fail_jar(s, Reason::Network, false),
+        },
+        Phase::Reading { received } => match input {
+            Input::Connected => lemma_fail_jar(s, Reason::Shell, true),
+            Input::Bytes(bytes) => match settle(http, received + bytes) {
+                Settled::Wait(rest) => {},
+                Settled::Final(response) => lemma_on_final_jar(urls, s, response, true),
+                Settled::Bad(reason) => lemma_fail_jar(s, reason, true),
+            },
+            Input::Closed => match settle_at_close(http, received) {
+                Settled::Final(response) => lemma_on_final_jar(urls, s, response, false),
+                Settled::Bad(reason) => lemma_fail_jar(s, reason, false),
+                Settled::Wait(_) => lemma_fail_jar(s, Reason::Incomplete, false),
+            },
+            Input::Error => lemma_fail_jar(s, Reason::Network, true),
+        },
     }
 }
 
