@@ -144,8 +144,8 @@
       "id": "validity-unchecked",
       "file": "src/request/spec.rs",
       "module": "request::examples",
-      "find": "Some(r) => if clazel_http::message::spec::is_valid_request(r) {",
-      "replace": "Some(r) => if true {",
+      "find": "match request_for(url) {\n        Some(r) => if clazel_http::message::spec::is_valid_request(r) {",
+      "replace": "match request_for(url) {\n        Some(r) => if true {",
       "expect": "killed",
       "reason": "Serializes an invalid request (an SP in the target would end the request line early). lemma_request_10 says it is refused.",
       "certificate": {
@@ -438,8 +438,8 @@
       "id": "request-not-sent",
       "file": "src/transducer/spec.rs",
       "module": "transducer::examples",
-      "find": "seq![Action::Send(bytes)]),",
-      "replace": "seq![]),",
+      "find": "seq![Action::Send(bytes)],",
+      "replace": "seq![],",
       "expect": "killed",
       "reason": "Connected sends nothing. lemma_transducer_14 says it sends the request.",
       "certificate": {
