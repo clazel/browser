@@ -13,7 +13,8 @@ Module `request`:
   §3.2.1: the URL's serialized path, `/` if empty, and its query; never
   the fragment), and the fields `Host` (RFC 9110 §7.2: the serialized host
   and the port if the URL has one), `Connection: close`, `Accept: */*` and
-  `User-Agent: clazel`, serialized by `clazel-http`;
+  `User-Agent: clazel`, and a `Cookie` field last when the cookie-string is
+  not empty (Fetch §3.1.1), serialized by `clazel-http`;
 - where to connect: the serialized host and the port (80 by default);
 - which responses are interim (RFC 9110 §15.2: 1xx except 101).
 
@@ -21,8 +22,8 @@ A URL with userinfo, a scheme other than `http`, or a non-ASCII code point
 in what would be sent is refused.
 
 Module `transducer`: the client state machine, a pure function the network
-shell (`clazel-net`) drives. `start(url)` asks to `Connect`; `step(state,
-input)` maps `Connected`, `Bytes`, `Closed` and `Error` to `Send`, `Close`,
+shell (`clazel-net`) drives. `start(url, jar, now)` asks to `Connect`;
+`step(state, input)` maps `Connected`, `Bytes`, `Closed` and `Error` to `Send`, `Close`,
 `Done` and `Fail`. It skips interim responses, ends a close-delimited body
 at `Closed` (RFC 9112 §6.3 step 8), fails on an invalid message, an
 unsupported transfer coding or a response incomplete at close, and follows
@@ -32,8 +33,22 @@ target or a 21st redirect is a network error), one connection per request.
 The HTTP and URL functions are parameters, joined to `clazel-http`'s
 response parser and `clazel-url`'s basic URL parser in `transducer::real`.
 
-Not built yet: TLS (`https:` is refused), cookies and
-`theorem_wire_cookies`, the independent transcription, conformance tests.
+Cookies: the jar (`clazel-cookie`'s model) is a field of the state and is
+what the state holds when `Done` or `Fail` ends the fetch. When the
+request is sent, its `Cookie` field is RFC 6265bis §5.8.3's retrieval for
+the current URL, as a top-level navigation GET with no client (so
+same-site, unless a redirect crossed sites: Fetch's redirect-taint, which
+makes it cross-site, so `SameSite=Strict` cookies are withheld), and the
+jar becomes the jar after the retrieval's step 5. Every `Set-Cookie` field
+line of a final response is stored, one by one, by §5.7 as HTTP, before
+the redirect is decided; a 1xx response never reaches the storage. The
+`Secure` requirement is the connection's: `Connect.tls` is false and the
+scheme `http`, so no `Secure` cookie is sent.
+
+Not built yet: TLS (`https:` is refused), the `Cookie` field and
+`Set-Cookie` of a fetch with a client (a subresource or a cross-site
+initiator: the context is fixed), `SameSite=Lax-allowing-unsafe`, and a
+conformance suite beyond the http-state corpus (see below).
 
 ## Verification
 
@@ -43,8 +58,14 @@ the spec. Proven of the transducer spec, for every HTTP and URL function
 (`src/transducer/theorems.rs`): at most 21 connections and 21 requests per
 fetch whatever the inputs; the redirect count stays at most 20; the URL
 changes only to an HTTP(S) URL, one redirect at a time; every `Send` is the
-request for the current URL; no action on bytes until the parser has
-decided. That splitting the bytes differently changes nothing is proven
+request for the current URL with the cookie-string of the jar; no action
+on bytes until the parser has decided; `theorem_wire_cookies`, that every
+`Send` is the request for the current URL whose only jar-derived part is
+its `Cookie` field, whose value is §5.8.3's retrieval; `theorem_jar_frame`,
+that the jar after a step is the jar before, or the jar after the
+retrieval's step 5 at `Connected`, or the jar of §5.7 storage of the final
+response's own `Set-Cookie` lines (so `clazel-cookie`'s root lemmas are all
+there is to know about the jar of a fetch). That splitting the bytes differently changes nothing is proven
 for every parser that is `prefix_stable`, and `clazel-http`'s is proven
 `prefix_stable` (`src/transducer/real.rs`). The executable transducer
 feeds each octet once into a `clazel-http` `ResponseParser`, so a fetch is
@@ -56,3 +77,24 @@ a stand-in URL function), and the mutations in `mutations.json` are each
 killed by an example or a theorem with a certificate. The network shell's
 `fetch` tests (`clazel-net`) run it end to end against local servers,
 redirect chains and the 20-redirect limit included.
+
+`src/transducer/independent.rs` is a second transcription of the Fetch
+Standard (HTTP-redirect fetch steps 3 to 8, 18 and 22, "location URL",
+the `Cookie` header and `Set-Cookie` steps), written with the request as
+its URL list (so the redirect count is the list's length and the
+redirect-taint is computed from it), and a proof that, for a state and a
+request in correspondence, the transducer's cookie-string, request bytes,
+jar and decision on a final response are the independent ones. The class
+is a navigation GET with no body, no cache, no CORS and credentials "include".
+It is a one-step equivalence (which gives the same request sequence by
+induction over a run, not proven as a statement over runs), and what it
+shares with `spec.rs` is only what the standards themselves call
+(`clazel-cookie`'s algorithms, the URL parser, the field functions).
+
+Conformance (`tests/conformance_http_state.rs`): the 222 rows of the
+`http-state` parser corpus run through the whole client (the response's
+bytes parsed, each `Set-Cookie` stored, the redirect followed, the next
+request's `Cookie` field compared): 195 pass, 27 are expected failures
+with reasons (RFC 6265 and draft 22 differ; the HTTP layer rejects a NUL
+or CR), none fail. The Fetch Standard text was read from its commit snapshot
+on the web; the repository holds no copy of it.

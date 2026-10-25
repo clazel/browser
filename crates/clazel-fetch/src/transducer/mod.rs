@@ -10,7 +10,6 @@
 //! - [`step`] and [`types`]: the executable transducer.
 //! - [`theorems`]: the proofs of the theorems.
 //! - [`real`]: the parameters joined to the real parsers.
-//! - [`independent`]: a second transcription of the Fetch Standard and a proof that the transducer agrees with it.
 //! - [`examples`]: concrete fetches evaluated on the spec.
 //! - [`independent`]: Fetch's HTTP-redirect fetch and cookie steps,
 //!   transcribed separately and proven to agree with the spec step by step.
