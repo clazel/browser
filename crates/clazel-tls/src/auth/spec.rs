@@ -188,6 +188,7 @@ pub open spec fn wf(s: State) -> bool {
         && (s.signature_checked ==> s.chain_checked)
         && (s.finished_checked ==> s.chain_checked && s.signature_checked)
         && (s.client_sent ==> s.finished_checked)
+        && (s.client_sent ==> s.phase == Phase::Ready || s.phase == Phase::Failed || s.phase == Phase::Closed)
         && (s.phase == Phase::CertificateVerify ==> s.chain_checked)
         && (s.phase == Phase::Finished ==> s.chain_checked && s.signature_checked)
         && (s.phase == Phase::SendFinished ==> s.finished_checked)
