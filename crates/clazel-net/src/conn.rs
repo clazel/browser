@@ -6,7 +6,7 @@ use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::time::Duration;
 
 /// Size of the read buffer, and so the largest chunk given to the callback.
-const READ_BUF: usize = 16 * 1024;
+pub(crate) const READ_BUF: usize = 16 * 1024;
 
 /// What the caller wants after a chunk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,50 +88,98 @@ pub fn run_with(
     timeouts: Timeouts,
     mut on_bytes: impl FnMut(&[u8]) -> Flow,
 ) -> Result<Finish, NetError> {
-    let mut stream = connect(addrs, port, timeouts.connect)?;
-    let io_err = |e: io::Error| NetError::Io(e.kind());
-    stream
-        .set_read_timeout(Some(timeouts.idle))
-        .map_err(io_err)?;
-    stream
-        .set_write_timeout(Some(timeouts.idle))
-        .map_err(io_err)?;
-    stream.set_nodelay(true).map_err(io_err)?;
-
-    let write_error = match stream.write_all(request).and_then(|()| stream.flush()) {
-        Ok(()) => None,
-        Err(e) => match e.kind() {
-            io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset => {
-                Some(NetError::Io(e.kind()))
-            }
-            _ => return Err(from_io(&e, Stage::Write)),
-        },
-    };
-
+    let mut conn = Connection::open(addrs, port, timeouts)?;
+    conn.send(request)?;
     let mut buf = vec![0u8; READ_BUF];
-    let mut delivered = false;
     loop {
-        match stream.read(&mut buf) {
-            Ok(0) => {
-                return match (write_error, delivered) {
-                    (Some(e), false) => Err(e),
-                    _ => Ok(Finish::Closed),
-                };
-            }
-            Ok(n) => {
-                delivered = true;
+        match conn.read(&mut buf)? {
+            None => return Ok(Finish::Closed),
+            Some(n) => {
                 let chunk = buf.get(..n).unwrap_or(&[]);
                 if on_bytes(chunk) == Flow::Stop {
                     return Ok(Finish::Stopped);
                 }
             }
-            Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
-            Err(e) => {
-                if delivered && write_error.is_some() && e.kind() == io::ErrorKind::ConnectionReset
-                {
-                    return Ok(Finish::Closed);
+        }
+    }
+}
+
+/// One open connection, for a caller that decides itself when to send and
+/// read (the fetch loop). Dropping it closes it.
+pub struct Connection {
+    stream: TcpStream,
+    /// A write that failed because the peer closed or reset: kept, and
+    /// returned by [`Connection::read`] only if nothing arrives.
+    write_error: Option<NetError>,
+    /// Whether any byte was read.
+    delivered: bool,
+}
+
+impl Connection {
+    /// Connect to `addrs` in order (as [`connect`]), with `timeouts.idle`
+    /// for every later read and write.
+    pub fn open(addrs: &[IpAddr], port: u16, timeouts: Timeouts) -> Result<Self, NetError> {
+        let stream = connect(addrs, port, timeouts.connect)?;
+        let io_err = |e: io::Error| NetError::Io(e.kind());
+        stream
+            .set_read_timeout(Some(timeouts.idle))
+            .map_err(io_err)?;
+        stream
+            .set_write_timeout(Some(timeouts.idle))
+            .map_err(io_err)?;
+        stream.set_nodelay(true).map_err(io_err)?;
+        Ok(Connection {
+            stream,
+            write_error: None,
+            delivered: false,
+        })
+    }
+
+    /// Write `bytes` in full. If the peer has closed or reset the
+    /// connection, whatever it sent before is still read: the error is
+    /// kept for [`Connection::read`] instead.
+    pub fn send(&mut self, bytes: &[u8]) -> Result<(), NetError> {
+        match self
+            .stream
+            .write_all(bytes)
+            .and_then(|()| self.stream.flush())
+        {
+            Ok(()) => Ok(()),
+            Err(e) => match e.kind() {
+                io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset => {
+                    self.write_error = Some(NetError::Io(e.kind()));
+                    Ok(())
                 }
-                return Err(from_io(&e, Stage::Read));
+                _ => Err(from_io(&e, Stage::Write)),
+            },
+        }
+    }
+
+    /// Read the next chunk into `buf`: `Some(n)` octets (never 0), or
+    /// `None` when the peer has closed the connection.
+    pub fn read(&mut self, buf: &mut [u8]) -> Result<Option<usize>, NetError> {
+        loop {
+            match self.stream.read(buf) {
+                Ok(0) => {
+                    return match (self.write_error, self.delivered) {
+                        (Some(e), false) => Err(e),
+                        _ => Ok(None),
+                    };
+                }
+                Ok(n) => {
+                    self.delivered = true;
+                    return Ok(Some(n));
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) => {
+                    if self.delivered
+                        && self.write_error.is_some()
+                        && e.kind() == io::ErrorKind::ConnectionReset
+                    {
+                        return Ok(None);
+                    }
+                    return Err(from_io(&e, Stage::Read));
+                }
             }
         }
     }
