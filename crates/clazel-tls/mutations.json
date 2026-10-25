@@ -1329,6 +1329,244 @@
         "lemma": "super::examples::lemma_label_iv()",
         "witness": "label_bytes(Label::Iv) != seq![105u8, 118u8]"
       }
+    },
+    {
+      "id": "transcript-initial-header",
+      "file": "src/transcript/spec.rs",
+      "find": "messages: crate::spec::write_handshake(1, client_hello)",
+      "replace": "messages: client_hello",
+      "expect": "killed",
+      "reason": "The start witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_start()",
+        "witness": "start(seq![7u8]) != Ok(super::examples::initial())"
+      }
+    },
+    {
+      "id": "transcript-initial-phase",
+      "file": "src/transcript/spec.rs",
+      "find": "phase: Phase::FirstServerHello, retried: false",
+      "replace": "phase: Phase::Handshake, retried: false",
+      "expect": "killed",
+      "reason": "The start witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_start()",
+        "witness": "start(seq![7u8]) != Ok(super::examples::initial())"
+      }
+    },
+    {
+      "id": "transcript-retry-wire-type",
+      "file": "src/transcript/spec.rs",
+      "find": "Kind::ServerHello | Kind::HelloRetryRequest => 2",
+      "replace": "Kind::ServerHello | Kind::HelloRetryRequest => 6",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-retry-synthetic-type",
+      "file": "src/transcript/spec.rs",
+      "find": "crate::spec::write_handshake(254, hash(s.messages))",
+      "replace": "crate::spec::write_handshake(2, hash(s.messages))",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-retry-hashes-body",
+      "file": "src/transcript/spec.rs",
+      "find": "hash(s.messages)",
+      "replace": "hash(body)",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-retry-retains-clienthello",
+      "file": "src/transcript/spec.rs",
+      "find": "crate::spec::write_handshake(254, hash(s.messages)) + message",
+      "replace": "s.messages + crate::spec::write_handshake(254, hash(s.messages)) + message",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-ordinary-drops-prefix",
+      "file": "src/transcript/spec.rs",
+      "find": "s.messages + message",
+      "replace": "message",
+      "expect": "killed",
+      "reason": "The ordinary witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_ordinary()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::ServerHello, seq![8u8]) != Ok(State { messages: seq![1u8, 0u8, 0u8, 1u8, 7u8, 2u8, 0u8, 0u8, 1u8, 8u8], phase: Phase::Handshake, retried: false })"
+      }
+    },
+    {
+      "id": "transcript-retry-flag",
+      "file": "src/transcript/spec.rs",
+      "find": "retried: s.retried || kind == Kind::HelloRetryRequest",
+      "replace": "retried: s.retried",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-second-retry",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::SecondClientHello => match kind {\n            Kind::ClientHello => Some(Phase::SecondServerHello),",
+      "replace": "Phase::SecondClientHello => match kind {\n            Kind::HelloRetryRequest => Some(Phase::SecondClientHello),\n            Kind::ClientHello => Some(Phase::SecondServerHello),",
+      "expect": "killed",
+      "reason": "The repeat witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_repeat()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::retried(), Kind::HelloRetryRequest, seq![8u8]) != Err(Error::UnexpectedMessage)"
+      }
+    },
+    {
+      "id": "transcript-auth-before-serverhello",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::FirstServerHello => match kind {",
+      "replace": "Phase::FirstServerHello => match kind {\n            Kind::Certificate => Some(Phase::Handshake),",
+      "expect": "killed",
+      "reason": "The first_order witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_first_order()",
+        "witness": "next_phase(Phase::FirstServerHello, Kind::Certificate) != None"
+      }
+    },
+    {
+      "id": "transcript-skip-second-clienthello",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::SecondClientHello => match kind {",
+      "replace": "Phase::SecondClientHello => match kind {\n            Kind::ServerHello => Some(Phase::Handshake),",
+      "expect": "killed",
+      "reason": "The second_client witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_second_client()",
+        "witness": "next_phase(Phase::SecondClientHello, Kind::ServerHello) != None"
+      }
+    },
+    {
+      "id": "transcript-repeat-second-clienthello",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::SecondServerHello => match kind {",
+      "replace": "Phase::SecondServerHello => match kind {\n            Kind::ClientHello => Some(Phase::SecondServerHello),",
+      "expect": "killed",
+      "reason": "The second_server witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_second_server()",
+        "witness": "next_phase(Phase::SecondServerHello, Kind::ClientHello) != None"
+      }
+    },
+    {
+      "id": "transcript-signature-pad-length",
+      "file": "src/transcript/spec.rs",
+      "find": "Seq::new(64, |i: int| 32u8)",
+      "replace": "Seq::new(63, |i: int| 32u8)",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-pad-byte",
+      "file": "src/transcript/spec.rs",
+      "find": "Seq::new(64, |i: int| 32u8)",
+      "replace": "Seq::new(64, |i: int| 0u8)",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-separator",
+      "file": "src/transcript/spec.rs",
+      "find": "context(server) + seq![0u8]",
+      "replace": "context(server) + seq![1u8]",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-omits-hash",
+      "file": "src/transcript/spec.rs",
+      "find": "+ transcript_hash",
+      "replace": "+ Seq::empty()",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-context-swapped",
+      "file": "src/transcript/spec.rs",
+      "find": "if server {",
+      "replace": "if !server {",
+      "expect": "killed",
+      "reason": "The client_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_client_input()",
+        "witness": "certificate_verify_input(false, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 99u8, 108u8, 105u8, 101u8, 110u8, 116u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
     }
   ]
 }

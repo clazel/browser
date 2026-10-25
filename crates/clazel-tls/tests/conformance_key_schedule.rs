@@ -186,3 +186,169 @@ fn chacha_key_and_updates_use_the_right_labels_and_lengths() -> Result<(), Strin
     assert_ne!(write_key(&crypto, &secret), write_key(&crypto, &next));
     Ok(())
 }
+
+#[test]
+fn transcript_accumulator_matches_rfc8448() -> Result<(), String> {
+    use clazel_tls::transcript::exec::Transcript;
+    use clazel_tls::transcript::spec::Kind;
+    let crypto = Reference;
+    let mut pass = 0usize;
+    let mut total = 0usize;
+    for section in [3, 5] {
+        let mut messages = key_schedule_vectors::TRANSCRIPT_MESSAGES
+            .iter()
+            .filter(|m| m.section == section)
+            .peekable();
+        let mut transcript: Option<Transcript> = None;
+        for v in key_schedule_vectors::VECTORS
+            .iter()
+            .filter(|v| v.section == section)
+        {
+            while messages.peek().is_some_and(|m| m.line < v.line) {
+                let m = messages.next().ok_or("missing transcript message")?;
+                let bytes = hex(m.hex)?;
+                let body = bytes.get(4..).ok_or("missing handshake header")?;
+                match &mut transcript {
+                    None => {
+                        assert_eq!(m.kind, Kind::ClientHello);
+                        transcript = Some(Transcript::new(body).map_err(|e| format!("{e:?}"))?);
+                    }
+                    Some(t) => t
+                        .push(&crypto, m.kind, body)
+                        .map_err(|e| format!("{e:?}"))?,
+                }
+            }
+            if v.kind != "expand"
+                || !matches!(
+                    label(v.label)?,
+                    Label::ClientHandshake
+                        | Label::ServerHandshake
+                        | Label::ClientApplication
+                        | Label::ServerApplication
+                        | Label::Finished
+                )
+            {
+                continue;
+            }
+            total = total.saturating_add(1);
+            let t = transcript.as_ref().ok_or("missing transcript")?;
+            let expected_messages = hex(v.messages)?;
+            let checked_value = if v.label == "finished" {
+                finished(&crypto, &hex(v.secret)?, t.messages()) == hex(v.finished)?
+            } else {
+                t.hash(&crypto) == hex(v.context)?
+            };
+            let passed = t.messages() == expected_messages && checked_value;
+            if passed {
+                pass = pass.saturating_add(1);
+            } else {
+                eprintln!("transcript section {section} line {}: {}", v.line, v.label);
+            }
+            assert_eq!(t.retried(), section == 5);
+        }
+    }
+    // Independently count the checks in the source table, not the successful loop iterations.
+    let expected_total = key_schedule_vectors::VECTORS
+        .iter()
+        .filter(|v| {
+            v.kind == "expand"
+                && matches!(
+                    v.label,
+                    "c hs traffic" | "s hs traffic" | "c ap traffic" | "s ap traffic" | "finished"
+                )
+        })
+        .count();
+    println!(
+        "clazel-conformance: suite=\"RFC 8448 live transcripts sections 3 and 5\" pass={pass} xfail=0 fail={} total={expected_total}",
+        expected_total.saturating_sub(pass)
+    );
+    assert_eq!(total, expected_total);
+    assert_eq!(pass, expected_total);
+    Ok(())
+}
+
+#[test]
+fn certificate_verify_input_matches_rfc8446_section_4_4_3() -> Result<(), String> {
+    use clazel_tls::transcript::exec::certificate_verify_input;
+    // The RFC's explicit example: SHA-256 transcript hash of 32 octets of 01.
+    let server = certificate_verify_input(true, &[1; 32]);
+    let mut expected = vec![0x20; 64];
+    expected.extend_from_slice(&hex("54 4c 53 20 31 2e 33 2c 20 73 65 72 76 65 72 20 43 65 72 74 69 66 69 63 61 74 65 56 65 72 69 66 79")?);
+    expected.push(0);
+    expected.extend_from_slice(&[1; 32]);
+    let passed = server == expected;
+    println!(
+        "clazel-conformance: suite=\"RFC 8446 section 4.4.3 signature input example\" pass={} xfail=0 fail={} total=1",
+        usize::from(passed),
+        usize::from(!passed)
+    );
+    assert!(passed);
+    let client = certificate_verify_input(false, &[1; 32]);
+    assert_eq!(client.len(), 130);
+    assert_ne!(client, server);
+    Ok(())
+}
+
+#[test]
+fn transcript_rejects_bad_hello_order_and_preserves_state() -> Result<(), String> {
+    use clazel_tls::transcript::exec::Transcript;
+    use clazel_tls::transcript::spec::{Error, Kind, MAX_BODY};
+    let crypto = Reference;
+    let mut t = Transcript::new(&[1]).map_err(|e| format!("{e:?}"))?;
+    let initial = t.messages().to_vec();
+    assert_eq!(
+        t.push(&crypto, Kind::Finished, &[2]),
+        Err(Error::UnexpectedMessage)
+    );
+    assert_eq!(t.messages(), initial);
+    t.push(&crypto, Kind::HelloRetryRequest, &[2])
+        .map_err(|e| format!("{e:?}"))?;
+    for next in [None, Some(Kind::ClientHello), Some(Kind::ServerHello)] {
+        if let Some(k) = next {
+            t.push(&crypto, k, &[3]).map_err(|e| format!("{e:?}"))?;
+        }
+        let before = t.messages().to_vec();
+        let phase = t.phase();
+        assert_eq!(
+            t.push(&crypto, Kind::HelloRetryRequest, &[2]),
+            Err(Error::UnexpectedMessage)
+        );
+        assert_eq!(t.messages(), before);
+        assert_eq!(t.phase(), phase);
+        assert!(t.retried());
+    }
+    let before = t.messages().to_vec();
+    let oversized = vec![0; MAX_BODY.saturating_add(1)];
+    assert!(matches!(Transcript::new(&oversized), Err(Error::TooLarge)));
+    assert_eq!(
+        t.push(&crypto, Kind::Certificate, &oversized),
+        Err(Error::TooLarge)
+    );
+    assert_eq!(t.messages(), before);
+    Ok(())
+}
+
+#[test]
+fn transcript_capacity_is_inclusive_and_failure_keeps_the_transcript() -> Result<(), String> {
+    use clazel_tls::transcript::exec::Transcript;
+    use clazel_tls::transcript::spec::{Error, Kind, MAX_BODY, MAX_TRANSCRIPT};
+    let crypto = Reference;
+    let mut t = Transcript::new(&[7]).map_err(|e| format!("{e:?}"))?;
+    t.push(&crypto, Kind::ServerHello, &[8])
+        .map_err(|e| format!("{e:?}"))?;
+    let body = vec![0x42; MAX_BODY];
+    while t.messages().len() < MAX_TRANSCRIPT {
+        let remaining = MAX_TRANSCRIPT.saturating_sub(t.messages().len());
+        assert!(remaining >= 4);
+        let body_len = remaining.saturating_sub(4).min(MAX_BODY);
+        let chunk = body.get(..body_len).ok_or("invalid test chunk")?;
+        t.push(&crypto, Kind::Certificate, chunk)
+            .map_err(|e| format!("{e:?}"))?;
+    }
+    assert_eq!(t.messages().len(), MAX_TRANSCRIPT);
+    let before = t.messages().to_vec();
+    assert_eq!(t.push(&crypto, Kind::Finished, &[]), Err(Error::TooLarge));
+    assert_eq!(t.messages(), before);
+    assert!(!t.retried());
+    Ok(())
+}

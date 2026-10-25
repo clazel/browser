@@ -953,6 +953,23 @@ security theorems, CertificateVerify inputs, the libcrux provider and the
 end-to-end encrypted traces. The crate remains tier 0; local proof and
 vector results do not replace CI's full verification.
 
+**Transcript construction as built (2026-10-25):**
+`clazel-tls/src/transcript/` accumulates classified handshake bodies with
+their handshake headers, implements §4.4.1's synthetic message_hash rewrite
+for HelloRetryRequest, and enforces the first/second Hello progression.
+It proves exact append/retry encodings, at most one accepted retry,
+a 4 MiB retained-byte bound, and preservation of the accumulator on error.
+The §4.4.3 CertificateVerify input builder adds the pad, the server/client
+context string, the separator and transcript hash. All 480 TLS obligations
+pass locally. Tests construct live transcripts from RFC 8448 §3/§5's 16
+messages and match all 12 hash/Finished checkpoints; RFC 8446's explicit
+signature-input example passes. The 95 existing mutation certificates now
+all pass (the six missing fixture references were fixed); 17 transcript
+witnesses are added, with their full mutation run pending. Authentication
+message ordering, server negotiation, signature verification and Finished
+verification as state transitions remain for the handshake state machine.
+No tier is raised, and full verification is still pending.
+
 #### 3.5f The cryptography and the join (M)
 
 The `shipped` rows for libcrux (`libcrux-chacha20poly1305`,
@@ -1091,7 +1108,7 @@ half does not wait on TLS.
 | 3.5b X.509 and path validation | not started (after 3.5a) |
 | 3.5c RSA PKCS#1 v1.5 | built (see As built); tier 0, target 2, pending CI full verification |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
-| 3.5e Key schedule and handshake state machine | SHA-256 non-PSK key schedule built and proven over abstract crypto; 40 RFC 8448 vector operations pass locally (see As built). Handshake state machine not started; tier 0, full CI pending |
+| 3.5e Key schedule and handshake state machine | SHA-256 non-PSK key schedule and transcript construction built and proven over abstract crypto; 40 schedule vectors and 12 live-transcript checkpoints pass locally (see As built). Full handshake/authentication state machine remains; tier 0, full CI pending |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | not started |
