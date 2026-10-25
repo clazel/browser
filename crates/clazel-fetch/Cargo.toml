@@ -37,6 +37,8 @@ theorems = [
     "theorem_split_invariant",
     "theorem_wire_cookies",
     "theorem_jar_frame",
+    "theorem_ops_name_request",
+    "theorem_jar_only_in_sends",
 ]
 
 [package.metadata.verus]

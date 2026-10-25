@@ -41,7 +41,8 @@
 //!   the **redirect-taint** is *computed* from the list ([`list_taint`]);
 //!   `spec.rs` keeps a counter, a URL and a sticky flag.
 //! - The cookie store is a `Seq<Cookie>` threaded through, and "parse and
-//!   store each `Set-Cookie`" is a `fold_left`, not a recursion.
+//!   store each `Set-Cookie`" is a `fold_left` over it; `spec.rs` returns
+//!   jar operations, compared here by applying them (`apply_ops`).
 //! - The result of HTTP-redirect fetch is Fetch's: a response, a network
 //!   error, or the request to fetch next ([`FetchResult`]); `spec.rs`'s
 //!   `Reason`s (why it failed) do not exist in Fetch.
@@ -241,17 +242,21 @@ pub open spec fn corresponds(urls: UrlFns, s: State, r: FetchRequest) -> bool {
     r.url_list.len() > 0 && s.url == current_url(r) && s.redirects == redirect_count(r) && s.tainted == list_taint(urls, r.url_list)
 }
 
-/// `store_lines` is the fold.
-pub proof fn lemma_store_lines_is_fold(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<Cookie>, lines: Seq<Seq<u8>>, url: RequestUrl, ctx: RequestContext, now: int)
+/// Applying `stored_ops` is the fold of storage.
+pub proof fn lemma_stored_ops_is_fold(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<Cookie>, lines: Seq<Seq<u8>>, url: RequestUrl, ctx: RequestContext, now: int)
     ensures
-        store_lines(rules, jar, lines, url, ctx, now)
+        apply_ops(rules, jar, stored_ops(lines, url, ctx, now))
             == lines.fold_left(jar, |j: Seq<Cookie>, line: Seq<u8>| clazel_cookie::storage::spec::store_a_set_cookie_string(rules, j, line, url, ctx, now)),
     decreases lines.len()
 {
     reveal_with_fuel(Seq::fold_left, 2);
     if lines.len() > 0 {
         let step_jar = clazel_cookie::storage::spec::store_a_set_cookie_string(rules, jar, lines[0], url, ctx, now);
-        lemma_store_lines_is_fold(rules, step_jar, lines.drop_first(), url, ctx, now);
+        lemma_stored_ops_is_fold(rules, step_jar, lines.drop_first(), url, ctx, now);
+        let ops = stored_ops(lines, url, ctx, now);
+        let rest = stored_ops(lines.drop_first(), url, ctx, now);
+        assert(ops[0] == (JarOp::Stored { line: lines[0], url: url, ctx: ctx, now: now }));
+        assert(ops.drop_first() =~= rest);
         assert(lines.drop_first() == lines.subrange(1, lines.len() as int));
         lemma_fold_left_drop_first(lines, jar, |j: Seq<Cookie>, line: Seq<u8>| clazel_cookie::storage::spec::store_a_set_cookie_string(rules, j, line, url, ctx, now));
     }
@@ -288,18 +293,21 @@ pub proof fn lemma_taint_push(urls: UrlFns, l: Seq<Url>, u: Url)
     assert(l.push(u)[l.len() - 1] == l[l.len() - 1]);
 }
 
-/// **The cookie header and the jar agree**: for a state and a request in
-/// correspondence, the cookie-string, the jar after the retrieval and the
-/// request bytes of the transducer are Fetch's.
-pub proof fn theorem_independent_request(urls: UrlFns, s: State, r: FetchRequest)
+/// **The cookie header agrees**: for a state and a request in
+/// correspondence, the cookie-string and the request bytes of the
+/// transducer, from the jar `jar` at `now`, are Fetch's; when Fetch's
+/// request is valid, it is what the transducer sends.
+pub proof fn theorem_independent_request(urls: UrlFns, s: State, r: FetchRequest, jar: Seq<Cookie>, now: int)
     requires
         corresponds(urls, s, r),
     ensures
-        cookie_string(urls, s) == indep_cookie_value(urls, s.jar, s.now, r),
-        crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s)) == indep_request_bytes(urls, s.jar, s.now, r),
+        cookie_string(urls, s, jar, now) == indep_cookie_value(urls, jar, now, r),
+        crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s, jar, now)) == indep_request_bytes(urls, jar, now, r),
+        forall|plain: Seq<u8>| #[trigger] indep_request_bytes(urls, jar, now, r) == Some(wire_bytes(s.url, cookie_string(urls, s, jar, now), plain))
+            || indep_request_bytes(urls, jar, now, r) is None,
 {
     assert(request_context(urls, s) == indep_context(urls, r));
-    let cs = cookie_string(urls, s);
+    let cs = cookie_string(urls, s, jar, now);
     match crate::request::spec::request_for(s.url) {
         Some(base) => {
             assert(crate::request::spec::cookie_field_lines(cs) =~= indep_header_list(seq![], cs) || cs.len() == 0);
@@ -312,41 +320,41 @@ pub proof fn theorem_independent_request(urls: UrlFns, s: State, r: FetchRequest
 /// **The decision on a final response is Fetch's**: for a state and a
 /// request in correspondence and a final response, what `on_final` does is
 /// what HTTP-redirect fetch returns, after §4.7 step 17's storage:
-/// - a response: `Done` for the request's URL, the jar of storage;
-/// - a network error: `Fail`, the jar of storage;
-/// - a request to fetch next: a new state in correspondence with it, from
-///   the jar of storage, asking for its connection.
-pub proof fn theorem_independent_redirect(urls: UrlFns, s: State, r: FetchRequest, response: Response, open: bool)
+/// - its jar operations, applied to any jar, are Fetch's storage;
+/// - a response: `Done` for the request's URL;
+/// - a network error: `Fail`;
+/// - a request to fetch next: a new state in correspondence with it,
+///   asking for its connection.
+pub proof fn theorem_independent_redirect(urls: UrlFns, s: State, r: FetchRequest, response: Response, open: bool, jar: Seq<Cookie>, now: int)
     requires
         corresponds(urls, s, r),
         s.redirects <= 20,
     ensures
-        on_final(urls, s, response, open).0.jar == indep_store_cookies(urls, s.jar, s.now, r, response),
-        on_final(urls, s, response, open).0.now == s.now,
+        apply_ops(urls.rules, jar, on_final(urls, s, response, open, now).2) == indep_store_cookies(urls, jar, now, r, response),
         match http_redirect_fetch(urls, r, response) {
-            FetchResult::Response(resp) => on_final(urls, s, response, open).1 == close_if(open) + seq![Action::Done { url: current_url(r), response: resp }],
-            FetchResult::NetworkError => exists|reason: Reason| on_final(urls, s, response, open).1 == close_if(open) + seq![Action::Fail(reason)],
+            FetchResult::Response(resp) => on_final(urls, s, response, open, now).1 == close_if(open) + seq![Action::Done { url: current_url(r), response: resp }],
+            FetchResult::NetworkError => exists|reason: Reason| on_final(urls, s, response, open, now).1 == close_if(open) + seq![Action::Fail(reason)],
             FetchResult::Follow(r2) => {
-                let after = on_final(urls, s, response, open);
-                corresponds(urls, after.0, r2) && after.1 == close_if(open) + begin(after.0.url, after.0.redirects, after.0.jar, after.0.now, after.0.tainted).1
+                let after = on_final(urls, s, response, open, now);
+                corresponds(urls, after.0, r2) && after.1 == close_if(open) + begin(after.0.url, after.0.redirects, after.0.tainted).1
             },
         },
 {
-    lemma_store_lines_is_fold(urls.rules, s.jar, set_cookie_values(response), (urls.request_url)(s.url), request_context(urls, s), s.now);
+    super::theorems::lemma_on_final_ops(urls, s, response, open, now);
+    lemma_stored_ops_is_fold(urls.rules, jar, set_cookie_values(response), (urls.request_url)(s.url), request_context(urls, s), now);
     assert(request_context(urls, s) == indep_context(urls, r));
-    let s1 = State { jar: store_response(urls, s, response), ..s };
     match location_url(urls, response, s.url) {
         LocationUrl::Null => {},
         LocationUrl::Failure => {
-            assert(exists|reason: Reason| on_final(urls, s, response, open).1 == close_if(open) + seq![Action::Fail(reason)]) by {
-                assert(on_final(urls, s, response, open).1 == close_if(open) + seq![Action::Fail(Reason::RedirectLocation)]);
+            assert(exists|reason: Reason| on_final(urls, s, response, open, now).1 == close_if(open) + seq![Action::Fail(reason)]) by {
+                assert(on_final(urls, s, response, open, now).1 == close_if(open) + seq![Action::Fail(Reason::RedirectLocation)]);
             }
         },
         LocationUrl::Url(location) => {
             if !is_http_s_scheme(location.scheme) {
-                assert(on_final(urls, s, response, open).1 == close_if(open) + seq![Action::Fail(Reason::RedirectScheme)]);
+                assert(on_final(urls, s, response, open, now).1 == close_if(open) + seq![Action::Fail(Reason::RedirectScheme)]);
             } else if s.redirects == max_redirects() {
-                assert(on_final(urls, s, response, open).1 == close_if(open) + seq![Action::Fail(Reason::RedirectLimit)]);
+                assert(on_final(urls, s, response, open, now).1 == close_if(open) + seq![Action::Fail(Reason::RedirectLimit)]);
             } else {
                 lemma_taint_push(urls, r.url_list, location);
                 let r2 = FetchRequest { url_list: r.url_list.push(location) };

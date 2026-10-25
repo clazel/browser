@@ -38,8 +38,9 @@ use super::spec::*;
 use vstd::prelude::*;
 
 use super::contract::{HttpFnsExec, UrlFnsExec};
-use super::types::{ActionBuf, InputBuf, StateBuf};
+use super::types::{ActionBuf, InputBuf, JarOpBuf, StateBuf};
 use clazel_cookie::matching::exec::canonicalize_a_host_name;
+use clazel_cookie::storage::exec::CookieRecord;
 use clazel_cookie::storage::exec::{RequestUrlRecord, narrow_exec};
 use clazel_encoding::utf8::decode::decode_without_bom;
 use clazel_http::message::body::ResponseParser;
@@ -103,12 +104,12 @@ pub proof fn theorem_real_prefix_stable()
 /// The split does not matter for the shipped client
 /// (`super::contract::split_invariant` with [`real_http`] and
 /// [`real_urls`]), for every state and split.
-pub proof fn theorem_real_split_invariant(s: State, a: Seq<u8>, b: Seq<u8>)
+pub proof fn theorem_real_split_invariant(s: State, a: Seq<u8>, b: Seq<u8>, jar: Seq<Cookie>, now: int)
     ensures
-        super::contract::split_invariant(real_http(), real_urls(), s, a, b),
+        super::contract::split_invariant(real_http(), real_urls(), s, a, b, jar, now),
 {
     theorem_real_prefix_stable();
-    super::theorems::theorem_split_invariant(real_http(), real_urls(), s, a, b);
+    super::theorems::theorem_split_invariant(real_http(), real_urls(), s, a, b, jar, now);
 }
 
 /// `request_url` (RFC 6265bis §5.7, §5.8's view of the URL).
@@ -182,17 +183,30 @@ impl UrlFnsExec for RealUrls {
 }
 
 /// The transducer's `step` with the real functions: what the network
-/// shell calls.
-pub fn step_real(s: StateBuf, input: &InputBuf) -> (out: (StateBuf, Vec<ActionBuf>))
+/// shell and the kernel call. The caller applies the jar operations it
+/// returns to its jar (`super::step::apply_ops_exec`).
+pub fn step_real(s: StateBuf, input: &InputBuf, jar: &[CookieRecord], now: u64) -> (out: (StateBuf, Vec<ActionBuf>, Vec<JarOpBuf>))
     requires
         super::contract::step_requires(s@),
         super::contract::state_ok(&RealHttp, &s),
+        super::contract::jar_requires(clazel_cookie::storage::exec::jar_view(jar@), now as int),
     ensures
-        super::contract::step_ensures(real_http(), real_urls(), s@, input@, out.0@, super::types::actions_view(out.1@)),
+        super::contract::step_ensures(
+            real_http(),
+            real_urls(),
+            s@,
+            input@,
+            clazel_cookie::storage::exec::jar_view(jar@),
+            now as int,
+            out.0@,
+            super::types::actions_view(out.1@),
+            super::types::ops_view(out.2@),
+        ),
         super::contract::step_requires(out.0@),
         super::contract::state_ok(&RealHttp, &out.0),
+        super::contract::ops_at(super::types::ops_view(out.2@), now as int),
 {
-    super::step::step(&RealHttp, &RealUrls, s, input)
+    super::step::step(&RealHttp, &RealUrls, s, input, jar, now)
 }
 
 } // verus!

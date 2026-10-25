@@ -32,12 +32,14 @@ pub open spec fn url_a(fragment: Option<Seq<u32>>) -> Url {
 
 /// A state for `url_a(fragment)`.
 pub open spec fn state_a(fragment: Option<Seq<u32>>, redirects: nat, phase: Phase) -> State {
-    State { url: url_a(fragment), redirects: redirects, phase: phase, jar: Seq::<Cookie>::empty(), now: 0, tainted: false }
+    State { url: url_a(fragment), redirects: redirects, phase: phase, tainted: false }
 }
 
-/// `step` with the real functions from `state_a(fragment, redirects, phase)`.
+/// `step` with the real functions from `state_a(fragment, redirects,
+/// phase)`, with an empty jar at time 0: the next state and the actions.
 pub open spec fn ex_step(fragment: Option<Seq<u32>>, redirects: nat, phase: Phase, input: Input) -> (State, Seq<Action>) {
-    step(super::real::real_http(), example_urls(), state_a(fragment, redirects, phase), input)
+    let r = step(super::real::real_http(), example_urls(), state_a(fragment, redirects, phase), input, Seq::<Cookie>::empty(), 0);
+    (r.0, r.1)
 }
 
 /// A stand-in for the URL parser, enough for the rows: `/b` and `/a` against an
@@ -299,15 +301,28 @@ pub open spec fn ex_cookie(name: Seq<u8>, value: Seq<u8>, expiry: int, secure: b
     }
 }
 
-/// `step` with the real HTTP functions from a state for `http://a/a` with
-/// the cookie jar `jar` at time `now`, with redirect-taint `tainted`.
-pub open spec fn ex_cstep(jar: Seq<Cookie>, now: int, tainted: bool, phase: Phase, input: Input) -> (State, Seq<Action>) {
-    step(
+/// What a cookie row looks at after a step: the jar after the step's
+/// operations, and the next state's redirect-taint.
+pub struct ExAfter {
+    /// the jar after the step's operations (`apply_ops`)
+    pub jar: Seq<Cookie>,
+    /// the next state's redirect-taint
+    pub tainted: bool,
+}
+
+/// `step` with the real HTTP functions from a state for `http://a/a` given
+/// the cookie jar `jar` at time `now`, with redirect-taint `tainted`: the
+/// jar after the operations it returns, and its actions.
+pub open spec fn ex_cstep(jar: Seq<Cookie>, now: int, tainted: bool, phase: Phase, input: Input) -> (ExAfter, Seq<Action>) {
+    let r = step(
         super::real::real_http(),
         example_urls(),
-        State { url: url_a(None), redirects: 0, phase: phase, jar: jar, now: now, tainted: tainted },
+        State { url: url_a(None), redirects: 0, phase: phase, tainted: tainted },
         input,
-    )
+        jar,
+        now,
+    );
+    (ExAfter { jar: apply_ops(example_urls().rules, jar, r.2), tainted: r.0.tainted }, r.1)
 }
 
 /// RFC 6265bis §5.8.3 via Fetch §3.1.1: the jar's cookie is sent as the last field, once.

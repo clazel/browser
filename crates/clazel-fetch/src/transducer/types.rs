@@ -6,7 +6,7 @@ use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
-use clazel_cookie::storage::exec::CookieRecord;
+use clazel_cookie::storage::exec::{RequestContextRecord, RequestUrlRecord};
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ResponseBuf;
 use clazel_url::url::record::ParsedUrl;
@@ -47,10 +47,6 @@ pub struct StateBuf {
     pub redirects: u8,
     /// where it is
     pub phase: PhaseBuf,
-    /// the cookie jar
-    pub jar: Vec<CookieRecord>,
-    /// the time (seconds since 1601)
-    pub now: u64,
     /// the redirect-taint is cross-site
     pub tainted: bool,
 }
@@ -63,8 +59,6 @@ impl View for StateBuf {
             url: self.url@,
             redirects: self.redirects as nat,
             phase: self.phase@,
-            jar: clazel_cookie::storage::exec::jar_view(self.jar@),
-            now: self.now as int,
             tainted: self.tainted,
         }
     }
@@ -161,6 +155,46 @@ impl View for ActionBuf {
 /// The view of a list of actions.
 pub open spec fn actions_view(a: Seq<ActionBuf>) -> Seq<Action> {
     a.map_values(|x: ActionBuf| x@)
+}
+
+/// [`JarOp`], executable.
+pub enum JarOpBuf {
+    /// §5.8.3 retrieval
+    Retrieved {
+        /// the request URL
+        url: RequestUrlRecord,
+        /// the request context
+        ctx: RequestContextRecord,
+        /// the time
+        now: u64,
+    },
+    /// §5.7 storage of one `Set-Cookie` value
+    Stored {
+        /// the field value
+        line: Vec<u8>,
+        /// the request URL
+        url: RequestUrlRecord,
+        /// the request context
+        ctx: RequestContextRecord,
+        /// the time
+        now: u64,
+    },
+}
+
+impl View for JarOpBuf {
+    type V = JarOp;
+
+    open spec fn view(&self) -> JarOp {
+        match self {
+            JarOpBuf::Retrieved { url, ctx, now } => JarOp::Retrieved { url: url@, ctx: ctx@, now: *now as int },
+            JarOpBuf::Stored { line, url, ctx, now } => JarOp::Stored { line: line@, url: url@, ctx: ctx@, now: *now as int },
+        }
+    }
+}
+
+/// The view of a list of jar operations.
+pub open spec fn ops_view(a: Seq<JarOpBuf>) -> Seq<JarOp> {
+    a.map_values(|x: JarOpBuf| x@)
 }
 
 /// [`Settled`], executable.

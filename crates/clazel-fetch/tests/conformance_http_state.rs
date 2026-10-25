@@ -23,7 +23,7 @@
 
 use clazel_cookie::storage::exec::CookieRecord;
 use clazel_fetch::transducer::real::step_real;
-use clazel_fetch::transducer::step::start;
+use clazel_fetch::transducer::step::{apply_ops_exec, start};
 use clazel_fetch::transducer::types::{ActionBuf, InputBuf};
 use clazel_url::url::parse::basic_url_parser;
 
@@ -151,22 +151,24 @@ fn run(c: &Case) -> Option<Vec<u8>> {
     let parsed = basic_url_parser(&input, None)?;
     let jar: Vec<CookieRecord> = Vec::new();
     let now = NOW_UNIX.saturating_add(UNIX_EPOCH_1601);
-    let (state, actions) = start(&parsed, jar, now);
+    let (state, actions) = start(&parsed);
     if !matches!(actions.as_slice(), [ActionBuf::Connect { .. }]) {
         return None;
     }
-    let (state, actions) = step_real(state, &InputBuf::Connected);
+    let (state, actions, ops) = step_real(state, &InputBuf::Connected, &jar, now);
+    let jar = apply_ops_exec(jar, &ops);
     if !matches!(actions.as_slice(), [ActionBuf::Send(_)]) {
         return None;
     }
-    let (state, actions) = step_real(state, &InputBuf::Bytes(response(c)));
+    let (state, actions, ops) = step_real(state, &InputBuf::Bytes(response(c)), &jar, now);
+    let jar = apply_ops_exec(jar, &ops);
     if !matches!(
         actions.as_slice(),
         [ActionBuf::Close, ActionBuf::Connect { .. }]
     ) {
         return None;
     }
-    let (_state, actions) = step_real(state, &InputBuf::Connected);
+    let (_state, actions, _ops) = step_real(state, &InputBuf::Connected, &jar, now);
     match actions.into_iter().next() {
         Some(ActionBuf::Send(bytes)) => Some(cookie_field(&bytes)),
         _ => None,
