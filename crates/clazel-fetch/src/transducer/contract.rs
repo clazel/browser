@@ -2,10 +2,11 @@
 //! theorems about the spec, stated as predicates (proven in `theorems.rs`
 //! for every [`HttpFns`]).
 //!
-//! The exec functions (in `step.rs`) take the HTTP functions as a value of
-//! a type implementing [`HttpFnsExec`], whose methods are each proven equal
-//! to the spec function of the same name, so the proofs hold for any
-//! implementation; `real.rs` gives the one the shell runs.
+//! The exec functions (in `step.rs`) take the HTTP and URL functions as
+//! values of types implementing [`HttpFnsExec`] and [`UrlFnsExec`], whose
+//! methods are each proven equal to the spec function of the same name, so
+//! the proofs hold for any implementation; `real.rs` gives the one the
+//! shell runs.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -13,6 +14,7 @@ use super::spec::*;
 use vstd::prelude::*;
 
 use clazel_http::message::types::ParseBuf;
+use clazel_url::url::record::ParsedUrl;
 
 verus! {
 
@@ -35,15 +37,36 @@ pub trait HttpFnsExec {
     ;
 }
 
+/// The URL functions, executable.
+pub trait UrlFnsExec {
+    /// The spec the method implements.
+    spec fn urls(&self) -> UrlFns;
+
+    /// [`UrlFns::location`]: `value` parsed with `base` as its base URL.
+    fn location(&self, base: &ParsedUrl, value: &[u8]) -> (r: Option<ParsedUrl>)
+        ensures
+            clazel_url::url::record::opt_url_view(r) == (self.urls().location)(base@, value@),
+    ;
+}
+
 /// Contract for `start(&ParsedUrl) -> (StateBuf, Vec<ActionBuf>)`.
 pub open spec fn start_ensures(url: Url, state: State, actions: Seq<Action>) -> bool {
     (state, actions) == start(url)
 }
 
-/// Contract for `step<H: HttpFnsExec>(&H, StateBuf, &InputBuf) ->
-/// (StateBuf, Vec<ActionBuf>)`, with `http` the `H`'s spec.
-pub open spec fn step_ensures(http: HttpFns, s: State, input: Input, state: State, actions: Seq<Action>) -> bool {
-    (state, actions) == step(http, s, input)
+/// Precondition of `step`: the redirect count is at most
+/// [`max_redirects`], as in every state [`start`] and `step` give
+/// ([`redirects_bounded`]); `step` ensures it of its result. (The exec
+/// count is a `u8`.)
+pub open spec fn step_requires(s: State) -> bool {
+    s.redirects <= max_redirects()
+}
+
+/// Contract for `step<H: HttpFnsExec, U: UrlFnsExec>(&H, &U, StateBuf,
+/// &InputBuf) -> (StateBuf, Vec<ActionBuf>)`, with `http` and `urls` their
+/// specs.
+pub open spec fn step_ensures(http: HttpFns, urls: UrlFns, s: State, input: Input, state: State, actions: Seq<Action>) -> bool {
+    (state, actions) == step(http, urls, s, input)
 }
 
 // ===========================================================================
@@ -72,26 +95,42 @@ pub open spec fn count_connects(actions: Seq<Action>) -> nat
     }
 }
 
-/// The most requests one fetch makes.
+/// The most requests one fetch makes: the first and 20 redirects (Fetch
+/// §4.5 step 7). Written out, not computed from [`max_redirects`], so a
+/// change to the limit shows here.
 pub open spec fn max_requests() -> nat {
-    1
+    21
 }
 
 /// Every action of a fetch of `url` given the inputs `inputs`.
-pub open spec fn trace(http: HttpFns, url: Url, inputs: Seq<Input>) -> Seq<Action> {
-    start(url).1 + run(http, start(url).0, inputs).1
+pub open spec fn trace(http: HttpFns, urls: UrlFns, url: Url, inputs: Seq<Input>) -> Seq<Action> {
+    start(url).1 + run(http, urls, start(url).0, inputs).1
 }
 
 /// Totality: whatever the shell reports, a fetch opens at most
 /// [`max_requests`] connections and sends at most that many requests.
-pub open spec fn requests_bounded(http: HttpFns, url: Url, inputs: Seq<Input>) -> bool {
-    count_sends(trace(http, url, inputs)) <= max_requests()
-        && count_connects(trace(http, url, inputs)) <= max_requests()
+pub open spec fn requests_bounded(http: HttpFns, urls: UrlFns, url: Url, inputs: Seq<Input>) -> bool {
+    count_sends(trace(http, urls, url, inputs)) <= max_requests()
+        && count_connects(trace(http, urls, url, inputs)) <= max_requests()
+}
+
+/// The redirect count never passes 20 (Fetch §4.5 step 7), whatever the
+/// input.
+pub open spec fn redirects_bounded(http: HttpFns, urls: UrlFns, s: State, input: Input) -> bool {
+    s.redirects <= 20 ==> step(http, urls, s, input).0.redirects <= 20
+}
+
+/// The current URL changes only by a redirect: to an HTTP(S) URL (Fetch
+/// §4.5 step 6), with the redirect count one more (step 8).
+pub open spec fn url_changes_only_by_redirect(http: HttpFns, urls: UrlFns, s: State, input: Input) -> bool {
+    let next = step(http, urls, s, input).0;
+    next.url == s.url && next.redirects == s.redirects
+        || next.redirects == s.redirects + 1 && is_http_s_scheme(next.url.scheme)
 }
 
 /// Every `Send` is the request for the current URL.
-pub open spec fn sends_are_requests(http: HttpFns, s: State, input: Input) -> bool {
-    forall|k: int| 0 <= k < step(http, s, input).1.len() ==> match #[trigger] step(http, s, input).1[k] {
+pub open spec fn sends_are_requests(http: HttpFns, urls: UrlFns, s: State, input: Input) -> bool {
+    forall|k: int| 0 <= k < step(http, urls, s, input).1.len() ==> match #[trigger] step(http, urls, s, input).1[k] {
         Action::Send(bytes) => crate::request::spec::request_bytes(s.url) == Some(bytes),
         _ => true,
     }
@@ -100,9 +139,9 @@ pub open spec fn sends_are_requests(http: HttpFns, s: State, input: Input) -> bo
 /// No action before the bytes decide: while reading, `Bytes` gives no
 /// action exactly when the parser, on what remains after the interim
 /// responses, has decided nothing (`Incomplete`).
-pub open spec fn silent_until_decided(http: HttpFns, s: State, bytes: Seq<u8>) -> bool {
+pub open spec fn silent_until_decided(http: HttpFns, urls: UrlFns, s: State, bytes: Seq<u8>) -> bool {
     match s.phase {
-        Phase::Reading { received } => (step(http, s, Input::Bytes(bytes)).1.len() == 0) == (settle(http, received + bytes) is Wait)
+        Phase::Reading { received } => (step(http, urls, s, Input::Bytes(bytes)).1.len() == 0) == (settle(http, received + bytes) is Wait)
             && match settle(http, received + bytes) {
                 Settled::Wait(rest) => (http.parse)(rest) is Incomplete,
                 _ => true,
@@ -132,13 +171,13 @@ pub open spec fn prefix_stable(http: HttpFns) -> bool {
 /// `b` afterwards leads to the same state and actions as `a + b`. So no
 /// action depends on how the bytes were cut, and none is taken on fewer
 /// bytes than the decision needs.
-pub open spec fn split_invariant(http: HttpFns, s: State, a: Seq<u8>, b: Seq<u8>) -> bool {
+pub open spec fn split_invariant(http: HttpFns, urls: UrlFns, s: State, a: Seq<u8>, b: Seq<u8>) -> bool {
     match s.phase {
         Phase::Reading { received: _ } => {
-            let first = step(http, s, Input::Bytes(a));
-            let whole = step(http, s, Input::Bytes(a + b));
+            let first = step(http, urls, s, Input::Bytes(a));
+            let whole = step(http, urls, s, Input::Bytes(a + b));
             if first.1.len() == 0 {
-                step(http, first.0, Input::Bytes(b)) == whole
+                step(http, urls, first.0, Input::Bytes(b)) == whole
             } else {
                 first == whole
             }
