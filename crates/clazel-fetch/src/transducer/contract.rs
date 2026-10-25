@@ -6,35 +6,68 @@
 //! values of types implementing [`HttpFnsExec`] and [`UrlFnsExec`], whose
 //! methods are each proven equal to the spec function of the same name, so
 //! the proofs hold for any implementation; `real.rs` gives the one the
-//! shell runs.
+//! shell runs. The exec state's invariant beyond its view is
+//! [`state_ok`]: `start` gives it and `step` requires and keeps it.
 
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
+use super::types::{PhaseBuf, StateBuf};
+use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
 use clazel_url::url::record::ParsedUrl;
 
 verus! {
 
-/// The HTTP functions, executable: each method's result is the spec
-/// function's of [`HttpFnsExec::http`].
+/// The HTTP functions, executable: each answer is the spec function's of
+/// [`HttpFnsExec::http`]. The octets of a connection go into a
+/// [`ResponseParser`] as they arrive, each given once, so a fetch is
+/// linear in the response's size; [`HttpFnsExec::parser_ok`] is the
+/// invariant such a parser keeps.
 pub trait HttpFnsExec {
     /// The spec the methods implement.
     spec fn http(&self) -> HttpFns;
 
-    /// [`HttpFns::parse`] of all of `received`.
-    fn parse(&self, received: &[u8]) -> (r: ParseBuf)
+    /// What a parser of these functions keeps between octets.
+    spec fn parser_ok(&self, p: &ResponseParser) -> bool;
+
+    /// A parser that has received nothing.
+    fn new_parser(&self) -> (p: ResponseParser)
         ensures
-            r@ == (self.http().parse)(received@),
+            self.parser_ok(&p),
+            p.received() == Seq::<u8>::empty(),
     ;
 
-    /// [`HttpFns::parse_at_close`] of all of `received`.
-    fn parse_at_close(&self, received: &[u8]) -> (r: ParseBuf)
+    /// `bytes` appended to what `p` received, and [`HttpFns::parse`] of
+    /// all of it.
+    fn feed(&self, p: &mut ResponseParser, bytes: &[u8]) -> (r: ParseBuf)
+        requires
+            self.parser_ok(old(p)),
         ensures
-            r@ == (self.http().parse_at_close)(received@),
+            self.parser_ok(final(p)),
+            final(p).received() == old(p).received() + bytes@,
+            r@ == (self.http().parse)(final(p).received()),
     ;
+
+    /// [`HttpFns::parse_at_close`] of all that `p` received.
+    fn parse_at_close(&self, p: ResponseParser) -> (r: ParseBuf)
+        requires
+            self.parser_ok(&p),
+        ensures
+            r@ == (self.http().parse_at_close)(p.received()),
+    ;
+}
+
+/// The executable state's invariant for `h`: a parser being read into
+/// keeps [`HttpFnsExec::parser_ok`]. A state that is not reading (as every
+/// one [`start`] gives) has it for every `h`.
+pub open spec fn state_ok<H: HttpFnsExec>(h: &H, s: &StateBuf) -> bool {
+    match s.phase {
+        PhaseBuf::Reading { parser } => h.parser_ok(&parser),
+        _ => true,
+    }
 }
 
 /// The URL functions, executable.

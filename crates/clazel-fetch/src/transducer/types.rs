@@ -6,6 +6,7 @@ use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
+use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ResponseBuf;
 use clazel_url::url::record::ParsedUrl;
 
@@ -17,8 +18,9 @@ pub enum PhaseBuf {
     Connecting,
     /// reading the response
     Reading {
-        /// the octets received and not yet consumed
-        received: Vec<u8>,
+        /// the parser holding the octets received and not yet consumed
+        /// (its `received()`)
+        parser: ResponseParser,
     },
     /// over
     Finished,
@@ -30,7 +32,7 @@ impl View for PhaseBuf {
     open spec fn view(&self) -> Phase {
         match self {
             PhaseBuf::Connecting => Phase::Connecting,
-            PhaseBuf::Reading { received } => Phase::Reading { received: received@ },
+            PhaseBuf::Reading { parser } => Phase::Reading { received: parser.received() },
             PhaseBuf::Finished => Phase::Finished,
         }
     }
@@ -149,8 +151,8 @@ pub open spec fn actions_view(a: Seq<ActionBuf>) -> Seq<Action> {
 
 /// [`Settled`], executable.
 pub enum SettledBuf {
-    /// wait, with these octets unconsumed
-    Wait(Vec<u8>),
+    /// wait, with the octets this parser received unconsumed
+    Wait(ResponseParser),
     /// the final response
     Final(ResponseBuf),
     /// the fetch fails
@@ -162,7 +164,7 @@ impl View for SettledBuf {
 
     open spec fn view(&self) -> Settled {
         match self {
-            SettledBuf::Wait(b) => Settled::Wait(b@),
+            SettledBuf::Wait(p) => Settled::Wait(p.received()),
             SettledBuf::Final(r) => Settled::Final(r@),
             SettledBuf::Bad(r) => Settled::Bad(*r),
         }
