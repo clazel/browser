@@ -445,7 +445,10 @@
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_14()",
-        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Connected).1) == 3000nat)"
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Connected).1) == 3000nat)",
+        "reveal": [
+          "Seq::filter"
+        ]
       }
     },
     {
@@ -730,9 +733,9 @@
       "file": "src/transducer/spec.rs",
       "module": "transducer::examples",
       "find": "clazel_http::field::spec::field_values_named(response.fields, lit_set_cookie())\n}",
-      "replace": "clazel_http::field::spec::field_values_named(response.fields, lit_set_cookie()).take(1)\n}",
+      "replace": "{ let v = clazel_http::field::spec::field_values_named(response.fields, lit_set_cookie()); if v.len() > 1 { seq![v[0]] } else { v } }\n}",
       "expect": "killed",
-      "reason": "Only the first Set-Cookie field line is stored. lemma_cookie_12.",
+      "reason": "Only the first Set-Cookie field line is stored. lemma_cookie_12. (A concrete one-element list, not `.take(1)`: compute_only re-evaluates a lazy `take` on every access and runs out of recursion depth in the storage examples.)",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_cookie_12()",
