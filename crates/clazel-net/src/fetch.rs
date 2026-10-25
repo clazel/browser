@@ -444,18 +444,23 @@ mod tests {
 
     #[test]
     fn not_fetched() {
+        // A fixed time (2013, in seconds since 1601) rather than `now_1601`,
+        // whose clock Miri's isolation refuses; none of these fetches gets
+        // far enough to read it.
+        let not_fetched = |url: &str| {
+            fetch_jar(url, Vec::new(), 13_000_000_000, quick(), local)
+                .0
+                .map(|_| ())
+        };
         assert_eq!(
-            fetch_with("https://example.com/", quick(), local).map(|_| ()),
+            not_fetched("https://example.com/"),
             Err(FetchError::NotFetched)
         );
         assert_eq!(
-            fetch_with("http://u:p@example.com/", quick(), local).map(|_| ()),
+            not_fetched("http://u:p@example.com/"),
             Err(FetchError::NotFetched)
         );
-        assert_eq!(
-            fetch_with("not a url", quick(), local).map(|_| ()),
-            Err(FetchError::Url)
-        );
+        assert_eq!(not_fetched("not a url"), Err(FetchError::Url));
     }
 
     /// A server for cookies, one request per connection: `GET /set` sets
