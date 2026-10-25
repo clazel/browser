@@ -145,7 +145,7 @@ pub proof fn theorem_fetched_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, url
         let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
         match run.result {
             FetchResult::Done { url, body } => {
-                if clazel_encoding::utf8::spec::all_scalar_values(url) && lock_of_url(urls, url, s1.next_id) is Some {
+                if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
                     lemma_navigate_tab_outputs(urls, s1, tab, url, body);
                 } else {
                     assert(out == seq![Output::ToRenderer { id: old.id, bytes: reply_frame(clazel_ipc::message::spec::Message::Error { code: error_bad_url() }) }]);
@@ -173,7 +173,7 @@ pub proof fn theorem_fetched_answers_navigation(rules: Seq<clazel_psl::spec::Rul
         let old = s.renderers[i];
         let sp = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
         let ok = match run.result {
-            FetchResult::Done { url, body } => clazel_encoding::utf8::spec::all_scalar_values(url) && lock_of_url(urls, url, sp.next_id) is Some,
+            FetchResult::Done { url, body } => scalar_url(url) && lock_of_url(urls, url, sp.next_id) is Some,
             FetchResult::Failed => false,
         };
         if ok {

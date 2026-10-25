@@ -161,7 +161,7 @@ pub proof fn lemma_fetched_stable(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
         match run.result {
             FetchResult::Done { url, body } => {
-                if clazel_encoding::utf8::spec::all_scalar_values(url) && lock_of_url(urls, url, s1.next_id) is Some {
+                if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
                     lemma_navigate_tab_stable(urls, s1, tab, url, body);
                 } else {
                     lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { pending: None, ..old });

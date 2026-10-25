@@ -709,6 +709,9 @@ pub fn fetched_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: Stat
                 }
                 match run.result {
                     FetchResultRecord::Done { url: furl, body } => {
+                        proof {
+                            crate::invariant::lemma_scalar_url(furl@);
+                        }
                         if super::real_urls::all_scalar_values_exec(furl.as_slice()) && lock_of_url_exec(urls, furl.as_slice(), s1.next_id).is_some() {
                             navigate_tab_exec(urls, s1, tab, furl.as_slice(), body.as_slice())
                         } else {

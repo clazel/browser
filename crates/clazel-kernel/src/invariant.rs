@@ -560,6 +560,46 @@ pub proof fn lemma_navigate_tab_wf(
     }
 }
 
+/// [`scalar_url`] is `all_scalar_values`.
+pub proof fn lemma_scalar_url(s: Seq<u32>)
+    ensures
+        scalar_url(s) == clazel_encoding::utf8::spec::all_scalar_values(s),
+    decreases s.len(),
+{
+    if s.len() > 0 {
+        let t = s.drop_first();
+        lemma_scalar_url(t);
+        if clazel_encoding::utf8::spec::all_scalar_values(s) {
+            assert forall|i: int| 0 <= i < t.len() implies clazel_encoding::utf8::spec::is_scalar_value(#[trigger] t[i]) by {
+                assert(t[i] == s[i + 1]);
+            }
+        }
+        if clazel_encoding::utf8::spec::all_scalar_values(t) && clazel_encoding::utf8::spec::is_scalar_value(s[0]) {
+            assert forall|i: int| 0 <= i < s.len() implies clazel_encoding::utf8::spec::is_scalar_value(#[trigger] s[i]) by {
+                if i > 0 {
+                    assert(t[i - 1] == s[i]);
+                }
+            }
+        }
+    }
+}
+
+/// A string with a code point that is not a scalar value is not [`scalar_url`].
+pub proof fn lemma_not_scalar_url(s: Seq<u32>, k: int)
+    requires
+        0 <= k < s.len(),
+        !clazel_encoding::utf8::spec::is_scalar_value(s[k]),
+    ensures
+        !scalar_url(s),
+    decreases s.len(),
+{
+    if k > 0 {
+        let t = s.drop_first();
+        assert(t[k - 1] == s[k]);
+        lemma_not_scalar_url(t, k - 1);
+    }
+}
+
 /// `begin_navigation` (a `NavigateTab`, and a renderer's `Navigate`) keeps
 /// the invariant: it only records the URL the renderer is navigating to.
 pub proof fn lemma_begin_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, tab: nat, url: Seq<u32>)
@@ -646,7 +686,7 @@ pub proof fn lemma_fetched_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
         assert(kernel_wf(rules, urls, s1));
         match run.result {
             FetchResult::Done { url, body } => {
-                if clazel_encoding::utf8::spec::all_scalar_values(url) && lock_of_url(urls, url, s1.next_id) is Some {
+                if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
                     lemma_navigate_tab_wf(rules, urls, s1, tab, url, body);
                 } else {
                     lemma_fail_navigation_wf(rules, urls, s1, i, old, error_bad_url());

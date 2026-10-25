@@ -274,7 +274,7 @@ pub proof fn lemma_fetched_consistency(
         assert(find_by_tab(s1p.renderers, tab, 0) is Some);
         match run.result {
             FetchResult::Done { url, body } => {
-                if clazel_encoding::utf8::spec::all_scalar_values(url) && lock_of_url(urls, url, s1p.next_id) is Some {
+                if scalar_url(url) && lock_of_url(urls, url, s1p.next_id) is Some {
                     lemma_navigate_tab_consistency(rules, urls, d, s1p, s2p, tab, url, body);
                 } else {
                     lemma_fail_consistency(rules, urls, d, s1p, s2p, i1, i2, error_bad_url());
