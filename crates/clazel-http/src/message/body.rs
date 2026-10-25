@@ -244,10 +244,40 @@ fn chunk_ext_step(t: &[u8]) -> (out: ExtStep)
     if n == 0 {
         return ExtStep::Answer(false);
     }
+    // Never saturates: at most t.len().
     let c = sub(b, n);
-    // None of the positions below saturates: each is at most t.len().
     let c_pos = ak.saturating_add(1).saturating_add(bk).saturating_add(n);
     assert(c@ =~= t@.skip(c_pos as int));
+    chunk_ext_value_step(t, c_pos)
+}
+
+/// [`is_chunk_ext`]'s answer once the chunk-ext-name has been read and `c`
+/// follows it: `[ BWS "=" BWS chunk-ext-val ]`, then the next round.
+spec fn chunk_ext_after_name(c: Seq<u8>) -> bool {
+    let d = strip_leading_ows(c);
+    if d.len() > 0 && d[0] == 0x3D {
+        match parse_parameter_value(strip_leading_ows(d.drop_first())) {
+            Some((_, rest)) => is_chunk_ext(rest),
+            None => false,
+        }
+    } else {
+        is_chunk_ext(c)
+    }
+}
+
+/// The rest of [`chunk_ext_step`], from `c_pos`, just past the
+/// chunk-ext-name: `[ BWS "=" BWS chunk-ext-val ]`.
+fn chunk_ext_value_step(t: &[u8], c_pos: usize) -> (out: ExtStep)
+    requires
+        0 < c_pos <= t.len(),
+        is_chunk_ext(t@) == chunk_ext_after_name(t@.skip(c_pos as int)),
+    ensures
+        match out {
+            ExtStep::Answer(r) => r == is_chunk_ext(t@),
+            ExtStep::Next(k) => 0 < k <= t.len() && is_chunk_ext(t@) == is_chunk_ext(t@.skip(k as int)),
+        },
+{
+    let c = sub(t, c_pos);
     let dk = run_len_exec(&crate::field::spec::Class::Ows, c);
     let d = sub(c, dk);
     if at(d, 0) == Some(0x3Du8) {
