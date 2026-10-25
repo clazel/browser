@@ -1090,20 +1090,28 @@ for the limit; in the pinned Fetch text it is §4.5 HTTP-redirect fetch,
 step 7. `Connect.tls` is always false and an `https:` URL (also as a
 redirect target) fails as not fetched. `clazel-net`'s `fetch` now only
 carries out the transducer's actions; `clazel fetch URL` follows
-redirects. Verus: `clazel-fetch` 90 verified, 0 errors. **Proven**, for
+redirects. Verus: `clazel-fetch` 93 verified, 0 errors (2026-10-25). **Proven**, for
 every HTTP and URL function: `theorem_requests_bounded` (at most 21
 `Connect`s and 21 `Send`s in any trace), `theorem_redirects_bounded`,
 `theorem_url_changes_only_by_redirect` (to an HTTP(S) URL, count plus
 one), `theorem_sends_are_requests` (every `Send` is `request_bytes` of the
 current URL), `theorem_silent_until_decided` (no action on `Bytes` until
-the parser, past the interim responses, is not `Incomplete`). **Proven
-only under a hypothesis**: `theorem_split_invariant` (bytes `a` then `b`
-give what `a + b` gives, so no decision is taken on fewer bytes than it
-needs) assumes the parser is `prefix_stable`; that is not proven of
-`clazel-http`'s parser, whose `monotone` and `no_early_decision`
-(`message/contract.rs`) are stated but not proven on `main`, and
-`monotone` is slightly weaker than needed (it does not fix the octets
-after a finished response to `rest + more`). **Not proven**: that the
+the parser, past the interim responses, is not `Incomplete`), and
+`theorem_split_invariant` (bytes `a` then `b` give what `a + b` gives, so
+no decision is taken on fewer bytes than it needs) for every parser that
+is `prefix_stable`. **Proven of the shipped client** (`real.rs`):
+`theorem_real_prefix_stable`, that `real_http()` is `prefix_stable`, from
+`clazel-http`'s `lemma_parse_response_append` (the append lemma behind
+`theorem_monotone`, which fixes the octets after a finished response to
+`rest + more`), and so `theorem_real_split_invariant`. The exec
+transducer does not re-parse: `HttpFnsExec` is `new_parser`, `feed` and
+`parse_at_close` on a `clazel-http` `ResponseParser`, which the reading
+state holds (its view's `received` is the parser's), and `step` feeds it
+only each `Bytes` input's new octets, starting a new parser on the octets
+after an interim response and at each new connection; `RealHttp`'s
+invariant `parser_ok` is the parser's `wf` for a request that is not
+`HEAD`, kept as `state_ok`, which `start` gives and `step` requires and
+keeps. **Not proven**: that the
 real parser always consumes at least one octet for a finished response
 (the interim-skipping guard turns the other case into `Invalid`; it only
 affects liveness), and anything about the real URL parser beyond its own
@@ -1190,7 +1198,7 @@ half does not wait on TLS.
 |------|-------|
 | 3.0 TLS decision | done (2026-10-23): option B, our own TLS 1.3 client over libcrux, grounds and accepted costs recorded above |
 | 3.1 HTTP field syntax | built: 146 verified, independent transcription (Fetch), 76 certified mutations, 10 unit tests; tier stays 0 until 3.2 and 3.3 |
-| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier stays 0: spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `clazel-http` 378 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription does not cover `parse_response_at_close`, obs-fold, `Transfer-Encoding` with `Content-Length`, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
+| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier stays 0: spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `ResponseParser::received_bytes` (proven to `received_bytes_ensures`) lets the fetch transducer keep no second copy of the octets. `clazel-http` 379 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription does not cover `parse_response_at_close`, obs-fold, `Transfer-Encoding` with `Content-Length`, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). Open: tier 2 also needs the items listed under 3.2, and a green full CI run, before `clazel-http` is raised |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
@@ -1200,9 +1208,9 @@ half does not wait on TLS.
 | 3.5e Key schedule and handshake state machine | not started (after 3.5d) |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |
-| 3.6 Client state machine | transducer and redirects built, `http://` only (branch `phase3/fetch-transducer`): `request` and `transducer` modules proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request and silence until decided proven for every parser; split invariance only for a `prefix_stable` parser, not proven of `clazel-http`'s; 34 certified mutations; tier 0 (see As built). Not yet: cookies, `theorem_wire_cookies`, `theorem_jar_frame`, TLS, independent transcription, conformance |
+| 3.6 Client state machine | transducer and redirects built, `http://` only (branch `phase3/fetch-transducer`): `request` and `transducer` modules proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request and silence until decided proven for every parser; split invariance proven for every `prefix_stable` parser, and `clazel-http`'s parser proven `prefix_stable` (`theorem_real_prefix_stable`, `theorem_real_split_invariant`); the exec transducer feeds each octet once into a `ResponseParser` held in the reading state, so a fetch is linear in the response's size; 34 certified mutations; tier 0 (see As built). Not yet: cookies, `theorem_wire_cookies`, `theorem_jar_frame`, TLS, independent transcription, conformance |
 | 3.7 Kernel integration | not started |
-| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 73 MB peak): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. Not yet: TLS, the http-state and WPT server tests, the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
+| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Not yet: TLS, the http-state and WPT server tests, the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | not started |
 
 ## Risks

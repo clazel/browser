@@ -45,8 +45,10 @@ fetch whatever the inputs; the redirect count stays at most 20; the URL
 changes only to an HTTP(S) URL, one redirect at a time; every `Send` is the
 request for the current URL; no action on bytes until the parser has
 decided. That splitting the bytes differently changes nothing is proven
-only for a parser that is `prefix_stable`, which is **not yet proven** of
-`clazel-http`'s.
+for every parser that is `prefix_stable`, and `clazel-http`'s is proven
+`prefix_stable` (`src/transducer/real.rs`). The executable transducer
+feeds each octet once into a `clazel-http` `ResponseParser`, so a fetch is
+linear in the response's size.
 
 Concrete cases are evaluated on the spec by Verus (`src/request/examples.rs`,
 `src/transducer/examples.rs`; the transducer's with the real HTTP parser and
