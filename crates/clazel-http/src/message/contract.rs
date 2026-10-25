@@ -65,6 +65,13 @@ pub open spec fn serialize_request_ensures(r: Request, output: Option<Seq<u8>>) 
     }
 }
 
+/// Contract for `parse_request_exec(&[u8]) -> RequestParseBuf`: the
+/// request parser's answer for `input` (`request.rs`). It exists for the
+/// round trip and the tests; the browser never parses requests.
+pub open spec fn parse_request_ensures(input: Seq<u8>, output: super::request::RequestParse) -> bool {
+    output == super::request::parse_request(input)
+}
+
 // ===========================================================================
 // Properties of the spec, proven in `lemmas.rs`.
 // ===========================================================================
