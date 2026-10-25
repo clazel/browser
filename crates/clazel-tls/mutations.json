@@ -1131,7 +1131,7 @@
       "certificate": {
         "file": "src/schedule/certificates.rs",
         "lemma": "super::examples::lemma_derive()",
-        "witness": "derive_secret(fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
+        "witness": "derive_secret(super::examples::fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
       }
     },
     {
@@ -1145,7 +1145,7 @@
       "certificate": {
         "file": "src/schedule/certificates.rs",
         "lemma": "super::examples::lemma_derive()",
-        "witness": "derive_secret(fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
+        "witness": "derive_secret(super::examples::fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
       }
     },
     {
@@ -1159,7 +1159,7 @@
       "certificate": {
         "file": "src/schedule/certificates.rs",
         "lemma": "super::examples::lemma_early()",
-        "witness": "early_secret(fixture_crypto()) != seq![69u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
+        "witness": "early_secret(super::examples::fixture_crypto()) != seq![69u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
       }
     },
     {
@@ -1173,7 +1173,7 @@
       "certificate": {
         "file": "src/schedule/certificates.rs",
         "lemma": "super::examples::lemma_handshake()",
-        "witness": "handshake_secret(fixture_crypto(), seq![1u8], seq![2u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 2u8]"
+        "witness": "handshake_secret(super::examples::fixture_crypto(), seq![1u8], seq![2u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 2u8]"
       }
     },
     {
@@ -1187,7 +1187,7 @@
       "certificate": {
         "file": "src/schedule/certificates.rs",
         "lemma": "super::examples::lemma_master()",
-        "witness": "master_secret(fixture_crypto(), seq![1u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
+        "witness": "master_secret(super::examples::fixture_crypto(), seq![1u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
       }
     },
     {
@@ -1201,7 +1201,7 @@
       "certificate": {
         "file": "src/schedule/certificates.rs",
         "lemma": "super::examples::lemma_finished()",
-        "witness": "finished(fixture_crypto(), seq![1u8], seq![2u8]) != seq![77u8, 88u8, 1u8, 0u8, 32u8, 14u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8, 0u8, 0u8, 32u8, 72u8, 2u8]"
+        "witness": "finished(super::examples::fixture_crypto(), seq![1u8], seq![2u8]) != seq![77u8, 88u8, 1u8, 0u8, 32u8, 14u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8, 0u8, 0u8, 32u8, 72u8, 2u8]"
       }
     },
     {
