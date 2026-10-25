@@ -186,7 +186,8 @@ pub open spec fn silent_until_decided(http: HttpFns, urls: UrlFns, s: State, byt
 /// the same decision on more bytes, and a finished response consumes the
 /// same octets. (`clazel_http::message::contract::monotone` states nearly
 /// this, but leaves the octets after the response free to be longer than
-/// `rest + more`; neither is proven on `main` yet.)
+/// `rest + more`; `clazel_http::message::lemmas::lemma_parse_response_append`
+/// is exactly this, for `parse_response`.)
 pub open spec fn prefix_stable(http: HttpFns) -> bool {
     forall|input: Seq<u8>, more: Seq<u8>| #![trigger (http.parse)(input), (http.parse)(input + more)] match (http.parse)(input) {
         clazel_http::message::spec::Parse::Done { response, rest } => (http.parse)(input + more)
@@ -195,6 +196,13 @@ pub open spec fn prefix_stable(http: HttpFns) -> bool {
         clazel_http::message::spec::Parse::Unsupported => (http.parse)(input + more) is Unsupported,
         clazel_http::message::spec::Parse::Incomplete => true,
     }
+}
+
+/// The shipped parser is [`prefix_stable`] (proven in `real.rs` from
+/// `clazel_http::message::lemmas::lemma_parse_response_append`), so the
+/// split theorem holds of the client the shell runs.
+pub open spec fn real_prefix_stable() -> bool {
+    prefix_stable(super::real::real_http())
 }
 
 /// The split does not matter: for a parser that is [`prefix_stable`], the
