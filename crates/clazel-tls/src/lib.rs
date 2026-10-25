@@ -29,6 +29,7 @@
 //! - [`independent`]: a second transcription, of RFC 8446 Appendix B,
 //!   proven to accept the same bytes on the class it states.
 
+pub mod auth;
 pub mod certificates;
 pub mod contract;
 pub mod encode;
