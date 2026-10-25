@@ -11,8 +11,9 @@ description = "The network shell: the resolver (UDP, TCP on truncation) and TCP 
 # nameserver lines of resolv.conf, query encoding, reply decoding and
 # acceptance, and the TCP framing.
 clazel-dns = { path = "../clazel-dns" }
-# `fetch` drives one http:// GET: the URL parser, the request builder and
-# the response parser are proven functions of these crates.
+# `fetch` drives an http:// GET and its redirects: the URL parser and the
+# client transducer (request, response framing, redirects) are proven
+# functions of these crates.
 clazel-url = { path = "../clazel-url" }
 clazel-fetch = { path = "../clazel-fetch" }
 clazel-http = { path = "../clazel-http" }

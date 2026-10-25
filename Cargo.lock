@@ -75,6 +75,7 @@ dependencies = [
 name = "clazel-fetch"
 version = "0.0.0"
 dependencies = [
+ "clazel-encoding",
  "clazel-http",
  "clazel-url",
  "vstd",

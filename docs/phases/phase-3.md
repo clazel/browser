@@ -1070,6 +1070,63 @@ lemma). Mutations for each decision. Independent: the Fetch Standard's
 fetch", transcribed and proven to give the same request sequence on a
 stated class (no caching, GET only, no CORS).
 
+**As built** (branch `phase3/fetch-transducer`, `http://` only, no
+cookies): `crates/clazel-fetch`, tier 0, target 2. Besides the `request`
+module, `src/transducer/`: `spec.rs` (the transducer: `start(url)` gives
+`Connect { host, port, tls }`, `step(http, urls, state, input)` maps
+`Connected`, `Bytes`, `Closed`, `Error` to `Send`, `Close`, `Done { url,
+response }`, `Fail(reason)`; interim 1xx responses skipped, a
+close-delimited body ended at `Closed`, failure on an invalid message, an
+unsupported coding or a response incomplete at close; redirects as Fetch
+§4.5 steps 3 to 8, 18 and 22, commit `59afe34…` of 19 October 2026, with
+§2.2.3's redirect statuses and §2.2.6's location URL), `contract.rs` (exec
+contracts, the traits `HttpFnsExec` and `UrlFnsExec` the parameters are
+passed as, and the theorem statements), `step.rs` and `types.rs` (the exec
+transducer, proven equal to the spec), `theorems.rs`, `real.rs` (the join:
+`parse_response`/`parse_response_at_close` for a GET, and a `Location`
+value UTF-8 decoded and parsed by the basic URL parser against the request
+URL; `step_real`) and `examples.rs`. The plan cites "Fetch §4.4 step 5"
+for the limit; in the pinned Fetch text it is §4.5 HTTP-redirect fetch,
+step 7. `Connect.tls` is always false and an `https:` URL (also as a
+redirect target) fails as not fetched. `clazel-net`'s `fetch` now only
+carries out the transducer's actions; `clazel fetch URL` follows
+redirects. Verus: `clazel-fetch` 90 verified, 0 errors. **Proven**, for
+every HTTP and URL function: `theorem_requests_bounded` (at most 21
+`Connect`s and 21 `Send`s in any trace), `theorem_redirects_bounded`,
+`theorem_url_changes_only_by_redirect` (to an HTTP(S) URL, count plus
+one), `theorem_sends_are_requests` (every `Send` is `request_bytes` of the
+current URL), `theorem_silent_until_decided` (no action on `Bytes` until
+the parser, past the interim responses, is not `Incomplete`). **Proven
+only under a hypothesis**: `theorem_split_invariant` (bytes `a` then `b`
+give what `a + b` gives, so no decision is taken on fewer bytes than it
+needs) assumes the parser is `prefix_stable`; that is not proven of
+`clazel-http`'s parser, whose `monotone` and `no_early_decision`
+(`message/contract.rs`) are stated but not proven on `main`, and
+`monotone` is slightly weaker than needed (it does not fix the octets
+after a finished response to `rest + more`). **Not proven**: that the
+real parser always consumes at least one octet for a finished response
+(the interim-skipping guard turns the other case into `Invalid`; it only
+affects liveness), and anything about the real URL parser beyond its own
+proofs: the examples run the transducer with the real HTTP parser but a
+stand-in URL function, because Verus does not finish evaluating them with
+the real one. Mutations: 34 in `mutations.json`, all certified kills (17
+of the request spec, 17 of the transducer: the five redirect statuses
+dropped and 304 added, the limit check off by one either way and the
+limit raised to 21, the scheme check removed, interim responses not
+skipped, the open-connection parser used at close, `Close` after the
+server closed, two `Location`s accepted, none treated as failure, the
+fragment dropped, the request not sent); two are killed by theorems, the
+rest by examples. Tests: `clazel-net` against local servers, a redirect
+chain through all five statuses with relative and absolute `Location`s,
+exactly 20 redirects followed, the 21st refused after exactly 21
+requests, `mailto:` and two-`Location` redirects. Not built: cookies (the
+jar becomes a field of `State`, passed to `start` and returned with
+`Done`/`Fail`; `begin` adds the §5.8 `Cookie` field to the request and
+`on_final` stores the response's `Set-Cookie` lines before deciding the
+redirect, so `theorem_wire_cookies` and `theorem_jar_frame` are one-step
+statements like `theorem_sends_are_requests`), TLS, the independent
+transcription and conformance tests.
+
 ### 3.7 Kernel integration (M)
 
 `clazel-kernel`: a `Navigate` (and the user's `NavigateTab`) now produces an
@@ -1143,9 +1200,9 @@ half does not wait on TLS.
 | 3.5e Key schedule and handshake state machine | not started (after 3.5d) |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |
-| 3.6 Client state machine | first part built: `clazel-fetch` `request` module (http GET, Host, Connection: close, interim responses), proven to its contracts; tier 0. Not yet: the transducer, redirects, cookies, `theorem_wire_cookies`, independent transcription, mutations |
+| 3.6 Client state machine | transducer and redirects built, `http://` only (branch `phase3/fetch-transducer`): `request` and `transducer` modules proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request and silence until decided proven for every parser; split invariance only for a `prefix_stable` parser, not proven of `clazel-http`'s; 34 certified mutations; tier 0 (see As built). Not yet: cookies, `theorem_wire_cookies`, `theorem_jar_frame`, TLS, independent transcription, conformance |
 | 3.7 Kernel integration | not started |
-| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch`) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 73 MB peak): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. Not yet: TLS, the http-state and WPT server tests, the redirect-loop case (no redirects yet), the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
+| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 73 MB peak): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. Not yet: TLS, the http-state and WPT server tests, the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | not started |
 
 ## Risks
