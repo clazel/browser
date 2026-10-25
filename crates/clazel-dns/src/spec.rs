@@ -696,7 +696,19 @@ pub open spec fn dotted_to_wire(s: Seq<u8>) -> Option<Seq<u8>> {
 /// A label that can stand between dots: no `.` and only ASCII, the octets
 /// [`dotted_scan`] accepts inside a label.
 pub open spec fn is_dotted_label(s: Seq<u8>) -> bool {
-    forall|i: int| 0 <= i < s.len() ==> (#[trigger] s[i]) != 46 && s[i] < 128
+    dotted_run(s, 0)
+}
+
+/// The octets of `s` from `i` on hold no `.` and are all ASCII. (Written
+/// as a recursion, not a quantifier, so that Verus can evaluate it.)
+pub open spec fn dotted_run(s: Seq<u8>, i: nat) -> bool
+    decreases s.len() - i
+{
+    if i >= s.len() {
+        true
+    } else {
+        s[i as int] != 46 && s[i as int] < 128 && dotted_run(s, i + 1)
+    }
 }
 
 /// `a` and `b` are dotted names or empty; the dotted name of both, `a`
