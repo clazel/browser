@@ -988,12 +988,34 @@ finite-trace application gating, terminal absorption and validation-input
 binding lemmas. The cheaper test subagent contributed eight tests with
 input-sensitive mock providers; the parent reviewed them, and all eight pass
 under Miri. Seventeen authentication mutation witnesses are added; their
-expanded mutation run is pending. No validator/crypto axiom was introduced.
+expanded run subsequently certified all 129 mutations, locally and in CI.
+No validator/crypto axiom was introduced.
 The X.509/name/time validator, signature verifier and timing-safe Finished
 comparison are explicit parameters with no production implementation yet.
 Remaining: Hello negotiation, X.509/libcrux joins, protected record-I/O
 integration, post-handshake dispatch, independent evidence for the full
 client and full verification on both platforms. The crate remains tier 0.
+
+**ServerHello/HRR acceptance (2026-10-25).** `clazel-tls::hello` checks
+the fixed TLS 1.3/ChaCha20-Poly1305/X25519 profile's server response and
+exact session echo. Version selection follows `supported_versions`, ignoring
+the legacy field as §4.2.1 requires. It rejects unsolicited responses,
+unoffered groups, wrong share lengths, repeat/no-op retries and retry share
+replacement (the sole supported group already has an initial share).
+Cookie-only retries return the exact cookie extension_data to echo.
+Contracts were committed before implementation. All 557 TLS proof obligations
+pass locally; eight server-selection tests pass under Miri. Ten new mutation
+certificates are added; their expanded run is pending. ClientHello generation,
+binding this stateless checker to the actual offers and retry history,
+X25519/shared-secret validation, secret/transcript handoff and record I/O
+remain. This does not establish a complete or production TLS client.
+
+The authentication CI run passed base and every crate job, but its final
+assembly failed solely because the TLS branch retained the obsolete check
+that a generated README table must already match. Main's existing fix
+(`10a47d6`, cherry-picked here) aligns that check with the current contributor
+policy: report a stale table and let CI update it on main. The table was not
+edited. A new full run is still required; no tier is raised.
 
 #### 3.5f The cryptography and the join (M)
 

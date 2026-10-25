@@ -1805,6 +1805,146 @@
         "lemma": "super::examples::lemma_closed_absorbs()",
         "witness": "step(super::examples::crypto(), super::examples::verifier(), State { phase: Phase::Closed, ..super::examples::initial() }, Input::Application(seq![1u8])).1 != Action::None"
       }
+    },
+    {
+      "id": "hello-legacy",
+      "file": "src/hello/spec.rs",
+      "find": "else if sh.session_id_echo != session_id",
+      "replace": "else if sh.legacy_version != 0x0303 || sh.session_id_echo != session_id",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_legacy()",
+        "witness": "parameters(crate::spec::ServerHello { legacy_version: 0x0304, ..super::examples::server() }, seq![7u8]) is Some"
+      }
+    },
+    {
+      "id": "hello-session",
+      "file": "src/hello/spec.rs",
+      "find": "sh.session_id_echo != session_id || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_session()",
+        "witness": "parameters(super::examples::server(), seq![8u8]) != Some(47u8)"
+      }
+    },
+    {
+      "id": "hello-cipher",
+      "file": "src/hello/spec.rs",
+      "find": "sh.cipher_suite != 0x1303\n                    || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_cipher()",
+        "witness": "parameters(crate::spec::ServerHello { cipher_suite: 0x1301, ..super::examples::server() }, seq![7u8]) != Some(47u8)"
+      }
+    },
+    {
+      "id": "hello-version",
+      "file": "src/hello/spec.rs",
+      "find": "version != 0x0304",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_version()",
+        "witness": "parameters(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 43, data: seq![3u8, 3u8] }], ..super::examples::server() }, seq![7u8]) != Some(47u8)"
+      }
+    },
+    {
+      "id": "hello-second-retry",
+      "file": "src/hello/spec.rs",
+      "find": "if retried { Err(10) }",
+      "replace": "if false { Err(10) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_checks()",
+        "witness": "retry(super::examples::request(), true) != Err(10u8)"
+      }
+    },
+    {
+      "id": "hello-redundant-retry-share",
+      "file": "src/hello/spec.rs",
+      "find": "else if extension(sh.extensions, 51) is Some { Err(47) }",
+      "replace": "else if false { Err(47) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_redundant_retry_share()",
+        "witness": "retry(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }], ..super::examples::request() }, false) != Err(47u8)"
+      }
+    },
+    {
+      "id": "hello-unsolicited",
+      "file": "src/hello/spec.rs",
+      "find": "es[0].etype == 43 || es[0].etype == 51",
+      "replace": "true || es[0].etype == 51",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_unsolicited()",
+        "witness": "offered(seq![crate::spec::Ext { etype: 65000, data: seq![] }], false)"
+      }
+    },
+    {
+      "id": "hello-group",
+      "file": "src/hello/spec.rs",
+      "find": "key.group != 29 || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_group()",
+        "witness": "share(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 23u8, 0u8, 32u8] + Seq::new(32, |i: int| 8u8) }], ..super::examples::server() }) != Err(47u8)"
+      }
+    },
+    {
+      "id": "hello-key-length",
+      "file": "src/hello/spec.rs",
+      "find": " || key.key_exchange.len() != 32",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_key_length()",
+        "witness": "share(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 29u8, 0u8, 1u8, 8u8] }], ..super::examples::server() }) != Err(47u8)"
+      }
+    },
+    {
+      "id": "hello-cookie-echo",
+      "file": "src/hello/spec.rs",
+      "find": "Some(_) => Ok(Selection::Retry(data))",
+      "replace": "Some(cookie) => Ok(Selection::Retry(cookie))",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_checks()",
+        "witness": "retry(super::examples::request(), false) != Ok(Selection::Retry(seq![0u8, 1u8, 9u8]))"
+      }
     }
   ]
 }

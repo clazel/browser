@@ -7,7 +7,8 @@ browser whose parsers of untrusted input carry machine-checked proofs.
 
 This covers phase-3.md item 3.5d and the SHA-256 key schedule from 3.5e.
 The initial authentication state machine is built over explicit validator
-and crypto parameters. **Hello negotiation, the record-I/O join and the
+and crypto parameters. ServerHello/HRR acceptance is built for the fixed
+TLS 1.3/X25519/ChaCha20-Poly1305 profile. **The remaining Hello join, record I/O and the
 production cryptography provider (items 3.5e and 3.5f) remain**, as does
 X.509 certificate interpretation and validation (3.5b). The crate stays at
 `tier = 0` with `target-tier = 2` until they are, and until CI's full run
@@ -106,7 +107,19 @@ what is proven today is stated below, not implied by the tier.
   complete authenticated bodies. Production Finished comparison must use a
   timing-safe provider; the functional proof makes no timing guarantee.
 
-Out of scope: full Hello negotiation and post-handshake dispatch (Appendix A), the
+- **Server selection** (§4.1.3–§4.2.8, `hello`): accept only TLS 1.3,
+  TLS_CHACHA20_POLY1305_SHA256 and a 32-byte X25519 peer share, with the
+  exact offered session ID echoed. `supported_versions` determines the
+  version; `legacy_version` is ignored as §4.2.1 requires. Unknown unoffered
+  responses fail. The profile already sends an X25519 share, so HRR may
+  request a cookie but cannot request an existing or unoffered group.
+  A second retry and a no-op retry fail; accepted cookie extension_data is
+  returned verbatim. Eight hand-built tests pass under Miri. This stateless
+  component relies on the caller to bind the profile/session/retry flag to
+  actual ClientHello messages. It does not perform X25519, the all-zero
+  shared-secret check, or hand off keys/transcripts to authentication yet.
+
+Out of scope: the remaining Hello join and post-handshake dispatch (Appendix A), the
 production cryptography, the contents of a certificate, `pre_shared_key` and the other
 extensions kept opaque (their data is not read), client certificates (a
 CertificateRequest is read and then refused by sending an empty
@@ -147,10 +160,10 @@ Tier 0, target tier 2. The current numbers are in the
   the top of the file; `Certificate` is outside it). **It was written
   after `spec.rs` in the same session, not before, and not hidden from
   it**, so it is weaker evidence than a second author's text read first.
-- **Mutations:** `mutations.json` lists 129 deliberate breaks: 76 for
+- **Mutations:** `mutations.json` lists 139 deliberate breaks: 76 for
   formats, 19 for the key schedule, 17 for transcript construction and 17
-  for authentication. The 112 pre-authentication certificates passed locally;
-  the expanded run is pending.
+  for authentication, plus 10 for server selection. All 129 certificates
+  through authentication passed locally and in CI; the expanded run is pending.
   Each `killed` entry requires a certificate that Verus checks; the
   certificate must pass on the mutant and fail on the real spec.
   Full workspace and CI verification remain required before tier promotion.
