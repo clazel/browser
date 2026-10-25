@@ -11,6 +11,7 @@
 pub mod body;
 pub mod contract;
 pub mod examples;
+pub mod incremental;
 pub mod lemmas;
 pub mod line;
 pub mod serialize;

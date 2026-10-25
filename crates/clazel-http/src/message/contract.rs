@@ -10,7 +10,10 @@
 //! state. Its view is everything it has been given (`received`) and whether
 //! the request was `HEAD`; every answer it gives is the spec's answer for
 //! all of `received`, so feeding it the bytes in any split gives the same
-//! result as parsing them at once.
+//! result as parsing them at once. Its saved state is described by its own
+//! invariant, `ResponseParser::wf` (in `incremental.rs`), which `new`
+//! ensures and `feed` requires and keeps; it says nothing about the
+//! answers beyond these predicates.
 
 #[allow(unused_imports)]
 use super::spec::*;
