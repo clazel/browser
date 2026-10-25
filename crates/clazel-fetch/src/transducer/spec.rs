@@ -310,13 +310,20 @@ pub open spec fn finished(s: State) -> State {
     State { phase: Phase::Finished, ..s }
 }
 
+/// The scheme as the cookie functions read it: `url_is_secure` asks whether
+/// it is `https` (or `wss`), so a connection is "secure" exactly when TLS
+/// is used (see the modelling choices, "Secure").
+pub open spec fn cookie_scheme(url: Url) -> Seq<u8> {
+    clazel_cookie::matching::spec::narrow(url.scheme)
+}
+
 /// RFC 6265bis §5.7 and §5.8's view of the URL: its scheme, canonicalized
 /// host and path (see the modelling choices). The transducer reads it
 /// through [`UrlFns::request_url`], which `real` sets to this.
 pub open spec fn request_url(url: Url) -> RequestUrl {
     let p = clazel_url::url::spec::url_path_serializer(url.path);
     RequestUrl {
-        scheme: clazel_cookie::matching::spec::narrow(url.scheme),
+        scheme: cookie_scheme(url),
         host: clazel_cookie::matching::spec::canonicalize_a_host_name(url.host),
         path: clazel_cookie::matching::spec::narrow(if p.len() == 0 { seq![0x2Fu32] } else { p }),
     }
