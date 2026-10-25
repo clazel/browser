@@ -19,11 +19,13 @@
 //!
 //! Every contract is about the Public Suffix List the generated tables hold
 //! (`clazel_psl::table::psl_rules()`), as `clazel-cookie`'s are, and for a
-//! given [`UrlFns`] `urls`: the spec view of the exec URL functions. Item
-//! 2.12 proves the exec `step` for any implementation of them whose view is
-//! `urls` (so the kernel proofs never unfold the URL parser), and item 2.13
-//! supplies the real one. The isolation theorems hold for every `urls`, so
-//! the contract assumes nothing about them.
+//! given [`UrlFns`] `urls`: the spec view of the exec URL functions, and a
+//! given [`FetchFns`] `fetch`, the spec view of the exec fetch (item 3.7).
+//! Item 2.12 proves the exec `step` for any implementation of them whose view
+//! is `urls` and `fetch` (so the kernel proofs never unfold the URL parser or
+//! the HTTP client), and item 2.13 supplies the real URL functions. The
+//! isolation theorems hold for every `urls` and `fetch`, so the contract
+//! assumes nothing about them.
 //!
 //! The exec `step` also needs the facts of [`super::spec`] that are not
 //! about a single call and that its caller keeps: `kernel_wf` of the state it
@@ -73,10 +75,12 @@ pub open spec fn urls_resolve_scalar(urls: UrlFns) -> bool {
 /// Vec<OutputRecord>)`: the state is well formed (`kernel_wf`); its jar and
 /// time are in the range of the exec cookie functions; the next id fits a
 /// `u64` with room for one more; a `Tick` carries a time in that range; and
-/// the URLs of an `OpenTab` or `NavigateTab` (and those `resolve` returns,
+/// the URL of an `OpenTab` (and those `resolve` returns,
 /// [`urls_resolve_scalar`]) are strings of Unicode scalar values, which a
 /// `Commit` must UTF-8 encode. (The id in `FromRenderer` and the tab in
-/// `NavigateTab` are `u64`s, so they fit.)
+/// `NavigateTab` and `Fetched` are `u64`s, so they fit. A `NavigateTab` or
+/// `Fetched` URL is never encoded: the final URL of a fetch is checked by the
+/// kernel itself, `fetched`, so the fetch functions need no condition.)
 pub open spec fn step_requires(urls: UrlFns, s: State, e: Event) -> bool {
     &&& super::invariant::kernel_wf(psl(), urls, s)
     &&& clazel_cookie::storage::contract::jar_in_range(s.jar)
@@ -85,13 +89,12 @@ pub open spec fn step_requires(urls: UrlFns, s: State, e: Event) -> bool {
     &&& (e is Tick ==> clazel_cookie::set_cookie::contract::now_in_range(e->Tick_time))
     &&& urls_resolve_scalar(urls)
     &&& (e is OpenTab ==> clazel_encoding::utf8::spec::all_scalar_values(e->OpenTab_url))
-    &&& (e is NavigateTab ==> clazel_encoding::utf8::spec::all_scalar_values(e->NavigateTab_url))
 }
 
 /// Contract for `step(StateRecord, &EventRecord) -> (StateRecord,
 /// Vec<OutputRecord>)`: the state and outputs of the spec's `step`.
-pub open spec fn step_ensures(urls: UrlFns, s: State, e: Event, output: (State, Seq<Output>)) -> bool {
-    output == step(psl(), urls, s, e)
+pub open spec fn step_ensures(urls: UrlFns, fetch: FetchFns, s: State, e: Event, output: (State, Seq<Output>)) -> bool {
+    output == step(psl(), urls, fetch, s, e)
 }
 
 /// Contract for `decode_renderer_frame(&[u8]) -> Option<Message>`: the

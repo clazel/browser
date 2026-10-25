@@ -413,13 +413,46 @@ pub proof fn lemma_insert_contains(jar: Seq<clazel_cookie::storage::spec::Cookie
     }
 }
 
+/// `navigate_tab` and `begin_navigation` leave the jar, storage and time alone.
+pub proof fn lemma_navigation_frame(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>)
+    ensures
+        navigate_tab(urls, s, tab, url, script).0.jar == s.jar,
+        navigate_tab(urls, s, tab, url, script).0.storage == s.storage,
+        navigate_tab(urls, s, tab, url, script).0.now == s.now,
+        begin_navigation(urls, s, tab, url).0.jar == s.jar,
+        begin_navigation(urls, s, tab, url).0.storage == s.storage,
+        begin_navigation(urls, s, tab, url).0.now == s.now,
+        begin_navigation(urls, s, tab, url).0.next_id == s.next_id,
+{
+}
+
+/// What a `Fetched` changes of the state besides the renderers: the jar
+/// takes the fetch's `Set-Cookie` lines if the event answers the navigation
+/// in flight, and nothing else (storage, time) changes.
+pub proof fn lemma_fetched_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+    ensures
+        fetched(rules, urls, fetch, s, tab, outcome).0.jar == (match fetched_run(fetch, s, tab, outcome) {
+            Some(run) => apply_stores(rules, s.jar, run.stores, s.now),
+            None => s.jar,
+        }),
+        fetched(rules, urls, fetch, s, tab, outcome).0.storage == s.storage,
+        fetched(rules, urls, fetch, s, tab, outcome).0.now == s.now,
+{
+    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
+        let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
+        if let FetchResult::Done { url, body } = run.result {
+            lemma_navigation_frame(urls, s1, tab, url, body);
+        }
+    }
+}
+
 /// Every step keeps the jar free of public-suffix domains, from a state
 /// with no renderer on a public-suffix host.
-pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, e: Event)
+pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         crate::invariant::kernel_wf(rules, urls, s),
     ensures
-        crate::invariant::jar_no_public_suffix(rules, step(rules, urls, s, e).0.jar),
+        crate::invariant::jar_no_public_suffix(rules, step(rules, urls, fetch, s, e).0.jar),
 {
     let any_root = clazel_cookie::matching::spec::CanonicalHost { name: seq![], is_ip_address: false };
     match e {
@@ -484,7 +517,7 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                                        assert(navigate_tab(urls, s, r.tab, resolved, no_script()).0.jar == s.jar);
+                                        lemma_navigation_frame(urls, s, r.tab, resolved, seq![]);
                                     }
                                 }
                             }
@@ -492,6 +525,12 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                         _ => {},
                     }
                 }
+            }
+        },
+        Event::Fetched { tab, outcome } => {
+            lemma_fetched_frame(rules, urls, fetch, s, tab, outcome);
+            if let Some(run) = fetched_run(fetch, s, tab, outcome) {
+                crate::invariant::lemma_apply_stores_wf(rules, s.jar, run.stores, s.now);
             }
         },
         _ => {},
