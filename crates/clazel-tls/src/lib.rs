@@ -52,6 +52,7 @@ pub mod reassemble;
 pub mod record;
 pub mod schedule;
 pub mod spec;
+pub mod traffic;
 pub mod transcript;
 pub mod types;
 pub mod writer;

@@ -2113,6 +2113,188 @@
         "lemma": "super::client_examples::lemma_join_time()",
         "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.now == 7)"
       }
+    },
+    {
+      "id": "traffic-start-zero",
+      "file": "src/traffic/spec.rs",
+      "find": "next: Some(0), failed: false",
+      "replace": "next: Some(1), failed: false",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_start_zero()",
+        "witness": "!(super::examples::initial().next == Some(0u64))"
+      }
+    },
+    {
+      "id": "traffic-iv-label",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::schedule::spec::Label::Iv, seq![], 12",
+      "replace": "crate::schedule::spec::Label::Key, seq![], 12",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_iv_label()",
+        "witness": "!(super::examples::initial().iv == Seq::new(12, |i: int| 88u8))"
+      }
+    },
+    {
+      "id": "traffic-empty-context",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::schedule::spec::Label::Key, seq![], 32",
+      "replace": "crate::schedule::spec::Label::Key, (c.hash)(seq![]), 32",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_empty_context()",
+        "witness": "!(super::examples::initial().key == Seq::new(32, |i: int| 90u8))"
+      }
+    },
+    {
+      "id": "traffic-advance",
+      "file": "src/traffic/spec.rs",
+      "find": "Some((n as int + 1) as u64)",
+      "replace": "Some(n)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_advance()",
+        "witness": "!(super::spec::advance(super::examples::initial()).next == Some(1u64))"
+      }
+    },
+    {
+      "id": "traffic-no-wrap",
+      "file": "src/traffic/spec.rs",
+      "find": "if n == u64::MAX { None }",
+      "replace": "if n == u64::MAX { Some(0) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_no_wrap()",
+        "witness": "!(super::spec::advance(super::spec::State { next: Some(u64::MAX), ..super::examples::initial() }).next is None)"
+      }
+    },
+    {
+      "id": "traffic-failed-send",
+      "file": "src/traffic/spec.rs",
+      "find": "if s.failed { (s, Err(80)) }",
+      "replace": "if false { (s, Err(80)) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_failed_send()",
+        "witness": "!(super::spec::send(super::examples::seal(), super::spec::failed(super::examples::initial()), 23, seq![42u8], 0).1 == Err(80u8))"
+      }
+    },
+    {
+      "id": "traffic-failed-receive",
+      "file": "src/traffic/spec.rs",
+      "find": "if s.failed { (s, Read::Fail(80)) }",
+      "replace": "if false { (s, Read::Fail(80)) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_failed_receive()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::spec::failed(super::examples::initial()), super::examples::wire()).1 == super::spec::Read::Fail(80))"
+      }
+    },
+    {
+      "id": "traffic-incomplete-counter",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::spec::Read::NeedMore => (s, Read::NeedMore)",
+      "replace": "crate::spec::Read::NeedMore => (advance(s), Read::NeedMore)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_incomplete_counter()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::examples::initial(), seq![23u8,3u8,3u8,0u8,18u8]).0 == super::examples::initial())"
+      }
+    },
+    {
+      "id": "traffic-received-counter",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::spec::Res::Ok(record) => (advance(s), Read::Record",
+      "replace": "crate::spec::Res::Ok(record) => (s, Read::Record",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_received_counter()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::examples::initial(), super::examples::wire()).0.next == Some(1u64))"
+      }
+    },
+    {
+      "id": "traffic-mac-terminal",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::spec::Res::Err(error) => (failed(s), Read::Fail",
+      "replace": "crate::spec::Res::Err(error) => (s, Read::Fail",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_mac_terminal()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::examples::initial(), seq![23u8,3u8,3u8,0u8,1u8,0u8]).0.failed)"
+      }
+    },
+    {
+      "id": "traffic-padding-tag-bound",
+      "file": "src/traffic/spec.rs",
+      "find": "content.len() + 1 + padding + 16 >",
+      "replace": "content.len() + 1 + padding >",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_padding_tag_bound()",
+        "witness": "!(super::spec::send_error(23, seq![42u8], 16623) == Some(22u8))"
+      }
+    },
+    {
+      "id": "traffic-plaintext-bound",
+      "file": "src/traffic/spec.rs",
+      "find": "content.len() > crate::spec::MAX_PLAINTEXT",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_plaintext_bound()",
+        "witness": "!(super::spec::send_error(23, Seq::new(16385, |i: int| 42u8), 0) == Some(22u8))"
+      }
+    },
+    {
+      "id": "traffic-no-protected-ccs",
+      "file": "src/traffic/spec.rs",
+      "find": "!(typ == 21 || typ == 22 || typ == 23)",
+      "replace": "!(typ == 20 || typ == 21 || typ == 22 || typ == 23)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_no_protected_ccs()",
+        "witness": "!(super::spec::send_error(20, seq![1u8], 0) == Some(10u8))"
+      }
     }
   ]
 }

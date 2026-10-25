@@ -93,7 +93,7 @@ pub open spec fn send(seal: spec_fn(Seq<u8>, Seq<u8>, Seq<u8>) -> Seq<u8>, s: St
 }
 /// One protected record, an incomplete prefix, or a fatal local/peer failure.
 pub enum Read {
-    /// Retain input bytes; do not advance the counter or call AEAD.
+    /// Caller retains/resubmits input; no counter advance or AEAD call.
     NeedMore,
     /// Inner content type, plaintext content and exact consumed wire-byte count.
     Record(u8, Seq<u8>, nat),
