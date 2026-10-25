@@ -126,9 +126,9 @@ Tier 0, target tier 2. The current numbers are in the
   it**, so it is weaker evidence than a second author's text read first.
 - **Mutations:** `mutations.json` lists 112 deliberate breaks: 76 for
   formats, 19 for the key schedule and 17 for transcript construction.
-  The latest completed local run certified all 95 format/key-schedule
-  kills; the run including the 17 new transcript witnesses is pending.
-  Each `killed` entry requires a certificate that Verus checks.
+  Each `killed` entry requires a certificate that Verus checks; the
+  certificate must pass on the mutant and fail on the real spec.
+  Full workspace and CI verification remain required before tier promotion.
 - **Conformance** (`tests/conformance_tls_formats.rs`, through the proven
   code): RFC 8448 sections 3 to 7: all 40 handshake messages (39 read and
   written back byte for byte, one expected failure: a ClientHello shown

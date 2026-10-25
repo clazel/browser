@@ -965,7 +965,7 @@ pass locally. Tests construct live transcripts from RFC 8448 §3/§5's 16
 messages and match all 12 hash/Finished checkpoints; RFC 8446's explicit
 signature-input example passes. The 95 existing mutation certificates now
 all pass (the six missing fixture references were fixed); 17 transcript
-witnesses are added, with their full mutation run pending. Authentication
+witnesses are added and require certification by the mutation checker. Authentication
 message ordering, server negotiation, signature verification and Finished
 verification as state transitions remain for the handshake state machine.
 No tier is raised, and full verification is still pending.
