@@ -7,8 +7,9 @@
 //!
 //! This crate is phase-3.md item 3.5d. It reads and writes bytes: the
 //! presentation language, records, handshake messages, extensions and
-//! alerts. The key schedule, the handshake state machine and the
-//! cryptography are items 3.5e and 3.5f; nothing here depends on them.
+//! alerts. [`schedule`] adds the SHA-256 key schedule over abstract crypto
+//! parameters (part of 3.5e). The handshake state machine and the production
+//! cryptography provider (3.5f) remain to be built.
 //!
 //! - [`spec`]: a step-by-step transcription of the standard. Its header
 //!   lists every modelling choice.

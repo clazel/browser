@@ -5,9 +5,10 @@ bytes in and bytes out: the presentation language, records, handshake
 messages, extensions and alerts. Part of [Clazel](../../README.md), a web
 browser whose parsers of untrusted input carry machine-checked proofs.
 
-This is phase-3.md item 3.5d. **The key schedule, the handshake state
-machine and the cryptography (items 3.5e and 3.5f) are not here yet**, and
-neither is the interpretation of a certificate (3.5b). The crate stays at
+This covers phase-3.md item 3.5d and the SHA-256 key schedule from 3.5e.
+**The handshake state machine and the production cryptography provider
+(items 3.5e and 3.5f) are not here yet**, and neither is the interpretation
+of a certificate (3.5b). The crate stays at
 `tier = 0` with `target-tier = 2` until they are, and until CI's full run
 has checked every proof, mutation and conformance test on a pull request;
 what is proven today is stated below, not implied by the tier.
@@ -50,7 +51,26 @@ what is proven today is stated below, not implied by the tier.
   each error (`ErrKind`) to the alert §6.2 names for it. Every reader
   returns a typed error that carries it.
 
-Out of scope: the key schedule (§7), the state machine (Appendix A), the
+- **Key schedule** (§7.1–§7.3, §4.4.4, `schedule`): HkdfLabel encoding,
+  HKDF-Expand-Label and Derive-Secret, early/handshake/master secrets for
+  a non-PSK SHA-256 handshake, client/server traffic-secret labels,
+  Finished verify_data, traffic-secret updates, and ChaCha20's write key
+  and IV. The `Crypto` trait supplies SHA-256, HKDF and HMAC. Each executable
+  function is proven equal to its equation over those parameters, without
+  axioms. This does not prove a provider correct or enforce transcript
+  boundaries: the handshake state machine must supply the right messages,
+  including the HelloRetryRequest transcript transformation.
+
+  `tests/conformance_key_schedule.rs` checks 40 RFC 8448 §3/§5 operations
+  through the proven code, with a test-only RFC 5869 provider over
+  RustCrypto SHA-256 (itself checked against RFC 5869 Appendix A.1).
+  The RFC traces select AES-128-GCM/SHA-256; their 16-byte key vectors test
+  generic Expand-Label, while the 32-byte ChaCha20 key and update helpers
+  have separate checks. These tests exercise the key schedule, not a TLS
+  handshake implementation. `schedule/examples.rs` adds concrete tagged
+  argument-routing witnesses and ASCII-label witnesses for 19 mutations.
+
+Out of scope: the state machine (Appendix A), the
 cryptography, the contents of a certificate, `pre_shared_key` and the other
 extensions kept opaque (their data is not read), client certificates (a
 CertificateRequest is read and then refused by sending an empty

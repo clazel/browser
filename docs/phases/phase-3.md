@@ -934,6 +934,25 @@ private keys and randoms injected, so the derived secrets and every
 encrypted record match byte for byte; RFC 8448 is the independent
 transcription's evidence too.
 
+**Key schedule as built (2026-10-25):** `clazel-tls/src/schedule/` now
+contains the SHA-256, non-PSK key schedule: separate spec and contracts
+(committed before implementation), HkdfLabel encoding, HKDF-Expand-Label,
+Derive-Secret, early/handshake/master secrets, client/server traffic-secret
+labels, Finished verify_data, traffic updates and ChaCha20's write key/IV.
+The executable code refines the RFC equations over a `Crypto` trait; it
+adds no axioms and no shipped dependency. All 448 TLS proof obligations
+pass locally. RFC 8448 §3 and §5 supply 40 passing key-schedule operations
+(including both Finished values and the HelloRetryRequest transcript),
+using a test-only RFC 5869 provider over RustCrypto SHA-256; RFC 5869
+Appendix A.1 checks that provider. The traces use AES-128-GCM/SHA-256, so
+16-byte key vectors exercise generic Expand-Label, not the ChaCha20 helper.
+Nineteen new mutation witnesses cover label spelling, HKDF framing,
+argument order, zero IKM, derived salts and transcript hashing.
+Still missing: the transcript-owning handshake state machine and its
+security theorems, CertificateVerify inputs, the libcrux provider and the
+end-to-end encrypted traces. The crate remains tier 0; local proof and
+vector results do not replace CI's full verification.
+
 #### 3.5f The cryptography and the join (M)
 
 The `shipped` rows for libcrux (`libcrux-chacha20poly1305`,
@@ -1072,7 +1091,7 @@ half does not wait on TLS.
 | 3.5b X.509 and path validation | not started (after 3.5a) |
 | 3.5c RSA PKCS#1 v1.5 | built (see As built); tier 0, target 2, pending CI full verification |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
-| 3.5e Key schedule and handshake state machine | not started (after 3.5d) |
+| 3.5e Key schedule and handshake state machine | SHA-256 non-PSK key schedule built and proven over abstract crypto; 40 RFC 8448 vector operations pass locally (see As built). Handshake state machine not started; tier 0, full CI pending |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | not started |

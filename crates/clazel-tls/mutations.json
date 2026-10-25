@@ -1063,6 +1063,272 @@
         "lemma": "super::examples_hs::lemma_server_messages()",
         "witness": "parse_handshake(seq![13u8, 0, 0, 3, 0, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
       }
+    },
+    {
+      "id": "schedule-prefix-space",
+      "file": "src/schedule/spec.rs",
+      "find": "seq![116u8, 108u8, 115u8, 49u8, 51u8, 32u8]",
+      "replace": "seq![116u8, 108u8, 115u8, 49u8, 51u8, 0u8]",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-output-length",
+      "file": "src/schedule/spec.rs",
+      "find": "crate::spec::write_u16(length)",
+      "replace": "crate::spec::write_u16(0)",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-omit-prefix",
+      "file": "src/schedule/spec.rs",
+      "find": "prefix() + label",
+      "replace": "label",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-omit-context",
+      "file": "src/schedule/spec.rs",
+      "find": "crate::spec::write_vec(context, 255)",
+      "replace": "crate::spec::write_vec(Seq::empty(), 255)",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-expand-arguments",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.expand)(secret, hkdf_label(label_bytes(label), context, length), length as nat)",
+      "replace": "(c.expand)(hkdf_label(label_bytes(label), context, length), secret, length as nat)",
+      "expect": "killed",
+      "reason": "The concrete derive witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_derive()",
+        "witness": "derive_secret(fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
+      }
+    },
+    {
+      "id": "schedule-derive-unhashed-transcript",
+      "file": "src/schedule/spec.rs",
+      "find": "expand_label(c, secret, label, (c.hash)(messages), HASH_LEN as u16)",
+      "replace": "expand_label(c, secret, label, messages, HASH_LEN as u16)",
+      "expect": "killed",
+      "reason": "The concrete derive witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_derive()",
+        "witness": "derive_secret(fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
+      }
+    },
+    {
+      "id": "schedule-empty-early-ikm",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.extract)(zeros(), zeros())",
+      "replace": "(c.extract)(zeros(), Seq::empty())",
+      "expect": "killed",
+      "reason": "The concrete early witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_early()",
+        "witness": "early_secret(fixture_crypto()) != seq![69u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
+      }
+    },
+    {
+      "id": "schedule-handshake-skips-derived",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.extract)(derive_secret(c, early, Label::Derived, Seq::empty()), dhe)",
+      "replace": "(c.extract)(early, dhe)",
+      "expect": "killed",
+      "reason": "The concrete handshake witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_handshake()",
+        "witness": "handshake_secret(fixture_crypto(), seq![1u8], seq![2u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-master-empty-ikm",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.extract)(derive_secret(c, handshake, Label::Derived, Seq::empty()), zeros())",
+      "replace": "(c.extract)(derive_secret(c, handshake, Label::Derived, Seq::empty()), Seq::empty())",
+      "expect": "killed",
+      "reason": "The concrete master witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_master()",
+        "witness": "master_secret(fixture_crypto(), seq![1u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
+      }
+    },
+    {
+      "id": "schedule-finished-unhashed-transcript",
+      "file": "src/schedule/spec.rs",
+      "find": "        (c.hash)(messages))",
+      "replace": "        messages)",
+      "expect": "killed",
+      "reason": "The concrete finished witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_finished()",
+        "witness": "finished(fixture_crypto(), seq![1u8], seq![2u8]) != seq![77u8, 88u8, 1u8, 0u8, 32u8, 14u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8, 0u8, 0u8, 32u8, 72u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-label-derived",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Derived => seq![100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8]",
+      "replace": "Label::Derived => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_derived witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_derived()",
+        "witness": "label_bytes(Label::Derived) != seq![100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8]"
+      }
+    },
+    {
+      "id": "schedule-label-clienthandshake",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ClientHandshake => seq![99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ClientHandshake => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_clienthandshake witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_clienthandshake()",
+        "witness": "label_bytes(Label::ClientHandshake) != seq![99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-serverhandshake",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ServerHandshake => seq![115u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ServerHandshake => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_serverhandshake witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_serverhandshake()",
+        "witness": "label_bytes(Label::ServerHandshake) != seq![115u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-clientapplication",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ClientApplication => seq![99u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ClientApplication => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_clientapplication witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_clientapplication()",
+        "witness": "label_bytes(Label::ClientApplication) != seq![99u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-serverapplication",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ServerApplication => seq![115u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ServerApplication => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_serverapplication witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_serverapplication()",
+        "witness": "label_bytes(Label::ServerApplication) != seq![115u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-finished",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Finished => seq![102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8]",
+      "replace": "Label::Finished => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_finished witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_finished()",
+        "witness": "label_bytes(Label::Finished) != seq![102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8]"
+      }
+    },
+    {
+      "id": "schedule-label-update",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Update => seq![116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 32u8, 117u8, 112u8, 100u8]",
+      "replace": "Label::Update => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_update witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_update()",
+        "witness": "label_bytes(Label::Update) != seq![116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 32u8, 117u8, 112u8, 100u8]"
+      }
+    },
+    {
+      "id": "schedule-label-key",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Key => seq![107u8, 101u8, 121u8]",
+      "replace": "Label::Key => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_key witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_key()",
+        "witness": "label_bytes(Label::Key) != seq![107u8, 101u8, 121u8]"
+      }
+    },
+    {
+      "id": "schedule-label-iv",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Iv => seq![105u8, 118u8]",
+      "replace": "Label::Iv => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_iv witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_iv()",
+        "witness": "label_bytes(Label::Iv) != seq![105u8, 118u8]"
+      }
     }
   ]
 }

@@ -14,6 +14,8 @@ vstd = "=0.0.0-2026-10-04-0306"
 # never shipped). Default features are off, so no cryptography provider is
 # built; only the message codec of `rustls::internal::msgs` is used.
 [dev-dependencies]
+# Test-only SHA-256 oracle for RFC 8448 key-schedule vectors.
+sha2 = { version = "=0.10.9", default-features = false }
 rustls = { version = "=0.23.46", default-features = false }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
