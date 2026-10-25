@@ -10,7 +10,9 @@
 use crate::error::{NetError, ResolveError, Stage, from_io};
 use clazel_dns::answer::answer_addresses;
 use clazel_dns::decode::{decode_message, decode_udp};
-use clazel_dns::encode::{dotted_to_wire, encode_query, tcp_frame, tcp_message_len};
+use clazel_dns::encode::{
+    dotted_to_wire, encode_query, tcp_frame, tcp_message_len, wire_to_dotted,
+};
 use clazel_dns::resolv::parse::nameservers;
 use clazel_dns::spec::Addr;
 use clazel_dns::types::{Msg, Resolved};
@@ -129,32 +131,6 @@ fn lookup(host: &[u8], qtype: u16, cfg: &Config) -> Result<Vec<IpAddr>, NetError
         }
     }
     Err(NetError::Resolve(ResolveError::TooManyAliases))
-}
-
-/// The dotted form of an uncompressed wire name, accepted only if the proven
-/// `dotted_to_wire` turns it back into the same bytes (so a label holding a
-/// dot, or any name the encoder would refuse, is not asked about).
-fn wire_to_dotted(wire: &[u8]) -> Option<Vec<u8>> {
-    let mut out: Vec<u8> = Vec::new();
-    let mut pos = 0usize;
-    loop {
-        let len = usize::from(*wire.get(pos)?);
-        let start = pos.checked_add(1)?;
-        if len == 0 {
-            // The root label must be the last octet, and the name not empty.
-            if start != wire.len() || out.is_empty() {
-                return None;
-            }
-            break;
-        }
-        let label = wire.get(start..start.checked_add(len)?)?;
-        if !out.is_empty() {
-            out.push(b'.');
-        }
-        out.extend_from_slice(label);
-        pos = start.checked_add(len)?;
-    }
-    (dotted_to_wire(&out).as_deref() == Some(wire)).then_some(out)
 }
 
 /// Ask the nameservers in order about `name`; the first acceptable reply wins.
@@ -606,15 +582,18 @@ mod tests {
     }
 
     #[test]
-    fn wire_names_become_dotted_names_only_when_they_round_trip() {
+    #[cfg_attr(miri, ignore = "opens sockets")]
+    fn a_cname_target_with_no_dotted_form_is_a_bad_alias() -> T {
+        // example.test CNAME "a.b" "test": the first label holds a dot, so
+        // the target cannot be written as a name to ask about.
+        let mut cname = vec![0xC0, 12, 0, 5, 0, 1, 0, 0, 0, 60, 0, 10];
+        cname.extend_from_slice(b"\x03a.b\x04test\x00");
+        let (ns, h) = udp_server(1, move |q, _| Some(reply(q, OK, 0, 1, &cname)))?;
         assert_eq!(
-            wire_to_dotted(b"\x04real\x04test\x00"),
-            Some(b"real.test".to_vec())
+            resolve_with(b"example.test", &cfg(ns)),
+            Err(NetError::Resolve(ResolveError::BadAlias))
         );
-        assert_eq!(wire_to_dotted(b"\x00"), None);
-        assert_eq!(wire_to_dotted(b"\x03a.b\x00"), None);
-        assert_eq!(wire_to_dotted(b"\x04real"), None);
-        assert_eq!(wire_to_dotted(b"\x04real\x00\x00"), None);
-        assert_eq!(wire_to_dotted(b"\xC0\x0c"), None);
+        h.join().map_err(|_| "server panicked")?;
+        Ok(())
     }
 }

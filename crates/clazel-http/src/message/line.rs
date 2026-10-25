@@ -177,7 +177,7 @@ pub fn parse_status_line_exec(line: &[u8]) -> (out: Option<StatusLineBuf>)
 }
 
 /// `parse_field_line_start` (§5, §5.1).
-fn parse_field_line_start_exec(line: &[u8]) -> (out: Option<FieldLineBuf>)
+pub fn parse_field_line_start_exec(line: &[u8]) -> (out: Option<FieldLineBuf>)
     ensures
         match out {
             Some(f) => parse_field_line_start(line@) == Some(f@),
@@ -214,7 +214,7 @@ fn finish_field_line_exec(raw: FieldLineBuf) -> (out: Option<FieldLineBuf>)
 
 /// `flush_pending`: appends the pending line, finished, to `acc`; `false`
 /// if it is not a valid field line.
-fn flush_pending_exec(acc: &mut Vec<FieldLineBuf>, pending: Option<FieldLineBuf>) -> (ok: bool)
+pub fn flush_pending_exec(acc: &mut Vec<FieldLineBuf>, pending: Option<FieldLineBuf>) -> (ok: bool)
     ensures
         match flush_pending(crate::field::types::lines_view(old(acc)@), super::types::opt_line_view(pending)) {
             Some(fields) => ok && crate::field::types::lines_view(final(acc)@) == fields,

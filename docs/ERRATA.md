@@ -172,3 +172,25 @@ it evidently means. Each entry records what we specified instead.
   decoder a lexicographic `decreases` (the limit, then the distance to it).
   See `read_name` in `crates/clazel-dns/src/spec.rs`.
 - **Reported upstream:** not yet.
+
+## RFC 7230 §3.2: `field-content` cannot match a value with two inner whitespace runs
+
+- **Spec:** RFC 7230 (June 2014), §3.2 "Header Fields",
+  <https://www.rfc-editor.org/rfc/rfc7230#section-3.2>
+- **Text:** "field-value = *( field-content / obs-fold )", "field-content =
+  field-vchar [ 1*( SP / HTAB ) field-vchar ]", "field-vchar = VCHAR /
+  obs-text".
+- **Problem:** `field-vchar` is one octet, so a `field-content` is one octet
+  or two octets with whitespace between, and `*( field-content / obs-fold )`
+  is a row of those. A value such as `a b c` would need `a b` followed by
+  ` c`, and ` c` begins with whitespace, so no row matches. Read literally,
+  `text/html; charset=utf-8` is not a field value. The rule evidently means
+  a value that begins and ends with a `field-vchar` with `SP`, `HTAB` and
+  `field-vchar` between, which is what RFC 9110 §5.5 (`field-content =
+  field-vchar [ 1*( SP / HTAB / field-vchar ) field-vchar ]`) writes.
+- **We specify:** the RFC 9110 §5.5 reading, in `r_is_field_value` in
+  `crates/clazel-http/src/message/independent.rs` (the independent
+  transcription of RFC 7230 §3); the spec itself is RFC 9112's and has no
+  such issue.
+- **Reported upstream:** not yet (RFC 9110, which obsoletes RFC 7230, already
+  states the corrected rule).

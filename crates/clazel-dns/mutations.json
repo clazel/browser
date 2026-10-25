@@ -2057,6 +2057,230 @@
         "lemma": "crate::resolv::examples::lemma_resolv_example_6()",
         "witness": "nameservers(seq![110u8, 97, 109, 101, 115, 101, 114, 118, 101, 114, 32, 50, 48, 48, 49, 58, 100, 98, 56, 58, 58, 56, 56, 56, 56, 10]) != seq![crate::spec::Addr::V6(42540766411282592856903984951653861512)]"
       }
+    },
+    {
+      "id": "wire-dotted-limit-lax",
+      "file": "src/spec.rs",
+      "find": "w.len() > MAX_NAME as nat {",
+      "replace": "w.len() > MAX_NAME as nat + 1 {",
+      "expect": "killed",
+      "reason": "§2.3.4: names are 255 octets or less: a wire name of 256 is spelled; lemma_wire_limits is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_limits()",
+        "witness": "wire_to_dotted(crate::examples::max_name(62)) is Some"
+      }
+    },
+    {
+      "id": "wire-dotted-limit-strict",
+      "file": "src/spec.rs",
+      "find": "w.len() > MAX_NAME as nat {",
+      "replace": "w.len() >= MAX_NAME as nat {",
+      "expect": "killed",
+      "reason": "§2.3.4: 255 octets is allowed: a wire name of 255 is refused; lemma_wire_limits is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_limits()",
+        "witness": "wire_to_dotted(crate::examples::max_name(61)) is None"
+      }
+    },
+    {
+      "id": "wire-dotted-root",
+      "file": "src/spec.rs",
+      "find": "Some(d) => if d.len() == 0 { None } else { Some(d) },",
+      "replace": "Some(d) => Some(d),",
+      "expect": "killed",
+      "reason": "The root has no label to write, so no dotted name; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![0u8]) is Some"
+      }
+    },
+    {
+      "id": "wire-dotted-nonroot",
+      "file": "src/spec.rs",
+      "find": "{ None } else { Some(d) }",
+      "replace": "{ None } else { None }",
+      "expect": "killed",
+      "reason": "A name with labels is spelled; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![1u8, 97, 0]) is None"
+      }
+    },
+    {
+      "id": "wire-scan-unterminated",
+      "file": "src/spec.rs",
+      "find": "name ended without it.\n        None",
+      "replace": "name ended without it.\n        Some(seq![])",
+      "expect": "killed",
+      "reason": "§3.1: a name is ended by a zero length octet; one that runs out first is refused; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![4u8, 114, 101, 97, 108]) is Some"
+      }
+    },
+    {
+      "id": "wire-scan-root-last",
+      "file": "src/spec.rs",
+      "find": "if pos + 1 == w.len() {",
+      "replace": "if pos + 1 <= w.len() {",
+      "expect": "killed",
+      "reason": "The zero octet is the last octet: octets after it are refused; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![4u8, 114, 101, 97, 108, 0, 0]) is Some"
+      }
+    },
+    {
+      "id": "wire-scan-root-none",
+      "file": "src/spec.rs",
+      "find": "if pos + 1 == w.len() {\n            Some(seq![])",
+      "replace": "if pos + 1 == w.len() {\n            None",
+      "expect": "killed",
+      "reason": "The zero octet ends the name; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![1u8, 97, 0]) is None"
+      }
+    },
+    {
+      "id": "wire-scan-label-limit-lax",
+      "file": "src/spec.rs",
+      "find": "w[pos as int] > MAX_LABEL as u8 ||",
+      "replace": "w[pos as int] > MAX_LABEL as u8 + 1 ||",
+      "expect": "killed",
+      "reason": "§2.3.4: labels are 63 octets or less: a length octet of 64 is taken for a label; lemma_wire_limits is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_limits()",
+        "witness": "wire_to_dotted(seq![64u8] + crate::examples::fill(97, 64) + seq![0u8]) is Some"
+      }
+    },
+    {
+      "id": "wire-scan-label-limit-strict",
+      "file": "src/spec.rs",
+      "find": "w[pos as int] > MAX_LABEL as u8 ||",
+      "replace": "w[pos as int] >= MAX_LABEL as u8 ||",
+      "expect": "killed",
+      "reason": "§2.3.4: a label of 63 octets is allowed; lemma_wire_limits is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_limits()",
+        "witness": "wire_to_dotted(seq![63u8] + crate::examples::fill(97, 63) + seq![0u8]) is None"
+      }
+    },
+    {
+      "id": "wire-scan-label-dot",
+      "file": "src/spec.rs",
+      "find": "s[i as int] != 46 && s[i as int] < 128 && dotted_run(s, i + 1)",
+      "replace": "s[i as int] != 47 && s[i as int] < 128 && dotted_run(s, i + 1)",
+      "expect": "killed",
+      "reason": "A label holding a dot has no dotted spelling (it would be split in two); lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![3u8, 97, 46, 98, 0]) is Some"
+      }
+    },
+    {
+      "id": "wire-scan-label-ascii",
+      "file": "src/spec.rs",
+      "find": "s[i as int] != 46 && s[i as int] < 128 && dotted_run(s, i + 1)",
+      "replace": "s[i as int] != 46 && s[i as int] < 129 && dotted_run(s, i + 1)",
+      "expect": "killed",
+      "reason": "The dotted name is ASCII, as dotted_to_wire requires: an octet of 128 is refused; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![3u8, 97, 128, 98, 0]) is Some"
+      }
+    },
+    {
+      "id": "wire-scan-join-dot",
+      "file": "src/spec.rs",
+      "find": "a + seq![46u8] + b",
+      "replace": "a + seq![47u8] + b",
+      "expect": "killed",
+      "reason": "Labels are joined by dots; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![1u8, 97, 1, 98, 1, 99, 0]) != Some(seq![97u8, 46, 98, 46, 99])"
+      }
+    },
+    {
+      "id": "wire-scan-join-trailing",
+      "file": "src/spec.rs",
+      "find": "else if b.len() == 0 {\n        a\n",
+      "replace": "else if b.len() == 0 {\n        a + seq![46u8]\n",
+      "expect": "killed",
+      "reason": "The last label has no dot after it; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![1u8, 97, 0]) != Some(seq![97u8])"
+      }
+    },
+    {
+      "id": "wire-scan-join-first",
+      "file": "src/spec.rs",
+      "find": "if a.len() == 0 {\n        b",
+      "replace": "if a.len() == 1 {\n        b",
+      "expect": "killed",
+      "reason": "A label of one octet is a label like any other; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![1u8, 97, 1, 98, 1, 99, 0]) != Some(seq![97u8, 46, 98, 46, 99])"
+      }
+    },
+    {
+      "id": "wire-scan-label-end",
+      "file": "src/spec.rs",
+      "find": "let label = w.subrange(pos as int + 1, pos as int + 1 + w[pos as int] as int);",
+      "replace": "let label = w.subrange(pos as int + 1, pos as int + w[pos as int] as int);",
+      "expect": "killed",
+      "reason": "§3.1: a label is its length octet's worth of octets; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![4u8, 114, 101, 97, 108, 4, 116, 101, 115, 116, 0]) != Some(seq![114u8, 101, 97, 108, 46, 116, 101, 115, 116])"
+      }
+    },
+    {
+      "id": "wire-scan-advance",
+      "file": "src/spec.rs",
+      "find": "match wire_scan(w, pos + 1 + w[pos as int] as nat) {",
+      "replace": "match wire_scan(w, pos + w[pos as int] as nat) {",
+      "expect": "killed",
+      "reason": "The next label starts after the length octet and the label; lemma_wire_names is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_wire_names()",
+        "witness": "wire_to_dotted(seq![4u8, 114, 101, 97, 108, 4, 116, 101, 115, 116, 0]) != Some(seq![114u8, 101, 97, 108, 46, 116, 101, 115, 116])"
+      }
     }
   ]
 }

@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "HTTP: field syntax (RFC 9110 §5, §8.6); message framing and chunked coding come next."
+description = "HTTP: field syntax (RFC 9110 §5, §8.6) and message framing with the chunked coding (RFC 9112)."
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
@@ -16,12 +16,15 @@ vstd = "=0.0.0-2026-10-04-0306"
 [dev-dependencies]
 httparse = { version = "=1.10.1", default-features = false }
 
-# Verification tier (docs/VERIFICATION.md). Tier 0 for now, target 2:
-# field syntax (src/field/) is proven against its contracts and has an
-# independent transcription (the Fetch Standard) with certified mutations,
-# but message framing (Phase 3 item 3.2) and the conformance tests
-# (tests/conformance*.rs, item 3.3) are not built yet, so the tier is not
-# raised.
+# Verification tier (docs/VERIFICATION.md). Tier 0 for now, target 2: field
+# syntax (src/field/) and message framing (src/message/) are proven equal to
+# their specs, each with an independent transcription (the Fetch Standard
+# for fields, RFC 7230 for framing) and certified mutations, and the
+# conformance tests exist (tests/conformance_http.rs: the llhttp corpus and
+# a differential against httparse). The tier is not raised until a full CI
+# run is green on the merged branch and every other Tier 2 requirement of
+# CLAUDE.md rule 7 holds; docs/phases/phase-3.md items 3.2 and 3.3 list what
+# is still open.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2

@@ -1,14 +1,15 @@
 # clazel-http
 
-HTTP field syntax for the Clazel browser: the rules every header a server
-sends is read with, formally verified with Verus. Part of
+HTTP/1.1 for the Clazel browser: the field syntax every header a server
+sends is read with, and the message framing that finds where a response's
+head and body end, formally verified with Verus. Part of
 [Clazel](../../README.md), a web browser whose parsers of untrusted input
 carry machine-checked proofs.
 
 ## What it is
 
-An implementation of the field syntax of RFC 9110 "HTTP Semantics" (June
-2022), module `field`:
+Two modules. `field` is the field syntax of RFC 9110 "HTTP Semantics" (June
+2022):
 
 - §5.1 field names, compared case-insensitively; §5.2 and §5.3 the combined
   field value of the lines that share a name (comma SP, in the order
@@ -27,17 +28,20 @@ An implementation of the field syntax of RFC 9110 "HTTP Semantics" (June
 
 Strings are bytes: `&[u8]` and `Vec<u8>`.
 
-Not built yet: message framing (RFC 9112 start line, field lines, chunked
-coding, message body length), which is Phase 3 item 3.2, and the conformance
-tests against other HTTP parsers (item 3.3). The crate therefore stays at
-tier 0 (target 2) until both exist: `tests/conformance*.rs` is a
-requirement of tier 2 (see [docs/VERIFICATION.md](../../docs/VERIFICATION.md)),
-and what is proven below is about `field/` alone.
+`message` is the message framing of RFC 9112 "HTTP/1.1" (June 2022), as a
+client sees it: the status line (§4), field lines (§5, obs-fold replaced by
+SP), the message body length (§6.3), the chunked coding (§7.1), reading a
+response to the end of the connection, the request serializer (§3), and a
+request parser used to check the serializer. `ResponseParser`
+(`message/incremental.rs`) is fed bytes as they arrive and reads each byte
+once, apart from a line still waiting for its CRLF. The line, field-line
+and body limits (8192 octets, 256 lines, 64 MiB) and the other modelling
+choices are listed at the top of `src/message/spec.rs`.
 
 ## Verification
 
-Target tier 2; declared tier 0 until 3.2 and 3.3. The code in `field/` is
-proven, in Verus, to equal an executable specification transcribed from the
+Target tier 2; declared tier 0 until CI's full verification passes with
+every requirement in place. The code in `field/` and `message/` is proven, in Verus, to equal an executable specification transcribed from the
 RFC, over all inputs. Verus also proves that none of it panics, overflows or
 indexes out of bounds. The current counts are in the
 [status table](../../README.md#verification-status).
@@ -69,10 +73,22 @@ indexes out of bounds. The current counts are in the
   with control bytes other than NUL, CR and LF, and its quoted-string reader
   accepts unterminated strings and any byte. The same agent wrote both
   transcriptions, so this is weaker evidence than a second author's.
+- **Message framing** (`src/message/`): every executable function is proven
+  to its contract in `contract.rs`, against `spec.rs`. `lemmas.rs` proves
+  that a decision never changes when more bytes arrive and that no prefix
+  decides early (`theorem_monotone`, `theorem_no_early_decision`).
+  `request.rs` proves that parsing a serialized request gives it back
+  (`theorem_request_round_trip`). `independent.rs` is a second transcription
+  from RFC 7230 §3, proven to give the same response wherever it decides;
+  the inputs where the two RFCs differ are listed at its top. The same agent
+  wrote both and had read the spec first, so this is weaker evidence than a
+  second author's.
 - **Mutations:** every deliberate break of the spec listed in
   `mutations.json` (one or more per grammar rule) is certified as caught by a
   checked proof.
-- **Conformance:** none yet (item 3.3).
+- **Conformance** (`tests/conformance_http.rs`): RFC 9112's own examples,
+  llhttp's test fixtures, and differential runs against `httparse` on random,
+  mutated and corpus responses, with each expected difference named.
 - **Modelling choices** (listed at the top of `src/field/spec.rs`): a list is
   split at commas outside quoted strings and each piece is then checked
   against the element's grammar; "the same decimal value" in §8.6 is read as
@@ -85,7 +101,7 @@ indexes out of bounds. The current counts are in the
 The proofs assume the Rust compiler, Verus and its solver, the `vstd`
 library, and that the spec transcribes the RFC correctly. The independent
 transcription and the examples support that last point but cannot prove it,
-and the conformance tests that would support it further are not written. The
+and the conformance tests support it further, on the inputs they cover. The
 full list is in
 [docs/VERIFICATION.md](../../docs/VERIFICATION.md#trusted-computing-base-what-we-do-not-prove).
 

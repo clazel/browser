@@ -1656,8 +1656,8 @@
       "id": "close-body-immediate",
       "file": "src/message/spec.rs",
       "module": "message::examples",
-      "find": "BodyLength::Close => if rest.len() > max_body() {\n                Parse::Invalid\n            } else {\n                Parse::Incomplete\n            },",
-      "replace": "BodyLength::Close => if rest.len() > max_body() {\n                Parse::Invalid\n            } else {\n                Parse::Done { response: response_of(head, rest), rest: seq![] }\n            },",
+      "find": "BodyLength::Close => close_body_pending(rest.len(), max_body()),",
+      "replace": "BodyLength::Close => Parse::Done { response: response_of(head, rest), rest: seq![] },",
       "expect": "killed",
       "reason": "A close-delimited body is finished at once, before the server closes the connection. Example lemma_framing_24 is false for the mutant.",
       "certificate": {
@@ -2034,46 +2034,71 @@
       "id": "line-max-off-by-one",
       "file": "src/message/spec.rs",
       "module": "message::examples",
-      "find": "Some(i) => if i <= max_line() {",
-      "replace": "Some(i) => if i < max_line() {",
-      "expect": "survives",
-      "reason": "A line of exactly `max_line` octets is rejected. Not covered: `max_line` is 8192 and Verus 0.2026.10.04 `compute_only` exceeds its maximum recursion depth evaluating `find_crlf_from` over such a line, so no example can reach the boundary. Closed by a Kani harness or a proven lemma about `read_line` (item 3.3 or later)."
+      "find": "Some(i) => if i <= max {",
+      "replace": "Some(i) => if i < max {",
+      "expect": "killed",
+      "reason": "A line of exactly the limit is rejected. Example lemma_framing_73 (limit 4) is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_73()",
+        "witness": "!(super::examples::line_is(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x0D, 0x0A], 4), seq![0x61u8, 0x62, 0x63, 0x64], Seq::<u8>::empty()))"
+      }
     },
     {
       "id": "line-max-widened",
       "file": "src/message/spec.rs",
       "module": "message::examples",
-      "find": "Some(i) => if i <= max_line() {",
-      "replace": "Some(i) => if i <= max_line() + 1 {",
-      "expect": "survives",
-      "reason": "A line of `max_line` + 1 octets is accepted. Not covered, for the same reason as line-max-off-by-one."
+      "find": "Some(i) => if i <= max {",
+      "replace": "Some(i) => if i <= max + 1 {",
+      "expect": "killed",
+      "reason": "A line of the limit + 1 octets is accepted. Example lemma_framing_74 (limit 4) is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_74()",
+        "witness": "!(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65, 0x0D, 0x0A], 4) is TooLong)"
+      }
     },
     {
       "id": "line-incomplete-limit-early",
       "file": "src/message/spec.rs",
       "module": "message::examples",
-      "find": "None => if s.len() > max_line() + 1 {",
-      "replace": "None => if s.len() > max_line() {",
-      "expect": "survives",
-      "reason": "A partial line is called too long one octet early. Not covered, for the same reason as line-max-off-by-one."
+      "find": "None => if s.len() > max + 1 {",
+      "replace": "None => if s.len() > max {",
+      "expect": "killed",
+      "reason": "A partial line is called too long one octet early. Example lemma_framing_75 (limit 4) is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_75()",
+        "witness": "!(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65], 4) is Incomplete)"
+      }
     },
     {
       "id": "line-incomplete-limit-late",
       "file": "src/message/spec.rs",
       "module": "message::examples",
-      "find": "None => if s.len() > max_line() + 1 {",
-      "replace": "None => if s.len() > max_line() + 2 {",
-      "expect": "survives",
-      "reason": "A partial line is called too long one octet late. Not covered, for the same reason as line-max-off-by-one."
+      "find": "None => if s.len() > max + 1 {",
+      "replace": "None => if s.len() > max + 2 {",
+      "expect": "killed",
+      "reason": "A partial line is called too long one octet late. Example lemma_framing_76 (limit 4) is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_76()",
+        "witness": "!(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65, 0x66], 4) is TooLong)"
+      }
     },
     {
       "id": "close-limit-dropped",
       "file": "src/message/spec.rs",
       "module": "message::examples",
-      "find": "BodyLength::Close => if rest.len() > max_body() {\n                Parse::Invalid\n            } else {",
-      "replace": "BodyLength::Close => if false {\n                Parse::Invalid\n            } else {",
-      "expect": "survives",
-      "reason": "A close-delimited body is never too big while open. Not covered: an example needs more than `max_body` (64 MiB) octets, which `compute_only` cannot evaluate. Closed by a lemma over `parse_response` with a symbolic body (item 3.3 or later)."
+      "find": "if received > limit {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "A close-delimited body is never too big while open. Example lemma_framing_78 (limit 4, 5 octets received) is false for the mutant.",
+      "certificate": {
+        "file": "src/message/termination.rs",
+        "lemma": "super::examples::lemma_framing_78()",
+        "witness": "!(close_body_pending(5, 4) is Invalid)"
+      }
     }
   ]
 }

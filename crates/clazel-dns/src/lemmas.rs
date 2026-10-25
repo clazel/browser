@@ -460,6 +460,154 @@ pub proof fn lemma_dotted_to_wire_valid(s: Seq<u8>)
     }
 }
 
+/// A label of [`dotted_run`]: each of its octets is not a dot and is ASCII.
+pub proof fn lemma_dotted_run_plain(s: Seq<u8>, i: nat)
+    requires
+        dotted_run(s, i),
+    ensures
+        forall|m: int| i <= m < s.len() ==> (#[trigger] s[m]) != 46 && s[m] < 128,
+    decreases s.len() - i,
+{
+    if i < s.len() {
+        lemma_dotted_run_plain(s, i + 1);
+    }
+}
+
+/// `dotted_scan` passes over the octets from `i` to `j` of a label (no dot,
+/// ASCII) without changing anything but its position.
+pub proof fn lemma_dotted_scan_skip(s: Seq<u8>, i: nat, j: nat, start: nat, acc: Seq<u8>)
+    requires
+        start <= i <= j <= s.len(),
+        forall|m: int| i <= m < j ==> (#[trigger] s[m]) != 46 && s[m] < 128,
+    ensures
+        dotted_scan(s, i, start, acc) == dotted_scan(s, j, start, acc),
+    decreases j - i,
+{
+    if i < j {
+        assert(s[i as int] != 46 && s[i as int] < 128);
+        lemma_dotted_scan_skip(s, i + 1, j, start, acc);
+    }
+}
+
+/// Scanning `b` after the prefix `a`, from a label start in `b`, is
+/// scanning `b` alone.
+pub proof fn lemma_dotted_scan_shift(a: Seq<u8>, b: Seq<u8>, j: nat, k: nat, acc: Seq<u8>)
+    requires
+        k <= j <= b.len(),
+    ensures
+        dotted_scan(a + b, a.len() + j, a.len() + k, acc) == dotted_scan(b, j, k, acc),
+    decreases b.len() - j,
+{
+    let s = a + b;
+    if j < b.len() {
+        assert(s[(a.len() + j) as int] == b[j as int]);
+        if b[j as int] == 46 {
+            if j != k && j - k <= MAX_LABEL as nat {
+                assert(s.subrange((a.len() + k) as int, (a.len() + j) as int) =~= b.subrange(k as int, j as int));
+                lemma_dotted_scan_shift(a, b, j + 1, j + 1, acc + seq![(j - k) as u8] + b.subrange(k as int, j as int));
+            }
+        } else if b[j as int] < 128 {
+            lemma_dotted_scan_shift(a, b, j + 1, k, acc);
+        }
+    } else {
+        assert(s.subrange((a.len() + k) as int, (a.len() + j) as int) =~= b.subrange(k as int, j as int));
+    }
+}
+
+/// Joining is associative when the middle part is not empty: the loop of
+/// `wire_to_dotted` adds a label at a time to the front, while `wire_scan`
+/// adds it to the rest.
+pub proof fn lemma_join_dotted_assoc(a: Seq<u8>, l: Seq<u8>, r: Seq<u8>)
+    requires
+        l.len() > 0,
+    ensures
+        join_dotted(a, join_dotted(l, r)) == join_dotted(join_dotted(a, l), r),
+{
+    if r.len() == 0 {
+        assert(join_dotted(l, r) == l);
+        assert(join_dotted(join_dotted(a, l), r) == join_dotted(a, l));
+    } else if a.len() == 0 {
+        assert(join_dotted(a, l) == l);
+    } else {
+        assert(join_dotted(l, r) == l + seq![46u8] + r);
+        assert(join_dotted(a, l) == a + seq![46u8] + l);
+        assert(a + seq![46u8] + (l + seq![46u8] + r) =~= a + seq![46u8] + l + seq![46u8] + r);
+    }
+}
+
+/// The dotted name of a wire name is scanned back to the wire name's
+/// labels: if the labels of `w` from `pos` read as the dotted string `d`,
+/// then `dotted_scan` of `d` gives those labels, after whatever was
+/// accumulated. Also: `w` ends with the zero octet.
+pub proof fn lemma_wire_scan_inverts(w: Seq<u8>, pos: nat, acc: Seq<u8>)
+    requires
+        wire_scan(w, pos) is Some,
+    ensures
+        pos < w.len(),
+        w[w.len() - 1] == 0,
+        dotted_scan(wire_scan(w, pos).unwrap(), 0, 0, acc) == Some(acc + w.subrange(pos as int, w.len() - 1)),
+    decreases w.len() - pos,
+{
+    let d = wire_scan(w, pos).unwrap();
+    if w[pos as int] == 0 {
+        assert(pos + 1 == w.len());
+        assert(d =~= Seq::<u8>::empty());
+        assert(w.subrange(pos as int, w.len() - 1) =~= Seq::<u8>::empty());
+        assert(acc + Seq::<u8>::empty() =~= acc);
+    } else {
+        let l = w[pos as int] as nat;
+        let pos2 = pos + 1 + l;
+        let label = w.subrange(pos as int + 1, pos2 as int);
+        let rest = wire_scan(w, pos2).unwrap();
+        let acc2 = acc + seq![l as u8] + label;
+        lemma_wire_scan_inverts(w, pos2, acc2);
+        assert(label.len() == l);
+        lemma_dotted_run_plain(label, 0);
+        assert(w.subrange(pos as int, w.len() - 1) =~= seq![l as u8] + label + w.subrange(pos2 as int, w.len() - 1));
+        assert(acc + (seq![l as u8] + label + w.subrange(pos2 as int, w.len() - 1)) =~= acc2 + w.subrange(pos2 as int, w.len() - 1));
+        if rest.len() == 0 {
+            assert(d =~= label);
+            // The scan of the label alone ends at its end.
+            lemma_dotted_scan_skip(d, 0, l, 0, acc);
+            assert(d.subrange(0, l as int) =~= label);
+            // The root label: nothing is left between `pos2` and the zero octet.
+            assert(dotted_scan(rest, 0, 0, acc2) == Some(acc2));
+            assert(w.subrange(pos2 as int, w.len() - 1).len() == 0);
+            assert(acc2 + w.subrange(pos2 as int, w.len() - 1) =~= acc2);
+        } else {
+            assert(d =~= (label + seq![46u8]) + rest);
+            assert forall|m: int| 0 <= m < label.len() implies (#[trigger] d[m]) != 46 && d[m] < 128 by {
+                assert(d[m] == label[m]);
+            }
+            lemma_dotted_scan_skip(d, 0, l, 0, acc);
+            assert(d[l as int] == 46);
+            assert(d.subrange(0, l as int) =~= label);
+            lemma_dotted_scan_shift(label + seq![46u8], rest, 0, 0, acc2);
+        }
+    }
+}
+
+/// A name that [`wire_to_dotted`] spells converts back: [`dotted_to_wire`]
+/// of the dotted string is the wire name. (This is the check the network
+/// shell used to make at run time.)
+pub proof fn lemma_wire_to_dotted_round_trip(w: Seq<u8>)
+    requires
+        wire_to_dotted(w) is Some,
+    ensures
+        dotted_to_wire(wire_to_dotted(w).unwrap()) == Some(w),
+{
+    let d = wire_to_dotted(w).unwrap();
+    lemma_wire_scan_inverts(w, 0, seq![]);
+    assert(seq![] + w.subrange(0, w.len() - 1) =~= w.drop_last());
+    assert(d.len() > 0);
+    if d == seq![46u8] {
+        // A lone dot is not a scan result: the scan refuses an empty label.
+        assert(dotted_scan(d, 0, 0, seq![]) is None);
+    }
+    assert(d != seq![46u8]);
+    assert(w.drop_last() + seq![0u8] =~= w);
+}
+
 /// A wire name that is not the root has its first label, and then a wire
 /// name.
 pub proof fn lemma_wire_name_tail(w: Seq<u8>)

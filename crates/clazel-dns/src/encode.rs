@@ -106,6 +106,111 @@ pub fn dotted_to_wire(s: &[u8]) -> (output: Option<Vec<u8>>)
     Some(w)
 }
 
+/// Whether the octets `w[from..to]` can stand between dots: see
+/// `spec::is_dotted_label`.
+fn dotted_label(w: &[u8], from: usize, to: usize) -> (r: bool)
+    requires
+        from <= to <= w.len(),
+    ensures
+        r == spec::is_dotted_label(w@.subrange(from as int, to as int)),
+{
+    let ghost label = w@.subrange(from as int, to as int);
+    assert(label.len() == to - from);
+    let mut k: usize = from;
+    while k < to
+        invariant
+            from <= k <= to,
+            to <= w.len(),
+            label == w@.subrange(from as int, to as int),
+            label.len() == to - from,
+            // The octets before `k` are plain, so the label is plain exactly
+            // when the rest of it is.
+            spec::dotted_run(label, 0) == spec::dotted_run(label, (k - from) as nat),
+        decreases to - k,
+    {
+        let c = match w.get(k) {
+            Some(&c) => c,
+            None => return false,
+        };
+        assert(label[(k - from) as int] == w@[k as int]);
+        if c == 46 || c >= 128 {
+            // The octet at `k` is not plain, so neither is the rest from `k`.
+            assert(!spec::dotted_run(label, (k - from) as nat));
+            return false;
+        }
+        // k < to, so this does not saturate.
+        k = k.saturating_add(1);
+    }
+    true
+}
+
+/// An uncompressed wire name as a dotted string; see `spec::wire_to_dotted`.
+pub fn wire_to_dotted(w: &[u8]) -> (output: Option<Vec<u8>>)
+    ensures
+        super::contract::wire_to_dotted_ensures(w@, super::types::opt_bytes(output)),
+{
+    // §2.3.4: names are 255 octets or less. That also keeps every position
+    // below small enough that nothing overflows.
+    if w.len() > spec::MAX_NAME {
+        return None;
+    }
+    let mut acc: Vec<u8> = Vec::new();
+    let mut pos: usize = 0;
+    // `acc` is the dotted form of the labels before `pos`; what `wire_scan`
+    // makes of the whole name is `acc` joined with what it makes from `pos`.
+    loop
+        invariant
+            pos <= w.len() <= spec::MAX_NAME,
+            spec::wire_scan(w@, 0) == match spec::wire_scan(w@, pos as nat) {
+                None => None::<Seq<u8>>,
+                Some(rest) => Some(spec::join_dotted(acc@, rest)),
+            },
+        decreases w.len() - pos,
+    {
+        let len = match w.get(pos) {
+            Some(&c) => c as usize,
+            // The name ended without the zero octet.
+            None => return None,
+        };
+        if len == 0 {
+            if pos.saturating_add(1) != w.len() {
+                // Octets after the root label.
+                return None;
+            }
+            // The root label ends the name; the root alone has no label.
+            if acc.is_empty() {
+                return None;
+            }
+            return Some(acc);
+        }
+        let start = pos.saturating_add(1);
+        let end = start.saturating_add(len);
+        if len > spec::MAX_LABEL || end > w.len() {
+            return None;
+        }
+        if !dotted_label(w, start, end) {
+            return None;
+        }
+        let ghost label = w@.subrange(start as int, end as int);
+        proof {
+            // The label is not empty, so joining it commutes with joining
+            // what follows.
+            match spec::wire_scan(w@, end as nat) {
+                Some(rest) => super::lemmas::lemma_join_dotted_assoc(acc@, label, rest),
+                None => {}
+            }
+        }
+        let ghost old_acc = acc@;
+        if !acc.is_empty() {
+            acc.push(46);
+        }
+        append_range(&mut acc, w, start, end);
+        assert(acc@ =~= spec::join_dotted(old_acc, label));
+        // end > pos, so this does not saturate.
+        pos = end;
+    }
+}
+
 /// A standard query: see `spec::encode_query`.
 pub fn encode_query(id: u16, name: &[u8], qtype: u16) -> (output: Option<Vec<u8>>)
     ensures

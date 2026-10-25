@@ -42,6 +42,12 @@ pub open spec fn dotted_to_wire_ensures(name: Seq<u8>, output: Option<Seq<u8>>) 
     output == dotted_to_wire(name)
 }
 
+/// Contract for `wire_to_dotted(&[u8]) -> Option<Vec<u8>>`: the dotted
+/// spelling of an uncompressed wire name, or `None` if it has none.
+pub open spec fn wire_to_dotted_ensures(name: Seq<u8>, output: Option<Seq<u8>>) -> bool {
+    output == wire_to_dotted(name)
+}
+
 /// Contract for `encode_query(u16, &[u8], u16) -> Option<Vec<u8>>`: the
 /// standard query for `qtype` at the dotted name, or `None` if the name is
 /// not valid.

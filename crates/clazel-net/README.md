@@ -36,10 +36,10 @@ item 3.0).
 
 ## Choices that are ours
 
-- `wire_to_dotted` turns a CNAME target (the proven decoder gives it in wire
-  format) back into a dotted name for the next query. It is the one
-  transformation of untrusted bytes here; its output is accepted only if the
-  proven `dotted_to_wire` maps it back to the same wire bytes.
+- A CNAME target is turned back into a dotted name for the next query by
+  `clazel-dns`'s proven `wire_to_dotted` (a target that has no dotted
+  spelling, such as a label holding a dot, is `BadAlias`). The shell has no
+  transformation of untrusted bytes of its own.
 - Addresses are tried in order, with no racing (no happy eyeballs).
 - A peer that resets while the request is being written still has what it sent
   delivered; the write error is returned only if nothing arrived.
@@ -57,4 +57,10 @@ empty A, a CNAME, an endless CNAME chain, a wrong ID, a wrong question,
 NXDOMAIN, a dead server before a live one), a TC reply that forces a TCP retry
 over a split-write reply, and `TcpListener` servers for `run` (a large request
 and reply, Stop on a connection that never closes, a silent server that must
-hit the read timeout, a refused port). `cargo test -p clazel-net`.
+hit the read timeout, a refused port). `tests/hostile.rs` runs `fetch_with`
+against hostile `TcpListener` servers (bytes that are not HTTP, an endless
+body, chunk sizes of 2^64 and 2^64-1, an over-long field line, 300 field
+lines, an immediate close, a partial head, silence, a short Content-Length)
+and requires an error, never a panic or a hang; one case, a chunked body that
+never ends, is `#[ignore]`d because it does not return in 20 s today.
+`cargo test -p clazel-net`.

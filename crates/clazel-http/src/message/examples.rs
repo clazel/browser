@@ -624,4 +624,73 @@ pub proof fn lemma_framing_71()
     assert(!is_valid_request(Request { method: seq![0x47u8, 0x45, 0x54], target: seq![0x2Fu8], fields: seq![FieldLine { name: seq![0x41u8, 0x3A, 0x42], value: seq![0x63u8] }] })) by (compute_only);
 }
 
+/// `r` is a line read with these octets before the CRLF and this rest.
+pub open spec fn line_is(r: LineRead, line: Seq<u8>, rest: Seq<u8>) -> bool {
+    match r {
+        LineRead::Line { line: l, rest: t } => l == line && t == rest,
+        _ => false,
+    }
+}
+
+/// §2.1: `read_line` is `read_line_with` at the limit `max_line`, so the
+/// examples below, which use a limit of 4, exercise the code `read_line`
+/// runs.
+pub proof fn lemma_framing_72(s: Seq<u8>)
+    ensures
+        read_line(s) == read_line_with(s, max_line()),
+{
+}
+
+/// §2.1: a line of exactly the limit (4) is accepted.
+pub proof fn lemma_framing_73()
+    ensures
+        line_is(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x0D, 0x0A], 4), seq![0x61u8, 0x62, 0x63, 0x64], Seq::<u8>::empty()),
+{
+    assert(line_is(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x0D, 0x0A], 4), seq![0x61u8, 0x62, 0x63, 0x64], Seq::<u8>::empty())) by (compute_only);
+}
+
+/// §2.1: a line of one past the limit is too long.
+pub proof fn lemma_framing_74()
+    ensures
+        read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65, 0x0D, 0x0A], 4) is TooLong,
+{
+    assert(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65, 0x0D, 0x0A], 4) is TooLong) by (compute_only);
+}
+
+/// §2.1: a partial line of limit + 1 octets may still be a line of the
+/// limit followed by the CR of its CRLF, so it is incomplete.
+pub proof fn lemma_framing_75()
+    ensures
+        read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65], 4) is Incomplete,
+{
+    assert(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65], 4) is Incomplete) by (compute_only);
+}
+
+/// §2.1: a partial line of limit + 2 octets without a CRLF is too long
+/// whatever arrives.
+pub proof fn lemma_framing_76()
+    ensures
+        read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65, 0x66], 4) is TooLong,
+{
+    assert(read_line_with(seq![0x61u8, 0x62, 0x63, 0x64, 0x65, 0x66], 4) is TooLong) by (compute_only);
+}
+
+/// §6.3 step 8: a close-delimited body of exactly the limit (4) is still
+/// waiting for the close.
+pub proof fn lemma_framing_77()
+    ensures
+        close_body_pending(4, 4) is Incomplete,
+{
+    assert(close_body_pending(4, 4) is Incomplete) by (compute_only);
+}
+
+/// §6.3 step 8: a close-delimited body of one past the limit is invalid
+/// already, while the connection is open.
+pub proof fn lemma_framing_78()
+    ensures
+        close_body_pending(5, 4) is Invalid,
+{
+    assert(close_body_pending(5, 4) is Invalid) by (compute_only);
+}
+
 } // verus!

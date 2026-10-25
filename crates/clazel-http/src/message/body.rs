@@ -1,7 +1,7 @@
 //! Executable message body length (RFC 9112 §6.3), chunked decoding
-//! (§7.1), the response (§2.1) and the parser that is fed bytes as they
-//! arrive. Each function is proven to equal its spec function in
-//! [`super::spec`], and the parser meets [`super::contract`].
+//! (§7.1) and the response (§2.1). Each function is proven to equal its
+//! spec function in [`super::spec`]. The parser that is fed bytes as they
+//! arrive is in [`super::incremental`].
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -244,10 +244,39 @@ fn chunk_ext_step(t: &[u8]) -> (out: ExtStep)
     if n == 0 {
         return ExtStep::Answer(false);
     }
-    let c = sub(b, n);
-    // None of the positions below saturates: each is at most t.len().
+    // Never saturates: at most t.len().
     let c_pos = ak.saturating_add(1).saturating_add(bk).saturating_add(n);
-    assert(c@ =~= t@.skip(c_pos as int));
+    assert(b@.skip(n as int) =~= t@.skip(c_pos as int));
+    chunk_ext_value_step(t, c_pos)
+}
+
+/// [`is_chunk_ext`]'s answer once the chunk-ext-name has been read and `c`
+/// follows it: `[ BWS "=" BWS chunk-ext-val ]`, then the next round.
+spec fn chunk_ext_after_name(c: Seq<u8>) -> bool {
+    let d = strip_leading_ows(c);
+    if d.len() > 0 && d[0] == 0x3D {
+        match parse_parameter_value(strip_leading_ows(d.drop_first())) {
+            Some((_, rest)) => is_chunk_ext(rest),
+            None => false,
+        }
+    } else {
+        is_chunk_ext(c)
+    }
+}
+
+/// The rest of [`chunk_ext_step`], from `c_pos`, just past the
+/// chunk-ext-name: `[ BWS "=" BWS chunk-ext-val ]`.
+fn chunk_ext_value_step(t: &[u8], c_pos: usize) -> (out: ExtStep)
+    requires
+        0 < c_pos <= t.len(),
+        is_chunk_ext(t@) == chunk_ext_after_name(t@.skip(c_pos as int)),
+    ensures
+        match out {
+            ExtStep::Answer(r) => r == is_chunk_ext(t@),
+            ExtStep::Next(k) => 0 < k <= t.len() && is_chunk_ext(t@) == is_chunk_ext(t@.skip(k as int)),
+        },
+{
+    let c = sub(t, c_pos);
     let dk = run_len_exec(&crate::field::spec::Class::Ows, c);
     let d = sub(c, dk);
     if at(d, 0) == Some(0x3Du8) {
@@ -294,7 +323,7 @@ fn is_chunk_ext_exec(s: &[u8]) -> (r: bool)
 }
 
 /// The result of [`parse_chunk_size_line_exec`].
-enum ChunkSize {
+pub enum ChunkSize {
     /// A size of at most [`MAX_BODY`].
     Size(u64),
     /// A valid size line whose size is greater than [`MAX_BODY`].
@@ -305,7 +334,7 @@ enum ChunkSize {
 
 /// `parse_chunk_size_line` (§7.1, §7.1.1), with sizes above the body
 /// limit reported without their value.
-fn parse_chunk_size_line_exec(line: &[u8]) -> (out: ChunkSize)
+pub fn parse_chunk_size_line_exec(line: &[u8]) -> (out: ChunkSize)
     ensures
         match out {
             ChunkSize::Size(v) => v <= MAX_BODY && parse_chunk_size_line(line@) == Some(v as nat),
@@ -369,7 +398,7 @@ fn parse_chunk_size_line_exec(line: &[u8]) -> (out: ChunkSize)
 }
 
 /// Is there a CRLF at `i`?
-fn crlf_at_exec(s: &[u8], i: usize) -> (r: bool)
+pub fn crlf_at_exec(s: &[u8], i: usize) -> (r: bool)
     ensures
         r == crlf_at(s@, i as int),
 {
@@ -535,56 +564,7 @@ pub fn parse_response_at_close_exec(s: &[u8], request_is_head: bool) -> (out: Pa
     }
 }
 
-/// A response parser, given the bytes of one connection as they arrive.
-/// Its view is everything it has been given and whether the request was
-/// `HEAD`; each answer is [`parse_response`]'s for all of it
-/// ([`super::contract::feed_ensures`]).
-pub struct ResponseParser {
-    buf: Vec<u8>,
-    request_is_head: bool,
-}
-
-impl ResponseParser {
-    /// Everything received so far.
-    pub closed spec fn received(&self) -> Seq<u8> {
-        self.buf@
-    }
-
-    /// Whether the request was `HEAD`.
-    pub closed spec fn head(&self) -> bool {
-        self.request_is_head
-    }
-
-    /// A parser for the response to a request that was `HEAD` exactly when
-    /// `request_is_head`.
-    pub fn new(request_is_head: bool) -> (p: Self)
-        ensures
-            super::contract::new_ensures(request_is_head, p.received(), p.head()),
-    {
-        let p = ResponseParser { buf: Vec::new(), request_is_head };
-        assert(p.buf@ =~= Seq::<u8>::empty());
-        p
-    }
-
-    /// The next bytes from the connection. The contract's precondition
-    /// (`feed_requires`: nothing decided yet) is not required: the answer
-    /// is the spec's for everything received in any case.
-    pub fn feed(&mut self, bytes: &[u8]) -> (out: ParseBuf)
-        ensures
-            final(self).head() == old(self).head(),
-            super::contract::feed_ensures(old(self).received(), bytes@, final(self).received(), final(self).head(), out@),
-    {
-        append(&mut self.buf, bytes);
-        parse_response_exec(self.buf.as_slice(), self.request_is_head)
-    }
-
-    /// The server closed the connection.
-    pub fn close(self) -> (out: ParseBuf)
-        ensures
-            super::contract::close_ensures(self.received(), self.head(), out@),
-    {
-        parse_response_at_close_exec(self.buf.as_slice(), self.request_is_head)
-    }
-}
-
 } // verus!
+
+/// The parser fed bytes as they arrive lives in [`super::incremental`].
+pub use super::incremental::ResponseParser;
