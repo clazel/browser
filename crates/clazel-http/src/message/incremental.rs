@@ -15,6 +15,12 @@
 //! the bytes received: parsing everything from the start equals resuming
 //! from the saved state.
 //!
+//! `close` is incremental too: it feeds the parser nothing, which resumes
+//! from the saved state, and reads the answer off the stage it stops in
+//! ([`stage_close`]): a close-delimited body is everything after the head,
+//! anything else unfinished is invalid. Only a parser that has already given
+//! a decision (its state dropped) re-parses at close.
+//!
 //! After it has answered anything but `Incomplete`, the state is dropped,
 //! and a later `feed` (which the contract does not forbid) re-parses
 //! everything from the start with [`parse_response_exec`].
@@ -367,6 +373,36 @@ enum Stage {
     Spent,
 }
 
+/// What the server closing the connection gives when the parser is in
+/// `stage` having received `b` and its last answer was `Incomplete`: the
+/// body that was close-delimited is everything after the head (RFC 9112
+/// §6.3 step 8), any other unfinished message is an error (step 6). It
+/// needs no octet but those after `start`.
+spec fn stage_close(stage: Stage, b: Seq<u8>) -> Parse {
+    match stage {
+        Stage::Body { head, start, length, pos: _, body: _ } => match length {
+            BodyLengthExec::Close => Parse::Done { response: response_of(head@, b.skip(start as int)), rest: seq![] },
+            _ => Parse::Invalid,
+        },
+        _ => Parse::Invalid,
+    }
+}
+
+/// An unfinished message in the `Body` stage closes as [`stage_close`] says:
+/// the saved head and body length are what parsing everything received
+/// reads.
+proof fn lemma_body_settled(p: &ResponseParser)
+    requires
+        p.wf(),
+        p.stage is Body,
+        parse_response(p.buf@, p.request_is_head) is Incomplete,
+    ensures
+        p.settled(),
+{
+    let b = p.buf@;
+    assert(b + Seq::<u8>::empty() =~= b);
+}
+
 /// A response parser, given the bytes of one connection as they arrive.
 /// Its view is everything it has been given and whether the request was
 /// `HEAD`; each answer is [`parse_response`]'s for all of it
@@ -410,6 +446,15 @@ impl ResponseParser {
         }
     }
 
+    /// What `close` decides from the saved state is what
+    /// [`parse_response_at_close`] gives for everything received. It holds
+    /// whenever the last answer was `Incomplete`, except that a parser
+    /// whose state was dropped after an answer (`Spent`) keeps nothing to
+    /// decide from.
+    closed spec fn settled(&self) -> bool {
+        !(self.stage is Spent) ==> stage_close(self.stage, self.buf@) == parse_response_at_close(self.buf@, self.request_is_head)
+    }
+
     /// A parser for the response to a request that was `HEAD` exactly when
     /// `request_is_head`.
     pub fn new(request_is_head: bool) -> (p: Self)
@@ -432,6 +477,21 @@ impl ResponseParser {
             final(self).wf(),
             final(self).head() == old(self).head(),
             super::contract::feed_ensures(old(self).received(), bytes@, final(self).received(), final(self).head(), out@),
+    {
+        self.feed_run(bytes)
+    }
+
+    /// [`Self::feed`], which also says that an `Incomplete` answer leaves
+    /// the parser `settled`: [`Self::close`] feeds it nothing and reads
+    /// that off the state.
+    fn feed_run(&mut self, bytes: &[u8]) -> (out: ParseBuf)
+        requires
+            old(self).wf(),
+        ensures
+            final(self).wf(),
+            final(self).head() == old(self).head(),
+            super::contract::feed_ensures(old(self).received(), bytes@, final(self).received(), final(self).head(), out@),
+            out@ is Incomplete ==> final(self).settled(),
     {
         let ghost b0 = self.buf@;
         append(&mut self.buf, bytes);
@@ -469,7 +529,13 @@ impl ResponseParser {
         if let Some(out) = self.fields_run() {
             return out;
         }
-        self.body_run()
+        let out = self.body_run();
+        proof {
+            if out@ is Incomplete && self.stage is Body {
+                lemma_body_settled(self);
+            }
+        }
+        out
     }
 
     /// Everything received so far
@@ -483,10 +549,36 @@ impl ResponseParser {
 
     /// The server closed the connection.
     pub fn close(self) -> (out: ParseBuf)
+        requires
+            self.wf(),
         ensures
             super::contract::close_ensures(self.received(), self.head(), out@),
     {
-        parse_response_at_close_exec(self.buf.as_slice(), self.request_is_head)
+        let mut p = self;
+        let ghost b = p.buf@;
+        let out = p.feed_run(&[]);
+        proof {
+            assert(b + Seq::<u8>::empty() =~= b);
+        }
+        match out {
+            ParseBuf::Incomplete => {
+                let ghost sc = stage_close(p.stage, b);
+                let mut stage = Stage::Spent;
+                core::mem::swap(&mut stage, &mut p.stage);
+                match stage {
+                    Stage::Body { head, start, length: BodyLengthExec::Close, pos: _, body: _ } => {
+                        let content = copy(sub(p.buf.as_slice(), start));
+                        let ghost h = head@;
+                        let r = ParseBuf::Done { response: ResponseBuf { status_line: head.status_line, fields: head.fields, body: content }, rest: Vec::new() };
+                        assert(r@ == (Parse::Done { response: response_of(h, b.skip(start as int)), rest: Seq::<u8>::empty() }));
+                        r
+                    },
+                    Stage::Spent => parse_response_at_close_exec(p.buf.as_slice(), p.request_is_head),
+                    _ => ParseBuf::Invalid,
+                }
+            },
+            decided => decided,
+        }
     }
 
     /// Reads the status line, if that is where the parser is.
@@ -498,7 +590,8 @@ impl ResponseParser {
             final(self).buf@ == old(self).buf@,
             final(self).request_is_head == old(self).request_is_head,
             match out {
-                Some(o) => o@ == parse_response(old(self).buf@, old(self).request_is_head),
+                Some(o) => o@ == parse_response(old(self).buf@, old(self).request_is_head)
+                    && (o@ is Incomplete ==> final(self).settled()),
                 None => !(final(self).stage is StatusLine),
             },
     {
@@ -547,7 +640,8 @@ impl ResponseParser {
             final(self).buf@ == old(self).buf@,
             final(self).request_is_head == old(self).request_is_head,
             match out {
-                Some(o) => o@ == parse_response(old(self).buf@, old(self).request_is_head),
+                Some(o) => o@ == parse_response(old(self).buf@, old(self).request_is_head)
+                    && (o@ is Incomplete ==> final(self).settled()),
                 None => !(final(self).stage is StatusLine) && !(final(self).stage is Fields),
             },
     {
@@ -630,6 +724,7 @@ impl ResponseParser {
             final(self).wf(),
             final(self).buf@ == old(self).buf@,
             final(self).request_is_head == old(self).request_is_head,
+            !(final(self).stage is StatusLine) && !(final(self).stage is Fields),
             out@ == parse_response(old(self).buf@, old(self).request_is_head),
     {
         let ghost b = self.buf@;
@@ -703,6 +798,7 @@ impl ResponseParser {
             final(self).wf(),
             final(self).buf@ == old(self).buf@,
             final(self).request_is_head == old(self).request_is_head,
+            !(final(self).stage is StatusLine) && !(final(self).stage is Fields),
             out@ == parse_response(old(self).buf@, old(self).request_is_head),
     {
         let ghost b = self.buf@;
