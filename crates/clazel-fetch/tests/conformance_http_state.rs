@@ -160,7 +160,10 @@ fn run(c: &Case) -> Option<Vec<u8>> {
         return None;
     }
     let (state, actions) = step_real(state, &InputBuf::Bytes(response(c)));
-    if !matches!(actions.as_slice(), [ActionBuf::Close, ActionBuf::Connect { .. }]) {
+    if !matches!(
+        actions.as_slice(),
+        [ActionBuf::Close, ActionBuf::Connect { .. }]
+    ) {
         return None;
     }
     let (_state, actions) = step_real(state, &InputBuf::Connected);

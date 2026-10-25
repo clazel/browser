@@ -12,10 +12,10 @@ use clazel_cookie::storage::exec::{
     CookieRecord, HttpRequestRecord, RequestContextRecord, RequestUrlRecord,
     retrieve_a_cookie_string_exec, store_a_set_cookie_string_exec,
 };
-use clazel_origin::exec::{ParsedOrigin, same_site_exec};
 use clazel_http::field::section::field_values_named;
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::{ParseBuf, ResponseBuf};
+use clazel_origin::exec::{ParsedOrigin, same_site_exec};
 use clazel_url::url::record::{ParsedUrl, clone_opt_str, clone_url, eq_str};
 
 verus! {

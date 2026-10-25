@@ -500,7 +500,11 @@ mod tests {
         // No jar, no `Cookie` field; then the cookies that apply to /echo
         // over http: not the Secure one, the Path=/echo one included, first (longer path, §5.8.3 step 4).
         assert!(!text(&first).contains("Cookie:"), "{}", text(&first));
-        assert!(text(&second).contains("\r\nCookie: c=3; a=1\r\n"), "{}", text(&second));
+        assert!(
+            text(&second).contains("\r\nCookie: c=3; a=1\r\n"),
+            "{}",
+            text(&second)
+        );
         // The jar comes back with the two cookies stored: a `Secure`
         // cookie from an `http:` response is ignored (§5.7 step 17).
         assert_eq!(jar.len(), 2);

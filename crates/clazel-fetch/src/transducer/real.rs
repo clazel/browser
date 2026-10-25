@@ -39,15 +39,15 @@ use vstd::prelude::*;
 
 use super::contract::{HttpFnsExec, UrlFnsExec};
 use super::types::{ActionBuf, InputBuf, StateBuf};
+use clazel_cookie::matching::exec::canonicalize_a_host_name;
+use clazel_cookie::storage::exec::{RequestUrlRecord, narrow_exec};
 use clazel_encoding::utf8::decode::decode_without_bom;
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
-use clazel_cookie::matching::exec::canonicalize_a_host_name;
-use clazel_cookie::storage::exec::{RequestUrlRecord, narrow_exec};
 use clazel_origin::exec::{ParsedOrigin, url_origin_exec};
-use clazel_url::url::serialize::url_path_serializer;
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::record::ParsedUrl;
+use clazel_url::url::serialize::url_path_serializer;
 
 verus! {
 
