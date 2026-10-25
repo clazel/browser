@@ -483,6 +483,8 @@ impl ResponseParser {
 
     /// The server closed the connection.
     pub fn close(self) -> (out: ParseBuf)
+        requires
+            self.wf(),
         ensures
             super::contract::close_ensures(self.received(), self.head(), out@),
     {
