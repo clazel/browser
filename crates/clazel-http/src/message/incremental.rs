@@ -472,6 +472,15 @@ impl ResponseParser {
         self.body_run()
     }
 
+    /// Everything received so far
+    /// ([`super::contract::received_bytes_ensures`]).
+    pub fn received_bytes(&self) -> (out: &[u8])
+        ensures
+            super::contract::received_bytes_ensures(self.received(), out@),
+    {
+        self.buf.as_slice()
+    }
+
     /// The server closed the connection.
     pub fn close(self) -> (out: ParseBuf)
         ensures
