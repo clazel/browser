@@ -12,7 +12,7 @@ use std::net::IpAddr;
 use clazel_cookie::storage::exec::CookieRecord;
 use clazel_fetch::transducer::real::step_real;
 use clazel_fetch::transducer::spec::Reason;
-use clazel_fetch::transducer::step::start;
+use clazel_fetch::transducer::step::{apply_ops_exec, start};
 use clazel_fetch::transducer::types::{ActionBuf, InputBuf};
 use clazel_http::message::types::ResponseBuf;
 use clazel_url::url::parse::basic_url_parser;
@@ -115,9 +115,9 @@ pub fn now_1601() -> u64 {
 
 /// [`fetch_with`] with a cookie jar: `url` is fetched with `jar` at time
 /// `now` (seconds since 1601, see [`now_1601`]), and the jar comes back
-/// as the transducer left it, whether the fetch gave a response or not
-/// (every `Set-Cookie` of a final response is stored, redirects and
-/// failures after it included).
+/// with the transducer's jar operations applied, whether the fetch gave a
+/// response or not (every `Set-Cookie` of a final response is stored,
+/// redirects and failures after it included).
 pub fn fetch_jar(
     url: &str,
     jar: Vec<CookieRecord>,
@@ -129,7 +129,8 @@ pub fn fetch_jar(
     let Some(parsed) = basic_url_parser(&input, None) else {
         return (Err(FetchError::Url), jar);
     };
-    let (mut state, first) = start(&parsed, jar, now);
+    let mut jar = jar;
+    let (mut state, first) = start(&parsed);
     let mut pending: VecDeque<ActionBuf> = first.into();
     let mut conn: Option<Connection> = None;
     let mut net: Option<NetError> = None;
@@ -174,8 +175,8 @@ pub fn fetch_jar(
                     conn = None;
                     continue;
                 }
-                ActionBuf::Done { response, .. } => return (Ok(*response), state.jar),
-                ActionBuf::Fail(reason) => return (Err(failure(reason, net)), state.jar),
+                ActionBuf::Done { response, .. } => return (Ok(*response), jar),
+                ActionBuf::Fail(reason) => return (Err(failure(reason, net)), jar),
             },
             None => match conn.as_mut() {
                 Some(c) => match c.read(&mut buf) {
@@ -194,7 +195,10 @@ pub fn fetch_jar(
                 None => InputBuf::Error,
             },
         };
-        let (s, next) = step_real(state, &input);
+        // The operations come before the actions they go with, so the jar
+        // is up to date when a `Done` or `Fail` returns it.
+        let (s, next, ops) = step_real(state, &input, &jar, now);
+        jar = apply_ops_exec(jar, &ops);
         state = s;
         pending.extend(next);
     }
