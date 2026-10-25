@@ -11,7 +11,14 @@
 //! - the Fetch Standard, Living Standard last updated 19 October 2026,
 //!   commit `59afe349913d56898c947576216f1c2579308be7`: §2.2.3 "redirect
 //!   status", §2.2.6 a response's "location URL", §4.5 "HTTP-redirect
-//!   fetch" (steps 3 to 8, 18 and 22), §2.1 "HTTP(S) scheme";
+//!   fetch" (steps 3 to 8, 18 and 22), §2.1 "HTTP(S) scheme", §3.1.1
+//!   "append a request `Cookie` header", §3.1.2 "parse and store response
+//!   `Set-Cookie` headers", §4.6 "HTTP-network-or-cache fetch" (steps 8.3
+//!   and 8.21.1: `includeCredentials`, the `Cookie` header) and §4.7
+//!   "HTTP-network fetch" (step 17: storing the response's cookies);
+//! - draft-ietf-httpbis-rfc6265bis-22 (as in `clazel_cookie::storage::spec`):
+//!   §5.2 same-site requests, §5.3, §5.7 storage, §5.8 retrieval, all as
+//!   `clazel_cookie` states them;
 //! - the request itself and [`crate::request::spec::is_interim`] are [`crate::request::spec`]'s.
 //!
 //! The protocol between the transducer and the shell: [`start`] gives the
@@ -82,8 +89,62 @@
 //!   and a URL that [`crate::request::spec::request_bytes`] refuses (any
 //!   other scheme, userinfo, a non-ASCII host) ends the fetch with
 //!   [`Reason::NotFetched`] before anything is sent.
-//! - **No cookies yet.** The state has no jar. 3.6's jar becomes a field of
-//!   [`State`], passed to [`start`] and returned with `Done`/`Fail`.
+//! - **The jar is a field of [`State`]** (`Seq<Cookie>`, `clazel_cookie`'s
+//!   model, in insertion order), passed to [`start`] and kept by every
+//!   state, `Finished` ones included: the shell reads the jar of a fetch from
+//!   the state that `Done` or `Fail` leaves, so nothing is returned twice.
+//!   `now` (seconds since 1601, `clazel_cookie`'s clock) is an argument of
+//!   [`start`] and does not change during a fetch: a fetch is a few round
+//!   trips and cookies expire in seconds at the finest, and the kernel
+//!   advances the clock between fetches.
+//! - **The cookie parameters** are in [`UrlFns`]: the Public Suffix List
+//!   `rules` the cookie functions take, and the URL Standard's "origin" of a
+//!   URL, from which the request's origin and the same-site status of a
+//!   redirect are computed. The shipped join gives `psl_rules()` and
+//!   `url_origin` (`real`); the proofs hold for every one.
+//! - **Cookies are included** (Fetch §4.6 step 8.3: `includeCredentials` is
+//!   true when "request's credentials mode is "include"", which is a
+//!   navigation request's) and the user agent is not configured to block
+//!   them. The `Cookie` field is added when the connection is open and the
+//!   request is sent ([`step`], `Connected`), as Fetch adds it in HTTP-
+//!   network-or-cache fetch, after any redirect: from the jar as it is
+//!   then. The `Set-Cookie` field lines are stored in [`on_final`], before
+//!   the redirect is decided (Fetch §4.7 step 17 is before the redirect
+//!   fetch gets the response), from the point of view of the request's
+//!   current URL, **one field line at a time** (§3.1.2 step 6: "each
+//!   occurrence is processed independently"). Only a final response
+//!   reaches [`on_final`]: [`settle`] skips every 1xx response, which is
+//!   RFC 6265bis §5.3's "ignore the Set-Cookie fields of 100-level
+//!   responses". A failure that ends the fetch after a final response
+//!   (a bad `Location`, the limit) still keeps the cookies it set.
+//! - **The request context** (RFC 6265bis §5.2, `RequestContext::Http`) is a
+//!   user's top-level navigation with no client: GET (a "safe" method),
+//!   navigating a top-level traversable, not a reload, `site for cookies`
+//!   "none" (so "same-site": §5.2 says "or if the request has no client")
+//!   and the current URL's origin from [`UrlFns::origin`]. Fetch §3.1.3
+//!   "determine the same-site mode" adds the **redirect-taint**: "if request's
+//!   redirect-taint is "cross-site"", the mode is "unset-or-less"; we model
+//!   the taint as [`State::tainted`], set (and never cleared) when a redirect
+//!   leads to a URL whose origin is not same-site with the current URL's
+//!   (the pinned Fetch text computes "redirect-taint" outside the steps we
+//!   transcribed, so this is our reading of its name), and a tainted
+//!   request's "site for cookies" is an opaque origin, which no URL is
+//!   same-site with, so §5.2 makes it "cross-site": SameSite=Strict cookies
+//!   are not sent, Lax and Default ones are (a safe method, a top-level
+//!   target). *Fetch §3.1.3 step 3, as we read it, returns "lax-or-less"
+//!   for every GET request whose destination is "document" before the
+//!   taint is looked at; that would withhold Strict cookies from
+//!   a same-site navigation and does not agree with RFC 6265bis §5.2, so we
+//!   follow §5.2 (we are not sure we read step 3 as intended, so it is not
+//!   an entry of `docs/ERRATA.md`).* The draft's §5.2 has no rule about
+//!   redirect chains of its own.
+//! - **Secure.** A connection is "secure" ([`clazel_cookie::storage::spec::url_is_secure`])
+//!   when the URL's scheme is `https`; `Connect.tls` is false exactly when
+//!   the scheme is `http`, which is the only scheme fetched yet, so no
+//!   `Secure` cookie is ever sent. Both change together when TLS arrives.
+//! - **The cookie-string's request URL** is [`request_url`]: the URL's
+//!   scheme, canonicalized host and path (an empty path is `/`, as
+//!   [`crate::request::spec::origin_form`] sends it).
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -103,8 +164,22 @@ pub type Parse = clazel_http::message::spec::Parse;
 // The parameters.
 // ===========================================================================
 
-/// What the transducer needs of the URL parser.
+/// The cookie model's types (`clazel_cookie::storage::spec`).
+pub type Cookie = clazel_cookie::storage::spec::Cookie;
+
+/// The URL a cookie function reads.
+pub type RequestUrl = clazel_cookie::storage::spec::RequestUrl;
+
+/// The request context a cookie function reads.
+pub type RequestContext = clazel_cookie::storage::spec::RequestContext;
+
+/// What the transducer needs of the URL parser and the URL-side
+/// functions of the cookie model.
 pub struct UrlFns {
+    /// URL §4.7 "origin" of a URL.
+    pub origin: spec_fn(Url) -> clazel_origin::spec::Origin,
+    /// The Public Suffix List the cookie functions take.
+    pub rules: Seq<clazel_psl::spec::Rule>,
     /// Fetch §2.2.6 location URL, step 3: the result of parsing the
     /// `Location` value (octets) with the request's URL as the base URL;
     /// `None` is failure.
@@ -173,6 +248,13 @@ pub struct State {
     pub redirects: nat,
     /// Where it is.
     pub phase: Phase,
+    /// The cookie jar (RFC 6265bis §5.7's "cookie store").
+    pub jar: Seq<Cookie>,
+    /// The time, seconds since 1601-01-01T00:00:00Z.
+    pub now: int,
+    /// Fetch's "redirect-taint" is "cross-site": some redirect crossed
+    /// sites (see the modelling choices).
+    pub tainted: bool,
 }
 
 /// What the shell reports.
@@ -219,26 +301,106 @@ pub enum Action {
 // Starting a request.
 // ===========================================================================
 
-/// The state that has ended, keeping the URL.
+/// The state that has ended, keeping the URL and the jar.
 pub open spec fn finished(s: State) -> State {
-    State { url: s.url, redirects: s.redirects, phase: Phase::Finished }
+    State { phase: Phase::Finished, ..s }
 }
 
-/// Begin the request for `url`, after `redirects` redirects: ask for its
-/// connection, or fail if it is a URL this client does not fetch.
-pub open spec fn begin(url: Url, redirects: nat) -> (State, Seq<Action>) {
-    match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes(url)) {
-        (Some((host, port)), Some(_)) => (
-            State { url: url, redirects: redirects, phase: Phase::Connecting },
-            seq![Action::Connect { host: host, port: port, tls: false }],
-        ),
-        _ => (State { url: url, redirects: redirects, phase: Phase::Finished }, seq![Action::Fail(Reason::NotFetched)]),
+/// RFC 6265bis §5.7 and §5.8's view of the URL: its scheme, canonicalized
+/// host and path (see the modelling choices).
+pub open spec fn request_url(url: Url) -> RequestUrl {
+    let p = clazel_url::url::spec::url_path_serializer(url.path);
+    RequestUrl {
+        scheme: clazel_cookie::matching::spec::narrow(url.scheme),
+        host: clazel_cookie::matching::spec::canonicalize_a_host_name(url.host),
+        path: clazel_cookie::matching::spec::narrow(if p.len() == 0 { seq![0x2Fu32] } else { p }),
     }
 }
 
-/// The first state and actions of a fetch of `url`.
-pub open spec fn start(url: Url) -> (State, Seq<Action>) {
-    begin(url, 0)
+/// RFC 6265bis §5.2's context of the current request of `s` (see the
+/// modelling choices): a top-level navigation, GET, with no client, its
+/// "site for cookies" an opaque origin once a redirect has crossed sites.
+pub open spec fn request_context(urls: UrlFns, s: State) -> RequestContext {
+    RequestContext::Http(clazel_cookie::storage::spec::HttpRequest {
+        url_origin: (urls.origin)(s.url),
+        site_for_cookies: if s.tainted { Some(clazel_origin::spec::Origin::Opaque(0)) } else { None },
+        is_reload_navigation: false,
+        reloaded_document_was_same_site: false,
+        navigates_top_level_traversable: true,
+        method_is_safe: true,
+        target_is_active_or_top_level: true,
+    })
+}
+
+/// "Set-Cookie".
+pub open spec fn lit_set_cookie() -> Seq<u8> {
+    seq![0x53u8, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65]
+}
+
+/// Fetch §3.1.2 step 6: the value of each `Set-Cookie` field line of the
+/// response, in order, one per field line (Fetch §2.2.2's extraction would
+/// combine them with commas, which §3.1.2 says not to do).
+pub open spec fn set_cookie_values(response: Response) -> Seq<Seq<u8>> {
+    clazel_http::field::spec::field_values_named(response.fields, lit_set_cookie())
+}
+
+/// The jar after storing each of `lines` in order (Fetch §3.1.2 step 6.2,
+/// each by RFC 6265bis §5.7 as HTTP, the string parsed by §5.6).
+pub open spec fn store_lines(
+    rules: Seq<clazel_psl::spec::Rule>,
+    jar: Seq<Cookie>,
+    lines: Seq<Seq<u8>>,
+    url: RequestUrl,
+    ctx: RequestContext,
+    now: int,
+) -> Seq<Cookie>
+    decreases lines.len()
+{
+    if lines.len() == 0 {
+        jar
+    } else {
+        store_lines(rules, clazel_cookie::storage::spec::store_a_set_cookie_string(rules, jar, lines[0], url, ctx, now), lines.drop_first(), url, ctx, now)
+    }
+}
+
+/// The jar of `s` after it has stored the cookies of `response`, the
+/// response to its current request.
+pub open spec fn store_response(urls: UrlFns, s: State, response: Response) -> Seq<Cookie> {
+    store_lines(urls.rules, s.jar, set_cookie_values(response), request_url(s.url), request_context(urls, s), s.now)
+}
+
+/// The cookie-string of the request `s` sends (Fetch §3.1.1 steps 5 to 7;
+/// RFC 6265bis §5.8.3).
+pub open spec fn cookie_string(urls: UrlFns, s: State) -> Seq<u8> {
+    clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, s.jar, request_url(s.url), request_context(urls, s), s.now)
+}
+
+/// The jar of `s` after that retrieval (§5.8.3 step 5, and the eviction of
+/// expired cookies).
+pub open spec fn jar_after_cookie_string(urls: UrlFns, s: State) -> Seq<Cookie> {
+    clazel_cookie::storage::spec::jar_after_retrieval(urls.rules, s.jar, request_url(s.url), request_context(urls, s), s.now)
+}
+
+/// Begin the request for `url`, after `redirects` redirects, with `jar`
+/// at time `now` and redirect-taint `tainted`: ask for its connection, or
+/// fail if it is a URL this client does not fetch.
+pub open spec fn begin(url: Url, redirects: nat, jar: Seq<Cookie>, now: int, tainted: bool) -> (State, Seq<Action>) {
+    match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes(url)) {
+        (Some((host, port)), Some(_)) => (
+            State { url: url, redirects: redirects, phase: Phase::Connecting, jar: jar, now: now, tainted: tainted },
+            seq![Action::Connect { host: host, port: port, tls: false }],
+        ),
+        _ => (
+            State { url: url, redirects: redirects, phase: Phase::Finished, jar: jar, now: now, tainted: tainted },
+            seq![Action::Fail(Reason::NotFetched)],
+        ),
+    }
+}
+
+/// The first state and actions of a fetch of `url` with the cookie jar
+/// `jar` at time `now`.
+pub open spec fn start(url: Url, jar: Seq<Cookie>, now: int) -> (State, Seq<Action>) {
+    begin(url, 0, jar, now, false)
 }
 
 // ===========================================================================
@@ -393,7 +555,11 @@ pub open spec fn location_url(urls: UrlFns, response: Response, request_url: Url
 /// What a final response for the current request leads to (Fetch §4.5
 /// HTTP-redirect fetch); `open` says whether the connection is still
 /// open.
-pub open spec fn on_final(urls: UrlFns, s: State, response: Response, open: bool) -> (State, Seq<Action>) {
+pub open spec fn on_final(urls: UrlFns, s0: State, response: Response, open: bool) -> (State, Seq<Action>) {
+    // Fetch §4.7 step 17 (§3.1.2): "If includeCredentials is true, then the
+    // user agent should parse and store response's `Set-Cookie` headers",
+    // before the redirect fetch sees the response.
+    let s = State { jar: store_response(urls, s0, response), ..s0 };
     // 3. "Let locationURL be internalResponse's location URL given
     // request's current URL's fragment."
     match location_url(urls, response, s.url) {
@@ -416,7 +582,9 @@ pub open spec fn on_final(urls: UrlFns, s: State, response: Response, open: bool
             // 22. "Return the result of running main fetch given
             // fetchParams and recursive": a new request, on a new
             // connection.
-            let next = begin(location, s.redirects + 1);
+            // The redirect-taint (see the modelling choices).
+            let tainted = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
+            let next = begin(location, s.redirects + 1, s.jar, s.now, tainted);
             (next.0, close_if(open) + next.1)
         },
     }
@@ -438,8 +606,13 @@ pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input) -> (S
         Phase::Finished => (s, seq![]),
         Phase::Connecting => match input {
             // The connection is open: send the request.
-            Input::Connected => match crate::request::spec::request_bytes(s.url) {
-                Some(bytes) => (State { url: s.url, redirects: s.redirects, phase: Phase::Reading { received: seq![] } }, seq![Action::Send(bytes)]),
+            // The request, with the `Cookie` field of Fetch §3.1.1 from the
+            // jar (RFC 6265bis §5.8.3), and the jar after the retrieval.
+            Input::Connected => match crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s)) {
+                Some(bytes) => (
+                    State { phase: Phase::Reading { received: seq![] }, jar: jar_after_cookie_string(urls, s), ..s },
+                    seq![Action::Send(bytes)],
+                ),
                 None => fail(s, Reason::NotFetched, true),
             },
             Input::Bytes(_) => fail(s, Reason::Shell, true),
@@ -449,7 +622,7 @@ pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input) -> (S
         Phase::Reading { received } => match input {
             Input::Connected => fail(s, Reason::Shell, true),
             Input::Bytes(bytes) => match settle(http, received + bytes) {
-                Settled::Wait(rest) => (State { url: s.url, redirects: s.redirects, phase: Phase::Reading { received: rest } }, seq![]),
+                Settled::Wait(rest) => (State { phase: Phase::Reading { received: rest }, ..s }, seq![]),
                 Settled::Final(response) => on_final(urls, s, response, true),
                 Settled::Bad(reason) => fail(s, reason, true),
             },

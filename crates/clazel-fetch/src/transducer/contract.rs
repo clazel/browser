@@ -16,6 +16,7 @@ use vstd::prelude::*;
 
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
+use clazel_origin::exec::ParsedOrigin;
 use clazel_url::url::record::ParsedUrl;
 
 verus! {
@@ -79,19 +80,41 @@ pub trait UrlFnsExec {
         ensures
             clazel_url::url::record::opt_url_view(r) == (self.urls().location)(base@, value@),
     ;
+
+    /// [`UrlFns::origin`]: URL §4.7 "origin" of `url`.
+    fn origin(&self, url: &ParsedUrl) -> (r: ParsedOrigin)
+        ensures
+            r@ == (self.urls().origin)(url@),
+    ;
+
+    /// The cookie functions of `clazel-cookie` are about the generated
+    /// Public Suffix List, so [`UrlFns::rules`] must be that.
+    proof fn rules_are_psl(&self)
+        ensures
+            self.urls().rules == clazel_psl::table::psl_rules(),
+    ;
 }
 
-/// Contract for `start(&ParsedUrl) -> (StateBuf, Vec<ActionBuf>)`.
-pub open spec fn start_ensures(url: Url, state: State, actions: Seq<Action>) -> bool {
-    (state, actions) == start(url)
+/// Contract for `start(&ParsedUrl, Vec<CookieRecord>, u64) -> (StateBuf,
+/// Vec<ActionBuf>)`.
+pub open spec fn start_ensures(url: Url, jar: Seq<Cookie>, now: int, state: State, actions: Seq<Action>) -> bool {
+    (state, actions) == start(url, jar, now)
+}
+
+/// Precondition of `start`: the time is one `clazel-cookie` accepts. (The
+/// jar of an exec value is in range by its types.)
+pub open spec fn start_requires(now: int) -> bool {
+    clazel_cookie::set_cookie::contract::now_in_range(now)
 }
 
 /// Precondition of `step`: the redirect count is at most
 /// [`max_redirects`], as in every state [`start`] and `step` give
 /// ([`redirects_bounded`]); `step` ensures it of its result. (The exec
-/// count is a `u8`.)
+/// count is a `u8`.) The time is in `clazel-cookie`'s range and the jar's
+/// instants fit a `u64`, which `clazel-cookie`'s functions require and keep;
+/// the time never changes.
 pub open spec fn step_requires(s: State) -> bool {
-    s.redirects <= max_redirects()
+    s.redirects <= max_redirects() && clazel_cookie::set_cookie::contract::now_in_range(s.now) && clazel_cookie::storage::contract::jar_in_range(s.jar)
 }
 
 /// Contract for `step<H: HttpFnsExec, U: UrlFnsExec>(&H, &U, StateBuf,
@@ -134,16 +157,17 @@ pub open spec fn max_requests() -> nat {
     21
 }
 
-/// Every action of a fetch of `url` given the inputs `inputs`.
-pub open spec fn trace(http: HttpFns, urls: UrlFns, url: Url, inputs: Seq<Input>) -> Seq<Action> {
-    start(url).1 + run(http, urls, start(url).0, inputs).1
+/// Every action of a fetch of `url` with the jar `jar` at time `now`
+/// given the inputs `inputs`.
+pub open spec fn trace(http: HttpFns, urls: UrlFns, url: Url, jar: Seq<Cookie>, now: int, inputs: Seq<Input>) -> Seq<Action> {
+    start(url, jar, now).1 + run(http, urls, start(url, jar, now).0, inputs).1
 }
 
 /// Totality: whatever the shell reports, a fetch opens at most
 /// [`max_requests`] connections and sends at most that many requests.
-pub open spec fn requests_bounded(http: HttpFns, urls: UrlFns, url: Url, inputs: Seq<Input>) -> bool {
-    count_sends(trace(http, urls, url, inputs)) <= max_requests()
-        && count_connects(trace(http, urls, url, inputs)) <= max_requests()
+pub open spec fn requests_bounded(http: HttpFns, urls: UrlFns, url: Url, jar: Seq<Cookie>, now: int, inputs: Seq<Input>) -> bool {
+    count_sends(trace(http, urls, url, jar, now, inputs)) <= max_requests()
+        && count_connects(trace(http, urls, url, jar, now, inputs)) <= max_requests()
 }
 
 /// The redirect count never passes 20 (Fetch §4.5 step 7), whatever the
@@ -160,11 +184,70 @@ pub open spec fn url_changes_only_by_redirect(http: HttpFns, urls: UrlFns, s: St
         || next.redirects == s.redirects + 1 && is_http_s_scheme(next.url.scheme)
 }
 
-/// Every `Send` is the request for the current URL.
+/// Every `Send` is the request for the current URL, carrying the
+/// cookie-string the jar gives ([`cookie_string`]).
 pub open spec fn sends_are_requests(http: HttpFns, urls: UrlFns, s: State, input: Input) -> bool {
     forall|k: int| 0 <= k < step(http, urls, s, input).1.len() ==> match #[trigger] step(http, urls, s, input).1[k] {
-        Action::Send(bytes) => crate::request::spec::request_bytes(s.url) == Some(bytes),
+        Action::Send(bytes) => crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s)) == Some(bytes),
         _ => true,
+    }
+}
+
+/// `bytes` is the serialization of a valid request whose only part derived
+/// from the jar is its `Cookie` field: the request for `url` with
+/// [`crate::request::spec::cookie_field_lines`] of `cookie` appended to
+/// the fields (so none when the cookie-string is empty, and otherwise one
+/// `Cookie` field line whose value is `cookie`).
+pub open spec fn is_wire_request(url: Url, cookie: Seq<u8>, bytes: Seq<u8>) -> bool {
+    match (crate::request::spec::request_for(url), crate::request::spec::request_for_cookie(url, cookie)) {
+        (Some(base), Some(r)) => clazel_http::message::spec::is_valid_request(r) && clazel_http::message::spec::serialize_request(r) == bytes
+            && r.method == base.method && r.target == base.target && r.fields == base.fields + crate::request::spec::cookie_field_lines(cookie),
+        _ => false,
+    }
+}
+
+/// **The jar reaches the wire only as the `Cookie` field** (`theorem_wire_cookies`):
+/// every `Send` is [`is_wire_request`] for the current URL and the
+/// cookie-string that RFC 6265bis §5.8.3's retrieval gives for it, in the
+/// jar of the state, at its time, for the context of its request.
+pub open spec fn wire_cookies(http: HttpFns, urls: UrlFns, s: State, input: Input) -> bool {
+    forall|k: int| 0 <= k < step(http, urls, s, input).1.len() ==> match #[trigger] step(http, urls, s, input).1[k] {
+        Action::Send(bytes) => is_wire_request(
+            s.url,
+            clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, s.jar, request_url(s.url), request_context(urls, s), s.now),
+            bytes,
+        ),
+        _ => true,
+    }
+}
+
+/// **The jar changes only by storage and retrieval** (`theorem_jar_frame`):
+/// the jar after a step is the jar before, except that (1) sending the
+/// request leaves RFC 6265bis §5.8.3 step 5's jar ([`jar_after_cookie_string`]),
+/// and (2) a final response leaves the jar of §5.7 storage of that
+/// response's own `Set-Cookie` lines, one by one ([`store_response`]); and
+/// the time never changes. So the Phase 2 lemmas about `store_a_set_cookie_string`
+/// and `jar_after_retrieval` (the cookie root lemmas) are all there is to
+/// know about the jar of a fetch.
+pub open spec fn jar_frame(http: HttpFns, urls: UrlFns, s: State, input: Input) -> bool {
+    let next = step(http, urls, s, input).0;
+    next.now == s.now && match s.phase {
+        Phase::Finished => next.jar == s.jar,
+        Phase::Connecting => match input {
+            Input::Connected => next.jar == s.jar || next.jar == jar_after_cookie_string(urls, s),
+            _ => next.jar == s.jar,
+        },
+        Phase::Reading { received } => match input {
+            Input::Bytes(bytes) => match settle(http, received + bytes) {
+                Settled::Final(response) => next.jar == store_response(urls, s, response),
+                _ => next.jar == s.jar,
+            },
+            Input::Closed => match settle_at_close(http, received) {
+                Settled::Final(response) => next.jar == store_response(urls, s, response),
+                _ => next.jar == s.jar,
+            },
+            _ => next.jar == s.jar,
+        },
     }
 }
 
