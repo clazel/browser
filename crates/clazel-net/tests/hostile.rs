@@ -136,7 +136,6 @@ fn a_body_that_never_ends_stops_at_the_limit_or_the_timeout() -> Result<(), Stri
 }
 
 #[test]
-#[ignore = "did not return within 20 s: a chunked body streaming toward the 0x4000000 limit (probably ResponseParser re-parsing the whole buffer on every feed, which is quadratic); fetch.rs is being rewritten on another branch"]
 #[cfg_attr(miri, ignore = "opens sockets")]
 fn a_chunked_body_that_never_ends_stops_at_the_limit_or_the_timeout() -> Result<(), String> {
     let r = against(|mut s| {
