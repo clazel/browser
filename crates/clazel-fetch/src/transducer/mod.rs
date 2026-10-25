@@ -9,3 +9,5 @@
 
 pub mod contract;
 pub mod spec;
+pub mod step;
+pub mod types;
