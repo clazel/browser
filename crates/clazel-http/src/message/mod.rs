@@ -10,6 +10,7 @@
 pub mod body;
 pub mod contract;
 pub mod examples;
+pub mod independent;
 pub mod line;
 pub mod serialize;
 pub mod spec;
