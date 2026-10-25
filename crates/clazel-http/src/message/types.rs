@@ -117,6 +117,35 @@ impl View for RequestBuf {
     }
 }
 
+/// The result of parsing a request, viewed as
+/// [`super::request::RequestParse`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum RequestParseBuf {
+    /// The request, and what follows its head.
+    Done {
+        /// the request
+        request: RequestBuf,
+        /// the octets after its head
+        rest: Vec<u8>,
+    },
+    /// More bytes are needed.
+    Incomplete,
+    /// Not a request the parser reads.
+    Invalid,
+}
+
+impl View for RequestParseBuf {
+    type V = super::request::RequestParse;
+
+    open spec fn view(&self) -> super::request::RequestParse {
+        match self {
+            RequestParseBuf::Done { request, rest } => super::request::RequestParse::Done { request: request@, rest: rest@ },
+            RequestParseBuf::Incomplete => super::request::RequestParse::Incomplete,
+            RequestParseBuf::Invalid => super::request::RequestParse::Invalid,
+        }
+    }
+}
+
 /// The view of an optional field line.
 pub open spec fn opt_line_view(p: Option<FieldLineBuf>) -> Option<FieldLine> {
     match p {
