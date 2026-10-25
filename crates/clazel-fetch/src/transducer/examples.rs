@@ -52,6 +52,7 @@ pub open spec fn example_urls() -> UrlFns {
         // Every URL has the one opaque origin, and the Public Suffix List
         // is empty: the rows with an empty jar do not read either.
         origin: |url: Url| clazel_origin::spec::Origin::Opaque(0),
+        request_url: |url: Url| RequestUrl { scheme: seq![0x68u8, 0x74, 0x74, 0x70], host: None, path: seq![0x2Fu8, 0x61] },
         rules: Seq::<clazel_psl::spec::Rule>::empty(),
         location: |base: Url, value: Seq<u8>| if value == seq![0x2Fu8, 0x62] {
             Some(clazel_url::url::spec::Url {

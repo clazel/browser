@@ -139,6 +139,7 @@ dependencies = [
 name = "clazel-net"
 version = "0.0.0"
 dependencies = [
+ "clazel-cookie",
  "clazel-dns",
  "clazel-fetch",
  "clazel-http",

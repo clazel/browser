@@ -6,7 +6,7 @@ use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
-use clazel_cookie::storage::exec::{CookieRecord, jar_view};
+use clazel_cookie::storage::exec::CookieRecord;
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ResponseBuf;
 use clazel_url::url::record::ParsedUrl;
@@ -63,7 +63,7 @@ impl View for StateBuf {
             url: self.url@,
             redirects: self.redirects as nat,
             phase: self.phase@,
-            jar: jar_view(self.jar@),
+            jar: clazel_cookie::storage::exec::jar_view(self.jar@),
             now: self.now as int,
             tainted: self.tainted,
         }

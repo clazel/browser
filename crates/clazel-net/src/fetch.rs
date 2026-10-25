@@ -9,6 +9,7 @@
 use std::collections::VecDeque;
 use std::net::IpAddr;
 
+use clazel_cookie::storage::exec::CookieRecord;
 use clazel_fetch::transducer::real::step_real;
 use clazel_fetch::transducer::spec::Reason;
 use clazel_fetch::transducer::step::start;
@@ -95,9 +96,40 @@ pub fn fetch_with(
     timeouts: Timeouts,
     resolver: impl Fn(&[u8]) -> Result<Vec<IpAddr>, NetError>,
 ) -> Result<ResponseBuf, FetchError> {
+    fetch_jar(url, Vec::new(), now_1601(), timeouts, resolver).0
+}
+
+/// The current time as `clazel-cookie` counts it: seconds since
+/// 1601-01-01T00:00:00Z, kept within the range its functions accept (the
+/// end of year 9999).
+pub fn now_1601() -> u64 {
+    // Seconds from 1601-01-01 to 1970-01-01.
+    const EPOCH_GAP: u64 = 11_644_473_600;
+    // The end of year 9999, `clazel_cookie::set_cookie::contract::now_in_range`'s limit.
+    const LATEST: u64 = 265_046_774_399;
+    let unix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    unix.saturating_add(EPOCH_GAP).min(LATEST)
+}
+
+/// [`fetch_with`] with a cookie jar: `url` is fetched with `jar` at time
+/// `now` (seconds since 1601, see [`now_1601`]), and the jar comes back
+/// as the transducer left it, whether the fetch gave a response or not
+/// (every `Set-Cookie` of a final response is stored, redirects and
+/// failures after it included).
+pub fn fetch_jar(
+    url: &str,
+    jar: Vec<CookieRecord>,
+    now: u64,
+    timeouts: Timeouts,
+    resolver: impl Fn(&[u8]) -> Result<Vec<IpAddr>, NetError>,
+) -> (Result<ResponseBuf, FetchError>, Vec<CookieRecord>) {
     let input: Vec<u32> = url.chars().map(u32::from).collect();
-    let parsed = basic_url_parser(&input, None).ok_or(FetchError::Url)?;
-    let (mut state, first) = start(&parsed);
+    let Some(parsed) = basic_url_parser(&input, None) else {
+        return (Err(FetchError::Url), jar);
+    };
+    let (mut state, first) = start(&parsed, jar, now);
     let mut pending: VecDeque<ActionBuf> = first.into();
     let mut conn: Option<Connection> = None;
     let mut net: Option<NetError> = None;
@@ -142,8 +174,8 @@ pub fn fetch_with(
                     conn = None;
                     continue;
                 }
-                ActionBuf::Done { response, .. } => return Ok(*response),
-                ActionBuf::Fail(reason) => return Err(failure(reason, net)),
+                ActionBuf::Done { response, .. } => return (Ok(*response), state.jar),
+                ActionBuf::Fail(reason) => return (Err(failure(reason, net)), state.jar),
             },
             None => match conn.as_mut() {
                 Some(c) => match c.read(&mut buf) {
@@ -420,5 +452,57 @@ mod tests {
             fetch_with("not a url", quick(), local).map(|_| ()),
             Err(FetchError::Url)
         );
+    }
+
+    /// A server for cookies, one request per connection: `GET /set` sets
+    /// two cookies in two `Set-Cookie` lines (one `Secure`) and redirects
+    /// to `/echo`, which answers `200` and reports every request head it
+    /// was sent.
+    fn cookie_server(connections: usize) -> Option<(u16, mpsc::Receiver<Vec<u8>>)> {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).ok()?;
+        let port = listener.local_addr().ok()?.port();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            for _ in 0..connections {
+                let Ok((mut s, _)) = listener.accept() else {
+                    return;
+                };
+                let head = read_head(&mut s);
+                let reply: &[u8] = if head.starts_with(b"GET /set ") {
+                    b"HTTP/1.1 302 Found\r\nSet-Cookie: a=1\r\nSet-Cookie: b=2; Secure\r\nSet-Cookie: c=3; Path=/echo\r\nLocation: /echo\r\nContent-Length: 0\r\n\r\n"
+                } else {
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+                };
+                let _ = s.write_all(reply);
+                let _ = tx.send(head);
+            }
+        });
+        Some((port, rx))
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore = "opens sockets")]
+    fn cookies_set_then_sent_on_the_redirect() {
+        let Some((port, rx)) = cookie_server(2) else {
+            return;
+        };
+        let (r, jar) = fetch_jar(
+            &format!("http://127.0.0.1:{port}/set"),
+            Vec::new(),
+            now_1601(),
+            quick(),
+            local,
+        );
+        assert_eq!(outcome(r), Ok((200, Vec::new())));
+        let first = rx.recv_timeout(Duration::from_secs(5)).unwrap_or_default();
+        let second = rx.recv_timeout(Duration::from_secs(5)).unwrap_or_default();
+        let text = |b: &[u8]| String::from_utf8_lossy(b).into_owned();
+        // No jar, no `Cookie` field; then the cookies that apply to /echo
+        // over http: not the Secure one, the Path=/echo one included, first (longer path, §5.8.3 step 4).
+        assert!(!text(&first).contains("Cookie:"), "{}", text(&first));
+        assert!(text(&second).contains("\r\nCookie: c=3; a=1\r\n"), "{}", text(&second));
+        // The jar comes back with the two cookies stored: a `Secure`
+        // cookie from an `http:` response is ignored (§5.7 step 17).
+        assert_eq!(jar.len(), 2);
     }
 }

@@ -42,7 +42,10 @@ use super::types::{ActionBuf, InputBuf, StateBuf};
 use clazel_encoding::utf8::decode::decode_without_bom;
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
+use clazel_cookie::matching::exec::canonicalize_a_host_name;
+use clazel_cookie::storage::exec::{RequestUrlRecord, narrow_exec};
 use clazel_origin::exec::{ParsedOrigin, url_origin_exec};
+use clazel_url::url::serialize::url_path_serializer;
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::record::ParsedUrl;
 
@@ -74,6 +77,7 @@ pub open spec fn real_urls() -> UrlFns {
         // URL §4.7 "origin" with the real domain parser; the opaque origin
         // id of a URL with none is 0 (no HTTP(S) URL has one).
         origin: |url: Url| clazel_origin::spec::url_origin(url, clazel_url::url::contract::url_domain_parser(), 0),
+        request_url: |url: Url| request_url(url),
         rules: clazel_psl::table::psl_rules(),
     }
 }
@@ -105,6 +109,22 @@ pub proof fn theorem_real_split_invariant(s: State, a: Seq<u8>, b: Seq<u8>)
 {
     theorem_real_prefix_stable();
     super::theorems::theorem_split_invariant(real_http(), real_urls(), s, a, b);
+}
+
+/// `request_url` (RFC 6265bis §5.7, §5.8's view of the URL).
+pub fn request_url_exec(url: &ParsedUrl) -> (r: RequestUrlRecord)
+    ensures
+        r@ == request_url(url@),
+{
+    let scheme = narrow_exec(url.scheme.as_slice());
+    let host = canonicalize_a_host_name(&url.host);
+    let mut p = url_path_serializer(&url.path);
+    if p.is_empty() {
+        p.push(0x2F);
+        assert(p@ =~= seq![0x2Fu32]);
+    }
+    let path = narrow_exec(p.as_slice());
+    RequestUrlRecord { scheme, host, path }
 }
 
 /// [`real_http`], executable.
@@ -142,6 +162,10 @@ impl UrlFnsExec for RealUrls {
     }
 
     proof fn rules_are_psl(&self) {
+    }
+
+    fn request_url(&self, url: &ParsedUrl) -> (r: RequestUrlRecord) {
+        request_url_exec(url)
     }
 
     fn origin(&self, url: &ParsedUrl) -> (r: ParsedOrigin) {
