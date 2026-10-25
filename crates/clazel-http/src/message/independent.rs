@@ -1,4 +1,120 @@
-//! PLACEHOLDER HEADER (rewritten when the module is complete).
+//! An independent transcription of HTTP/1.1 message framing from a
+//! different RFC than [`super::spec`]: RFC 7230 "HTTP/1.1: Message Syntax
+//! and Routing" (June 2014), §3 (message format) and §4.1 (chunked
+//! transfer coding), the text RFC 9112 obsoleted (docs/VERIFICATION.md,
+//! "Trust without reviewers", item 2). The transcription section uses
+//! nothing from `spec.rs` but three plain data carriers (`FieldLine`,
+//! `StatusLine`, `Response`), so that the two sides can be compared; only
+//! the proof section after it uses the spec's functions. Unlike
+//! `field/independent.rs`, it was not written without having read
+//! `spec.rs`: its author had read it, so what makes it independent is the
+//! other RFC's text and grammar it follows (and the differences between the
+//! two, listed below), not isolation from the spec.
+//!
+//! Source (pinned; an RFC never changes after publication): RFC 7230, June
+//! 2014, <https://www.rfc-editor.org/rfc/rfc7230>: §3 `HTTP-message`; §3.1.2
+//! `status-line` (with §2.6 `HTTP-version`); §3.2 `header-field`,
+//! `field-value`, `obs-fold`; §3.2.3 `OWS`; §3.2.6 `token`, `quoted-string`;
+//! §3.3.2 `Content-Length`; §3.3.3 message body length; §4.1 chunked
+//! transfer coding, §4.1.1 chunk extensions, §4.1.2 trailer, §4.1.3
+//! decoding. RFC 5234 for `DIGIT`, `HEXDIG`, `VCHAR`.
+//!
+//! # What is proven
+//!
+//! [`r_parse`] reads the response at the start of an input as RFC 7230
+//! describes, and says `Done` (the response and the octets after it), `No`
+//! (not a valid response, or not all of it is here) or `Out` (see below).
+//! [`theorem_independent_framing`] proves, for **every** input and both
+//! values of "the request was HEAD":
+//!
+//! - `r_parse` says `Done { response, rest }`: then `parse_response` says
+//!   `Done` with that same response and rest;
+//! - `r_parse` says `No`: then `parse_response` is not `Done` (it is
+//!   `Incomplete`, `Invalid` or `Unsupported`);
+//! - `r_parse` says `Out`: nothing is claimed.
+//!
+//! So the two never disagree about a response they both decide, and a
+//! response the spec finishes is one RFC 7230 finishes the same way, or an
+//! `Out` input. [`corollary_independent_framing`] states that last half.
+//! The same equalities hold part by part: the status line
+//! ([`lemma_r_status_line`]), the field section and trailer
+//! ([`lemma_r_section`], for any state the spec was in), the chunk
+//! extension ([`lemma_r_chunk_ext`]), the chunked body
+//! ([`lemma_r_chunked`]) and the body length ([`lemma_r_body_length`]).
+//! `example_*` show each case by evaluation, including one input per `Out`
+//! class, so the theorem is not vacuous.
+//!
+//! # Where RFC 7230 and RFC 9112 differ: the `Out` inputs
+//!
+//! Each is a place where reading RFC 7230 literally gives another answer
+//! than `spec.rs` (RFC 9112 plus a stated modelling choice). The
+//! transcription returns `Out` there and the theorem claims nothing.
+//!
+//! - **Obs-fold.** RFC 7230 §3.2.4: a user agent replaces each `obs-fold`
+//!   (`CRLF 1*( SP / HTAB )`) "with one or more SP octets"; RFC 9112 §5.2
+//!   gives `obs-fold = OWS CRLF RWS`. The spec replaces the whitespace
+//!   before the CRLF, the CRLF and the whitespace after with one SP; the
+//!   RFC 7230 text leaves the whitespace before the CRLF in place. They
+//!   give different values for `a  ` fold `b`. Every line that begins with
+//!   `SP` or `HTAB` after the start-line (an obs-fold, or a
+//!   whitespace-preceded line right after the start-line, which both RFCs
+//!   say to reject or consume) is `Out`, and so is a field line that is not
+//!   a field value when the next line is one.
+//! - **`Transfer-Encoding` with `Content-Length`.** RFC 7230 §3.3.3 item
+//!   3: "Transfer-Encoding overrides the Content-Length"; RFC 9112 §6.3 item
+//!   3 makes it an error, and so does the spec.
+//! - **Codings.** Anything but exactly one `Transfer-Encoding` field line
+//!   whose value is `chunked` in any case: other codings, `chunked` with
+//!   parameters, several lines, an empty list. RFC 7230 would decode a
+//!   coding before `chunked` or read to the close if `chunked` is not last;
+//!   the spec calls them `Unsupported` or `Invalid`.
+//! - **HTTP/1.0 with `Transfer-Encoding`.** An error in RFC 9112 §6.1, not
+//!   in RFC 7230.
+//! - **`Content-Length` that is not exactly one line of digits.** The
+//!   repeated-value and list cases are worded differently ("same decimal
+//!   value" against the spec's "same digits": `42, 042`), and the
+//!   transcription does not cover them.
+//! - **Chunk extension whitespace.** RFC 9112 §7.1.1 allows `BWS` around
+//!   `;` and `=`; RFC 7230 §4.1.1 does not. A chunk-size line that is not a
+//!   `chunk-ext` in RFC 7230 and has an `SP` or `HTAB` is `Out`; one
+//!   without is `No`, proven rejected by the spec too.
+//! - **Status line.** RFC 7230 §3.1.2 requires the SP after the status
+//!   code even with no reason phrase; the spec accepts `HTTP/1.1 301` (a
+//!   modelling choice listed in `spec.rs`). A major version other than 1 is
+//!   a valid `HTTP-version` in both RFCs but the spec rejects it. Both
+//!   `Out`.
+//!
+//! # Modelling choices and limits of the claim
+//!
+//! - The transcription decides whether a response is there, not *why* it
+//!   is not: `No` covers both "not all here yet" and "not valid", which
+//!   RFC 7230 does not distinguish (RFC 7230 says nothing of incremental
+//!   parsing). The spec's `Incomplete`, `Invalid` and `Unsupported` are
+//!   therefore compared only as "not `Done`". **Not covered:**
+//!   `parse_response_at_close` (a body that ends when the server closes
+//!   the connection: `r_parse` says `No` for it, as the spec's
+//!   `parse_response` is not `Done` for it); the executable parser (proven
+//!   equal to the spec in `line.rs` and `body.rs`, so equal to this through
+//!   the spec); and the request serializer (RFC 7230 §3.1.1 is not
+//!   transcribed).
+//! - The limits are the spec's numbers (`r_max_line`, `r_max_lines`,
+//!   `r_max_body`): a limit is a choice of the implementation, not of the
+//!   RFC, and a message past one is `No`, as it is `Invalid` in the spec.
+//! - A chunk size and a `Content-Length` are numbers of unbounded size
+//!   here; the body limit bounds them. The digit values use the same
+//!   left-to-right arithmetic as the spec (`r_hex_value`, `r_dec_value`).
+//! - Lines end only at CRLF, and no grammar here accepts a CR or LF inside
+//!   a line (RFC 7230 §3.5 lets a recipient accept a bare LF as a line
+//!   terminator; the spec chose not to, and so does this).
+//! - RFC 7230 §3.2's `field-content` cannot match a value with two inner
+//!   whitespace runs (`a b c`). The transcription uses RFC 9110 §5.5's
+//!   reading, the evident intent: see `docs/ERRATA.md`.
+//! - The same-looking helpers (`r_first_crlf`, `r_token_len`, `r_hex_len`,
+//!   `r_ltrim`) are the obvious loops over octets; the transcription's
+//!   independence is in the grammar it follows, the order in which it
+//!   decides (the whole message in one pass, a section as a list that is
+//!   built from the end, `Out` where the RFCs differ), and the body-length
+//!   rules, not in these.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -583,6 +699,212 @@ pub proof fn r_chunked_decreases(s: Seq<u8>, total: nat) {
     }
 }
 
+/// RFC 5234 §2.3: letters in a quoted string match either case; the
+/// lowercase of an octet.
+pub open spec fn r_lower(c: u8) -> u8 {
+    if 0x41 <= c <= 0x5A {
+        (c + 0x20) as u8
+    } else {
+        c
+    }
+}
+
+/// RFC 7230 §3.2: "Each header field consists of a case-insensitive field
+/// name": `a` and `b` are the same name.
+pub open spec fn r_ci_eq(a: Seq<u8>, b: Seq<u8>) -> bool
+    decreases a.len()
+{
+    a.len() == b.len() && (a.len() == 0 || (r_lower(a[0]) == r_lower(b[0])
+        && r_ci_eq(a.drop_first(), b.drop_first())))
+}
+
+/// "Transfer-Encoding" (RFC 7230 §3.3.1), in lowercase.
+pub open spec fn r_lit_transfer_encoding() -> Seq<u8> {
+    seq![0x74u8, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x65, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67]
+}
+
+/// "Content-Length" (RFC 7230 §3.3.2), in lowercase.
+pub open spec fn r_lit_content_length() -> Seq<u8> {
+    seq![0x63u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x6C, 0x65, 0x6E, 0x67, 0x74, 0x68]
+}
+
+/// "chunked" (RFC 7230 §4.1), in lowercase.
+pub open spec fn r_lit_chunked() -> Seq<u8> {
+    seq![0x63u8, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64]
+}
+
+/// The values of the header fields named `name` (compared
+/// case-insensitively), in the order received.
+pub open spec fn r_values_named(fields: Seq<FieldLine>, name: Seq<u8>) -> Seq<Seq<u8>>
+    decreases fields.len()
+{
+    if fields.len() == 0 {
+        seq![]
+    } else if r_ci_eq(fields[0].name, name) {
+        seq![fields[0].value] + r_values_named(fields.drop_first(), name)
+    } else {
+        r_values_named(fields.drop_first(), name)
+    }
+}
+
+/// Every octet of `s` is a `DIGIT`.
+pub open spec fn r_all_digit(s: Seq<u8>) -> bool
+    decreases s.len()
+{
+    s.len() == 0 || (r_is_digit(s[0]) && r_all_digit(s.drop_first()))
+}
+
+/// RFC 7230 §3.3.2: `Content-Length = 1*DIGIT`.
+pub open spec fn r_is_digits(s: Seq<u8>) -> bool {
+    s.len() > 0 && r_all_digit(s)
+}
+
+/// The number written by the digits `s`, most significant first.
+pub open spec fn r_dec_value(s: Seq<u8>) -> nat
+    decreases s.len()
+{
+    if s.len() == 0 {
+        0
+    } else {
+        r_dec_value(s.drop_last()) * 10 + ((s.last() - 0x30) as nat)
+    }
+}
+
+/// How a response's body is delimited, by RFC 7230 §3.3.3.
+pub enum RLen {
+    /// No body (item 1).
+    NoBody,
+    /// This many octets (item 5).
+    Length(nat),
+    /// The chunked coding, the final and only one (item 3).
+    Chunked,
+    /// Until the server closes the connection (item 7).
+    Close,
+    /// A length past the limit.
+    Over,
+    /// Outside the covered inputs (see the header).
+    Out,
+}
+
+/// RFC 7230 §3.3.3 for a response whose request was `HEAD` exactly when
+/// `is_head`, items 1, 3, 5 and 7 (item 2 is CONNECT, item 6 a request).
+pub open spec fn r_body_length(sl: StatusLine, fields: Seq<FieldLine>, is_head: bool) -> RLen {
+    let status = sl.status;
+    if is_head || (100 <= status && status <= 199) || status == 204 || status == 304 {
+        // 1. "Any response to a HEAD request and any response with a 1xx
+        // (Informational), 204 (No Content), or 304 (Not Modified) status
+        // code is always terminated by the first empty line after the
+        // header fields".
+        RLen::NoBody
+    } else {
+        let te = r_values_named(fields, r_lit_transfer_encoding());
+        let cl = r_values_named(fields, r_lit_content_length());
+        if te.len() > 0 {
+            // 3. "If a Transfer-Encoding header field is present and the
+            // chunked transfer coding is the final encoding".
+            if cl.len() > 0 {
+                // RFC 7230 lets Transfer-Encoding override Content-Length;
+                // RFC 9112 makes it an error: outside.
+                RLen::Out
+            } else if sl.major == 1 && sl.minor == 0 {
+                // RFC 9112 §6.1 makes it an error in an HTTP/1.0 message;
+                // RFC 7230 does not: outside.
+                RLen::Out
+            } else if te.len() == 1 && r_ci_eq(te[0], r_lit_chunked()) {
+                RLen::Chunked
+            } else {
+                // Other codings: outside.
+                RLen::Out
+            }
+        } else if cl.len() > 0 {
+            // 5. "If a valid Content-Length header field is present without
+            // Transfer-Encoding, its decimal value defines the expected
+            // message body length in octets."
+            if cl.len() == 1 && r_is_digits(cl[0]) {
+                if r_dec_value(cl[0]) > r_max_body() {
+                    RLen::Over
+                } else {
+                    RLen::Length(r_dec_value(cl[0]))
+                }
+            } else {
+                // Repeated or invalid values: outside.
+                RLen::Out
+            }
+        } else {
+            // 7. "Otherwise, this is a response message without a declared
+            // message body length, so the message body length is determined
+            // by the number of octets received prior to the server closing
+            // the connection."
+            RLen::Close
+        }
+    }
+}
+
+/// What the RFC's rules say of the response at the start of `input`.
+pub enum RParse {
+    /// The response, and what follows it.
+    Done {
+        /// the response
+        response: Response,
+        /// the octets after it
+        rest: Seq<u8>,
+    },
+    /// Not (yet) a complete response, or not a valid one.
+    No,
+    /// Outside the covered inputs.
+    Out,
+}
+
+/// RFC 7230 §3 `HTTP-message = start-line *( header-field CRLF ) CRLF [
+/// message-body ]` with `start-line = status-line`, for a response to a
+/// request that was `HEAD` exactly when `is_head`, on a connection that is
+/// still open (a body that ends at the close is not decided, as in the
+/// spec).
+pub open spec fn r_parse(input: Seq<u8>, is_head: bool) -> RParse {
+    match r_first_crlf(input, 0) {
+        None => RParse::No,
+        Some(n) => if n > r_max_line() {
+            RParse::No
+        } else {
+            let line = input.take(n as int);
+            let after_line = input.skip((n + 2) as int);
+            match r_status_line(line) {
+                RStatus::No => RParse::No,
+                RStatus::Out => RParse::Out,
+                RStatus::Ok(sl) => match r_header_section(after_line, 0) {
+                    RSection::No => RParse::No,
+                    RSection::Out => RParse::Out,
+                    RSection::Ok { fields, rest } => match r_body_length(sl, fields, is_head) {
+                        RLen::NoBody => RParse::Done {
+                            response: Response { status_line: sl, fields: fields, body: seq![] },
+                            rest: rest,
+                        },
+                        RLen::Length(len) => if rest.len() >= len {
+                            RParse::Done {
+                                response: Response { status_line: sl, fields: fields, body: rest.take(len as int) },
+                                rest: rest.skip(len as int),
+                            }
+                        } else {
+                            RParse::No
+                        },
+                        RLen::Chunked => match r_chunked(rest, 0) {
+                            RChunked::Ok { body, rest: after } => RParse::Done {
+                                response: Response { status_line: sl, fields: fields, body: body },
+                                rest: after,
+                            },
+                            RChunked::No => RParse::No,
+                            RChunked::Out => RParse::Out,
+                        },
+                        RLen::Close => RParse::No,
+                        RLen::Over => RParse::No,
+                        RLen::Out => RParse::Out,
+                    },
+                },
+            }
+        },
+    }
+}
+
 // ===========================================================================
 // Proofs: the transcription equals `spec.rs` wherever it decides.
 // ===========================================================================
@@ -1149,6 +1471,400 @@ pub proof fn lemma_r_chunked(s: Seq<u8>, body: Seq<u8>)
             }
         }
     }
+}
+
+/// The case-insensitive comparison is the spec's `field_name_eq`.
+pub proof fn lemma_r_ci_eq(a: Seq<u8>, b: Seq<u8>)
+    ensures
+        r_ci_eq(a, b) == field_name_eq(a, b),
+    decreases a.len()
+{
+    let la = ascii_lowercase(a);
+    let lb = ascii_lowercase(b);
+    assert(la.len() == a.len());
+    assert(lb.len() == b.len());
+    if a.len() == b.len() && a.len() > 0 {
+        assert(la.drop_first() =~= ascii_lowercase(a.drop_first()));
+        assert(lb.drop_first() =~= ascii_lowercase(b.drop_first()));
+        assert(la[0] == r_lower(a[0]));
+        assert(lb[0] == r_lower(b[0]));
+        lemma_r_ci_eq(a.drop_first(), b.drop_first());
+        if la == lb {
+            assert(la.drop_first() == lb.drop_first());
+        }
+        if r_lower(a[0]) == r_lower(b[0]) && field_name_eq(a.drop_first(), b.drop_first()) {
+            assert(la =~= lb) by {
+                assert(la.drop_first() == lb.drop_first());
+                assert forall|i: int| 0 <= i < la.len() implies la[i] == lb[i] by {
+                    if i == 0 {
+                    } else {
+                        assert(la.drop_first()[i - 1] == la[i]);
+                        assert(lb.drop_first()[i - 1] == lb[i]);
+                    }
+                }
+            }
+        }
+    } else if a.len() == 0 && b.len() == 0 {
+        assert(la =~= lb);
+    }
+}
+
+/// The values of the fields of a name are the spec's.
+pub proof fn lemma_r_values_named(fields: Seq<FieldLine>, name: Seq<u8>)
+    ensures
+        r_values_named(fields, name) == field_values_named(fields, name),
+    decreases fields.len()
+{
+    if fields.len() > 0 {
+        lemma_r_ci_eq(fields[0].name, name);
+        lemma_r_values_named(fields.drop_first(), name);
+    }
+}
+
+/// The literal names are the spec's.
+pub proof fn lemma_r_literals()
+    ensures
+        r_lit_transfer_encoding() == lit_transfer_encoding(),
+        r_lit_content_length() == lit_content_length(),
+        r_lit_chunked() == lit_chunked(),
+{
+}
+
+/// The index form of the case-insensitive comparison.
+pub proof fn lemma_r_ci_eq_index(a: Seq<u8>, b: Seq<u8>)
+    requires
+        r_ci_eq(a, b),
+    ensures
+        a.len() == b.len(),
+        forall|i: int| 0 <= i < a.len() ==> r_lower(#[trigger] a[i]) == r_lower(b[i]),
+    decreases a.len()
+{
+    if a.len() > 0 {
+        lemma_r_ci_eq_index(a.drop_first(), b.drop_first());
+        assert forall|i: int| 0 <= i < a.len() implies r_lower(#[trigger] a[i]) == r_lower(b[i]) by {
+            if i > 0 {
+                assert(a.drop_first()[i - 1] == a[i]);
+                assert(b.drop_first()[i - 1] == b[i]);
+            }
+        }
+    }
+}
+
+/// The digits are the spec's: all of them, and their value.
+pub proof fn lemma_r_digits(s: Seq<u8>)
+    ensures
+        r_all_digit(s) == all_in(s, Class::Digit),
+        r_is_digits(s) == is_digits(s),
+        r_dec_value(s) == decimal_value(s),
+    decreases s.len()
+{
+    if s.len() > 0 {
+        lemma_r_classes(s[0]);
+        lemma_r_digits(s.drop_first());
+        lemma_r_digits(s.drop_last());
+    }
+}
+
+/// A string whose octets are letters has no OWS at either end, so
+/// stripping leaves it as it is.
+pub proof fn lemma_r_strip_ows_id(x: Seq<u8>)
+    requires
+        x.len() == 0 || (!r_is_wsp(x[0]) && !r_is_wsp(x.last())),
+    ensures
+        strip_ows(x) == x,
+{
+    lemma_r_strip_id(x);
+    if x.len() > 0 {
+        lemma_r_classes(x.last());
+    }
+}
+
+/// A single `chunked` (in any letter case) is the one coding of the
+/// spec's `Transfer-Encoding`.
+pub proof fn lemma_r_te_chunked(v: Seq<u8>)
+    requires
+        r_ci_eq(v, r_lit_chunked()),
+    ensures
+        parse_transfer_encoding(combine(seq![v])) == Some(
+            seq![TransferCoding { name: v, parameters: seq![] }],
+        ),
+{
+    lemma_r_ci_eq_index(v, r_lit_chunked());
+    assert(v.len() == 7);
+    // Every octet is a letter.
+    assert forall|i: int| 0 <= i < v.len() implies r_is_alpha(#[trigger] v[i]) by {
+        assert(r_lower(v[i]) == r_lit_chunked()[i]);
+    }
+    assert(combine(seq![v]) == v);
+    assert(crate::field::lemmas::no_comma_or_quote(v)) by {
+        assert forall|i: int| 0 <= i < v.len() implies (#[trigger] v[i]) != 0x2C && v[i] != 0x22 by {
+            assert(r_is_alpha(v[i]));
+        }
+    }
+    crate::field::lemmas::lemma_scan_plain_run(v, Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty());
+    assert(v + Seq::<u8>::empty() =~= v);
+    assert(Seq::<u8>::empty() + v =~= v);
+    assert(!r_is_wsp(v[0]) && !r_is_wsp(v.last())) by {
+        assert(r_is_alpha(v[0]));
+        assert(r_is_alpha(v.last()));
+    }
+    lemma_r_strip_ows_id(v);
+    assert(split_values(v) =~= seq![v]);
+    assert(seq![v].drop_first() =~= Seq::<Seq<u8>>::empty());
+    assert(drop_empty(Seq::<Seq<u8>>::empty()) =~= Seq::<Seq<u8>>::empty());
+    assert(seq![v][0] == v);
+    assert(drop_empty(seq![v]) =~= seq![v]);
+    assert(list_elements(v) =~= seq![v]);
+    // The coding: a run of tchars, no parameters.
+    assert(all_in(v, Class::Tchar)) by {
+        crate::field::lemmas::lemma_all_in_index(v, Class::Tchar);
+        assert forall|i: int| 0 <= i < v.len() implies in_class(Class::Tchar, #[trigger] v[i]) by {
+            assert(r_is_alpha(v[i]));
+            lemma_r_classes(v[i]);
+        }
+    }
+    crate::field::lemmas::lemma_all_in_run_len(v, Class::Tchar);
+    assert(v.skip(7).len() == 0);
+    assert(v.take(7) =~= v);
+    assert(parse_transfer_codings(Seq::<Seq<u8>>::empty()) == Some(Seq::<TransferCoding>::empty()));
+    assert(seq![v].drop_first() =~= Seq::<Seq<u8>>::empty());
+    assert(seq![TransferCoding { name: v, parameters: seq![] }] + Seq::<TransferCoding>::empty() =~= seq![
+        TransferCoding { name: v, parameters: seq![] },
+    ]);
+}
+
+/// A single `Content-Length` of digits is the spec's.
+pub proof fn lemma_r_cl_single(v: Seq<u8>)
+    requires
+        r_is_digits(v),
+    ensures
+        parse_content_length_lines(seq![v]) == Some(r_dec_value(v)),
+{
+    lemma_r_digits(v);
+    assert(combine(seq![v]) == v);
+    crate::field::lemmas::lemma_all_in_index(v, Class::Digit);
+    assert(crate::field::lemmas::no_comma_or_quote(v)) by {
+        assert forall|i: int| 0 <= i < v.len() implies (#[trigger] v[i]) != 0x2C && v[i] != 0x22 by {
+            assert(in_class(Class::Digit, v[i]));
+        }
+    }
+    crate::field::lemmas::lemma_scan_plain_run(v, Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty());
+    assert(v + Seq::<u8>::empty() =~= v);
+    assert(Seq::<u8>::empty() + v =~= v);
+    assert(!r_is_wsp(v[0]) && !r_is_wsp(v.last())) by {
+        assert(in_class(Class::Digit, v[0]));
+        assert(in_class(Class::Digit, v[v.len() - 1]));
+    }
+    lemma_r_strip_ows_id(v);
+    assert(split_values(v) =~= seq![v]);
+    assert(seq![v].drop_first() =~= Seq::<Seq<u8>>::empty());
+    assert(seq![v][0] == v);
+    reveal_with_fuel(all_equal, 2);
+    assert(all_equal(Seq::<Seq<u8>>::empty(), v));
+    assert(all_equal(seq![v], v));
+    assert(parse_content_length(v) == Some(decimal_value(v)));
+}
+
+/// The body length of the transcription is the spec's.
+pub proof fn lemma_r_body_length(sl: StatusLine, fields: Seq<FieldLine>, is_head: bool)
+    ensures
+        match r_body_length(sl, fields, is_head) {
+            RLen::NoBody => body_length(Head { status_line: sl, fields: fields }, is_head) is NoBody,
+            RLen::Length(n) => body_length(Head { status_line: sl, fields: fields }, is_head) == BodyLength::Length(n),
+            RLen::Chunked => body_length(Head { status_line: sl, fields: fields }, is_head) is Chunked,
+            RLen::Close => body_length(Head { status_line: sl, fields: fields }, is_head) is Close,
+            RLen::Over => body_length(Head { status_line: sl, fields: fields }, is_head) is Invalid,
+            RLen::Out => true,
+        },
+{
+    lemma_r_literals();
+    lemma_r_values_named(fields, r_lit_transfer_encoding());
+    lemma_r_values_named(fields, r_lit_content_length());
+    let te = r_values_named(fields, r_lit_transfer_encoding());
+    let cl = r_values_named(fields, r_lit_content_length());
+    if te.len() > 0 && cl.len() == 0 && !(sl.major == 1 && sl.minor == 0) && te.len() == 1
+        && r_ci_eq(te[0], r_lit_chunked()) {
+        lemma_r_te_chunked(te[0]);
+        lemma_r_ci_eq(te[0], r_lit_chunked());
+        assert(te =~= seq![te[0]]);
+        assert(combine(te) == te[0]);
+    }
+    if te.len() == 0 && cl.len() == 1 && r_is_digits(cl[0]) {
+        lemma_r_cl_single(cl[0]);
+        assert(cl =~= seq![cl[0]]);
+    }
+}
+
+/// **The theorem.** Wherever the transcription of RFC 7230 §3 decides, it
+/// decides as the spec does: if it finds a response, `parse_response`
+/// finds that response with the same octets after it; if it says there is
+/// none (the octets are not a valid response, or not all here), then
+/// `parse_response` does not finish one. `Out` is the inputs where the two
+/// RFCs differ (see the header), for which nothing is claimed.
+pub proof fn theorem_independent_framing(input: Seq<u8>, is_head: bool)
+    ensures
+        match r_parse(input, is_head) {
+            RParse::Done { response, rest } => parse_response(input, is_head) == Parse::Done {
+                response: response,
+                rest: rest,
+            },
+            RParse::No => !(parse_response(input, is_head) is Done),
+            RParse::Out => true,
+        },
+{
+    lemma_r_first_crlf(input, 0);
+    lemma_r_first_crlf_some(input, 0);
+    match r_first_crlf(input, 0) {
+        None => {}
+        Some(n) => {
+            if n <= r_max_line() {
+                let line = input.take(n as int);
+                let after_line = input.skip((n + 2) as int);
+                lemma_r_status_line(line);
+                match r_status_line(line) {
+                    RStatus::No => {}
+                    RStatus::Out => {}
+                    RStatus::Ok(sl) => {
+                        lemma_r_section(after_line, seq![], None, 0);
+                        match r_header_section(after_line, 0) {
+                            RSection::No => {}
+                            RSection::Out => {}
+                            RSection::Ok { fields, rest } => {
+                                assert(Seq::<FieldLine>::empty() + fields =~= fields);
+                                lemma_r_body_length(sl, fields, is_head);
+                                match r_body_length(sl, fields, is_head) {
+                                    RLen::Chunked => {
+                                        assert(Seq::<u8>::empty().len() == 0);
+                                        lemma_r_chunked(rest, Seq::<u8>::empty());
+                                        if let RChunked::Ok { body, rest: after } = r_chunked(rest, 0) {
+                                            assert(Seq::<u8>::empty() + body =~= body);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A response with a `Content-Length`: both finish it, the same way.
+pub proof fn example_agree_length()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false) is Done,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false) is Done,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false) is Done) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F], false) is Done) by (compute_only);
+}
+
+/// A chunked response with an extension and a trailer: both finish it, the same way.
+pub proof fn example_agree_chunked()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x35, 0x3B, 0x61, 0x3D, 0x62, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x54, 0x3A, 0x20, 0x76, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x35, 0x3B, 0x61, 0x3D, 0x62, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x54, 0x3A, 0x20, 0x76, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x35, 0x3B, 0x61, 0x3D, 0x62, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x54, 0x3A, 0x20, 0x76, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x35, 0x3B, 0x61, 0x3D, 0x62, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x54, 0x3A, 0x20, 0x76, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done) by (compute_only);
+}
+
+/// A response to HEAD has no body: both finish it at the empty line.
+pub proof fn example_agree_head()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], true) is Done,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], true) is Done,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], true) is Done) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A], true) is Done) by (compute_only);
+}
+
+/// A body one octet short: neither finishes it.
+pub proof fn example_agree_incomplete()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C], false) is No,
+        !(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C], false) is Done),
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C], false) is No) by (compute_only);
+    assert(!(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x68, 0x65, 0x6C, 0x6C], false) is Done)) by (compute_only);
+}
+
+/// Difference: `Transfer-Encoding` with `Content-Length`. RFC 7230 §3.3.3 lets the first override the second; RFC 9112 §6.3 makes it an error.
+pub proof fn example_out_te_and_cl()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x35, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid) by (compute_only);
+}
+
+/// Difference: an obs-fold. The two RFCs word its replacement differently.
+pub proof fn example_out_obs_fold()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x58, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x20, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x58, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x20, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x58, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x20, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x58, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x20, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done) by (compute_only);
+}
+
+/// Difference: no SP after the status code. RFC 7230 §3.1.2 requires it; the spec accepts it (modelling choice).
+pub proof fn example_out_missing_sp()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x31, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x31, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x31, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x31, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done) by (compute_only);
+}
+
+/// Difference: whitespace in a chunk extension. RFC 9112 §7.1.1 allows `BWS`; RFC 7230 §4.1.1 does not.
+pub proof fn example_out_chunk_bws()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x20, 0x3B, 0x20, 0x61, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x20, 0x3B, 0x20, 0x61, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x20, 0x3B, 0x20, 0x61, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x20, 0x3B, 0x20, 0x61, 0x0D, 0x0A, 0x0D, 0x0A], false) is Done) by (compute_only);
+}
+
+/// Difference: `Transfer-Encoding` in an HTTP/1.0 response. RFC 9112 §6.1 makes it an error.
+pub proof fn example_out_http10_te()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x30, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Invalid) by (compute_only);
+}
+
+/// Difference: codings other than a lone `chunked`. The spec calls them unsupported; RFC 7230 would decode or read to close.
+pub proof fn example_out_other_coding()
+    ensures
+        r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x2C, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out,
+        parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x2C, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Unsupported,
+{
+    assert(r_parse(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x2C, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Out) by (compute_only);
+    assert(parse_response(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x2C, 0x20, 0x63, 0x68, 0x75, 0x6E, 0x6B, 0x65, 0x64, 0x0D, 0x0A, 0x0D, 0x0A, 0x30, 0x0D, 0x0A, 0x0D, 0x0A], false) is Unsupported) by (compute_only);
+}
+
+/// The other half of the theorem: a response the spec finishes is one the
+/// transcription finishes the same way, unless the input is one where the
+/// two RFCs differ.
+pub proof fn corollary_independent_framing(input: Seq<u8>, is_head: bool)
+    ensures
+        match parse_response(input, is_head) {
+            Parse::Done { response, rest } => r_parse(input, is_head) is Out || r_parse(input, is_head) == RParse::Done {
+                response: response,
+                rest: rest,
+            },
+            _ => true,
+        },
+{
+    theorem_independent_framing(input, is_head);
 }
 
 } // verus!
