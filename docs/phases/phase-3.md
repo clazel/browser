@@ -571,7 +571,7 @@ listed (RFC 7230 allowed obs-fold in a request; RFC 9112 does not).
 
 **As built (3.2):** `crates/clazel-http/src/message/` (`spec`, `contract`,
 `termination`, `line`, `body`, `serialize`, `types`, `examples`, `independent`,
-`tests`). The spec, the examples and the executable response parser and request
+`lemmas`, `incremental`, `request`, `request_parser`, `tests`). The spec, the examples and the executable response parser and request
 serializer are as the plan describes, with the status line and obs-fold
 choices listed in `spec.rs`'s header. Limits (`max_line` 8192, `max_lines` 256,
 `max_body` 64 MiB) are parameterised in two spec functions
@@ -590,9 +590,16 @@ whitespace, status line without the second SP or with another major version).
 RFC 7230's `field-content` cannot match `a b c`; the transcription reads it as
 RFC 9110 §5.5 does (`docs/ERRATA.md`). Unlike `field/independent.rs`, its
 author had read `spec.rs`, so the independence is the other RFC's grammar and
-the proof, not isolation. Not written: the Fetch "HTTP-network fetch"
-comparison the plan names; the incremental parser, the request parser and
-round-trip lemma, and the two theorems of `contract.rs` (another change).
+the proof, not isolation. `lemmas.rs` proves that each reader keeps its decision when bytes are
+appended, from which `theorem_monotone` and `theorem_no_early_decision`
+follow. `incremental.rs` keeps the parser's place (status line, field lines
+read, body start and length, chunks decoded) under an invariant `wf`: for
+every continuation, resuming from the saved state equals parsing from the
+start; `feed` requires and keeps `wf`. `request.rs` specifies a request
+parser (HTTP/1.1 only, the target a run of VCHAR, no leading empty lines,
+no body) and proves `parse_request(serialize_request(r) + more)` gives `r`
+back for every valid request within the limits. Not written: the Fetch
+"HTTP-network fetch" comparison the plan names.
 
 ### 3.3 HTTP conformance (M)
 
@@ -1105,7 +1112,7 @@ half does not wait on TLS.
 |------|-------|
 | 3.0 TLS decision | done (2026-10-23): option B, our own TLS 1.3 client over libcrux, grounds and accepted costs recorded above |
 | 3.1 HTTP field syntax | built: 146 verified, independent transcription (Fetch), 76 certified mutations, 10 unit tests; tier stays 0 until 3.2 and 3.3 |
-| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier stays 0: spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `clazel-http` 342 verified, 0 errors (2026-10-25, with the `message/lemmas.rs` work not yet merged). Not yet: the monotonicity and no-early-decision theorems stated in `message/contract.rs`, an incremental parser (`ResponseParser` re-parses everything on each feed, quadratic in the response size), the request parser and round-trip lemma; the independent transcription does not cover `parse_response_at_close`, obs-fold, `Transfer-Encoding` with `Content-Length`, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
+| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier stays 0: spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `clazel-http` 378 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription does not cover `parse_response_at_close`, obs-fold, `Transfer-Encoding` with `Content-Length`, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). Open: tier 2 also needs the items listed under 3.2, and a green full CI run, before `clazel-http` is raised |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
