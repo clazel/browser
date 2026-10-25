@@ -122,3 +122,81 @@ fn serializes() {
     };
     assert_eq!(serialize_request(&bad), None);
 }
+
+#[test]
+fn request_round_trip_and_httparse() {
+    use super::request_parser::parse_request_exec;
+    use super::types::RequestParseBuf;
+    let field = |n: &[u8], v: &[u8]| FieldLineBuf {
+        name: n.to_vec(),
+        value: v.to_vec(),
+    };
+    let reqs = [
+        RequestBuf {
+            method: b"GET".to_vec(),
+            target: b"/x?y=1".to_vec(),
+            fields: vec![field(b"Host", b"example.com"), field(b"Accept", b"")],
+        },
+        RequestBuf {
+            method: b"OPTIONS".to_vec(),
+            target: b"*".to_vec(),
+            fields: vec![],
+        },
+        RequestBuf {
+            method: b"POST".to_vec(),
+            target: b"http://a.example/p%20q".to_vec(),
+            fields: vec![field(b"X-A", b"1 \t 2"), field(b"x-a", b"\x80\xff")],
+        },
+    ];
+    for req in reqs {
+        let bytes = serialize_request(&req);
+        assert!(bytes.is_some());
+        let mut bytes = bytes.unwrap_or_default();
+        bytes.extend_from_slice(b"NEXT");
+        // httparse reads the same method, target and fields.
+        let mut headers = [httparse::EMPTY_HEADER; 8];
+        let mut theirs = httparse::Request::new(&mut headers);
+        assert_eq!(
+            theirs.parse(&bytes),
+            Ok(httparse::Status::Complete(bytes.len() - 4))
+        );
+        assert_eq!(theirs.method.map(str::as_bytes), Some(&req.method[..]));
+        assert_eq!(theirs.path.map(str::as_bytes), Some(&req.target[..]));
+        assert_eq!(theirs.version, Some(1));
+        let fields: Vec<(&[u8], &[u8])> = theirs
+            .headers
+            .iter()
+            .map(|h| (h.name.as_bytes(), h.value))
+            .collect();
+        let ours: Vec<(&[u8], &[u8])> = req
+            .fields
+            .iter()
+            .map(|f| (&f.name[..], &f.value[..]))
+            .collect();
+        assert_eq!(fields, ours);
+        // Every proper prefix of the request is incomplete.
+        for k in 0..bytes.len() - 4 {
+            assert_eq!(
+                parse_request_exec(bytes.get(..k).unwrap_or_default()),
+                RequestParseBuf::Incomplete,
+                "prefix {k}"
+            );
+        }
+        // The proven parser gives the request back, with what follows.
+        assert_eq!(
+            parse_request_exec(&bytes),
+            RequestParseBuf::Done {
+                request: req,
+                rest: b"NEXT".to_vec()
+            }
+        );
+    }
+    assert_eq!(
+        parse_request_exec(b"GET /x HTTP/1.0\r\n\r\n"),
+        RequestParseBuf::Invalid
+    );
+    assert_eq!(
+        parse_request_exec(b"GET  /x HTTP/1.1\r\n\r\n"),
+        RequestParseBuf::Invalid
+    );
+}

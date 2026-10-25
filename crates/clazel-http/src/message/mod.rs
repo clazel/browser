@@ -9,7 +9,7 @@
 //! - [`lemmas`]: those properties, proven.
 //! - [`incremental`]: the parser fed bytes as they arrive.
 //! - [`request`]: the request parser (a spec) and the serializer's
-//!   round trip.
+//!   round trip; [`request_parser`]: the request parser, executable.
 
 pub mod body;
 pub mod contract;
@@ -18,6 +18,7 @@ pub mod incremental;
 pub mod lemmas;
 pub mod line;
 pub mod request;
+pub mod request_parser;
 pub mod serialize;
 pub mod spec;
 pub mod termination;
