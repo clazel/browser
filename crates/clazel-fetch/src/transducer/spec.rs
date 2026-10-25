@@ -613,7 +613,8 @@ pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input) -> (S
                     State { phase: Phase::Reading { received: seq![] }, jar: jar_after_cookie_string(urls, s), ..s },
                     seq![Action::Send(bytes)],
                 ),
-                None => fail(s, Reason::NotFetched, true),
+                // (The retrieval has happened: the jar keeps its step 5.)
+                None => fail(State { jar: jar_after_cookie_string(urls, s), ..s }, Reason::NotFetched, true),
             },
             Input::Bytes(_) => fail(s, Reason::Shell, true),
             Input::Closed => fail(s, Reason::Network, false),
