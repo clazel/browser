@@ -46,8 +46,10 @@ specification transcribed from the standards. The current numbers are in the
 [status table](../../README.md#verification-status).
 
 - **Proven:** `decode_message`, `decode_udp`, `encode_query`,
-  `dotted_to_wire`, `tcp_frame`, `tcp_message_len`, `answer_addresses` and
-  `nameservers` meet their contracts. Decoding a query we encoded gives it
+  `dotted_to_wire`, `wire_to_dotted`, `tcp_frame`, `tcp_message_len`,
+  `answer_addresses` and `nameservers` meet their contracts. A name that
+  `wire_to_dotted` spells converts back with `dotted_to_wire`
+  (`lemma_wire_to_dotted_round_trip`). Decoding a query we encoded gives it
   back. Every name a decoded message holds has at most 255 octets and labels
   of at most 63. `answer_addresses` returns only addresses (and a redirect)
   that are in the answer section. The decoder never reserves more records than

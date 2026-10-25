@@ -32,7 +32,9 @@
 
 use clazel_dns::answer::answer_addresses;
 use clazel_dns::decode::{decode_message, decode_udp};
-use clazel_dns::encode::{dotted_to_wire, encode_query, tcp_frame, tcp_message_len};
+use clazel_dns::encode::{
+    dotted_to_wire, encode_query, tcp_frame, tcp_message_len, wire_to_dotted as dotted_of_wire,
+};
 use clazel_dns::resolv::parse::nameservers;
 use clazel_dns::spec::Addr;
 use clazel_dns::types::{Msg, Rd, Rec};
@@ -672,6 +674,18 @@ fn hand_built() -> Suite {
             expect(
                 dotted_to_wire(d_bad.as_bytes()).is_none(),
                 "256-octet dotted name",
+            )?;
+            // And from the wire side: 255 octets are spelled, 256 are not,
+            // and a name that holds a dot in a label, or is a pointer, has
+            // no dotted spelling.
+            expect(
+                dotted_of_wire(&ok).as_deref() == Some(d_ok.as_bytes()),
+                "255-octet wire name",
+            )?;
+            expect(dotted_of_wire(&bad).is_none(), "256-octet wire name")?;
+            expect(
+                dotted_of_wire(b"\x03a.b\x00").is_none() && dotted_of_wire(&[0xC0, 12]).is_none(),
+                "no dotted spelling",
             )
         }),
     ));
@@ -1496,6 +1510,23 @@ fn our_queries() -> Suite {
             )?;
             // And we read it ourselves, as a datagram.
             let m = decode_udp(&bytes).ok_or("decode_udp")?;
+            // The name, from the wire back to a dotted string: ours must
+            // give the name that was asked, and the labels simple-dns read.
+            let wire = m
+                .questions
+                .first()
+                .map(|q| q.name.as_slice())
+                .ok_or("question")?;
+            let dotted = dotted_of_wire(wire).ok_or("wire_to_dotted refused a name we sent")?;
+            expect(
+                dotted == name.trim_end_matches('.').as_bytes(),
+                "wire_to_dotted gives the name back",
+            )?;
+            let their_dotted: Vec<u8> = their_labels(&q.qname).join(&b'.');
+            expect(
+                dotted == their_dotted,
+                "wire_to_dotted agrees with simple-dns",
+            )?;
             expect(
                 m.questions.len() == 1 && m.header.rd && !m.header.qr,
                 "decoded",
