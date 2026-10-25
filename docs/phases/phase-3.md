@@ -710,6 +710,27 @@ rule: the prior-occurrence rule, trailing octets, AD/CD, RDLENGTH 0 or longer
 than the data, unknown types or classes; none unexplained), and 10
 `resolv.conf` files.
 
+**Added for 3.8 (2026-10-25):** `encode::wire_to_dotted(&[u8]) -> Option<Vec<u8>>`,
+the inverse of `dotted_to_wire` for a CNAME target, proven equal to
+`spec::wire_to_dotted` (RFC 1035 §3.1 labels, §2.3.4 limits; the spec is
+`wire_scan`, a recursion on the labels with the dotted forms joined). `None`
+for the root, a label holding a `.` or an octet of 128 or more, a pointer or
+reserved length octet, octets after the zero octet, a missing zero octet and a
+name over 255 octets; octets outside the preferred syntax of §2.3.1 are kept,
+as `dotted_to_wire` keeps them. Proven: `lemma_wire_to_dotted_round_trip`
+(`dotted_to_wire` of the result is the input, which is what the shell's run-time
+guard checked), with `lemma_wire_scan_inverts`, `lemma_dotted_scan_skip` and
+`lemma_dotted_scan_shift`; examples `lemma_wire_names` and
+`lemma_wire_limits`, evaluated by Verus. 16 more mutations, all certified kills
+(163 in all). Verus 242 verified. Conformance: `wire_to_dotted` is checked on
+the 4000 queries of the `simple-dns` differential (it must give back the name,
+and equal the labels `simple-dns` reads) and on the 255 and 256 octet names;
+the suite totals are unchanged. Not covered by a mutation: the check that a
+label does not run past the end of the name (a mutant that drops it makes the
+spec take an out-of-range `subrange`, which `compute_only` cannot evaluate; the
+`>` to `>=` change is equivalent). `independent.rs` does not cover it, as it
+does not cover `dotted_to_wire`: it is the decoder's second transcription.
+
 ### 3.5 TLS (seven items; 3.0 decided option B)
 
 Our own TLS 1.3 client. Every parser is a pure function over bytes and the
@@ -1124,7 +1145,7 @@ half does not wait on TLS.
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | first part built: `clazel-fetch` `request` module (http GET, Host, Connection: close, interim responses), proven to its contracts; tier 0. Not yet: the transducer, redirects, cookies, `theorem_wire_cookies`, independent transcription, mutations |
 | 3.7 Kernel integration | not started |
-| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch`) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Not yet: TLS, the http-state and WPT server tests, the hostile-server tests, the line count in the README table. The CNAME target is converted to a dotted name in the shell (accepted only if `clazel-dns`'s proven encoder maps it back), which should move into `clazel-dns` |
+| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch`) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 10 passing, about 1.5 s, 73 MB peak): bytes that are not HTTP, an endless body (no framing, and a Content-Length over the limit), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. One case is `#[ignore]`d and open: a chunked body that never ends does not return within 20 s (probably `ResponseParser` re-parsing the buffer on every feed). Not yet: TLS, the http-state and WPT server tests, the redirect-loop case (no redirects yet), the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | not started |
 
 ## Risks
