@@ -89,14 +89,20 @@
 //!   and a URL that [`crate::request::spec::request_bytes`] refuses (any
 //!   other scheme, userinfo, a non-ASCII host) ends the fetch with
 //!   [`Reason::NotFetched`] before anything is sent.
-//! - **The jar is a field of [`State`]** (`Seq<Cookie>`, `clazel_cookie`'s
-//!   model, in insertion order), passed to [`start`] and kept by every
-//!   state, `Finished` ones included: the shell reads the jar of a fetch from
-//!   the state that `Done` or `Fail` leaves, so nothing is returned twice.
-//!   `now` (seconds since 1601, `clazel_cookie`'s clock) is an argument of
-//!   [`start`] and does not change during a fetch: a fetch is a few round
-//!   trips and cookies expire in seconds at the finest, and the kernel
-//!   advances the clock between fetches.
+//! - **The jar is not part of [`State`]** (phase-3.md 3.7: the kernel
+//!   owns one jar for every tab, and two fetches in flight must not each
+//!   hold a copy of it). [`step`] is given the jar as it is at that moment
+//!   and the time `now` (seconds since 1601, `clazel_cookie`'s clock), reads
+//!   the jar only to build the `Cookie` field, and returns, besides the next
+//!   state and the actions, the **jar operations** it performed, in order
+//!   ([`JarOp`]): §5.8.3 step 5's update when the request is built
+//!   (`Retrieved`) and §5.7 storage of each `Set-Cookie` line of a final
+//!   response (`Stored`). The caller applies them ([`apply_ops`], defined by
+//!   `clazel_cookie`'s spec functions) to its jar. The next state, the
+//!   operations and every action other than the `Send`'s bytes do not
+//!   depend on the jar (`theorem_jar_only_in_sends`), so a caller that
+//!   applies them to a jar other fetches also change still runs this
+//!   transducer.
 //! - **The cookie parameters** are in [`UrlFns`]: the Public Suffix List
 //!   `rules` the cookie functions take, the URL as they read it
 //!   ([`request_url`]) and the URL Standard's "origin" of a URL, from which
@@ -109,7 +115,12 @@
 //!   them. The `Cookie` field is added when the connection is open and the
 //!   request is sent ([`step`], `Connected`), as Fetch adds it in HTTP-
 //!   network-or-cache fetch, after any redirect: from the jar as it is
-//!   then. The `Set-Cookie` field lines are stored in [`on_final`], before
+//!   then. If the cookie-string is one no field value can carry (the
+//!   request with it is not valid), the request is sent without a `Cookie`
+//!   field (a choice of ours: Fetch appends the header without checking it;
+//!   a cookie stored by §5.6's parser never has such a value, which is not
+//!   proven here). Either way the request is sent, so whether it is sent does
+//!   not depend on the jar. The `Set-Cookie` field lines are stored in [`on_final`], before
 //!   the redirect is decided (Fetch §4.7 step 17 is before the redirect
 //!   fetch gets the response), from the point of view of the request's
 //!   current URL, **one field line at a time** (§3.1.2 step 6: "each
@@ -117,7 +128,8 @@
 //!   reaches [`on_final`]: [`settle`] skips every 1xx response, which is
 //!   RFC 6265bis §5.3's "ignore the Set-Cookie fields of 100-level
 //!   responses". A failure that ends the fetch after a final response
-//!   (a bad `Location`, the limit) still keeps the cookies it set.
+//!   (a bad `Location`, the limit) still keeps the cookies it set: its
+//!   `Stored` operations come with the `Fail`.
 //! - **The request context** (RFC 6265bis §5.2, `RequestContext::Http`) is a
 //!   user's top-level navigation with no client: GET (a "safe" method),
 //!   navigating a top-level traversable, not a reload, `site for cookies`
@@ -252,10 +264,6 @@ pub struct State {
     pub redirects: nat,
     /// Where it is.
     pub phase: Phase,
-    /// The cookie jar (RFC 6265bis §5.7's "cookie store").
-    pub jar: Seq<Cookie>,
-    /// The time, seconds since 1601-01-01T00:00:00Z.
-    pub now: int,
     /// Fetch's "redirect-taint" is "cross-site": some redirect crossed
     /// sites (see the modelling choices).
     pub tainted: bool,
@@ -301,11 +309,59 @@ pub enum Action {
     Fail(Reason),
 }
 
+/// What a step did to the cookie jar it was given (see the modelling
+/// choices): the caller applies these, in order ([`apply_ops`]).
+pub enum JarOp {
+    /// RFC 6265bis §5.8.3 retrieval for this request URL and context at
+    /// `now`: step 5 ("Update the last-access-time of each cookie in the
+    /// cookie-list") and the eviction of expired cookies.
+    Retrieved {
+        /// the request URL, as the cookie functions read it
+        url: RequestUrl,
+        /// the request context
+        ctx: RequestContext,
+        /// the time
+        now: int,
+    },
+    /// RFC 6265bis §5.7 storage of one `Set-Cookie` field value as HTTP
+    /// (Fetch §3.1.2 step 6.2), for this request URL and context at `now`.
+    Stored {
+        /// the field value
+        line: Seq<u8>,
+        /// the request URL, as the cookie functions read it
+        url: RequestUrl,
+        /// the request context
+        ctx: RequestContext,
+        /// the time
+        now: int,
+    },
+}
+
+/// The jar after `op`: `clazel_cookie`'s `jar_after_retrieval` or
+/// `store_a_set_cookie_string`.
+pub open spec fn apply_op(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<Cookie>, op: JarOp) -> Seq<Cookie> {
+    match op {
+        JarOp::Retrieved { url, ctx, now } => clazel_cookie::storage::spec::jar_after_retrieval(rules, jar, url, ctx, now),
+        JarOp::Stored { line, url, ctx, now } => clazel_cookie::storage::spec::store_a_set_cookie_string(rules, jar, line, url, ctx, now),
+    }
+}
+
+/// The jar after each of `ops`, in order.
+pub open spec fn apply_ops(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<Cookie>, ops: Seq<JarOp>) -> Seq<Cookie>
+    decreases ops.len()
+{
+    if ops.len() == 0 {
+        jar
+    } else {
+        apply_ops(rules, apply_op(rules, jar, ops[0]), ops.drop_first())
+    }
+}
+
 // ===========================================================================
 // Starting a request.
 // ===========================================================================
 
-/// The state that has ended, keeping the URL and the jar.
+/// The state that has ended, keeping the URL.
 pub open spec fn finished(s: State) -> State {
     State { phase: Phase::Finished, ..s }
 }
@@ -356,63 +412,67 @@ pub open spec fn set_cookie_values(response: Response) -> Seq<Seq<u8>> {
     clazel_http::field::spec::field_values_named(response.fields, lit_set_cookie())
 }
 
-/// The jar after storing each of `lines` in order (Fetch §3.1.2 step 6.2,
-/// each by RFC 6265bis §5.7 as HTTP, the string parsed by §5.6).
-pub open spec fn store_lines(
-    rules: Seq<clazel_psl::spec::Rule>,
-    jar: Seq<Cookie>,
-    lines: Seq<Seq<u8>>,
-    url: RequestUrl,
-    ctx: RequestContext,
-    now: int,
-) -> Seq<Cookie>
+/// Fetch §3.1.2 step 6: one `Stored` operation for each of `lines`, in
+/// order, each "parse and store" by RFC 6265bis §5.7 as HTTP (the string
+/// parsed by §5.6), for the request URL `url` and context `ctx` at `now`.
+pub open spec fn stored_ops(lines: Seq<Seq<u8>>, url: RequestUrl, ctx: RequestContext, now: int) -> Seq<JarOp>
     decreases lines.len()
 {
     if lines.len() == 0 {
-        jar
+        seq![]
     } else {
-        store_lines(rules, clazel_cookie::storage::spec::store_a_set_cookie_string(rules, jar, lines[0], url, ctx, now), lines.drop_first(), url, ctx, now)
+        seq![JarOp::Stored { line: lines[0], url: url, ctx: ctx, now: now }] + stored_ops(lines.drop_first(), url, ctx, now)
     }
 }
 
-/// The jar of `s` after it has stored the cookies of `response`, the
-/// response to its current request.
-pub open spec fn store_response(urls: UrlFns, s: State, response: Response) -> Seq<Cookie> {
-    store_lines(urls.rules, s.jar, set_cookie_values(response), (urls.request_url)(s.url), request_context(urls, s), s.now)
+/// The operations storing the cookies of `response`, the response to the
+/// current request of `s`.
+pub open spec fn response_ops(urls: UrlFns, s: State, response: Response, now: int) -> Seq<JarOp> {
+    stored_ops(set_cookie_values(response), (urls.request_url)(s.url), request_context(urls, s), now)
 }
 
-/// The cookie-string of the request `s` sends (Fetch §3.1.1 steps 5 to 7;
-/// RFC 6265bis §5.8.3).
-pub open spec fn cookie_string(urls: UrlFns, s: State) -> Seq<u8> {
-    clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, s.jar, (urls.request_url)(s.url), request_context(urls, s), s.now)
+/// The retrieval for the current request of `s` (§5.8.3 step 5, and the
+/// eviction of expired cookies).
+pub open spec fn retrieval_op(urls: UrlFns, s: State, now: int) -> JarOp {
+    JarOp::Retrieved { url: (urls.request_url)(s.url), ctx: request_context(urls, s), now: now }
 }
 
-/// The jar of `s` after that retrieval (§5.8.3 step 5, and the eviction of
-/// expired cookies).
-pub open spec fn jar_after_cookie_string(urls: UrlFns, s: State) -> Seq<Cookie> {
-    clazel_cookie::storage::spec::jar_after_retrieval(urls.rules, s.jar, (urls.request_url)(s.url), request_context(urls, s), s.now)
+/// The cookie-string of the request `s` sends, from `jar` at `now` (Fetch
+/// §3.1.1 steps 5 to 7; RFC 6265bis §5.8.3).
+pub open spec fn cookie_string(urls: UrlFns, s: State, jar: Seq<Cookie>, now: int) -> Seq<u8> {
+    clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, jar, (urls.request_url)(s.url), request_context(urls, s), now)
 }
 
-/// Begin the request for `url`, after `redirects` redirects, with `jar`
-/// at time `now` and redirect-taint `tainted`: ask for its connection, or
-/// fail if it is a URL this client does not fetch.
-pub open spec fn begin(url: Url, redirects: nat, jar: Seq<Cookie>, now: int, tainted: bool) -> (State, Seq<Action>) {
+/// The bytes sent for `url` with the cookie-string `cookie`, given `plain`,
+/// the request without a `Cookie` field: the request with it, or `plain`
+/// if no field value can carry it (see the modelling choices).
+pub open spec fn wire_bytes(url: Url, cookie: Seq<u8>, plain: Seq<u8>) -> Seq<u8> {
+    match crate::request::spec::request_bytes_cookie(url, cookie) {
+        Some(bytes) => bytes,
+        None => plain,
+    }
+}
+
+/// Begin the request for `url`, after `redirects` redirects, with
+/// redirect-taint `tainted`: ask for its connection, or fail if it is a URL
+/// this client does not fetch.
+pub open spec fn begin(url: Url, redirects: nat, tainted: bool) -> (State, Seq<Action>) {
     match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes(url)) {
         (Some((host, port)), Some(_)) => (
-            State { url: url, redirects: redirects, phase: Phase::Connecting, jar: jar, now: now, tainted: tainted },
+            State { url: url, redirects: redirects, phase: Phase::Connecting, tainted: tainted },
             seq![Action::Connect { host: host, port: port, tls: false }],
         ),
         _ => (
-            State { url: url, redirects: redirects, phase: Phase::Finished, jar: jar, now: now, tainted: tainted },
+            State { url: url, redirects: redirects, phase: Phase::Finished, tainted: tainted },
             seq![Action::Fail(Reason::NotFetched)],
         ),
     }
 }
 
-/// The first state and actions of a fetch of `url` with the cookie jar
-/// `jar` at time `now`.
-pub open spec fn start(url: Url, jar: Seq<Cookie>, now: int) -> (State, Seq<Action>) {
-    begin(url, 0, jar, now, false)
+/// The first state and actions of a fetch of `url`. (No jar: nothing is
+/// sent before the connection is open.)
+pub open spec fn start(url: Url) -> (State, Seq<Action>) {
+    begin(url, 0, false)
 }
 
 // ===========================================================================
@@ -566,27 +626,27 @@ pub open spec fn location_url(urls: UrlFns, response: Response, request_url: Url
 
 /// What a final response for the current request leads to (Fetch §4.5
 /// HTTP-redirect fetch); `open` says whether the connection is still
-/// open.
-pub open spec fn on_final(urls: UrlFns, s0: State, response: Response, open: bool) -> (State, Seq<Action>) {
+/// open. The cookies are stored at `now`.
+pub open spec fn on_final(urls: UrlFns, s: State, response: Response, open: bool, now: int) -> (State, Seq<Action>, Seq<JarOp>) {
     // Fetch §4.7 step 17 (§3.1.2): "If includeCredentials is true, then the
     // user agent should parse and store response's `Set-Cookie` headers",
     // before the redirect fetch sees the response.
-    let s = State { jar: store_response(urls, s0, response), ..s0 };
+    let ops = response_ops(urls, s, response, now);
     // 3. "Let locationURL be internalResponse's location URL given
     // request's current URL's fragment."
     match location_url(urls, response, s.url) {
         // 4. "If locationURL is null, then return response."
-        LocationUrl::Null => (finished(s), close_if(open) + seq![Action::Done { url: s.url, response: response }]),
+        LocationUrl::Null => (finished(s), close_if(open) + seq![Action::Done { url: s.url, response: response }], ops),
         // 5. "If locationURL is failure, then return a network error."
-        LocationUrl::Failure => fail(s, Reason::RedirectLocation, open),
+        LocationUrl::Failure => with_ops(fail(s, Reason::RedirectLocation, open), ops),
         LocationUrl::Url(location) => if !is_http_s_scheme(location.scheme) {
             // 6. "If locationURL's scheme is not an HTTP(S) scheme, then
             // return a network error."
-            fail(s, Reason::RedirectScheme, open)
+            with_ops(fail(s, Reason::RedirectScheme, open), ops)
         } else if s.redirects == max_redirects() {
             // 7. "If request's redirect count is 20, then return a network
             // error."
-            fail(s, Reason::RedirectLimit, open)
+            with_ops(fail(s, Reason::RedirectLimit, open), ops)
         } else {
             // 8. "Increase request's redirect count by 1."
             // 18. "Append locationURL to request's URL list." (It becomes
@@ -596,37 +656,47 @@ pub open spec fn on_final(urls: UrlFns, s0: State, response: Response, open: boo
             // connection.
             // The redirect-taint (see the modelling choices).
             let tainted = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
-            let next = begin(location, s.redirects + 1, s.jar, s.now, tainted);
-            (next.0, close_if(open) + next.1)
+            let next = begin(location, s.redirects + 1, tainted);
+            (next.0, close_if(open) + next.1, ops)
         },
     }
 }
 
 /// The fetch fails for `reason`; `open` says whether the connection is
-/// still open.
-pub open spec fn fail(s: State, reason: Reason, open: bool) -> (State, Seq<Action>) {
-    (finished(s), close_if(open) + seq![Action::Fail(reason)])
+/// still open. No jar operation.
+pub open spec fn fail(s: State, reason: Reason, open: bool) -> (State, Seq<Action>, Seq<JarOp>) {
+    (finished(s), close_if(open) + seq![Action::Fail(reason)], seq![])
+}
+
+/// `r` with the jar operations `ops` before its own.
+pub open spec fn with_ops(r: (State, Seq<Action>, Seq<JarOp>), ops: Seq<JarOp>) -> (State, Seq<Action>, Seq<JarOp>) {
+    (r.0, r.1, ops + r.2)
 }
 
 // ===========================================================================
 // The step function.
 // ===========================================================================
 
-/// The next state and actions after `input` in state `s`.
-pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input) -> (State, Seq<Action>) {
+/// The next state, actions and jar operations after `input` in state `s`,
+/// given the cookie jar `jar` at time `now` (read only to build the
+/// `Cookie` field).
+pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input, jar: Seq<Cookie>, now: int) -> (State, Seq<Action>, Seq<JarOp>) {
     match s.phase {
-        Phase::Finished => (s, seq![]),
+        Phase::Finished => (s, seq![], seq![]),
         Phase::Connecting => match input {
-            // The connection is open: send the request.
-            // The request, with the `Cookie` field of Fetch §3.1.1 from the
-            // jar (RFC 6265bis §5.8.3), and the jar after the retrieval.
-            Input::Connected => match crate::request::spec::request_bytes_cookie(s.url, cookie_string(urls, s)) {
-                Some(bytes) => (
-                    State { phase: Phase::Reading { received: seq![] }, jar: jar_after_cookie_string(urls, s), ..s },
-                    seq![Action::Send(bytes)],
-                ),
-                // (The retrieval has happened: the jar keeps its step 5.)
-                None => fail(State { jar: jar_after_cookie_string(urls, s), ..s }, Reason::NotFetched, true),
+            // The connection is open: send the request, with the `Cookie`
+            // field of Fetch §3.1.1 from the jar (RFC 6265bis §5.8.3), and
+            // the retrieval's step 5 as an operation.
+            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+                Some(plain) => {
+                    let bytes = wire_bytes(s.url, cookie_string(urls, s, jar, now), plain);
+                    (
+                        State { phase: Phase::Reading { received: seq![] }, ..s },
+                        seq![Action::Send(bytes)],
+                        seq![retrieval_op(urls, s, now)],
+                    )
+                },
+                None => with_ops(fail(s, Reason::NotFetched, true), seq![retrieval_op(urls, s, now)]),
             },
             Input::Bytes(_) => fail(s, Reason::Shell, true),
             Input::Closed => fail(s, Reason::Network, false),
@@ -635,12 +705,12 @@ pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input) -> (S
         Phase::Reading { received } => match input {
             Input::Connected => fail(s, Reason::Shell, true),
             Input::Bytes(bytes) => match settle(http, received + bytes) {
-                Settled::Wait(rest) => (State { phase: Phase::Reading { received: rest }, ..s }, seq![]),
-                Settled::Final(response) => on_final(urls, s, response, true),
+                Settled::Wait(rest) => (State { phase: Phase::Reading { received: rest }, ..s }, seq![], seq![]),
+                Settled::Final(response) => on_final(urls, s, response, true, now),
                 Settled::Bad(reason) => fail(s, reason, true),
             },
             Input::Closed => match settle_at_close(http, received) {
-                Settled::Final(response) => on_final(urls, s, response, false),
+                Settled::Final(response) => on_final(urls, s, response, false, now),
                 Settled::Bad(reason) => fail(s, reason, false),
                 // settle_at_close never waits.
                 Settled::Wait(_) => fail(s, Reason::Incomplete, false),
@@ -650,17 +720,28 @@ pub open spec fn step(http: HttpFns, urls: UrlFns, s: State, input: Input) -> (S
     }
 }
 
-/// The state and every action after the inputs `inputs`, in order, from
-/// state `s`.
-pub open spec fn run(http: HttpFns, urls: UrlFns, s: State, inputs: Seq<Input>) -> (State, Seq<Action>)
-    decreases inputs.len()
+/// What the shell reports at one step, and the jar and time the step is
+/// given.
+pub struct Given {
+    /// the input
+    pub input: Input,
+    /// the cookie jar at that step
+    pub jar: Seq<Cookie>,
+    /// the time at that step
+    pub now: int,
+}
+
+/// The state, every action and every jar operation after the steps
+/// `given`, in order, from state `s`.
+pub open spec fn run(http: HttpFns, urls: UrlFns, s: State, given: Seq<Given>) -> (State, Seq<Action>, Seq<JarOp>)
+    decreases given.len()
 {
-    if inputs.len() == 0 {
-        (s, seq![])
+    if given.len() == 0 {
+        (s, seq![], seq![])
     } else {
-        let first = step(http, urls, s, inputs[0]);
-        let after = run(http, urls, first.0, inputs.drop_first());
-        (after.0, first.1 + after.1)
+        let first = step(http, urls, s, given[0].input, given[0].jar, given[0].now);
+        let after = run(http, urls, first.0, given.drop_first());
+        (after.0, first.1 + after.1, first.2 + after.2)
     }
 }
 
