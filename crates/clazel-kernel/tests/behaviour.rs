@@ -179,6 +179,8 @@ fn a_navigation_to_a_url_that_does_not_parse_is_an_error() {
             url: b"/b".to_vec(),
         },
     );
+    assert_eq!(out, vec![Out::Fetch(id, support::code_points("https://example.test/b"))]);
+    let out = kernel.settled(out);
     assert_eq!(
         out,
         vec![Out::To(
@@ -220,6 +222,7 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
             url: b"../d/./e?x=1#y".to_vec(),
         },
     );
+    let out = kernel.settled(out);
     assert_eq!(
         out,
         vec![Out::To(
@@ -237,6 +240,7 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
             url: b"//other.test/z".to_vec(),
         },
     );
+    let out = kernel.settled(out);
     assert!(matches!(
         out.as_slice(),
         [Out::Kill(old), Out::Spawn(new), Out::To(to, Msg::Commit { .. })]

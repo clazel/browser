@@ -237,9 +237,9 @@ fn trace(seed: u64, now: u64) -> Option<String> {
                     kernel.event(&EventRecord::NavigateTab {
                         tab: tab.tab,
                         url: code_points(&target),
-                        script: Vec::new(),
                     })
                 };
+                let out = kernel.settled(out);
                 if same_origin {
                     match out.as_slice() {
                         [Out::To(to, Msg::Commit { url: committed, .. })]

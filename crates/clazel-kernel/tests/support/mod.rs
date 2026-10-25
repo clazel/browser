@@ -9,6 +9,7 @@
 
 use clazel_ipc::message::codec::{Msg, decode_framed, encode_framed};
 use clazel_kernel::exec::real_urls::step_real;
+use clazel_kernel::exec::fetch::NetOutcomeRecord;
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
 
 /// The code points of a string.
@@ -27,6 +28,8 @@ pub enum Out {
     Spawn(u64),
     /// A renderer killed.
     Kill(u64),
+    /// The kernel asked for a URL to be fetched for a tab.
+    Fetch(u64, Vec<u32>),
 }
 
 /// The exec kernel, driven as the host shell would.
@@ -59,6 +62,7 @@ impl Kernel {
                 },
                 OutputRecord::Spawn { id } => Out::Spawn(id),
                 OutputRecord::Kill { id } => Out::Kill(id),
+                OutputRecord::Fetch { tab, url } => Out::Fetch(tab, url),
             })
             .collect()
     }
@@ -74,6 +78,35 @@ impl Kernel {
             _ => None,
         });
         (id, out)
+    }
+
+    /// Answer every `Fetch` among `out` as the shell would with no network
+    /// (the kernel's stand-in fetch makes the delivered bytes the document's
+    /// script: `body`), and give the outputs with each `Fetch` replaced by what
+    /// answering it produced.
+    pub fn settled_with(&mut self, out: Vec<Out>, body: &[u8]) -> Vec<Out> {
+        let mut all = Vec::new();
+        for o in out {
+            match o {
+                Out::Fetch(tab, url) => {
+                    let answer = self.event(&EventRecord::Fetched {
+                        tab,
+                        outcome: NetOutcomeRecord {
+                            url,
+                            net: body.to_vec(),
+                        },
+                    });
+                    all.extend(answer);
+                }
+                other => all.push(other),
+            }
+        }
+        all
+    }
+
+    /// [`Kernel::settled_with`] an empty document.
+    pub fn settled(&mut self, out: Vec<Out>) -> Vec<Out> {
+        self.settled_with(out, &[])
     }
 
     /// Renderer `id` sends `m`, framed by the IPC codec.

@@ -687,7 +687,11 @@ pub fn fetched_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: Stat
                 (s, no_outputs())
             } else {
                 let run = fetch.run(url, net);
-                let StateRecord { renderers, jar, storage, next_id, now } = s;
+                let jar = s.jar;
+                let renderers = s.renderers;
+                let storage = s.storage;
+                let next_id = s.next_id;
+                let now = s.now;
                 proof {
                     clazel_cookie::storage::exec::lemma_jar_view_in_range(jar@);
                 }

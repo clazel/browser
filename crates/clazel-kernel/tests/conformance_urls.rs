@@ -291,6 +291,7 @@ fn navigate(base: &str, input: &str) -> Navigation {
     if out == vec![Out::To(id, Msg::Error { code: 3 })] {
         return Navigation::BadUrl;
     }
+    let out = kernel.settled(out);
     match committed(&out) {
         Some(url) => Navigation::Committed(url.to_vec()),
         None => Navigation::Other(format!("{out:?}")),
