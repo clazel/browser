@@ -237,45 +237,53 @@ pub open spec fn accept_finished(c: kdf::Crypto, s: State, verify_data: Seq<u8>)
         }
     }
 }
-/// §4.3/§4.4: parse and authenticate a complete initial-flight handshake body.
+/// §4.3.1 and §4.2: accepted EncryptedExtensions must answer actual offers.
+pub open spec fn on_extensions(c: kdf::Crypto, s: State, body: Seq<u8>, es: Seq<Ext>) -> (State, Action) {
+    if s.phase != Phase::EncryptedExtensions { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
+    else if !extensions_offered(es, s.config.extensions) { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }
+    else { record(c, s, tr::Kind::EncryptedExtensions, body, Phase::CertificateOrRequest) }
+}
+/// §4.3.2: one initial CertificateRequest, with empty context and signature_algorithms.
+pub open spec fn on_request(c: kdf::Crypto, s: State, body: Seq<u8>, empty_context: bool, has_algorithms: bool) -> (State, Action) {
+    if s.phase != Phase::CertificateOrRequest { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
+    else if !empty_context { fail(s, crate::spec::ILLEGAL_PARAMETER) }
+    else if !has_algorithms { fail(s, crate::spec::MISSING_EXTENSION) }
+    else { record(c, State { requested: true, ..s }, tr::Kind::CertificateRequest, body, Phase::Certificate) }
+}
+/// §4.4.2: nonempty server chain, validated for this captured host and time.
+pub open spec fn on_certificate(c: kdf::Crypto, v: Verification, s: State, body: Seq<u8>, empty_chain: bool) -> (State, Action) {
+    if s.phase != Phase::CertificateOrRequest && s.phase != Phase::Certificate { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
+    else if empty_chain { fail(s, crate::spec::DECODE_ERROR) }
+    else {
+        match (v.chain)(s.config.host, s.config.now, body) {
+            Err(error) => fail(s, certificate_alert(error)),
+            Ok(key) => {
+                if key.len() > MAX_KEY { fail(s, crate::spec::INTERNAL_ERROR) }
+                else { record(c, State { key, chain_checked: true, ..s }, tr::Kind::Certificate, body, Phase::CertificateVerify) }
+            },
+        }
+    }
+}
+/// §4.4.3: use the validated leaf key and the transcript through Certificate.
+pub open spec fn on_verify(c: kdf::Crypto, v: Verification, s: State, body: Seq<u8>, algorithm: u16, signature: Seq<u8>) -> (State, Action) {
+    if s.phase != Phase::CertificateVerify { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
+    else if !signature_scheme(algorithm) || !member(s.config.signatures, algorithm) { fail(s, crate::spec::ILLEGAL_PARAMETER) }
+    else {
+        let input = tr::certificate_verify_input(true, (c.hash)(s.transcript.messages));
+        if !(v.signature)(s.key, algorithm, input, signature) { fail(s, crate::spec::DECRYPT_ERROR) }
+        else { record(c, State { signature_checked: true, ..s }, tr::Kind::CertificateVerify, body, Phase::Finished) }
+    }
+}
+/// §4.3/§4.4: parse a complete body, then dispatch its actual parsed fields.
 pub open spec fn receive(c: kdf::Crypto, v: Verification, s: State, typ: u8, body: Seq<u8>) -> (State, Action) {
     if body.len() > tr::MAX_BODY { fail(s, crate::spec::INTERNAL_ERROR) } else {
         match crate::spec::parse_handshake_body(typ, body, 32) {
             Res::Err(error) => fail(s, crate::spec::alert_for(error).description),
             Res::Ok(message) => match message {
-                HsMsg::EncryptedExtensions(es) => {
-                    if s.phase != Phase::EncryptedExtensions { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
-                    else if !extensions_offered(es, s.config.extensions) { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }
-                    else { record(c, s, tr::Kind::EncryptedExtensions, body, Phase::CertificateOrRequest) }
-                },
-                HsMsg::CertificateRequest(request) => {
-                    if s.phase != Phase::CertificateOrRequest { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
-                    else if request.context.len() != 0 { fail(s, crate::spec::ILLEGAL_PARAMETER) }
-                    else if !crate::spec::has_ext(request.extensions, 13) { fail(s, crate::spec::MISSING_EXTENSION) }
-                    else { record(c, State { requested: true, ..s }, tr::Kind::CertificateRequest, body, Phase::Certificate) }
-                },
-                HsMsg::Certificate(certificate) => {
-                    if s.phase != Phase::CertificateOrRequest && s.phase != Phase::Certificate { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
-                    else if certificate.entries.len() == 0 { fail(s, crate::spec::DECODE_ERROR) }
-                    else {
-                        match (v.chain)(s.config.host, s.config.now, body) {
-                            Err(error) => fail(s, certificate_alert(error)),
-                            Ok(key) => {
-                                if key.len() > MAX_KEY { fail(s, crate::spec::INTERNAL_ERROR) }
-                                else { record(c, State { key, chain_checked: true, ..s }, tr::Kind::Certificate, body, Phase::CertificateVerify) }
-                            },
-                        }
-                    }
-                },
-                HsMsg::CertificateVerify(cv) => {
-                    if s.phase != Phase::CertificateVerify { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
-                    else if !signature_scheme(cv.algorithm) || !member(s.config.signatures, cv.algorithm) { fail(s, crate::spec::ILLEGAL_PARAMETER) }
-                    else {
-                        let input = tr::certificate_verify_input(true, (c.hash)(s.transcript.messages));
-                        if !(v.signature)(s.key, cv.algorithm, input, cv.signature) { fail(s, crate::spec::DECRYPT_ERROR) }
-                        else { record(c, State { signature_checked: true, ..s }, tr::Kind::CertificateVerify, body, Phase::Finished) }
-                    }
-                },
+                HsMsg::EncryptedExtensions(es) => on_extensions(c, s, body, es),
+                HsMsg::CertificateRequest(request) => on_request(c, s, body, request.context.len() == 0, crate::spec::has_ext(request.extensions, 13)),
+                HsMsg::Certificate(certificate) => on_certificate(c, v, s, body, certificate.entries.len() == 0),
+                HsMsg::CertificateVerify(cv) => on_verify(c, v, s, body, cv.algorithm, cv.signature),
                 HsMsg::Finished(verify_data) => {
                     if s.phase != Phase::Finished { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
                     else { accept_finished(c, s, verify_data) }
