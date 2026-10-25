@@ -245,9 +245,8 @@ fn chunk_ext_step(t: &[u8]) -> (out: ExtStep)
         return ExtStep::Answer(false);
     }
     // Never saturates: at most t.len().
-    let c = sub(b, n);
     let c_pos = ak.saturating_add(1).saturating_add(bk).saturating_add(n);
-    assert(c@ =~= t@.skip(c_pos as int));
+    assert(b@.skip(n as int) =~= t@.skip(c_pos as int));
     chunk_ext_value_step(t, c_pos)
 }
 
