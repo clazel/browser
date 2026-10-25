@@ -15,6 +15,7 @@ use clazel_kernel::exec::real_urls::RealUrls;
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
 use clazel_kernel::exec::step::step_exec;
 use clazel_kernel::exec::urls::UrlFnsExec;
+use clazel_origin::exec::ParsedOrigin;
 
 fn code_points(s: &str) -> Vec<u32> {
     s.chars().map(u32::from).collect()
@@ -39,12 +40,9 @@ struct TestFetch(Plan);
 
 /// The request URL and HTTP context of an HTTPS request for `host`.
 fn request_for(host: &str) -> (RequestUrlRecord, RequestContextRecord) {
-    let origin = RealUrls
-        .origin_of(&code_points(&format!("https://{host}/")))
-        .expect("an origin");
-    let other = RealUrls
-        .origin_of(&code_points(&format!("https://{host}/")))
-        .expect("an origin");
+    let url = code_points(&format!("https://{host}/"));
+    let origin = RealUrls.origin_of(&url).unwrap_or(ParsedOrigin::Opaque(0));
+    let other = RealUrls.origin_of(&url).unwrap_or(ParsedOrigin::Opaque(0));
     (
         RequestUrlRecord {
             scheme: b"https".to_vec(),
@@ -108,6 +106,7 @@ impl FetchFnsExec for TestFetch {
 #[derive(Debug, PartialEq, Eq)]
 enum Out {
     To(u64, Msg),
+    Garbled(u64),
     Spawn(u64),
     Kill(u64),
     Fetch(u64, Vec<u32>),
@@ -135,9 +134,10 @@ impl Rig {
         outputs
             .into_iter()
             .map(|o| match o {
-                OutputRecord::ToRenderer { id, bytes } => {
-                    Out::To(id, decode_framed(&bytes).expect("a frame"))
-                }
+                OutputRecord::ToRenderer { id, bytes } => match decode_framed(&bytes) {
+                    Some(m) => Out::To(id, m),
+                    None => Out::Garbled(id),
+                },
                 OutputRecord::Spawn { id } => Out::Spawn(id),
                 OutputRecord::Kill { id } => Out::Kill(id),
                 OutputRecord::Fetch { tab, url } => Out::Fetch(tab, url),
@@ -150,14 +150,16 @@ impl Rig {
             url: code_points(url),
             script: Vec::new(),
         });
-        match out.first() {
-            Some(Out::Spawn(id)) => *id,
-            other => panic!("OpenTab of {url}: {other:?}"),
-        }
+        let id = match out.first() {
+            Some(Out::Spawn(id)) => Some(*id),
+            _ => None,
+        };
+        assert!(id.is_some(), "OpenTab of {url}: {out:?}");
+        id.unwrap_or(0)
     }
 
     fn send(&mut self, id: u64, m: &Msg) -> Vec<Out> {
-        let bytes = encode_framed(m).expect("encodable");
+        let bytes = encode_framed(m).unwrap_or_default();
         self.event(&EventRecord::FromRenderer { id, bytes })
     }
 
@@ -199,7 +201,10 @@ fn a_navigation_only_asks_for_the_fetch_and_the_fetch_commits_the_body() {
     let out = rig.fetched(id, "https://example.test/next", b"page body");
     assert_eq!(
         out,
-        vec![Out::To(id, commit("https://example.test/next", b"page body"))]
+        vec![Out::To(
+            id,
+            commit("https://example.test/next", b"page body")
+        )]
     );
 }
 
@@ -215,14 +220,20 @@ fn a_fetched_event_is_ignored_unless_it_answers_the_navigation_in_flight() {
     // answer is for a URL the tab no longer navigates to.
     rig.navigate(id, "https://example.test/first");
     rig.navigate(id, "https://example.test/second");
-    assert!(rig.fetched(id, "https://example.test/first", b"old").is_empty());
+    assert!(
+        rig.fetched(id, "https://example.test/first", b"old")
+            .is_empty()
+    );
     let out = rig.fetched(id, "https://example.test/second", b"new");
     assert_eq!(
         out,
         vec![Out::To(id, commit("https://example.test/second", b"new"))]
     );
     // The navigation is over: its answer, again, is ignored.
-    assert!(rig.fetched(id, "https://example.test/second", b"new").is_empty());
+    assert!(
+        rig.fetched(id, "https://example.test/second", b"new")
+            .is_empty()
+    );
 }
 
 #[test]
@@ -231,7 +242,10 @@ fn a_fetched_event_for_a_tab_that_closed_is_ignored() {
     let id = rig.open("https://example.test/");
     rig.navigate(id, "https://example.test/next");
     rig.event(&EventRecord::RendererExited { id });
-    assert!(rig.fetched(id, "https://example.test/next", b"x").is_empty());
+    assert!(
+        rig.fetched(id, "https://example.test/next", b"x")
+            .is_empty()
+    );
 }
 
 #[test]
@@ -256,20 +270,19 @@ fn a_redirect_to_another_origin_replaces_the_renderer_with_the_final_url() {
     let id = rig.open("https://example.test/");
     rig.navigate(id, "https://example.test/start");
     let out = rig.fetched(id, "https://example.test/start", b"landing page");
-    match out.as_slice() {
+    let ok = matches!(
+        out.as_slice(),
         [
             Out::Kill(old),
             Out::Spawn(new),
             Out::To(to, Msg::Commit { url, script }),
-        ] => {
-            assert_eq!(*old, id);
-            assert_eq!(new, to);
-            assert_ne!(*new, id);
-            assert_eq!(url.as_slice(), b"https://other.test/landed");
-            assert_eq!(script.as_slice(), b"landing page");
-        }
-        other => panic!("{other:?}"),
-    }
+        ] if *old == id
+            && new == to
+            && *new != id
+            && url.as_slice() == b"https://other.test/landed"
+            && script.as_slice() == b"landing page"
+    );
+    assert!(ok, "{out:?}");
 }
 
 #[test]
@@ -328,7 +341,10 @@ fn a_cookie_for_a_stale_answer_is_not_stored() {
     let id = rig.open("https://example.test/");
     rig.navigate(id, "https://example.test/first");
     rig.navigate(id, "https://example.test/second");
-    assert!(rig.fetched(id, "https://example.test/first", b"").is_empty());
+    assert!(
+        rig.fetched(id, "https://example.test/first", b"")
+            .is_empty()
+    );
     assert_eq!(
         cookie_string(&rig.send(id, &Msg::CookieGet), id),
         Some(&b""[..])

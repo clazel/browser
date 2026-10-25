@@ -135,6 +135,15 @@ pub fn find_by_tab_exec(rs: &[RendererRecord], tab: u64) -> (r: Option<usize>)
     None
 }
 
+/// A copy of a renderer's pending URL.
+fn copy_pending(p: &Option<Vec<u32>>) -> (out: Option<Vec<u32>>)
+    ensures
+        code_points_opt_view(out) == code_points_opt_view(*p),
+{
+    let p = p.as_ref()?;
+    Some(copy(p.as_slice()))
+}
+
 /// A copy of renderer `i`.
 pub fn renderer_at(rs: &[RendererRecord], i: usize) -> (r: RendererRecord)
     requires
@@ -148,10 +157,7 @@ pub fn renderer_at(rs: &[RendererRecord], i: usize) -> (r: RendererRecord)
             tab: r.tab,
             url: copy(r.url.as_slice()),
             lock: clone_origin(&r.lock),
-            pending: match &r.pending {
-                Some(p) => Some(copy(p.as_slice())),
-                None => None,
-            },
+            pending: copy_pending(&r.pending),
         },
         None => RendererRecord { id: 0, tab: 0, url: Vec::new(), lock: ParsedOrigin::Opaque(0), pending: None },
     }

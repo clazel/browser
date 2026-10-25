@@ -9,10 +9,10 @@
 //! exec request URL and context of `clazel-cookie`, the same the kernel's
 //! cookie calls use).
 
-use clazel_cookie::storage::exec::{RequestContextRecord, RequestUrlRecord};
-use clazel_url::host::record::copy;
 #[allow(unused_imports)]
 use super::spec::*;
+use clazel_cookie::storage::exec::{RequestContextRecord, RequestUrlRecord};
+use clazel_url::host::record::copy;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

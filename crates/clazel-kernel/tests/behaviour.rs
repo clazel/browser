@@ -7,8 +7,31 @@
 
 mod support;
 
+use clazel_kernel::exec::fetch::NetOutcomeRecord;
+use clazel_kernel::exec::records::EventRecord;
+
 use clazel_ipc::message::codec::Msg;
 use support::{Kernel, Out};
+
+/// Answer every `Fetch` among `out` as a shell with no network would: the
+/// kernel's stand-in fetch makes the delivered bytes (none) the document's
+/// script. The outputs, with each `Fetch` replaced by what answering it gave.
+fn settled(kernel: &mut Kernel, out: Vec<Out>) -> Vec<Out> {
+    let mut all = Vec::new();
+    for o in out {
+        match o {
+            Out::Fetch(tab, url) => {
+                let outcome = NetOutcomeRecord {
+                    url,
+                    net: Vec::new(),
+                };
+                all.extend(kernel.event(&EventRecord::Fetched { tab, outcome }));
+            }
+            other => all.push(other),
+        }
+    }
+    all
+}
 
 /// Open a tab; the id of its renderer.
 fn open(kernel: &mut Kernel, url: &str) -> u64 {
@@ -179,8 +202,14 @@ fn a_navigation_to_a_url_that_does_not_parse_is_an_error() {
             url: b"/b".to_vec(),
         },
     );
-    assert_eq!(out, vec![Out::Fetch(id, support::code_points("https://example.test/b"))]);
-    let out = kernel.settled(out);
+    assert_eq!(
+        out,
+        vec![Out::Fetch(
+            id,
+            support::code_points("https://example.test/b")
+        )]
+    );
+    let out = settled(&mut kernel, out);
     assert_eq!(
         out,
         vec![Out::To(
@@ -222,7 +251,7 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
             url: b"../d/./e?x=1#y".to_vec(),
         },
     );
-    let out = kernel.settled(out);
+    let out = settled(&mut kernel, out);
     assert_eq!(
         out,
         vec![Out::To(
@@ -240,7 +269,7 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
             url: b"//other.test/z".to_vec(),
         },
     );
-    let out = kernel.settled(out);
+    let out = settled(&mut kernel, out);
     assert!(matches!(
         out.as_slice(),
         [Out::Kill(old), Out::Spawn(new), Out::To(to, Msg::Commit { .. })]

@@ -47,10 +47,32 @@
 
 mod support;
 
+use clazel_kernel::exec::fetch::NetOutcomeRecord;
+
 use clazel_ipc::message::codec::Msg;
 use clazel_kernel::exec::records::EventRecord;
 use cookie_store::CookieStore;
 use support::{Kernel, Out, code_points};
+
+/// Answer every `Fetch` among `out` as a shell with no network would: the
+/// kernel's stand-in fetch makes the delivered bytes (none) the document's
+/// script. The outputs, with each `Fetch` replaced by what answering it gave.
+fn settled(kernel: &mut Kernel, out: Vec<Out>) -> Vec<Out> {
+    let mut all = Vec::new();
+    for o in out {
+        match o {
+            Out::Fetch(tab, url) => {
+                let outcome = NetOutcomeRecord {
+                    url,
+                    net: Vec::new(),
+                };
+                all.extend(kernel.event(&EventRecord::Fetched { tab, outcome }));
+            }
+            other => all.push(other),
+        }
+    }
+    all
+}
 use url::Url;
 
 /// A fixed-seed generator (Knuth's MMIX constants).
@@ -239,7 +261,7 @@ fn trace(seed: u64, now: u64) -> Option<String> {
                         url: code_points(&target),
                     })
                 };
-                let out = kernel.settled(out);
+                let out = settled(&mut kernel, out);
                 if same_origin {
                     match out.as_slice() {
                         [Out::To(to, Msg::Commit { url: committed, .. })]

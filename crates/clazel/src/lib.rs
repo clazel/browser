@@ -18,8 +18,8 @@ use clazel_ipc::{
     frame::codec::payload_length,
     message::codec::{Msg, decode_framed},
 };
-use clazel_kernel::exec::real_urls::step_real;
 use clazel_kernel::exec::fetch::NetOutcomeRecord;
+use clazel_kernel::exec::real_urls::step_real;
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
 
 /// What a socket's reader thread reports; the id is the socket's.
