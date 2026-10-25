@@ -50,10 +50,10 @@ pub open spec fn auth_config(c: crate::schedule::spec::Crypto, config: super::cl
         client_secret: crate::schedule::spec::derive_secret(c, handshake, crate::schedule::spec::Label::ClientHandshake, transcript.messages),
         signatures: super::client_spec::signatures(), extensions: extension_types(config, transcript.retried) }
 }
-/// §7.1 and §7.4.2: bind keys, derive non-PSK secrets, and transfer ownership.
-pub open spec fn into_auth(c: crate::schedule::spec::Crypto, k: KeyExchange,
+/// §7.1/§7.4.2: derive validated traffic secrets before choosing their consumers.
+pub open spec fn derive(c: crate::schedule::spec::Crypto, k: KeyExchange,
     config: super::client_spec::Config, transcript: crate::transcript::spec::State,
-    peer_key: Seq<u8>, private_key: Seq<u8>) -> Result<(crate::auth::spec::State, Seq<u8>), u8>
+    peer_key: Seq<u8>, private_key: Seq<u8>) -> Result<(crate::auth::spec::Config, Seq<u8>), u8>
 {
     if private_key.len() != 32 || (k.public_key)(private_key) != config.public_key { Err(80) }
     else {
@@ -64,12 +64,22 @@ pub open spec fn into_auth(c: crate::schedule::spec::Crypto, k: KeyExchange,
                     let early = crate::schedule::spec::early_secret(c);
                     let handshake = crate::schedule::spec::handshake_secret(c, early, shared);
                     let master = crate::schedule::spec::master_secret(c, handshake);
-                    match crate::auth::spec::start(auth_config(c, config, transcript, handshake), transcript) {
-                        Err(alert) => Err(alert),
-                        Ok(auth) => Ok((auth, master)),
-                    }
+                    Ok((auth_config(c, config, transcript, handshake), master))
                 },
         }
     }
 }
+/// §7.1/§4.4: transfer derived traffic secrets and the exact prefix into Auth.
+pub open spec fn into_auth(c: crate::schedule::spec::Crypto, k: KeyExchange,
+    config: super::client_spec::Config, transcript: crate::transcript::spec::State,
+    peer_key: Seq<u8>, private_key: Seq<u8>) -> Result<(crate::auth::spec::State, Seq<u8>), u8>
+{
+    match derive(c, k, config, transcript, peer_key, private_key) {
+        Err(alert) => Err(alert),
+        Ok((auth_config, master)) => match crate::auth::spec::start(auth_config, transcript) {
+            Err(alert) => Err(alert), Ok(auth) => Ok((auth, master)),
+        },
+    }
+}
+
 } // verus!
