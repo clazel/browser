@@ -98,9 +98,10 @@
 //!   trips and cookies expire in seconds at the finest, and the kernel
 //!   advances the clock between fetches.
 //! - **The cookie parameters** are in [`UrlFns`]: the Public Suffix List
-//!   `rules` the cookie functions take, and the URL Standard's "origin" of a
-//!   URL, from which the request's origin and the same-site status of a
-//!   redirect are computed. The shipped join gives `psl_rules()` and
+//!   `rules` the cookie functions take, the URL as they read it
+//!   ([`request_url`]) and the URL Standard's "origin" of a URL, from which
+//!   the request's origin and the same-site status of a redirect are
+//!   computed. The shipped join gives `psl_rules()` and
 //!   `url_origin` (`real`); the proofs hold for every one.
 //! - **Cookies are included** (Fetch §4.6 step 8.3: `includeCredentials` is
 //!   true when "request's credentials mode is "include"", which is a
@@ -178,6 +179,9 @@ pub type RequestContext = clazel_cookie::storage::spec::RequestContext;
 pub struct UrlFns {
     /// URL §4.7 "origin" of a URL.
     pub origin: spec_fn(Url) -> clazel_origin::spec::Origin,
+    /// The URL as the cookie functions read it: [`request_url`] in the
+    /// shipped join.
+    pub request_url: spec_fn(Url) -> RequestUrl,
     /// The Public Suffix List the cookie functions take.
     pub rules: Seq<clazel_psl::spec::Rule>,
     /// Fetch §2.2.6 location URL, step 3: the result of parsing the
@@ -307,7 +311,8 @@ pub open spec fn finished(s: State) -> State {
 }
 
 /// RFC 6265bis §5.7 and §5.8's view of the URL: its scheme, canonicalized
-/// host and path (see the modelling choices).
+/// host and path (see the modelling choices). The transducer reads it
+/// through [`UrlFns::request_url`], which `real` sets to this.
 pub open spec fn request_url(url: Url) -> RequestUrl {
     let p = clazel_url::url::spec::url_path_serializer(url.path);
     RequestUrl {
@@ -366,19 +371,19 @@ pub open spec fn store_lines(
 /// The jar of `s` after it has stored the cookies of `response`, the
 /// response to its current request.
 pub open spec fn store_response(urls: UrlFns, s: State, response: Response) -> Seq<Cookie> {
-    store_lines(urls.rules, s.jar, set_cookie_values(response), request_url(s.url), request_context(urls, s), s.now)
+    store_lines(urls.rules, s.jar, set_cookie_values(response), (urls.request_url)(s.url), request_context(urls, s), s.now)
 }
 
 /// The cookie-string of the request `s` sends (Fetch §3.1.1 steps 5 to 7;
 /// RFC 6265bis §5.8.3).
 pub open spec fn cookie_string(urls: UrlFns, s: State) -> Seq<u8> {
-    clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, s.jar, request_url(s.url), request_context(urls, s), s.now)
+    clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, s.jar, (urls.request_url)(s.url), request_context(urls, s), s.now)
 }
 
 /// The jar of `s` after that retrieval (§5.8.3 step 5, and the eviction of
 /// expired cookies).
 pub open spec fn jar_after_cookie_string(urls: UrlFns, s: State) -> Seq<Cookie> {
-    clazel_cookie::storage::spec::jar_after_retrieval(urls.rules, s.jar, request_url(s.url), request_context(urls, s), s.now)
+    clazel_cookie::storage::spec::jar_after_retrieval(urls.rules, s.jar, (urls.request_url)(s.url), request_context(urls, s), s.now)
 }
 
 /// Begin the request for `url`, after `redirects` redirects, with `jar`

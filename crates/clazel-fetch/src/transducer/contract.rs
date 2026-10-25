@@ -87,6 +87,12 @@ pub trait UrlFnsExec {
             r@ == (self.urls().origin)(url@),
     ;
 
+    /// [`UrlFns::request_url`]: the URL as the cookie functions read it.
+    fn request_url(&self, url: &ParsedUrl) -> (r: clazel_cookie::storage::exec::RequestUrlRecord)
+        ensures
+            r@ == (self.urls().request_url)(url@),
+    ;
+
     /// The cookie functions of `clazel-cookie` are about the generated
     /// Public Suffix List, so [`UrlFns::rules`] must be that.
     proof fn rules_are_psl(&self)
@@ -214,7 +220,7 @@ pub open spec fn wire_cookies(http: HttpFns, urls: UrlFns, s: State, input: Inpu
     forall|k: int| 0 <= k < step(http, urls, s, input).1.len() ==> match #[trigger] step(http, urls, s, input).1[k] {
         Action::Send(bytes) => is_wire_request(
             s.url,
-            clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, s.jar, request_url(s.url), request_context(urls, s), s.now),
+            clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, s.jar, (urls.request_url)(s.url), request_context(urls, s), s.now),
             bytes,
         ),
         _ => true,
