@@ -17,16 +17,22 @@
 #[allow(unused_imports)]
 use vstd::prelude::*;
 verus! {
+/// Public-key derivation parameter with an explicit private scalar.
+pub type PublicKey = spec_fn(Seq<u8>) -> Seq<u8>;
+/// Shared-secret parameter with explicit private and peer public inputs.
+pub type SharedSecret = spec_fn(Seq<u8>, Seq<u8>) -> Option<Seq<u8>>;
 /// Pure X25519 provider functions; successful outputs are checked by the trait.
 pub struct KeyExchange {
     /// Public input derived from the exact private scalar.
-    pub public_key: spec_fn(Seq<u8>) -> Seq<u8>,
+    pub public_key: PublicKey,
     /// Shared secret from the exact private scalar and received peer public input.
-    pub shared_secret: spec_fn(Seq<u8>, Seq<u8>) -> Option<Seq<u8>>,
+    pub shared_secret: SharedSecret,
 }
 /// Functional all-zero rejection (§7.4.2).
-pub open spec fn nonzero(bytes: Seq<u8>) -> bool {
-    exists|i: int| 0 <= i < bytes.len() && #[trigger] bytes[i] != 0
+pub open spec fn nonzero(bytes: Seq<u8>) -> bool
+    decreases bytes.len(),
+{
+    bytes.len() > 0 && (bytes.last() != 0 || nonzero(bytes.drop_last()))
 }
 /// Actual extension types in the final sent ClientHello, including any HRR cookie.
 pub open spec fn extension_types(c: super::client_spec::Config, retried: bool) -> Seq<u16> {
