@@ -244,15 +244,20 @@ pub open spec fn f_interpret_decimal(s: Seq<u8>, accumulated: nat) -> nat
 
 /// The result of "extract a length": null, failure, or a number.
 pub enum ExtractedLength {
+    /// "return null": there is no usable length.
     Null,
+    /// "return failure": the values differ.
     Failure,
+    /// A number.
     Length(nat),
 }
 
 /// What step 3's loop leaves: failure was returned, or the value of
 /// `candidateValue` (null or a string).
 pub enum Candidate {
+    /// Step 4.2 returned failure.
     Failed,
+    /// The loop ended with this `candidateValue`.
     Is(Option<Seq<u8>>),
 }
 
