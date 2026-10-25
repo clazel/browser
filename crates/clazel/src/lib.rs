@@ -174,9 +174,7 @@ impl Host {
         }
     }
 
-    /// Answer a `Fetch` without a network: the page is the user's script for
-    /// this navigation (empty for a renderer's own `Navigate`); the kernel
-    /// ignores the answer if the tab has moved on.
+    /// Answer a `Fetch` with the user's script (empty for a `Navigate`).
     fn stand_in_network(&mut self, tab: u64, url: Vec<u32>) {
         let net = self.scripts.remove(&tab).unwrap_or_default();
         let shown: String = url.iter().filter_map(|c| char::from_u32(*c)).collect();
