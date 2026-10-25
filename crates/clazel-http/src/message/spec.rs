@@ -166,23 +166,30 @@ pub enum LineRead {
     TooLong,
 }
 
-/// One line at the start of `s` (§2.1: each of the start-line and the field
-/// lines is followed by CRLF; §2.2: "the line terminator for the start-line
-/// and fields is the sequence CRLF").
-pub open spec fn read_line(s: Seq<u8>) -> LineRead {
+/// One line at the start of `s`, with lines at most `max` octets long
+/// before their CRLF (a parameter so that the examples can reach the limit
+/// with short inputs; the spec's limit is [`max_line`], see [`read_line`]).
+pub open spec fn read_line_with(s: Seq<u8>, max: nat) -> LineRead {
     match find_crlf_from(s, 0) {
-        Some(i) => if i <= max_line() {
+        Some(i) => if i <= max {
             LineRead::Line { line: s.take(i as int), rest: s.skip((i + 2) as int) }
         } else {
             LineRead::TooLong
         },
         // A CRLF that arrives later starts at s.len() - 1 or after.
-        None => if s.len() > max_line() + 1 {
+        None => if s.len() > max + 1 {
             LineRead::TooLong
         } else {
             LineRead::Incomplete
         },
     }
+}
+
+/// One line at the start of `s` (§2.1: each of the start-line and the field
+/// lines is followed by CRLF; §2.2: "the line terminator for the start-line
+/// and fields is the sequence CRLF"), at most [`max_line`] octets long.
+pub open spec fn read_line(s: Seq<u8>) -> LineRead {
+    read_line_with(s, max_line())
 }
 
 // ===========================================================================
@@ -718,6 +725,19 @@ pub open spec fn response_of(head: Head, body: Seq<u8>) -> Response {
     Response { status_line: head.status_line, fields: head.fields, body: body }
 }
 
+/// §6.3 step 8, while the connection is open: `received` octets of a
+/// close-delimited body have arrived, and the body may be at most `limit`
+/// octets (a parameter so that the examples can reach the limit with short
+/// inputs; [`parse_response`] passes [`max_body`]). Past the limit it is
+/// invalid already; otherwise nothing is decided before the close.
+pub open spec fn close_body_pending(received: nat, limit: nat) -> Parse {
+    if received > limit {
+        Parse::Invalid
+    } else {
+        Parse::Incomplete
+    }
+}
+
 /// The response at the start of `input`, everything received so far on a
 /// connection that is still open, to a request that was `HEAD` exactly
 /// when `request_is_head`.
@@ -739,11 +759,7 @@ pub open spec fn parse_response(input: Seq<u8>, request_is_head: bool) -> Parse 
             },
             // §6.3 step 8: the body ends only when the connection closes;
             // past the limit, it is invalid already.
-            BodyLength::Close => if rest.len() > max_body() {
-                Parse::Invalid
-            } else {
-                Parse::Incomplete
-            },
+            BodyLength::Close => close_body_pending(rest.len(), max_body()),
             BodyLength::Invalid => Parse::Invalid,
             BodyLength::Unsupported => Parse::Unsupported,
         },
