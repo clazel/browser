@@ -9,8 +9,9 @@
 //! presentation language, records, handshake messages, extensions and
 //! alerts. [`schedule`] adds the SHA-256 key schedule over abstract crypto
 //! parameters (part of 3.5e). [`transcript`] constructs the transcript and
-//! CertificateVerify signature inputs. The handshake state machine and the production
-//! cryptography provider (3.5f) remain to be built.
+//! CertificateVerify signature inputs. [`auth`] implements the initial
+//! authentication flight and application-delivery gate. Hello negotiation,
+//! the record-I/O join and production cryptography (3.5f) remain to be built.
 //!
 //! - [`spec`]: a step-by-step transcription of the standard. Its header
 //!   lists every modelling choice.

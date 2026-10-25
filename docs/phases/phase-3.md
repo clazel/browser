@@ -970,6 +970,31 @@ message ordering, server negotiation, signature verification and Finished
 verification as state transitions remain for the handshake state machine.
 No tier is raised, and full verification is still pending.
 
+**Initial authentication as built (2026-10-25):** `clazel-tls/src/auth/`
+now implements the initial client certificate-authentication transducer after
+final ServerHello, not just transcript bookkeeping. Specifications/contracts
+were committed before implementation. It accepts EncryptedExtensions only
+for the stated non-PSK profile's actual offers, allows one CertificateRequest,
+validates a nonempty server chain for the captured target/time, checks
+CertificateVerify with the validated leaf key and offered TLS 1.3 scheme,
+and compares server Finished over the correct transcript using the server
+handshake secret. It builds the client's Finished with the client secret,
+preceded by an empty Certificate when requested, and releases application
+data only after the exact-send acknowledgement. It captures the application
+traffic-secret transcript hash immediately after server Finished.
+
+All 532 TLS obligations pass locally, including executable refinement,
+finite-trace application gating, terminal absorption and validation-input
+binding lemmas. The cheaper test subagent contributed eight tests with
+input-sensitive mock providers; the parent reviewed them, and all eight pass
+under Miri. Seventeen authentication mutation witnesses are added; their
+expanded mutation run is pending. No validator/crypto axiom was introduced.
+The X.509/name/time validator, signature verifier and timing-safe Finished
+comparison are explicit parameters with no production implementation yet.
+Remaining: Hello negotiation, X.509/libcrux joins, protected record-I/O
+integration, post-handshake dispatch, independent evidence for the full
+client and full verification on both platforms. The crate remains tier 0.
+
 #### 3.5f The cryptography and the join (M)
 
 The `shipped` rows for libcrux (`libcrux-chacha20poly1305`,
@@ -1108,7 +1133,7 @@ half does not wait on TLS.
 | 3.5b X.509 and path validation | not started (after 3.5a) |
 | 3.5c RSA PKCS#1 v1.5 | built (see As built); tier 0, target 2, pending CI full verification |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
-| 3.5e Key schedule and handshake state machine | SHA-256 non-PSK key schedule and transcript construction built and proven over abstract crypto; 40 schedule vectors and 12 live-transcript checkpoints pass locally (see As built). Full handshake/authentication state machine remains; tier 0, full CI pending |
+| 3.5e Key schedule and handshake state machine | SHA-256 non-PSK key schedule and transcript construction built and proven over abstract crypto; 40 schedule vectors and 12 live-transcript checkpoints pass locally (see As built). Initial authentication state machine built and proven over validator/crypto parameters (532 TLS obligations; 8 mock-provider tests pass under Miri). Hello negotiation, production joins and record-I/O integration remain; tier 0, full CI pending |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | not started |

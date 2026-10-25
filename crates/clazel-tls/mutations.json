@@ -1567,6 +1567,244 @@
         "lemma": "super::examples::lemma_client_input()",
         "witness": "certificate_verify_input(false, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 99u8, 108u8, 105u8, 101u8, 110u8, 116u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
       }
+    },
+    {
+      "id": "auth-deliver-before-ready",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Ready { (s, Action::Deliver(bytes)) }",
+      "replace": "if true { (s, Action::Deliver(bytes)) }",
+      "expect": "killed",
+      "reason": "The early_data authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_early_data()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), super::examples::initial(), Input::Application(seq![1u8])).1 != Action::Fail(10u8)"
+      }
+    },
+    {
+      "id": "auth-ack-before-send",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::SendFinished { (State { phase: Phase::Ready, client_sent: true, ..s }, Action::Ready) }",
+      "replace": "if true { (State { phase: Phase::Ready, client_sent: true, ..s }, Action::Ready) }",
+      "expect": "killed",
+      "reason": "The early_ack authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_early_ack()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), super::examples::initial(), Input::SentFinished).1 != Action::Fail(80u8)"
+      }
+    },
+    {
+      "id": "auth-ignore-chain-failure",
+      "file": "src/auth/spec.rs",
+      "find": "Err(error) => fail(s, certificate_alert(error)),",
+      "replace": "Err(error) => record(c, State { key: seq![17u8], chain_checked: true, ..s }, crate::transcript::spec::Kind::Certificate, body, Phase::CertificateVerify),",
+      "expect": "killed",
+      "reason": "The bad_chain authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_bad_chain()",
+        "witness": "super::examples::rejected_chain() != Action::Fail(45u8)"
+      }
+    },
+    {
+      "id": "auth-ignore-signature-failure",
+      "file": "src/auth/spec.rs",
+      "find": "if !(v.signature)(s.key, algorithm, input, signature)",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "The bad_signature authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_bad_signature()",
+        "witness": "super::examples::rejected_signature() != Action::Fail(51u8)"
+      }
+    },
+    {
+      "id": "auth-ignore-finished-failure",
+      "file": "src/auth/spec.rs",
+      "find": "if verify_data != crate::schedule::spec::finished(c, s.config.server_secret, s.transcript.messages)",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "The bad_finished authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_bad_finished()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_signature(), 20, Seq::new(32, |i: int| 0u8)).1 != Action::Fail(51u8)"
+      }
+    },
+    {
+      "id": "auth-server-mac-client-secret",
+      "file": "src/auth/spec.rs",
+      "find": "crate::schedule::spec::finished(c, s.config.server_secret, s.transcript.messages)",
+      "replace": "crate::schedule::spec::finished(c, s.config.client_secret, s.transcript.messages)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-client-mac-server-secret",
+      "file": "src/auth/spec.rs",
+      "find": "crate::schedule::spec::finished(c, s2.config.client_secret, s2.transcript.messages)",
+      "replace": "crate::schedule::spec::finished(c, s2.config.server_secret, s2.transcript.messages)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-client-cv-context",
+      "file": "src/auth/spec.rs",
+      "find": "crate::transcript::spec::certificate_verify_input(true, (c.hash)(s.transcript.messages))",
+      "replace": "crate::transcript::spec::certificate_verify_input(false, (c.hash)(s.transcript.messages))",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-wrong-cv-key",
+      "file": "src/auth/spec.rs",
+      "find": "(v.signature)(s.key, algorithm, input, signature)",
+      "replace": "(v.signature)(Seq::empty(), algorithm, input, signature)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-wrong-chain-time",
+      "file": "src/auth/spec.rs",
+      "find": "(v.chain)(s.config.host, s.config.now, body)",
+      "replace": "(v.chain)(s.config.host, 0, body)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-wrong-chain-host",
+      "file": "src/auth/spec.rs",
+      "find": "(v.chain)(s.config.host, s.config.now, body)",
+      "replace": "(v.chain)(Seq::empty(), s.config.now, body)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-unoffered-signature",
+      "file": "src/auth/spec.rs",
+      "find": "!signature_scheme(algorithm) || !member(s.config.signatures, algorithm)",
+      "replace": "!signature_scheme(algorithm)",
+      "expect": "killed",
+      "reason": "The unoffered_signature authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_unoffered_signature()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_certificate(), 15, seq![8u8, 7u8, 0u8, 1u8, 9u8]).1 != Action::Fail(47u8)"
+      }
+    },
+    {
+      "id": "auth-send-becomes-ready",
+      "file": "src/auth/spec.rs",
+      "find": "record(c, s2, crate::transcript::spec::Kind::Finished, own, Phase::SendFinished)",
+      "replace": "record(c, s2, crate::transcript::spec::Kind::Finished, own, Phase::Ready)",
+      "expect": "killed",
+      "reason": "The send_phase authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_send_phase()",
+        "witness": "super::examples::accepted().0.phase != Phase::SendFinished"
+      }
+    },
+    {
+      "id": "auth-checkpoint-after-client-finished",
+      "file": "src/auth/spec.rs",
+      "find": "(s3, Action::Send(certificate + crate::spec::write_handshake(20, own)))",
+      "replace": "(State { application_hash: (c.hash)(s3.transcript.messages), ..s3 }, Action::Send(certificate + crate::spec::write_handshake(20, own)))",
+      "expect": "killed",
+      "reason": "The checkpoint authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_checkpoint()",
+        "witness": "super::examples::accepted().0.application_hash != Seq::new(32, |i: int| 75u8)"
+      }
+    },
+    {
+      "id": "auth-application-before-send-ack",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Ready { (s, Action::Deliver(bytes)) }",
+      "replace": "if s.phase == Phase::Ready || s.phase == Phase::SendFinished { (s, Action::Deliver(bytes)) }",
+      "expect": "killed",
+      "reason": "The no_ack authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_no_ack()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), super::examples::accepted().0, Input::Application(seq![1u8])).1 != Action::Fail(10u8)"
+      }
+    },
+    {
+      "id": "auth-failed-not-absorbing",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Failed || s.phase == Phase::Closed",
+      "replace": "if s.phase == Phase::Closed",
+      "expect": "killed",
+      "reason": "The failed_absorbs authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_failed_absorbs()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), State { phase: Phase::Failed, ..super::examples::initial() }, Input::Application(seq![1u8])).1 != Action::None"
+      }
+    },
+    {
+      "id": "auth-closed-not-absorbing",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Failed || s.phase == Phase::Closed",
+      "replace": "if s.phase == Phase::Failed",
+      "expect": "killed",
+      "reason": "The closed_absorbs authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_closed_absorbs()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), State { phase: Phase::Closed, ..super::examples::initial() }, Input::Application(seq![1u8])).1 != Action::None"
+      }
     }
   ]
 }

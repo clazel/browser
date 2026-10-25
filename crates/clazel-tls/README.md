@@ -6,9 +6,10 @@ messages, extensions and alerts. Part of [Clazel](../../README.md), a web
 browser whose parsers of untrusted input carry machine-checked proofs.
 
 This covers phase-3.md item 3.5d and the SHA-256 key schedule from 3.5e.
-**The handshake state machine and the production cryptography provider
-(items 3.5e and 3.5f) are not here yet**, and neither is the interpretation
-of a certificate (3.5b). The crate stays at
+The initial authentication state machine is built over explicit validator
+and crypto parameters. **Hello negotiation, the record-I/O join and the
+production cryptography provider (items 3.5e and 3.5f) remain**, as does
+X.509 certificate interpretation and validation (3.5b). The crate stays at
 `tier = 0` with `target-tier = 2` until they are, and until CI's full run
 has checked every proof, mutation and conformance test on a pull request;
 what is proven today is stated below, not implied by the tier.
@@ -83,8 +84,30 @@ what is proven today is stated below, not implied by the tier.
   messages, checking 12 hash/Finished checkpoints against the existing
   official vectors. RFC 8446's explicit signature-input example also passes.
 
-Out of scope: the state machine (Appendix A), the
-cryptography, the contents of a certificate, `pre_shared_key` and the other
+- **Initial authentication** (§4.3–§4.4, `auth`): after final ServerHello,
+  own the transcript through EncryptedExtensions, optional CertificateRequest,
+  mandatory nonempty Certificate, CertificateVerify and server Finished.
+  Chain validation receives the captured host, time and certificate body;
+  the returned leaf key is used for the offered TLS 1.3 signature scheme and
+  the server-context transcript input. Finished uses the server handshake
+  secret and the transcript before that message. Only then is the client
+  Finished emitted (preceded by an empty Certificate when requested).
+  Application delivery waits for acknowledgement of that exact client flight.
+
+  All executable handlers refine the pure transducer. Trace theorems prove
+  the application gate and terminal-state absorption; binding lemmas state
+  the exact chain, signature and Finished inputs. Eight input-sensitive
+  mock-provider tests check these decisions, including distinct handshake
+  secrets, typed alerts, transcript checkpoints and rejection ordering; all
+  eight pass under Miri. They do not establish real X.509/signature correctness.
+  EE support is limited to server_name/supported_groups responses to actual
+  offers; no PSK, early data or ALPN. The future Hello layer supplies the
+  negotiated secrets and actual offers; the future record loop supplies
+  complete authenticated bodies. Production Finished comparison must use a
+  timing-safe provider; the functional proof makes no timing guarantee.
+
+Out of scope: full Hello negotiation and post-handshake dispatch (Appendix A), the
+production cryptography, the contents of a certificate, `pre_shared_key` and the other
 extensions kept opaque (their data is not read), client certificates (a
 CertificateRequest is read and then refused by sending an empty
 Certificate), and any use of the network.
@@ -94,7 +117,7 @@ Certificate), and any use of the network.
 Tier 0, target tier 2. The current numbers are in the
 [status table](../../README.md#verification-status).
 
-- **Proven (Verus, `cargo verus verify`: 480 verified, 0 errors):** the
+- **Proven (Verus, `cargo verus verify`: 532 verified, 0 errors):** the
   executable functions of `reader`, `writer`, `record`, `reassemble`,
   `extension`, `handshake` and `encode` meet the contracts in
   `contract.rs`, which are the spec's functions in `spec.rs`. About the
@@ -124,8 +147,10 @@ Tier 0, target tier 2. The current numbers are in the
   the top of the file; `Certificate` is outside it). **It was written
   after `spec.rs` in the same session, not before, and not hidden from
   it**, so it is weaker evidence than a second author's text read first.
-- **Mutations:** `mutations.json` lists 112 deliberate breaks: 76 for
-  formats, 19 for the key schedule and 17 for transcript construction.
+- **Mutations:** `mutations.json` lists 129 deliberate breaks: 76 for
+  formats, 19 for the key schedule, 17 for transcript construction and 17
+  for authentication. The 112 pre-authentication certificates passed locally;
+  the expanded run is pending.
   Each `killed` entry requires a certificate that Verus checks; the
   certificate must pass on the mutant and fail on the real spec.
   Full workspace and CI verification remain required before tier promotion.
