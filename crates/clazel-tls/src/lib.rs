@@ -42,6 +42,7 @@ pub mod lemmas_record;
 pub mod reader;
 pub mod reassemble;
 pub mod record;
+pub mod schedule;
 pub mod spec;
 pub mod types;
 pub mod writer;
