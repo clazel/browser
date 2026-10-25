@@ -4,6 +4,7 @@
 //! function of [`crate::spec`], and its `ensures` clause says that it equals
 //! it on the views.
 
+use super::fetch::*;
 use super::frames::*;
 use super::locks::*;
 use super::records::*;
@@ -12,7 +13,8 @@ use super::spec::*;
 use super::storage::*;
 use super::urls::*;
 use clazel_cookie::storage::exec::{
-    evict_expired_exec, retrieve_a_cookie_string_exec, store_a_set_cookie_string_exec,
+    CookieRecord, RequestUrlRecord, evict_expired_exec, is_public_suffix_string_exec,
+    retrieve_a_cookie_string_exec, store_a_set_cookie_string_exec,
 };
 use clazel_ipc::message::codec::Msg;
 use clazel_origin::exec::ParsedOrigin;
@@ -141,8 +143,17 @@ pub fn renderer_at(rs: &[RendererRecord], i: usize) -> (r: RendererRecord)
         r@ == renderers_view(rs@)[i as int],
 {
     match rs.get(i) {
-        Some(r) => RendererRecord { id: r.id, tab: r.tab, url: copy(r.url.as_slice()), lock: clone_origin(&r.lock) },
-        None => RendererRecord { id: 0, tab: 0, url: Vec::new(), lock: ParsedOrigin::Opaque(0) },
+        Some(r) => RendererRecord {
+            id: r.id,
+            tab: r.tab,
+            url: copy(r.url.as_slice()),
+            lock: clone_origin(&r.lock),
+            pending: match &r.pending {
+                Some(p) => Some(copy(p.as_slice())),
+                None => None,
+            },
+        },
+        None => RendererRecord { id: 0, tab: 0, url: Vec::new(), lock: ParsedOrigin::Opaque(0), pending: None },
     }
 }
 
@@ -402,7 +413,7 @@ pub open spec fn keeps_storage_jar_now(before: StateRecord, after: StateRecord) 
     &&& after.now == before.now
 }
 
-/// [`navigate_tab`]: the renderer of tab `tab` navigates to `url`.
+/// [`navigate_tab`]: the renderer of tab `tab` commits the document at `url`.
 pub fn navigate_tab_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, tab: u64, url: &[u32], script: &[u8]) -> (out: (
     StateRecord,
     Vec<OutputRecord>,
@@ -432,7 +443,7 @@ pub fn navigate_tab_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, tab: u64, url:
                     let mut s = s;
                     if same {
                         let ghost old_renderers = s.renderers@;
-                        let rec = RendererRecord { id: old.id, tab: old.tab, url: copy(url), lock: old.lock };
+                        let rec = RendererRecord { id: old.id, tab: old.tab, url: copy(url), lock: old.lock, pending: None };
                         let ghost rv = rec@;
                         s.renderers.set(i, rec);
                         proof {
@@ -443,7 +454,7 @@ pub fn navigate_tab_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, tab: u64, url:
                     } else {
                         let id = s.next_id;
                         let ghost old_renderers = s.renderers@;
-                        let rec = RendererRecord { id, tab, url: copy(url), lock };
+                        let rec = RendererRecord { id, tab, url: copy(url), lock, pending: None };
                         s.renderers.set(i, rec);
                         proof {
                             lemma_renderers_view_update(old_renderers, i as int, rec);
@@ -482,7 +493,7 @@ pub fn open_tab_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, url: &[u32], scrip
             let frame = commit_frame_exec(url, script);
             let mut s = s;
             let ghost old_renderers = s.renderers@;
-            let rec = RendererRecord { id, tab: id, url: copy(url), lock };
+            let rec = RendererRecord { id, tab: id, url: copy(url), lock, pending: None };
             s.renderers.push(rec);
             proof {
                 lemma_renderers_view_push(old_renderers, rec);
@@ -490,6 +501,213 @@ pub fn open_tab_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, url: &[u32], scrip
             s.next_id = id.saturating_add(1);
             let outs = two_outputs(OutputRecord::Spawn { id }, OutputRecord::ToRenderer { id, bytes: frame });
             (s, outs)
+        },
+    }
+}
+
+/// [`begin_navigation`]: the renderer of tab `tab` starts navigating to
+/// `url`, and the kernel asks for it to be fetched.
+pub fn begin_navigation_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, tab: u64, url: &[u32]) -> (out: (
+    StateRecord,
+    Vec<OutputRecord>,
+))
+    ensures
+        result_view(out) == begin_navigation(urls.urls(), s@, tab as nat, url@),
+        keeps_storage_jar_now(s, out.0),
+        out.0.next_id == s.next_id,
+{
+    match find_by_tab_exec(s.renderers.as_slice(), tab) {
+        None => (s, no_outputs()),
+        Some(i) => match lock_of_url_exec(urls, url, s.next_id) {
+            None => (s, no_outputs()),
+            Some(_) => {
+                let old = renderer_at(s.renderers.as_slice(), i);
+                let mut s = s;
+                let ghost old_renderers = s.renderers@;
+                let rec = RendererRecord { id: old.id, tab: old.tab, url: old.url, lock: old.lock, pending: Some(copy(url)) };
+                s.renderers.set(i, rec);
+                proof {
+                    lemma_renderers_view_update(old_renderers, i as int, rec);
+                }
+                let outs = one_output(OutputRecord::Fetch { tab, url: copy(url) });
+                (s, outs)
+            },
+        },
+    }
+}
+
+/// [`fail_navigation`]: the navigation of the renderer at index `i` ends
+/// without a commit: it stays, no longer navigating, and is sent an `Error`.
+pub fn fail_navigation_exec(s: StateRecord, i: usize, code: u64) -> (out: (StateRecord, Vec<OutputRecord>))
+    requires
+        i < s.renderers.len(),
+    ensures
+        result_view(out) == fail_navigation(s@, i as int, s@.renderers[i as int], code),
+        keeps_storage_jar_now(s, out.0),
+        out.0.next_id == s.next_id,
+{
+    let old = renderer_at(s.renderers.as_slice(), i);
+    let mut s = s;
+    let ghost old_renderers = s.renderers@;
+    let rec = RendererRecord { id: old.id, tab: old.tab, url: copy(old.url.as_slice()), lock: clone_origin(&old.lock), pending: None };
+    let e = Msg::Error { code };
+    let outs = reply_exec(&old, &e);
+    s.renderers.set(i, rec);
+    proof {
+        lemma_renderers_view_update(old_renderers, i as int, rec);
+    }
+    (s, outs)
+}
+
+// ---------------------------------------------------------------------
+// The fetch's answer.
+// ---------------------------------------------------------------------
+
+/// [`store_allowed`], over the generated Public Suffix List.
+pub fn store_allowed_exec(url: &RequestUrlRecord) -> (r: bool)
+    ensures
+        r == store_allowed(crate::contract::psl(), url@),
+{
+    match &url.host {
+        Some(h) => !h.name.is_empty() && (h.is_ip_address || !is_public_suffix_string_exec(h.name.as_slice())),
+        None => false,
+    }
+}
+
+/// [`store_one`]: the jar after one `Set-Cookie` line of a response.
+pub fn store_one_exec(jar: Vec<CookieRecord>, st: &HttpStoreRecord, now: u64) -> (out: Vec<CookieRecord>)
+    requires
+        clazel_cookie::storage::contract::jar_in_range(clazel_cookie::storage::exec::jar_view(jar@)),
+        clazel_cookie::set_cookie::contract::now_in_range(now as int),
+    ensures
+        clazel_cookie::storage::exec::jar_view(out@) == store_one(crate::contract::psl(), clazel_cookie::storage::exec::jar_view(jar@), st@, now as int),
+{
+    if store_allowed_exec(&st.url) {
+        store_a_set_cookie_string_exec(jar.as_slice(), st.line.as_slice(), &st.url, &st.ctx, now)
+    } else {
+        jar
+    }
+}
+
+/// Dropping the first element of the remaining stores is the next
+/// `apply_stores` step.
+proof fn lemma_apply_stores_tail(jar: Seq<clazel_cookie::storage::spec::Cookie>, stores: Seq<HttpStore>, k: int, now: int)
+    requires
+        0 <= k < stores.len(),
+    ensures
+        apply_stores(crate::contract::psl(), jar, stores.subrange(k, stores.len() as int), now) == apply_stores(
+            crate::contract::psl(),
+            store_one(crate::contract::psl(), jar, stores[k], now),
+            stores.subrange(k + 1, stores.len() as int),
+            now,
+        ),
+{
+    let rest = stores.subrange(k, stores.len() as int);
+    assert(rest[0] == stores[k]);
+    assert(rest.drop_first() =~= stores.subrange(k + 1, stores.len() as int));
+}
+
+/// [`apply_stores`]: the jar after the `Set-Cookie` lines of a fetch.
+pub fn apply_stores_exec(jar: Vec<CookieRecord>, stores: &[HttpStoreRecord], now: u64) -> (out: Vec<CookieRecord>)
+    requires
+        clazel_cookie::storage::contract::jar_in_range(clazel_cookie::storage::exec::jar_view(jar@)),
+        clazel_cookie::set_cookie::contract::now_in_range(now as int),
+    ensures
+        clazel_cookie::storage::exec::jar_view(out@) == apply_stores(crate::contract::psl(), clazel_cookie::storage::exec::jar_view(jar@), stores_view(stores@), now as int),
+{
+    let ghost jar0 = clazel_cookie::storage::exec::jar_view(jar@);
+    let ghost sv = stores_view(stores@);
+    let mut cur = jar;
+    let mut k: usize = 0;
+    proof {
+        assert(sv.subrange(0, sv.len() as int) =~= sv);
+    }
+    while k < stores.len()
+        invariant
+            k <= stores.len(),
+            clazel_cookie::set_cookie::contract::now_in_range(now as int),
+            sv == stores_view(stores@),
+            clazel_cookie::storage::contract::jar_in_range(clazel_cookie::storage::exec::jar_view(cur@)),
+            apply_stores(crate::contract::psl(), clazel_cookie::storage::exec::jar_view(cur@), sv.subrange(k as int, sv.len() as int), now as int) == apply_stores(
+                crate::contract::psl(),
+                jar0,
+                sv,
+                now as int,
+            ),
+        decreases stores.len() - k,
+    {
+        if let Some(st) = stores.get(k) {
+            proof {
+                lemma_apply_stores_tail(clazel_cookie::storage::exec::jar_view(cur@), sv, k as int, now as int);
+                assert(sv[k as int] == st@);
+            }
+            cur = store_one_exec(cur, st, now);
+            proof {
+                clazel_cookie::storage::exec::lemma_jar_view_in_range(cur@);
+            }
+        }
+        // Never saturates: k < stores.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(sv.subrange(stores.len() as int, sv.len() as int) =~= Seq::<HttpStore>::empty());
+    }
+    cur
+}
+
+/// [`fetched`]: a `Fetched` event for tab `tab`, whose fetch was started for
+/// `url`, over what the network delivered (`net`).
+pub fn fetched_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, tab: u64, url: &[u32], net: &[u8]) -> (out: (
+    StateRecord,
+    Vec<OutputRecord>,
+))
+    requires
+        state_ok(urls.urls(), s),
+    ensures
+        result_view(out) == fetched(crate::contract::psl(), urls.urls(), fetch.fetch(), s@, tab as nat, NetOutcome { url: url@, net: net@ }),
+        out.0.exec_wf(),
+        out.0.now == s.now,
+        out.0.next_id <= s.next_id + 1,
+{
+    let ghost sv = s@;
+    match find_by_tab_exec(s.renderers.as_slice(), tab) {
+        None => (s, no_outputs()),
+        Some(i) => {
+            let navigating_here = match s.renderers.get(i) {
+                Some(r) => match &r.pending {
+                    Some(p) => u32s_eq(p.as_slice(), url),
+                    None => false,
+                },
+                None => false,
+            };
+            if !navigating_here {
+                proof {
+                    assert(fetched_run(fetch.fetch(), sv, tab as nat, NetOutcome { url: url@, net: net@ }) is None);
+                }
+                (s, no_outputs())
+            } else {
+                let run = fetch.run(url, net);
+                let StateRecord { renderers, jar, storage, next_id, now } = s;
+                proof {
+                    clazel_cookie::storage::exec::lemma_jar_view_in_range(jar@);
+                }
+                let jar1 = apply_stores_exec(jar, run.stores.as_slice(), now);
+                let s1 = StateRecord { renderers, jar: jar1, storage, next_id, now };
+                proof {
+                    assert(s1@ == State { jar: apply_stores(crate::contract::psl(), sv.jar, stores_view(run.stores@), sv.now), ..sv });
+                    clazel_cookie::storage::exec::lemma_jar_view_in_range(s1.jar@);
+                }
+                match run.result {
+                    FetchResultRecord::Done { url: furl, body } => {
+                        if super::real_urls::all_scalar_values_exec(furl.as_slice()) && lock_of_url_exec(urls, furl.as_slice(), s1.next_id).is_some() {
+                            navigate_tab_exec(urls, s1, tab, furl.as_slice(), body.as_slice())
+                        } else {
+                            fail_navigation_exec(s1, i, 3)
+                        }
+                    },
+                    FetchResultRecord::Failed => fail_navigation_exec(s1, i, 5),
+                }
+            }
         },
     }
 }
@@ -631,8 +849,7 @@ pub fn handle_message_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, i: usize, m:
                         let outs = reply_exec(&r, &e);
                         (s, outs)
                     } else {
-                        let script: Vec<u8> = Vec::new();
-                        navigate_tab_exec(urls, s, r.tab, resolved.as_slice(), script.as_slice())
+                        begin_navigation_exec(urls, s, r.tab, resolved.as_slice())
                     }
                 },
             },
@@ -694,12 +911,12 @@ pub fn from_renderer_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, id: u64, byte
 /// The kernel's step function ([`step`]): the one entry point of the
 /// executable kernel. Pure: bytes, ids and time come in as arguments, and
 /// the outputs go out as a value for the host to act on.
-pub fn step_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, e: &EventRecord) -> (out: (StateRecord, Vec<OutputRecord>))
+pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, e: &EventRecord) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         crate::contract::step_requires(urls.urls(), s@, e@),
         s.exec_wf(),
     ensures
-        crate::contract::step_ensures(urls.urls(), s@, e@, result_view(out)),
+        crate::contract::step_ensures(urls.urls(), fetch.fetch(), s@, e@, result_view(out)),
         out.0.exec_wf(),
         clazel_cookie::storage::contract::jar_in_range(out.0@.jar),
         clazel_cookie::set_cookie::contract::now_in_range(out.0@.now),
@@ -711,7 +928,8 @@ pub fn step_exec<U: UrlFnsExec>(urls: &U, s: StateRecord, e: &EventRecord) -> (o
     let out = match e {
         EventRecord::FromRenderer { id, bytes } => from_renderer_exec(urls, s, *id, bytes.as_slice()),
         EventRecord::OpenTab { url, script } => open_tab_exec(urls, s, url.as_slice(), script.as_slice()),
-        EventRecord::NavigateTab { tab, url, script } => navigate_tab_exec(urls, s, *tab, url.as_slice(), script.as_slice()),
+        EventRecord::NavigateTab { tab, url } => begin_navigation_exec(urls, s, *tab, url.as_slice()),
+        EventRecord::Fetched { tab, outcome } => fetched_exec(urls, fetch, s, *tab, outcome.url.as_slice(), outcome.net.as_slice()),
         EventRecord::RendererExited { id } => renderer_exited_exec(s, *id),
         EventRecord::Tick { time } => tick_exec(s, *time),
     };
