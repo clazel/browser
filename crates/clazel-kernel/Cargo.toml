@@ -86,6 +86,7 @@ theorems = [
     "quark_cookie_confidentiality",
     "lemma_independent_cookie_get",
     "lemma_independent_cookie_set",
+    "example_dead_tab_breaks_noninterference",
     "example_public_suffix_overlay_crosses_roots",
     "example_retrieval_changes_jar",
     # Item 2.13: the above for the shipped kernel (the real URL parser), and
@@ -95,6 +96,7 @@ theorems = [
     "corollary_real_cookie_confidentiality",
     "corollary_real_cookie_integrity",
     "corollary_real_storage_same_origin",
+    "corollary_real_wire_cookies",
     "corollary_real_cookie_noninterference",
     "lemma_real_urls_resolve_scalar",
 ]

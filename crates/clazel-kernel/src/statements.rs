@@ -80,13 +80,24 @@ pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, u
 /// ([`net_target`]: the connection is in the table, its tab is open and its
 /// renderer is navigating); and a step that leaves a tab's renderer no longer
 /// navigating leaves the tab no connection, so a late event of a finished
-/// fetch is ignored.
+/// fetch is ignored. And a step on which the transducer ends the fetch
+/// (`Done` or `Fail` among its actions) leaves the tab's renderer not
+/// navigating and the tab without connections, whether the navigation
+/// committed or failed (`commit_navigation`, `abort_navigation`).
 pub open spec fn net_answers_connection_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
     let (s1, out) = step(rules, urls, fetch, s, Event::Net { conn, input });
     &&& (net_target(s, conn) is None ==> s1 == s && out == Seq::<Output>::empty())
     &&& (net_target(s, conn) matches Some((c, _, _)) ==> forall|j: int, k: int|
         0 <= j < s1.renderers.len() && 0 <= k < s1.conns.len() && (#[trigger] s1.renderers[j]).tab == c.tab && (#[trigger] s1.conns[k]).tab == c.tab
             ==> s1.renderers[j].pending is Some)
+    &&& (net_target(s, conn) matches Some((c, _, nav)) ==> {
+        let actions = net_transducer_step(fetch, s, nav, input).1;
+        (exists|a: int|
+            0 <= a < actions.len() && ((#[trigger] actions[a]) is Done || actions[a] is Fail)) ==> {
+            &&& forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == c.tab ==> s1.renderers[j].pending is None
+            &&& forall|k: int| 0 <= k < s1.conns.len() ==> (#[trigger] s1.conns[k]).tab != c.tab
+        }
+    })
 }
 
 /// `theorem_wire_cookies`, kernel level (item 3.7): every `Send` the kernel
@@ -98,9 +109,16 @@ pub open spec fn net_answers_connection_statement(rules: Seq<clazel_psl::spec::R
 /// cookie-string for that request, from the kernel's jar at the step, at
 /// its time, for the request's context (or no field, if no valid request can
 /// carry that string).
+///
+/// The transducer reads the jar with its own Public Suffix List
+/// (`fetch.urls.rules`), the kernel applies the jar operations with `rules`;
+/// the statement is about a transducer whose list is the kernel's
+/// (`fetch.urls.rules == rules`), which the shipped instantiation satisfies
+/// (`real_theorems::corollary_real_wire_cookies`, and the exec kernel's
+/// `fetch.urls.rules == psl()` precondition).
 pub open spec fn wire_cookies_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
     let out = step(rules, urls, fetch, s, Event::Net { conn, input }).1;
-    match net_target(s, conn) {
+    fetch.urls.rules == rules ==> match net_target(s, conn) {
         None => true,
         Some((c, _, nav)) => {
             let actions = net_transducer_step(fetch, s, nav, input).1;
@@ -112,7 +130,7 @@ pub open spec fn wire_cookies_statement(rules: Seq<clazel_psl::spec::Rule>, urls
                         clazel_fetch::transducer::contract::carried(
                             nav.fetch.url,
                             clazel_cookie::storage::spec::retrieve_cookie_string(
-                                fetch.urls.rules,
+                                rules,
                                 s.jar,
                                 (fetch.urls.request_url)(nav.fetch.url),
                                 clazel_fetch::transducer::spec::request_context(fetch.urls, nav.fetch),

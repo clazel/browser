@@ -2,14 +2,14 @@
 //! found false, each shown in Verus, and the narrowest correction that
 //! `noninterference.rs` and `statements.rs` state instead.
 //!
-//! 1. `example_dead_tab_breaks_noninterference` (being restated): without `user_tabs_open`,
+//! 1. [`example_dead_tab_breaks_noninterference`]: without `user_tabs_open`,
 //!    `theorem_cookie_noninterference` is false. A renderer of one domain
 //!    that sends a frame the kernel cannot decode is killed and its tab is
 //!    closed; the purge drops that frame, so in the purged run the tab is
 //!    still open (and its connections), and a later `Net` for the connection
 //!    of the navigation the user made while the tab was open steps its fetch
 //!    to a commit of a document in the observer's domain, which the first run
-//!    does not. (The proof is being restated over `Net`: item 3.7, stage 2.) (Before item 3.7 a
+//!    does not. (Before item 3.7 a
 //!    later `NavigateTab` of the user to the closed tab did the same: a
 //!    navigation committed at once. A `NavigateTab` to a closed tab no longer
 //!    shows anything to the observer, since it only starts a fetch, so it is
@@ -51,14 +51,60 @@ pub open spec fn ce_urls() -> UrlFns {
     }
 }
 
-// Counterexample 1 is restated over `Net` in stage 2 of item 3.7's join: it
-// needs a concrete transducer (a response that commits into the observer's
-// domain), whose evaluation is part of the proofs. Its statement, in words:
-// without `user_tabs_open`'s clause that a `Net` names an open connection,
-// `theorem_cookie_noninterference` is false: a renderer's undecodable frame
-// kills it, which closes its tab's connections; the purge drops that frame, so
-// in the purged run the connection is still open when its `Net` arrives, and
-// the fetch commits into the observer's domain.
+/// The transducer under which the counterexample runs: the real response
+/// parser, the transducer examples' stand-in URL functions, and a parser that
+/// reads every navigation URL as `http://a/a`.
+pub open spec fn ce_fetch() -> FetchFns {
+    FetchFns {
+        http: clazel_fetch::transducer::real::real_http(),
+        urls: clazel_fetch::transducer::examples::example_urls(),
+        parse: |u: Seq<u32>| Some(clazel_fetch::transducer::examples::url_a(None)),
+    }
+}
+
+/// `HTTP/1.1 204 No Content` and an empty header section.
+pub open spec fn ce_response() -> Seq<u8> {
+    seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x34, 0x20, 0x4E, 0x6F, 0x20, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x0D, 0x0A, 0x0D, 0x0A]
+}
+
+/// Open a tab, navigate it (the user types a URL; the kernel opens the
+/// connection 0), have its renderer send an undecodable frame (empty), which
+/// closes the tab and its connection, then report that connection open and
+/// the response arriving.
+pub open spec fn ce_trace() -> Seq<Event> {
+    seq![
+        Event::OpenTab { url: Seq::<u32>::empty(), script: Seq::<u8>::empty() },
+        Event::NavigateTab { tab: 0, url: Seq::<u32>::empty() },
+        Event::FromRenderer { id: 0, bytes: Seq::<u8>::empty() },
+        Event::Net { conn: 0, input: clazel_fetch::transducer::spec::Input::Connected },
+        Event::Net { conn: 0, input: clazel_fetch::transducer::spec::Input::Bytes(ce_response()) },
+    ]
+}
+
+/// **Counterexample 1** (restated over `Net` events, item 3.7). For the
+/// observer `Opaque(1)` (the renderer the purged run spawns): every
+/// `NavigateTab` of the trace names an open tab, but its `Net` events name a
+/// connection that is closed, and the outputs to the observer differ between
+/// the trace and its purge. In the trace the renderer's undecodable frame
+/// closes the tab and its connection, so both events are ignored; the purge
+/// drops that frame, so the connection is still open when the shell reports
+/// on it, the transducer sends its request and reads the response, and the
+/// navigation commits into the observer's domain. So `user_tabs_open` needs
+/// its clause for `Net` events.
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn example_dead_tab_breaks_noninterference(rules: Seq<clazel_psl::spec::Rule>)
+    ensures
+        ({
+            let urls = ce_urls();
+            let fetch = ce_fetch();
+            let t = ce_trace();
+            let d = crate::domain::Domain::Opaque(1nat);
+            !crate::noninterference::user_tabs_open(rules, urls, fetch, init_state(), t) && crate::noninterference::run_outputs_for(rules, urls, fetch, d, init_state(), t)
+                != crate::noninterference::run_outputs_for(rules, urls, fetch, d, init_state(), crate::domain::purge(rules, urls, fetch, d, t))
+        }),
+{
+}
 
 /// An accepted element is in the filter.
 pub proof fn lemma_filter_contains_elem<A>(s: Seq<A>, p: spec_fn(A) -> bool, i: int)

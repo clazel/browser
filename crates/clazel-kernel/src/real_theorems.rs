@@ -77,6 +77,21 @@ pub proof fn corollary_real_cookie_integrity(fetch: FetchFns, s: State, e: Event
     crate::cookie_theorems::theorem_cookie_integrity(crate::contract::psl(), crate::urls::real_urls(), fetch, s, e);
 }
 
+/// Item 3.7's `wire_cookies_statement` for the shipped kernel: the transducer
+/// the shipped kernel steps reads the jar with the Public Suffix List the
+/// kernel applies jar operations with (`psl()`), so the hypothesis of the
+/// statement holds, for any other fetch parameter.
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn corollary_real_wire_cookies(fetch: FetchFns, s: State, conn: nat, input: NetInput)
+    requires
+        real_reachable(fetch, s),
+        fetch.urls.rules == crate::contract::psl(),
+    ensures
+        crate::statements::wire_cookies_statement(crate::contract::psl(), crate::urls::real_urls(), fetch, s, conn, input),
+{
+}
+
 /// Theorem `theorem_storage_same_origin` for the shipped kernel.
 pub proof fn corollary_real_storage_same_origin(fetch: FetchFns, s: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
