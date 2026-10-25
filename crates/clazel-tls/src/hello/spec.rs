@@ -46,18 +46,18 @@ pub open spec fn offered(es: Seq<crate::spec::Ext>, retry: bool) -> bool
     es.len() == 0 || ((es[0].etype == 43 || es[0].etype == 51
         || (retry && es[0].etype == 44)) && offered(es.skip(1), retry))
 }
-/// §4.1.3 legacy fields and cipher_suite; §4.2.1 selected_version.
+/// §4.2.1 selected_version first; §4.1.3 session echo, cipher and compression.
+/// §4.2.1 explicitly requires clients to ignore legacy_version here.
 pub open spec fn parameters(sh: crate::spec::ServerHello, session_id: Seq<u8>) -> Option<u8> {
-    if sh.legacy_version != 0x0303 || sh.session_id_echo != session_id
-        || sh.cipher_suite != 0x1303 || sh.compression != 0 { Some(47) }
-    else {
-        match extension(sh.extensions, 43) {
-            None => Some(109),
-            Some(data) => match crate::spec::read_supported_versions_sh(data) {
-                None => Some(50),
-                Some(version) => if version != 0x0304 { Some(47) } else { None },
-            },
-        }
+    match extension(sh.extensions, 43) {
+        None => Some(109),
+        Some(data) => match crate::spec::read_supported_versions_sh(data) {
+            None => Some(50),
+            Some(version) => if version != 0x0304 { Some(47) }
+                else if sh.session_id_echo != session_id || sh.cipher_suite != 0x1303
+                    || sh.compression != 0 { Some(47) }
+                else { None },
+        },
     }
 }
 /// §4.1.4 second/no-op retry, §4.2.8 selected_group checks, §4.2.2 cookie.
