@@ -463,12 +463,13 @@ pub proof fn lemma_split_inner_canonical(p: Seq<u8>)
 }
 
 /// The inner plaintext of a record we protect is opened to the record:
-/// any type of `alert`, `handshake` or `application_data`, any padding,
+/// any type of `alert`, `handshake` or `application_data`, bounded padding,
 /// content of at most 2^14 bytes, non-empty unless it is application data.
 pub proof fn lemma_open_write_inner(content: Seq<u8>, ctype: u8, padding: nat)
     requires
         ctype == CT_ALERT || ctype == CT_HANDSHAKE || ctype == CT_APPLICATION_DATA,
         content.len() <= MAX_PLAINTEXT,
+        content.len() + 1 + padding <= MAX_PLAINTEXT + 1,
         ctype == CT_APPLICATION_DATA || content.len() > 0,
     ensures
         open_inner_plaintext(write_inner_plaintext(content, ctype, padding)) == Res::Ok(
@@ -500,6 +501,7 @@ pub proof fn lemma_encrypt_decrypt(
     requires
         ctype == CT_ALERT || ctype == CT_HANDSHAKE || ctype == CT_APPLICATION_DATA,
         content.len() <= MAX_PLAINTEXT,
+        content.len() + 1 + padding <= MAX_PLAINTEXT + 1,
         ctype == CT_APPLICATION_DATA || content.len() > 0,
         content.len() + 1 + padding + tag_len <= MAX_CIPHERTEXT,
         forall|n: Seq<u8>, a: Seq<u8>, p: Seq<u8>| #[trigger] seal(n, a, p).len() == p.len() + tag_len,

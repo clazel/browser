@@ -60,7 +60,9 @@
 //!   (2^18 = 262144 octets) is refused when its four-byte header is read,
 //!   although `uint24 length` allows 2^24-1; the reassembly buffer never
 //!   holds [`REASSEMBLY_BOUND`] (2^14 + 4 + 2^18 = 278532) bytes or more.
-//!   Records: 2^14 and 2^14 + 256 as in §5.1 and §5.2. Extensions: 2^16-1
+//!   Records: 2^14 content bytes, 2^14 + 1 full inner-plaintext bytes
+//!   including type/padding (§5.4), and 2^14 + 256 ciphertext bytes (§5.2).
+//!   Extensions: 2^16-1
 //!   octets of `extension_data` and of the whole block, as declared.
 //! - **`legacy_record_version`.** §5.1 also says the field "MUST be
 //!   ignored for all purposes"; the reader here refuses a value that is
@@ -794,6 +796,8 @@ pub open spec fn split_inner_plaintext(p: Seq<u8>) -> Option<(Seq<u8>, u8)>
 
 /// §5.2 and §5.4 applied to the decrypted `TLSInnerPlaintext` `p`:
 ///
+/// 0. §5.4: reject a full encoded inner plaintext above 2^14 + 1,
+///    including content type and padding, with `record_overflow`.
 /// 1. Find the content type from the end; "all-zero" has none, which is
 ///    `unexpected_message`.
 /// 2. A `change_cipher_spec` record must not be protected (§5: "which
@@ -808,6 +812,7 @@ pub open spec fn split_inner_plaintext(p: Seq<u8>) -> Option<(Seq<u8>, u8)>
 ///    received, the receiving implementation MUST terminate the
 ///    connection with an "unexpected_message" alert." (§5.4)
 pub open spec fn open_inner_plaintext(p: Seq<u8>) -> Res<Record> {
+    if p.len() > MAX_PLAINTEXT + 1 { return Res::Err(ErrKind::RecordOverflow); }
     match split_inner_plaintext(p) {
         None => Res::Err(ErrKind::AllZeroInnerPlaintext),
         Some((content, t)) => {

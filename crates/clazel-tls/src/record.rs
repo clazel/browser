@@ -404,6 +404,7 @@ pub fn encrypt_record<A: Aead>(aead: &A, iv: &[u8], seqno: u64, ctype: u8, conte
     requires
         iv.len() >= 8,
         iv@.len() == aead.nonce_len_spec(),
+        super::contract::inner_length_requires(content@, padding as nat),
         content.len() + 1 + padding + aead.tag_len_spec() <= MAX_CIPHERTEXT,
     ensures
         record@ == super::spec::encrypt_record(
@@ -428,7 +429,8 @@ pub fn encrypt_record<A: Aead>(aead: &A, iv: &[u8], seqno: u64, ctype: u8, conte
         invariant
             k <= padding,
             inner@ =~= content@ + seq![ctype] + Seq::new(k as nat, |i: int| 0u8),
-            content.len() + 1 + padding + aead.tag_len_spec() <= MAX_CIPHERTEXT,
+            super::contract::inner_length_requires(content@, padding as nat),
+        content.len() + 1 + padding + aead.tag_len_spec() <= MAX_CIPHERTEXT,
         decreases padding - k,
     {
         inner.push(0);

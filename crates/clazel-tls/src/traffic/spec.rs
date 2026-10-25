@@ -11,7 +11,8 @@
 //!   making a second object with the same secret is outside this module's
 //!   per-object counter guarantee. KeyUpdate and phase changes are a later join.
 //! - Outbound callers fragment content into at most 2^14-byte records.
-//!   Padding is checked against the existing TLSCiphertext bound.
+//!   Content/type/padding together are at most 2^14 + 1 bytes (§5.4).
+//!   The fixed 16-byte tag then also fits the TLSCiphertext bound.
 //! - Inbound input starts at a record boundary; return the consumed count
 //!   so the driver can retain any suffix. NeedMore retains all epoch state.
 //! - A complete record's framing, MAC or inner-plaintext failure kills this
@@ -71,9 +72,8 @@ pub open spec fn failed(s: State) -> State { State { failed: true, ..s } }
 /// §5.2/§5.4: validate outbound inner type/content/padding before AEAD.
 pub open spec fn send_error(typ: u8, content: Seq<u8>, padding: nat) -> Option<u8> {
     if !(typ == 21 || typ == 22 || typ == 23) { Some(10) }
-    else if content.len() > crate::spec::MAX_PLAINTEXT { Some(22) }
     else if content.len() == 0 && (typ == 21 || typ == 22) { Some(10) }
-    else if content.len() + 1 + padding + 16 > crate::spec::MAX_CIPHERTEXT { Some(22) }
+    else if content.len() + 1 + padding > crate::spec::MAX_PLAINTEXT + 1 { Some(22) }
     else { None }
 }
 /// §5.2/§5.3: write one complete record using exactly the next unused nonce.

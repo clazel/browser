@@ -103,6 +103,11 @@ pub open spec fn split_inner_ensures(p: Seq<u8>, out: Option<(usize, u8)>) -> bo
     }
 }
 
+/// §5.4: full inner plaintext includes the content type and all padding.
+pub open spec fn inner_length_requires(content: Seq<u8>, padding: nat) -> bool {
+    content.len() + 1 + padding <= MAX_PLAINTEXT + 1
+}
+
 /// `open_inner_plaintext(p)`: [`open_inner_plaintext`].
 pub open spec fn open_inner_ensures(p: Seq<u8>, out: Res<Record>) -> bool {
     out == open_inner_plaintext(p)
