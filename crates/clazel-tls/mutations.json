@@ -1887,7 +1887,7 @@
       "certificate": {
         "file": "src/hello/certificates.rs",
         "lemma": "super::examples::lemma_redundant_retry_share()",
-        "witness": "retry(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }], ..super::examples::request() }, false) != Err(47u8)"
+        "witness": "retry(crate::spec::ServerHello { extensions: super::examples::request().extensions.push(crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }), ..super::examples::request() }, false) != Err(47u8)"
       }
     },
     {

@@ -201,6 +201,24 @@ fn cookie_only_retry_returns_exact_extension_data_and_rejects_invalid_retries() 
         validate(SESSION_ID, false, &redundant),
         Err(ILLEGAL_PARAMETER)
     );
+    // A valid cookie must not mask a request to replace an already offered share.
+    let cookie_and_share = [
+        (43, version.as_slice()),
+        (44, cookie_data.as_slice()),
+        (51, selected_group.as_slice()),
+    ];
+    let redundant = server_hello(
+        0x0303,
+        &HRR_RANDOM,
+        SESSION_ID,
+        0x1303,
+        0,
+        &cookie_and_share,
+    );
+    assert_eq!(
+        validate(SESSION_ID, false, &redundant),
+        Err(ILLEGAL_PARAMETER)
+    );
 
     let unoffered_group = 23u16.to_be_bytes();
     let asks_for_group = [(43, version.as_slice()), (51, unoffered_group.as_slice())];

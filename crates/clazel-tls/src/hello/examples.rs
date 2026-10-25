@@ -61,9 +61,9 @@ pub proof fn lemma_retry_checks()
 }
 /// §4.2.8: no supported group remains for a replacement share in this profile.
 pub proof fn lemma_redundant_retry_share()
-    ensures retry(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }], ..request() }, false) == Err(47u8),
+    ensures retry(crate::spec::ServerHello { extensions: request().extensions.push(crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }), ..request() }, false) == Err(47u8),
 {
-    assert(retry(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }], ..request() }, false) == Err(47u8)) by (compute_only);
+    assert(retry(crate::spec::ServerHello { extensions: request().extensions.push(crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }), ..request() }, false) == Err(47u8)) by (compute_only);
 }
 /// §4.2: unknown unsolicited responses are rejected, HRR cookie is excepted.
 pub proof fn lemma_unsolicited()
