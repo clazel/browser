@@ -6,3 +6,4 @@
 //! `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 
 pub mod request;
+pub mod transducer;
