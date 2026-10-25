@@ -144,33 +144,25 @@ pub proof fn lemma_rel_after_update(
 }
 
 /// `begin_navigation` from related states, for a tab open in the first: the
-/// same outputs (a `Fetch`, or nothing), and related states.
-pub proof fn lemma_begin_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, url: Seq<u32>)
+/// same outputs (the `Close`s of the tab's old connections and the first
+/// request's `Connect`, or an error), and related states.
+///
+/// Stage 2 of the join writes this proof. It needs the connection clauses of
+/// `rel` (the tab's connections are the same in both runs).
+pub proof fn lemma_begin_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, url: Seq<u32>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
     ensures
-        begin_navigation(urls, s1, tab, url).1 == begin_navigation(urls, s2, tab, url).1,
-        crate::noninterference::rel(rules, urls, d, begin_navigation(urls, s1, tab, url).0, begin_navigation(urls, s2, tab, url).0),
+        begin_navigation(rules, urls, fetch, s1, tab, url).1 == begin_navigation(rules, urls, fetch, s2, tab, url).1,
+        crate::noninterference::rel(
+            rules,
+            urls,
+            d,
+            begin_navigation(rules, urls, fetch, s1, tab, url).0,
+            begin_navigation(rules, urls, fetch, s2, tab, url).0,
+        ),
 {
-    crate::unwind_base::lemma_found_contained(s1, tab);
-    let i1 = find_by_tab(s1.renderers, tab, 0)->Some_0;
-    let old = s1.renderers[i1];
-    assert(s2.renderers.contains(old));
-    crate::unwind_base::lemma_find_contained(urls, s2, old);
-    crate::unwind_base::lemma_found_contained(s2, tab);
-    let i2 = find_by_tab(s2.renderers, tab, 0)->Some_0;
-    assert(s2.renderers[i2] == old);
-    crate::invariant::lemma_begin_navigation_wf(rules, urls, s1, tab, url);
-    crate::invariant::lemma_begin_navigation_wf(rules, urls, s2, tab, url);
-    let (s1b, o1) = begin_navigation(urls, s1, tab, url);
-    let (s2b, o2) = begin_navigation(urls, s2, tab, url);
-    if lock_of_url(urls, url, s1.next_id) is Some {
-        let r = Renderer { pending: Some(url), ..old };
-        crate::unwind_base::lemma_navigation_frame(urls, s1, tab, url, seq![]);
-        crate::unwind_base::lemma_navigation_frame(urls, s2, tab, url, seq![]);
-        lemma_rel_after_update(rules, urls, d, s1, s2, i1, i2, r, s1b, s2b);
-    }
 }
 
 /// A navigation that ends without a commit, from related states in which the
@@ -211,80 +203,24 @@ pub proof fn lemma_fail_consistency(
     );
 }
 
-/// The jar after a fetch's `Set-Cookie` lines, from related states: they
-/// stay related (the new jars agree on the unexpired cookies of every root).
-pub proof fn lemma_stores_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, stores: Seq<HttpStore>)
+/// A `Net` event from related states, for a connection open in the first:
+/// the same outputs, and related states. (The jar operations leave the
+/// unexpired cookies of every root the states agree on agreeing:
+/// `lemma_apply_net_ops_agree`; the transducer's step does not depend on the
+/// jar but in the octets of a `Send`, which are addressed to no renderer:
+/// `theorem_jar_only_in_sends` of `clazel-fetch`.)
+///
+/// Stage 2 of the join writes this proof. The statement may need a stronger
+/// hypothesis than `rel` and `kept_event`: it is the one place the
+/// noninterference theorem meets the network, and it is not yet proven.
+pub proof fn lemma_net_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, conn: nat, input: NetInput)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
+        net_target(s1, conn) is Some,
     ensures
-        crate::noninterference::rel(
-            rules,
-            urls,
-            d,
-            State { jar: apply_stores(rules, s1.jar, stores, s1.now), ..s1 },
-            State { jar: apply_stores(rules, s2.jar, stores, s2.now), ..s2 },
-        ),
+        net(rules, urls, fetch, s1, conn, input).1 == net(rules, urls, fetch, s2, conn, input).1,
+        crate::noninterference::rel(rules, urls, d, net(rules, urls, fetch, s1, conn, input).0, net(rules, urls, fetch, s2, conn, input).0),
 {
-    let s1b = State { jar: apply_stores(rules, s1.jar, stores, s1.now), ..s1 };
-    let s2b = State { jar: apply_stores(rules, s2.jar, stores, s2.now), ..s2 };
-    crate::invariant::lemma_apply_stores_wf(rules, s1.jar, stores, s1.now);
-    crate::invariant::lemma_apply_stores_wf(rules, s2.jar, stores, s2.now);
-    if let crate::domain::Domain::Root(root) = d {
-        assert(crate::projection::live_root(rules, s1.jar, s1.now, root) == crate::projection::live_root(rules, s2.jar, s2.now, root));
-        crate::store_projection::lemma_apply_stores_agree(rules, s1.jar, s2.jar, stores, s1.now, root);
-    }
-    assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
-        let k = choose|k: int| 0 <= k < s1.renderers.len() && s1.renderers[k] == x;
-    }
-    lemma_rel_from_sets(rules, urls, d, s1b, s2b);
-}
-
-/// `fetched` from related states, for a tab open in the first: the same
-/// outputs, and related states.
-pub proof fn lemma_fetched_consistency(
-    rules: Seq<clazel_psl::spec::Rule>,
-    urls: UrlFns,
-    fetch: FetchFns,
-    d: crate::domain::Domain,
-    s1: State,
-    s2: State,
-    tab: nat,
-    outcome: NetOutcome,
-)
-    requires
-        crate::noninterference::rel(rules, urls, d, s1, s2),
-        find_by_tab(s1.renderers, tab, 0) is Some,
-    ensures
-        fetched(rules, urls, fetch, s1, tab, outcome).1 == fetched(rules, urls, fetch, s2, tab, outcome).1,
-        crate::noninterference::rel(rules, urls, d, fetched(rules, urls, fetch, s1, tab, outcome).0, fetched(rules, urls, fetch, s2, tab, outcome).0),
-{
-    crate::unwind_base::lemma_found_contained(s1, tab);
-    let i1 = find_by_tab(s1.renderers, tab, 0)->Some_0;
-    let old = s1.renderers[i1];
-    assert(s2.renderers.contains(old));
-    crate::unwind_base::lemma_find_contained(urls, s2, old);
-    crate::unwind_base::lemma_found_contained(s2, tab);
-    let i2 = find_by_tab(s2.renderers, tab, 0)->Some_0;
-    assert(s2.renderers[i2] == old);
-    assert(fetched_run(fetch, s1, tab, outcome) == fetched_run(fetch, s2, tab, outcome));
-    if let Some(run) = fetched_run(fetch, s1, tab, outcome) {
-        lemma_stores_consistency(rules, urls, d, s1, s2, run.stores);
-        let s1p = State { jar: apply_stores(rules, s1.jar, run.stores, s1.now), ..s1 };
-        let s2p = State { jar: apply_stores(rules, s2.jar, run.stores, s2.now), ..s2 };
-        assert(find_by_tab(s1p.renderers, tab, 0) is Some);
-        match run.result {
-            FetchResult::Done { url, body } => {
-                if scalar_url(url) && lock_of_url(urls, url, s1p.next_id) is Some {
-                    lemma_navigate_tab_consistency(rules, urls, d, s1p, s2p, tab, url, body);
-                } else {
-                    lemma_fail_consistency(rules, urls, d, s1p, s2p, i1, i2, error_bad_url());
-                }
-            },
-            FetchResult::Failed => {
-                lemma_fail_consistency(rules, urls, d, s1p, s2p, i1, i2, error_fetch());
-            },
-        }
-    }
 }
 
 /// `rel`, from facts about sets of renderers.

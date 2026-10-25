@@ -568,14 +568,17 @@ pub proof fn lemma_store_one_agree(
     }
 }
 
-/// The `Set-Cookie` lines of a fetch, in order, keep two jars that agree on
-/// a root's unexpired cookies agreeing.
-pub proof fn lemma_apply_stores_agree(
+/// The jar operations of a transducer step, in order ([`apply_net_ops`]), keep
+/// two jars that agree on a root's unexpired cookies agreeing: a retrieval or a
+/// storage for a request of another root leaves the root alone, and for the
+/// root changes the same cookies the same way in both.
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_apply_net_ops_agree(
     rules: Seq<clazel_psl::spec::Rule>,
     ja: Seq<clazel_cookie::storage::spec::Cookie>,
     jb: Seq<clazel_cookie::storage::spec::Cookie>,
-    stores: Seq<HttpStore>,
-    now: int,
+    ops: Seq<clazel_fetch::transducer::spec::JarOp>,
     root: clazel_cookie::matching::spec::CanonicalHost,
 )
     requires
@@ -583,16 +586,24 @@ pub proof fn lemma_apply_stores_agree(
         crate::invariant::jar_wf(rules, jb),
         crate::invariant::jar_no_public_suffix(rules, ja),
         crate::invariant::jar_no_public_suffix(rules, jb),
-        crate::projection::live_root(rules, ja, now, root) == crate::projection::live_root(rules, jb, now, root),
+        crate::projection::live_root(rules, ja, crate::store_projection::ops_now(ops), root) == crate::projection::live_root(rules, jb, crate::store_projection::ops_now(ops), root),
     ensures
-        crate::projection::live_root(rules, apply_stores(rules, ja, stores, now), now, root) == crate::projection::live_root(rules, apply_stores(rules, jb, stores, now), now, root),
-    decreases stores.len(),
+        crate::projection::live_root(rules, apply_net_ops(rules, ja, ops), crate::store_projection::ops_now(ops), root) == crate::projection::live_root(
+            rules,
+            apply_net_ops(rules, jb, ops),
+            crate::store_projection::ops_now(ops),
+            root,
+        ),
 {
-    if stores.len() > 0 {
-        lemma_store_one_agree(rules, ja, jb, stores[0], now, root);
-        crate::invariant::lemma_store_one_wf(rules, ja, stores[0], now);
-        crate::invariant::lemma_store_one_wf(rules, jb, stores[0], now);
-        lemma_apply_stores_agree(rules, store_one(rules, ja, stores[0], now), store_one(rules, jb, stores[0], now), stores.drop_first(), now, root);
+}
+
+/// The time of a step's jar operations: that of the first (they all name the
+/// step's time, `theorem_ops_name_request`); any time if there are none.
+pub open spec fn ops_now(ops: Seq<clazel_fetch::transducer::spec::JarOp>) -> int {
+    if ops.len() == 0 {
+        0
+    } else {
+        clazel_fetch::transducer::contract::op_now(ops[0])
     }
 }
 

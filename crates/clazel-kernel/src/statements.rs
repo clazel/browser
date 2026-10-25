@@ -14,8 +14,8 @@
 //!   cookies first, which the plan's "except expiry at Tick" omits.
 //! - `theorem_cookie_noninterference`: see `noninterference.rs` and
 //!   `counterexamples.rs`: the user may only navigate a tab that is open, and
-//!   the network shell may only report the fetch of a tab that is open
-//!   (`user_tabs_open`). (A second correction, that no renderer is on a
+//!   the network shell may only report on a connection that is open
+//!   (`user_tabs_open`; item 3.7). (A second correction, that no renderer is on a
 //!   public-suffix host, was first a hypothesis and is now closed in the
 //!   kernel: such documents are cookie-averse.)
 
@@ -29,58 +29,195 @@ verus! {
 /// `theorem_reply_only_to_sender`: the `ToRenderer` outputs of a
 /// `FromRenderer(id, _)` event are for `id`, or for the renderer spawned in
 /// that step (id `next_id`, with a `Spawn` among the outputs); a `Spawn` is
-/// for `next_id`; a `Kill` is for `id`.
+/// for `next_id`; a `Kill` is for `id`. Item 3.7: it never gives a `Send` (a
+/// frame from a renderer is never a wire byte); a `Connect` is for a
+/// connection opened in this step (an id from `next_conn` on, below the new
+/// counter); and a `Close` is for a connection of the sender's own tab (a
+/// navigation it starts replaces its tab's in-flight one, or it is killed and
+/// takes its tab's connections with it).
 pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
-    let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
+    let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
     forall|k: int|
         0 <= k < out.len() ==> match #[trigger] out[k] {
             Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
             Output::Spawn { id: x, .. } => x == s.next_id,
             Output::Kill { id: x } => x == id,
-            Output::Fetch { tab: x, .. } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == x,
+            Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
+            Output::Send { .. } => false,
+            Output::Close { conn: x } => exists|i: int, j: int|
+                0 <= i < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i].tab,
         }
 }
 
-/// `theorem_fetched_only_to_tab` (item 3.7): a `Fetched { tab, _ }` event is
-/// attributed to the renderer of its tab, as a frame is to its socket's: its
-/// outputs are `ToRenderer`s for that renderer or for the renderer spawned in
-/// that step (id `next_id`, with a `Spawn` among the outputs), a `Spawn` for
-/// `next_id`, and a `Kill` of that renderer; and no `Fetch` (a fetch's answer
-/// does not start another fetch).
-pub open spec fn fetched_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome) -> bool {
-    let out = step(rules, urls, fetch, s, Event::Fetched { tab, outcome }).1;
-    forall|k: int|
-        0 <= k < out.len() ==> match #[trigger] out[k] {
-            Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x) || (x == s.next_id && out.contains(
-                Output::Spawn { id: x, policy: Policy::Renderer },
-            )),
-            Output::Spawn { id: x, .. } => x == s.next_id,
-            Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
-            Output::Fetch { .. } => false,
-        }
+/// `theorem_net_only_to_tab` (item 3.7; replaces `theorem_fetched_only_to_tab`):
+/// a `Net { conn, _ }` event is attributed to the renderer of its connection's
+/// tab, as a frame is to its socket's: its renderer-bound outputs are
+/// `ToRenderer`s for that renderer or for the renderer spawned in that step (id
+/// `next_id`, with a `Spawn` among the outputs), a `Spawn` for `next_id`, and a
+/// `Kill` of that renderer. (Its `Connect`, `Send` and `Close` outputs concern
+/// only that tab's connections: `connection_ownership_statement`.)
+pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
+    let out = step(rules, urls, fetch, s, Event::Net { conn, input }).1;
+    match net_target(s, conn) {
+        None => true,
+        Some((c, _, _)) => forall|k: int|
+            0 <= k < out.len() ==> match #[trigger] out[k] {
+                Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == c.tab && s.renderers[i].id == x) || (x == s.next_id && out.contains(
+                    Output::Spawn { id: x, policy: Policy::Renderer },
+                )),
+                Output::Spawn { id: x, .. } => x == s.next_id,
+                Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == c.tab && s.renderers[i].id == x,
+                Output::Connect { .. } => true,
+                Output::Send { .. } => true,
+                Output::Close { .. } => true,
+            },
+    }
 }
 
-/// `theorem_fetched_answers_navigation` (item 3.7): a `Fetched { tab, outcome
-/// }` event does nothing (no state change, no output) unless it answers the
-/// navigation in flight ([`fetched_run`]: its tab is open, its renderer is
-/// navigating, and to the URL the outcome was fetched for); and one that
-/// does leaves the tab's renderer no longer navigating, so a second answer
-/// to the same navigation is ignored.
-pub open spec fn fetched_answers_navigation_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome) -> bool {
-    let (s1, out) = step(rules, urls, fetch, s, Event::Fetched { tab, outcome });
-    &&& (fetched_run(fetch, s, tab, outcome) is None ==> s1 == s && out == Seq::<Output>::empty())
-    &&& (fetched_run(fetch, s, tab, outcome) is Some ==> forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab ==> s1.renderers[j].pending is None)
+/// `theorem_net_answers_connection` (item 3.7; replaces
+/// `theorem_fetched_answers_navigation`): a `Net { conn, _ }` event does
+/// nothing (no state change, no output) unless it is about an open connection
+/// ([`net_target`]: the connection is in the table, its tab is open and its
+/// renderer is navigating); and a step that leaves a tab's renderer no longer
+/// navigating leaves the tab no connection, so a late event of a finished
+/// fetch is ignored.
+pub open spec fn net_answers_connection_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::Net { conn, input });
+    &&& (net_target(s, conn) is None ==> s1 == s && out == Seq::<Output>::empty())
+    &&& (net_target(s, conn) matches Some((c, _, _)) ==> forall|j: int, k: int|
+        0 <= j < s1.renderers.len() && 0 <= k < s1.conns.len() && (#[trigger] s1.renderers[j]).tab == c.tab && (#[trigger] s1.conns[k]).tab == c.tab
+            ==> s1.renderers[j].pending is Some)
+}
+
+/// `theorem_wire_cookies`, kernel level (item 3.7): every `Send` the kernel
+/// outputs for a `Net` event is on the event's connection and is a `Send`
+/// action of that connection's fetch's transducer at that step (nothing on
+/// the wire is made anywhere else); so, by item 3.6's `theorem_wire_cookies`,
+/// it is a valid request for the fetch's current URL whose only part derived
+/// from the jar is its `Cookie` field, and that field is RFC 6265bis §5.8.3's
+/// cookie-string for that request, from the kernel's jar at the step, at
+/// its time, for the request's context (or no field, if no valid request can
+/// carry that string).
+pub open spec fn wire_cookies_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
+    let out = step(rules, urls, fetch, s, Event::Net { conn, input }).1;
+    match net_target(s, conn) {
+        None => true,
+        Some((c, _, nav)) => {
+            let actions = net_transducer_step(fetch, s, nav, input).1;
+            forall|k: int|
+                0 <= k < out.len() ==> match #[trigger] out[k] {
+                    Output::Send { conn: x, bytes } => x == conn && (exists|a: int| 0 <= a < actions.len() && actions[a] == clazel_fetch::transducer::spec::Action::Send(bytes))
+                        && clazel_fetch::transducer::contract::is_wire_request(
+                        nav.fetch.url,
+                        clazel_fetch::transducer::contract::carried(
+                            nav.fetch.url,
+                            clazel_cookie::storage::spec::retrieve_cookie_string(
+                                fetch.urls.rules,
+                                s.jar,
+                                (fetch.urls.request_url)(nav.fetch.url),
+                                clazel_fetch::transducer::spec::request_context(fetch.urls, nav.fetch),
+                                s.now,
+                            ),
+                        ),
+                        bytes,
+                    ),
+                    _ => true,
+                }
+        },
+    }
+}
+
+/// `theorem_net_jar_frame` (item 3.7): a `Net` event changes the jar only by
+/// its fetch's jar operations: the jar after it is the jar before with the
+/// operations of the transducer's step applied in order ([`apply_net_ops`]:
+/// retrieval, and §5.7 storage behind [`store_allowed`]); and, by item 3.6's
+/// `theorem_jar_frame` and `theorem_ops_name_request`, those operations are
+/// the retrieval for the request the step builds and the storage of the
+/// final response's own `Set-Cookie` lines, each naming only the fetch's
+/// current request and the step's time. An event that is not about an open
+/// connection leaves the jar as it is.
+pub open spec fn net_jar_frame_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
+    let s1 = step(rules, urls, fetch, s, Event::Net { conn, input }).0;
+    match net_target(s, conn) {
+        None => s1.jar == s.jar,
+        Some((c, _, nav)) => {
+            let ops = net_transducer_step(fetch, s, nav, input).2;
+            &&& s1.jar == apply_net_ops(rules, s.jar, ops)
+            &&& clazel_fetch::transducer::contract::jar_frame(fetch.http, fetch.urls, nav.fetch, input, s.jar, s.now)
+            &&& clazel_fetch::transducer::contract::ops_name_request(fetch.urls, nav.fetch, s.now, ops)
+        },
+    }
+}
+
+/// The tab an event is about, for connections: the sender's tab for a
+/// `FromRenderer` of a renderer that exists, the tab of a `NavigateTab`, the
+/// tab of the renderer that exits, and the owner of the connection of a `Net`
+/// (when it is open). Other events are about no tab.
+pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
+    match e {
+        Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => Some(s.renderers[i].tab),
+            None => None,
+        },
+        Event::NavigateTab { tab, .. } => Some(tab),
+        Event::RendererExited { id } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => Some(s.renderers[i].tab),
+            None => None,
+        },
+        Event::Net { conn, .. } => match net_target(s, conn) {
+            Some((c, _, _)) => Some(c.tab),
+            None => None,
+        },
+        _ => None,
+    }
+}
+
+/// `theorem_connection_ownership` (item 3.7): connections belong to the tab
+/// whose fetch opened them, and an event concerns only its own tab's. For
+/// every event, with `t` the tab it is about ([`event_tab`]):
+///
+/// - an event about no tab changes no connection and gives no `Connect`,
+///   `Send` or `Close`;
+/// - the connections of every other tab are still there, unchanged;
+/// - a connection that is new (an id from `next_conn` on) belongs to `t`
+///   and carries the partition key of `t`'s renderer's domain;
+/// - a connection the old connections keep, they keep unchanged;
+/// - every `Send` and `Close` names a connection of `t` in the old table or a
+///   connection of this step; every `Connect` names a connection of this step
+///   (which is `t`'s if it is still open);
+/// - connection ids are allocated in order, never reused: the counter does
+///   not go down, and a connection of the new table below the old counter is
+///   in the old table.
+pub open spec fn connection_ownership_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    &&& s.next_conn <= s1.next_conn
+    &&& forall|j: int| 0 <= j < s1.conns.len() && (#[trigger] s1.conns[j]).id < s.next_conn ==> s.conns.contains(s1.conns[j])
+    &&& (event_tab(s, e) is None ==> s1.conns == s.conns && s1.next_conn == s.next_conn && forall|k: int|
+        0 <= k < out.len() ==> !((#[trigger] out[k]) is Connect || out[k] is Send || out[k] is Close))
+    &&& (event_tab(s, e) matches Some(t) ==> {
+        &&& forall|j: int| 0 <= j < s.conns.len() && (#[trigger] s.conns[j]).tab != t ==> s1.conns.contains(s.conns[j])
+        &&& forall|j: int|
+            0 <= j < s1.conns.len() && (#[trigger] s1.conns[j]).id >= s.next_conn ==> s1.conns[j].tab == t && exists|i: int|
+                0 <= i < s1.renderers.len() && s1.renderers[i].tab == t && (s1.renderers[i].pending matches Some(nav) && nav.partition == s1.conns[j].partition)
+        &&& forall|k: int|
+            0 <= k < out.len() ==> match #[trigger] out[k] {
+                Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
+                Output::Send { conn: x, .. } => (exists|j: int| 0 <= j < s.conns.len() && s.conns[j].id == x && s.conns[j].tab == t) || (s.next_conn <= x < s1.next_conn),
+                Output::Close { conn: x } => (exists|j: int| 0 <= j < s.conns.len() && s.conns[j].id == x && s.conns[j].tab == t) || (s.next_conn <= x < s1.next_conn),
+                _ => true,
+            }
+    })
 }
 
 /// The event is handled by the kernel's own parsing of a URL: `OpenTab`,
 /// `NavigateTab`, a renderer's frame that decodes to a `Navigate`, or the
-/// `Fetched` that commits a navigation (or ends it: it changes the
-/// renderer's `pending`).
+/// `Net` event that commits a navigation (or ends it, or steps it: it
+/// changes the renderer's `pending`).
 pub open spec fn navigation_event(e: Event) -> bool {
     match e {
         Event::OpenTab { .. } => true,
         Event::NavigateTab { .. } => true,
-        Event::Fetched { .. } => true,
+        Event::Net { .. } => true,
         Event::FromRenderer { bytes, .. } => decode_renderer_frame(bytes) matches Some(clazel_ipc::message::spec::Message::Navigate { .. }),
         _ => false,
     }
@@ -186,11 +323,12 @@ pub open spec fn cookie_confidentiality_statement(rules: Seq<clazel_psl::spec::R
 /// 6265bis storage applied to its string; for `CookieGet`, the retrieval's
 /// own update (§5.8.3 step 5); both with the sender's request URL and the
 /// non-HTTP API flag (and unchanged for a cookie-averse lock); for `Tick`,
-/// the old jar after the eviction of expired cookies; for a `Fetched` that
-/// answers its tab's navigation in flight ([`fetched_run`]), the jar after
-/// [`apply_stores`] of the `Set-Cookie` lines of the fetch's responses, each
-/// with the request it answers (so only §5.7 storage, for the hosts of those
-/// requests, and never for a public suffix); for anything else, unchanged.
+/// the old jar after the eviction of expired cookies; for a `Net` about an
+/// open connection ([`net_target`]), the jar after the jar operations of the
+/// transducer's step ([`apply_net_ops`]: §5.8.3 retrieval for the request it
+/// builds and §5.7 storage of the final response's `Set-Cookie` lines, each
+/// with the request it answers, never for a public suffix); for anything else,
+/// unchanged.
 pub open spec fn cookie_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let s1 = step(rules, urls, fetch, s, e).0;
     match e {
@@ -221,8 +359,8 @@ pub open spec fn cookie_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, 
             },
         },
         Event::Tick { time } => s1.jar == clazel_cookie::storage::spec::evict_expired(s.jar, if time > s.now { time } else { s.now }),
-        Event::Fetched { tab, outcome } => match fetched_run(fetch, s, tab, outcome) {
-            Some(run) => s1.jar == apply_stores(rules, s.jar, run.stores, s.now),
+        Event::Net { conn, input } => match net_target(s, conn) {
+            Some((_, _, nav)) => s1.jar == apply_net_ops(rules, s.jar, net_transducer_step(fetch, s, nav, input).2),
             None => s1.jar == s.jar,
         },
         _ => s1.jar == s.jar,

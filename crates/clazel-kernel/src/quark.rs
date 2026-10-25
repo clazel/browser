@@ -128,8 +128,8 @@ pub proof fn lemma_store_elements(
 /// renderer asked to set it (`CookieSet`), and then its cookie root is the
 /// root of the sender's lock host; or because a retrieval updated its
 /// last-access-time (§5.8.3 step 5, which Quark has no analogue of); or
-/// because a fetch's response chain set it (item 3.7: a `Fetched` event that
-/// answers its tab's navigation), and then its cookie root is that of the
+/// because a fetch's response chain set it (item 3.7: a `Net` event about an
+/// open connection), and then its cookie root is that of the
 /// host of a request of the chain that may store.
 pub open spec fn quark_cookie_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let s1 = step(rules, urls, fetch, s, e).0;
@@ -138,65 +138,42 @@ pub open spec fn quark_cookie_integrity_statement(rules: Seq<clazel_psl::spec::R
         find_by_id(s.renderers, e->FromRenderer_id, 0) matches Some(i) && decode_renderer_frame(e->FromRenderer_bytes) matches Some(
             clazel_ipc::message::spec::Message::CookieSet { .. },
         ) && lock_host(s.renderers[i].lock) is Some && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, lock_host(s.renderers[i].lock)->Some_0)))
-            || fetch_stored_root(rules, fetch, s, e, c))
+            || net_stored_root(rules, fetch, s, e, c))
 }
 
-/// A `Fetched` event that answers its tab's navigation, one of whose
-/// `Set-Cookie` lines may be stored and has the cookie root of `c`.
-pub open spec fn fetch_stored_root(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, e: Event, c: clazel_cookie::storage::spec::Cookie) -> bool {
-    e is Fetched && (match fetched_run(fetch, s, e->Fetched_tab, e->Fetched_outcome) {
-        Some(run) => exists|k: int|
-            0 <= k < run.stores.len() && store_allowed(rules, (#[trigger] run.stores[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
-                rules,
-                run.stores[k].url.host->Some_0,
-            ),
+/// A `Net` event about an open connection, whose transducer step stores a
+/// `Set-Cookie` line that may be stored and has the cookie root of `c`.
+pub open spec fn net_stored_root(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, e: Event, c: clazel_cookie::storage::spec::Cookie) -> bool {
+    e is Net && (match net_target(s, e->Net_conn) {
+        Some((_, _, nav)) => {
+            let ops = net_transducer_step(fetch, s, nav, e->Net_input).2;
+            exists|k: int|
+                0 <= k < ops.len() && ((#[trigger] ops[k]) matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url)
+                    && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0))
+        },
         None => false,
     })
 }
 
-/// A cookie of the jar after a fetch's `Set-Cookie` lines was there before, or
-/// has the cookie root of the host of a line's request, for a line that may
-/// be stored.
-pub proof fn lemma_apply_stores_elements(
+/// A cookie of the jar after a step's jar operations was there before, or has
+/// the cookie root of the host of a `Stored` operation's request, for one that
+/// may be stored.
+///
+/// Stage 2 of the join writes this proof (the one for `Fetched` is gone with
+/// it).
+pub proof fn lemma_apply_net_ops_elements(
     rules: Seq<clazel_psl::spec::Rule>,
     jar: Seq<clazel_cookie::storage::spec::Cookie>,
-    stores: Seq<HttpStore>,
-    now: int,
+    ops: Seq<clazel_fetch::transducer::spec::JarOp>,
     c: clazel_cookie::storage::spec::Cookie,
 )
     requires
-        apply_stores(rules, jar, stores, now).contains(c),
+        apply_net_ops(rules, jar, ops).contains(c),
     ensures
-        jar.contains(c) || exists|k: int|
-            0 <= k < stores.len() && store_allowed(rules, (#[trigger] stores[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
-                rules,
-                stores[k].url.host->Some_0,
-            ),
-    decreases stores.len(),
+        jar.contains(c) || (exists|c0: clazel_cookie::storage::spec::Cookie, now: int| jar.contains(c0) && c == clazel_cookie::storage::spec::with_last_access_time(c0, now)) || exists|k: int|
+            0 <= k < ops.len() && ((#[trigger] ops[k]) matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url)
+                && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0)),
 {
-    if stores.len() > 0 {
-        let st = stores[0];
-        let jar1 = store_one(rules, jar, st, now);
-        let rest = stores.drop_first();
-        lemma_apply_stores_elements(rules, jar1, rest, now, c);
-        if jar1.contains(c) && !jar.contains(c) {
-            assert(store_allowed(rules, st.url));
-            let host = st.url.host->Some_0;
-            assert(st.url.host == Some(host));
-            lemma_store_elements(rules, jar, st.line, st.url, st.ctx, now, host, c);
-            assert(store_allowed(rules, stores[0].url));
-        }
-        if exists|k: int| 0 <= k < rest.len() && store_allowed(rules, (#[trigger] rest[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
-            rules,
-            rest[k].url.host->Some_0,
-        ) {
-            let k = choose|k: int| 0 <= k < rest.len() && store_allowed(rules, (#[trigger] rest[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
-                rules,
-                rest[k].url.host->Some_0,
-            );
-            assert(stores[k + 1] == rest[k]);
-        }
-    }
 }
 
 /// **Quark's cookie integrity follows from `theorem_cookie_integrity`.**
@@ -214,13 +191,10 @@ pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
         || (e is FromRenderer && (find_by_id(s.renderers, e->FromRenderer_id, 0) matches Some(i) && decode_renderer_frame(e->FromRenderer_bytes) matches Some(
         clazel_ipc::message::spec::Message::CookieSet { .. },
     ) && lock_host(s.renderers[i].lock) is Some && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, lock_host(s.renderers[i].lock)->Some_0)))
-        || fetch_stored_root(rules, fetch, s, e, c)) by {
+        || net_stored_root(rules, fetch, s, e, c)) by {
         match e {
-            Event::Fetched { tab, outcome } => {
-                crate::unwind_base::lemma_fetched_frame(rules, urls, fetch, s, tab, outcome);
-                if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-                    lemma_apply_stores_elements(rules, s.jar, run.stores, s.now, c);
-                }
+            Event::Net { conn, input } => {
+                // Stage 2.
             },
             Event::Tick { time } => {
                 let now = if time > s.now { time } else { s.now };

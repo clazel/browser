@@ -414,36 +414,35 @@ pub proof fn lemma_insert_contains(jar: Seq<clazel_cookie::storage::spec::Cookie
 }
 
 /// `navigate_tab` and `begin_navigation` leave the jar, storage and time alone.
-pub proof fn lemma_navigation_frame(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>)
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_navigation_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>)
     ensures
         navigate_tab(urls, s, tab, url, script).0.jar == s.jar,
         navigate_tab(urls, s, tab, url, script).0.storage == s.storage,
         navigate_tab(urls, s, tab, url, script).0.now == s.now,
-        begin_navigation(urls, s, tab, url).0.jar == s.jar,
-        begin_navigation(urls, s, tab, url).0.storage == s.storage,
-        begin_navigation(urls, s, tab, url).0.now == s.now,
-        begin_navigation(urls, s, tab, url).0.next_id == s.next_id,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.jar == s.jar,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.storage == s.storage,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.now == s.now,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.next_id == s.next_id,
 {
 }
 
-/// What a `Fetched` changes of the state besides the renderers: the jar
-/// takes the fetch's `Set-Cookie` lines if the event answers the navigation
-/// in flight, and nothing else (storage, time) changes.
-pub proof fn lemma_fetched_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+/// What a `Net` changes of the state besides the renderers and connections:
+/// the jar takes the jar operations of the transducer's step if the event is
+/// about an open connection, and nothing else (storage, time, the id counter)
+/// changes.
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_net_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     ensures
-        fetched(rules, urls, fetch, s, tab, outcome).0.jar == (match fetched_run(fetch, s, tab, outcome) {
-            Some(run) => apply_stores(rules, s.jar, run.stores, s.now),
+        net(rules, urls, fetch, s, conn, input).0.jar == (match net_target(s, conn) {
+            Some((_, _, nav)) => apply_net_ops(rules, s.jar, net_transducer_step(fetch, s, nav, input).2),
             None => s.jar,
         }),
-        fetched(rules, urls, fetch, s, tab, outcome).0.storage == s.storage,
-        fetched(rules, urls, fetch, s, tab, outcome).0.now == s.now,
+        net(rules, urls, fetch, s, conn, input).0.storage == s.storage,
+        net(rules, urls, fetch, s, conn, input).0.now == s.now,
 {
-    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-        let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
-        if let FetchResult::Done { url, body } = run.result {
-            lemma_navigation_frame(urls, s1, tab, url, body);
-        }
-    }
 }
 
 /// Every step keeps the jar free of public-suffix domains, from a state
@@ -517,7 +516,7 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                                        lemma_navigation_frame(urls, s, r.tab, resolved, seq![]);
+                                        lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, seq![]);
                                     }
                                 }
                             }
@@ -527,10 +526,10 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                 }
             }
         },
-        Event::Fetched { tab, outcome } => {
-            lemma_fetched_frame(rules, urls, fetch, s, tab, outcome);
-            if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-                crate::invariant::lemma_apply_stores_wf(rules, s.jar, run.stores, s.now);
+        Event::Net { conn, input } => {
+            lemma_net_frame(rules, urls, fetch, s, conn, input);
+            if let Some((_, _, nav)) = net_target(s, conn) {
+                crate::invariant::lemma_apply_net_ops_wf(rules, s.jar, net_transducer_step(fetch, s, nav, input).2);
             }
         },
         _ => {},

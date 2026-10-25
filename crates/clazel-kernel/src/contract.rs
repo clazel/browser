@@ -7,7 +7,7 @@
 //! clock, no processes. Bytes, renderer ids and the time come in as arguments,
 //! as the host shell (item 2.15) gets them, and the outputs go out as a value
 //! for the host to act on. An exec `StateRecord` is viewed as a [`State`]
-//! (renderers, jar, storage maps, counter, time), an `EventRecord` as an
+//! (renderers, jar, storage maps, connections, counters, time), an `EventRecord` as an
 //! [`Event`] and an `OutputRecord` as an [`Output`]; the exec jar is the view
 //! of `clazel-cookie`'s (item 2.9), with its times `u64`s, hence
 //! `jar_in_range`. Ids are `u64`s, hence `next_id` below `u64::MAX`. Web
@@ -34,8 +34,8 @@
 //! (`lemma_init_wf`). `jar_in_range` and `now_in_range` of the state hold of
 //! every state the exec `step` returns because its jar and time are `u64`s
 //! that the exec cookie functions keep in range (their contracts); the exec
-//! `step` ensures both. (`next_id` may reach `u64::MAX`, after which the
-//! host must not call it again; the exec `step` ensures it grows by at most
+//! `step` ensures both. (`next_id` and `next_conn` may reach `u64::MAX`, after which the
+//! host must not call it again; the exec `step` ensures each grows by at most
 //! one.)
 //!
 //! The spec casts a storage map's length to `u64` (`StorageLength`). That is
@@ -78,14 +78,22 @@ pub open spec fn urls_resolve_scalar(urls: UrlFns) -> bool {
 /// the URL of an `OpenTab` (and those `resolve` returns,
 /// [`urls_resolve_scalar`]) are strings of Unicode scalar values, which a
 /// `Commit` must UTF-8 encode. (The id in `FromRenderer` and the tab in
-/// `NavigateTab` and `Fetched` are `u64`s, so they fit. A `NavigateTab` or
-/// `Fetched` URL is never encoded: the final URL of a fetch is checked by the
-/// kernel itself, `fetched`, so the fetch functions need no condition.)
-pub open spec fn step_requires(urls: UrlFns, s: State, e: Event) -> bool {
+/// `NavigateTab` and the connection in `Net` are `u64`s, so they fit. A
+/// `NavigateTab` URL is never encoded, and neither is the final URL of a
+/// fetch: the kernel checks it itself (`commit_navigation`), so the fetch
+/// functions need no condition on it.) Item 3.7: the connection counter fits
+/// a `u64` with room for one more (a step opens at most one connection: the
+/// transducer's actions hold at most one `Connect`), and the transducer's
+/// Public Suffix List is the kernel's (`UrlFnsExec::rules_are_psl` of
+/// `clazel-fetch`), so the `Cookie` field is read from the jar with the same
+/// cookie roots the kernel applies the jar operations with.
+pub open spec fn step_requires(urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     &&& super::invariant::kernel_wf(psl(), urls, s)
     &&& clazel_cookie::storage::contract::jar_in_range(s.jar)
     &&& clazel_cookie::set_cookie::contract::now_in_range(s.now)
     &&& s.next_id < 0xFFFF_FFFF_FFFF_FFFFnat
+    &&& s.next_conn < 0xFFFF_FFFF_FFFF_FFFFnat
+    &&& fetch.urls.rules == psl()
     &&& (e is Tick ==> clazel_cookie::set_cookie::contract::now_in_range(e->Tick_time))
     &&& urls_resolve_scalar(urls)
     &&& (e is OpenTab ==> clazel_encoding::utf8::spec::all_scalar_values(e->OpenTab_url))

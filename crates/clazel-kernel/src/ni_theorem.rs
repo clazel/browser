@@ -37,7 +37,7 @@ pub proof fn lemma_navigate_declassify(rules: Seq<clazel_psl::spec::Rule>, urls:
         crate::unwind_base::lemma_find_contained(urls, s1, r);
         if lock_of_url(urls, resolved, s1.next_id) is Some {
             crate::domain::lemma_declassified_is_navigate_tab(rules, urls, fetch, s1, e, dn);
-            crate::unwinding::lemma_begin_consistency(rules, urls, d, s1, s2, r.tab, resolved);
+            crate::unwinding::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved);
             crate::unwind_base::lemma_outputs_for_same(rules, urls, d, s1, s2, s1b, s2b, o1);
         } else {
             // The kernel answers the sender with an error; the NavigateTab is ignored.
@@ -120,10 +120,10 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
             crate::unwinding::lemma_open_tab_consistency(rules, urls, fetch, d, s1, s2, url, script);
         },
         Event::NavigateTab { tab, url } => {
-            crate::unwinding::lemma_begin_consistency(rules, urls, d, s1, s2, tab, url);
+            crate::unwinding::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, tab, url);
         },
-        Event::Fetched { tab, outcome } => {
-            crate::unwinding::lemma_fetched_consistency(rules, urls, fetch, d, s1, s2, tab, outcome);
+        Event::Net { conn, input } => {
+            crate::unwinding::lemma_net_consistency(rules, urls, fetch, d, s1, s2, conn, input);
         },
         Event::RendererExited { id } => {
             crate::unwinding::lemma_exited_consistency(rules, urls, fetch, d, s1, s2, id);
@@ -284,7 +284,9 @@ pub open spec fn rename_output(f: spec_fn(nat) -> nat, o: Output) -> Output {
         Output::ToRenderer { id, bytes } => Output::ToRenderer { id: f(id), bytes },
         Output::Spawn { id, policy } => Output::Spawn { id: f(id), policy },
         Output::Kill { id } => Output::Kill { id: f(id) },
-        Output::Fetch { tab, url } => Output::Fetch { tab, url },
+        Output::Connect { conn, host, port, tls } => Output::Connect { conn, host, port, tls },
+        Output::Send { conn, bytes } => Output::Send { conn, bytes },
+        Output::Close { conn } => Output::Close { conn },
     }
 }
 
@@ -324,7 +326,9 @@ pub proof fn theorem_cookie_noninterference_up_to_ids(rules: Seq<clazel_psl::spe
             Output::ToRenderer { id, bytes } => {},
             Output::Spawn { id, policy } => {},
             Output::Kill { id } => {},
-            Output::Fetch { tab, url } => {},
+            Output::Connect { conn, host, port, tls } => {},
+            Output::Send { conn, bytes } => {},
+            Output::Close { conn } => {},
         }
     }
     assert(outs.map_values(|o: Output| rename_output(f, o)) =~= outs);

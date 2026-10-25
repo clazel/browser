@@ -16,8 +16,8 @@
 //! URL §4.7 origin of the URL parsed from the string the kernel committed
 //! (an opaque one replaced by the renderer's id); a `Navigate` from a
 //! renderer is resolved by the basic URL parser against the committed URL,
-//! started by `begin_navigation` and committed only by `fetched` through
-//! `navigate_tab`; and document.cookie is answered for
+//! started by `begin_navigation` and committed only by a `Net` event's
+//! `Done` through `commit_navigation` and `navigate_tab`; and document.cookie is answered for
 //! the lock's scheme and host and the committed URL's path.
 
 #[allow(unused_imports)]
@@ -75,20 +75,6 @@ pub proof fn corollary_real_cookie_integrity(fetch: FetchFns, s: State, e: Event
         crate::statements::cookie_integrity_statement(crate::contract::psl(), crate::urls::real_urls(), fetch, s, e),
 {
     crate::cookie_theorems::theorem_cookie_integrity(crate::contract::psl(), crate::urls::real_urls(), fetch, s, e);
-}
-
-/// Theorems `theorem_fetched_only_to_tab` and
-/// `theorem_fetched_answers_navigation` (item 3.7) for the shipped kernel, for
-/// any fetch.
-pub proof fn corollary_real_fetched(fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
-    requires
-        real_reachable(fetch, s),
-    ensures
-        crate::statements::fetched_only_to_tab_statement(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome),
-        crate::statements::fetched_answers_navigation_statement(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome),
-{
-    crate::theorems::theorem_fetched_only_to_tab(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome);
-    crate::theorems::theorem_fetched_answers_navigation(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome);
 }
 
 /// Theorem `theorem_storage_same_origin` for the shipped kernel.

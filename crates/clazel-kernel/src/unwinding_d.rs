@@ -208,7 +208,7 @@ pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
                     assert(s1.renderers.contains(r));
                     crate::unwind_base::lemma_found_contained(s1, r.tab);
                     crate::unwind_base::lemma_find_contained(urls, s1, r);
-                    crate::unwinding::lemma_begin_consistency(rules, urls, d, s1, s2, r.tab, resolved);
+                    crate::unwinding::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved);
                 }
             },
         },

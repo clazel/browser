@@ -123,57 +123,35 @@ pub proof fn lemma_navigate_tab_stable(urls: UrlFns, s: State, tab: nat, url: Se
 }
 
 /// The renderers after a `begin_navigation` keep the lock of every id.
-pub proof fn lemma_begin_stable(urls: UrlFns, s: State, tab: nat, url: Seq<u32>)
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_begin_stable(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
-            let s1 = begin_navigation(urls, s, tab, url).0;
+            let s1 = begin_navigation(rules, urls, fetch, s, tab, url).0;
             forall|a: int, b: int|
                 0 <= a < s.renderers.len() && 0 <= b < s1.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] s1.renderers[b]).id ==> s.renderers[a].lock
                     == s1.renderers[b].lock
         }),
 {
-    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
-    if let Some(i) = find_by_tab(s.renderers, tab, 0) {
-        if lock_of_url(urls, url, s.next_id) is Some {
-            lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { pending: Some(url), ..s.renderers[i] });
-        }
-    }
 }
 
-/// The renderers after a `fetched` keep the lock of every id that survives.
-pub proof fn lemma_fetched_stable(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+/// The renderers after a `net` keep the lock of every id that survives.
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_net_stable(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
-            let s1 = fetched(rules, urls, fetch, s, tab, outcome).0;
+            let s1 = net(rules, urls, fetch, s, conn, input).0;
             forall|a: int, b: int|
                 0 <= a < s.renderers.len() && 0 <= b < s1.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] s1.renderers[b]).id ==> s.renderers[a].lock
                     == s1.renderers[b].lock
         }),
 {
-    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
-    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-        let i = find_by_tab(s.renderers, tab, 0)->Some_0;
-        let old = s.renderers[i];
-        let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
-        match run.result {
-            FetchResult::Done { url, body } => {
-                if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
-                    lemma_navigate_tab_stable(urls, s1, tab, url, body);
-                } else {
-                    lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { pending: None, ..old });
-                }
-            },
-            FetchResult::Failed => {
-                lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { pending: None, ..old });
-            },
-        }
-    } else {
-        lemma_stable_same(urls, s.renderers, s.next_id);
-    }
 }
 
 /// `storage_call` leaves all but the storage alone.
@@ -267,10 +245,10 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                 }
             },
             Event::NavigateTab { tab, url } => {
-                lemma_begin_stable(urls, s, tab, url);
+                lemma_begin_stable(rules, urls, fetch, s, tab, url);
             },
-            Event::Fetched { tab, outcome } => {
-                lemma_fetched_stable(rules, urls, fetch, s, tab, outcome);
+            Event::Net { conn, input } => {
+                lemma_net_stable(rules, urls, fetch, s, conn, input);
             },
             Event::FromRenderer { id, bytes } => {
                 crate::invariant::lemma_find_by_id(s.renderers, id, 0);
@@ -280,7 +258,7 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                                    lemma_begin_stable(urls, s, r.tab, resolved);
+                                    lemma_begin_stable(rules, urls, fetch, s, r.tab, resolved);
                                 }
                             }
                         }

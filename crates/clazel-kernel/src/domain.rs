@@ -121,18 +121,18 @@ pub open spec fn obs(rules: Seq<clazel_psl::spec::Rule>, s: State, d: Domain) ->
 }
 
 /// The domain a `FromRenderer(id, _)` event belongs to in state `s`: that
-/// of the renderer `id`; a `Fetched { tab, _ }` event (item 3.7), that of the
-/// renderer of the tab, whose lock the fetch was started under (as a frame
-/// is attributed to its socket's renderer). Other events, an id that names no
-/// renderer and a tab that is not open belong to none.
+/// of the renderer `id`; a `Net { conn, _ }` event (item 3.7), that of the
+/// renderer of the connection's tab, whose lock the fetch was started under
+/// (as a frame is attributed to its socket's renderer). Other events, an id
+/// that names no renderer and a connection that is not open belong to none.
 pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: Event) -> Option<Domain> {
     match e {
         Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
             Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
             None => None,
         },
-        Event::Fetched { tab, .. } => match find_by_tab(s.renderers, tab, 0) {
-            Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
+        Event::Net { conn, .. } => match net_target(s, conn) {
+            Some((_, i, _)) => Some(domain_of_renderer(rules, s.renderers[i])),
             None => None,
         },
         _ => None,
@@ -142,7 +142,7 @@ pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: E
 /// The declassified part of a `FromRenderer(id, bytes)` event in state `s`:
 /// `NavigateTab(its tab, resolved URL)` if the frame decodes to a
 /// `Navigate` that decodes and resolves, and nothing otherwise. (A
-/// `Fetched` event has no declassified part of its own: it is kept whole for
+/// `Net` event has no declassified part of its own: it is kept whole for
 /// every observer, see [`ipurge_event`].)
 pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event> {
     match e {
@@ -170,7 +170,7 @@ pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event>
 /// event itself if it is not a renderer's or belongs to `d`, its
 /// declassified part if it belongs to another domain.
 ///
-/// A `Fetched` event is kept for every observer, whichever domain it is
+/// A `Net` event is kept for every observer, whichever domain it is
 /// attributed to (item 3.7). What it carries came from the network, not from
 /// the renderer of its tab: that renderer contributed only the URL it
 /// navigated to, which is the declassified part of its `Navigate` (a
@@ -178,7 +178,10 @@ pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event>
 /// anywhere is the user's navigation, as item 2.11 treats a `Navigate`. So a
 /// redirect from another domain's tab into `d`'s domain, and the cookies the
 /// response chain sets under `d`'s root, are things `d` is allowed to see
-/// depend on; what the other domain's renderer did otherwise is not.
+/// depend on; what the other domain's renderer did otherwise is not. (The
+/// network is outside every renderer domain: a server can echo the cookies
+/// of the request it received into a body that a redirect hands to another
+/// site's tab. That is the web, not a flow through the kernel; see `spec.rs`.)
 pub open spec fn ipurge_event(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
@@ -220,22 +223,25 @@ pub open spec fn purge(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: 
 
 /// The renderer id an output is addressed to. (Which domain that renderer is
 /// in is read in the state after the step for a `Spawn`, and before it for a
-/// `Kill`; stating that is item 2.11's.) A `Fetch` is addressed to no
-/// renderer (`noninterference::addressed_to` is false for it); its tab is
+/// `Kill`; stating that is item 2.11's.) `Connect`, `Send` and `Close` are
+/// addressed to the network shell, not to a renderer
+/// (`noninterference::addressed_to` is false for them); their connection is
 /// returned only to make the function total.
 pub open spec fn output_id(o: Output) -> nat {
     match o {
         Output::ToRenderer { id, .. } => id,
         Output::Spawn { id, .. } => id,
         Output::Kill { id } => id,
-        Output::Fetch { tab, .. } => tab,
+        Output::Connect { conn, .. } => conn,
+        Output::Send { conn, .. } => conn,
+        Output::Close { conn } => conn,
     }
 }
 
 
 /// A renderer's `Navigate` that the kernel accepts does exactly what its
 /// declassified part, a `NavigateTab`, does: the same state and the same
-/// outputs (it starts the navigation and asks for the fetch). (`lemma_navigate_declassify` of item 2.11 builds on this.) The
+/// outputs (it starts the navigation and its fetch). (`lemma_navigate_declassify` of item 2.11 builds on this.) The
 /// event is accepted when the resolved URL has a lock; otherwise the kernel
 /// only replies with an error to the sender.
 pub proof fn lemma_declassified_is_navigate_tab(

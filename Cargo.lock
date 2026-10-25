@@ -116,6 +116,7 @@ version = "0.0.0"
 dependencies = [
  "clazel-cookie",
  "clazel-encoding",
+ "clazel-fetch",
  "clazel-ipc",
  "clazel-origin",
  "clazel-psl",

@@ -152,7 +152,7 @@ pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: 
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                                    crate::unwind_base::lemma_navigation_frame(urls, s, r.tab, resolved, seq![]);
+                                    crate::unwind_base::lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, seq![]);
                                 }
                             }
                         }
@@ -160,8 +160,8 @@ pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: 
                 }
             }
         },
-        Event::Fetched { tab, outcome } => {
-            crate::unwind_base::lemma_fetched_frame(rules, urls, fetch, s, tab, outcome);
+        Event::Net { conn, input } => {
+            crate::unwind_base::lemma_net_frame(rules, urls, fetch, s, conn, input);
         },
         _ => {},
     }

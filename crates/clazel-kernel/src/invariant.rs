@@ -47,6 +47,32 @@ pub open spec fn jar_no_public_suffix(rules: Seq<clazel_psl::spec::Rule>, jar: S
         0 <= i < jar.len() ==> (#[trigger] jar[i]).domain.is_ip_address || !clazel_cookie::storage::spec::is_public_suffix_string(rules, jar[i].domain.name)
 }
 
+/// Navigations (item 3.7): a renderer's navigation in flight has the
+/// partition key of its renderer's domain, and its fetch's redirect count is
+/// within `clazel-fetch`'s bound (the precondition of the transducer's
+/// `step`, which it keeps: `theorem_redirects_bounded`).
+pub open spec fn navigations_wf(rules: Seq<clazel_psl::spec::Rule>, rs: Seq<Renderer>) -> bool {
+    forall|i: int|
+        0 <= i < rs.len() ==> match (#[trigger] rs[i]).pending {
+            Some(nav) => nav.partition == crate::domain::domain_of_renderer(rules, rs[i]) && clazel_fetch::transducer::contract::step_requires(nav.fetch),
+            None => true,
+        }
+}
+
+/// Connections (item 3.7): ids distinct and below the counter; at most one
+/// connection per tab (a navigation has one request in flight); every
+/// connection belongs to a tab whose renderer is navigating, with that
+/// navigation's partition key. So a renderer that is not navigating owns no
+/// connection, and a connection never outlives its navigation.
+pub open spec fn conns_wf(rs: Seq<Renderer>, cs: Seq<Connection>, next_conn: nat) -> bool {
+    &&& forall|i: int| 0 <= i < cs.len() ==> (#[trigger] cs[i]).id < next_conn
+    &&& forall|i: int, j: int| 0 <= i < j < cs.len() ==> (#[trigger] cs[i]).id != (#[trigger] cs[j]).id && cs[i].tab != cs[j].tab
+    &&& forall|i: int|
+        #![trigger cs[i]]
+        0 <= i < cs.len() ==> exists|j: int|
+            0 <= j < rs.len() && (#[trigger] rs[j]).tab == cs[i].tab && (rs[j].pending matches Some(nav) && nav.partition == cs[i].partition)
+}
+
 /// The invariant of every reachable state.
 ///
 /// - the jar: `jar_domains_nonempty` (the hypothesis of `clazel-cookie`'s
@@ -54,7 +80,8 @@ pub open spec fn jar_no_public_suffix(rules: Seq<clazel_psl::spec::Rule>, jar: S
 ///   `lemma_retrieve_frame`, which hold only under it), at most 180 cookies
 ///   per root, and unique keys (§5.7 step 23's invariant);
 /// - the renderers: [`renderers_wf`];
-/// - Web Storage: [`storage_wf`].
+/// - Web Storage: [`storage_wf`];
+/// - navigations and connections (item 3.7): [`navigations_wf`], [`conns_wf`].
 pub open spec fn kernel_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State) -> bool {
     &&& clazel_cookie::storage::isolation::jar_domains_nonempty(s.jar)
     &&& clazel_cookie::storage::spec::jar_within_root_limit(rules, s.jar)
@@ -62,6 +89,8 @@ pub open spec fn kernel_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: 
     &&& jar_no_public_suffix(rules, s.jar)
     &&& renderers_wf(urls, s.renderers, s.next_id)
     &&& storage_wf(s.storage)
+    &&& navigations_wf(rules, s.renderers)
+    &&& conns_wf(s.renderers, s.conns, s.next_conn)
 }
 
 /// The initial state satisfies the invariant.
@@ -601,22 +630,17 @@ pub proof fn lemma_not_scalar_url(s: Seq<u32>, k: int)
 }
 
 /// `begin_navigation` (a `NavigateTab`, and a renderer's `Navigate`) keeps
-/// the invariant: it only records the URL the renderer is navigating to.
-pub proof fn lemma_begin_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, tab: nat, url: Seq<u32>)
+/// the invariant: it records the navigation (with the partition key of the
+/// renderer's domain), closes the tab's old connections, and carries out the
+/// transducer's first actions (one new connection, or a failed navigation).
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_begin_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
     requires
         kernel_wf(rules, urls, s),
     ensures
-        kernel_wf(rules, urls, begin_navigation(urls, s, tab, url).0),
+        kernel_wf(rules, urls, begin_navigation(rules, urls, fetch, s, tab, url).0),
 {
-    lemma_find_by_tab(s.renderers, tab, 0);
-    if let Some(i) = find_by_tab(s.renderers, tab, 0) {
-        if lock_of_url(urls, url, s.next_id) is Some {
-            let old = s.renderers[i];
-            assert(lock_of_url(urls, old.url, old.id) == Some(old.lock));
-            let r = Renderer { pending: Some(url), ..old };
-            lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
-        }
-    }
 }
 
 /// One `Set-Cookie` line of a fetch keeps the jar well formed and free of
@@ -638,22 +662,20 @@ pub proof fn lemma_store_one_wf(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<cla
     }
 }
 
-/// The `Set-Cookie` lines of a fetch keep the jar well formed and free of
-/// public-suffix domains.
-pub proof fn lemma_apply_stores_wf(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, stores: Seq<HttpStore>, now: int)
+/// The jar operations of a transducer step keep the jar well formed and free
+/// of public-suffix domains: a retrieval is `jar_after_retrieval`, and a line
+/// is stored only for a request whose host is not empty and not a public
+/// suffix ([`store_allowed`]).
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_apply_net_ops_wf(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, ops: Seq<clazel_fetch::transducer::spec::JarOp>)
     requires
         jar_wf(rules, jar),
         jar_no_public_suffix(rules, jar),
     ensures
-        jar_wf(rules, apply_stores(rules, jar, stores, now)),
-        jar_no_public_suffix(rules, apply_stores(rules, jar, stores, now)),
-    decreases stores.len(),
+        jar_wf(rules, apply_net_ops(rules, jar, ops)),
+        jar_no_public_suffix(rules, apply_net_ops(rules, jar, ops)),
 {
-    if stores.len() > 0 {
-        let jar1 = store_one(rules, jar, stores[0], now);
-        lemma_store_one_wf(rules, jar, stores[0], now);
-        lemma_apply_stores_wf(rules, jar1, stores.drop_first(), now);
-    }
 }
 
 /// A navigation that ends without a commit keeps the invariant.
@@ -669,34 +691,19 @@ pub proof fn lemma_fail_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: 
     lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, Renderer { pending: None, ..old }, s.next_id);
 }
 
-/// `fetched` keeps the invariant.
-pub proof fn lemma_fetched_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+/// `net` keeps the invariant: the jar operations keep the jar well formed
+/// ([`lemma_apply_net_ops_wf`]), the transducer keeps its redirect bound
+/// (`theorem_redirects_bounded` of `clazel-fetch`), the connections stay owned
+/// by navigating tabs, and a commit or a failure ends the navigation and its
+/// connections together.
+///
+/// Stage 2 of the join writes this proof.
+pub proof fn lemma_net_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
         kernel_wf(rules, urls, s),
     ensures
-        kernel_wf(rules, urls, fetched(rules, urls, fetch, s, tab, outcome).0),
+        kernel_wf(rules, urls, net(rules, urls, fetch, s, conn, input).0),
 {
-    lemma_find_by_tab(s.renderers, tab, 0);
-    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-        let i = find_by_tab(s.renderers, tab, 0)->Some_0;
-        let old = s.renderers[i];
-        let jar1 = apply_stores(rules, s.jar, run.stores, s.now);
-        lemma_apply_stores_wf(rules, s.jar, run.stores, s.now);
-        let s1 = State { jar: jar1, ..s };
-        assert(kernel_wf(rules, urls, s1));
-        match run.result {
-            FetchResult::Done { url, body } => {
-                if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
-                    lemma_navigate_tab_wf(rules, urls, s1, tab, url, body);
-                } else {
-                    lemma_fail_navigation_wf(rules, urls, s1, i, old, error_bad_url());
-                }
-            },
-            FetchResult::Failed => {
-                lemma_fail_navigation_wf(rules, urls, s1, i, old, error_fetch());
-            },
-        }
-    }
 }
 
 /// **`step` preserves `kernel_wf`.** For every Public Suffix List, every
@@ -727,10 +734,10 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
             }
         },
         Event::NavigateTab { tab, url } => {
-            lemma_begin_navigation_wf(rules, urls, s, tab, url);
+            lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url);
         },
-        Event::Fetched { tab, outcome } => {
-            lemma_fetched_wf(rules, urls, fetch, s, tab, outcome);
+        Event::Net { conn, input } => {
+            lemma_net_wf(rules, urls, fetch, s, conn, input);
         },
         Event::FromRenderer { id, bytes } => {
             lemma_find_by_id(s.renderers, id, 0);
@@ -768,7 +775,7 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                                        lemma_begin_navigation_wf(rules, urls, s, r.tab, resolved);
+                                        lemma_begin_navigation_wf(rules, urls, fetch, s, r.tab, resolved);
                                     }
                                 }
                             }

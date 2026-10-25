@@ -20,6 +20,9 @@ clazel-origin = { path = "../clazel-origin" }
 clazel-psl = { path = "../clazel-psl" }
 # Host and scheme types of the origins.
 clazel-url = { path = "../clazel-url" }
+# The transducer the kernel steps for a navigation (item 3.7): its spec
+# `start` and `step`, and the real parsers it is joined to.
+clazel-fetch = { path = "../clazel-fetch" }
 # A navigation URL arrives as UTF-8 text in a message (item 2.3) and is
 # decoded to code points for the URL functions.
 clazel-encoding = { path = "../clazel-encoding" }
@@ -67,19 +70,22 @@ theorems = [
     "lemma_step_consistency",
     "lemma_local_respect",
     "lemma_navigate_declassify",
-    # Item 3.7: a navigation is a fetch (`Fetched` events, `Fetch` outputs).
-    "theorem_fetched_only_to_tab",
-    "theorem_fetched_answers_navigation",
-    "lemma_fetched_wf",
-    "lemma_apply_stores_wf",
-    "lemma_apply_stores_agree",
-    "lemma_fetched_consistency",
+    # Item 3.7: the kernel steps the fetch (`Net` events; `Connect`, `Send` and
+    # `Close` outputs). Stage 1 of the join has only these lemmas' statements:
+    # their proofs are written in stage 2, which also adds the theorems whose
+    # statements are in `statements.rs` (`net_only_to_tab_statement`,
+    # `net_answers_connection_statement`, `wire_cookies_statement`,
+    # `net_jar_frame_statement`, `connection_ownership_statement`) to this
+    # list as it proves them.
+    "lemma_net_wf",
+    "lemma_apply_net_ops_wf",
+    "lemma_apply_net_ops_agree",
+    "lemma_net_consistency",
     "quark_tab_non_interference",
     "quark_cookie_integrity",
     "quark_cookie_confidentiality",
     "lemma_independent_cookie_get",
     "lemma_independent_cookie_set",
-    "example_dead_tab_breaks_noninterference",
     "example_public_suffix_overlay_crosses_roots",
     "example_retrieval_changes_jar",
     # Item 2.13: the above for the shipped kernel (the real URL parser), and
@@ -89,7 +95,6 @@ theorems = [
     "corollary_real_cookie_confidentiality",
     "corollary_real_cookie_integrity",
     "corollary_real_storage_same_origin",
-    "corollary_real_fetched",
     "corollary_real_cookie_noninterference",
     "lemma_real_urls_resolve_scalar",
 ]
