@@ -18,6 +18,16 @@ clazel-http = { path = "../clazel-http" }
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+# The transducer's theorems (src/transducer/theorems.rs). `cargo xtask
+# check` fails if one is not defined as a `proof fn` in this crate.
+theorems = [
+    "theorem_requests_bounded",
+    "theorem_redirects_bounded",
+    "theorem_url_changes_only_by_redirect",
+    "theorem_sends_are_requests",
+    "theorem_silent_until_decided",
+    "theorem_split_invariant",
+]
 
 [package.metadata.verus]
 verify = true
