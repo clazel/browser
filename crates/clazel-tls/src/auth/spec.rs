@@ -318,4 +318,10 @@ pub open spec fn step(c: crate::schedule::spec::Crypto, v: Verification, s: Stat
         }
     }
 }
+/// Finite authentication traces, for invariants over arbitrary peer/I/O inputs.
+pub open spec fn run(c: crate::schedule::spec::Crypto, v: Verification, s: State, inputs: Seq<Input>) -> State
+    decreases inputs.len(),
+{
+    if inputs.len() == 0 { s } else { run(c, v, step(c, v, s, inputs[0]).0, inputs.skip(1)) }
+}
 } // verus!

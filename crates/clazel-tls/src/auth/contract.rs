@@ -20,4 +20,14 @@ pub open spec fn step_ensures(c: crate::schedule::spec::Crypto, v: super::spec::
 {
     (after, action) == super::spec::step(c, v, before, input) && exec_wf(after)
 }
+/// Application delivery requires all three peer checks and the client's send ack.
+pub open spec fn delivery_safe(before: super::spec::State, action: super::spec::Action) -> bool {
+    action is Deliver ==> before.phase == super::spec::Phase::Ready
+        && before.chain_checked && before.signature_checked && before.finished_checked && before.client_sent
+}
+/// The only emitted client flight follows successful chain, signature and MAC checks.
+pub open spec fn send_safe(after: super::spec::State, action: super::spec::Action) -> bool {
+    action is Send ==> after.phase == super::spec::Phase::SendFinished
+        && after.chain_checked && after.signature_checked && after.finished_checked && !after.client_sent
+}
 } // verus!
