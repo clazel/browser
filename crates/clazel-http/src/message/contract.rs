@@ -40,6 +40,13 @@ pub open spec fn feed_ensures(old_received: Seq<u8>, bytes: Seq<u8>, new_receive
     new_received == old_received + bytes && output == parse_response(new_received, request_is_head)
 }
 
+/// Contract for `ResponseParser::received_bytes(&self) -> &[u8]`: the
+/// octets received so far, so a caller (the fetch transducer) need not
+/// keep a second copy of them.
+pub open spec fn received_bytes_ensures(received: Seq<u8>, output: Seq<u8>) -> bool {
+    output == received
+}
+
 /// Precondition of `ResponseParser::close(self) -> Parse`, called when the
 /// server has closed the connection: as for `feed`.
 pub open spec fn close_requires(received: Seq<u8>, request_is_head: bool) -> bool {
