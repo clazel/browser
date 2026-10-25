@@ -109,6 +109,60 @@ fn from_result(r: Result<Vec<String>, String>) -> Outcome {
     }
 }
 
+/// Like [`run`], but every line is also printed as it arrives, indented,
+/// so a long step (the tests, Miri) shows how far it got even when it
+/// never returns, as when a CI runner dies under it. Prints `--> {name}`
+/// first: a step's `==>` header comes only once it has finished.
+fn run_streamed(name: &str, cmd: &mut Command) -> Result<String, String> {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    println!("--> {name}: started, output follows as it arrives");
+    let shown = format!("{cmd:?}");
+    let mut child = cmd
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("cannot run {shown}: {e}"))?;
+    let echo = |pipe: Option<Box<dyn std::io::Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut kept = String::new();
+            if let Some(p) = pipe {
+                for line in BufReader::new(p).lines().map_while(Result::ok) {
+                    println!("    | {line}");
+                    kept.push_str(&line);
+                    kept.push('\n');
+                }
+            }
+            kept
+        })
+    };
+    let out = echo(
+        child
+            .stdout
+            .take()
+            .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+    );
+    let err = echo(
+        child
+            .stderr
+            .take()
+            .map(|p| Box::new(p) as Box<dyn std::io::Read + Send>),
+    );
+    let status = child
+        .wait()
+        .map_err(|e| format!("cannot wait for {shown}: {e}"))?;
+    let text = format!(
+        "{}{}",
+        out.join().unwrap_or_default(),
+        err.join().unwrap_or_default()
+    );
+    if status.success() {
+        Ok(text)
+    } else {
+        Err(format!("{shown} failed (its output is above)"))
+    }
+}
+
 /// Run a command; Ok(stdout+stderr) on success, Err(stdout+stderr) otherwise.
 fn run(cmd: &mut Command) -> Result<String, String> {
     let shown = format!("{cmd:?}");
@@ -433,7 +487,9 @@ fn build_checks(r: &mut Runner, only: Option<&[Crate]>) {
     );
     // `--no-fail-fast`: run every test binary even after one fails, so a
     // single run (CI's especially) reports every failing test.
-    let mut args = vec!["test", "--locked", "--quiet", "--no-fail-fast"];
+    // Not `--quiet`: the streamed output then names each test binary as it
+    // starts and each test as it ends.
+    let mut args = vec!["test", "--locked", "--no-fail-fast"];
     match only {
         None => args.push("--workspace"),
         Some([]) => {
@@ -445,7 +501,12 @@ fn build_checks(r: &mut Runner, only: Option<&[Crate]>) {
         }
         Some(cs) => args.extend(cs.iter().flat_map(|c| ["-p", c.name.as_str()])),
     }
-    r.step("tests", cargo(&args));
+    // Streamed: a test that hangs or takes the machine down is then named
+    // by the last lines printed.
+    r.step(
+        "tests",
+        from_result(run_streamed("tests", Command::new("cargo").args(&args)).map(|_| Vec::new())),
+    );
 }
 
 /// Run every test under Miri, which reports undefined behaviour (Tier 0).
@@ -485,7 +546,7 @@ fn miri(r: &mut Runner, pins: &Pins, only: Option<&[Crate]>) {
         }
         Some(cs) => args.extend(cs.iter().flat_map(|c| ["-p", c.name.as_str()])),
     }
-    let res = run(Command::new("cargo").args(&args)).map(|out| {
+    let res = run_streamed(NAME, Command::new("cargo").args(&args)).map(|out| {
         let passed: u64 = out
             .lines()
             .filter_map(|l| l.strip_prefix("test result: ok. "))
@@ -1107,5 +1168,21 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
     } else {
         println!("RESULT: {done}");
         ExitCode::SUCCESS
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+
+    /// A streamed run keeps both pipes' output and reports failure.
+    #[cfg(unix)]
+    #[test]
+    #[cfg_attr(miri, ignore = "spawns processes")]
+    fn a_streamed_run_keeps_its_output() {
+        let ok = super::run_streamed("t", Command::new("sh").args(["-c", "echo a; echo b >&2"]));
+        assert_eq!(ok.as_deref(), Ok("a\nb\n"));
+        let failed = super::run_streamed("t", Command::new("sh").args(["-c", "exit 3"]));
+        assert!(failed.is_err());
     }
 }
