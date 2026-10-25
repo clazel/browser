@@ -33,9 +33,7 @@ pub struct Host {
     /// The kernel's state. Tests preload the cookie jar (the HTTP layer that
     /// would fill it is Phase 3); nothing else writes it but `step_real`.
     pub state: StateRecord,
-    /// The script the user gave for the navigation of a tab they just started,
-    /// which the stand-in network answers that tab's `Fetch` with (the body of
-    /// the page), until the network shell (item 3.8) is wired in.
+    /// The user's script for a tab's navigation: the stand-in network's page.
     scripts: HashMap<u64, Vec<u8>>,
     /// A fixed kernel clock (seconds since 1601) for tests; `None`: wall clock.
     pub clock: Option<u64>,
@@ -176,11 +174,9 @@ impl Host {
         }
     }
 
-    /// Answer a `Fetch` without a network: the page is the script the user gave
-    /// for this navigation (empty for a renderer's own `Navigate`), and the
-    /// kernel's stand-in fetch takes those bytes as the response's body. The
-    /// kernel checks the answer against the navigation it started, and
-    /// ignores it if the tab has moved on.
+    /// Answer a `Fetch` without a network: the page is the user's script for
+    /// this navigation (empty for a renderer's own `Navigate`); the kernel
+    /// ignores the answer if the tab has moved on.
     fn stand_in_network(&mut self, tab: u64, url: Vec<u32>) {
         let net = self.scripts.remove(&tab).unwrap_or_default();
         let shown: String = url.iter().filter_map(|c| char::from_u32(*c)).collect();
@@ -188,10 +184,8 @@ impl Host {
             "network (stand-in): tab {tab} <- {shown:?}, {} bytes",
             net.len()
         ));
-        self.event(EventRecord::Fetched {
-            tab,
-            outcome: NetOutcomeRecord { url, net },
-        });
+        let outcome = NetOutcomeRecord { url, net };
+        self.event(EventRecord::Fetched { tab, outcome });
     }
 
     /// The user opens a tab at `url`; the script's format is `clazel-renderer`'s.
@@ -203,15 +197,11 @@ impl Host {
         self.event(EventRecord::OpenTab { url, script });
     }
 
-    /// The user navigates tab `tab` (the id of the renderer that opened it).
-    /// The kernel asks for `url` to be fetched; with no network yet, the page
-    /// is `script` (see `stand_in_network`).
+    /// The user navigates tab `tab`; with no network, the page is `script`.
     pub fn navigate_tab(&mut self, tab: u64, url: &str, script: &str) {
         let url = url.chars().map(u32::from).collect();
         self.scripts.insert(tab, script.as_bytes().to_vec());
         self.event(EventRecord::NavigateTab { tab, url });
-        // A navigation the kernel did not start leaves no script behind for a
-        // later one (a renderer's own `Navigate` carries none).
         self.scripts.remove(&tab);
     }
 
