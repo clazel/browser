@@ -898,6 +898,15 @@ pub open spec fn fail_navigation(s: State, i: int, old: Renderer, code: u64) -> 
     (State { renderers: s.renderers.update(i, Renderer { pending: None, ..old }), ..s }, reply(old, clazel_ipc::message::spec::Message::Error { code }))
 }
 
+/// Whether every code point of `s` is a Unicode scalar value: the same as
+/// `clazel_encoding::utf8::spec::all_scalar_values` (`lemma_scalar_url`),
+/// written by recursion so that Verus can evaluate it on a concrete string.
+pub open spec fn scalar_url(s: Seq<u32>) -> bool
+    decreases s.len(),
+{
+    s.len() == 0 || (clazel_encoding::utf8::spec::is_scalar_value(s[0]) && scalar_url(s.drop_first()))
+}
+
 /// `Fetched { tab, outcome }`: see the modelling choices. The jar takes the
 /// response chain's cookies, then the navigation commits with the final URL
 /// and the body, or fails.
@@ -909,7 +918,7 @@ pub open spec fn fetched(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch
             let old = s.renderers[i];
             let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
             match run.result {
-                FetchResult::Done { url, body } => if clazel_encoding::utf8::spec::all_scalar_values(url) && lock_of_url(urls, url, s1.next_id) is Some {
+                FetchResult::Done { url, body } => if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
                     navigate_tab(urls, s1, tab, url, body)
                 } else {
                     fail_navigation(s1, i, old, error_bad_url())
