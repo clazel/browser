@@ -9,8 +9,10 @@
 //!   illegal_parameter, the chosen fatal alert for an invalid DH exchange.
 //! - Reject an all-zero *shared secret*, not a zero raw peer public input.
 //!   Functional proofs make no timing or secret-erasure claim.
-//! - The caller owns the private scalar until this consuming handoff. It
-//!   must supply fresh entropy and immutable providers in production.
+//! - The caller retains ownership of the borrowed private scalar. This
+//!   consuming handoff transfers the Hello configuration and transcript,
+//!   not scalar ownership or an erasure guarantee. Production callers must
+//!   supply fresh entropy and immutable providers.
 //! - The auth machine starts waiting for EncryptedExtensions; this handoff
 //!   does not authenticate the peer. Its chain/signature providers and the
 //!   record-I/O driver remain separate. RFC equations have no step numbers.

@@ -1017,6 +1017,29 @@ that a generated README table must already match. Main's existing fix
 policy: report a stale table and let CI update it on main. The table was not
 edited. A new full run is still required; no tier is raised.
 
+**Owned Hello exchange and authentication handoff (2026-10-25).**
+`hello::client` generates the fixed-profile ClientHello and retains the actual
+configuration and transcript. Server validation uses the captured session ID
+and retry state. A cookie-only HRR yields a second ClientHello with the original
+random/session/cipher/groups/signatures/share and only the cookie extension
+added, capped at 4098 bytes of extension_data as a documented resource policy.
+The transcript retains the message_hash/HRR/CH2/final-SH sequence.
+`hello::join` binds a borrowed private scalar to the public share actually sent,
+uses the exact private/peer inputs, rejects provider failure/all-zero shared
+secrets, derives client/server handshake secrets over the final-SH prefix,
+and starts authentication with the original host/time/offers/transcript.
+The caller retains scalar ownership; no erasure guarantee is claimed.
+
+Contracts were committed before implementation. All 595 TLS obligations pass
+locally, including offer/configuration binding and nonzero-test equivalence.
+Four builder/controller and six key-handoff/mock-authentication tests pass
+under Miri. The cheaper subagent supplied these tests and a read-only review;
+the parent reviewed the tests. Twelve further mutation certificates cover
+construction, key binding, zero rejection, traffic labels/transcript, master
+secret source and captured host/time. The expanded full run remains required.
+No production crypto, X.509/trust store, entropy source, protected record-I/O
+driver or post-handshake dispatcher is joined yet. No tier is raised.
+
 #### 3.5f The cryptography and the join (M)
 
 The `shipped` rows for libcrux (`libcrux-chacha20poly1305`,
@@ -1155,8 +1178,8 @@ half does not wait on TLS.
 | 3.5b X.509 and path validation | not started (after 3.5a) |
 | 3.5c RSA PKCS#1 v1.5 | built (see As built); tier 0, target 2, pending CI full verification |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
-| 3.5e Key schedule and handshake state machine | SHA-256 non-PSK key schedule and transcript construction built and proven over abstract crypto; 40 schedule vectors and 12 live-transcript checkpoints pass locally (see As built). Initial authentication state machine built and proven over validator/crypto parameters (532 TLS obligations; 8 mock-provider tests pass under Miri). Hello negotiation, production joins and record-I/O integration remain; tier 0, full CI pending |
-| 3.5f Cryptography and the join | not started |
+| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection and initial authentication built over provider parameters (595 TLS obligations; see As built). Production providers, protected record I/O and post-handshake dispatch remain; tier 0, full CI pending |
+| 3.5f Cryptography and the join | Hello-to-authentication handoff built over explicit providers; production libcrux/X.509 joins not started |
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | not started |
 | 3.7 Kernel integration | not started |

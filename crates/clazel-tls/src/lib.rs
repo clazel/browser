@@ -11,9 +11,10 @@
 //! parameters (part of 3.5e). [`transcript`] constructs the transcript and
 //! CertificateVerify signature inputs. [`auth`] implements the initial
 //! authentication flight and application-delivery gate. [`hello`] validates
-//! ServerHello/HRR selections for the fixed TLS 1.3/X25519 profile. ClientHello
-//! generation, the key-exchange join, record I/O and production cryptography
-//! (3.5f) remain to be built.
+//! ServerHello/HRR selections for the fixed TLS 1.3/X25519 profile, generates
+//! ClientHello, retains retry/transcript state, and joins explicit key-exchange
+//! providers to authentication. Record I/O, production cryptography (3.5f),
+//! entropy sourcing and X.509 validation remain to be built.
 //!
 //! - [`spec`]: a step-by-step transcription of the standard. Its header
 //!   lists every modelling choice.

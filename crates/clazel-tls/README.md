@@ -6,10 +6,10 @@ messages, extensions and alerts. Part of [Clazel](../../README.md), a web
 browser whose parsers of untrusted input carry machine-checked proofs.
 
 This covers phase-3.md item 3.5d and the SHA-256 key schedule from 3.5e.
-The initial authentication state machine is built over explicit validator
-and crypto parameters. ServerHello/HRR acceptance is built for the fixed
-TLS 1.3/X25519/ChaCha20-Poly1305 profile. **The remaining Hello join, record I/O and the
-production cryptography provider (items 3.5e and 3.5f) remain**, as does
+The initial Hello/authentication flow is built over explicit validator,
+key-exchange and crypto parameters for the fixed TLS 1.3/X25519/ChaCha20-Poly1305
+profile. **Protected record I/O, entropy sourcing and the production
+cryptography provider (items 3.5e and 3.5f) remain**, as does
 X.509 certificate interpretation and validation (3.5b). The crate stays at
 `tier = 0` with `target-tier = 2` until they are, and until CI's full run
 has checked every proof, mutation and conformance test on a pull request;
@@ -102,7 +102,7 @@ what is proven today is stated below, not implied by the tier.
   secrets, typed alerts, transcript checkpoints and rejection ordering; all
   eight pass under Miri. They do not establish real X.509/signature correctness.
   EE support is limited to server_name/supported_groups responses to actual
-  offers; no PSK, early data or ALPN. The future Hello layer supplies the
+  offers; no PSK, early data or ALPN. The Hello join supplies the
   negotiated secrets and actual offers; the future record loop supplies
   complete authenticated bodies. Production Finished comparison must use a
   timing-safe provider; the functional proof makes no timing guarantee.
@@ -115,11 +115,29 @@ what is proven today is stated below, not implied by the tier.
   request a cookie but cannot request an existing or unoffered group.
   A second retry and a no-op retry fail; accepted cookie extension_data is
   returned verbatim. Eight hand-built tests pass under Miri. This stateless
-  component relies on the caller to bind the profile/session/retry flag to
-  actual ClientHello messages. It does not perform X25519, the all-zero
-  shared-secret check, or hand off keys/transcripts to authentication yet.
+  component receives the actual session/retry state from `client::Hello`.
+- **Owned Hello exchange** (§4.1.2/§4.1.4/§4.4.1, `hello::client`):
+  generate ClientHello from captured host/time, caller entropy and public share;
+  retain exactly its transcript; validate server selections against retained
+  session/retry state; and build ClientHello2 with only the exact cookie
+  extension added. The 4098-byte cookie extension_data cap is a resource policy.
+  Four tests pass under Miri, including unchanged offers and the complete
+  message_hash/HRR/CH2/final-SH transcript. The caller classifies DNS versus
+  IP hosts for SNI and implements record-level send ordering/compatibility CCS.
+- **Hello-to-authentication join** (§7.1/§7.4.2, `hello::join`): verify the
+  borrowed private scalar derives the public share actually sent, call the
+  key-exchange provider with that scalar and exact peer share, reject provider
+  failure/all-zero shared secrets, derive both handshake traffic secrets over
+  the final-SH transcript, and transfer captured host/time/offers/transcript
+  into authentication. Return the master secret for later application keys.
+  Six input-sensitive mock-provider tests pass under Miri, including a complete
+  mock authentication flight through both Finished messages. They assert actual
+  chain and signature inputs and independently compute the joined traffic secrets.
+  They do not establish real X25519/HKDF/HMAC/X.509/signature correctness.
+  The caller retains private-scalar ownership; no erasure or timing guarantee
+  is established. Production providers and entropy sourcing remain absent.
 
-Out of scope: the remaining Hello join and post-handshake dispatch (Appendix A), the
+Out of scope: protected record I/O and post-handshake dispatch (Appendix A), the
 production cryptography, the contents of a certificate, `pre_shared_key` and the other
 extensions kept opaque (their data is not read), client certificates (a
 CertificateRequest is read and then refused by sending an empty
@@ -130,7 +148,7 @@ Certificate), and any use of the network.
 Tier 0, target tier 2. The current numbers are in the
 [status table](../../README.md#verification-status).
 
-- **Proven (Verus, `cargo verus verify`: 532 verified, 0 errors):** the
+- **Proven (Verus, `cargo verus verify`: 595 verified, 0 errors):** the
   executable functions of `reader`, `writer`, `record`, `reassemble`,
   `extension`, `handshake` and `encode` meet the contracts in
   `contract.rs`, which are the spec's functions in `spec.rs`. About the
@@ -160,10 +178,13 @@ Tier 0, target tier 2. The current numbers are in the
   the top of the file; `Certificate` is outside it). **It was written
   after `spec.rs` in the same session, not before, and not hidden from
   it**, so it is weaker evidence than a second author's text read first.
-- **Mutations:** `mutations.json` lists 139 deliberate breaks: 76 for
+- **Mutations:** `mutations.json` lists 151 deliberate breaks: 76 for
   formats, 19 for the key schedule, 17 for transcript construction and 17
-  for authentication, plus 10 for server selection. All 129 certificates
-  through authentication passed locally and in CI; the expanded run is pending.
+  for authentication, 10 for server selection and 12 for ClientHello/key handoff.
+  All 129 certificates through authentication passed locally and in CI.
+  Additional certificate checks use isolated copies: each theorem must fail
+  on its mutant, and its certificate must verify on the mutant and fail on
+  the original. The full expanded run remains required.
   Each `killed` entry requires a certificate that Verus checks; the
   certificate must pass on the mutant and fail on the real spec.
   Full workspace and CI verification remain required before tier promotion.

@@ -6,8 +6,8 @@
 //! - Fixed TLS 1.3, ChaCha20-Poly1305/SHA-256 and X25519 profile, matching
 //!   hello::spec. No PSK, early data, ALPN, padding or client identity.
 //! - Entropy, the clock, canonical host and an X25519 public input are
-//!   explicit configuration. Entropy sourcing and private/public key binding
-//!   belong to the future key-exchange join, not this exchange controller.
+//!   explicit configuration. Entropy sourcing remains external; the key-
+//!   exchange join checks the private/public binding after this controller.
 //! - send_sni is supplied by the URL layer (DNS host versus IP address).
 //!   The captured host is retained unchanged for future certificate checks.
 //! - Caller entropy/random and public input are exactly 32 bytes. Session ID

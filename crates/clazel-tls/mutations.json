@@ -1945,6 +1945,174 @@
         "lemma": "super::examples::lemma_retry_checks()",
         "witness": "retry(super::examples::request(), false) != Ok(Selection::Retry(seq![0u8, 1u8, 9u8]))"
       }
+    },
+    {
+      "id": "client-cipher",
+      "file": "src/hello/client_spec.rs",
+      "find": "cipher_suites: seq![0x1303u16]",
+      "replace": "cipher_suites: seq![0x1301u16]",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_cipher()",
+        "witness": "!(super::client_spec::client_hello(super::client_examples::config(), seq![]).cipher_suites == seq![0x1303u16])"
+      }
+    },
+    {
+      "id": "client-public-share",
+      "file": "src/hello/client_spec.rs",
+      "find": "group: 29, key_exchange: c.public_key",
+      "replace": "group: 29, key_exchange: Seq::new(32, |i: int| 0u8)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_public_share()",
+        "witness": "!(super::client_spec::extensions(super::client_examples::config(), seq![])[4].data == seq![0u8,36u8,0u8,29u8,0u8,32u8] + Seq::new(32, |i: int| 5u8))"
+      }
+    },
+    {
+      "id": "client-cookie",
+      "file": "src/hello/client_spec.rs",
+      "find": "+ (if cookie.len() == 0 { seq![] } else { seq![crate::spec::Ext { etype: 44, data: cookie }] })",
+      "replace": "+ seq![]",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_cookie()",
+        "witness": "!(super::client_spec::extensions(super::client_examples::config(), seq![0u8,1u8,9u8]).len() == 6)"
+      }
+    },
+    {
+      "id": "join-key-binding",
+      "file": "src/hello/join_spec.rs",
+      "find": " || (k.public_key)(private_key) != config.public_key",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_key_binding()",
+        "witness": "!(super::client_examples::attempt(super::client_spec::Config { public_key: Seq::new(32, |i: int| 6u8), ..super::client_examples::config() }, Seq::new(32, |i: int| 17u8)) == Err(80u8))"
+      }
+    },
+    {
+      "id": "join-zero-secret",
+      "file": "src/hello/join_spec.rs",
+      "find": " || !nonzero(shared)",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_zero_secret()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 5u8)) == Err(47u8))"
+      }
+    },
+    {
+      "id": "join-checks-shared-not-peer",
+      "file": "src/hello/join_spec.rs",
+      "find": "!nonzero(shared)",
+      "replace": "!nonzero(peer_key)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_checks_shared_not_peer()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 0u8)) is Ok)"
+      }
+    },
+    {
+      "id": "join-server-label",
+      "file": "src/hello/join_spec.rs",
+      "find": "crate::schedule::spec::Label::ServerHandshake, transcript.messages",
+      "replace": "crate::schedule::spec::Label::ClientHandshake, transcript.messages",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_server_label()",
+        "witness": "!(super::join_spec::auth_config(super::client_examples::crypto(), super::client_examples::config(), super::client_examples::transcript(), Seq::new(32, |i: int| 112u8)).server_secret == Seq::new(32, |i: int| 9u8))"
+      }
+    },
+    {
+      "id": "join-client-label",
+      "file": "src/hello/join_spec.rs",
+      "find": "crate::schedule::spec::Label::ClientHandshake, transcript.messages",
+      "replace": "crate::schedule::spec::Label::ServerHandshake, transcript.messages",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_client_label()",
+        "witness": "!(super::join_spec::auth_config(super::client_examples::crypto(), super::client_examples::config(), super::client_examples::transcript(), Seq::new(32, |i: int| 112u8)).client_secret == Seq::new(32, |i: int| 25u8))"
+      }
+    },
+    {
+      "id": "join-transcript",
+      "file": "src/hello/join_spec.rs",
+      "find": "crate::schedule::spec::Label::ServerHandshake, transcript.messages",
+      "replace": "crate::schedule::spec::Label::ServerHandshake, seq![]",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_transcript()",
+        "witness": "!(super::join_spec::auth_config(super::client_examples::crypto(), super::client_examples::config(), super::client_examples::transcript(), Seq::new(32, |i: int| 112u8)).server_secret == Seq::new(32, |i: int| 9u8))"
+      }
+    },
+    {
+      "id": "join-master-source",
+      "file": "src/hello/join_spec.rs",
+      "find": "let master = crate::schedule::spec::master_secret(c, handshake);",
+      "replace": "let master = crate::schedule::spec::master_secret(c, early);",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_master_source()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().1 == Seq::new(32, |i: int| 20u8))"
+      }
+    },
+    {
+      "id": "join-host",
+      "file": "src/hello/join_spec.rs",
+      "find": "host: config.host, now: config.now",
+      "replace": "host: seq![120u8], now: config.now",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_host()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == seq![104u8])"
+      }
+    },
+    {
+      "id": "join-time",
+      "file": "src/hello/join_spec.rs",
+      "find": "host: config.host, now: config.now",
+      "replace": "host: config.host, now: 0",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_time()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.now == 7)"
+      }
     }
   ]
 }

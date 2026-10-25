@@ -5,16 +5,16 @@
 //! Modelling choices:
 //! - The client offers only TLS 1.3, TLS_CHACHA20_POLY1305_SHA256 (0x1303),
 //!   and X25519 (29), with an X25519 share already in ClientHello.
-//! - The caller supplies the actual offered session ID and whether a retry
-//!   was already accepted. Generating ClientHello and maintaining that state
-//!   are separate work; this module does not establish their correspondence.
+//! - This stateless helper takes the offered session ID and retry flag.
+//!   client::Hello supplies them from its captured configuration/transcript
+//!   and generates ClientHello, establishing that correspondence.
 //! - Therefore only a cookie-only HRR can change ClientHello legally: any
 //!   HRR key_share selects either an unoffered group or an existing share.
 //! - Retry returns the entire cookie extension_data, including its length,
-//!   so a future ClientHello builder can copy it verbatim (§4.2.2).
+//!   so the ClientHello builder can copy it verbatim (§4.2.2).
 //! - Selection returns the peer's raw 32-byte X25519 public input. It is not
 //!   a validated shared secret; the §7.4.2 all-zero shared-secret check,
-//!   key exchange, transcript and traffic-key derivation remain separate.
+//!   key exchange and traffic-secret derivation live in the separate join.
 //! - Complete handshake bodies use the existing format/extension parser.
 //!   Its duplicate, placement, structural and missing-version errors win
 //!   before negotiation checks. Multi-fault inputs need only one fatal alert.
