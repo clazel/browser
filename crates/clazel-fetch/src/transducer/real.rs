@@ -36,7 +36,7 @@ use vstd::prelude::*;
 use super::contract::{HttpFnsExec, UrlFnsExec};
 use super::types::{ActionBuf, InputBuf, StateBuf};
 use clazel_encoding::utf8::decode::decode_without_bom;
-use clazel_http::message::body::{parse_response_at_close_exec, parse_response_exec};
+use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::record::ParsedUrl;
@@ -75,12 +75,21 @@ impl HttpFnsExec for RealHttp {
         real_http()
     }
 
-    fn parse(&self, received: &[u8]) -> (r: ParseBuf) {
-        parse_response_exec(received, false)
+    /// `clazel-http`'s invariant, for a request that is not `HEAD`.
+    open spec fn parser_ok(&self, p: &ResponseParser) -> bool {
+        p.wf() && !p.head()
     }
 
-    fn parse_at_close(&self, received: &[u8]) -> (r: ParseBuf) {
-        parse_response_at_close_exec(received, false)
+    fn new_parser(&self) -> (p: ResponseParser) {
+        ResponseParser::new(false)
+    }
+
+    fn feed(&self, p: &mut ResponseParser, bytes: &[u8]) -> (r: ParseBuf) {
+        p.feed(bytes)
+    }
+
+    fn parse_at_close(&self, p: ResponseParser) -> (r: ParseBuf) {
+        p.close()
     }
 }
 
@@ -106,9 +115,11 @@ impl UrlFnsExec for RealUrls {
 pub fn step_real(s: StateBuf, input: &InputBuf) -> (out: (StateBuf, Vec<ActionBuf>))
     requires
         super::contract::step_requires(s@),
+        super::contract::state_ok(&RealHttp, &s),
     ensures
         super::contract::step_ensures(real_http(), real_urls(), s@, input@, out.0@, super::types::actions_view(out.1@)),
         super::contract::step_requires(out.0@),
+        super::contract::state_ok(&RealHttp, &out.0),
 {
     super::step::step(&RealHttp, &RealUrls, s, input)
 }

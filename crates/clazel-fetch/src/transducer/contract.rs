@@ -14,7 +14,6 @@ use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
-use super::types::{PhaseBuf, StateBuf};
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
 use clazel_url::url::record::ParsedUrl;
@@ -63,9 +62,9 @@ pub trait HttpFnsExec {
 /// The executable state's invariant for `h`: a parser being read into
 /// keeps [`HttpFnsExec::parser_ok`]. A state that is not reading (as every
 /// one [`start`] gives) has it for every `h`.
-pub open spec fn state_ok<H: HttpFnsExec>(h: &H, s: &StateBuf) -> bool {
+pub open spec fn state_ok<H: HttpFnsExec>(h: &H, s: &super::types::StateBuf) -> bool {
     match s.phase {
-        PhaseBuf::Reading { parser } => h.parser_ok(&parser),
+        super::types::PhaseBuf::Reading { parser } => h.parser_ok(&parser),
         _ => true,
     }
 }

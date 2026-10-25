@@ -9,7 +9,7 @@ use super::contract::{HttpFnsExec, UrlFnsExec};
 use super::types::{ActionBuf, InputBuf, LocationBuf, PhaseBuf, SettledBuf, StateBuf};
 use crate::request::build::{connect_to, is_interim, request_bytes};
 use clazel_http::field::section::field_values_named;
-use clazel_http::field::string::append;
+use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::{ParseBuf, ResponseBuf};
 use clazel_url::url::record::{ParsedUrl, clone_opt_str, clone_url, eq_str};
 
@@ -19,6 +19,7 @@ verus! {
 fn begin_exec(url: ParsedUrl, redirects: u8) -> (out: (StateBuf, Vec<ActionBuf>))
     ensures
         (out.0@, super::types::actions_view(out.1@)) == begin(url@, redirects as nat),
+        !(out.0.phase is Reading),
 {
     match (connect_to(&url), request_bytes(&url)) {
         (Some((host, port)), Some(_)) => {
@@ -39,6 +40,7 @@ pub fn start(url: &ParsedUrl) -> (out: (StateBuf, Vec<ActionBuf>))
     ensures
         super::contract::start_ensures(url@, out.0@, super::types::actions_view(out.1@)),
         super::contract::step_requires(out.0@),
+        !(out.0.phase is Reading),
 {
     begin_exec(clone_url(url), 0)
 }
@@ -69,6 +71,7 @@ fn fail_exec(url: ParsedUrl, redirects: u8, reason: Reason, open: bool, Ghost(s)
     ensures
         (out.0@, super::types::actions_view(out.1@)) == fail(s, reason, open),
         out.0@.redirects == s.redirects,
+        !(out.0.phase is Reading),
 {
     let last = vec![ActionBuf::Fail(reason)];
     assert(super::types::actions_view(last@) =~= seq![Action::Fail(reason)]);
@@ -134,6 +137,7 @@ fn on_final_exec<U: UrlFnsExec>(u: &U, url: ParsedUrl, redirects: u8, response: 
     ensures
         (out.0@, super::types::actions_view(out.1@)) == on_final(u.urls(), s, response@, open),
         out.0@.redirects <= max_redirects(),
+        !(out.0.phase is Reading),
 {
     // 3.
     match location_url_exec(u, &response, &url) {
@@ -168,18 +172,32 @@ fn on_final_exec<U: UrlFnsExec>(u: &U, url: ParsedUrl, redirects: u8, response: 
     }
 }
 
-/// `settle`: skip complete interim responses at the start of `received`.
-fn settle_exec<H: HttpFnsExec>(h: &H, received: Vec<u8>) -> (out: SettledBuf)
+/// `settle` of all that `p` received, given `first`, the parser's answer
+/// for it: skip complete interim responses at the start, each time
+/// reading what follows into a new parser.
+fn settle_exec<H: HttpFnsExec>(h: &H, p: ResponseParser, first: ParseBuf) -> (out: SettledBuf)
+    requires
+        h.parser_ok(&p),
+        first@ == (h.http().parse)(p.received()),
     ensures
-        out@ == settle(h.http(), received@),
+        out@ == settle(h.http(), p.received()),
+        match out {
+            SettledBuf::Wait(q) => h.parser_ok(&q),
+            _ => true,
+        },
 {
-    let mut cur = received;
+    let ghost all = p.received();
+    let mut cur = p;
+    let mut answer = first;
     loop
         invariant
-            settle(h.http(), cur@) == settle(h.http(), received@),
-        decreases cur@.len(),
+            all == p.received(),
+            h.parser_ok(&cur),
+            answer@ == (h.http().parse)(cur.received()),
+            settle(h.http(), cur.received()) == settle(h.http(), all),
+        decreases cur.received().len(),
     {
-        match h.parse(cur.as_slice()) {
+        match answer {
             ParseBuf::Incomplete => {
                 return SettledBuf::Wait(cur);
             },
@@ -191,8 +209,11 @@ fn settle_exec<H: HttpFnsExec>(h: &H, received: Vec<u8>) -> (out: SettledBuf)
             },
             ParseBuf::Done { response, rest } => {
                 if is_interim(response.status_line.status) {
-                    if rest.len() < cur.len() {
-                        cur = rest;
+                    if rest.len() < cur.received_bytes().len() {
+                        let mut next = h.new_parser();
+                        answer = h.feed(&mut next, rest.as_slice());
+                        assert(next.received() =~= rest@);
+                        cur = next;
                     } else {
                         return SettledBuf::Bad(Reason::Invalid);
                     }
@@ -204,12 +225,14 @@ fn settle_exec<H: HttpFnsExec>(h: &H, received: Vec<u8>) -> (out: SettledBuf)
     }
 }
 
-/// `settle_at_close`.
-fn settle_at_close_exec<H: HttpFnsExec>(h: &H, received: &[u8]) -> (out: SettledBuf)
+/// `settle_at_close` of all that `p` received.
+fn settle_at_close_exec<H: HttpFnsExec>(h: &H, p: ResponseParser) -> (out: SettledBuf)
+    requires
+        h.parser_ok(&p),
     ensures
-        out@ == settle_at_close(h.http(), received@),
+        out@ == settle_at_close(h.http(), p.received()),
 {
-    match h.parse_at_close(received) {
+    match h.parse_at_close(p) {
         ParseBuf::Done { response, rest: _ } => if is_interim(response.status_line.status) {
             SettledBuf::Bad(Reason::Incomplete)
         } else {
@@ -221,33 +244,35 @@ fn settle_at_close_exec<H: HttpFnsExec>(h: &H, received: &[u8]) -> (out: Settled
     }
 }
 
-/// `step` while reading the response.
-fn step_reading<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, url: ParsedUrl, redirects: u8, received: Vec<u8>, input: &InputBuf, Ghost(s): Ghost<State>) -> (out: (StateBuf, Vec<ActionBuf>))
+/// `step` while reading the response into `parser`.
+fn step_reading<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, url: ParsedUrl, redirects: u8, parser: ResponseParser, input: &InputBuf, Ghost(s): Ghost<State>) -> (out: (StateBuf, Vec<ActionBuf>))
     requires
         s.url == url@,
         s.redirects == redirects as nat,
         s.redirects <= max_redirects(),
-        s.phase == (Phase::Reading { received: received@ }),
+        s.phase == (Phase::Reading { received: parser.received() }),
+        h.parser_ok(&parser),
     ensures
         super::contract::step_ensures(h.http(), u.urls(), s, input@, out.0@, super::types::actions_view(out.1@)),
         out.0@.redirects <= max_redirects(),
+        super::contract::state_ok(h, &out.0),
 {
     match input {
         InputBuf::Connected => fail_exec(url, redirects, Reason::Shell, true, Ghost(s)),
         InputBuf::Bytes(bytes) => {
-            let mut all = received;
-            append(&mut all, bytes.as_slice());
-            match settle_exec(h, all) {
+            let mut parser = parser;
+            let first = h.feed(&mut parser, bytes.as_slice());
+            match settle_exec(h, parser, first) {
                 SettledBuf::Wait(rest) => {
                     let a: Vec<ActionBuf> = Vec::new();
                     assert(super::types::actions_view(a@) =~= Seq::<Action>::empty());
-                    (StateBuf { url, redirects, phase: PhaseBuf::Reading { received: rest } }, a)
+                    (StateBuf { url, redirects, phase: PhaseBuf::Reading { parser: rest } }, a)
                 },
                 SettledBuf::Final(response) => on_final_exec(u, url, redirects, response, true, Ghost(s)),
                 SettledBuf::Bad(reason) => fail_exec(url, redirects, reason, true, Ghost(s)),
             }
         },
-        InputBuf::Closed => match settle_at_close_exec(h, received.as_slice()) {
+        InputBuf::Closed => match settle_at_close_exec(h, parser) {
             SettledBuf::Final(response) => on_final_exec(u, url, redirects, response, false, Ghost(s)),
             SettledBuf::Bad(reason) => fail_exec(url, redirects, reason, false, Ghost(s)),
             SettledBuf::Wait(_) => fail_exec(url, redirects, Reason::Incomplete, false, Ghost(s)),
@@ -260,9 +285,11 @@ fn step_reading<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, url: ParsedUrl, red
 pub fn step<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, s: StateBuf, input: &InputBuf) -> (out: (StateBuf, Vec<ActionBuf>))
     requires
         super::contract::step_requires(s@),
+        super::contract::state_ok(h, &s),
     ensures
         super::contract::step_ensures(h.http(), u.urls(), s@, input@, out.0@, super::types::actions_view(out.1@)),
         super::contract::step_requires(out.0@),
+        super::contract::state_ok(h, &out.0),
 {
     let ghost sv = s@;
     let url = s.url;
@@ -279,7 +306,7 @@ pub fn step<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, s: StateBuf, input: &In
                 Some(bytes) => {
                     let a = vec![ActionBuf::Send(bytes)];
                     assert(super::types::actions_view(a@) =~= super::spec::step(h.http(), u.urls(), sv, input@).1);
-                    (StateBuf { url, redirects, phase: PhaseBuf::Reading { received: Vec::new() } }, a)
+                    (StateBuf { url, redirects, phase: PhaseBuf::Reading { parser: h.new_parser() } }, a)
                 },
                 None => fail_exec(url, redirects, Reason::NotFetched, true, Ghost(sv)),
             },
@@ -287,7 +314,7 @@ pub fn step<H: HttpFnsExec, U: UrlFnsExec>(h: &H, u: &U, s: StateBuf, input: &In
             InputBuf::Closed => fail_exec(url, redirects, Reason::Network, false, Ghost(sv)),
             InputBuf::Error => fail_exec(url, redirects, Reason::Network, false, Ghost(sv)),
         },
-        PhaseBuf::Reading { received } => step_reading(h, u, url, redirects, received, input, Ghost(sv)),
+        PhaseBuf::Reading { parser } => step_reading(h, u, url, redirects, parser, input, Ghost(sv)),
     }
 }
 
