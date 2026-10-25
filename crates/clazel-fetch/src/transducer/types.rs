@@ -40,6 +40,8 @@ impl View for PhaseBuf {
 pub struct StateBuf {
     /// the URL of the current request
     pub url: ParsedUrl,
+    /// the redirect count, at most 20
+    pub redirects: u8,
     /// where it is
     pub phase: PhaseBuf,
 }
@@ -48,7 +50,29 @@ impl View for StateBuf {
     type V = State;
 
     open spec fn view(&self) -> State {
-        State { url: self.url@, phase: self.phase@ }
+        State { url: self.url@, redirects: self.redirects as nat, phase: self.phase@ }
+    }
+}
+
+/// [`LocationUrl`], executable.
+pub enum LocationBuf {
+    /// null
+    Null,
+    /// failure
+    Failure,
+    /// a URL
+    Url(ParsedUrl),
+}
+
+impl View for LocationBuf {
+    type V = LocationUrl;
+
+    open spec fn view(&self) -> LocationUrl {
+        match self {
+            LocationBuf::Null => LocationUrl::Null,
+            LocationBuf::Failure => LocationUrl::Failure,
+            LocationBuf::Url(u) => LocationUrl::Url(u@),
+        }
     }
 }
 
