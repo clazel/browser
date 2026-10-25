@@ -333,4 +333,251 @@ pub open spec fn fetch_agrees(head: Head, request_is_head: bool) -> bool {
     }
 }
 
+// ===========================================================================
+// Proofs: what the transcription and the spec agree on (uses spec.rs).
+// ===========================================================================
+
+/// Infra's byte-lowercase is `ascii_lowercase`.
+pub proof fn lemma_f_lowercase(s: Seq<u8>)
+    ensures
+        f_byte_lowercase(s) == ascii_lowercase(s),
+    decreases s.len(),
+{
+    if s.len() > 0 {
+        lemma_f_lowercase(s.drop_first());
+        assert(ascii_lowercase(s) =~= seq![f_byte_lowercase_byte(s[0])] + ascii_lowercase(s.drop_first()));
+    } else {
+        assert(ascii_lowercase(s) =~= Seq::<u8>::empty());
+    }
+}
+
+/// `Content-Length` is `content-length` for both matches.
+pub proof fn lemma_f_name_match(a: Seq<u8>)
+    ensures
+        f_byte_case_insensitive_match(a, f_content_length_name()) == field_name_eq(a, lit_content_length()),
+{
+    lemma_f_lowercase(a);
+    lemma_f_lowercase(f_content_length_name());
+    lemma_f_lowercase(lit_content_length());
+    assert(f_byte_lowercase(f_content_length_name()) == lit_content_length()) by (compute_only);
+    assert(f_byte_lowercase(lit_content_length()) == lit_content_length()) by (compute_only);
+}
+
+/// Fetch's "get" collects the lines the spec's `field_values_named` does,
+/// and "contains" is "there is one".
+pub proof fn lemma_f_values_named(list: Seq<FieldLine>)
+    ensures
+        f_matching_values(list, f_content_length_name()) == field_values_named(list, lit_content_length()),
+        f_header_list_contains(list, f_content_length_name()) == (field_values_named(list, lit_content_length()).len() > 0),
+    decreases list.len(),
+{
+    if list.len() > 0 {
+        lemma_f_values_named(list.drop_first());
+        lemma_f_name_match(list[0].name);
+        let tail = list.drop_first();
+        if f_byte_case_insensitive_match(list[0].name, f_content_length_name()) {
+            assert(f_header_list_contains(list, f_content_length_name())) by {
+                assert(f_byte_case_insensitive_match(list[0].name, f_content_length_name()));
+            }
+        } else {
+            if f_header_list_contains(list, f_content_length_name()) {
+                let i = choose|i: int| 0 <= i < list.len() && f_byte_case_insensitive_match(#[trigger] list[i].name, f_content_length_name());
+                assert(i > 0);
+                assert(tail[i - 1] == list[i]);
+                assert(f_header_list_contains(tail, f_content_length_name()));
+            }
+            if f_header_list_contains(tail, f_content_length_name()) {
+                let j = choose|j: int| 0 <= j < tail.len() && f_byte_case_insensitive_match(#[trigger] tail[j].name, f_content_length_name());
+                assert(list[j + 1] == tail[j]);
+            }
+        }
+    } else {
+        assert(!f_header_list_contains(list, f_content_length_name()));
+    }
+}
+
+/// ", " between the values is the spec's combined value (§5.3).
+pub proof fn lemma_f_get_is_combine(values: Seq<Seq<u8>>)
+    ensures
+        f_separated(values) == combine(values),
+    decreases values.len(),
+{
+    if values.len() > 1 {
+        lemma_f_get_is_combine(values.drop_first());
+    }
+}
+
+/// Fetch's "ASCII digit" is the spec's `DIGIT`.
+pub proof fn lemma_f_digits(s: Seq<u8>)
+    ensures
+        f_all_ascii_digits(s) == all_in(s, Class::Digit),
+    decreases s.len(),
+{
+    if s.len() > 0 {
+        lemma_f_digits(s.drop_first());
+    }
+}
+
+/// Appending a digit multiplies by ten and adds it, whatever was
+/// accumulated.
+proof fn lemma_f_decimal_push(s: Seq<u8>, c: u8, accumulated: nat)
+    requires
+        f_all_ascii_digits(s),
+        f_is_ascii_digit(c),
+    ensures
+        f_interpret_decimal(s.push(c), accumulated) == f_interpret_decimal(s, accumulated) * 10 + ((c - 0x30) as nat),
+    decreases s.len(),
+{
+    let t = s.push(c);
+    assert(t.len() > 0);
+    if s.len() > 0 {
+        let d = ((s[0] - 0x30) as nat);
+        assert(t[0] == s[0]);
+        assert(f_is_ascii_digit(s[0]) && f_all_ascii_digits(s.drop_first()));
+        lemma_f_decimal_push(s.drop_first(), c, accumulated * 10 + d);
+        assert(t.drop_first() =~= s.drop_first().push(c));
+        assert(f_interpret_decimal(t, accumulated) == f_interpret_decimal(t.drop_first(), accumulated * 10 + d));
+        assert(f_interpret_decimal(s, accumulated) == f_interpret_decimal(s.drop_first(), accumulated * 10 + d));
+    } else {
+        assert(t[0] == c);
+        assert(t.drop_first() =~= Seq::<u8>::empty());
+        assert(f_interpret_decimal(t, accumulated) == f_interpret_decimal(Seq::<u8>::empty(), accumulated * 10 + ((c - 0x30) as nat)));
+    }
+}
+
+/// Reading the digits left to right is the spec's `decimal_value`.
+pub proof fn lemma_f_decimal(s: Seq<u8>)
+    requires
+        all_in(s, Class::Digit),
+    ensures
+        f_interpret_decimal(s, 0) == decimal_value(s),
+    decreases s.len(),
+{
+    if s.len() > 0 {
+        let dl = s.drop_last();
+        assert(all_in(dl, Class::Digit)) by {
+            lemma_all_in_drop_last(s);
+        }
+        lemma_f_decimal(dl);
+        assert(s =~= dl.push(s.last()));
+        lemma_f_digits(dl);
+        lemma_f_digits(s);
+        lemma_all_in_last(s);
+        assert(f_is_ascii_digit(s.last()));
+        lemma_f_decimal_push(dl, s.last(), 0);
+        assert(f_interpret_decimal(s, 0) == f_interpret_decimal(dl.push(s.last()), 0));
+    }
+}
+
+/// The last member of an `all_in` string is in the class.
+proof fn lemma_all_in_last(s: Seq<u8>)
+    requires
+        s.len() > 0,
+        all_in(s, Class::Digit),
+    ensures
+        in_class(Class::Digit, s.last()),
+    decreases s.len(),
+{
+    if s.len() > 1 {
+        lemma_all_in_last(s.drop_first());
+        assert(s.drop_first().last() == s.last());
+    }
+}
+
+/// If every member of a string sequence is a digit string, so is each
+/// prefix: `drop_last` keeps `all_in`.
+proof fn lemma_all_in_drop_last(s: Seq<u8>)
+    requires
+        s.len() > 0,
+        all_in(s, Class::Digit),
+    ensures
+        all_in(s.drop_last(), Class::Digit),
+    decreases s.len(),
+{
+    if s.len() > 1 {
+        lemma_all_in_drop_last(s.drop_first());
+        assert(s.drop_last().drop_first() =~= s.drop_first().drop_last());
+        assert(in_class(Class::Digit, s.drop_last()[0]));
+    }
+}
+
+/// Step 4's loop against `all_equal`.
+pub proof fn lemma_f_for_each(values: Seq<Seq<u8>>, c: Seq<u8>)
+    ensures
+        f_for_each_value(values, Some(c)) == (if all_equal(values, c) { Candidate::Is(Some(c)) } else { Candidate::Failed }),
+    decreases values.len(),
+{
+    if values.len() > 0 && values[0] == c {
+        lemma_f_for_each(values.drop_first(), c);
+    }
+}
+
+/// Fetch's loop over the split values against the spec's reading of the
+/// same list (`parse_content_length`): a number exactly when the spec has
+/// one (the same one); failure only for differing members; null when the
+/// spec says invalid for another reason.
+pub proof fn lemma_f_extract_values(values: Seq<Seq<u8>>)
+    ensures
+        ({
+            let valid = values.len() > 0 && is_digits(values[0]) && all_equal(values, values[0]);
+            &&& valid ==> f_extract_a_length_of(values) == ExtractedLength::Length(decimal_value(values[0]))
+            &&& (f_extract_a_length_of(values) is Length) ==> valid
+            &&& (f_extract_a_length_of(values) is Failure) ==> (values.len() > 0 && !all_equal(values, values[0]))
+            &&& (f_extract_a_length_of(values) is Null) ==> !valid
+        }),
+{
+    if values.len() > 0 {
+        let c = values[0];
+        assert(f_for_each_value(values, None) == f_for_each_value(values.drop_first(), Some(c)));
+        lemma_f_for_each(values.drop_first(), c);
+        assert(all_equal(values, c) == all_equal(values.drop_first(), c));
+        lemma_f_digits(c);
+        if is_digits(c) && all_equal(values, c) {
+            lemma_f_decimal(c);
+        }
+    }
+}
+
+/// The statement, proven: [`fetch_agrees`] for every head.
+pub proof fn theorem_fetch_extract_length(head: Head, request_is_head: bool)
+    ensures
+        fetch_agrees(head, request_is_head),
+{
+    let cl = field_values_named(head.fields, lit_content_length());
+    lemma_f_values_named(head.fields);
+    if cl.len() > 0 {
+        lemma_f_get_is_combine(cl);
+        let combined = combine(cl);
+        crate::field::independent::lemma_get_decode_split_equals_split_values(combined);
+        let m = split_values(combined);
+        lemma_f_extract_values(m);
+        assert(f_header_list_get(head.fields, f_content_length_name()) == Some(combined));
+        assert(parse_content_length_lines(cl) == parse_content_length(combined));
+    } else {
+        assert(f_header_list_get(head.fields, f_content_length_name()) is None);
+    }
+}
+
+
+/// One case per result of steps 3 to 6 of "extract a length", so the
+/// statement is not vacuous: a number, repeated equal values, differing
+/// values (failure), `042` against `42` (failure: a string comparison), a
+/// non-digit (null) and an empty value (null).
+pub proof fn example_extract_a_length()
+    ensures
+        f_extract_a_length_of(seq![seq![0x34u8, 0x32]]) == ExtractedLength::Length(42),
+        f_extract_a_length_of(seq![seq![0x34u8, 0x32], seq![0x34u8, 0x32]]) == ExtractedLength::Length(42),
+        f_extract_a_length_of(seq![seq![0x34u8, 0x32], seq![0x34u8, 0x33]]) == ExtractedLength::Failure,
+        f_extract_a_length_of(seq![seq![0x34u8, 0x32], seq![0x30u8, 0x34, 0x32]]) == ExtractedLength::Failure,
+        f_extract_a_length_of(seq![seq![0x34u8, 0x78]]) == ExtractedLength::Null,
+        f_extract_a_length_of(seq![seq![]]) == ExtractedLength::Null,
+{
+    assert(f_extract_a_length_of(seq![seq![0x34u8, 0x32]]) == ExtractedLength::Length(42)) by (compute_only);
+    assert(f_extract_a_length_of(seq![seq![0x34u8, 0x32], seq![0x34u8, 0x32]]) == ExtractedLength::Length(42)) by (compute_only);
+    assert(f_extract_a_length_of(seq![seq![0x34u8, 0x32], seq![0x34u8, 0x33]]) == ExtractedLength::Failure) by (compute_only);
+    assert(f_extract_a_length_of(seq![seq![0x34u8, 0x32], seq![0x30u8, 0x34, 0x32]]) == ExtractedLength::Failure) by (compute_only);
+    assert(f_extract_a_length_of(seq![seq![0x34u8, 0x78]]) == ExtractedLength::Null) by (compute_only);
+    assert(f_extract_a_length_of(seq![seq![]]) == ExtractedLength::Null) by (compute_only);
+}
+
 } // verus!
