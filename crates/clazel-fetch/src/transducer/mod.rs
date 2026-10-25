@@ -13,3 +13,4 @@ pub mod spec;
 pub mod step;
 pub mod theorems;
 pub mod types;
+pub mod examples;
