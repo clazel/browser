@@ -12,8 +12,8 @@
 //! - [`theorem_silent_until_decided`]: no action on bytes until the parser
 //!   has decided;
 //! - [`theorem_split_invariant`]: for a parser that is `prefix_stable`, how
-//!   the bytes are split does not matter. (Whether the real parser is
-//!   prefix-stable is not proven: see `prefix_stable`.)
+//!   the bytes are split does not matter. (The real parser is
+//!   prefix-stable: `real::theorem_real_prefix_stable`.)
 
 #[allow(unused_imports)]
 use super::spec::*;

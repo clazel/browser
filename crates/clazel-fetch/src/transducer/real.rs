@@ -7,12 +7,16 @@
 //! network shell runs.
 //!
 //! Every theorem of `theorems.rs` holds for every `HttpFns` and `UrlFns`,
-//! so it holds of these without change, except
-//! `theorem_split_invariant`, whose hypothesis `prefix_stable` is **not
-//! proven** of [`real_http`] (it needs the monotonicity of
-//! `clazel_http::message::spec::parse_response`, stated in
-//! `clazel_http::message::contract` but not proven, and slightly stronger:
-//! see `prefix_stable`).
+//! so it holds of these without change. `theorem_split_invariant` needs
+//! its parser to be `prefix_stable`: [`theorem_real_prefix_stable`] proves
+//! that of [`real_http`] from `clazel-http`'s
+//! `lemma_parse_response_append`, and [`theorem_real_split_invariant`] is
+//! the split theorem for the shipped client.
+//!
+//! [`RealHttp`] keeps one `clazel-http` `ResponseParser` per connection in
+//! the reading state and feeds it each octet once (`HttpFnsExec::feed`),
+//! so a fetch is linear in the response's size; the parser's invariant is
+//! its `wf`, for a request that is not `HEAD`.
 //!
 //! # Modelling choices
 //!
@@ -65,6 +69,35 @@ pub open spec fn real_location(base: Url, value: Seq<u8>) -> Option<Url> {
 /// The URL functions of the shipped client.
 pub open spec fn real_urls() -> UrlFns {
     UrlFns { location: |base: Url, value: Seq<u8>| real_location(base, value) }
+}
+
+/// The shipped parser is prefix-stable
+/// (`super::contract::real_prefix_stable`): `clazel-http`'s append lemma
+/// for `parse_response` is the statement, for a request that is not `HEAD`.
+pub proof fn theorem_real_prefix_stable()
+    ensures
+        super::contract::real_prefix_stable(),
+{
+    assert forall|input: Seq<u8>, more: Seq<u8>| #![trigger (real_http().parse)(input), (real_http().parse)(input + more)] match (real_http().parse)(input) {
+        clazel_http::message::spec::Parse::Done { response, rest } => (real_http().parse)(input + more)
+            == (clazel_http::message::spec::Parse::Done { response: response, rest: rest + more }),
+        clazel_http::message::spec::Parse::Invalid => (real_http().parse)(input + more) is Invalid,
+        clazel_http::message::spec::Parse::Unsupported => (real_http().parse)(input + more) is Unsupported,
+        clazel_http::message::spec::Parse::Incomplete => true,
+    } by {
+        clazel_http::message::lemmas::lemma_parse_response_append(input, more, false);
+    }
+}
+
+/// The split does not matter for the shipped client
+/// (`super::contract::split_invariant` with [`real_http`] and
+/// [`real_urls`]), for every state and split.
+pub proof fn theorem_real_split_invariant(s: State, a: Seq<u8>, b: Seq<u8>)
+    ensures
+        super::contract::split_invariant(real_http(), real_urls(), s, a, b),
+{
+    theorem_real_prefix_stable();
+    super::theorems::theorem_split_invariant(real_http(), real_urls(), s, a, b);
 }
 
 /// [`real_http`], executable.
