@@ -26,9 +26,6 @@
 //!   at most 16 KiB, host identifiers at most 253 bytes, offers at most 64.
 //! - RFC prose/equations have no numbered steps; comments name the clause.
 
-use crate::schedule::spec as kdf;
-use crate::spec::{Ext, HsMsg, Res};
-use crate::transcript::spec as tr;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -56,12 +53,16 @@ pub open spec fn certificate_alert(error: CertificateError) -> u8 {
         CertificateError::Unsupported => 43,
     }
 }
+/// Chain/name/time validation parameter, returning an opaque end-entity key.
+pub type ChainValidation = spec_fn(Seq<u8>, u64, Seq<u8>) -> Result<Seq<u8>, CertificateError>;
+/// Signature-verification parameter bound to an end-entity key and TLS scheme.
+pub type SignatureVerification = spec_fn(Seq<u8>, u16, Seq<u8>, Seq<u8>) -> bool;
 /// Pure verification parameters, not assumptions about real cryptography.
 pub struct Verification {
     /// Validates chain, identity and time and returns the end-entity key.
-    pub chain: spec_fn(Seq<u8>, u64, Seq<u8>) -> Result<Seq<u8>, CertificateError>,
+    pub chain: ChainValidation,
     /// Verifies this signature with that end-entity key and TLS scheme.
-    pub signature: spec_fn(Seq<u8>, u16, Seq<u8>, Seq<u8>) -> bool,
+    pub signature: SignatureVerification,
 }
 /// Stages of the certificate-based, non-PSK client flight (Appendix A.1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,7 +106,7 @@ pub struct State {
     /// Immutable per-connection context.
     pub config: Config,
     /// Transcript owned by this machine through each accepted message.
-    pub transcript: tr::State,
+    pub transcript: crate::transcript::spec::State,
     /// Next protocol stage.
     pub phase: Phase,
     /// End-entity key returned by chain validation.
@@ -170,7 +171,7 @@ pub open spec fn signature_scheme(scheme: u16) -> bool {
         || scheme == 0x0807 || scheme == 0x0809 || scheme == 0x080a || scheme == 0x080b
 }
 /// §4.2: EE responses must have been offered. Placement/body rules are parsed first.
-pub open spec fn extensions_offered(es: Seq<Ext>, offers: Seq<u16>) -> bool
+pub open spec fn extensions_offered(es: Seq<crate::spec::Ext>, offers: Seq<u16>) -> bool
     decreases es.len(),
 {
     es.len() == 0 || (member(offers, es[0].etype) && extensions_offered(es.skip(1), offers))
@@ -182,7 +183,7 @@ pub open spec fn config_ok(c: Config) -> bool {
 }
 /// Authentication gate invariant; no claim about the validator's cryptography.
 pub open spec fn wf(s: State) -> bool {
-    config_ok(s.config) && tr::wf(s.transcript) && s.transcript.phase == tr::Phase::Handshake
+    config_ok(s.config) && crate::transcript::spec::wf(s.transcript) && s.transcript.phase == crate::transcript::spec::Phase::Handshake
         && s.key.len() <= MAX_KEY
         && (s.signature_checked ==> s.chain_checked)
         && (s.finished_checked ==> s.chain_checked && s.signature_checked)
@@ -193,8 +194,8 @@ pub open spec fn wf(s: State) -> bool {
         && (s.phase == Phase::Ready ==> s.finished_checked && s.client_sent)
 }
 /// Begin after the Hello layer supplied its negotiated secrets and transcript.
-pub open spec fn start(config: Config, transcript: tr::State) -> Result<State, u8> {
-    if !config_ok(config) || !tr::wf(transcript) || transcript.phase != tr::Phase::Handshake {
+pub open spec fn start(config: Config, transcript: crate::transcript::spec::State) -> Result<State, u8> {
+    if !config_ok(config) || !crate::transcript::spec::wf(transcript) || transcript.phase != crate::transcript::spec::Phase::Handshake {
         Err(crate::spec::INTERNAL_ERROR)
     } else {
         Ok(State { config, transcript, phase: Phase::EncryptedExtensions, key: Seq::empty(),
@@ -207,8 +208,8 @@ pub open spec fn fail(s: State, alert: u8) -> (State, Action) {
     (State { phase: Phase::Failed, ..s }, Action::Fail(alert))
 }
 /// Append exactly one accepted handshake encoding, enforcing the transcript bound.
-pub open spec fn record(c: kdf::Crypto, s: State, kind: tr::Kind, body: Seq<u8>, phase: Phase) -> (State, Action) {
-    match tr::step(c.hash, s.transcript, kind, body) {
+pub open spec fn record(c: crate::schedule::spec::Crypto, s: State, kind: crate::transcript::spec::Kind, body: Seq<u8>, phase: Phase) -> (State, Action) {
+    match crate::transcript::spec::step(c.hash, s.transcript, kind, body) {
         Ok(transcript) => (State { transcript, phase, ..s }, Action::None),
         Err(_) => fail(s, crate::spec::INTERNAL_ERROR),
     }
@@ -216,19 +217,19 @@ pub open spec fn record(c: kdf::Crypto, s: State, kind: tr::Kind, body: Seq<u8>,
 /// §4.4.2: an empty client Certificate has zero-length context and certificate_list.
 pub open spec fn empty_certificate() -> Seq<u8> { seq![0u8, 0u8, 0u8, 0u8] }
 /// §4.4.4: verify the server before building or sending any client handshake flight.
-pub open spec fn accept_finished(c: kdf::Crypto, s: State, verify_data: Seq<u8>) -> (State, Action) {
-    if verify_data != kdf::finished(c, s.config.server_secret, s.transcript.messages) {
+pub open spec fn accept_finished(c: crate::schedule::spec::Crypto, s: State, verify_data: Seq<u8>) -> (State, Action) {
+    if verify_data != crate::schedule::spec::finished(c, s.config.server_secret, s.transcript.messages) {
         fail(s, crate::spec::DECRYPT_ERROR)
     } else {
-        let (s1, a1) = record(c, State { finished_checked: true, ..s }, tr::Kind::Finished, verify_data, Phase::SendFinished);
+        let (s1, a1) = record(c, State { finished_checked: true, ..s }, crate::transcript::spec::Kind::Finished, verify_data, Phase::SendFinished);
         if a1 is Fail { (s1, a1) } else {
             let s1 = State { application_hash: (c.hash)(s1.transcript.messages), ..s1 };
             let (s2, a2) = if s1.requested {
-                record(c, s1, tr::Kind::Certificate, empty_certificate(), Phase::SendFinished)
+                record(c, s1, crate::transcript::spec::Kind::Certificate, empty_certificate(), Phase::SendFinished)
             } else { (s1, Action::None) };
             if a2 is Fail { (s2, a2) } else {
-                let own = kdf::finished(c, s2.config.client_secret, s2.transcript.messages);
-                let (s3, a3) = record(c, s2, tr::Kind::Finished, own, Phase::SendFinished);
+                let own = crate::schedule::spec::finished(c, s2.config.client_secret, s2.transcript.messages);
+                let (s3, a3) = record(c, s2, crate::transcript::spec::Kind::Finished, own, Phase::SendFinished);
                 if a3 is Fail { (s3, a3) } else {
                     let certificate = if s3.requested { crate::spec::write_handshake(11, empty_certificate()) } else { Seq::empty() };
                     (s3, Action::Send(certificate + crate::spec::write_handshake(20, own)))
@@ -238,20 +239,20 @@ pub open spec fn accept_finished(c: kdf::Crypto, s: State, verify_data: Seq<u8>)
     }
 }
 /// §4.3.1 and §4.2: accepted EncryptedExtensions must answer actual offers.
-pub open spec fn on_extensions(c: kdf::Crypto, s: State, body: Seq<u8>, es: Seq<Ext>) -> (State, Action) {
+pub open spec fn on_extensions(c: crate::schedule::spec::Crypto, s: State, body: Seq<u8>, es: Seq<crate::spec::Ext>) -> (State, Action) {
     if s.phase != Phase::EncryptedExtensions { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
     else if !extensions_offered(es, s.config.extensions) { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }
-    else { record(c, s, tr::Kind::EncryptedExtensions, body, Phase::CertificateOrRequest) }
+    else { record(c, s, crate::transcript::spec::Kind::EncryptedExtensions, body, Phase::CertificateOrRequest) }
 }
 /// §4.3.2: one initial CertificateRequest, with empty context and signature_algorithms.
-pub open spec fn on_request(c: kdf::Crypto, s: State, body: Seq<u8>, empty_context: bool, has_algorithms: bool) -> (State, Action) {
+pub open spec fn on_request(c: crate::schedule::spec::Crypto, s: State, body: Seq<u8>, empty_context: bool, has_algorithms: bool) -> (State, Action) {
     if s.phase != Phase::CertificateOrRequest { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
     else if !empty_context { fail(s, crate::spec::ILLEGAL_PARAMETER) }
     else if !has_algorithms { fail(s, crate::spec::MISSING_EXTENSION) }
-    else { record(c, State { requested: true, ..s }, tr::Kind::CertificateRequest, body, Phase::Certificate) }
+    else { record(c, State { requested: true, ..s }, crate::transcript::spec::Kind::CertificateRequest, body, Phase::Certificate) }
 }
 /// §4.4.2: nonempty server chain, validated for this captured host and time.
-pub open spec fn on_certificate(c: kdf::Crypto, v: Verification, s: State, body: Seq<u8>, empty_chain: bool) -> (State, Action) {
+pub open spec fn on_certificate(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty_chain: bool) -> (State, Action) {
     if s.phase != Phase::CertificateOrRequest && s.phase != Phase::Certificate { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
     else if empty_chain { fail(s, crate::spec::DECODE_ERROR) }
     else {
@@ -259,42 +260,47 @@ pub open spec fn on_certificate(c: kdf::Crypto, v: Verification, s: State, body:
             Err(error) => fail(s, certificate_alert(error)),
             Ok(key) => {
                 if key.len() > MAX_KEY { fail(s, crate::spec::INTERNAL_ERROR) }
-                else { record(c, State { key, chain_checked: true, ..s }, tr::Kind::Certificate, body, Phase::CertificateVerify) }
+                else { record(c, State { key, chain_checked: true, ..s }, crate::transcript::spec::Kind::Certificate, body, Phase::CertificateVerify) }
             },
         }
     }
 }
 /// §4.4.3: use the validated leaf key and the transcript through Certificate.
-pub open spec fn on_verify(c: kdf::Crypto, v: Verification, s: State, body: Seq<u8>, algorithm: u16, signature: Seq<u8>) -> (State, Action) {
+pub open spec fn on_verify(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, algorithm: u16, signature: Seq<u8>) -> (State, Action) {
     if s.phase != Phase::CertificateVerify { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
     else if !signature_scheme(algorithm) || !member(s.config.signatures, algorithm) { fail(s, crate::spec::ILLEGAL_PARAMETER) }
     else {
-        let input = tr::certificate_verify_input(true, (c.hash)(s.transcript.messages));
+        let input = crate::transcript::spec::certificate_verify_input(true, (c.hash)(s.transcript.messages));
         if !(v.signature)(s.key, algorithm, input, signature) { fail(s, crate::spec::DECRYPT_ERROR) }
-        else { record(c, State { signature_checked: true, ..s }, tr::Kind::CertificateVerify, body, Phase::Finished) }
+        else { record(c, State { signature_checked: true, ..s }, crate::transcript::spec::Kind::CertificateVerify, body, Phase::Finished) }
     }
 }
-/// §4.3/§4.4: parse a complete body, then dispatch its actual parsed fields.
-pub open spec fn receive(c: kdf::Crypto, v: Verification, s: State, typ: u8, body: Seq<u8>) -> (State, Action) {
-    if body.len() > tr::MAX_BODY { fail(s, crate::spec::INTERNAL_ERROR) } else {
+/// §4.3/§4.4: dispatch the actual parsed fields, with an explicit Finished-length guard.
+pub open spec fn dispatch(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, message: crate::spec::HsMsg) -> (State, Action) {
+    match message {
+        crate::spec::HsMsg::EncryptedExtensions(es) => on_extensions(c, s, body, es),
+        crate::spec::HsMsg::CertificateRequest(request) => on_request(c, s, body, request.context.len() == 0, crate::spec::has_ext(request.extensions, 13)),
+        crate::spec::HsMsg::Certificate(certificate) => on_certificate(c, v, s, body, certificate.entries.len() == 0),
+        crate::spec::HsMsg::CertificateVerify(cv) => on_verify(c, v, s, body, cv.algorithm, cv.signature),
+        crate::spec::HsMsg::Finished(verify_data) => {
+            if s.phase != Phase::Finished { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
+            else if verify_data.len() != 32 { fail(s, crate::spec::DECODE_ERROR) }
+            else { accept_finished(c, s, verify_data) }
+        },
+        _ => fail(s, crate::spec::UNEXPECTED_MESSAGE),
+    }
+}
+/// §4.3/§4.4: parse a complete body before authentication dispatch.
+pub open spec fn receive(c: crate::schedule::spec::Crypto, v: Verification, s: State, typ: u8, body: Seq<u8>) -> (State, Action) {
+    if body.len() > crate::transcript::spec::MAX_BODY { fail(s, crate::spec::INTERNAL_ERROR) } else {
         match crate::spec::parse_handshake_body(typ, body, 32) {
-            Res::Err(error) => fail(s, crate::spec::alert_for(error).description),
-            Res::Ok(message) => match message {
-                HsMsg::EncryptedExtensions(es) => on_extensions(c, s, body, es),
-                HsMsg::CertificateRequest(request) => on_request(c, s, body, request.context.len() == 0, crate::spec::has_ext(request.extensions, 13)),
-                HsMsg::Certificate(certificate) => on_certificate(c, v, s, body, certificate.entries.len() == 0),
-                HsMsg::CertificateVerify(cv) => on_verify(c, v, s, body, cv.algorithm, cv.signature),
-                HsMsg::Finished(verify_data) => {
-                    if s.phase != Phase::Finished { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
-                    else { accept_finished(c, s, verify_data) }
-                },
-                _ => fail(s, crate::spec::UNEXPECTED_MESSAGE),
-            },
+            crate::spec::Res::Err(error) => fail(s, crate::spec::alert_for(error).description),
+            crate::spec::Res::Ok(message) => dispatch(c, v, s, body, message),
         }
     }
 }
 /// Appendix A.1 initial-flight client effects and the application-data gate.
-pub open spec fn step(c: kdf::Crypto, v: Verification, s: State, input: Input) -> (State, Action) {
+pub open spec fn step(c: crate::schedule::spec::Crypto, v: Verification, s: State, input: Input) -> (State, Action) {
     if s.phase == Phase::Failed || s.phase == Phase::Closed { (s, Action::None) }
     else {
         match input {
