@@ -39,8 +39,9 @@ pub const CRATE_NAME: &str = "clazel-sys";
 pub const AUDITS: &str = "docs/SYS-AUDITS.md";
 
 /// Foreign functions `clazel-sys` may declare or call. `syscall` is the
-/// route to `seccomp(2)` and the three `landlock_*` system calls, which
-/// glibc does not wrap; it may only be called with a number from
+/// route to `seccomp(2)`, the three `landlock_*` system calls and `ptrace(2)`
+/// on Linux (glibc does not wrap the first four, and its `ptrace` is variadic
+/// with a request type that differs between libcs); it may only be called with a number from
 /// [`SYSCALLS`]. Errno is read with `std::io::Error::last_os_error`, which
 /// is safe, so it needs no entry.
 pub const FOREIGN_FUNCTIONS: &[&str] = &[
@@ -49,6 +50,13 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     "prctl",
     "syscall",
     "unshare",
+    // The escape attempts of the sandbox tests (phase-2.md item 2.16): each
+    // returns only whether the OS allowed it. `fork`'s child calls `_exit`
+    // at once. `ptrace` is a foreign function on macOS; on Linux it is
+    // reached through `syscall` with `SYS_ptrace`.
+    "fork",
+    "_exit",
+    "ptrace",
 ];
 
 /// The system call numbers `syscall` may be given (names as in `libc`).
@@ -57,6 +65,7 @@ pub const SYSCALLS: &[&str] = &[
     "SYS_landlock_create_ruleset",
     "SYS_landlock_add_rule",
     "SYS_landlock_restrict_self",
+    "SYS_ptrace",
 ];
 
 /// Method and function names that do pointer arithmetic. Banned in the

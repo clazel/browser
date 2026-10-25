@@ -247,7 +247,7 @@ fn ows_at(s: &[u8], i: usize) -> (r: bool)
 }
 
 /// `s` without its trailing OWS.
-fn strip_trailing_ows_exec(s: &[u8]) -> (out: Vec<u8>)
+pub fn strip_trailing_ows_exec(s: &[u8]) -> (out: Vec<u8>)
     ensures
         out@ == strip_trailing_ows(s@),
 {

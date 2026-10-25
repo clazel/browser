@@ -14,16 +14,22 @@
 //!   Mac; CI is its first run).
 //!
 //! Each attempt first runs unsandboxed (`control`) against a target of its own
-//! and must succeed, so a denial is the sandbox's and not a wrong path. Not
-//! covered, because neither `std` nor `clazel-sys` can express them: `fork`
-//! and `ptrace` of a sibling.
+//! and must succeed, so a denial is the sandbox's and not a wrong path. The
+//! `fork` and `ptrace-attach` attempts use `clazel-sys`'s `attempt_fork` and
+//! `attempt_ptrace_attach` (awaiting their audit, see docs/SYS-AUDITS.md).
+//! `ptrace-attach` targets a sibling: an unsandboxed `clazel-adversary idle`
+//! the test started, which is not a descendant of the adversary. On Linux
+//! with Yama's `ptrace_scope` above 0 (Ubuntu's default) even the unsandboxed
+//! control is refused (`EPERM`) for that reason, so there the control may
+//! end in that error instead of succeeding; the sandboxed run must still be
+//! killed by `SIGSYS`.
 
 use std::fs;
 use std::net::TcpListener;
 use std::os::unix::net::UnixListener;
 use std::os::unix::process::ExitStatusExt;
 use std::path::PathBuf;
-use std::process::{Command, Output};
+use std::process::{Child, Command, Output, Stdio};
 
 use clazel_renderer::escape::Attempt;
 
@@ -65,6 +71,76 @@ fn text(out: &Output) -> String {
     )
 }
 
+/// A sibling process to attach to: `clazel-adversary idle`, killed on drop.
+struct Sibling(Option<Child>);
+
+impl Sibling {
+    fn start(program: &str) -> Sibling {
+        let child = Command::new(program)
+            .arg("idle")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        assert!(child.is_ok(), "cannot start a sibling: {child:?}");
+        Sibling(child.ok())
+    }
+
+    fn pid(&self) -> String {
+        self.0.as_ref().map_or(0, Child::id).to_string()
+    }
+}
+
+impl Drop for Sibling {
+    fn drop(&mut self) {
+        if let Some(child) = self.0.as_mut() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+/// The program the sibling runs. On Linux that is the adversary itself. On
+/// macOS an unsandboxed process cannot `ptrace` another one unless the target
+/// carries the `com.apple.security.get-task-allow` entitlement (what a debug
+/// build from Xcode has, and a Cargo build does not): even an unsandboxed
+/// attach to a plain child gets `EPERM`. So the sibling is a copy of the
+/// adversary, ad-hoc signed with that entitlement, which is the one thing
+/// that makes the control attach succeed and a denial the sandbox's.
+fn sibling_program(dir: &std::path::Path) -> String {
+    if cfg!(not(target_os = "macos")) {
+        return ADVERSARY.to_owned();
+    }
+    let copy = dir.join("debuggable-sibling");
+    let plist = dir.join("get-task-allow.plist");
+    let entitlements = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
+        <!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \
+        \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n\
+        <plist version=\"1.0\"><dict><key>com.apple.security.get-task-allow</key>\
+        <true/></dict></plist>\n";
+    assert!(
+        fs::copy(ADVERSARY, &copy).is_ok() && fs::write(&plist, entitlements).is_ok(),
+        "cannot prepare the debuggable sibling in {dir:?}"
+    );
+    let signed = Command::new("codesign")
+        .args(["--force", "--sign", "-", "--entitlements"])
+        .arg(&plist)
+        .arg(&copy)
+        .output();
+    assert!(
+        signed.as_ref().is_ok_and(|o| o.status.success()),
+        "codesign of the sibling failed: {signed:?}"
+    );
+    copy.to_string_lossy().into_owned()
+}
+
+/// On Linux, Yama's `ptrace_scope` above 0 lets a process attach only to its
+/// descendants, so an unsandboxed attach to a sibling gets `EPERM`.
+fn yama_restricts_ptrace() -> bool {
+    cfg!(target_os = "linux")
+        && fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope").is_ok_and(|v| v.trim() != "0")
+}
+
 /// What a listener the test keeps alive and the target for `attempt` are.
 /// Returns the target the control run and the sandboxed run use.
 fn targets(
@@ -100,6 +176,17 @@ fn targets(
         }
         Attempt::UnixListen => (p("control-listen"), p("listen")),
         Attempt::Execve => ("/bin/echo".to_owned(), "/bin/echo".to_owned()),
+        Attempt::Fork => ("-".to_owned(), "-".to_owned()),
+        Attempt::PtraceAttach => {
+            // One sibling each, so the control's attach cannot leave the
+            // sandboxed run's target traced.
+            let program = sibling_program(dir);
+            let (for_control, for_escape) = (Sibling::start(&program), Sibling::start(&program));
+            let pids = (for_control.pid(), for_escape.pid());
+            keep.push(Box::new(for_control));
+            keep.push(Box::new(for_escape));
+            pids
+        }
     };
     (control, sandboxed, keep)
 }
@@ -109,9 +196,18 @@ fn escape_attempt_is_stopped(attempt: Attempt) {
     let (control_target, target, _keep) = targets(attempt, &dir);
 
     let control = adversary("control", attempt, &control_target);
+    let control_stdout = String::from_utf8_lossy(&control.stdout).into_owned();
+    // Yama is the one documented way an unsandboxed attach to a sibling fails.
+    let yama_refused = attempt == Attempt::PtraceAttach
+        && yama_restricts_ptrace()
+        && control.status.code() == Some(0)
+        && control_stdout.starts_with("DENIED")
+        && control_stdout.contains("Operation not permitted");
+    if yama_refused {
+        println!("escape: ptrace-attach control refused by Yama ptrace_scope, as documented");
+    }
     assert!(
-        control.status.code() == Some(3)
-            && String::from_utf8_lossy(&control.stdout).starts_with("ESCAPED"),
+        yama_refused || (control.status.code() == Some(3) && control_stdout.starts_with("ESCAPED")),
         "{}: the attempt does not even work outside the sandbox, so a denial would prove nothing: {}",
         attempt.name(),
         text(&control)
@@ -181,4 +277,6 @@ escape_tests! {
     cannot_connect_to_a_unix_socket: Attempt::UnixConnect,
     cannot_create_a_unix_socket: Attempt::UnixListen,
     cannot_execute_a_program: Attempt::Execve,
+    cannot_fork: Attempt::Fork,
+    cannot_attach_to_a_sibling_with_ptrace: Attempt::PtraceAttach,
 }

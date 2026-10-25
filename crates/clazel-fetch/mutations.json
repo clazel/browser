@@ -1,0 +1,480 @@
+{
+  "mutations": [
+    {
+      "id": "ascii-bound-widened",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "(s[0] < 0x80 &&",
+      "replace": "(s[0] < 0x100 &&",
+      "expect": "killed",
+      "reason": "Lets Latin-1 code points through as octets: a host with U+00E9 is sent as the octet 0xE9 in Host, which a field value allows (obs-text). lemma_request_09 says it is refused. (A path with it is still refused by the serializer, so lemma_request_08 cannot kill this.)",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_09()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0xE9u32, 0x78])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None)"
+      }
+    },
+    {
+      "id": "empty-path-not-slash",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "let path = if p.len() == 0 { seq![0x2Fu32] } else { p };",
+      "replace": "let path = p;",
+      "expect": "killed",
+      "reason": "Sends an empty path instead of `/` (RFC 9112 §3.2.1). lemma_request_02 says the target is `/`.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_02()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(Seq::<Seq<u32>>::empty()), query: None, fragment: None }) == Some(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A]))"
+      }
+    },
+    {
+      "id": "query-without-question-mark",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "Some(q) => path + seq![0x3Fu32] + q,",
+      "replace": "Some(q) => path + q,",
+      "expect": "killed",
+      "reason": "Drops the `?` before the query. lemma_request_00 says the target is `/a?b=1`.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_00()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: Some(seq![0x62u32, 0x3D, 0x31]), fragment: None }) == Some(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x62, 0x3D, 0x31, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A]))"
+      }
+    },
+    {
+      "id": "query-dropped",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "Some(q) => path + seq![0x3Fu32] + q,",
+      "replace": "Some(q) => path,",
+      "expect": "killed",
+      "reason": "Never sends the query. lemma_request_03 says an empty query still sends `/a?`.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_03()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: Some(Seq::<u32>::empty()), fragment: None }) == Some(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A]))"
+      }
+    },
+    {
+      "id": "port-dropped",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "Some(port) => h + seq![0x3Au32] + clazel_url::host::spec::serialize_integer(port),",
+      "replace": "Some(port) => h,",
+      "expect": "killed",
+      "reason": "Leaves the port out of Host (RFC 9110 §7.2). lemma_request_01 says Host is `example.com:8080`.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_01()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: Some(8080nat), path: clazel_url::url::spec::UrlPath::List(seq![Seq::<u32>::empty()]), query: None, fragment: None }) == Some(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x3A, 0x38, 0x30, 0x38, 0x30, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A]))"
+      }
+    },
+    {
+      "id": "scheme-unchecked",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "if url.scheme != clazel_url::url::spec::http_str() || url.username.len() > 0",
+      "replace": "if url.username.len() > 0",
+      "expect": "killed",
+      "reason": "Fetches any scheme over plain HTTP. lemma_request_05 says https: is refused.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_05()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None)"
+      }
+    },
+    {
+      "id": "username-unchecked",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "|| url.username.len() > 0 || url.password.len() > 0 {",
+      "replace": "|| url.password.len() > 0 {",
+      "expect": "killed",
+      "reason": "Accepts a username (RFC 9110 §4.2.4). lemma_request_06 says it is refused.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_06()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: seq![0x75u32], password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None)"
+      }
+    },
+    {
+      "id": "password-unchecked",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "|| url.username.len() > 0 || url.password.len() > 0 {",
+      "replace": "|| url.username.len() > 0 {",
+      "expect": "killed",
+      "reason": "Accepts a password (RFC 9110 §4.2.4). lemma_request_07 says it is refused.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_07()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: seq![0x70u32], host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None)"
+      }
+    },
+    {
+      "id": "connection-close-dropped",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "                        clazel_http::field::spec::FieldLine { name: lit_connection(), value: lit_close() },\n",
+      "replace": "",
+      "expect": "killed",
+      "reason": "Drops `Connection: close`, which one request per connection relies on. lemma_request_00 lists the four fields.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_00()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: Some(seq![0x62u32, 0x3D, 0x31]), fragment: None }) == Some(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x62, 0x3D, 0x31, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A]))"
+      }
+    },
+    {
+      "id": "method-head",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "    seq![0x47u8, 0x45, 0x54]",
+      "replace": "    seq![0x48u8, 0x45, 0x41, 0x44]",
+      "expect": "killed",
+      "reason": "Sends HEAD, whose response has no body (RFC 9112 §6.3 step 1). lemma_request_00 says the method is GET.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_00()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: Some(seq![0x62u32, 0x3D, 0x31]), fragment: None }) == Some(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x3F, 0x62, 0x3D, 0x31, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A]))"
+      }
+    },
+    {
+      "id": "validity-unchecked",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "Some(r) => if clazel_http::message::spec::is_valid_request(r) {",
+      "replace": "Some(r) => if true {",
+      "expect": "killed",
+      "reason": "Serializes an invalid request (an SP in the target would end the request line early). lemma_request_10 says it is refused.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_10()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32, 0x20, 0x62]]), query: None, fragment: None }) is None)"
+      }
+    },
+    {
+      "id": "url-port-ignored",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "                Some(p) => p,",
+      "replace": "                Some(p) => 80,",
+      "expect": "killed",
+      "reason": "Connects to 80 whatever the URL's port. lemma_request_13 says 8080.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_13()",
+        "witness": "!(connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: Some(8080nat), path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 8080nat)))"
+      }
+    },
+    {
+      "id": "default-port-443",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "                None => 80,",
+      "replace": "                None => 443,",
+      "expect": "killed",
+      "reason": "Uses the https default for http (RFC 9110 §4.2.1). lemma_request_12 says 80.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_12()",
+        "witness": "!(connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 80nat)))"
+      }
+    },
+    {
+      "id": "interim-includes-101",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "100 <= status && status <= 199 && status != 101",
+      "replace": "100 <= status && status <= 199",
+      "expect": "killed",
+      "reason": "Treats 101 (Switching Protocols) as interim, though no Upgrade is sent. lemma_request_16 says it is final.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_16()",
+        "witness": "!(!is_interim(101nat))"
+      }
+    },
+    {
+      "id": "interim-includes-200",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "100 <= status && status <= 199 && status != 101",
+      "replace": "100 <= status && status <= 200 && status != 101",
+      "expect": "killed",
+      "reason": "Skips a 200 as if interim (RFC 9110 §15.2 is 1xx only). lemma_request_17 says it is final.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_17()",
+        "witness": "!(!is_interim(200nat))"
+      }
+    },
+    {
+      "id": "interim-includes-99",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "100 <= status && status <= 199 && status != 101",
+      "replace": "99 <= status && status <= 199 && status != 101",
+      "expect": "killed",
+      "reason": "Treats 99 as interim. lemma_request_18 says it is not.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_18()",
+        "witness": "!(!is_interim(99nat))"
+      }
+    },
+    {
+      "id": "interim-excludes-199",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "100 <= status && status <= 199 && status != 101",
+      "replace": "100 <= status && status < 199 && status != 101",
+      "expect": "killed",
+      "reason": "Misses 199, the top of the 1xx class. lemma_request_15 says it is interim.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_15()",
+        "witness": "!(is_interim(199nat))"
+      }
+    },
+    {
+      "id": "redirect-301-dropped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "status == 301 || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "301 is no longer a redirect status (Fetch §2.2.3). lemma_transducer_02 says a 301 with a Location is followed.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_02()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x31, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 2000nat)"
+      }
+    },
+    {
+      "id": "redirect-302-dropped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "status == 302 || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "302 is no longer a redirect status. lemma_transducer_01 says it is followed.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_01()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 2000nat)"
+      }
+    },
+    {
+      "id": "redirect-303-dropped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "status == 303 || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "303 is no longer a redirect status. lemma_transducer_03 says it is followed.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_03()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x33, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 2000nat)"
+      }
+    },
+    {
+      "id": "redirect-307-dropped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "status == 307 || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "307 is no longer a redirect status. lemma_transducer_04 says it is followed.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_04()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x37, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 2000nat)"
+      }
+    },
+    {
+      "id": "redirect-308-dropped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": " || status == 308",
+      "replace": "",
+      "expect": "killed",
+      "reason": "308 is no longer a redirect status. lemma_transducer_05 says it is followed.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_05()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x38, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 2000nat)"
+      }
+    },
+    {
+      "id": "redirect-304-added",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "status == 301 || ",
+      "replace": "status == 304 || status == 301 || ",
+      "expect": "killed",
+      "reason": "Treats 304 as a redirect. lemma_transducer_06 says a 304 with a Location is the response.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_06()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x34, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 304nat)"
+      }
+    },
+    {
+      "id": "limit-check-never-fires",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "} else if s.redirects == max_redirects() {",
+      "replace": "} else if s.redirects > max_redirects() {",
+      "expect": "killed",
+      "reason": "Follows a 21st redirect (Fetch §4.5 step 7). lemma_transducer_07 says it is RedirectLimit.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_07()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 20nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1009nat)"
+      }
+    },
+    {
+      "id": "limit-check-early",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "} else if s.redirects == max_redirects() {",
+      "replace": "} else if s.redirects + 1 == max_redirects() {",
+      "expect": "killed",
+      "reason": "Refuses the 20th redirect. lemma_transducer_08 says it is followed.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_08()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 19nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 2000nat)"
+      }
+    },
+    {
+      "id": "interim-not-skipped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "if crate::request::spec::is_interim(response.status_line.status) {\n            // §15.2",
+      "replace": "if false {\n            // §15.2",
+      "expect": "killed",
+      "reason": "A 1xx response is taken as the final one (RFC 9110 §15.2). lemma_transducer_00 says the 204 after a 100 is the response.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_00()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x30, 0x30, 0x20, 0x43, 0x6F, 0x6E, 0x74, 0x69, 0x6E, 0x75, 0x65, 0x0D, 0x0A, 0x0D, 0x0A, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x34, 0x20, 0x4E, 0x6F, 0x20, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 204nat)"
+      }
+    },
+    {
+      "id": "close-parsed-as-open",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "match (http.parse_at_close)(received) {",
+      "replace": "match (http.parse)(received) {",
+      "expect": "killed",
+      "reason": "At close, the parser for an open connection is used, so a close-delimited body never ends (RFC 9112 §6.3 step 8). lemma_transducer_10 says it is the response.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_10()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x62] }, Input::Closed).1) == 200nat)"
+      }
+    },
+    {
+      "id": "close-closes-again",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Settled::Final(response) => on_final(urls, s, response, false),",
+      "replace": "Settled::Final(response) => on_final(urls, s, response, true),",
+      "expect": "killed",
+      "reason": "Asks to close a connection the server already closed. lemma_transducer_10 says the only action is Done.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_10()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x0D, 0x0A, 0x61, 0x62] }, Input::Closed).1.len() == 1nat)"
+      }
+    },
+    {
+      "id": "two-locations-allowed",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "} else if values.len() > 1 {",
+      "replace": "} else if values.len() > 2 {",
+      "expect": "killed",
+      "reason": "Takes the first of two Location lines (Fetch §2.2.2 step 2 says failure). lemma_transducer_11 says it is RedirectLocation.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_11()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x46, 0x6F, 0x75, 0x6E, 0x64, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x63, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1007nat)"
+      }
+    },
+    {
+      "id": "no-location-fails",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "if values.len() == 0 {\n            LocationUrl::Null",
+      "replace": "if values.len() == 0 {\n            LocationUrl::Failure",
+      "expect": "killed",
+      "reason": "A redirect status without Location becomes a network error instead of the response (Fetch §4.5 step 4). lemma_transducer_12 says it is the response.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_12()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x46, 0x6F, 0x75, 0x6E, 0x64, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 302nat)"
+      }
+    },
+    {
+      "id": "fragment-dropped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Some(location) => LocationUrl::Url(with_fragment(location, request_url.fragment)),",
+      "replace": "Some(location) => LocationUrl::Url(location),",
+      "expect": "killed",
+      "reason": "The location URL loses the request's fragment (Fetch §2.2.6 step 4). lemma_transducer_13 says it keeps it.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_13()",
+        "witness": "!(super::examples::ex_step(Some(seq![0x66u32]), 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.url.fragment == Some(seq![0x66u32]))"
+      }
+    },
+    {
+      "id": "request-not-sent",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "seq![Action::Send(bytes)]),",
+      "replace": "seq![]),",
+      "expect": "killed",
+      "reason": "Connected sends nothing. lemma_transducer_14 says it sends the request.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_14()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Connected).1) == 3000nat)"
+      }
+    },
+    {
+      "id": "limit-21",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::theorems",
+      "find": "pub open spec fn max_redirects() -> nat {\n    20\n}",
+      "replace": "pub open spec fn max_redirects() -> nat {\n    21\n}",
+      "expect": "killed",
+      "reason": "Allows 21 redirects. theorem_redirects_bounded (a count of at most 20 stays at most 20) is false: from 20, a redirect makes it 21.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::theorems::theorem_redirects_bounded(super::real::real_http(), super::examples::example_urls(), super::examples::state_a(None, 20nat, Phase::Reading { received: Seq::<u8>::empty() }), Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A]))",
+        "witness": "super::examples::ex_step(None, 20nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.redirects == 21"
+      }
+    },
+    {
+      "id": "redirect-scheme-unchecked",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::theorems",
+      "find": "LocationUrl::Url(location) => if !is_http_s_scheme(location.scheme) {",
+      "replace": "LocationUrl::Url(location) => if false {",
+      "expect": "killed",
+      "reason": "Follows a redirect to any scheme (Fetch §4.5 step 6). theorem_url_changes_only_by_redirect is false: a redirect to mailto:x makes it the current URL.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::theorems::theorem_url_changes_only_by_redirect(super::real::real_http(), super::examples::example_urls(), super::examples::state_a(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }), Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A]))",
+        "witness": "super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.redirects == 1 && !is_http_s_scheme(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.url.scheme)"
+      }
+    }
+  ]
+}

@@ -13,6 +13,10 @@
 //! - `clazel-adversary control ATTEMPT TARGET`: the same attempt without the
 //!   sandbox, which the tests use to show that the target is reachable, so
 //!   that a denial is the sandbox's.
+//! - `clazel-adversary idle`: not sandboxed; block until its standard input
+//!   closes. The `ptrace-attach` test starts one as the sibling to attach to
+//!   (a plain binary of this build, which the OS lets a same-user process
+//!   attach to, unlike a platform binary such as `/bin/sleep` on macOS).
 //!
 //! Exit codes: 71 a sandbox layer failed (as for the real renderer), 64
 //! usage, 70 the socket failed.
@@ -25,7 +29,7 @@ use clazel_renderer::{escape, hostile, sandbox};
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let mode = args.get(1).map(String::as_str);
-    if mode != Some("control") {
+    if mode != Some("control") && mode != Some("idle") {
         // First act, before anything else is read or done: fail closed.
         if let Err(failure) = sandbox::enter() {
             eprintln!("FAILED-CLOSED {failure}");
@@ -33,6 +37,11 @@ fn main() -> ExitCode {
         }
     }
     match (mode, args.get(2), args.get(3)) {
+        (Some("idle"), None, None) => {
+            let mut sink = Vec::new();
+            let _ = io::Read::read_to_end(&mut io::stdin().lock(), &mut sink);
+            ExitCode::SUCCESS
+        }
         (Some("hostile"), Some(seed), None) => match seed.parse::<u64>() {
             Ok(seed) => hostile_mode(seed),
             Err(_) => usage(),
@@ -80,6 +89,6 @@ fn hostile_mode(seed: u64) -> ExitCode {
 }
 
 fn usage() -> ExitCode {
-    eprintln!("usage: clazel-adversary hostile SEED | escape|control ATTEMPT TARGET");
+    eprintln!("usage: clazel-adversary hostile SEED | escape|control ATTEMPT TARGET | idle");
     ExitCode::from(64)
 }

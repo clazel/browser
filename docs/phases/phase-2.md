@@ -1691,18 +1691,41 @@ dependency, no `unsafe`, `clazel-sys` untouched.
   a file, connect to a TCP listener, listen on a TCP port, bind a UDP socket,
   connect to and create a Unix socket, and run `/bin/echo` (`Command`, so
   `posix_spawn`/`execve`). Each attempt first runs unsandboxed and must
-  succeed, so a denial is the sandbox's. **macOS (run): 9 of 9 return
+  succeed, so a denial is the sandbox's. **macOS (run): the first 9 of 9 return
   `Operation not permitted (os error 1)`** under the unchanged Seatbelt
   profile. **Linux (written, not run):** the test passes only if the process
   dies of `SIGSYS`; an error return fails it, and so does a renderer that
   fails closed before the call, because then nothing was tried.
-  **Not expressible without a `clazel-sys` change:** `fork` and `ptrace` of a
-  sibling. `std` has neither (`Command::spawn` is `posix_spawn` on macOS and
-  fork or clone plus exec on Linux, so on Linux the `execve` attempt does
-  exercise process creation, but a bare `fork` and `ptrace` are not
-  attempted anywhere), and `clazel-sys` wraps neither. Adding them is a change
-  to `clazel-sys` with its own audit by another session (CLAUDE.md rule 1),
-  not done here; no `libc` or `unsafe` was used elsewhere to get around it.
+  **`fork` and `ptrace` of a sibling (added afterwards, branch
+  `phase2/fork-ptrace`).** `std` has neither (`Command::spawn` is
+  `posix_spawn` on macOS and fork or clone plus exec on Linux), so
+  `clazel-sys` gained `attempt_fork()` and `attempt_ptrace_attach(pid)` in
+  both `linux.rs` and `macos.rs`, each `-> Result<(), Errno>` where `Ok` means
+  the OS allowed it. `fork`'s child calls `_exit(0)` at once and the parent
+  does not wait. Linux `ptrace` is `syscall(SYS_ptrace, PTRACE_ATTACH, ..)`
+  (glibc's variadic wrapper types its request differently per libc); macOS is
+  `ptrace(PT_ATTACHEXC, pid, 0, 0)`. `fork`, `_exit`, `ptrace` and
+  `SYS_ptrace` are on the list in `xtask/src/sys.rs`; the `unsafe` count went
+  from 8 to 14 blocks (20 lines). The attempts are `Attempt::Fork` and
+  `Attempt::PtraceAttach` (target: a pid). The sibling is an unsandboxed
+  `clazel-adversary idle` the test starts; one per run, so the control's attach
+  cannot leave the sandboxed run's target traced. **macOS (run): 11 of 11
+  denied (`EPERM`), with no policy change**: `(deny default)` already refuses
+  `fork`, and `ptrace` attach. The control matters: on this macOS (arm64,
+  SIP on) even an unsandboxed process gets `EPERM` from `ptrace` on a plain
+  Cargo-built child, because the target must carry the
+  `com.apple.security.get-task-allow` entitlement. So on macOS the test signs
+  a copy of the adversary ad hoc with that entitlement (`codesign`) and uses it
+  as the sibling; the control then attaches (`ESCAPED`) and the sandboxed run
+  is refused. **Linux (written, type-checked and clippy-clean for
+  `x86_64` and `aarch64` `unknown-linux-gnu`, not run):** the allowlist has no
+  `clone`, `clone3`, `fork`, `vfork` or `ptrace`, so both should end in
+  `SIGSYS`. Yama's `ptrace_scope` above 0 (Ubuntu's default) makes even the
+  unsandboxed control's attach to a non-descendant fail with `EPERM`; the test
+  accepts that one documented refusal for the control only, so on such a
+  runner the control shows less than on macOS. **These two functions await
+  their `clazel-sys` audit** (`docs/SYS-AUDITS.md`, by a session other than the
+  author's): `cargo xtask check` fails on "clazel-sys audit" until then.
 - **WPT `cookies/` end to end.** `clazel`'s `tests/conformance_wpt_cookies.rs`
   runs the 178 cases the kernel's conformance test runs, one host and one
   real sandboxed renderer process per case, 8 at a time: the 11
@@ -1721,8 +1744,12 @@ dependency, no `unsafe`, `clazel-sys` untouched.
   `clazel-renderer` do so too (the harness-less `sandbox` test returns early
   under Miri). The generator's unit test runs 200 seeds under Miri.
   Miri was not run here.
-- **CI and user namespaces (needs a maintainer decision; nothing decided
-  here).** `.github/workflows/ci.yml` is not touched. On `ubuntu-24.04`
+- **CI and user namespaces (decided 2026-10-24 by the maintainer: option
+  (2), the AppArmor profile).** `packaging/apparmor/allow-userns.sh` installs
+  a profile granting `userns` and nothing else to the named programs; CI's
+  base and crate jobs run it for the test binaries before the tests, and the
+  release tarball's `install.sh` runs it for the installed renderer. Not yet
+  seen passing in CI. The text below is the analysis it was decided on. On `ubuntu-24.04`
   unprivileged user namespaces are restricted by AppArmor
   (`kernel.apparmor_restrict_unprivileged_userns=1`), the renderer's
   `unshare` layer fails, and it fails closed (exit 71, `sandbox layer
@@ -1747,8 +1774,11 @@ dependency, no `unsafe`, `clazel-sys` untouched.
   (Darwin 25.6), with `cargo test -p clazel -p clazel-renderer` and
   `cargo run -p clazel -- demo`; the README says so next to the table. The
   Linux half has been neither compiled-and-run nor seen in CI.
-- **Left undone.** Linux: everything above. `fork` and `ptrace` of a sibling
-  (need `clazel-sys`). The README table rows for `clazel` and
+- **Left undone.** Linux: everything above, including the new `fork` and
+  `ptrace-attach` attempts (they compile for Linux but have never run, and the
+  Yama caveat above applies). The `clazel-sys` audit of `attempt_fork` and
+  `attempt_ptrace_attach` (`cargo xtask check` fails on it until a different
+  session writes the `docs/SYS-AUDITS.md` row). The README table rows for `clazel` and
   `clazel-renderer` (need Verus and Kani for `report --write`). The CI
   decision. Whether CI's `Full verification` is green: it has not run on this
   branch.
@@ -1795,7 +1825,7 @@ Nothing waits on Phase 1: every item of it is merged.
 | 2.13 Navigation with the real URL parser | done, `clazel-kernel` stays at tier 2: `RealUrls` proven equal to `urls::real_urls()` (the real parser, serializers, `url_origin_exec`), `urls_resolve_scalar` proven by a scalar guard on `resolve` (that the guard is vacuous is not proven; 2896/2896 inputs never trigger it), `step_real` for the host shell, the 2.11 theorems restated for the real parser, 16 of 16 mutations certified kills, WPT `urltestdata.json` navigation 336/336 and `origin_of`/`path_of` 560/560 through the kernel |
 | 2.14 Sandbox policies | done at Tier 1 (applying them is 2.15) |
 | 2.15 Host shell and renderer stub | built, Tier 0: `clazel` (298 lines) and `clazel-renderer`, the sandbox entered first on macOS (Seatbelt; the test shows `open` and `connect` denied) and a script run end to end through real processes; the Linux path is written but not yet compiled or run; the README table rows are not yet generated (no Verus or Kani here); CI's full run has not happened |
-| 2.16 Exit demo and adversarial tests | built, Tier 0, passing on macOS arm64 (run locally): the demo, 9 of 9 escape attempts denied under Seatbelt, 96 hostile and 16 well-behaved renderers at once (seeded), WPT cookies/ 177 of 178 through real processes (1 expected failure, as in the kernel's run); not run on Linux; `fork` and `ptrace` attempts need a `clazel-sys` addition and audit; CI on `ubuntu-24.04` needs a user namespace decision by the maintainer; README rows wait for Verus and Kani |
+| 2.16 Exit demo and adversarial tests | built, Tier 0, passing on macOS arm64 (run locally): the demo, 11 of 11 escape attempts denied under Seatbelt (`fork` and `ptrace` attach came via two new `clazel-sys` functions that await their audit), 96 hostile and 16 well-behaved renderers at once (seeded), WPT cookies/ 177 of 178 through real processes (1 expected failure, as in the kernel's run); not run on Linux (the new `fork` and `ptrace` attempts are only type-checked for it); CI on `ubuntu-24.04` needs a user namespace decision by the maintainer; README rows wait for Verus and Kani |
 
 ## Risks
 

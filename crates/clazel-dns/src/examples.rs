@@ -218,6 +218,55 @@ pub proof fn lemma_dotted_names()
     assert(dotted_to_wire(seq![97u8, 128]) is None) by (compute_only);
 }
 
+/// Wire names to dotted names: labels joined by dots, and everything that
+/// has no dotted spelling (the root, no zero octet, octets after it, a label
+/// with a dot or an octet of 128 or more, a pointer, a label that runs past
+/// the end).
+pub proof fn lemma_wire_names()
+    ensures
+        wire_to_dotted(seq![4u8, 114, 101, 97, 108, 4, 116, 101, 115, 116, 0]) == Some(seq![114u8, 101, 97, 108, 46, 116, 101, 115, 116]),
+        wire_to_dotted(seq![1u8, 97, 0]) == Some(seq![97u8]),
+        wire_to_dotted(seq![1u8, 97, 1, 98, 1, 99, 0]) == Some(seq![97u8, 46, 98, 46, 99]),
+        wire_to_dotted(seq![1u8, 65, 0]) == Some(seq![65u8]),
+        wire_to_dotted(seq![0u8]) is None,
+        wire_to_dotted(seq![]) is None,
+        wire_to_dotted(seq![4u8, 114, 101, 97, 108]) is None,
+        wire_to_dotted(seq![4u8, 114, 101, 97, 108, 0, 0]) is None,
+        wire_to_dotted(seq![3u8, 97, 46, 98, 0]) is None,
+        wire_to_dotted(seq![3u8, 97, 128, 98, 0]) is None,
+        wire_to_dotted(seq![0xC0u8, 0x0C]) is None,
+        wire_to_dotted(seq![5u8, 97, 98, 0]) is None,
+{
+    assert(wire_to_dotted(seq![4u8, 114, 101, 97, 108, 4, 116, 101, 115, 116, 0]) == Some(seq![114u8, 101, 97, 108, 46, 116, 101, 115, 116])) by (compute_only);
+    assert(wire_to_dotted(seq![1u8, 97, 0]) == Some(seq![97u8])) by (compute_only);
+    assert(wire_to_dotted(seq![1u8, 97, 1, 98, 1, 99, 0]) == Some(seq![97u8, 46, 98, 46, 99])) by (compute_only);
+    assert(wire_to_dotted(seq![1u8, 65, 0]) == Some(seq![65u8])) by (compute_only);
+    assert(wire_to_dotted(seq![0u8]) is None) by (compute_only);
+    assert(wire_to_dotted(seq![]) is None) by (compute_only);
+    assert(wire_to_dotted(seq![4u8, 114, 101, 97, 108]) is None) by (compute_only);
+    assert(wire_to_dotted(seq![4u8, 114, 101, 97, 108, 0, 0]) is None) by (compute_only);
+    assert(wire_to_dotted(seq![3u8, 97, 46, 98, 0]) is None) by (compute_only);
+    assert(wire_to_dotted(seq![3u8, 97, 128, 98, 0]) is None) by (compute_only);
+    assert(wire_to_dotted(seq![0xC0u8, 0x0C]) is None) by (compute_only);
+    assert(wire_to_dotted(seq![5u8, 97, 98, 0]) is None) by (compute_only);
+}
+
+/// The limits, from the wire side: a label of 63 octets and a name of 255
+/// are spelled, a label of 64 (a length octet that is not a label's) and a
+/// name of 256 are not. The names are the same as in [`lemma_dotted_limits`].
+pub proof fn lemma_wire_limits()
+    ensures
+        wire_to_dotted(seq![63u8] + fill(97, 63) + seq![0u8]) == Some(fill(97, 63)),
+        wire_to_dotted(seq![64u8] + fill(97, 64) + seq![0u8]) is None,
+        wire_to_dotted(max_name(61)) == Some(dotted_name(61)),
+        wire_to_dotted(max_name(62)) is None,
+{
+    assert(wire_to_dotted(seq![63u8] + fill(97, 63) + seq![0u8]) == Some(fill(97, 63))) by (compute_only);
+    assert(wire_to_dotted(seq![64u8] + fill(97, 64) + seq![0u8]) is None) by (compute_only);
+    assert(wire_to_dotted(max_name(61)) == Some(dotted_name(61))) by (compute_only);
+    assert(wire_to_dotted(max_name(62)) is None) by (compute_only);
+}
+
 // ---------------------------------------------------------------------------
 // §4.1.1: the header.
 // ---------------------------------------------------------------------------

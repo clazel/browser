@@ -105,11 +105,15 @@ fn a_closed_socket_becomes_renderer_exited() {
     let mut host = stub("exit 0".to_owned());
     host.open_tab("https://a.example/", "");
     assert!(host.run(LONG), "{:#?}", host.log);
+    // Which the host notices first is a race: if the stub has exited before
+    // the host sends its commit, the write fails ("cannot write", as on
+    // Linux CI); otherwise the read sees the socket close. Either is a
+    // correct report that the renderer has gone.
     assert!(
         has(
             &host,
             "renderer 0 exited: closed its socket; exit status: 0"
-        ),
+        ) || has(&host, "renderer 0 exited: cannot write; exit status: 0"),
         "{:#?}",
         host.log
     );

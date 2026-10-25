@@ -4,19 +4,27 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "HTTP: field syntax (RFC 9110 §5, §8.6); message framing and chunked coding come next."
+description = "HTTP: field syntax (RFC 9110 §5, §8.6) and message framing with the chunked coding (RFC 9112)."
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
 
-# Verification tier (docs/VERIFICATION.md). Tier 0 for now, target 2:
-# field syntax (src/field/) is proven against its contracts and has an
-# independent transcription (the Fetch Standard) with certified mutations,
-# but message framing (Phase 3 item 3.2) and the conformance tests
-# (tests/conformance*.rs, item 3.3) are not built yet, so the tier is not
-# raised.
+# Test-only reference engine for the differential test in
+# tests/conformance_http.rs (class `test` in docs/DEPENDENCIES.md: never
+# shipped). httparse is the response-head parser hyper uses; it has no
+# dependencies.
+[dev-dependencies]
+httparse = { version = "=1.10.1", default-features = false }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires. Tier 2
+# since CI's full verification passed on 9ce4086 (run 40182763958): field
+# syntax (src/field/) and message framing (src/message/) proven equal to
+# their specs, each with an independent transcription (the Fetch Standard
+# for fields, RFC 7230 for framing), every mutation certified killed, and
+# the conformance tests (tests/conformance_http.rs).
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]
