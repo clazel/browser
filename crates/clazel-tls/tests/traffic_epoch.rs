@@ -6,6 +6,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use clazel_tls::auth::exec::Input;
+use clazel_tls::auth::spec::Phase as AuthPhase;
+use clazel_tls::encode;
+use clazel_tls::hello::client::{Config, Hello, Outcome};
+use clazel_tls::hello::key_exchange::KeyExchange;
+use clazel_tls::reassemble::{Event, Reassembler};
 use clazel_tls::record::Aead;
 use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::spec::{
@@ -13,9 +19,15 @@ use clazel_tls::spec::{
 };
 use clazel_tls::traffic::exec::{Decryptor, Encryptor, Read};
 use clazel_tls::traffic::provider::{Factory, KeyedAead};
+use clazel_tls::types::Extension;
 use sha2::{Digest, Sha256};
 
 const SECRET: [u8; 32] = [0x31; 32];
+const HOST: &[u8] = b"traffic.example.test";
+const PRIVATE: [u8; 32] = [0x41; 32];
+const PUBLIC: [u8; 32] = [0x52; 32];
+const PEER: [u8; 32] = [0x63; 32];
+const SHARED: [u8; 32] = [0x74; 32];
 
 /// Input-sensitive but deliberately non-cryptographic SHA-256-based test double.
 struct TestCrypto;
@@ -157,14 +169,46 @@ fn reference_expand_label(
     label: &[u8],
     length: u16,
 ) -> Vec<u8> {
+    reference_expand_label_context(crypto, secret, label, &[], length)
+}
+
+fn reference_expand_label_context(
+    crypto: &TestCrypto,
+    secret: &[u8],
+    label: &[u8],
+    context: &[u8],
+    length: u16,
+) -> Vec<u8> {
     let mut info = Vec::new();
     info.extend_from_slice(&length.to_be_bytes());
     let full_label_length = 6usize.saturating_add(label.len());
     info.push(u8::try_from(full_label_length).unwrap_or(u8::MAX));
     info.extend_from_slice(b"tls13 ");
     info.extend_from_slice(label);
-    info.push(0); // empty HKDF-Label context
+    info.push(u8::try_from(context.len()).unwrap_or(u8::MAX));
+    info.extend_from_slice(context);
     crypto.expand(secret, &info, length)
+}
+
+fn expected_handshake_secrets(
+    crypto: &TestCrypto,
+    transcript: &[u8],
+    shared: &[u8],
+) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let zeros = [0; 32];
+    let early = crypto.extract(&zeros, &zeros);
+    let derived_early =
+        reference_expand_label_context(crypto, &early, b"derived", &crypto.hash(&[]), 32);
+    let handshake = crypto.extract(&derived_early, shared);
+    let transcript_hash = crypto.hash(transcript);
+    let client =
+        reference_expand_label_context(crypto, &handshake, b"c hs traffic", &transcript_hash, 32);
+    let server =
+        reference_expand_label_context(crypto, &handshake, b"s hs traffic", &transcript_hash, 32);
+    let derived_handshake =
+        reference_expand_label_context(crypto, &handshake, b"derived", &crypto.hash(&[]), 32);
+    let master = crypto.extract(&derived_handshake, &zeros);
+    (client, server, master)
 }
 
 fn expected_key_iv(crypto: &TestCrypto) -> (Vec<u8>, Vec<u8>) {
@@ -207,6 +251,87 @@ fn record_with_inner(crypto: &TestCrypto, inner: &[u8]) -> Vec<u8> {
     encrypted.extend_from_slice(&toy_tag(&key, &nonce, &header, inner));
     wire.extend_from_slice(&encrypted);
     wire
+}
+
+struct MockExchange {
+    public_result: Vec<u8>,
+    shared_result: Option<Vec<u8>>,
+}
+
+impl KeyExchange for MockExchange {
+    fn public_key(&self, _private_key: &[u8]) -> Vec<u8> {
+        self.public_result.clone()
+    }
+
+    fn shared_secret(&self, _private_key: &[u8], _peer_key: &[u8]) -> Option<Vec<u8>> {
+        self.shared_result.clone()
+    }
+}
+
+fn hello_config() -> Config {
+    Config {
+        host: HOST.to_vec(),
+        now: 1_800_000_000,
+        random: vec![0x11; 32],
+        session_id: vec![0x12; 8],
+        public_key: PUBLIC.to_vec(),
+        send_sni: true,
+    }
+}
+
+fn handshake_message(kind: u8, body: &[u8]) -> Vec<u8> {
+    let mut message = Vec::new();
+    encode::write_handshake(&mut message, kind, body);
+    message
+}
+
+fn server_hello_body() -> Vec<u8> {
+    let version = [3, 4];
+    let mut key_data = vec![0, 29, 0, 32];
+    key_data.extend_from_slice(&PEER);
+    let mut extensions = Vec::new();
+    extensions.extend_from_slice(&43u16.to_be_bytes());
+    extensions.extend_from_slice(
+        &u16::try_from(version.len())
+            .unwrap_or(u16::MAX)
+            .to_be_bytes(),
+    );
+    extensions.extend_from_slice(&version);
+    extensions.extend_from_slice(&51u16.to_be_bytes());
+    extensions.extend_from_slice(
+        &u16::try_from(key_data.len())
+            .unwrap_or(u16::MAX)
+            .to_be_bytes(),
+    );
+    extensions.extend_from_slice(&key_data);
+    let mut body = vec![3, 3];
+    body.extend_from_slice(&[0x33; 32]);
+    body.push(8);
+    body.extend_from_slice(&[0x12; 8]);
+    body.extend_from_slice(&0x1303u16.to_be_bytes());
+    body.push(0);
+    body.extend_from_slice(
+        &u16::try_from(extensions.len())
+            .unwrap_or(u16::MAX)
+            .to_be_bytes(),
+    );
+    body.extend_from_slice(&extensions);
+    body
+}
+
+fn hello_fixture(
+    crypto: &TestCrypto,
+) -> Result<(clazel_tls::hello::client::Established, Vec<u8>), String> {
+    let (hello, client_hello) =
+        Hello::start(hello_config()).map_err(|alert| format!("ClientHello start alert {alert}"))?;
+    let server_body = server_hello_body();
+    match hello
+        .receive(crypto, &server_body)
+        .map_err(|alert| format!("ServerHello alert {alert}"))?
+    {
+        Outcome::Established(value) => Ok((value, client_hello)),
+        Outcome::Retry(_, _) => Err("unexpected HelloRetryRequest in fixture".to_owned()),
+    }
 }
 
 #[test]
@@ -445,5 +570,144 @@ fn empty_application_content_is_valid() -> Result<(), String> {
         receiver.open(&wire),
         Read::Record(23, Vec::new(), wire.len())
     );
+    Ok(())
+}
+
+#[test]
+fn hello_record_auth_handoff_installs_directional_keys_and_processes_ee() -> Result<(), String> {
+    let crypto = TestCrypto;
+    let exchange = MockExchange {
+        public_result: PUBLIC.to_vec(),
+        shared_result: Some(SHARED.to_vec()),
+    };
+    let (established, client_hello_flight) = hello_fixture(&crypto)?;
+    let server_body = server_hello_body();
+    let mut prefix = client_hello_flight;
+    prefix.extend_from_slice(&handshake_message(2, &server_body));
+    let (client_secret, server_secret, expected_master) =
+        expected_handshake_secrets(&crypto, &prefix, &SHARED);
+
+    let handoff_factory = ToyFactory::new();
+    let handoff = established
+        .into_record_auth(&crypto, &exchange, &handoff_factory, &PRIVATE)
+        .map_err(|alert| format!("record-auth handoff alert {alert}"))?;
+    assert_eq!(
+        handoff_factory.trace.borrow().made_keys,
+        vec![
+            reference_expand_label(&crypto, &client_secret, b"key", 32),
+            reference_expand_label(&crypto, &server_secret, b"key", 32),
+        ]
+    );
+    let (mut auth, mut sender, mut receiver, master) = handoff.into_parts();
+    assert_eq!(master, expected_master);
+    assert_eq!(auth.phase(), AuthPhase::EncryptedExtensions);
+    assert_eq!(auth.messages(), prefix);
+    assert_eq!(sender.next_sequence(), Some(0));
+    assert_eq!(receiver.next_sequence(), Some(0));
+
+    let mut ee_body = Vec::new();
+    encode::write_encrypted_extensions(&mut ee_body, &[] as &[Extension<'_>]);
+    let ee_message = handshake_message(8, &ee_body);
+    let server_factory = ToyFactory::new();
+    let mut server_sender = Encryptor::new(&crypto, &server_factory, &server_secret)
+        .map_err(|alert| format!("server writer construction alert {alert}"))?;
+    let server_wire = server_sender
+        .seal(22, &ee_message, 0)
+        .map_err(|alert| format!("server EncryptedExtensions seal alert {alert}"))?;
+    let (content_type, plaintext, consumed) = match receiver.open(&server_wire) {
+        Read::Record(typ, bytes, consumed) => (typ, bytes, consumed),
+        other => return Err(format!("bundle receiver rejected EE record: {other:?}")),
+    };
+    assert_eq!(content_type, 22);
+    assert_eq!(consumed, server_wire.len());
+    assert_eq!(receiver.next_sequence(), Some(1));
+    let mut reassembler = Reassembler::new();
+    match reassembler.feed_record(content_type, &plaintext) {
+        Ok(Event::Messages(messages)) => assert_eq!(messages, vec![ee_message]),
+        other => return Err(format!("EE record did not reassemble: {other:?}")),
+    }
+    assert_eq!(
+        auth.step(&crypto, &NoopVerifier, Input::Handshake(8, &ee_body)),
+        clazel_tls::auth::exec::Action::None
+    );
+    assert_eq!(auth.phase(), AuthPhase::CertificateOrRequest);
+
+    let client_finished = handshake_message(20, &[0x5a; 32]);
+    let client_wire = sender
+        .seal(22, &client_finished, 0)
+        .map_err(|alert| format!("bundle sender seal alert {alert}"))?;
+    assert_eq!(sender.next_sequence(), Some(1));
+    let peer_factory = ToyFactory::new();
+    let mut peer_receiver = Decryptor::new(&crypto, &peer_factory, &client_secret)
+        .map_err(|alert| format!("peer reader construction alert {alert}"))?;
+    assert_eq!(
+        peer_factory.trace.borrow().made_keys,
+        vec![reference_expand_label(&crypto, &client_secret, b"key", 32)]
+    );
+    assert_eq!(
+        peer_receiver.open(&client_wire),
+        Read::Record(22, client_finished, client_wire.len())
+    );
+    Ok(())
+}
+
+struct NoopVerifier;
+
+impl clazel_tls::auth::verify::Verifier for NoopVerifier {
+    fn chain(
+        &self,
+        _host: &[u8],
+        _now: u64,
+        _certificate_body: &[u8],
+    ) -> Result<Vec<u8>, clazel_tls::auth::spec::CertificateError> {
+        Err(clazel_tls::auth::spec::CertificateError::UnknownCa)
+    }
+
+    fn signature(&self, _key: &[u8], _scheme: u16, _input: &[u8], _signature: &[u8]) -> bool {
+        false
+    }
+
+    fn finished_equal(&self, received: &[u8], expected: &[u8]) -> bool {
+        received == expected
+    }
+}
+
+#[test]
+fn failed_key_exchange_never_installs_record_keys() -> Result<(), String> {
+    let crypto = TestCrypto;
+    let factory = ToyFactory::new();
+
+    let (established, _) = hello_fixture(&crypto)?;
+    let valid_exchange = MockExchange {
+        public_result: PUBLIC.to_vec(),
+        shared_result: Some(SHARED.to_vec()),
+    };
+    assert!(matches!(
+        established.into_record_auth(&crypto, &valid_exchange, &factory, &[0x41; 31]),
+        Err(INTERNAL_ERROR)
+    ));
+    assert!(factory.trace.borrow().made_keys.is_empty());
+
+    let (established, _) = hello_fixture(&crypto)?;
+    let mismatched_exchange = MockExchange {
+        public_result: vec![0x99; 32],
+        shared_result: Some(SHARED.to_vec()),
+    };
+    assert!(matches!(
+        established.into_record_auth(&crypto, &mismatched_exchange, &factory, &PRIVATE),
+        Err(INTERNAL_ERROR)
+    ));
+    assert!(factory.trace.borrow().made_keys.is_empty());
+
+    let (established, _) = hello_fixture(&crypto)?;
+    let rejected_exchange = MockExchange {
+        public_result: PUBLIC.to_vec(),
+        shared_result: None,
+    };
+    assert!(matches!(
+        established.into_record_auth(&crypto, &rejected_exchange, &factory, &PRIVATE),
+        Err(clazel_tls::spec::ILLEGAL_PARAMETER)
+    ));
+    assert!(factory.trace.borrow().made_keys.is_empty());
     Ok(())
 }

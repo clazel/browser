@@ -160,6 +160,18 @@ impl Established {
     /// Preconditions established by successful Hello receive, before key agreement.
     pub open spec fn wf(&self) -> bool { super::join_contract::established_wf(self@.0, self@.1, self@.2) }
 
+    /// RFC 8446 §7.3: start authentication with client-send/server-receive epochs.
+    /// The caller still supplies the connection driver and production providers.
+    pub fn into_record_auth<C: Crypto, K: super::key_exchange::KeyExchange, F: crate::traffic::provider::Factory>(self,
+        crypto: &C, exchange: &K, factory: &F, private_key: &[u8]) -> (out: Result<crate::traffic::handshake::HandshakeKeys<F::Cipher>, u8>)
+        requires self.wf(),
+        ensures crate::traffic::handshake_contract::start_ensures(crypto.functions(), exchange.functions(),
+            self@.0, self@.1, self@.2, private_key@, crate::traffic::handshake::result_view(out)),
+            match out { Ok(h) => h.wf(), Err(_) => true },
+    {
+        crate::traffic::handshake::start(self.config, self.transcript, self.peer_key, crypto, exchange, factory, private_key)
+    }
+
     /// RFC 8446 §7.1/§7.4.2: bind the caller's private scalar to the share sent,
     /// derive secrets and start (not finish) peer authentication.
     pub fn into_auth<C: Crypto, K: super::key_exchange::KeyExchange>(self, crypto: &C,

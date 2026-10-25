@@ -8,7 +8,8 @@ browser whose parsers of untrusted input carry machine-checked proofs.
 This covers phase-3.md item 3.5d and the SHA-256 key schedule from 3.5e.
 The initial Hello/authentication flow is built over explicit validator,
 key-exchange and crypto parameters for the fixed TLS 1.3/X25519/ChaCha20-Poly1305
-profile. **Protected record I/O, entropy sourcing and the production
+profile. Protected traffic-key epochs and the initial handshake record-key
+handoff are built. **The connection-I/O driver, entropy sourcing and the production
 cryptography provider (items 3.5e and 3.5f) remain**, as does
 X.509 certificate interpretation and validation (3.5b). The crate stays at
 `tier = 0` with `target-tier = 2` until they are, and until CI's full run
@@ -136,8 +137,28 @@ what is proven today is stated below, not implied by the tier.
   They do not establish real X25519/HKDF/HMAC/X.509/signature correctness.
   The caller retains private-scalar ownership; no erasure or timing guarantee
   is established. Production providers and entropy sourcing remain absent.
+- **Protected traffic epochs** (§5.2–§5.5/§7.3, `traffic`): install the
+  derived 32-byte write key in an owned cipher and retain the 12-byte IV.
+  Separate encryptor/decryptor types start independent counters at zero,
+  authenticate the exact wire header, enforce content/padding bounds, and
+  consume each successful record's counter once. The last u64 value moves
+  to an explicit exhausted state; no wrap, clone or reset API is provided.
+  Incomplete input leaves state unchanged; callers retain/resubmit that prefix.
+  Framing/MAC/inner-content errors permanently disable that epoch. The future
+  driver must propagate fatal failure to the other direction and Auth.
+  `Established::into_record_auth` installs the client handshake secret for
+  sending and the server secret for receiving, preserving the existing Auth
+  handoff. Seven tests pass under Miri, with independent key/IV/nonce expectations,
+  fragmentation, concatenated records, malformed/tampered/reordered input,
+  and an encrypted mock EncryptedExtensions record fed through reassembly/Auth.
+  Key-direction witnesses distinguish the two traffic labels. The factory
+  is parameterized; its test AEAD is not production cryptography.
+  The caller must assign distinct secrets to distinct directions/epochs;
+  constructing another object with the same secret is outside the per-object
+  counter guarantee. Application gating, compatibility CCS, key-phase changes,
+  KeyUpdate and socket I/O remain the connection driver's responsibility.
 
-Out of scope: protected record I/O and post-handshake dispatch (Appendix A), the
+Out of scope: the connection-I/O driver and post-handshake dispatch (Appendix A), the
 production cryptography, the contents of a certificate, `pre_shared_key` and the other
 extensions kept opaque (their data is not read), client certificates (a
 CertificateRequest is read and then refused by sending an empty
@@ -148,7 +169,7 @@ Certificate), and any use of the network.
 Tier 0, target tier 2. The current numbers are in the
 [status table](../../README.md#verification-status).
 
-- **Proven (Verus, `cargo verus verify`: 595 verified, 0 errors):** the
+- **Proven (Verus, `cargo verus verify`: 632 verified, 0 errors):** the
   executable functions of `reader`, `writer`, `record`, `reassemble`,
   `extension`, `handshake` and `encode` meet the contracts in
   `contract.rs`, which are the spec's functions in `spec.rs`. About the
@@ -178,9 +199,10 @@ Tier 0, target tier 2. The current numbers are in the
   the top of the file; `Certificate` is outside it). **It was written
   after `spec.rs` in the same session, not before, and not hidden from
   it**, so it is weaker evidence than a second author's text read first.
-- **Mutations:** `mutations.json` lists 151 deliberate breaks: 76 for
+- **Mutations:** `mutations.json` lists 166 deliberate breaks: 76 for
   formats, 19 for the key schedule, 17 for transcript construction and 17
-  for authentication, 10 for server selection and 12 for ClientHello/key handoff.
+  for authentication, 10 for server selection, 12 for ClientHello/key handoff,
+  13 for record epochs and two for handshake record directions.
   All 129 certificates through authentication passed locally and in CI.
   Additional certificate checks use isolated copies: each theorem must fail
   on its mutant, and its certificate must verify on the mutant and fail on

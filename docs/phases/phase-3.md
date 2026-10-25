@@ -1108,6 +1108,35 @@ secret source and captured host/time. The expanded full run remains required.
 No production crypto, X.509/trust store, entropy source, protected record-I/O
 driver or post-handshake dispatcher is joined yet. No tier is raised.
 
+**Protected record epochs and handshake key directions (2026-10-25).**
+`clazel-tls::traffic` derives the §7.3 key/IV from an actual traffic secret
+and binds the derived key to an owned, parameterized AEAD. Separate send and
+receive objects own their own counters, beginning at zero; a successful
+record consumes one counter, the last u64 value becomes explicitly exhausted,
+and no reset/clone API is supplied. Partial wire input preserves state and
+is retained/resubmitted by the caller. Complete malformed or unauthenticated
+records permanently disable that epoch. Size/type/padding bounds and exact
+header additional-data binding use the existing proven record functions.
+
+`Established::into_record_auth` shares the existing checked Hello derivation,
+installs the client handshake secret for sending and server handshake secret
+for receiving, and returns those epochs with Auth and the master secret.
+The existing `into_auth` handoff is preserved. Contracts were committed before
+implementation. All 632 TLS obligations pass locally, including counter,
+terminal-state and direction-binding lemmas. Seven traffic/handoff tests pass
+under Miri; six existing Hello/authentication-join tests also pass after the
+derivation refactor. The cheaper subagent contributed tests and a read-only
+review, with the parent reviewing the tests. Thirteen epoch and two direction
+mutation certificates were checked individually in isolated copies; the full
+expanded run remains required. Strict clippy and all TLS package tests pass.
+
+This is not a connection driver: wire buffering, compatibility CCS, exact-send
+acknowledgement, cross-direction failure propagation, Auth's application gate,
+message-boundary key changes, application keys/KeyUpdate and sockets remain.
+Distinct-direction/epoch secret assignment is the future driver's obligation;
+the no-wrap guarantee is per owned epoch. No production AEAD or secret-erasure
+claim is introduced. Full PR verification is pending and the crate stays tier 0.
+
 #### 3.5f The cryptography and the join (M)
 
 The `shipped` rows for libcrux (`libcrux-chacha20poly1305`,
@@ -1311,8 +1340,8 @@ half does not wait on TLS.
 | 3.5b X.509 and path validation | not started (after 3.5a) |
 | 3.5c RSA PKCS#1 v1.5 | built (see As built); tier 0, target 2, pending CI full verification |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
-| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection and initial authentication built over provider parameters (595 TLS obligations; see As built). Production providers, protected record I/O and post-handshake dispatch remain; tier 0, full CI pending |
-| 3.5f Cryptography and the join | Hello-to-authentication handoff built over explicit providers; production libcrux/X.509 joins not started |
+| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection and initial authentication built over provider parameters (632 TLS obligations; see As built). Protected epochs/key directions built; connection driver, production providers and post-handshake dispatch remain; tier 0, full CI pending |
+| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; production libcrux/X.509 joins not started |
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | transducer and redirects built, `http://` only (branch `phase3/fetch-transducer`): `request` and `transducer` modules proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request and silence until decided proven for every parser; split invariance proven for every `prefix_stable` parser, and `clazel-http`'s parser proven `prefix_stable` (`theorem_real_prefix_stable`, `theorem_real_split_invariant`); the exec transducer feeds each octet once into a `ResponseParser` held in the reading state, so a fetch is linear in the response's size; 34 certified mutations; tier 0 (see As built). Not yet: cookies, `theorem_wire_cookies`, `theorem_jar_frame`, TLS, independent transcription, conformance |
 | 3.7 Kernel integration | not started |

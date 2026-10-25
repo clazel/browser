@@ -2295,6 +2295,34 @@
         "lemma": "super::examples::lemma_traffic_no_protected_ccs()",
         "witness": "!(super::spec::send_error(20, seq![1u8], 0) == Some(10u8))"
       }
+    },
+    {
+      "id": "handshake-client-write-key",
+      "file": "src/traffic/handshake_spec.rs",
+      "find": "super::spec::start(c, auth_config.client_secret)",
+      "replace": "super::spec::start(c, auth_config.server_secret)",
+      "expect": "killed",
+      "reason": "The RFC 8446 section 7.3 direction witness distinguishes client and server traffic keys.",
+      "module": "traffic::handshake_lemmas",
+      "certificate": {
+        "file": "src/traffic/handshake_certificates.rs",
+        "lemma": "super::handshake_lemmas::lemma_client_write_key()",
+        "witness": "super::handshake_lemmas::handoff().1.key != Seq::new(32, |i: int| 114u8)"
+      }
+    },
+    {
+      "id": "handshake-server-read-key",
+      "file": "src/traffic/handshake_spec.rs",
+      "find": "super::spec::start(c, auth_config.server_secret)",
+      "replace": "super::spec::start(c, auth_config.client_secret)",
+      "expect": "killed",
+      "reason": "The RFC 8446 section 7.3 direction witness distinguishes client and server traffic keys.",
+      "module": "traffic::handshake_lemmas",
+      "certificate": {
+        "file": "src/traffic/handshake_certificates.rs",
+        "lemma": "super::handshake_lemmas::lemma_server_read_key()",
+        "witness": "super::handshake_lemmas::handoff().2.key != Seq::new(32, |i: int| 98u8)"
+      }
     }
   ]
 }

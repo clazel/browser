@@ -45,12 +45,16 @@ pub fn extension_types(config: &Config, retried: bool) -> (out: Vec<u16>)
 pub open spec fn result_view(out: Result<(Auth, Vec<u8>), u8>) -> Result<(crate::auth::spec::State, Seq<u8>), u8> {
     match out { Err(e) => Err(e), Ok((auth, master)) => Ok((auth@, master@)) }
 }
-/// §7.1/§7.4.2: bind the private scalar to the sent share, then start authentication.
-pub fn into_auth<C: Crypto, K: KeyExchange>(config: Config, transcript: Transcript,
-    peer_key: Vec<u8>, crypto: &C, exchange: &K, private_key: &[u8]) -> (out: Result<(Auth, Vec<u8>), u8>)
+/// View of derived authentication configuration and master secret.
+pub open spec fn derived_view(out: Result<(crate::auth::exec::Config, Vec<u8>), u8>) -> Result<(crate::auth::spec::Config, Seq<u8>), u8> {
+    match out { Err(e) => Err(e), Ok((config, master)) => Ok((config@, master@)) }
+}
+/// §7.1/§7.4.2: derive the same checked inputs for authentication and records.
+pub fn derive<C: Crypto, K: KeyExchange>(config: Config, transcript: &Transcript,
+    peer_key: Vec<u8>, crypto: &C, exchange: &K, private_key: &[u8]) -> (out: Result<(crate::auth::exec::Config, Vec<u8>), u8>)
     requires super::join_contract::established_wf(config@, transcript@, peer_key@),
-    ensures super::join_contract::into_auth_ensures(crypto.functions(), exchange.functions(),
-        config@, transcript@, peer_key@, private_key@, result_view(out)),
+    ensures super::join_contract::derive_ensures(crypto.functions(), exchange.functions(),
+        config@, transcript@, peer_key@, private_key@, derived_view(out)),
 {
     if private_key.len() != 32 { return Err(80); }
     let public_key = exchange.public_key(private_key);
@@ -69,6 +73,17 @@ pub fn into_auth<C: Crypto, K: KeyExchange>(config: Config, transcript: Transcri
     let extensions = extension_types(&config, transcript.retried());
     let auth_config = crate::auth::exec::Config { host: config.host, now: config.now,
         server_secret, client_secret, signatures, extensions };
+    Ok((auth_config, master))
+}
+/// §7.1/§4.4: transfer checked secrets and the exact prefix into authentication.
+pub fn into_auth<C: Crypto, K: KeyExchange>(config: Config, transcript: Transcript,
+    peer_key: Vec<u8>, crypto: &C, exchange: &K, private_key: &[u8]) -> (out: Result<(Auth, Vec<u8>), u8>)
+    requires super::join_contract::established_wf(config@, transcript@, peer_key@),
+    ensures super::join_contract::into_auth_ensures(crypto.functions(), exchange.functions(),
+        config@, transcript@, peer_key@, private_key@, result_view(out)),
+{
+    let (auth_config, master) = derive(config, &transcript, peer_key, crypto, exchange, private_key)?;
     match Auth::start(auth_config, transcript) { Err(e) => Err(e), Ok(auth) => Ok((auth, master)) }
 }
+
 } // verus!
