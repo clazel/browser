@@ -241,6 +241,7 @@ pub open spec fn output_id(o: Output) -> nat {
 pub proof fn lemma_declassified_is_navigate_tab(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
+    fetch: FetchFns,
     s: State,
     e: Event,
     d: Event,
@@ -250,7 +251,7 @@ pub proof fn lemma_declassified_is_navigate_tab(
         d is NavigateTab,
         lock_of_url(urls, d->NavigateTab_url, s.next_id) is Some,
     ensures
-        step(rules, urls, s, e) == step(rules, urls, s, d),
+        step(rules, urls, fetch, s, e) == step(rules, urls, fetch, s, d),
 {
     let id = e->FromRenderer_id;
     let i = find_by_id(s.renderers, id, 0)->Some_0;

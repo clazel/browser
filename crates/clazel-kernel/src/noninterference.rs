@@ -17,7 +17,7 @@
 //!   `Fetched` (item 3.7: the network shell reports the fetch of a tab it
 //!   was asked to fetch for; a tab whose renderer killed itself in one run
 //!   is closed in it and open in the purged run, where the fetch would
-//!   commit into `d`'s domain; `counterexamples::example_dead_tab_fetched_breaks_noninterference`);
+//!   commit into `d`'s domain; `counterexamples::example_dead_tab_breaks_noninterference`);
 //!
 //! the outputs addressed to the renderers of `d` ([`run_outputs_for`], their
 //! `Spawn` and `Kill` included) are the same from running `t` as from running

@@ -546,16 +546,115 @@ pub proof fn lemma_navigate_tab_wf(
         let old = s.renderers[i];
         if let Some(lock) = lock_of_url(urls, url, s.next_id) {
             if lock is Tuple && lock == old.lock {
-                let r = Renderer { url, ..old };
+                let r = Renderer { url, pending: None, ..old };
                 // `lock` is `old.lock`, a tuple, so the origin of `url` is that tuple
                 // whatever id the lock is asked for.
                 assert(lock_of_url(urls, url, old.id) == Some(old.lock));
                 lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
             } else {
                 let id = s.next_id;
-                let r = Renderer { id, tab, url, lock };
+                let r = Renderer { id, tab, url, lock, pending: None };
                 lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, id + 1);
             }
+        }
+    }
+}
+
+/// `begin_navigation` (a `NavigateTab`, and a renderer's `Navigate`) keeps
+/// the invariant: it only records the URL the renderer is navigating to.
+pub proof fn lemma_begin_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, tab: nat, url: Seq<u32>)
+    requires
+        kernel_wf(rules, urls, s),
+    ensures
+        kernel_wf(rules, urls, begin_navigation(urls, s, tab, url).0),
+{
+    lemma_find_by_tab(s.renderers, tab, 0);
+    if let Some(i) = find_by_tab(s.renderers, tab, 0) {
+        if lock_of_url(urls, url, s.next_id) is Some {
+            let old = s.renderers[i];
+            assert(lock_of_url(urls, old.url, old.id) == Some(old.lock));
+            let r = Renderer { pending: Some(url), ..old };
+            lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
+        }
+    }
+}
+
+/// One `Set-Cookie` line of a fetch keeps the jar well formed and free of
+/// public-suffix domains: it is stored only for a request whose host is not
+/// empty and not a public suffix ([`store_allowed`]).
+pub proof fn lemma_store_one_wf(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, st: HttpStore, now: int)
+    requires
+        jar_wf(rules, jar),
+        jar_no_public_suffix(rules, jar),
+    ensures
+        jar_wf(rules, store_one(rules, jar, st, now)),
+        jar_no_public_suffix(rules, store_one(rules, jar, st, now)),
+{
+    if store_allowed(rules, st.url) {
+        let host = st.url.host->Some_0;
+        assert(st.url.host == Some(host));
+        lemma_jar_wf_store_string(rules, jar, st.line, st.url, st.ctx, now);
+        crate::unwind_base::lemma_store_no_public_suffix(rules, jar, st.line, st.url, st.ctx, now, host);
+    }
+}
+
+/// The `Set-Cookie` lines of a fetch keep the jar well formed and free of
+/// public-suffix domains.
+pub proof fn lemma_apply_stores_wf(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, stores: Seq<HttpStore>, now: int)
+    requires
+        jar_wf(rules, jar),
+        jar_no_public_suffix(rules, jar),
+    ensures
+        jar_wf(rules, apply_stores(rules, jar, stores, now)),
+        jar_no_public_suffix(rules, apply_stores(rules, jar, stores, now)),
+    decreases stores.len(),
+{
+    if stores.len() > 0 {
+        let jar1 = store_one(rules, jar, stores[0], now);
+        lemma_store_one_wf(rules, jar, stores[0], now);
+        lemma_apply_stores_wf(rules, jar1, stores.drop_first(), now);
+    }
+}
+
+/// A navigation that ends without a commit keeps the invariant.
+pub proof fn lemma_fail_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, i: int, old: Renderer, code: u64)
+    requires
+        kernel_wf(rules, urls, s),
+        0 <= i < s.renderers.len(),
+        old == s.renderers[i],
+    ensures
+        kernel_wf(rules, urls, fail_navigation(s, i, old, code).0),
+{
+    assert(lock_of_url(urls, old.url, old.id) == Some(old.lock));
+    lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, Renderer { pending: None, ..old }, s.next_id);
+}
+
+/// `fetched` keeps the invariant.
+pub proof fn lemma_fetched_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+    requires
+        kernel_wf(rules, urls, s),
+    ensures
+        kernel_wf(rules, urls, fetched(rules, urls, fetch, s, tab, outcome).0),
+{
+    lemma_find_by_tab(s.renderers, tab, 0);
+    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
+        let i = find_by_tab(s.renderers, tab, 0)->Some_0;
+        let old = s.renderers[i];
+        let jar1 = apply_stores(rules, s.jar, run.stores, s.now);
+        lemma_apply_stores_wf(rules, s.jar, run.stores, s.now);
+        let s1 = State { jar: jar1, ..s };
+        assert(kernel_wf(rules, urls, s1));
+        match run.result {
+            FetchResult::Done { url, body } => {
+                if clazel_encoding::utf8::spec::all_scalar_values(url) && lock_of_url(urls, url, s1.next_id) is Some {
+                    lemma_navigate_tab_wf(rules, urls, s1, tab, url, body);
+                } else {
+                    lemma_fail_navigation_wf(rules, urls, s1, i, old, error_bad_url());
+                }
+            },
+            FetchResult::Failed => {
+                lemma_fail_navigation_wf(rules, urls, s1, i, old, error_fetch());
+            },
         }
     }
 }
@@ -563,13 +662,13 @@ pub proof fn lemma_navigate_tab_wf(
 /// **`step` preserves `kernel_wf`.** For every Public Suffix List, every
 /// instantiation of the URL functions, every state satisfying the invariant
 /// and every event.
-pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, e: Event)
+pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         kernel_wf(rules, urls, s),
     ensures
-        kernel_wf(rules, urls, step(rules, urls, s, e).0),
+        kernel_wf(rules, urls, step(rules, urls, fetch, s, e).0),
 {
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s, e);
     match e {
         Event::Tick { time } => {
             let now = if time > s.now { time } else { s.now };
@@ -584,11 +683,14 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
         Event::OpenTab { url, script } => {
             let id = s.next_id;
             if let Some(lock) = lock_of_url(urls, url, id) {
-                lemma_renderers_wf_push(urls, s.renderers, s.next_id, Renderer { id, tab: id, url, lock });
+                lemma_renderers_wf_push(urls, s.renderers, s.next_id, Renderer { id, tab: id, url, lock, pending: None });
             }
         },
-        Event::NavigateTab { tab, url, script } => {
-            lemma_navigate_tab_wf(rules, urls, s, tab, url, script);
+        Event::NavigateTab { tab, url } => {
+            lemma_begin_navigation_wf(rules, urls, s, tab, url);
+        },
+        Event::Fetched { tab, outcome } => {
+            lemma_fetched_wf(rules, urls, fetch, s, tab, outcome);
         },
         Event::FromRenderer { id, bytes } => {
             lemma_find_by_id(s.renderers, id, 0);
@@ -626,7 +728,7 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                                        lemma_navigate_tab_wf(rules, urls, s, r.tab, resolved, no_script());
+                                        lemma_begin_navigation_wf(rules, urls, s, r.tab, resolved);
                                     }
                                 }
                             }
@@ -641,29 +743,29 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
 
 /// Running a trace from a state that satisfies the invariant ends in one
 /// that does.
-pub proof fn lemma_run_state_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, t: Seq<Event>)
+pub proof fn lemma_run_state_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, t: Seq<Event>)
     requires
         kernel_wf(rules, urls, s),
     ensures
-        kernel_wf(rules, urls, run_state(rules, urls, s, t)),
+        kernel_wf(rules, urls, run_state(rules, urls, fetch, s, t)),
     decreases t.len(),
 {
     if t.len() > 0 {
-        lemma_step_preserves_wf(rules, urls, s, t[0]);
-        lemma_run_state_wf(rules, urls, step(rules, urls, s, t[0]).0, t.drop_first());
+        lemma_step_preserves_wf(rules, urls, fetch, s, t[0]);
+        lemma_run_state_wf(rules, urls, fetch, step(rules, urls, fetch, s, t[0]).0, t.drop_first());
     }
 }
 
 /// **Every reachable state satisfies the invariant.**
-pub proof fn lemma_reachable_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State)
+pub proof fn lemma_reachable_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State)
     requires
-        reachable(rules, urls, s),
+        reachable(rules, urls, fetch, s),
     ensures
         kernel_wf(rules, urls, s),
 {
     lemma_init_wf(rules, urls);
-    let t = choose|t: Seq<Event>| run_state(rules, urls, init_state(), t) == s;
-    lemma_run_state_wf(rules, urls, init_state(), t);
+    let t = choose|t: Seq<Event>| run_state(rules, urls, fetch, init_state(), t) == s;
+    lemma_run_state_wf(rules, urls, fetch, init_state(), t);
 }
 
 } // verus!

@@ -12,7 +12,7 @@ verus! {
 
 /// A renderer with the given id and lock, committed to the URL `a`.
 pub open spec fn ml_renderer(id: nat, lock: clazel_origin::spec::Origin) -> Renderer {
-    Renderer { id, tab: id, url: seq![0x61u32], lock }
+    Renderer { id, tab: id, url: seq![0x61u32], lock, pending: None }
 }
 
 /// A tuple origin of host `a` with the given scheme.

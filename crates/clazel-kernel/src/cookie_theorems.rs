@@ -94,13 +94,13 @@ pub proof fn lemma_tuple_lock_host(urls: UrlFns, rs: Seq<Renderer>, next_id: nat
 }
 
 /// **`theorem_cookie_confidentiality`.**
-pub proof fn theorem_cookie_confidentiality(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, id: nat, bytes: Seq<u8>)
+pub proof fn theorem_cookie_confidentiality(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
-        reachable(rules, urls, s),
+        reachable(rules, urls, fetch, s),
     ensures
-        crate::statements::cookie_confidentiality_statement(rules, urls, s, id, bytes),
+        crate::statements::cookie_confidentiality_statement(rules, urls, fetch, s, id, bytes),
 {
-    crate::invariant::lemma_reachable_wf(rules, urls, s);
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     crate::invariant::lemma_find_by_id(s.renderers, id, 0);
     if let Some(i) = find_by_id(s.renderers, id, 0) {
         let r = s.renderers[i];
@@ -134,13 +134,13 @@ pub proof fn theorem_cookie_confidentiality(rules: Seq<clazel_psl::spec::Rule>, 
 // ---------------------------------------------------------------------
 
 /// **`theorem_cookie_integrity`.**
-pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, e: Event)
+pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
-        reachable(rules, urls, s),
+        reachable(rules, urls, fetch, s),
     ensures
-        crate::statements::cookie_integrity_statement(rules, urls, s, e),
+        crate::statements::cookie_integrity_statement(rules, urls, fetch, s, e),
 {
-    crate::invariant::lemma_reachable_wf(rules, urls, s);
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     match e {
         Event::FromRenderer { id, bytes } => {
             crate::invariant::lemma_find_by_id(s.renderers, id, 0);
@@ -152,13 +152,16 @@ pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: 
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                                    assert(navigate_tab(urls, s, r.tab, resolved, no_script()).0.jar == s.jar);
+                                    crate::unwind_base::lemma_navigation_frame(urls, s, r.tab, resolved, seq![]);
                                 }
                             }
                         }
                     }
                 }
             }
+        },
+        Event::Fetched { tab, outcome } => {
+            crate::unwind_base::lemma_fetched_frame(rules, urls, fetch, s, tab, outcome);
         },
         _ => {},
     }
@@ -193,11 +196,11 @@ pub proof fn lemma_storage_call_local(s: State, s2: State, r: Renderer, r2: Rend
 }
 
 /// **`theorem_storage_same_origin`.**
-pub proof fn theorem_storage_same_origin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, s2: State, id: nat, bytes: Seq<u8>)
+pub proof fn theorem_storage_same_origin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
-        reachable(rules, urls, s),
+        reachable(rules, urls, fetch, s),
     ensures
-        crate::statements::storage_same_origin_statement(rules, urls, s, s2, id, bytes),
+        crate::statements::storage_same_origin_statement(rules, urls, fetch, s, s2, id, bytes),
 {
     crate::invariant::lemma_find_by_id(s.renderers, id, 0);
     crate::invariant::lemma_find_by_id(s2.renderers, id, 0);
