@@ -34,9 +34,19 @@ pub enum GeneralNameConstraint {
     /// RFC 5280 dNSName constraint IA5 bytes.
     DnsName(Seq<u8>),
     /// RFC 5280 iPAddress constraint, split into address and network mask.
-    IpAddress { address: Seq<u8>, mask: Seq<u8> },
+    IpAddress {
+        /// Address octets (4 or 16 bytes).
+        address: Seq<u8>,
+        /// Network mask octets, matching the address width.
+        mask: Seq<u8>,
+    },
     /// A syntactically framed but unsupported GeneralName alternative.
-    Unsupported { tag: u32, der: Seq<u8> },
+    Unsupported {
+        /// Context-specific GeneralName tag number.
+        tag: u32,
+        /// Complete DER TLV retained for a later processor.
+        der: Seq<u8>,
+    },
 }
 
 /// One GeneralSubtree, with `minimum` modeled as its omitted DEFAULT zero and
