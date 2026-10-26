@@ -250,22 +250,36 @@ fn reference(start_url: &str, hops: &[Hop]) -> Option<Run> {
                 return Some(Run {
                     requests,
                     end: Some(hop.status),
-                })
+                });
             }
             [one] => *one,
-            _ => return Some(Run { requests, end: None }),
+            _ => {
+                return Some(Run {
+                    requests,
+                    end: None,
+                });
+            }
         };
         let Ok(mut next) = url.join(location) else {
-            return Some(Run { requests, end: None });
+            return Some(Run {
+                requests,
+                end: None,
+            });
         };
         if next.fragment().is_none() {
             next.set_fragment(url.fragment());
         }
         if next.scheme() != "http" && next.scheme() != "https" {
-            return Some(Run { requests, end: None });
+            return Some(Run {
+                requests,
+                end: None,
+            });
         }
         if redirects == 20 {
-            return Some(Run { requests, end: None });
+            return Some(Run {
+                requests,
+                end: None,
+            });
         }
         redirects = redirects.saturating_add(1);
         url = next;
@@ -323,9 +337,14 @@ fn ours(start_url: &str, hops: &[Hop], now: u64) -> Option<Run> {
                 return Some(Run {
                     requests,
                     end: Some(response.status_line.status),
-                })
+                });
             }
-            [ActionBuf::Close, ActionBuf::Fail(_)] => return Some(Run { requests, end: None }),
+            [ActionBuf::Close, ActionBuf::Fail(_)] => {
+                return Some(Run {
+                    requests,
+                    end: None,
+                });
+            }
             _ => return None,
         }
     }
@@ -377,7 +396,11 @@ fn differential_redirects_and_cookies() {
         let seed = i.wrapping_mul(0x9E37_79B9).wrapping_add(1);
         let (start_url, hops) = case(seed);
         if let Some(run) = reference(start_url, &hops) {
-            if run.requests.iter().any(|(_, _, cookies)| !cookies.is_empty()) {
+            if run
+                .requests
+                .iter()
+                .any(|(_, _, cookies)| !cookies.is_empty())
+            {
                 with_cookies = with_cookies.saturating_add(1);
             }
             if run.requests.len() == 21 && run.end.is_none() {
@@ -400,7 +423,9 @@ fn differential_redirects_and_cookies() {
     println!(
         "clazel-conformance: suite=\"url and cookie_store differential, random redirect chains\" pass={pass} xfail=0 fail={failed} total={runs}"
     );
-    println!("runs with a redirect followed: {followed}, a cookie sent: {with_cookies}, the limit reached: {at_limit}");
+    println!(
+        "runs with a redirect followed: {followed}, a cookie sent: {with_cookies}, the limit reached: {at_limit}"
+    );
     assert_eq!(failed, 0);
     assert!(followed > 500 && with_cookies > 100 && at_limit > 10);
 }
