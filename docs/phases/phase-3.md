@@ -1184,6 +1184,25 @@ top sites refuse a ChaCha20-only, X25519-only client (run locally, like
 the demo). **Raise `clazel-der`, `clazel-x509`, `clazel-pkcs1` and
 `clazel-tls` to tier 2** as each earns it.
 
+**Real-certificate compatibility measurement:** vendor a reproducible corpus
+of complete, original DER chains, with collection date, source, licence and
+SHA-256 fingerprints. Deduplicate certificates by fingerprint, retain their
+leaf/intermediate/root role, and report both certificate and chain totals.
+Measure explicit `Extension.critical = FALSE` separately from malformed
+BOOLEANs and other DER errors: our current X.690 §11.5 profile rejects that
+explicit DEFAULT. Report affected certificates, extension OIDs and chains,
+including how many chains fail solely for this encoding. Compare the same
+original bytes against the independent certificate engine(s) used by the
+conformance suite; record their versions and acceptance differences.
+
+Keep explicit-FALSE fixtures for the strict result and any compatibility
+result. Decide whether to retain strict rejection or introduce a documented
+certificate-profile exception only after recording those measurements and
+the interoperability rationale. Any exception needs its own spec, proofs
+and negative cases; it must preserve the original signed TBS bytes and must
+not relax the general DER decoder. **This measurement and decision are
+pending; no real-certificate prevalence or compatibility result is claimed.**
+
 ### 3.6 The client state machine (L)
 
 `crates/clazel-fetch`. A pure transducer: `start(url, jar, now, context)`
