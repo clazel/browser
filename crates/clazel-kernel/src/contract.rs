@@ -92,7 +92,7 @@ pub open spec fn step_requires(urls: UrlFns, fetch: FetchFns, s: State, e: Event
     &&& clazel_cookie::storage::contract::jar_in_range(s.jar)
     &&& clazel_cookie::set_cookie::contract::now_in_range(s.now)
     &&& s.next_id < 0xFFFF_FFFF_FFFF_FFFFnat
-    &&& s.next_conn < 0xFFFF_FFFF_FFFF_FFFFnat
+    &&& s.next_conn + 21 <= 0xFFFF_FFFF_FFFF_FFFFnat
     &&& fetch.urls.rules == psl()
     &&& (e is Tick ==> clazel_cookie::set_cookie::contract::now_in_range(e->Tick_time))
     &&& urls_resolve_scalar(urls)

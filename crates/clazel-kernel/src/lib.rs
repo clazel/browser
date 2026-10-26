@@ -23,10 +23,7 @@ pub mod contract;
 pub mod cookie_theorems;
 pub mod counterexamples;
 pub mod domain;
-// The executable kernel is not built while the spec of item 3.7's join is
-// under review (stage 1 of the join: spec, contracts and theorem statements
-// only); `exec` is rewritten against it in stage 2.
-// pub mod exec;
+pub mod exec;
 pub mod independent;
 pub mod independent_equivalence;
 pub mod invariant;
