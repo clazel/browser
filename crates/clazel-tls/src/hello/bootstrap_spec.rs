@@ -108,8 +108,11 @@ pub open spec fn wf(s: State) -> bool {
         Some(h) => super::client_spec::wf(h)
             && s.compatibility == (h.config.session_id.len() > 0)
             && match s.mode {
-                Mode::AwaitClientHelloSend | Mode::AwaitServerHello =>
+                Mode::AwaitClientHelloSend =>
                     h.transcript.phase == crate::transcript::spec::Phase::FirstServerHello,
+                Mode::AwaitServerHello =>
+                    h.transcript.phase == crate::transcript::spec::Phase::FirstServerHello
+                        || h.transcript.phase == crate::transcript::spec::Phase::SecondServerHello,
                 Mode::AwaitClientHello2Send =>
                     h.transcript.phase == crate::transcript::spec::Phase::SecondServerHello,
                 _ => false,
