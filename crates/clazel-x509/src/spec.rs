@@ -117,6 +117,16 @@ pub open spec fn wildcard_suffix_is_public_suffix(name: Seq<u8>) -> bool {
         clazel_psl::table::psl_rules(), psl_domain_from_ascii(name))
 }
 
+/// RFC 9525 §6.3's one-label wildcard comparison after the PSL policy gate.
+/// Keeping this helper independent of the PSL lookup makes its matching proof
+/// transparent while `dns_match` still requires the public-suffix veto.
+pub open spec fn wildcard_matches_reference(reference: Seq<u8>, suffix: Seq<u8>) -> bool {
+    let dot = first_dot(reference, 0);
+    dot > 0 && dot < reference.len()
+        && folded_equal_from(
+            reference.subrange(dot + 1, reference.len() as int), suffix, 0)
+}
+
 /// RFC 9525 §6.3 label matching; the executable algorithm and proof are
 /// supplied in the implementation commit.
 pub open spec fn dns_match(reference: Seq<u8>, presented: Seq<u8>) -> bool {
@@ -127,15 +137,8 @@ pub open spec fn dns_match(reference: Seq<u8>, presented: Seq<u8>) -> bool {
         && dns_name_shape(presented.subrange(2, presented.len() as int))
         && no_wildcard_from(presented, 2)
         && !wildcard_suffix_is_public_suffix(presented.subrange(2, presented.len() as int))
-    {
-        let dot = first_dot(reference, 0);
-        dot > 0 && dot < reference.len()
-            && folded_equal_from(
-                reference.subrange(dot + 1, reference.len() as int),
-                presented.subrange(2, presented.len() as int),
-                0,
-            )
-    } else { false }
+    { wildcard_matches_reference(reference, presented.subrange(2, presented.len() as int)) }
+    else { false }
 }
 
 /// RFC 9525 §6.4 requires octet-for-octet comparison of IP-ID values.
