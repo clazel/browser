@@ -8,10 +8,10 @@ browser whose parsers of untrusted input carry machine-checked proofs.
 This covers phase-3.md item 3.5d and the SHA-256 key schedule from 3.5e.
 The initial Hello/authentication flow is built over explicit validator,
 key-exchange and crypto parameters for the fixed TLS 1.3/X25519/ChaCha20-Poly1305
-profile. Protected traffic-key epochs and the initial handshake record-key
-handoff are built. **The connection-I/O driver, entropy sourcing and the production
-cryptography provider (items 3.5e and 3.5f) remain**, as does
-X.509 certificate interpretation and validation (3.5b). The crate stays at
+profile. Protected traffic-key epochs, the handshake record-key handoff, and
+an initial byte-stream connection dispatcher are built. **Socket I/O, entropy
+sourcing and the production cryptography provider (items 3.5e and 3.5f) remain**,
+as do X.509 certificate interpretation and path validation (3.5b). The crate stays at
 `tier = 0` with `target-tier = 2` until they are, and until CI's full run
 has checked every proof, mutation and conformance test on a pull request;
 what is proven today is stated below, not implied by the tier.
@@ -104,7 +104,7 @@ what is proven today is stated below, not implied by the tier.
   eight pass under Miri. They do not establish real X.509/signature correctness.
   EE support is limited to server_name/supported_groups responses to actual
   offers; no PSK, early data or ALPN. The Hello join supplies the
-  negotiated secrets and actual offers; the future record loop supplies
+  negotiated secrets and actual offers; the connection dispatcher supplies
   complete authenticated bodies. Production Finished comparison must use a
   timing-safe provider; the functional proof makes no timing guarantee.
 
@@ -124,7 +124,8 @@ what is proven today is stated below, not implied by the tier.
   extension added. The 4098-byte cookie extension_data cap is a resource policy.
   Four tests pass under Miri, including unchanged offers and the complete
   message_hash/HRR/CH2/final-SH transcript. The caller classifies DNS versus
-  IP hosts for SNI and implements record-level send ordering/compatibility CCS.
+  IP hosts for SNI. The connection dispatcher handles record-level send
+  ordering and compatibility CCS.
 - **Hello-to-authentication join** (§7.1/§7.4.2, `hello::join`): verify the
   borrowed private scalar derives the public share actually sent, call the
   key-exchange provider with that scalar and exact peer share, reject provider
@@ -144,8 +145,9 @@ what is proven today is stated below, not implied by the tier.
   consume each successful record's counter once. The last u64 value moves
   to an explicit exhausted state; no wrap, clone or reset API is provided.
   Incomplete input leaves state unchanged; callers retain/resubmit that prefix.
-  Framing/MAC/inner-content errors permanently disable that epoch. The future
-  driver must propagate fatal failure to the other direction and Auth.
+  Framing/MAC/inner-content errors permanently disable that epoch. The
+  connection dispatcher propagates fatal failure across both directions and
+  Auth.
   `Established::into_record_auth` installs the client handshake secret for
   sending and the server secret for receiving, preserving the existing Auth
   handoff. Seven tests pass under Miri, with independent key/IV/nonce expectations,
@@ -155,11 +157,26 @@ what is proven today is stated below, not implied by the tier.
   is parameterized; its test AEAD is not production cryptography.
   The caller must assign distinct secrets to distinct directions/epochs;
   constructing another object with the same secret is outside the per-object
-  counter guarantee. Application gating, compatibility CCS, key-phase changes,
-  KeyUpdate and socket I/O remain the connection driver's responsibility.
+  counter guarantee. The initial connection dispatcher owns handshake/application
+  phase changes, compatibility CCS and Auth's application gate. KeyUpdate,
+  post-handshake dispatch and socket I/O remain outside this slice.
 
-Out of scope: the connection-I/O driver and post-handshake dispatch (Appendix A), the
-production cryptography, the contents of a certificate, `pre_shared_key` and the other
+- **Initial connection dispatcher** (§5.1–§5.2/§5.5/§7.3, `connection`):
+  incrementally buffer one protected record, process exactly its prefix, and
+  leave a coalesced suffix with the caller. Drop a valid compatibility CCS in
+  the pre-Finished window; decrypt records with the active direction's epoch;
+  reassemble and dispatch handshake messages through Auth; require server
+  Finished to be the final complete message at a record boundary; emit and
+  await acknowledgement of the exact protected client flight; then install
+  fresh application epochs from Auth's stored server-Finished checkpoint.
+  Premature application records and malformed/authentication failures become
+  terminal, dropping live epochs and partial buffers. Four targeted tests pass
+  locally and under Miri with deterministic, input-sensitive test providers. They do not
+  prove production crypto, certificate path validation, timing behavior or
+  socket I/O.
+
+Out of scope: socket I/O and post-handshake dispatch (Appendix A), production
+cryptography, certificate path validation, `pre_shared_key` and the other
 extensions kept opaque (their data is not read), client certificates (a
 CertificateRequest is read and then refused by sending an empty
 Certificate), and any use of the network.

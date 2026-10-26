@@ -39,7 +39,7 @@ impl Buffer {
 
     /// Start with no buffered bytes.
     pub fn new() -> (out: Self)
-        ensures super::framing_contract::new_ensures(out@),
+        ensures super::framing_contract::new_ensures(out@), out.wf(),
     {
         Buffer { bytes: Vec::new() }
     }
@@ -62,8 +62,8 @@ impl Buffer {
 
     /// Return all held bytes and clear the buffer for the next record.
     pub fn take(&mut self) -> (out: Vec<u8>)
-        requires old(self).wf(),
-        ensures super::framing_contract::take_ensures(old(self)@, out@, final(self)@),
+        requires super::framing_spec::wf(old(self)@),
+        ensures final(self).wf(), super::framing_contract::take_ensures(old(self)@, out@, final(self)@),
     {
         let mut out = Vec::new();
         out.extend_from_slice(self.bytes.as_slice());
@@ -90,14 +90,15 @@ impl Buffer {
     /// Consume only enough caller input to complete or reject the first record.
     /// Consumed bytes move into this bounded buffer; the caller keeps the suffix.
     pub fn feed(&mut self, input: &[u8]) -> (out: (usize, Status))
-        requires old(self).wf(),
-        ensures final(self).wf(),
+        requires super::framing_spec::wf(old(self)@),
+        ensures final(self).wf(), super::framing_spec::wf(final(self)@),
             final(self)@ == old(self)@ + input@.take(out.0 as int),
             out.0 as nat <= input@.len(),
             super::framing_contract::feed_ensures(old(self)@, input@,
                 super::framing_spec::Feed { buffer: final(self)@, consumed: out.0 as nat, status: out.1@ }),
     {
         let ghost initial = self@;
+        proof { assert(self.wf()); }
         let mut consumed = 0usize;
         let mut status = self.parse_status();
         proof {

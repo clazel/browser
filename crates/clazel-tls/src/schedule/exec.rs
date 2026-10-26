@@ -132,8 +132,9 @@ pub fn finished<C: Crypto>(crypto: &C, base: &[u8], messages: &[u8]) -> (out: Ve
 /// RFC 8446 §7.2: next traffic secret, empty context (not Hash(empty)).
 pub fn update_secret<C: Crypto>(crypto: &C, secret: &[u8]) -> (out: Vec<u8>)
     requires secret.len() == HASH_LEN,
-    ensures out@ == super::spec::expand_label(crypto.functions(), secret@, Label::Update,
-        Seq::empty(), HASH_LEN as u16), out.len() == HASH_LEN,
+    ensures out@ == super::spec::next_traffic_secret(crypto.functions(), secret@),
+        super::contract::update_traffic_secret_ensures(crypto.functions(), secret@, out@),
+        out.len() == HASH_LEN,
 {
     expand_label(crypto, secret, Label::Update, &[], HASH_LEN as u16)
 }

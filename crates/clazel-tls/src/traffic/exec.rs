@@ -24,10 +24,14 @@ impl<A: KeyedAead> Keys<A> {
     fn fail(&mut self, alert: u8) -> (out: u8)
         requires old(self).wf(),
         ensures out == alert, final(self).wf(), final(self)@ == super::spec::failed(old(self)@),
+            (forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] final(self).cipher.seal_spec(n, ad, p) == old(self).cipher.seal_spec(n, ad, p)),
+            (forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] final(self).cipher.open_spec(n, ad, ct) == old(self).cipher.open_spec(n, ad, ct)),
     { self.failed = true; alert }
     fn advance(&mut self)
         requires old(self).wf(), old(self).next is Some,
         ensures final(self).wf(), final(self)@ == super::spec::advance(old(self)@),
+            (forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] final(self).cipher.seal_spec(n, ad, p) == old(self).cipher.seal_spec(n, ad, p)),
+            (forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] final(self).cipher.open_spec(n, ad, ct) == old(self).cipher.open_spec(n, ad, ct)),
     {
         self.next = match self.next { Some(n) => n.checked_add(1), None => None };
     }
@@ -91,15 +95,16 @@ impl View for Read {
 /// §5.2/§5.4: reject invalid outbound content/type/padding before calling AEAD.
 fn send_error(typ: u8, content: &[u8], padding: usize) -> (out: Option<u8>)
     ensures out == super::spec::send_error(typ, content@, padding as nat),
+        out is None ==> content.len() + 1 + padding <= crate::spec::MAX_PLAINTEXT + 1,
         out is None ==> content.len() + 1 + padding + 16 <= crate::spec::MAX_CIPHERTEXT,
 {
     if !(typ == 21 || typ == 22 || typ == 23) { return Some(10); }
     if content.len() > crate::spec::MAX_PLAINTEXT { return Some(22); }
     if content.is_empty() && (typ == 21 || typ == 22) { return Some(10); }
-    if padding > crate::spec::MAX_CIPHERTEXT { return Some(22); }
-    let needed = content.len().saturating_add(padding).saturating_add(17);
-    proof { assert(needed == content.len() + padding + 17); }
-    if needed > crate::spec::MAX_CIPHERTEXT { Some(22) } else { None }
+    if padding > crate::spec::MAX_PLAINTEXT { return Some(22); }
+    let needed = content.len().saturating_add(padding).saturating_add(1);
+    proof { assert(needed == content.len() + padding + 1); }
+    if needed > crate::spec::MAX_PLAINTEXT.saturating_add(1) { Some(22) } else { None }
 }
 impl<A: KeyedAead> Encryptor<A> {
     /// Installed cipher has the fixed tag/nonce sizes and derived key/IV lengths.
@@ -124,6 +129,9 @@ impl<A: KeyedAead> Encryptor<A> {
         ensures final(self).wf(),
             super::contract::send_ensures(|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| old(self).seal_spec(n, ad, p),
                 old(self)@, typ, content@, padding as nat, final(self)@, sent_view(out)),
+            super::contract::seal_preserved(|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| old(self).seal_spec(n, ad, p),
+                |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| final(self).seal_spec(n, ad, p)),
+            forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] final(self).seal_spec(n, ad, p) == old(self).seal_spec(n, ad, p),
     {
         if self.keys.failed { return Err(80); }
         let n = match self.keys.next { Some(n) => n, None => return Err(self.keys.fail(80)) };
@@ -157,6 +165,9 @@ impl<A: KeyedAead> Decryptor<A> {
         ensures final(self).wf(),
             super::contract::receive_ensures(|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| old(self).open_spec(n, ad, ct),
                 old(self)@, wire@, final(self)@, out@),
+            super::contract::open_preserved(|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| old(self).open_spec(n, ad, ct),
+                |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| final(self).open_spec(n, ad, ct)),
+            forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] final(self).open_spec(n, ad, ct) == old(self).open_spec(n, ad, ct),
     {
         hide(crate::spec::read_record);
         if self.keys.failed { return Read::Fail(80); }

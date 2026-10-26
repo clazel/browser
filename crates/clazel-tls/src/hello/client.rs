@@ -167,7 +167,11 @@ impl Established {
         requires self.wf(),
         ensures crate::traffic::handshake_contract::start_ensures(crypto.functions(), exchange.functions(),
             self@.0, self@.1, self@.2, private_key@, crate::traffic::handshake::result_view(out)),
-            match out { Ok(h) => h.wf(), Err(_) => true },
+            match out { Ok(h) => h.wf()
+                && h.ccs_pending_spec() == crate::traffic::handshake_spec::needs_ccs(self@.0, self@.1)
+                && crate::traffic::handshake_contract::cipher_bound(factory.functions(), h@,
+                    |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| h.seal_spec(n, ad, p),
+                    |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| h.open_spec(n, ad, ct)), Err(_) => true },
     {
         crate::traffic::handshake::start(self.config, self.transcript, self.peer_key, crypto, exchange, factory, private_key)
     }

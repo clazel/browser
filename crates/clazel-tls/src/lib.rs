@@ -37,6 +37,7 @@
 
 pub mod auth;
 pub mod certificates;
+pub mod connection;
 pub mod contract;
 pub mod encode;
 pub mod examples;

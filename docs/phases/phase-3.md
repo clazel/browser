@@ -1130,12 +1130,24 @@ review, with the parent reviewing the tests. Thirteen epoch and two direction
 mutation certificates were checked individually in isolated copies; the full
 expanded run remains required. Strict clippy and all TLS package tests pass.
 
-This is not a connection driver: wire buffering, compatibility CCS, exact-send
-acknowledgement, cross-direction failure propagation, Auth's application gate,
-message-boundary key changes, application keys/KeyUpdate and sockets remain.
-Distinct-direction/epoch secret assignment is the future driver's obligation;
-the no-wrap guarantee is per owned epoch. No production AEAD or secret-erasure
-claim is introduced. Full PR verification is pending and the crate stays tier 0.
+**Initial connection dispatcher as built (2026-10-26).** `connection::framing`
+and `connection::exec` now add a bounded initial record dispatcher on top of
+the proved traffic epochs and Auth machine. It buffers partial records, consumes
+one complete record prefix at a time, leaves a coalesced suffix to its caller,
+drops compatibility CCS only in the pre-server-Finished window, reassembles
+and authenticates handshake messages, requires server Finished to end the
+record/message flight, protects the exact client flight, and waits for its send
+acknowledgement before installing application epochs from Auth's captured
+checkpoint. Fatal record/Auth errors drop both directions and partial state;
+application data reaches Auth only in Ready. Focused Verus verification of
+`connection::exec` passes (22 verified, 0 errors); four deterministic-provider
+dispatcher tests pass locally and under Miri, and strict clippy passes. The providers in those tests
+are not production crypto or certificate validation.
+
+This does not add socket I/O, post-handshake KeyUpdate/ticket handling, or
+production AEAD. The no-wrap guarantee remains per owned epoch and the future
+transport still owns I/O/timeout policy. Full combined PR verification remains
+required and the crate stays tier 0.
 
 #### 3.5f The cryptography and the join (M)
 
@@ -1337,10 +1349,10 @@ half does not wait on TLS.
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). `clazel-http` raised to tier 2 on 2026-10-25 |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | built on `phase3/tls`; tier 0, target 2, pending full PR verification (see As built) |
-| 3.5b X.509 and path validation | not started (after 3.5a) |
+| 3.5b X.509 and path validation | standalone RFC 9525 DNS/IP matching and a bounded RFC 5280 certificate-envelope parser are in progress; path building, constraints, trust store and TLS integration remain unimplemented |
 | 3.5c RSA PKCS#1 v1.5 | built (see As built); tier 0, target 2, pending CI full verification |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
-| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection and initial authentication built over provider parameters (632 TLS obligations; see As built). Protected epochs/key directions built; connection driver, production providers and post-handshake dispatch remain; tier 0, full CI pending |
+| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters. Production providers, socket I/O and post-handshake dispatch remain; tier 0, combined full verification pending |
 | 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; production libcrux/X.509 joins not started |
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | transducer and redirects built, `http://` only (branch `phase3/fetch-transducer`): `request` and `transducer` modules proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request and silence until decided proven for every parser; split invariance proven for every `prefix_stable` parser, and `clazel-http`'s parser proven `prefix_stable` (`theorem_real_prefix_stable`, `theorem_real_split_invariant`); the exec transducer feeds each octet once into a `ResponseParser` held in the reading state, so a fetch is linear in the response's size; 34 certified mutations; tier 0 (see As built). Not yet: cookies, `theorem_wire_cookies`, `theorem_jar_frame`, TLS, independent transcription, conformance |

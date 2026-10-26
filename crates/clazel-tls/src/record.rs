@@ -282,6 +282,7 @@ pub fn open_inner_plaintext(p: Vec<u8>) -> (out: Result<(u8, Vec<u8>), ErrKind>)
     ensures
         super::contract::open_inner_ensures(p@, res_record(out)),
 {
+    if p.len() > MAX_PLAINTEXT.saturating_add(1) { return Err(ErrKind::RecordOverflow); }
     let (n, t) = match split_inner_plaintext(p.as_slice()) {
         Some(x) => x,
         None => return Err(ErrKind::AllZeroInnerPlaintext),

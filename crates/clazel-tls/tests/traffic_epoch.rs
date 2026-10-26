@@ -446,7 +446,7 @@ fn invalid_installs_sends_and_padding_fail_without_crypto_calls() -> Result<(), 
         (24, &b"x"[..], 0, UNEXPECTED_MESSAGE),
         (22, &b""[..], 0, UNEXPECTED_MESSAGE),
         (21, &b""[..], 0, UNEXPECTED_MESSAGE),
-        (23, &[0x78; 16384][..], 240, RECORD_OVERFLOW),
+        (23, &[0x78; 16384][..], 1, RECORD_OVERFLOW),
     ] {
         let local = ToyFactory::new();
         let mut sender = Encryptor::new(&crypto, &local, &SECRET)
@@ -467,11 +467,11 @@ fn invalid_installs_sends_and_padding_fail_without_crypto_calls() -> Result<(), 
     let maximum_factory = ToyFactory::new();
     let mut maximum_sender = Encryptor::new(&crypto, &maximum_factory, &SECRET)
         .map_err(|alert| format!("maximum sender construction alert {alert}"))?;
-    let maximum_padding = 16640usize.saturating_sub(16384 + 1 + 16);
+    let maximum_padding = 0;
     let output = maximum_sender
         .seal(23, &vec![0x5a; 16384], maximum_padding)
         .map_err(|alert| format!("maximum valid record rejected: {alert}"))?;
-    assert_eq!(output.len(), 16645);
+    assert_eq!(output.len(), 16406);
     assert_eq!(maximum_factory.trace.borrow().seals.len(), 1);
     Ok(())
 }
