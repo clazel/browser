@@ -80,7 +80,7 @@ pub open spec fn prepare_close_ensures(c: crate::schedule::spec::Crypto,
     ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
     action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
     after == super::dispatcher_spec::prepare_close_notify(c, ciphers, before)
-        && (after.pending_close_wire.len() > 0 ==> action ==
+        && (before.pending_close_wire.len() == 0 && after.pending_close_wire.len() > 0 ==> action ==
             super::dispatcher_spec::Action::Send(after.pending_close_wire))
 }
 
