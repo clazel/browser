@@ -1830,7 +1830,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                     match read_uint(r4, 1) {
                                         None => None,
                                         Some((comp, r5)) => {
-                                            if r5.len() == 0 {
+                                            if r5.len() == 0 || r5 =~= seq![0u8, 0u8] {
                                                 Some(ServerHello {
                                                     legacy_version: ver as u16,
                                                     random,
