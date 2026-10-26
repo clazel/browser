@@ -80,7 +80,8 @@ pub open spec fn prepare_close_ensures(c: crate::schedule::spec::Crypto,
     ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
     action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
     after == super::dispatcher_spec::prepare_close_notify(c, ciphers, before)
-        && (after.pending_close_wire.len() > 0 ==> action is Send(after.pending_close_wire))
+        && (after.pending_close_wire.len() > 0 ==> action ==
+            super::dispatcher_spec::Action::Send(after.pending_close_wire))
         && (after == before ==> action is None)
 }
 
@@ -95,7 +96,7 @@ pub open spec fn acknowledge_close_ensures(before: super::dispatcher_spec::State
                 action is WriteClosed && after.local_write_closed
             })
         && (before.pending_close_wire.len() > 0 && acknowledgement != before.pending_close_wire
-            ==> action is Fail(crate::spec::INTERNAL_ERROR))
+            ==> action == super::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR))
 }
 
 /// A protected client flight remains pending until the exact wire bytes are acknowledged.
