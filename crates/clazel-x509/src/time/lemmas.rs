@@ -71,6 +71,18 @@ pub proof fn lemma_reject_reversed_validity()
     ) is None) by (compute_only);
 }
 
+/// If validity construction rejects the endpoints, no captured time is inside
+/// the corresponding inclusive interval.
+pub proof fn lemma_make_validity_none_excludes_time(
+    not_before: CertificateTime, not_after: CertificateTime, now: CertificateTime,
+)
+    requires make_validity(not_before, not_after) is None
+    ensures !validity_contains(Validity { not_before, not_after }, now)
+{
+    reveal(make_validity);
+    reveal(validity_contains);
+}
+
 /// RFC 5280 includes both validity endpoints.
 pub proof fn lemma_validity_accepts_inclusive_end()
     ensures validity_contains(
