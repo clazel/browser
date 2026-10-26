@@ -17,4 +17,5 @@
 //! validation are separate (3.5b and 3.5c) and not here.
 
 pub mod axioms;
+pub mod provider;
 pub mod spec;
