@@ -2,6 +2,26 @@
 #[allow(unused_imports)]
 use vstd::prelude::*;
 verus! {
+/// Installed-key encryption function.
+pub type Seal3 = spec_fn(Seq<u8>, Seq<u8>, Seq<u8>) -> Seq<u8>;
+/// Installed-key authentication/decryption function.
+pub type Open3 = spec_fn(Seq<u8>, Seq<u8>, Seq<u8>) -> Option<Seq<u8>>;
+/// Cipher encryption is bound to this exact factory and derived key.
+pub open spec fn sealed_bound(f: super::spec::Cipher, key: Seq<u8>, seal: Seal3) -> bool {
+    forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] seal(n, ad, p) == (f.seal)(key, n, ad, p)
+}
+/// Cipher authentication is bound to this exact factory and derived key.
+pub open spec fn opened_bound(f: super::spec::Cipher, key: Seq<u8>, open: Open3) -> bool {
+    forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] open(n, ad, ct) == (f.open)(key, n, ad, ct)
+}
+/// A record operation cannot change its installed cipher function.
+pub open spec fn seal_preserved(before: Seal3, after: Seal3) -> bool {
+    forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] after(n, ad, p) == before(n, ad, p)
+}
+/// A record operation cannot replace its installed authentication function.
+pub open spec fn open_preserved(before: Open3, after: Open3) -> bool {
+    forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] after(n, ad, ct) == before(n, ad, ct)
+}
 /// Key/IV derivation, fresh sequence zero, and fixed-profile invariant.
 pub open spec fn start_ensures(c: crate::schedule::spec::Crypto, secret: Seq<u8>, out: Result<super::spec::State, u8>) -> bool {
     out == super::spec::start(c, secret) && match out { Ok(s) => super::spec::wf(s), Err(_) => true }

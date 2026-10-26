@@ -2,6 +2,12 @@
 #[allow(unused_imports)]
 use vstd::prelude::*;
 verus! {
+/// Both record directions retain the provider functions instantiated by Hello.
+pub open spec fn cipher_bound(f: super::spec::Cipher, h: super::handshake_spec::Handoff,
+    seal: super::contract::Seal3, open: super::contract::Open3) -> bool
+{
+    super::contract::sealed_bound(f, h.1.key, seal) && super::contract::opened_bound(f, h.2.key, open)
+}
 /// Exact pipeline and ready-to-use epoch/authentication invariants.
 pub open spec fn start_ensures(c: crate::schedule::spec::Crypto, k: crate::hello::join_spec::KeyExchange,
     config: crate::hello::client_spec::Config, transcript: crate::transcript::spec::State,

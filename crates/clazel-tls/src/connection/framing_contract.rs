@@ -12,6 +12,7 @@ pub open spec fn feed_ensures(before: Seq<u8>, input: Seq<u8>, out: super::frami
     super::framing_spec::wf(before)
         && out == super::framing_spec::feed(before, input)
         && out.consumed <= input.len()
+        && out.buffer == before + input.take(out.consumed as int)
         && super::framing_spec::wf(out.buffer)
         && super::framing_spec::status_matches(out.buffer, out.status)
 }
@@ -27,5 +28,10 @@ pub open spec fn take_ensures(before: Seq<u8>, returned: Seq<u8>, after: Seq<u8>
 /// length reports the number of bytes currently buffered.
 pub open spec fn len_ensures(buffer: Seq<u8>, reported: nat) -> bool {
     super::framing_spec::wf(buffer) && reported == super::framing_spec::len(buffer)
+}
+
+/// is_empty reports whether there are zero buffered bytes.
+pub open spec fn is_empty_ensures(buffer: Seq<u8>, reported: bool) -> bool {
+    super::framing_spec::wf(buffer) && reported == super::framing_spec::is_empty(buffer)
 }
 } // verus!

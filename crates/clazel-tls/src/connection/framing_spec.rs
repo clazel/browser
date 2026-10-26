@@ -115,4 +115,7 @@ pub open spec fn take(buffer: State) -> (Seq<u8>, State) { (buffer, Seq::empty()
 
 /// Current buffered byte count.
 pub open spec fn len(buffer: State) -> nat { buffer.len() }
+
+/// Whether the buffer currently owns no bytes.
+pub open spec fn is_empty(buffer: State) -> bool { buffer.len() == 0 }
 } // verus!

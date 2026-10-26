@@ -17,6 +17,11 @@ use vstd::prelude::*;
 verus! {
 /// Auth state, client send epoch, server receive epoch and application master secret.
 pub type Handoff = (crate::auth::spec::State, super::spec::State, super::spec::State, Seq<u8>);
+/// Appendix D.4: non-HRR compatibility clients still owe their dummy CCS.
+/// An HRR Hello driver sends it immediately before ClientHello2 instead.
+pub open spec fn needs_ccs(config: crate::hello::client_spec::Config, transcript: crate::transcript::spec::State) -> bool {
+    config.session_id.len() > 0 && !transcript.retried
+}
 /// §7.1/§7.3: use the client secret for writing and the server secret for reading.
 pub open spec fn start(c: crate::schedule::spec::Crypto, k: crate::hello::join_spec::KeyExchange,
     config: crate::hello::client_spec::Config, transcript: crate::transcript::spec::State,
