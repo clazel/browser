@@ -40,8 +40,7 @@ choices are listed at the top of `src/message/spec.rs`.
 
 ## Verification
 
-Target tier 2; declared tier 0 until CI's full verification passes with
-every requirement in place. The code in `field/` and `message/` is proven, in Verus, to equal an executable specification transcribed from the
+Tier 2 (since CI's full verification passed on 9ce4086). The code in `field/` and `message/` is proven, in Verus, to equal an executable specification transcribed from the
 RFC, over all inputs. Verus also proves that none of it panics, overflows or
 indexes out of bounds. The current counts are in the
 [status table](../../README.md#verification-status).
