@@ -194,6 +194,58 @@
         "lemma": "super::certificates::lemma_prefix_preserves_complete_tlv()",
         "witness": "match parse_prefix(seq![0x30u8, 0x03, 0x02, 0x01, 0x01]) { Some(prefix) => prefix.tbs_der =~= seq![0x02u8, 0x01, 0x01], None => false }"
       }
+    },
+    {
+      "id": "x509-basic-constraints-omits-default-ca-false",
+      "file": "src/constraints/spec.rs",
+      "find": "Some((true, after_ca)) => parse_path_len(input, after_ca, end, true),",
+      "replace": "Some((ca, after_ca)) => parse_path_len(input, after_ca, end, ca),",
+      "expect": "killed",
+      "reason": "DER omits BasicConstraints cA when its DEFAULT value is FALSE (X.690 §11.5).",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_explicit_default_ca_false()",
+        "witness": "parse_basic_constraints(seq![0x30u8, 0x03, 0x01, 0x01, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-basic-constraints-pathlen-requires-ca",
+      "file": "src/constraints/spec.rs",
+      "find": "} else if !ca {\n        None\n    } else {",
+      "replace": "} else if false {\n        None\n    } else {",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.9 permits pathLenConstraint only when cA is asserted.",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_path_length_without_ca()",
+        "witness": "parse_basic_constraints(seq![0x30u8, 0x03, 0x02, 0x01, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-key-usage-rejects-unnamed-bits",
+      "file": "src/constraints/spec.rs",
+      "find": "if count > 0 && count <= 9",
+      "replace": "if count > 0",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.3 names KeyUsage bits only through bit 8; higher bits are unsupported.",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_unknown_key_usage_bit()",
+        "witness": "parse_key_usage(seq![0x03u8, 0x03, 0x06, 0x00, 0x80]) is Some"
+      }
+    },
+    {
+      "id": "x509-extended-key-usage-rejects-duplicate-oids",
+      "file": "src/constraints/spec.rs",
+      "find": "&& !oid_in(seen, oid, 0) =>",
+      "replace": "&& true =>",
+      "expect": "killed",
+      "reason": "Repeated KeyPurposeId values are rejected by this decoder's uniqueness policy.",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_duplicate_eku_oid()",
+        "witness": "parse_extended_key_usage(seq![0x30u8, 0x0c, 0x06, 0x04, 0x55, 0x1d, 0x25, 0x00, 0x06, 0x04, 0x55, 0x1d, 0x25, 0x00]) is Some"
+      }
     }
   ]
 }
