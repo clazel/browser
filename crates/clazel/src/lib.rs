@@ -16,19 +16,19 @@
 //! `Connect` with `tls` fails.
 
 use std::collections::HashMap;
-use std::io::{Read, Write};
 use std::collections::HashSet;
+use std::io::{Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
 use std::os::{fd::OwnedFd, unix::net::UnixStream};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
+use clazel_fetch::transducer::types::InputBuf;
 use clazel_ipc::{
     frame::codec::payload_length,
     message::codec::{Msg, decode_framed},
 };
-use clazel_fetch::transducer::types::InputBuf;
 use clazel_kernel::exec::real_urls::{RealFetch, step_real};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
 
@@ -101,7 +101,14 @@ fn read_frames(id: u64, mut sock: UnixStream, tx: Sender<Ev>) {
 }
 
 /// A connection's thread: connect, report, then read until the end.
-fn net_thread(conn: u64, host: &[u8], port: u16, tls: bool, route: Option<SocketAddr>, tx: &Sender<Ev>) {
+fn net_thread(
+    conn: u64,
+    host: &[u8],
+    port: u16,
+    tls: bool,
+    route: Option<SocketAddr>,
+    tx: &Sender<Ev>,
+) {
     let report = |ev: NetEv| tx.send(Ev::Net(conn, ev)).is_ok();
     if tls {
         report(NetEv::Failed("TLS is not carried out".to_owned()));
@@ -226,7 +233,10 @@ impl Host {
             self.say("kernel ids exhausted; event dropped".to_owned());
             return Vec::new();
         }
-        let (s, outputs) = step_real(std::mem::replace(&mut self.state, init_record::<RealFetch>()), &e);
+        let (s, outputs) = step_real(
+            std::mem::replace(&mut self.state, init_record::<RealFetch>()),
+            &e,
+        );
         self.state = s;
         outputs
     }

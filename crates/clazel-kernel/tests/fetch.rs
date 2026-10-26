@@ -297,11 +297,17 @@ fn each_connection_belongs_to_the_tab_that_opened_it() {
     let out = k.net(1, InputBuf::Bytes(response(b"for b")));
     assert_eq!(
         out,
-        vec![Out::Close(1), Out::To(b, commit("http://b.test/y", b"for b"))]
+        vec![
+            Out::Close(1),
+            Out::To(b, commit("http://b.test/y", b"for b"))
+        ]
     );
     let out = k.net(0, InputBuf::Bytes(response(b"for a")));
     assert_eq!(
         out,
-        vec![Out::Close(0), Out::To(a, commit("http://a.test/x", b"for a"))]
+        vec![
+            Out::Close(0),
+            Out::To(a, commit("http://a.test/x", b"for a"))
+        ]
     );
 }

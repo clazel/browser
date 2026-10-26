@@ -174,14 +174,15 @@ pub fn without_tab_exec(conns: &[ConnectionRecord], tab: u64) -> (out: Vec<Conne
             conns_view(out@) == cv.take(k as int).filter(|c: Connection| c.tab != tab as nat),
         decreases conns.len() - k,
     {
-        let c = &conns[k];
-        proof {
-            reveal(Seq::filter);
-            assert(cv.take(k as int + 1).drop_last() =~= cv.take(k as int));
-            assert(cv.take(k as int + 1).last() == c@);
-        }
-        if c.tab != tab {
-            out.push(clone_conn(c));
+        if let Some(c) = conns.get(k) {
+            proof {
+                reveal(Seq::filter);
+                assert(cv.take(k as int + 1).drop_last() =~= cv.take(k as int));
+                assert(cv.take(k as int + 1).last() == c@);
+            }
+            if c.tab != tab {
+                out.push(clone_conn(c));
+            }
         }
         // Never saturates: k < conns.len().
         k = k.saturating_add(1);
@@ -211,14 +212,15 @@ pub fn without_conn_exec(conns: &[ConnectionRecord], id: u64) -> (out: Vec<Conne
             conns_view(out@) == cv.take(k as int).filter(|c: Connection| c.id != id as nat),
         decreases conns.len() - k,
     {
-        let c = &conns[k];
-        proof {
-            reveal(Seq::filter);
-            assert(cv.take(k as int + 1).drop_last() =~= cv.take(k as int));
-            assert(cv.take(k as int + 1).last() == c@);
-        }
-        if c.id != id {
-            out.push(clone_conn(c));
+        if let Some(c) = conns.get(k) {
+            proof {
+                reveal(Seq::filter);
+                assert(cv.take(k as int + 1).drop_last() =~= cv.take(k as int));
+                assert(cv.take(k as int + 1).last() == c@);
+            }
+            if c.id != id {
+                out.push(clone_conn(c));
+            }
         }
         // Never saturates: k < conns.len().
         k = k.saturating_add(1);

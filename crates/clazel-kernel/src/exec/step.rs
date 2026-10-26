@@ -1070,7 +1070,7 @@ pub fn carry_out_exec<U: UrlFnsExec, F: FetchFnsExec>(
     let ghost av = clazel_fetch::transducer::types::actions_view(actions@);
     let ghost sk = s@;
     let ghost curk = conn_opt_view(cur);
-    if actions.len() == 0 {
+    if actions.is_empty() {
         proof {
             assert(av =~= Seq::<NetAction>::empty());
         }
@@ -1474,7 +1474,7 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
 
 /// A frame a renderer may not send: the renderer at index `i` (with id `id`)
 /// is killed, its record, with its tab, removed and its connections closed.
-fn kill_renderer_exec<F: FetchFnsExec>(s: StateRecord, i: usize, id: u64) -> (out: (StateRecord, Vec<OutputRecord>))
+pub fn kill_renderer_exec<F: FetchFnsExec>(s: StateRecord, i: usize, id: u64) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         i < s.renderers.len(),
         renderers_ok::<F>(s.renderers@),

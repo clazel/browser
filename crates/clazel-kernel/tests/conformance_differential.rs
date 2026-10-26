@@ -47,8 +47,8 @@
 
 mod support;
 
-use clazel_ipc::message::codec::Msg;
 use clazel_fetch::transducer::types::InputBuf;
+use clazel_ipc::message::codec::Msg;
 use clazel_kernel::exec::records::EventRecord;
 use cookie_store::CookieStore;
 use support::{Kernel, Out, code_points};

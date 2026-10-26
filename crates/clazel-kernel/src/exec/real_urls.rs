@@ -11,9 +11,9 @@ use clazel_origin::exec::{ParsedOrigin, url_origin_exec};
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::serialize::url_path_serializer;
 
+use super::fetch::FetchFnsExec;
 use super::records::{EventRecord, StateRecord};
 use super::step::step_exec;
-use super::fetch::FetchFnsExec;
 use super::urls::UrlFnsExec;
 #[allow(unused_imports)]
 use vstd::prelude::*;
