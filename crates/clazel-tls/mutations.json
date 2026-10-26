@@ -2353,6 +2353,20 @@
       }
     },
     {
+      "id": "dispatcher-ccs-dropped-mid-message",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "        && crate::spec::at_message_boundary(reassembly)\n}",
+      "replace": "        && true\n}",
+      "expect": "killed",
+      "reason": "RFC 8446 \u00a75.1 forbids interleaving a handshake message with another record type: a compatibility CCS between two fragments of one handshake message must be refused, not dropped.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_compatibility_ccs_not_dropped_mid_message()",
+        "witness": "super::dispatcher_spec::compatibility_ccs_dropped(super::dispatcher_spec::Mode::Handshake, Some(crate::auth::spec::Phase::Finished), crate::spec::Reasm { buf: seq![1u8] })"
+      }
+    },
+    {
       "id": "dispatcher-peer-update-epoch-construction-failure",
       "file": "src/connection/dispatcher_spec.rs",
       "find": "// A derived secret that cannot form a new epoch must not leave a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => failed(),",

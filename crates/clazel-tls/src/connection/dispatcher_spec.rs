@@ -12,6 +12,10 @@
 //! - The compatibility CCS is a one-byte dummy record, tracked separately
 //!   from the protected record epochs. For an HRR retry it was already sent
 //!   before ClientHello2 by the Hello driver.
+//! - RFC 8446 §5.1 forbids interleaving a handshake message with another
+//!   record type, and a compatibility CCS is another record type. It is
+//!   dropped only while no handshake message is partly received
+//!   (`message_boundary`); in the middle of one it is fatal unexpected_message.
 //! - Terminal states retain no authentication secrets, traffic epochs, or
 //!   partial input. NewSessionTicket bodies are parsed and discarded; ticket
 //!   caching, PSK resumption, 0-RTT, and secret-erasure guarantees are not
@@ -126,6 +130,31 @@ pub open spec fn message_boundary(s: State) -> bool {
 
 /// Appendix D.4 dummy CCS record, sent only when the retained Hello profile owes it.
 pub open spec fn compatibility_ccs_record() -> Seq<u8> { seq![20u8, 3u8, 3u8, 0u8, 1u8, 1u8] }
+
+/// RFC 8446 §5.1 "Handshake messages MUST NOT be interleaved with other
+/// record types" and Appendix D.4: an unprotected compatibility CCS is dropped
+/// only in the server-flight phases of the handshake, and only when no
+/// handshake message is partly received.
+pub open spec fn compatibility_ccs_dropped(mode: Mode, phase: Option<crate::auth::spec::Phase>,
+    reassembly: crate::spec::Reasm) -> bool {
+    mode == Mode::Handshake
+        && match phase {
+            Some(p) => p != crate::auth::spec::Phase::SendFinished && p != crate::auth::spec::Phase::Ready,
+            None => false,
+        }
+        && crate::spec::at_message_boundary(reassembly)
+}
+
+/// The effect of one valid unprotected compatibility CCS record: dropped with
+/// no state change when permitted, else a fatal unexpected_message.
+pub open spec fn receive_compatibility_ccs(s: State) -> (Action, State) {
+    let phase = match s.auth { Some(a) => Some(a.phase), None => None };
+    if compatibility_ccs_dropped(s.mode, phase, s.reassembly) {
+        (Action::Ignored, s)
+    } else {
+        (Action::Fail(crate::spec::UNEXPECTED_MESSAGE), failed())
+    }
+}
 
 /// A handshake record flight has Finished as its last complete message.
 pub open spec fn finished_is_last(messages: Seq<Seq<u8>>) -> bool {
