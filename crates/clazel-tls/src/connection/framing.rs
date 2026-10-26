@@ -34,6 +34,12 @@ impl View for Buffer {
     type V = State;
     closed spec fn view(&self) -> State { self.bytes@ }
 }
+/// The mode-indexed invariant is the framing spec's, for callers outside this module.
+pub proof fn lemma_wf_mode(buffer: &Buffer, protected: bool)
+    ensures buffer.wf_mode(protected) == super::framing_spec::wf_mode(buffer@, protected),
+{
+}
+
 impl Buffer {
     /// Immutable parser mode selected at construction.
     pub closed spec fn protected_mode(&self) -> bool { self.protected }
