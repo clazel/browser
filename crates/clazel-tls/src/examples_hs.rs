@@ -212,9 +212,9 @@ pub proof fn lemma_extension_checks()
         check_extensions(seq![Ext { etype: 43, data: seq![3u8, 4] }], MsgKind::Ee) == Some(ErrKind::ExtensionNotAllowed),
         check_extensions(seq![Ext { etype: 43, data: seq![3u8] }], MsgKind::Sh) == Some(ErrKind::Decode),
         check_extensions(seq![Ext { etype: 43, data: seq![3u8, 4, 5] }], MsgKind::Sh) == Some(ErrKind::Decode),
-        check_extensions(seq![Ext { etype: 1234, data: seq![9u8] }], MsgKind::Sh) == Some(ErrKind::MissingExtension),
-        check_extensions(Seq::<Ext>::empty(), MsgKind::Sh) == Some(ErrKind::MissingExtension),
-        check_extensions(Seq::<Ext>::empty(), MsgKind::Hrr) == Some(ErrKind::MissingExtension),
+        check_extensions(seq![Ext { etype: 1234, data: seq![9u8] }], MsgKind::Sh) is None,
+        check_extensions(Seq::<Ext>::empty(), MsgKind::Sh) is None,
+        check_extensions(Seq::<Ext>::empty(), MsgKind::Hrr) is None,
         check_extensions(Seq::<Ext>::empty(), MsgKind::Ee) is None,
         check_extensions(Seq::<Ext>::empty(), MsgKind::Ch) is None,
         check_extensions(seq![Ext { etype: 44, data: seq![0u8, 1, 7] }, Ext { etype: 43, data: seq![3u8, 4] }], MsgKind::Hrr) is None,
@@ -250,10 +250,10 @@ pub proof fn lemma_extension_checks()
         by (compute_only);
     assert(check_extensions(seq![Ext { etype: 43, data: seq![3u8] }], MsgKind::Sh) == Some(ErrKind::Decode)) by (compute_only);
     assert(check_extensions(seq![Ext { etype: 43, data: seq![3u8, 4, 5] }], MsgKind::Sh) == Some(ErrKind::Decode)) by (compute_only);
-    assert(check_extensions(seq![Ext { etype: 1234, data: seq![9u8] }], MsgKind::Sh) == Some(ErrKind::MissingExtension))
+    assert(check_extensions(seq![Ext { etype: 1234, data: seq![9u8] }], MsgKind::Sh) is None)
         by (compute_only);
-    assert(check_extensions(Seq::<Ext>::empty(), MsgKind::Sh) == Some(ErrKind::MissingExtension)) by (compute_only);
-    assert(check_extensions(Seq::<Ext>::empty(), MsgKind::Hrr) == Some(ErrKind::MissingExtension)) by (compute_only);
+    assert(check_extensions(Seq::<Ext>::empty(), MsgKind::Sh) is None) by (compute_only);
+    assert(check_extensions(Seq::<Ext>::empty(), MsgKind::Hrr) is None) by (compute_only);
     assert(check_extensions(Seq::<Ext>::empty(), MsgKind::Ee) is None) by (compute_only);
     assert(check_extensions(Seq::<Ext>::empty(), MsgKind::Ch) is None) by (compute_only);
     assert(check_extensions(seq![Ext { etype: 44, data: seq![0u8, 1, 7] }, Ext { etype: 43, data: seq![3u8, 4] }], MsgKind::Hrr) is None)
@@ -340,13 +340,11 @@ pub proof fn lemma_server_hello()
             == Res::<HsMsg>::Err(ErrKind::DuplicateExtension),
         parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 10] + seq![0u8, 0, 0, 0] + sv_ext()), 32)
             == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed),
-        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32)
-            == Res::<HsMsg>::Err(ErrKind::MissingExtension),
-        parse_handshake_body(2, sh_body(hrr_random(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32)
-            == Res::<HsMsg>::Err(ErrKind::MissingExtension),
+        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32) is Ok,
+        parse_handshake_body(2, sh_body(hrr_random(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32) is Ok,
         parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 7, 0, 0x2b, 0, 3, 3, 4, 5]), 32) == Res::<HsMsg>::Err(ErrKind::Decode),
-        // the extensions need at least 6 bytes (floor 6).
-        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        // RFC 5246's legacy extension syntax permits a five-byte extension vector.
+        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) is Ok,
 {
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6] + sv_ext()), 32) == Res::<HsMsg>::Ok(
         HsMsg::ServerHello(
@@ -400,13 +398,13 @@ pub proof fn lemma_server_hello()
         == Res::<HsMsg>::Err(ErrKind::DuplicateExtension)) by (compute_only);
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 10] + seq![0u8, 0, 0, 0] + sv_ext()), 32)
         == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed)) by (compute_only);
-    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32)
-        == Res::<HsMsg>::Err(ErrKind::MissingExtension)) by (compute_only);
-    assert(parse_handshake_body(2, sh_body(hrr_random(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32)
-        == Res::<HsMsg>::Err(ErrKind::MissingExtension)) by (compute_only);
+    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32) is Ok)
+        by (compute_only);
+    assert(parse_handshake_body(2, sh_body(hrr_random(), 0, seq![0u8, 6, 0x12, 0x34, 0, 2, 0xAA, 0xBB]), 32) is Ok)
+        by (compute_only);
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 7, 0, 0x2b, 0, 3, 3, 4, 5]), 32) == Res::<HsMsg>::Err(ErrKind::Decode))
         by (compute_only);
-    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) == Res::<HsMsg>::Err(ErrKind::Decode))
+    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) is Ok)
         by (compute_only);
 }
 
@@ -508,7 +506,8 @@ pub proof fn lemma_server_messages()
                 },
             ),
         ),
-        parse_handshake(seq![11u8, 0, 0, 5, 1, 7, 0, 0, 0], 32) == Res::<HsMsg>::Err(ErrKind::NonEmptyContext),
+        parse_handshake(seq![11u8, 0, 0, 5, 1, 7, 0, 0, 0], 32)
+            == Res::<HsMsg>::Ok(HsMsg::Certificate(Certificate { context: seq![7u8], entries: Seq::<CertificateEntry>::empty() })),
         parse_handshake(seq![11u8, 0, 0, 9, 0, 0, 0, 5, 0, 0, 0, 0, 0], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
         parse_handshake(seq![11u8, 0, 0, 16, 0, 0, 0, 12, 0, 0, 3, 1, 2, 3, 0, 4, 0, 0, 0, 0], 32)
             == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed),
@@ -566,7 +565,8 @@ pub proof fn lemma_server_messages()
             },
         ),
     )) by (compute_only);
-    assert(parse_handshake(seq![11u8, 0, 0, 5, 1, 7, 0, 0, 0], 32) == Res::<HsMsg>::Err(ErrKind::NonEmptyContext)) by (compute_only);
+    assert(parse_handshake(seq![11u8, 0, 0, 5, 1, 7, 0, 0, 0], 32)
+        == Res::<HsMsg>::Ok(HsMsg::Certificate(Certificate { context: seq![7u8], entries: Seq::<CertificateEntry>::empty() }))) by (compute_only);
     assert(parse_handshake(seq![11u8, 0, 0, 9, 0, 0, 0, 5, 0, 0, 0, 0, 0], 32) == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
     assert(parse_handshake(seq![11u8, 0, 0, 16, 0, 0, 0, 12, 0, 0, 3, 1, 2, 3, 0, 4, 0, 0, 0, 0], 32)
         == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed)) by (compute_only);

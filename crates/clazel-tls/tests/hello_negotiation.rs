@@ -3,8 +3,8 @@
 
 use clazel_tls::hello::exec::{Selection, validate};
 use clazel_tls::spec::{
-    DECODE_ERROR, ILLEGAL_PARAMETER, INTERNAL_ERROR, MISSING_EXTENSION, UNEXPECTED_MESSAGE,
-    UNSUPPORTED_EXTENSION,
+    DECODE_ERROR, ILLEGAL_PARAMETER, INTERNAL_ERROR, MISSING_EXTENSION, PROTOCOL_VERSION,
+    UNEXPECTED_MESSAGE, UNSUPPORTED_EXTENSION,
 };
 
 const SESSION_ID: &[u8] = b"session-id";
@@ -58,6 +58,17 @@ fn server_key_share(group: u16, key: &[u8]) -> Vec<u8> {
     data.extend_from_slice(&key_length.to_be_bytes());
     data.extend_from_slice(key);
     data
+}
+
+fn legacy_server_hello_without_extensions() -> Vec<u8> {
+    let mut body = Vec::new();
+    body.extend_from_slice(&0x0303u16.to_be_bytes());
+    body.extend_from_slice(&RANDOM);
+    body.push(u8::try_from(SESSION_ID.len()).unwrap_or(u8::MAX));
+    body.extend_from_slice(SESSION_ID);
+    body.extend_from_slice(&0x002fu16.to_be_bytes());
+    body.push(0);
+    body
 }
 
 fn valid_extensions(key: &[u8]) -> Vec<(u16, Vec<u8>)> {
@@ -142,6 +153,59 @@ fn requires_a_valid_offered_x25519_share() {
         let body = server_hello(0x0303, &RANDOM, SESSION_ID, 0x1303, 0, &extensions);
         assert_eq!(validate(SESSION_ID, false, &body), Err(ILLEGAL_PARAMETER));
     }
+}
+
+#[test]
+fn tls12_server_hello_without_tls13_version_fails_with_protocol_version() {
+    let absent_extensions = legacy_server_hello_without_extensions();
+    assert_eq!(
+        validate(SESSION_ID, false, &absent_extensions),
+        Err(PROTOCOL_VERSION)
+    );
+
+    let mut empty_extensions = absent_extensions.clone();
+    empty_extensions.extend_from_slice(&[0, 0]);
+    assert_eq!(
+        validate(SESSION_ID, false, &empty_extensions),
+        Err(PROTOCOL_VERSION)
+    );
+
+    // A complete, generic five-byte extension vector is valid legacy syntax;
+    // its missing supported_versions is a negotiation failure, not a framing
+    // failure. Five bytes is below the TLS 1.3 Appendix B extension minimum.
+    let legacy_extension = [(0x1234, &[9u8][..])];
+    let short_legacy_vector =
+        server_hello(0x0303, &RANDOM, SESSION_ID, 0x002f, 0, &legacy_extension);
+    assert_eq!(
+        validate(SESSION_ID, false, &short_legacy_vector),
+        Err(PROTOCOL_VERSION)
+    );
+
+    // The same declared vector with an overrun or a trailing byte is malformed.
+    let mut overrun_vector = short_legacy_vector.clone();
+    if let Some(length_bytes) = overrun_vector.get_mut(48..50) {
+        length_bytes.copy_from_slice(&6u16.to_be_bytes());
+    }
+    assert_eq!(
+        validate(SESSION_ID, false, &overrun_vector),
+        Err(DECODE_ERROR)
+    );
+
+    let mut underlength_vector = short_legacy_vector;
+    if let Some(length_bytes) = underlength_vector.get_mut(48..50) {
+        length_bytes.copy_from_slice(&4u16.to_be_bytes());
+    }
+    assert_eq!(
+        validate(SESSION_ID, false, &underlength_vector),
+        Err(DECODE_ERROR)
+    );
+
+    let mut truncated_extensions_length = absent_extensions;
+    truncated_extensions_length.push(0);
+    assert_eq!(
+        validate(SESSION_ID, false, &truncated_extensions_length),
+        Err(DECODE_ERROR)
+    );
 }
 
 #[test]
@@ -246,10 +310,10 @@ fn rejects_invalid_local_bounds_before_parsing() {
 }
 
 #[test]
-fn rejects_missing_versions_misplaced_extensions_and_malformed_retry_cookies() {
+fn rejects_legacy_versions_misplaced_extensions_and_malformed_retry_cookies() {
     let key = server_key_share(29, &X25519_SHARE);
     let body = server_hello(0x0303, &RANDOM, SESSION_ID, 0x1303, 0, &[(51, &key)]);
-    assert_eq!(validate(SESSION_ID, false, &body), Err(MISSING_EXTENSION));
+    assert_eq!(validate(SESSION_ID, false, &body), Err(PROTOCOL_VERSION));
 
     let version = supported_versions(0x0304);
     // Cookie is the HRR-only exception; it cannot appear in a final ServerHello.
@@ -285,7 +349,12 @@ fn accepts_final_server_hello_after_retry_and_checks_every_truncated_prefix() {
     );
     for end in 0..body.len() {
         let prefix = body.get(..end).unwrap_or(&[]);
-        assert_eq!(validate(SESSION_ID, false, prefix), Err(DECODE_ERROR));
+        let expected = if end == 2 + 32 + 1 + SESSION_ID.len() + 2 + 1 {
+            PROTOCOL_VERSION
+        } else {
+            DECODE_ERROR
+        };
+        assert_eq!(validate(SESSION_ID, false, prefix), Err(expected));
     }
     let mut trailing = body;
     trailing.push(0);

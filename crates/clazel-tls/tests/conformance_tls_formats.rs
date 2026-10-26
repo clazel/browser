@@ -853,8 +853,11 @@ fn hand_built_cases() -> Vec<Case> {
         wrapped(2, &b)
     };
     add(
-        "ServerHello without supported_versions",
-        parse_err(&sh_missing) == Some(ErrKind::MissingExtension),
+        "ServerHello without supported_versions is structurally decoded",
+        matches!(
+            parse_handshake(&sh_missing, HASH_LEN),
+            Ok(HsMsg::ServerHello(_))
+        ),
     );
     add(
         "missing extension alert is 109",
@@ -939,8 +942,8 @@ fn hand_built_cases() -> Vec<Case> {
     );
     let cert_ctx = [11u8, 0, 0, 5, 1, 7, 0, 0, 0];
     add(
-        "a server Certificate with a context",
-        parse_err(&cert_ctx) == Some(ErrKind::NonEmptyContext),
+        "a Certificate context is preserved for the authentication layer",
+        matches!(parse_handshake(&cert_ctx, HASH_LEN), Ok(HsMsg::Certificate(c)) if c.context == [7]),
     );
     add(
         "finished of the wrong size",

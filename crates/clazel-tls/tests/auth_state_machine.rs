@@ -21,7 +21,7 @@ use clazel_tls::spec::{
 use clazel_tls::transcript::exec::Transcript;
 use clazel_tls::transcript::spec::Kind;
 use clazel_tls::types::{
-    Certificate, CertificateEntry, CertificateRequest, CertificateVerify, Extension,
+    Certificate, CertificateEntry, CertificateRequest, CertificateVerify, Extension, HsMsg,
 };
 use sha2::{Digest, Sha256};
 
@@ -555,6 +555,9 @@ fn malformed_requests_unoffered_extensions_and_signature_schemes_are_rejected() 
         Action::None
     );
     let request = request_body(b"not empty");
+    let parsed_request = clazel_tls::handshake::read_certificate_request(&request)
+        .ok_or_else(|| "generic CertificateRequest parser rejected a valid context".to_owned())?;
+    assert_eq!(parsed_request.context, b"not empty");
     assert_eq!(
         receive(&mut nonempty_context, &crypto, &verifier, 13, &request),
         Action::Fail(ILLEGAL_PARAMETER)
@@ -628,6 +631,36 @@ fn malformed_requests_unoffered_extensions_and_signature_schemes_are_rejected() 
         );
         assert!(verifier.calls.borrow().signatures.is_empty());
     }
+    Ok(())
+}
+
+#[test]
+fn generic_certificate_parser_preserves_context_but_initial_server_auth_rejects_it()
+-> Result<(), String> {
+    let crypto = TestCrypto;
+    let verifier = MockVerifier::accepts_chain();
+    let body = certificate_body(b"client-context", b"certificate-bytes");
+
+    match clazel_tls::handshake::parse_handshake_body(11, &body, 32) {
+        Ok(HsMsg::Certificate(certificate)) => {
+            assert_eq!(certificate.context, b"client-context");
+        }
+        other => {
+            return Err(format!(
+                "generic parser did not retain certificate context: {other:?}"
+            ));
+        }
+    }
+
+    let mut auth = start(&crypto)?;
+    assert_eq!(
+        receive(&mut auth, &crypto, &verifier, 8, &encrypted_extensions(&[])),
+        Action::None
+    );
+    assert_eq!(
+        receive(&mut auth, &crypto, &verifier, 11, &body),
+        Action::Fail(ILLEGAL_PARAMETER)
+    );
     Ok(())
 }
 

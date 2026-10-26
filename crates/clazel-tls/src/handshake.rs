@@ -69,7 +69,7 @@ pub fn read_server_hello<'a>(body: &'a [u8]) -> (r: Option<ServerHello<'a>>)
     let sid = c.vec(0, 32)?;
     let suite = c.u16()?;
     let comp = c.u8()?;
-    let exts = read_exts(&mut c, 6, 65535)?;
+    let exts = read_exts(&mut c, 0, 65535)?;
     if !c.is_empty() {
         return None;
     }
@@ -83,6 +83,28 @@ pub fn read_server_hello<'a>(body: &'a [u8]) -> (r: Option<ServerHello<'a>>)
             extensions: exts,
         },
     )
+}
+
+/// RFC 5246 §7.4.1.3 legacy form and RFC 8446 §4.1.3 negotiation: recognize
+/// complete ServerHello bodies with no `supported_versions` extension before
+/// applying the TLS 1.3 parser. Invalid or truncated framing returns false,
+/// so the normal parser reports `decode_error` for those inputs.
+pub fn legacy_server_hello_without_supported_versions(body: &[u8]) -> (out: bool)
+    ensures out == super::spec::legacy_server_hello_without_supported_versions(body@),
+{
+    let mut c = Cur::new(body);
+    if c.u16().is_none() { return false; }
+    if c.fixed(32).is_none() { return false; }
+    if c.vec(0, 32).is_none() { return false; }
+    if c.u16().is_none() { return false; }
+    if c.u8().is_none() { return false; }
+    if c.is_empty() { return true; }
+    let extensions = match read_exts(&mut c, 0, 65535) {
+        Some(extensions) => extensions,
+        None => return false,
+    };
+    if !c.is_empty() { return false; }
+    !super::extension::has_ext(extensions.as_slice(), 43)
 }
 
 /// Whether two byte strings are equal.
@@ -478,9 +500,6 @@ fn parse_certificate<'a>(body: &'a [u8], _hash_len: usize) -> (r: Result<HsMsg<'
         None => return Err(ErrKind::Decode),
         Some(c) => c,
     };
-    if !c.context.is_empty() {
-        return Err(ErrKind::NonEmptyContext);
-    }
     match certificate_entries_error(c.entries.as_slice()) {
         Some(k) => Err(k),
         None => Ok(HsMsg::Certificate(c)),

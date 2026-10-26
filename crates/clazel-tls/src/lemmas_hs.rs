@@ -27,7 +27,7 @@ pub open spec fn server_hello_requires(sh: ServerHello) -> bool {
     &&& sh.random.len() == 32
     &&& vec_in_bounds(sh.session_id_echo, 0, 32)
     &&& forall|i: int| 0 <= i < sh.extensions.len() ==> (#[trigger] sh.extensions[i]).data.len() <= 65535
-    &&& vec_in_bounds(write_list(sh.extensions, |e: Ext| write_ext(e)), 6, 65535)
+    &&& vec_in_bounds(write_list(sh.extensions, |e: Ext| write_ext(e)), 0, 65535)
 }
 
 // ---------------------------------------------------------------------------
@@ -113,16 +113,15 @@ pub proof fn lemma_read_server_hello_write(sh: ServerHello)
     super::lemmas_pl::lemma_read_uint_write(sh.cipher_suite as nat, 2, cm);
     lemma_be_bytes_one(sh.compression);
     super::lemmas_pl::lemma_read_uint_write(sh.compression as nat, 1, e);
-    super::lemmas_ext::lemma_read_exts_write_exts(sh.extensions, 6, 65535, seq![]);
+    super::lemmas_ext::lemma_read_exts_write_exts(sh.extensions, 0, 65535, seq![]);
     assert(e + Seq::<u8>::empty() =~= e);
 }
 
-/// What [`read_server_hello`] accepts is what [`write_server_hello`]
-/// writes.
+/// What [`read_server_hello`] accepts is written back byte-for-byte.
 pub proof fn lemma_read_server_hello_canonical(b: Seq<u8>)
     ensures
         match read_server_hello(b) {
-            Some(sh) => server_hello_requires(sh) && write_server_hello(sh) =~= b,
+        Some(sh) => server_hello_requires(sh) && write_server_hello(sh) =~= b,
             None => true,
         },
 {
@@ -138,10 +137,11 @@ pub proof fn lemma_read_server_hello_canonical(b: Seq<u8>)
         super::lemmas_pl::lemma_read_uint_canonical(r3, 2);
         let (comp, r5) = read_uint(r4, 1)->Some_0;
         super::lemmas_pl::lemma_read_uint_canonical(r4, 1);
-        let (exts, r6) = read_exts(r5, 6, 65535)->Some_0;
-        super::lemmas_ext::lemma_read_exts_canonical(r5, 6, 65535);
+        let (exts, r6) = read_exts(r5, 0, 65535)->Some_0;
         assert(r6.len() == 0);
+        super::lemmas_ext::lemma_read_exts_canonical(r5, 0, 65535);
         assert(r5 =~= write_exts(exts, 65535));
+        assert(b =~= write_server_hello(sh));
         assert(write_u16(ver as u16) =~= be_bytes(ver, 2));
         assert(write_u16(cs as u16) =~= be_bytes(cs, 2));
         lemma_be_bytes_one(comp as u8);
@@ -565,10 +565,9 @@ pub proof fn lemma_client_hello_len(ch: ClientHello)
 
 /// The empty Certificate message that refuses a CertificateRequest is read
 /// back, with the request's context ("the client MUST send a Certificate
-/// message containing no certificates", §4.4.2). Server authentication
-/// requires an empty context, so [`parse_handshake`] refuses a non-empty
-/// context from a server ([`ErrKind::NonEmptyContext`]); the client's
-/// message echoes the request's, and is read back by the structure reader.
+/// message containing no certificates", §4.4.2). The generic structure
+/// reader preserves the context; the initial-server-authentication layer
+/// separately requires it to be empty, while a client response echoes it.
 pub proof fn lemma_empty_certificate_round_trip(context: Seq<u8>)
     requires
         vec_in_bounds(context, 0, 255),

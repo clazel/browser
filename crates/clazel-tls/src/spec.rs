@@ -1719,7 +1719,8 @@ pub struct ServerHello {
     pub cipher_suite: u16,
     /// `legacy_compression_method` ("MUST have the value 0").
     pub compression: u8,
-    /// `Extension extensions<6..2^16-1>`.
+    /// Parsed extension list; an absent legacy field is handled by the hello
+    /// negotiation preflight, while an encoded list has length 0..2^16-1.
     pub extensions: Seq<Ext>,
 }
 

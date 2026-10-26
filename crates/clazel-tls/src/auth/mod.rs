@@ -4,5 +4,6 @@ pub mod contract;
 pub mod examples;
 pub mod exec;
 pub mod lemmas;
+pub mod mutation_certificates;
 pub mod spec;
 pub mod verify;

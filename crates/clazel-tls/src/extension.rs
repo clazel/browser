@@ -676,9 +676,6 @@ pub fn check_extensions(es: &[Extension<'_>], m: MsgKind) -> (r: Option<ErrKind>
         }
         return Some(ErrKind::Decode);
     }
-    if (matches!(m, MsgKind::Sh) || matches!(m, MsgKind::Hrr)) && !has_ext(es, EXT_SUPPORTED_VERSIONS) {
-        return Some(ErrKind::MissingExtension);
-    }
     proof {
         assert(forall|i: int| 0 <= i < super::types::views(es@).len() ==> super::spec::extension_allowed(
             #[trigger] super::types::views(es@)[i].etype,

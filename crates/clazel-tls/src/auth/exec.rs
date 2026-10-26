@@ -10,6 +10,19 @@ use crate::types::{Extension, HsMsg};
 use vstd::prelude::*;
 
 verus! {
+/// RFC 8446 §4.3.2: the initial server CertificateRequest has an empty context.
+fn initial_request_context_valid(context: &[u8]) -> (result: bool)
+    ensures result == super::spec::initial_request_context_valid(context@),
+{
+    context.is_empty()
+}
+/// RFC 8446 §4.4.2: the initial server Certificate uses an empty context.
+fn initial_certificate_context_valid(context: &[u8]) -> (result: bool)
+    ensures result == super::spec::initial_certificate_context_valid(context@),
+{
+    context.is_empty()
+}
+
 /// The actual offers, target and traffic secrets supplied by the Hello layer.
 pub struct Config {
     /// Canonical host identity passed unchanged to certificate validation.
@@ -57,7 +70,7 @@ impl View for Auth {
 /// Complete, decrypted record-layer inputs and the exact-send acknowledgement.
 #[derive(Debug)]
 pub enum Input<'a> {
-    /// One complete handshake body and its wire type.
+    /// One complete handshake body and its HandshakeType, after record deprotection.
     Handshake(u8, &'a [u8]),
     /// Decrypted application plaintext.
     Application(&'a [u8]),
@@ -256,12 +269,13 @@ impl Auth {
         self.requested = true;
         self.record(crypto, Kind::CertificateRequest, body, Phase::Certificate)
     }
-    fn on_certificate<C: Crypto, V: Verifier>(&mut self, crypto: &C, verifier: &V, body: &[u8], empty_chain: bool) -> (out: Action)
+    fn on_certificate<C: Crypto, V: Verifier>(&mut self, crypto: &C, verifier: &V, body: &[u8], empty_context: bool, empty_chain: bool) -> (out: Action)
         requires old(self).wf(),
-        ensures (final(self)@, out@) == super::spec::on_certificate(crypto.functions(), verifier.functions(), old(self)@, body@, empty_chain),
+        ensures (final(self)@, out@) == super::spec::on_certificate(crypto.functions(), verifier.functions(), old(self)@, body@, empty_context, empty_chain),
             final(self).wf(),
     {
         if !matches!(self.phase, Phase::CertificateOrRequest | Phase::Certificate) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
+        if !empty_context { return self.fail(crate::spec::ILLEGAL_PARAMETER); }
         if empty_chain { return self.fail(crate::spec::DECODE_ERROR); }
         let key = match verifier.chain(self.config.host.as_slice(), self.config.now, body) {
             Ok(key) => key,
@@ -319,9 +333,10 @@ impl Auth {
             HsMsg::EncryptedExtensions(es) => self.on_extensions(crypto, body, es.as_slice()),
             HsMsg::CertificateRequest(request) => {
                 let present = crate::extension::has_ext(request.extensions.as_slice(), 13);
-                self.on_request(crypto, body, request.context.is_empty(), present)
+                self.on_request(crypto, body, initial_request_context_valid(request.context), present)
             },
-            HsMsg::Certificate(certificate) => self.on_certificate(crypto, verifier, body, certificate.entries.is_empty()),
+            HsMsg::Certificate(certificate) => self.on_certificate(crypto, verifier, body,
+                initial_certificate_context_valid(certificate.context), certificate.entries.is_empty()),
             HsMsg::CertificateVerify(cv) => self.on_verify(crypto, verifier, body, cv.algorithm, cv.signature),
             HsMsg::Finished(verify_data) => {
                 if !matches!(self.phase, Phase::Finished) { self.fail(crate::spec::UNEXPECTED_MESSAGE) }
@@ -350,6 +365,9 @@ impl Auth {
         requires old(self).wf(),
         ensures super::contract::step_ensures(crypto.functions(), verifier.functions(), old(self)@, input@, final(self)@, out@),
     {
+        hide(super::spec::receive);
+        hide(super::spec::dispatch);
+        hide(crate::spec::parse_handshake_body);
         if matches!(self.phase, Phase::Failed | Phase::Closed) { return Action::None; }
         match input {
             Input::Closed => { self.phase = Phase::Closed; Action::Close },

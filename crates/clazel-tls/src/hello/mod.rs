@@ -14,4 +14,5 @@ pub mod join_contract;
 pub mod join_spec;
 pub mod key_exchange;
 pub mod lemmas;
+pub mod mutation_certificates;
 pub mod spec;

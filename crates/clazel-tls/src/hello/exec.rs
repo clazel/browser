@@ -78,7 +78,7 @@ fn parameters(sh: &ServerHello<'_>, session_id: &[u8]) -> (out: Option<u8>)
     ensures out == super::spec::parameters(sh@, session_id@),
 {
     match extension(sh.extensions.as_slice(), 43) {
-        None => Some(109),
+        None => Some(crate::spec::PROTOCOL_VERSION),
         Some(data) => match crate::extension::supported_versions_sh(data) {
             None => Some(50),
             Some(version) => {
@@ -135,6 +135,9 @@ pub fn validate<'a>(session_id: &[u8], retried: bool, body: &'a [u8]) -> (out: R
 {
     hide(crate::spec::parse_handshake_body);
     if session_id.len() > 32 || body.len() > crate::transcript::spec::MAX_BODY { return Err(80); }
+    if crate::handshake::legacy_server_hello_without_supported_versions(body) {
+        return Err(crate::spec::PROTOCOL_VERSION);
+    }
     match crate::handshake::parse_handshake_body(2, body, 32) {
         Err(error) => Err(crate::encode::alert_for(error).description),
         Ok(HsMsg::ServerHello(sh)) => parsed(sh, session_id, retried),

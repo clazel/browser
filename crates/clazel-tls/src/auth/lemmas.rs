@@ -121,7 +121,7 @@ pub proof fn lemma_dispatch(c: crate::schedule::spec::Crypto, v: Verification, s
 pub proof fn theorem_certificate_binding(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty: bool)
     requires wf(s), !s.chain_checked,
     ensures {
-        let next = on_certificate(c, v, s, body, empty).0;
+        let next = on_certificate(c, v, s, body, true, empty).0;
         next.chain_checked ==> (v.chain)(s.config.host, s.config.now, body) == Ok(next.key)
     },
 {
