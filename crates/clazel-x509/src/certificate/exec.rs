@@ -18,13 +18,7 @@ pub struct AlgorithmIdentifier<'a> {
 impl View for AlgorithmIdentifier<'_> {
     type V = cert_spec::AlgorithmIdentifier;
     closed spec fn view(&self) -> Self::V {
-        cert_spec::AlgorithmIdentifier {
-            oid: der::nats(self.oid@),
-            parameters_der: match self.parameters_der {
-                Some(bytes) => Some(bytes@),
-                None => None,
-            },
-        }
+        super::contract::view_algorithm_identifier(self)
     }
 }
 

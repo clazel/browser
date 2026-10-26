@@ -11,7 +11,7 @@ pub open spec fn view_result(
     result: Option<super::exec::TbsCertificate<'_>>,
 ) -> Option<TbsCertificate> {
     match result {
-        Some(value) => Some(value@),
+        Some(value) => Some(super::exec::view_tbs_certificate(&value)),
         None => None,
     }
 }

@@ -59,22 +59,26 @@ pub struct TbsCertificate<'a> {
 impl View for TbsCertificate<'_> {
     type V = super::spec::TbsCertificate;
     closed spec fn view(&self) -> Self::V {
-        Self::V {
-            version: self.version as nat,
-            serial_number_der: self.serial_number_der@,
-            signature: self.signature@,
-            issuer_der: self.issuer_der@,
-            not_before: self.not_before@,
-            not_after: self.not_after@,
-            subject_der: self.subject_der@,
-            subject_public_key_info_der: self.subject_public_key_info_der@,
-            issuer_unique_id_der: match self.issuer_unique_id_der { Some(x) => Some(x@), None => None },
-            subject_unique_id_der: match self.subject_unique_id_der { Some(x) => Some(x@), None => None },
-            extensions_der: match self.extensions_der { Some(x) => Some(x@), None => None },
-            extensions_sequence_der: match self.extensions_sequence_der { Some(x) => Some(x@), None => None },
-            tbs_certificate_der: self.tbs_certificate_der@,
-        }
+        view_tbs_certificate(self)
     }
+}
+
+pub open spec fn view_tbs_certificate(value: &TbsCertificate<'_>) -> super::spec::TbsCertificate {
+        super::spec::TbsCertificate {
+            version: value.version as nat,
+            serial_number_der: value.serial_number_der@,
+            signature: crate::certificate::contract::view_algorithm_identifier(&value.signature),
+            issuer_der: value.issuer_der@,
+            not_before: value.not_before@,
+            not_after: value.not_after@,
+            subject_der: value.subject_der@,
+            subject_public_key_info_der: value.subject_public_key_info_der@,
+            issuer_unique_id_der: match value.issuer_unique_id_der { Some(x) => Some(x@), None => None },
+            subject_unique_id_der: match value.subject_unique_id_der { Some(x) => Some(x@), None => None },
+            extensions_der: match value.extensions_der { Some(x) => Some(x@), None => None },
+            extensions_sequence_der: match value.extensions_sequence_der { Some(x) => Some(x@), None => None },
+            tbs_certificate_der: value.tbs_certificate_der@,
+        }
 }
 
 
@@ -95,13 +99,17 @@ pub struct Prefix<'a> {
 impl View for Prefix<'_> {
     type V = super::spec::Prefix;
     closed spec fn view(&self) -> Self::V {
-        Self::V { version: self.version as nat, serial_der: self.serial_der@,
-            pos: self.pos as nat, tbs_der: self.tbs_der@, end: self.end as nat }
+        view_prefix(self)
     }
 }
 
+pub open spec fn view_prefix(value: &Prefix<'_>) -> super::spec::Prefix {
+    super::spec::Prefix { version: value.version as nat, serial_der: value.serial_der@,
+        pos: value.pos as nat, tbs_der: value.tbs_der@, end: value.end as nat }
+}
+
 pub open spec fn view_prefix_result(result: Option<Prefix<'_>>) -> Option<super::spec::Prefix> {
-    match result { Some(value) => Some(value@), None => None }
+    match result { Some(value) => Some(view_prefix(&value)), None => None }
 }
 
 /// View conversion for the optional version parser.
@@ -231,7 +239,14 @@ fn valid_implicit_bit_string(input: &[u8], start: usize, end: usize) -> (result:
 
 pub open spec fn view_signature_issuer_result(result: Option<(AlgorithmIdentifier<'_>, &[u8], usize)>)
     -> Option<(crate::certificate::spec::AlgorithmIdentifier, Seq<u8>, nat)> {
-    match result { Some((alg, issuer, next)) => Some((alg@, issuer@, next as nat)), None => None }
+    match result {
+        Some((alg, issuer, next)) => Some((
+            crate::certificate::contract::view_algorithm_identifier(&alg),
+            issuer@,
+            next as nat,
+        )),
+        None => None,
+    }
 }
 
 /// RFC 5280 §4.1.2.3/.4: parse the TBS signature algorithm and bounded issuer Name.
@@ -394,6 +409,10 @@ pub fn parse_tbs_certificate(input: &[u8]) -> (result: Option<TbsCertificate<'_>
     hide(clazel_der::spec::read_integer);
     hide(clazel_der::spec::expect_sequence);
     let prefix = parse_prefix(input)?;
+    proof {
+        reveal(super::spec::parse_prefix);
+        assert(super::exec::view_prefix_result(Some(prefix)).unwrap().tbs_der == input@);
+    }
     let tbs_certificate_der = prefix.tbs_der;
     let mut pos = prefix.pos;
     let version = prefix.version;
@@ -409,7 +428,7 @@ pub fn parse_tbs_certificate(input: &[u8]) -> (result: Option<TbsCertificate<'_>
 
     let (optional_tail, final_cursor) = parse_optional_tail(input, pos, contents_end, version)?;
     if final_cursor != contents_end { return None; }
-    Some(TbsCertificate {
+    let result = TbsCertificate {
         version, serial_number_der, signature, issuer_der, not_before, not_after,
         subject_der, subject_public_key_info_der,
         issuer_unique_id_der: optional_tail.issuer_uid,
@@ -417,7 +436,8 @@ pub fn parse_tbs_certificate(input: &[u8]) -> (result: Option<TbsCertificate<'_>
         extensions_der: optional_tail.extensions,
         extensions_sequence_der: optional_tail.extensions_sequence,
         tbs_certificate_der,
-    })
+    };
+    Some(result)
 }
 
 } // verus!

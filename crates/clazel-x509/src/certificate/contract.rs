@@ -7,12 +7,26 @@ use vstd::prelude::*;
 
 verus! {
 
+/// Transparent conversion of the borrowed runtime AlgorithmIdentifier to the
+/// certificate spec representation, for callers that refine algorithm policy.
+pub open spec fn view_algorithm_identifier(
+    algorithm: &super::exec::AlgorithmIdentifier<'_>,
+) -> AlgorithmIdentifier {
+    AlgorithmIdentifier {
+        oid: clazel_der::decode::nats(algorithm.oid@),
+        parameters_der: match algorithm.parameters_der {
+            Some(bytes) => Some(bytes@),
+            None => None,
+        },
+    }
+}
+
 /// View conversion for the executable AlgorithmIdentifier parser result.
 pub open spec fn view_algorithm_result(
     result: Option<(super::exec::AlgorithmIdentifier<'_>, usize)>,
 ) -> Option<(AlgorithmIdentifier, nat)> {
     match result {
-        Some((algorithm, next)) => Some((algorithm@, next as nat)),
+        Some((algorithm, next)) => Some((view_algorithm_identifier(&algorithm), next as nat)),
         None => None,
     }
 }

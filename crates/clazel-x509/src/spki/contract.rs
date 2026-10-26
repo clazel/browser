@@ -10,7 +10,7 @@ verus! {
 pub open spec fn view_result(
     result: Option<super::exec::SubjectPublicKeyInfo<'_>>,
 ) -> Option<SubjectPublicKeyInfo> {
-    match result { Some(value) => Some(value@), None => None }
+    super::exec::view_spki_result(result)
 }
 
 pub open spec fn parse_subject_public_key_info_ensures(
