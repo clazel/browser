@@ -54,4 +54,28 @@ pub proof fn lemma_key_update_epoch_start_failure_is_terminal()
         super::dispatcher_certificates::sample_bad_update_state(), seq![7u8])
             == super::dispatcher_spec::failed());
 }
+
+/// RFC 8446 §6.1: receiving close_notify closes the peer write direction but
+/// retains local application sending resources until separately closed.
+pub proof fn lemma_peer_close_is_directional()
+    ensures {
+        let before = super::dispatcher_certificates::sample_ready_state();
+        let after = super::dispatcher_spec::receive_close_notify(before);
+        after.mode == super::dispatcher_spec::Mode::Ready
+            && after.peer_write_closed && !after.local_write_closed
+            && after.application_sender == before.application_sender
+            && after.pending_update_wire == before.pending_update_wire
+            && after.pending_update_secret == before.pending_update_secret
+            && after.pending_update_request == before.pending_update_request
+            && after.response_due == before.response_due
+    },
+{
+    reveal(super::dispatcher_spec::receive_close_notify);
+    assert(super::dispatcher_spec::receive_close_notify(
+        super::dispatcher_certificates::sample_ready_state()) ==
+        super::dispatcher_spec::State {
+            peer_write_closed: true,
+            ..super::dispatcher_certificates::sample_ready_state()
+        });
+}
 } // verus!
