@@ -16,8 +16,13 @@
 //!   a validated shared secret; the §7.4.2 all-zero shared-secret check,
 //!   key exchange and traffic-secret derivation live in the separate join.
 //! - Complete handshake bodies use the existing format/extension parser.
-//!   Its duplicate, placement, structural and missing-version errors win
-//!   before negotiation checks. Multi-fault inputs need only one fatal alert.
+//!   Its duplicate, placement and structural errors win before negotiation;
+//!   absent `supported_versions` is a protocol-version negotiation failure.
+//!   Multi-fault inputs need only one fatal alert.
+//! - For legacy-version fallback, absent and explicit zero-length ServerHello
+//!   extension fields both map to an empty extension sequence. The structure
+//!   model does not retain which encoding was used; the writer emits the
+//!   length-prefixed form, so byte-for-byte round-trip preservation is not claimed.
 //! - Body size inherits the transcript limit; invalid local session IDs and
 //!   oversized bodies yield internal_error. RFC prose has no step numbers;
 //!   comments name the exact field or clause rather than inventing steps.
