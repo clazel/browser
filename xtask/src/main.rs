@@ -19,7 +19,9 @@
 //!   vendored conformance suites (`tests/generated/*.rs`). `check` and
 //!   `verify` fail if a committed table is stale.
 //! - `cargo xtask tables`: regenerate the Unicode tables generated from
-//!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs`).
+//!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs`), the
+//!   Public Suffix List, and the root certificate table from NSS's
+//!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`).
 //!   `check` and `verify` fail if they are stale or a data file's hash
 //!   differs from its `SOURCE.md`.
 //! - `cargo xtask report [--write] [--changed [base]]`: run the checks that produce the README
@@ -37,6 +39,7 @@ mod pins;
 mod psl;
 mod report;
 mod reviews;
+mod roots;
 mod scan;
 mod sys;
 mod testdata;
@@ -346,6 +349,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
         "generated Public Suffix List tables",
         outcome(problems, notes),
     );
+    let (problems, notes) = roots::run(false);
+    r.step("generated root certificate table", outcome(problems, notes));
     let tooling = crates
         .iter()
         .filter(|c| c.tooling)
@@ -903,6 +908,8 @@ fn generate_tables() -> ExitCode {
         "generate Public Suffix List tables",
         outcome(problems, notes),
     );
+    let (problems, notes) = roots::run(true);
+    r.step("generate root certificate table", outcome(problems, notes));
     if r.failed {
         println!("RESULT: FAILED");
         ExitCode::from(1)
