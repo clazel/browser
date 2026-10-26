@@ -510,9 +510,10 @@ pub enum ErrKind {
     /// "MUST abort the handshake with an "illegal_parameter" alert").
     /// Alert `illegal_parameter`.
     InvalidEnum,
-    /// §4.4.2: in the case of server authentication the
-    /// `certificate_request_context` "SHALL be zero length". Alert
-    /// `illegal_parameter` (§6 generic rule).
+    /// Reserved semantic result for a caller enforcing the initial server
+    /// authentication profile's §4.4.2 zero-length context requirement.
+    /// The generic Certificate parser preserves this context; the auth layer
+    /// maps a nonempty value to `illegal_parameter`.
     NonEmptyContext,
     /// §4.1.3: "All TLS 1.3 ServerHello messages MUST contain the
     /// "supported_versions" extension" (and §4.1.4 for a
