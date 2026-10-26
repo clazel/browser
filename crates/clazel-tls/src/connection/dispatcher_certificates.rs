@@ -44,4 +44,13 @@ pub open spec fn sample_ready_state() -> super::dispatcher_spec::State {
     }
 }
 
+pub open spec fn sample_bad_update_state() -> super::dispatcher_spec::State {
+    super::dispatcher_spec::State {
+        pending_update_secret: seq![],
+        pending_update_wire: seq![7u8],
+        pending_update_request: Some(0u8),
+        ..sample_ready_state()
+    }
+}
+
 } // verus!

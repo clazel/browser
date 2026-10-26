@@ -2351,6 +2351,34 @@
         "lemma": "super::dispatcher_lemmas::lemma_key_update_request_is_bounded()",
         "witness": "super::dispatcher_spec::prepare_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::ciphers(), super::dispatcher_certificates::sample_ready_state(), 2, false) != super::dispatcher_certificates::sample_ready_state()"
       }
+    },
+    {
+      "id": "dispatcher-peer-update-epoch-construction-failure",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "// A derived secret that cannot form a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => failed(),",
+      "replace": "// A derived secret that cannot form a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => s,",
+      "expect": "killed",
+      "reason": "If a derived peer traffic secret cannot construct its receive epoch, the dispatcher model must not retain the old receiver with the new secret.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_epoch_start_failure_is_terminal()",
+        "witness": "super::dispatcher_spec::receive_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::sample_ready_state(), 0) != super::dispatcher_spec::failed()"
+      }
+    },
+    {
+      "id": "dispatcher-local-update-epoch-construction-failure",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "// Never advance the traffic secret while retaining old keys.\n                Err(_) => failed(),",
+      "replace": "// Never advance the traffic secret while retaining old keys.\n                Err(_) => s,",
+      "expect": "killed",
+      "reason": "If a locally acknowledged KeyUpdate secret cannot construct its send epoch, the dispatcher model must fail instead of retaining old keys.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_epoch_start_failure_is_terminal()",
+        "witness": "super::dispatcher_spec::acknowledge_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::sample_bad_update_state(), seq![7u8]) != super::dispatcher_spec::failed()"
+      }
     }
   ]
 }

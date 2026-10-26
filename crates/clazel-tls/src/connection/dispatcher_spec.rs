@@ -284,13 +284,16 @@ pub open spec fn receive_key_update(c: crate::schedule::spec::Crypto, s: State,
     request: u8) -> State
 {
     let next_secret = crate::schedule::spec::next_traffic_secret(c, s.server_application_secret);
-    State {
-        application_receiver: match crate::traffic::spec::start(c, next_secret) {
-            Ok(epoch) => Some(epoch), Err(_) => s.application_receiver,
+    match crate::traffic::spec::start(c, next_secret) {
+        Ok(epoch) => State {
+            application_receiver: Some(epoch),
+            server_application_secret: next_secret,
+            response_due: s.response_due || request == 1,
+            ..s
         },
-        server_application_secret: next_secret,
-        response_due: s.response_due || request == 1,
-        ..s
+        // A derived secret that cannot form a new epoch must not leave a
+        // next-secret/old-key mismatch in the model.
+        Err(_) => failed(),
     }
 }
 
@@ -300,17 +303,20 @@ pub open spec fn acknowledge_key_update(c: crate::schedule::spec::Crypto,
     s: State, acknowledgement: Seq<u8>) -> State
 {
     match s.pending_update_request {
-        Some(_) if acknowledgement == s.pending_update_wire => State {
-            application_sender: match crate::traffic::spec::start(c, s.pending_update_secret) {
-                Ok(epoch) => Some(epoch), Err(_) => s.application_sender,
+        Some(_) if acknowledgement == s.pending_update_wire =>
+            match crate::traffic::spec::start(c, s.pending_update_secret) {
+                Ok(epoch) => State {
+                    application_sender: Some(epoch),
+                    client_application_secret: s.pending_update_secret,
+                    pending_update_secret: seq![],
+                    pending_update_wire: seq![],
+                    pending_update_request: None,
+                    pending_update_is_response: false,
+                    ..s
+                },
+                // Never advance the traffic secret while retaining old keys.
+                Err(_) => failed(),
             },
-            client_application_secret: s.pending_update_secret,
-            pending_update_secret: seq![],
-            pending_update_wire: seq![],
-            pending_update_request: None,
-            pending_update_is_response: false,
-            ..s
-        },
         _ => s,
     }
 }
