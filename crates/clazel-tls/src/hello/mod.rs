@@ -1,4 +1,6 @@
 //! Fixed-profile ClientHello, owned retry exchange and parameterized auth handoff.
+pub mod bootstrap_contract;
+pub mod bootstrap_spec;
 pub mod certificates;
 pub mod client;
 pub mod client_certificates;
