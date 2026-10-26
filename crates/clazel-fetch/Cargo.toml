@@ -19,6 +19,17 @@ clazel-psl = { path = "../clazel-psl" }
 # A `Location` value is UTF-8 decoded before the URL parser (transducer::real).
 clazel-encoding = { path = "../clazel-encoding" }
 
+[dev-dependencies]
+# The reference engines of tests/conformance_differential.rs: rust-url (the
+# WHATWG URL parser) resolves `Location` values, and the cookie jar of
+# reqwest's `cookie_store` feature (RFC 6265) stores and sends cookies. As
+# in `clazel-cookie`'s differential test: without default features (no
+# Public Suffix List, no serde), and the same versions, so the Cargo.lock
+# holds no new package (docs/DEPENDENCIES.md).
+cookie_store = { version = "=0.21.1", default-features = false }
+time = { version = "=0.3.17", default-features = false }
+url = { version = "=2.5.8", default-features = false }
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires. Tier 0
 # until 3.6 is complete (redirects, cookies, theorem_wire_cookies, the

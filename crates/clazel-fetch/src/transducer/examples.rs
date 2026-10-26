@@ -457,4 +457,100 @@ pub proof fn lemma_cookie_14()
     assert(ex_cstep(Seq::<Cookie>::empty(), 0int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A])]) by (compute_only);
 }
 
+/// RFC 9112 §9.6: the server closing a connection that was never opened is a failure with nothing to close.
+pub proof fn lemma_transducer_16()
+    ensures
+        ex_step(None, 0nat, Phase::Connecting, Input::Closed).1.len() == 1nat,
+{
+    assert(ex_step(None, 0nat, Phase::Connecting, Input::Closed).1.len() == 1nat) by (compute_only);
+}
+
+/// A connection error while connecting is a failure with nothing to close.
+pub proof fn lemma_transducer_17()
+    ensures
+        ex_step(None, 0nat, Phase::Connecting, Input::Error).1.len() == 1nat,
+{
+    assert(ex_step(None, 0nat, Phase::Connecting, Input::Error).1.len() == 1nat) by (compute_only);
+}
+
+/// A connection error while reading fails and closes the connection.
+pub proof fn lemma_transducer_18()
+    ensures
+        ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Error).1.len() == 2nat,
+{
+    assert(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Error).1.len() == 2nat) by (compute_only);
+}
+
+/// A second Connected is a shell error and the open connection is closed.
+pub proof fn lemma_transducer_19()
+    ensures
+        ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Connected).1.len() == 2nat,
+{
+    assert(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Connected).1.len() == 2nat) by (compute_only);
+}
+
+/// Bytes before Connected are a shell error and the connection is closed.
+pub proof fn lemma_transducer_20()
+    ensures
+        ex_step(None, 0nat, Phase::Connecting, Input::Bytes(seq![0x61u8])).1.len() == 2nat,
+{
+    assert(ex_step(None, 0nat, Phase::Connecting, Input::Bytes(seq![0x61u8])).1.len() == 2nat) by (compute_only);
+}
+
+/// RFC 9110 §15.2: a connection that closes after only a 100 response never gave the final one (Incomplete).
+pub proof fn lemma_transducer_21()
+    ensures
+        outcome(ex_step(None, 0nat, Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x30, 0x30, 0x20, 0x58, 0x0D, 0x0A, 0x0D, 0x0A] }, Input::Closed).1) == 1005nat,
+{
+    assert(outcome(ex_step(None, 0nat, Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x30, 0x30, 0x20, 0x58, 0x0D, 0x0A, 0x0D, 0x0A] }, Input::Closed).1) == 1005nat) by (compute_only);
+}
+
+/// RFC 9112 §6.1: a transfer coding the parser does not support fails the fetch as Unsupported.
+pub proof fn lemma_transducer_22()
+    ensures
+        outcome(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1004nat,
+{
+    assert(outcome(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1004nat) by (compute_only);
+}
+
+/// RFC 9112 §2.2: bytes that are not a message fail the fetch as Invalid.
+pub proof fn lemma_transducer_23()
+    ensures
+        outcome(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x67u8, 0x61, 0x72, 0x62, 0x61, 0x67, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1003nat,
+{
+    assert(outcome(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x67u8, 0x61, 0x72, 0x62, 0x61, 0x67, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1003nat) by (compute_only);
+}
+
+/// Fetch §4.5 step 22: a fetch of an http: URL asks for a plain (not TLS) connection to its host and port.
+pub proof fn lemma_transducer_24()
+    ensures
+        start(url_a(None)).1 == seq![Action::Connect { host: seq![0x61u8], port: 80nat, tls: false }],
+{
+    assert(start(url_a(None)).1 == seq![Action::Connect { host: seq![0x61u8], port: 80nat, tls: false }]) by (compute_only);
+}
+
+/// A URL the client has no request for (https: until TLS is built) ends the fetch as NotFetched before anything is asked for.
+pub proof fn lemma_transducer_25()
+    ensures
+        outcome(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..url_a(None) }).1) == 1001nat,
+{
+    assert(outcome(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..url_a(None) }).1) == 1001nat) by (compute_only);
+}
+
+/// RFC 9112 §6.3: an incomplete response head leaves the octets received waiting for more.
+pub proof fn lemma_transducer_26()
+    ensures
+        ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30])).0.phase == (Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30] }),
+{
+    assert(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30])).0.phase == (Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30] })) by (compute_only);
+}
+
+/// After Done or Fail every input is ignored.
+pub proof fn lemma_transducer_27()
+    ensures
+        ex_step(None, 0nat, Phase::Finished, Input::Bytes(seq![0x61u8])).1.len() == 0nat,
+{
+    assert(ex_step(None, 0nat, Phase::Finished, Input::Bytes(seq![0x61u8])).1.len() == 0nat) by (compute_only);
+}
+
 } // verus!

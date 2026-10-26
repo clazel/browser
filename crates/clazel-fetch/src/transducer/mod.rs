@@ -12,7 +12,8 @@
 //! - [`real`]: the parameters joined to the real parsers.
 //! - [`examples`]: concrete fetches evaluated on the spec.
 //! - [`independent`]: Fetch's HTTP-redirect fetch and cookie steps,
-//!   transcribed separately and proven to agree with the spec step by step.
+//!   transcribed separately and proven to agree with the spec step by step
+//!   and over whole runs.
 
 pub mod contract;
 pub mod examples;
