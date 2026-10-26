@@ -1,8 +1,12 @@
-//! Service identity matching for the DNS-ID and IP-ID forms in RFC 9525.
+//! RFC 5280 X.509 envelope, TBS, extension, time, public-key, and selected
+//! constraint decoders, plus RFC 9525 DNS-ID/IP-ID matching and partial
+//! server-leaf checks.
 //!
-//! This crate does not decode certificates or validate paths. The caller
-//! supplies already-extracted subjectAltName values and a canonical
-//! reference identifier from the URL layer.
+//! `PartialLeafChecks` deliberately does not mean a certificate is valid.
+//! Signature verification, TBS/outer signature-algorithm agreement, path
+//! building and validation, trust, revocation, name constraints, and remaining
+//! policy checks still require a later verifier. DNS references are supplied
+//! as canonical ASCII from the URL layer. Common Name fallback is not used.
 
 pub mod certificate;
 pub mod certificates;

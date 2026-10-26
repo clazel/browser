@@ -11,6 +11,12 @@
 //!   complete left-most label (§6.3). Empty labels are rejected.
 //! - The caller supplies IP addresses as exactly 4 or 16 octets. Textual IP
 //!   parsing and host classification are outside this matching function.
+//! - A wildcard suffix is rejected when it is a Public Suffix List public
+//!   suffix. The repository's complete table (ICANN and PRIVATE sections) is
+//!   used after lower-casing the ASCII suffix. This prevents wildcards such
+//!   as `*.co.uk`, `*.com`, and `*.github.io` from crossing a registry or
+//!   hosted-service boundary while allowing a registrable suffix such as
+//!   `*.example.co.uk`. PSL exception rules follow the existing PSL spec.
 //! - This slice includes only DNS-ID and IP-ID. SRV-ID, URI-ID, Common Name
 //!   fallback, DER decoding, certificate path validation and trust are out
 //!   of scope.
@@ -96,6 +102,19 @@ pub open spec fn no_wildcard_from(name: Seq<u8>, i: int) -> bool
     else { name[i] != b'*' && no_wildcard_from(name, i + 1) }
 }
 
+/// Convert a valid DNS suffix to the lower-case code points consumed by PSL.
+pub open spec fn psl_domain_from_ascii(name: Seq<u8>) -> Seq<u32> {
+    name.map_values(|byte: u8| if byte >= b'A' && byte <= b'Z' {
+        byte as u32 + 32
+    } else { byte as u32 })
+}
+
+/// True when a DNS wildcard suffix is itself a PSL public suffix.
+pub open spec fn wildcard_suffix_is_public_suffix(name: Seq<u8>) -> bool {
+    clazel_psl::spec::is_public_suffix(
+        clazel_psl::table::psl_rules(), psl_domain_from_ascii(name))
+}
+
 /// RFC 9525 §6.3 label matching; the executable algorithm and proof are
 /// supplied in the implementation commit.
 pub open spec fn dns_match(reference: Seq<u8>, presented: Seq<u8>) -> bool {
@@ -105,6 +124,7 @@ pub open spec fn dns_match(reference: Seq<u8>, presented: Seq<u8>) -> bool {
     } else if presented.len() > 2 && presented[0] == b'*' && presented[1] == b'.'
         && dns_name_shape(presented.subrange(2, presented.len() as int))
         && no_wildcard_from(presented, 2)
+        && !wildcard_suffix_is_public_suffix(presented.subrange(2, presented.len() as int))
     {
         let dot = first_dot(reference, 0);
         dot > 0 && dot < reference.len()

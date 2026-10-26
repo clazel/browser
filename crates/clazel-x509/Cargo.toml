@@ -8,6 +8,7 @@ description = "RFC 9525 service identity matching for X.509 subjectAltName ident
 
 [dependencies]
 clazel-der = { path = "../clazel-der" }
+clazel-psl = { path = "../clazel-psl" }
 vstd = "=0.0.0-2026-10-04-0306"
 
 [package.metadata.clazel]
