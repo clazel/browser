@@ -2355,8 +2355,8 @@
     {
       "id": "dispatcher-peer-update-epoch-construction-failure",
       "file": "src/connection/dispatcher_spec.rs",
-      "find": "// A derived secret that cannot form a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => failed(),",
-      "replace": "// A derived secret that cannot form a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => s,",
+      "find": "// A derived secret that cannot form a new epoch must not leave a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => failed(),",
+      "replace": "// A derived secret that cannot form a new epoch must not leave a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => s,",
       "expect": "killed",
       "reason": "If a derived peer traffic secret cannot construct its receive epoch, the dispatcher model must not retain the old receiver with the new secret.",
       "module": "connection::dispatcher_lemmas",
@@ -2378,6 +2378,76 @@
         "file": "src/connection/dispatcher_certificates.rs",
         "lemma": "super::dispatcher_lemmas::lemma_key_update_epoch_start_failure_is_terminal()",
         "witness": "super::dispatcher_spec::acknowledge_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::sample_bad_update_state(), seq![7u8]) != super::dispatcher_spec::failed()"
+      }
+    },
+    {
+      "id": "auth-initial-server-certificate-empty-context",
+      "file": "src/auth/spec.rs",
+      "find": "pub open spec fn initial_certificate_context_valid(context: Seq<u8>) -> bool {\n    context.len() == 0",
+      "replace": "pub open spec fn initial_certificate_context_valid(context: Seq<u8>) -> bool {\n    true",
+      "expect": "killed",
+      "reason": "RFC 8446 §4.4.2 requires the server Certificate context to be empty during initial server authentication; nonempty client contexts remain supported by the generic parser.",
+      "module": "auth::mutation_certificates",
+      "certificate": {
+        "file": "src/auth/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_nonempty_server_certificate_context_is_rejected()",
+        "witness": "initial_certificate_context_valid(seq![7u8])"
+      }
+    },
+    {
+      "id": "hello-classify-absent-legacy-extension-field",
+      "file": "src/hello/spec.rs",
+      "find": "else if crate::spec::legacy_server_hello_without_supported_versions(body) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "RFC 5246 §7.4.1.3 allows the legacy ServerHello extension field to be absent; a complete pre-TLS-1.3 response maps to protocol_version, while the strict generic TLS 1.3 parser would report decode_error.",
+      "module": "hello::mutation_certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_absent_legacy_extension_field_uses_protocol_version()",
+        "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_without_extension_field()) == Err(crate::spec::DECODE_ERROR)"
+      }
+    },
+    {
+      "id": "hello-legacy-server-hello-protocol-version",
+      "file": "src/hello/spec.rs",
+      "find": "None => Some(crate::spec::PROTOCOL_VERSION),",
+      "replace": "None => Some(crate::spec::MISSING_EXTENSION),",
+      "expect": "killed",
+      "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version.",
+      "module": "hello::mutation_certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_legacy_server_hello_uses_protocol_version()",
+        "witness": "parameters(crate::spec::ServerHello { legacy_version: 0x0303, random: Seq::empty(), session_id_echo: Seq::empty(), cipher_suite: 0x002f, compression: 0, extensions: Seq::empty() }, Seq::empty()) == Some(crate::spec::MISSING_EXTENSION)"
+      }
+    },
+    {
+      "id": "connection-alert-level-ignored-for-user-canceled",
+      "file": "src/spec.rs",
+      "find": "a.description == CLOSE_NOTIFY || a.description == USER_CANCELED",
+      "replace": "a.description == CLOSE_NOTIFY || (a.description == USER_CANCELED && a.level == LEVEL_WARNING)",
+      "expect": "killed",
+      "reason": "RFC 8446 §6 says TLS 1.3 receivers MUST ignore the alert level; user_canceled is recognized by description at either level.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "crate::examples::lemma_alert_closure()",
+        "witness": "!crate::spec::alert_is_closure(crate::spec::Alert { level: 2, description: crate::spec::USER_CANCELED })"
+      }
+    },
+    {
+      "id": "connection-peer-close-preserves-local-write-direction",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "else { State { peer_write_closed: true, ..s } }",
+      "replace": "else { closed() }",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.1 says receiving close_notify closes only the peer's write direction; it must not discard local sending state.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_peer_close_is_directional()",
+        "witness": "super::dispatcher_spec::receive_close_notify(super::dispatcher_certificates::sample_ready_state()).application_sender != super::dispatcher_certificates::sample_ready_state().application_sender"
       }
     }
   ]
