@@ -118,6 +118,7 @@ dependencies = [
  "clazel-cookie",
  "clazel-encoding",
  "clazel-fetch",
+ "clazel-http",
  "clazel-ipc",
  "clazel-origin",
  "clazel-psl",

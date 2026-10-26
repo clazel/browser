@@ -23,6 +23,9 @@ clazel-url = { path = "../clazel-url" }
 # The transducer the kernel steps for a navigation (item 3.7): its spec
 # `start` and `step`, and the real parsers it is joined to.
 clazel-fetch = { path = "../clazel-fetch" }
+# The response the transducer finishes with (`Action::Done`), which the
+# mutation lemmas build.
+clazel-http = { path = "../clazel-http" }
 # A navigation URL arrives as UTF-8 text in a message (item 2.3) and is
 # decoded to code points for the URL functions.
 clazel-encoding = { path = "../clazel-encoding" }
