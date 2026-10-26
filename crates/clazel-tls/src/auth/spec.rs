@@ -126,7 +126,7 @@ pub struct State {
 }
 /// Inputs from the record layer and I/O driver.
 pub enum Input {
-    /// A complete handshake body and its authenticated record-layer type.
+    /// A complete handshake body and its HandshakeType, after record-layer authentication.
     Handshake(u8, Seq<u8>),
     /// Application plaintext from authenticated record decryption.
     Application(Seq<u8>),
@@ -245,6 +245,10 @@ pub open spec fn on_extensions(c: crate::schedule::spec::Crypto, s: State, body:
     else if !extensions_offered(es, s.config.extensions) { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }
     else { record(c, s, crate::transcript::spec::Kind::EncryptedExtensions, body, Phase::CertificateOrRequest) }
 }
+/// RFC 8446 §4.3.2: an initial-handshake CertificateRequest uses empty context.
+pub open spec fn initial_request_context_valid(context: Seq<u8>) -> bool {
+    context.len() == 0
+}
 /// §4.3.2: one initial CertificateRequest, with empty context and signature_algorithms.
 pub open spec fn on_request(c: crate::schedule::spec::Crypto, s: State, body: Seq<u8>, empty_context: bool, has_algorithms: bool) -> (State, Action) {
     if s.phase != Phase::CertificateOrRequest { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
@@ -280,7 +284,7 @@ pub open spec fn on_verify(c: crate::schedule::spec::Crypto, v: Verification, s:
 pub open spec fn dispatch(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, message: crate::spec::HsMsg) -> (State, Action) {
     match message {
         crate::spec::HsMsg::EncryptedExtensions(es) => on_extensions(c, s, body, es),
-        crate::spec::HsMsg::CertificateRequest(request) => on_request(c, s, body, request.context.len() == 0, crate::spec::has_ext(request.extensions, 13)),
+        crate::spec::HsMsg::CertificateRequest(request) => on_request(c, s, body, initial_request_context_valid(request.context), crate::spec::has_ext(request.extensions, 13)),
         crate::spec::HsMsg::Certificate(certificate) => on_certificate(c, v, s, body, certificate.entries.len() == 0),
         crate::spec::HsMsg::CertificateVerify(cv) => on_verify(c, v, s, body, cv.algorithm, cv.signature),
         crate::spec::HsMsg::Finished(verify_data) => {

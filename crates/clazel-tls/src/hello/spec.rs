@@ -47,10 +47,11 @@ pub open spec fn offered(es: Seq<crate::spec::Ext>, retry: bool) -> bool
         || (retry && es[0].etype == 44)) && offered(es.skip(1), retry))
 }
 /// §4.2.1 selected_version first; §4.1.3 session echo, cipher and compression.
-/// §4.2.1 explicitly requires clients to ignore legacy_version here.
+/// RFC 8446 Appendix D.1: no selected-version extension identifies a legacy
+/// server response, which this TLS 1.3-only client rejects with protocol_version.
 pub open spec fn parameters(sh: crate::spec::ServerHello, session_id: Seq<u8>) -> Option<u8> {
     match extension(sh.extensions, 43) {
-        None => Some(109),
+        None => Some(crate::spec::PROTOCOL_VERSION),
         Some(data) => match crate::spec::read_supported_versions_sh(data) {
             None => Some(50),
             Some(version) => if version != 0x0304 { Some(47) }

@@ -1595,10 +1595,8 @@ pub open spec fn all_bodies_ok(es: Seq<Ext>, m: MsgKind) -> bool
 ///    ([`extension_allowed`]);
 /// 3. an extension this crate reads whose `extension_data` does not have
 ///    its structure ([`ext_body_ok`]): `decode_error` (§6);
-/// 4. §4.1.3: "All TLS 1.3 ServerHello messages MUST contain the
-///    "supported_versions" extension", and §4.1.4: "The server's
-///    extensions MUST contain "supported_versions"" for a
-///    HelloRetryRequest (`missing_extension`, §6.2).
+/// 4. Protocol-version negotiation is checked by the hello layer, which can
+///    return `protocol_version` for a legacy ServerHello without extensions.
 pub open spec fn check_extensions(es: Seq<Ext>, m: MsgKind) -> Option<ErrKind> {
     if !exts_unique(es) {
         Some(ErrKind::DuplicateExtension)
@@ -1606,8 +1604,6 @@ pub open spec fn check_extensions(es: Seq<Ext>, m: MsgKind) -> Option<ErrKind> {
         Some(ErrKind::ExtensionNotAllowed)
     } else if !all_bodies_ok(es, m) {
         Some(ErrKind::Decode)
-    } else if (m is Sh || m is Hrr) && !has_ext(es, EXT_SUPPORTED_VERSIONS) {
-        Some(ErrKind::MissingExtension)
     } else {
         None
     }
@@ -1834,7 +1830,16 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                     match read_uint(r4, 1) {
                                         None => None,
                                         Some((comp, r5)) => {
-                                            match read_exts(r5, 6, 65535) {
+                                            if r5.len() == 0 {
+                                                Some(ServerHello {
+                                                    legacy_version: ver as u16,
+                                                    random,
+                                                    session_id_echo: sid,
+                                                    cipher_suite: cs as u16,
+                                                    compression: comp as u8,
+                                                    extensions: Seq::empty(),
+                                                })
+                                            } else { match read_exts(r5, 6, 65535) {
                                                 None => None,
                                                 Some((exts, r6)) => {
                                                     if r6.len() != 0 {
@@ -1852,7 +1857,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                                         )
                                                     }
                                                 },
-                                            }
+                                            } }
                                         },
                                     }
                                 },
