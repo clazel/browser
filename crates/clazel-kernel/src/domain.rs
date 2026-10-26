@@ -121,11 +121,17 @@ pub open spec fn obs(rules: Seq<clazel_psl::spec::Rule>, s: State, d: Domain) ->
 }
 
 /// The domain a `FromRenderer(id, _)` event belongs to in state `s`: that
-/// of the renderer `id`. Other events, and an id that names no renderer,
-/// belong to none.
+/// of the renderer `id`; a `Fetched { tab, _ }` event (item 3.7), that of the
+/// renderer of the tab, whose lock the fetch was started under (as a frame
+/// is attributed to its socket's renderer). Other events, an id that names no
+/// renderer and a tab that is not open belong to none.
 pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: Event) -> Option<Domain> {
     match e {
         Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
+            None => None,
+        },
+        Event::Fetched { tab, .. } => match find_by_tab(s.renderers, tab, 0) {
             Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
             None => None,
         },
@@ -134,8 +140,10 @@ pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: E
 }
 
 /// The declassified part of a `FromRenderer(id, bytes)` event in state `s`:
-/// `NavigateTab(its tab, resolved URL, no script)` if the frame decodes to a
-/// `Navigate` that decodes and resolves, and nothing otherwise.
+/// `NavigateTab(its tab, resolved URL)` if the frame decodes to a
+/// `Navigate` that decodes and resolves, and nothing otherwise. (A
+/// `Fetched` event has no declassified part of its own: it is kept whole for
+/// every observer, see [`ipurge_event`].)
 pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event> {
     match e {
         Event::FromRenderer { id, bytes } => match find_by_id(s.renderers, id, 0) {
@@ -147,7 +155,7 @@ pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event>
                         None => None,
                         Some(relative) => match (urls.resolve)(r.url, relative) {
                             None => None,
-                            Some(resolved) => Some(Event::NavigateTab { tab: r.tab, url: resolved, script: no_script() }),
+                            Some(resolved) => Some(Event::NavigateTab { tab: r.tab, url: resolved }),
                         },
                     },
                     _ => None,
@@ -161,6 +169,16 @@ pub open spec fn declassified(urls: UrlFns, s: State, e: Event) -> Option<Event>
 /// What the purge leaves of event `e` for observer `d`, in state `s`: the
 /// event itself if it is not a renderer's or belongs to `d`, its
 /// declassified part if it belongs to another domain.
+///
+/// A `Fetched` event is kept for every observer, whichever domain it is
+/// attributed to (item 3.7). What it carries came from the network, not from
+/// the renderer of its tab: that renderer contributed only the URL it
+/// navigated to, which is the declassified part of its `Navigate` (a
+/// `NavigateTab`, kept), and the kernel's decision to follow a redirect to
+/// anywhere is the user's navigation, as item 2.11 treats a `Navigate`. So a
+/// redirect from another domain's tab into `d`'s domain, and the cookies the
+/// response chain sets under `d`'s root, are things `d` is allowed to see
+/// depend on; what the other domain's renderer did otherwise is not.
 pub open spec fn ipurge_event(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
@@ -180,7 +198,7 @@ pub open spec fn ipurge_event(
 /// `ipurge(t, D)` from state `s`: the trace `t` with every event of another
 /// domain replaced by its declassified part, the states being those of `t`
 /// itself.
-pub open spec fn ipurge(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, d: Domain, t: Seq<Event>) -> Seq<Event>
+pub open spec fn ipurge(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, d: Domain, t: Seq<Event>) -> Seq<Event>
     decreases t.len(),
 {
     if t.len() == 0 {
@@ -191,35 +209,39 @@ pub open spec fn ipurge(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: Sta
             Some(pe) => seq![pe],
             None => seq![],
         };
-        kept + ipurge(rules, urls, step(rules, urls, s, e).0, d, t.drop_first())
+        kept + ipurge(rules, urls, fetch, step(rules, urls, fetch, s, e).0, d, t.drop_first())
     }
 }
 
 /// `purge(t, D)`: [`ipurge`] from the initial state.
-pub open spec fn purge(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: Domain, t: Seq<Event>) -> Seq<Event> {
-    ipurge(rules, urls, init_state(), d, t)
+pub open spec fn purge(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: Domain, t: Seq<Event>) -> Seq<Event> {
+    ipurge(rules, urls, fetch, init_state(), d, t)
 }
 
 /// The renderer id an output is addressed to. (Which domain that renderer is
 /// in is read in the state after the step for a `Spawn`, and before it for a
-/// `Kill`; stating that is item 2.11's.)
+/// `Kill`; stating that is item 2.11's.) A `Fetch` is addressed to no
+/// renderer (`noninterference::addressed_to` is false for it); its tab is
+/// returned only to make the function total.
 pub open spec fn output_id(o: Output) -> nat {
     match o {
         Output::ToRenderer { id, .. } => id,
         Output::Spawn { id, .. } => id,
         Output::Kill { id } => id,
+        Output::Fetch { tab, .. } => tab,
     }
 }
 
 
 /// A renderer's `Navigate` that the kernel accepts does exactly what its
 /// declassified part, a `NavigateTab`, does: the same state and the same
-/// outputs. (`lemma_navigate_declassify` of item 2.11 builds on this.) The
+/// outputs (it starts the navigation and asks for the fetch). (`lemma_navigate_declassify` of item 2.11 builds on this.) The
 /// event is accepted when the resolved URL has a lock; otherwise the kernel
 /// only replies with an error to the sender.
 pub proof fn lemma_declassified_is_navigate_tab(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
+    fetch: FetchFns,
     s: State,
     e: Event,
     d: Event,
@@ -229,7 +251,7 @@ pub proof fn lemma_declassified_is_navigate_tab(
         d is NavigateTab,
         lock_of_url(urls, d->NavigateTab_url, s.next_id) is Some,
     ensures
-        step(rules, urls, s, e) == step(rules, urls, s, d),
+        step(rules, urls, fetch, s, e) == step(rules, urls, fetch, s, d),
 {
     let id = e->FromRenderer_id;
     let i = find_by_id(s.renderers, id, 0)->Some_0;

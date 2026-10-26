@@ -18,6 +18,7 @@ use clazel_ipc::{
     frame::codec::payload_length,
     message::codec::{Msg, decode_framed},
 };
+use clazel_kernel::exec::fetch::NetOutcomeRecord;
 use clazel_kernel::exec::real_urls::step_real;
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
 
@@ -32,6 +33,8 @@ pub struct Host {
     /// The kernel's state. Tests preload the cookie jar (the HTTP layer that
     /// would fill it is Phase 3); nothing else writes it but `step_real`.
     pub state: StateRecord,
+    /// The user's script for a tab's navigation: the stand-in network's page.
+    scripts: HashMap<u64, Vec<u8>>,
     /// A fixed kernel clock (seconds since 1601) for tests; `None`: wall clock.
     pub clock: Option<u64>,
     table: HashMap<u64, (UnixStream, Child)>,
@@ -109,6 +112,7 @@ impl Host {
         let (tx, rx) = channel();
         Host {
             state: init_record(),
+            scripts: HashMap::new(),
             clock: None,
             table: HashMap::new(),
             tx,
@@ -144,6 +148,7 @@ impl Host {
         let time = self.clock.unwrap_or_else(now);
         self.step(EventRecord::Tick { time });
         let mut dead = Vec::new();
+        let mut fetches = Vec::new();
         for output in self.step(e) {
             match output {
                 OutputRecord::Spawn { id } => {
@@ -158,11 +163,27 @@ impl Host {
                     }
                 }
                 OutputRecord::Kill { id } => self.reap(id, "killed by the kernel", Duration::ZERO),
+                OutputRecord::Fetch { tab, url } => fetches.push((tab, url)),
             }
         }
         for (id, why) in dead {
             self.exit(id, why);
         }
+        for (tab, url) in fetches {
+            self.stand_in_network(tab, url);
+        }
+    }
+
+    /// Answer a `Fetch` with the user's script (empty for a `Navigate`).
+    fn stand_in_network(&mut self, tab: u64, url: Vec<u32>) {
+        let net = self.scripts.remove(&tab).unwrap_or_default();
+        let shown: String = url.iter().filter_map(|c| char::from_u32(*c)).collect();
+        self.say(format!(
+            "network (stand-in): tab {tab} <- {shown:?}, {} bytes",
+            net.len()
+        ));
+        let outcome = NetOutcomeRecord { url, net };
+        self.event(EventRecord::Fetched { tab, outcome });
     }
 
     /// The user opens a tab at `url`; the script's format is `clazel-renderer`'s.
@@ -174,13 +195,12 @@ impl Host {
         self.event(EventRecord::OpenTab { url, script });
     }
 
-    /// The user navigates tab `tab` (the id of the renderer that opened it).
+    /// The user navigates tab `tab`; with no network, the page is `script`.
     pub fn navigate_tab(&mut self, tab: u64, url: &str, script: &str) {
-        let (url, script) = (
-            url.chars().map(u32::from).collect(),
-            script.as_bytes().to_vec(),
-        );
-        self.event(EventRecord::NavigateTab { tab, url, script });
+        let url = url.chars().map(u32::from).collect();
+        self.scripts.insert(tab, script.as_bytes().to_vec());
+        self.event(EventRecord::NavigateTab { tab, url });
+        self.scripts.remove(&tab);
     }
 
     fn spawn(&mut self, id: u64) -> std::io::Result<()> {

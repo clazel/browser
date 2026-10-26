@@ -6,6 +6,8 @@
 //!   [`crate::spec::UrlFns`].
 //! - [`real_urls`]: [`real_urls::RealUrls`], the URL functions with the real
 //!   parser (item 2.13), and [`real_urls::step_real`], `step` with them.
+//! - [`fetch`]: [`fetch::FetchFnsExec`], the exec counterpart of
+//!   [`crate::spec::FetchFns`] (item 3.7), and the stand-in [`fetch::StubFetch`].
 //! - [`locks`]: locks, cookie-averse documents and cookie requests.
 //! - [`frames`]: the frames sent to renderers.
 //! - [`storage`]: Web Storage over the exec buckets.
@@ -15,6 +17,7 @@
 /// use (the one spelling of that import the lint check allows).
 pub use crate::spec;
 
+pub mod fetch;
 pub mod frames;
 pub mod locks;
 pub mod real_urls;

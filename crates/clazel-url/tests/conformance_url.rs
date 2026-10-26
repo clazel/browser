@@ -142,12 +142,19 @@ fn differences(got: &Getters, e: &Expected) -> Vec<String> {
         .collect()
 }
 
+/// The WPT rows a run checks: every row, or under Miri every 4th (parsing
+/// each URL there is slow, and the native run checks them all).
+fn rows() -> impl Iterator<Item = &'static Case> {
+    URLTESTDATA.iter().step_by(if cfg!(miri) { 4 } else { 1 })
+}
+
 #[test]
 fn wpt_urltestdata() {
     let mut failures = Vec::new();
     let mut passed = 0usize;
     let mut expected_failures = 0usize;
-    for case in URLTESTDATA {
+    let checked = rows().count();
+    for case in rows() {
         let got = new_url(case.input, case.base);
         let problem = match (&got, &case.expected) {
             (None, None) => None,
@@ -180,12 +187,10 @@ fn wpt_urltestdata() {
     // Summary line for the README table (unit: a row); format in
     // xtask/src/conformance.rs.
     println!(
-        "clazel-conformance: suite=\"WPT url/ urltestdata.json\" pass={passed} xfail={expected_failures} fail={} total={}",
-        URLTESTDATA
-            .len()
+        "clazel-conformance: suite=\"WPT url/ urltestdata.json\" pass={passed} xfail={expected_failures} fail={} total={checked}",
+        checked
             .saturating_sub(passed)
             .saturating_sub(expected_failures),
-        URLTESTDATA.len()
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
@@ -216,13 +221,13 @@ fn reparses_to_itself(input: &str, base: Option<&str>) -> Result<(), String> {
 #[test]
 fn idempotence() {
     let mut failures = Vec::new();
-    for case in URLTESTDATA {
+    for case in rows() {
         if let Err(e) = reparses_to_itself(case.input, case.base) {
             failures.push(e);
         }
     }
     let mut rng = Lcg(11);
-    for _ in 0..samples(200_000, 300) {
+    for _ in 0..samples(200_000, 75) {
         let input = random_input(&mut rng);
         let n = u64::try_from(BASES.len()).unwrap_or(1);
         let base = BASES.get(rng.below(n)).copied().flatten();
@@ -614,7 +619,7 @@ fn differential_rust_url() {
     let mut explained: std::collections::BTreeMap<Divergence, usize> =
         std::collections::BTreeMap::new();
     let mut agree = 0usize;
-    for _ in 0..samples(200_000, 300) {
+    for _ in 0..samples(200_000, 75) {
         let input = random_input(&mut rng);
         let n = u64::try_from(BASES.len()).unwrap_or(1);
         let base = BASES.get(rng.below(n)).copied().flatten();
