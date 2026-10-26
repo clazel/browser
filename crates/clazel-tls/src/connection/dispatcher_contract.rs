@@ -61,15 +61,7 @@ pub open spec fn feed_ensures(before: super::dispatcher_spec::State, input: Seq<
     super::dispatcher_spec::wf(before) && super::dispatcher_spec::wf(after)
         && consumed <= input.len()
         && (before.mode == super::dispatcher_spec::Mode::AwaitClientFlight ==> consumed == 0)
-        && match action {
-            super::dispatcher_spec::Action::Send(wire) => after.mode == super::dispatcher_spec::Mode::AwaitClientFlight
-                && after.pending_flight == wire,
-            super::dispatcher_spec::Action::Ready => after.mode == super::dispatcher_spec::Mode::Ready,
-            super::dispatcher_spec::Action::Deliver(_) => after.mode == super::dispatcher_spec::Mode::Ready,
-            super::dispatcher_spec::Action::Fail(_) => terminal_ensures(after, super::dispatcher_spec::Mode::Failed),
-            super::dispatcher_spec::Action::Close => terminal_ensures(after, super::dispatcher_spec::Mode::Closed),
-            super::dispatcher_spec::Action::None | super::dispatcher_spec::Action::Ignored => true,
-        }
+        && super::dispatcher_spec::action_refines(action, after)
 }
 
 /// A protected client flight remains pending until the exact wire bytes are acknowledged.
@@ -123,7 +115,8 @@ pub open spec fn ready_after_ack_ensures(c: crate::schedule::spec::Crypto, v: cr
 pub open spec fn acknowledgement_ensures(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
     before: super::dispatcher_spec::State, acknowledgement: Seq<u8>, action: super::dispatcher_spec::Action,
     after: super::dispatcher_spec::State) -> bool {
-    if acknowledgement == before.pending_flight {
+    if before.mode == super::dispatcher_spec::Mode::AwaitClientFlight
+        && acknowledgement == before.pending_flight {
         ready_after_ack_ensures(c, v, before, acknowledgement, after) && action is Ready
     } else {
         terminal_ensures(after, super::dispatcher_spec::Mode::Failed) && action is Fail

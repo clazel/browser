@@ -110,22 +110,33 @@ pub open spec fn no_live_secrets(s: State) -> bool {
         && s.application_sender is None && s.application_receiver is None && s.master.len() == 0
 }
 
+/// Outward effects agree with the state transition that makes them safe.
+pub open spec fn action_refines(action: Action, after: State) -> bool {
+    match action {
+        Action::Send(wire) => after.mode == Mode::AwaitClientFlight && after.pending_flight == wire,
+        Action::Ready => after.mode == Mode::Ready,
+        Action::Deliver(_) => after.mode == Mode::Ready,
+        Action::Fail(_) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
+        Action::Close => super::dispatcher_contract::terminal_ensures(after, Mode::Closed),
+        Action::None | Action::Ignored => true,
+    }
+}
+
 /// Lifecycle, bounds, and key-phase invariants for the initial connection.
 pub open spec fn wf(s: State) -> bool {
-    s.framing.len() <= super::framing_spec::MAX_BUFFER
-        && s.reassembly.buf.len() < crate::spec::HANDSHAKE_HEADER + crate::spec::MAX_HANDSHAKE_BODY
-        && match s.mode {
+    // Runtime `resources_wf` carries the concrete Buffer/Reassembler bounds.
+    match s.mode {
             Mode::Handshake => s.auth is Some && s.handshake_sender is Some
                 && s.handshake_receiver is Some && s.application_sender is None
                 && s.application_receiver is None && s.master.len() == 32
                 && s.pending_flight.len() == 0
-                && match s.auth { Some(a) => a.phase != crate::auth::spec::Phase::SendFinished,
-                    None => false },
+                && s.auth is Some,
             Mode::AwaitClientFlight => s.auth is Some && s.handshake_sender is Some
                 && s.handshake_receiver is Some && s.application_sender is None
                 && s.application_receiver is None && s.master.len() == 32
                 && s.pending_flight.len() > 0 && !s.ccs_pending
                 && crate::spec::at_message_boundary(s.reassembly)
+                && s.framing.len() == 0
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::SendFinished,
                     None => false },
             Mode::Ready => s.auth is Some && s.handshake_sender is None
