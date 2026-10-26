@@ -204,7 +204,7 @@ impl<C: Crypto> Bootstrap<C> {
         if messages.is_empty() {
             return Action::None;
         }
-        if messages.len() != 1 || !self.reassembler.at_message_boundary() || !self.framer.is_empty_mode(false) {
+        if messages.len() != 1 || !self.reassembler.at_message_boundary() || !self.framer.is_empty_mode(Ghost(false)) {
             return self.fail(crate::spec::UNEXPECTED_MESSAGE);
         }
         let message = match messages.first() {
@@ -337,10 +337,7 @@ impl<C: Crypto> Bootstrap<C> {
         let compatibility = !config.session_id.is_empty();
         let started = Hello::start(config);
         let ghost started_view = super::client::start_view(started);
-        let (hello, flight) = match started {
-            Ok(pair) => pair,
-            Err(alert) => return Err(alert),
-        };
+        let (hello, flight) = started?;
         proof {
             assert(started_view == Ok((hello@, flight@)));
             assert(super::client_spec::config_ok(config_view));

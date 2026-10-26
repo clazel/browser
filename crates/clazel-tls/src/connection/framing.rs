@@ -79,7 +79,7 @@ impl Buffer {
     }
 
     /// Whether this mode's byte prefix is empty.
-    pub fn is_empty_mode(&self, protected: bool) -> (out: bool)
+    pub fn is_empty_mode(&self, Ghost(protected): Ghost<bool>) -> (out: bool)
         requires self.protected_mode() == protected, self.wf_mode(protected),
         ensures super::framing_contract::is_empty_mode_ensures(protected, self@, out),
     {
