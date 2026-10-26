@@ -159,6 +159,15 @@ fn parse_key_update_wire(message: &[u8]) -> Result<u8, u8> {
     }
 }
 
+fn is_discarded_ticket(message: &[u8]) -> (out: bool)
+    ensures out == super::dispatcher_spec::valid_discarded_ticket(message@),
+{
+    matches!(
+        crate::handshake::parse_handshake(message, crate::schedule::spec::HASH_LEN),
+        Ok(crate::types::HsMsg::NewSessionTicket(_))
+    )
+}
+
 impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: KeyedAead {
     /// The lifecycle and resource invariant exposed to callers.
     pub closed spec fn wf(&self) -> bool { super::dispatcher_spec::wf(self.state()) }
@@ -493,6 +502,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             old(self)@.mode == super::dispatcher_spec::Mode::Ready,
         ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
+            super::dispatcher_contract::discarded_ticket_ensures(old(self)@, crate::types::views(messages@), out@, final(self)@),
     {
         if messages.is_empty() { return Action::None; }
         if messages.len() != 1 || !self.reassembler.at_message_boundary() {
@@ -502,10 +512,18 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             Some(message) => message,
             None => return self.fail(crate::spec::DECODE_ERROR),
         };
-        match parse_key_update_wire(message.as_slice()) {
-            Ok(request) => if request <= 1 { self.receive_key_update(request) }
-                else { self.fail(crate::spec::ILLEGAL_PARAMETER) },
-            Err(alert) => self.fail(alert),
+        if is_discarded_ticket(message.as_slice()) {
+            proof {
+                assert(super::dispatcher_spec::valid_discarded_ticket(message@));
+                assert(self@ == old(self)@);
+            }
+            Action::None
+        } else {
+            match parse_key_update_wire(message.as_slice()) {
+                Ok(request) => if request <= 1 { self.receive_key_update(request) }
+                    else { self.fail(crate::spec::ILLEGAL_PARAMETER) },
+                Err(alert) => self.fail(alert),
+            }
         }
     }
 

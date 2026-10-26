@@ -1139,15 +1139,20 @@ and authenticates handshake messages, requires server Finished to end the
 record/message flight, protects the exact client flight, and waits for its send
 acknowledgement before installing application epochs from Auth's captured
 checkpoint. Fatal record/Auth errors drop both directions and partial state;
-application data reaches Auth only in Ready. Focused Verus verification of
-`connection::exec` passes (22 verified, 0 errors); four deterministic-provider
-dispatcher tests pass locally and under Miri, and strict clippy passes. The providers in those tests
-are not production crypto or certificate validation.
+application data reaches Auth only in Ready. Ready also handles KeyUpdate:
+receive epochs rotate independently, requested updates queue a KeyUpdate(0)
+response, and send epochs rotate only after exact I/O acknowledgement. It parses
+and discards valid NewSessionTicket messages because this profile does not offer
+PSK modes or cache tickets; malformed tickets retain parser alerts and duplicate
+extensions are rejected. Focused Verus verification of `connection::exec`
+passes (29 verified, 0 errors); ten deterministic-provider dispatcher tests
+pass locally and under Miri, and strict clippy passes. These providers are not
+production crypto or certificate validation.
 
-This does not add socket I/O, post-handshake KeyUpdate/ticket handling, or
-production AEAD. The no-wrap guarantee remains per owned epoch and the future
-transport still owns I/O/timeout policy. Full combined PR verification remains
-required and the crate stays tier 0.
+This does not add socket I/O, post-handshake client authentication, ticket
+caching/resumption, 0-RTT, or production AEAD. The no-wrap guarantee remains
+per owned epoch and the future transport still owns I/O/timeout policy. Full
+combined PR verification remains required and the crate stays tier 0.
 
 #### 3.5f The cryptography and the join (M)
 

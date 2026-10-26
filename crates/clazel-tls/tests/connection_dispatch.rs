@@ -18,7 +18,9 @@ use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::schedule::exec::finished;
 use clazel_tls::traffic::exec::{Decryptor, Encryptor};
 use clazel_tls::traffic::provider::{Factory, KeyedAead};
-use clazel_tls::types::{Certificate, CertificateEntry, CertificateVerify, Extension};
+use clazel_tls::types::{
+    Certificate, CertificateEntry, CertificateVerify, Extension, NewSessionTicket,
+};
 use sha2::{Digest, Sha256};
 
 const HOST: &[u8] = b"dispatch.example.test";
@@ -235,6 +237,19 @@ fn certificate_body() -> Vec<u8> {
 fn encrypted_extensions() -> Vec<u8> {
     let mut output = Vec::new();
     encode::write_encrypted_extensions(&mut output, &[] as &[Extension<'_>]);
+    output
+}
+
+fn ticket_body(lifetime: u32, extensions: Vec<Extension<'_>>) -> Vec<u8> {
+    let ticket = NewSessionTicket {
+        ticket_lifetime: lifetime,
+        ticket_age_add: 0x1234_5678,
+        ticket_nonce: &[0x01],
+        ticket: b"opaque ticket",
+        extensions,
+    };
+    let mut output = Vec::new();
+    encode::write_new_session_ticket(&mut output, &ticket);
     output
 }
 
@@ -796,5 +811,155 @@ fn fragmented_key_update_with_trailing_message_is_rejected() -> Result<(), Strin
     );
     assert_eq!(fixture.connection.mode(), Mode::Failed);
     assert_eq!(fixture.connection.feed(&second_record), (0, Action::None));
+    Ok(())
+}
+
+#[test]
+fn valid_new_session_tickets_are_discarded_without_resumption_state() -> Result<(), String> {
+    let mut fixture = ready_fixture()?;
+    let (_, server_secret) = application_secrets(&fixture);
+    let mut server = Encryptor::new(&fixture.crypto, &fixture.factory, &server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+
+    // With no PSK mode, this profile never caches or derives a resumption PSK.
+    // Zero and over-seven-day lifetimes are discarded along with usable tickets.
+    for lifetime in [0, 604_800, 604_801] {
+        let message = handshake(4, &ticket_body(lifetime, Vec::new()));
+        let record = server
+            .seal(22, &message, 0)
+            .map_err(|e| format!("ticket seal alert {e}"))?;
+        assert_eq!(
+            fixture.connection.feed(&record),
+            (record.len(), Action::None)
+        );
+        assert_eq!(fixture.connection.mode(), Mode::Ready);
+    }
+
+    let app = server
+        .seal(23, b"ticket did not replace application state", 0)
+        .map_err(|e| format!("server app seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&app),
+        (
+            app.len(),
+            Action::Deliver(b"ticket did not replace application state".to_vec())
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn fragmented_ticket_is_discarded_but_coalesced_or_duplicate_messages_fail() -> Result<(), String> {
+    let mut fixture = ready_fixture()?;
+    let (_, server_secret) = application_secrets(&fixture);
+    let mut server = Encryptor::new(&fixture.crypto, &fixture.factory, &server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+    let ticket = handshake(4, &ticket_body(3600, Vec::new()));
+    let split = ticket.len().saturating_div(2);
+    let prefix = ticket.get(..split).ok_or("short ticket")?;
+    let suffix = ticket.get(split..).ok_or("missing ticket suffix")?;
+    let prefix_record = server
+        .seal(22, prefix, 0)
+        .map_err(|e| format!("ticket prefix seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&prefix_record),
+        (prefix_record.len(), Action::None)
+    );
+    let suffix_record = server
+        .seal(22, suffix, 0)
+        .map_err(|e| format!("ticket suffix seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&suffix_record),
+        (suffix_record.len(), Action::None)
+    );
+
+    let mut coalesced = ticket.clone();
+    coalesced.extend_from_slice(&handshake(24, &[0]));
+    let coalesced_record = server
+        .seal(22, &coalesced, 0)
+        .map_err(|e| format!("coalesced post-handshake seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&coalesced_record),
+        (
+            coalesced_record.len(),
+            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
+        )
+    );
+    assert_eq!(fixture.connection.mode(), Mode::Failed);
+
+    let mut duplicate_fixture = ready_fixture()?;
+    let (_, duplicate_server_secret) = application_secrets(&duplicate_fixture);
+    let mut duplicate_server = Encryptor::new(
+        &duplicate_fixture.crypto,
+        &duplicate_fixture.factory,
+        &duplicate_server_secret,
+    )
+    .map_err(|e| format!("duplicate server epoch alert {e}"))?;
+    let early_data = [0, 0, 0, 1];
+    let duplicate_extensions = vec![
+        Extension {
+            etype: 42,
+            data: &early_data,
+        },
+        Extension {
+            etype: 42,
+            data: &early_data,
+        },
+    ];
+    let duplicate_ticket = handshake(4, &ticket_body(3600, duplicate_extensions));
+    let duplicate_record = duplicate_server
+        .seal(22, &duplicate_ticket, 0)
+        .map_err(|e| format!("duplicate ticket seal alert {e}"))?;
+    assert_eq!(
+        duplicate_fixture.connection.feed(&duplicate_record),
+        (
+            duplicate_record.len(),
+            Action::Fail(clazel_tls::spec::ILLEGAL_PARAMETER)
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_ticket_is_decode_error_and_unknown_ticket_extensions_are_discarded() -> Result<(), String>
+{
+    let mut fixture = ready_fixture()?;
+    let (_, server_secret) = application_secrets(&fixture);
+    let mut server = Encryptor::new(&fixture.crypto, &fixture.factory, &server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+
+    let empty_ticket_body = [0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 0];
+    let malformed = handshake(4, &empty_ticket_body);
+    let malformed_record = server
+        .seal(22, &malformed, 0)
+        .map_err(|e| format!("malformed ticket seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&malformed_record),
+        (
+            malformed_record.len(),
+            Action::Fail(clazel_tls::spec::DECODE_ERROR)
+        )
+    );
+
+    let mut unknown_fixture = ready_fixture()?;
+    let (_, unknown_server_secret) = application_secrets(&unknown_fixture);
+    let mut unknown_server = Encryptor::new(
+        &unknown_fixture.crypto,
+        &unknown_fixture.factory,
+        &unknown_server_secret,
+    )
+    .map_err(|e| format!("unknown-extension server epoch alert {e}"))?;
+    let unknown_extension = Extension {
+        etype: 0xFE42,
+        data: b"opaque",
+    };
+    let unknown_ticket = handshake(4, &ticket_body(3600, vec![unknown_extension]));
+    let unknown_record = unknown_server
+        .seal(22, &unknown_ticket, 0)
+        .map_err(|e| format!("unknown-extension ticket seal alert {e}"))?;
+    assert_eq!(
+        unknown_fixture.connection.feed(&unknown_record),
+        (unknown_record.len(), Action::None)
+    );
     Ok(())
 }

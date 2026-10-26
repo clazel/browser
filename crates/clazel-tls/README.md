@@ -157,9 +157,10 @@ what is proven today is stated below, not implied by the tier.
   is parameterized; its test AEAD is not production cryptography.
   The caller must assign distinct secrets to distinct directions/epochs;
   constructing another object with the same secret is outside the per-object
-  counter guarantee. The initial connection dispatcher owns handshake/application
-  phase changes, compatibility CCS and Auth's application gate. KeyUpdate,
-  post-handshake dispatch and socket I/O remain outside this slice.
+  counter guarantee. The connection dispatcher owns initial handshake/application
+  phase changes, compatibility CCS and Auth's application gate. It also handles
+  post-handshake KeyUpdate rotation with exact send acknowledgements, and parses
+  then discards NewSessionTicket messages for this non-resumption profile.
 
 - **Initial connection dispatcher** (§5.1–§5.2/§5.5/§7.3, `connection`):
   incrementally buffer one protected record, process exactly its prefix, and
@@ -170,16 +171,18 @@ what is proven today is stated below, not implied by the tier.
   await acknowledgement of the exact protected client flight; then install
   fresh application epochs from Auth's stored server-Finished checkpoint.
   Premature application records and malformed/authentication failures become
-  terminal, dropping live epochs and partial buffers. Four targeted tests pass
-  locally and under Miri with deterministic, input-sensitive test providers. They do not
-  prove production crypto, certificate path validation, timing behavior or
-  socket I/O.
+  terminal, dropping live epochs and partial buffers. Post-handshake KeyUpdate
+  preserves independent send/receive epochs; valid NewSessionTicket messages
+  are discarded without deriving or caching PSKs. Ten targeted tests pass
+  locally and under Miri with deterministic, input-sensitive test providers.
+  They do not prove production crypto, certificate path validation, timing
+  behavior or socket I/O.
 
-Out of scope: socket I/O and post-handshake dispatch (Appendix A), production
-cryptography, certificate path validation, `pre_shared_key` and the other
-extensions kept opaque (their data is not read), client certificates (a
-CertificateRequest is read and then refused by sending an empty
-Certificate), and any use of the network.
+Out of scope: socket I/O, post-handshake client authentication, PSK ticket
+caching/resumption and 0-RTT (Appendix A), production cryptography, certificate
+path validation, and `pre_shared_key` and other extensions kept opaque. Client
+certificates are refused with an empty Certificate after CertificateRequest;
+no network I/O is included.
 
 ## Verification
 
