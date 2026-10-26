@@ -2266,13 +2266,9 @@ pub open spec fn parse_handshake_body(t: u8, body: Seq<u8>, hash_len: nat) -> Re
         match read_certificate(body) {
             None => Res::Err(ErrKind::Decode),
             Some(c) => {
-                if c.context.len() != 0 {
-                    Res::Err(ErrKind::NonEmptyContext)
-                } else {
-                    match certificate_entries_error(c.entries) {
-                        Some(k) => Res::Err(k),
-                        None => Res::Ok(HsMsg::Certificate(c)),
-                    }
+                match certificate_entries_error(c.entries) {
+                    Some(k) => Res::Err(k),
+                    None => Res::Ok(HsMsg::Certificate(c)),
                 }
             },
         }

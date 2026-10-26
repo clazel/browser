@@ -249,6 +249,10 @@ pub open spec fn on_extensions(c: crate::schedule::spec::Crypto, s: State, body:
 pub open spec fn initial_request_context_valid(context: Seq<u8>) -> bool {
     context.len() == 0
 }
+/// RFC 8446 §4.4.2: server Certificate uses empty context in initial auth.
+pub open spec fn initial_certificate_context_valid(context: Seq<u8>) -> bool {
+    context.len() == 0
+}
 /// §4.3.2: one initial CertificateRequest, with empty context and signature_algorithms.
 pub open spec fn on_request(c: crate::schedule::spec::Crypto, s: State, body: Seq<u8>, empty_context: bool, has_algorithms: bool) -> (State, Action) {
     if s.phase != Phase::CertificateOrRequest { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
@@ -257,8 +261,9 @@ pub open spec fn on_request(c: crate::schedule::spec::Crypto, s: State, body: Se
     else { record(c, State { requested: true, ..s }, crate::transcript::spec::Kind::CertificateRequest, body, Phase::Certificate) }
 }
 /// §4.4.2: nonempty server chain, validated for this captured host and time.
-pub open spec fn on_certificate(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty_chain: bool) -> (State, Action) {
+pub open spec fn on_certificate(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty_context: bool, empty_chain: bool) -> (State, Action) {
     if s.phase != Phase::CertificateOrRequest && s.phase != Phase::Certificate { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
+    else if !empty_context { fail(s, crate::spec::ILLEGAL_PARAMETER) }
     else if empty_chain { fail(s, crate::spec::DECODE_ERROR) }
     else {
         match (v.chain)(s.config.host, s.config.now, body) {
@@ -285,7 +290,8 @@ pub open spec fn dispatch(c: crate::schedule::spec::Crypto, v: Verification, s: 
     match message {
         crate::spec::HsMsg::EncryptedExtensions(es) => on_extensions(c, s, body, es),
         crate::spec::HsMsg::CertificateRequest(request) => on_request(c, s, body, initial_request_context_valid(request.context), crate::spec::has_ext(request.extensions, 13)),
-        crate::spec::HsMsg::Certificate(certificate) => on_certificate(c, v, s, body, certificate.entries.len() == 0),
+        crate::spec::HsMsg::Certificate(certificate) => on_certificate(c, v, s, body,
+            initial_certificate_context_valid(certificate.context), certificate.entries.len() == 0),
         crate::spec::HsMsg::CertificateVerify(cv) => on_verify(c, v, s, body, cv.algorithm, cv.signature),
         crate::spec::HsMsg::Finished(verify_data) => {
             if s.phase != Phase::Finished { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
