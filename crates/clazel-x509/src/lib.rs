@@ -17,6 +17,8 @@ pub mod extensions;
 pub mod leaf;
 pub mod lemmas;
 pub mod matcher;
+pub mod name;
+pub mod name_constraints;
 pub mod signature_algorithm;
 pub mod spec;
 pub mod spki;
