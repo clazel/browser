@@ -50,6 +50,39 @@ pub proof fn lemma_legacy_server_hello_uses_protocol_version()
     ) == Some(crate::spec::PROTOCOL_VERSION)) by (compute_only);
 }
 
+/// A complete base ServerHello whose extension vector is `exts` (the bytes
+/// after the two-byte vector length, which this prefixes).
+pub open spec fn legacy_server_hello_with_extensions(exts: Seq<u8>) -> Seq<u8> {
+    legacy_server_hello_without_extension_field() + seq![0u8, exts.len() as u8] + exts
+}
+
+/// A nonempty extension list without `supported_versions` identifies no
+/// TLS 1.3 version: `protocol_version`, even though the generic parser would
+/// reject the (server_name) extension as not allowed in a ServerHello.
+pub proof fn lemma_legacy_server_hello_extensions_without_supported_versions()
+    ensures
+        super::spec::validate(
+            Seq::empty(), false, legacy_server_hello_with_extensions(seq![0u8, 0, 0, 0]),
+        ) == Err(crate::spec::PROTOCOL_VERSION),
+{
+    assert(super::spec::validate(
+        Seq::empty(), false, legacy_server_hello_with_extensions(seq![0u8, 0, 0, 0]),
+    ) == Err(crate::spec::PROTOCOL_VERSION)) by (compute_only);
+}
+
+/// `supported_versions` in a non-first position is found: the message is not
+/// a legacy ServerHello without it.
+pub proof fn lemma_supported_versions_found_after_other_extension()
+    ensures
+        !crate::spec::legacy_server_hello_without_supported_versions(
+            legacy_server_hello_with_extensions(seq![0x12u8, 0x34, 0, 1, 9, 0, 0x2b, 0, 2, 3, 4]),
+        ),
+{
+    assert(!crate::spec::legacy_server_hello_without_supported_versions(
+        legacy_server_hello_with_extensions(seq![0x12u8, 0x34, 0, 1, 9, 0, 0x2b, 0, 2, 3, 4]),
+    )) by (compute_only);
+}
+
 /// A hash that is irrelevant to a CCS event.
 pub open spec fn empty_hash(_messages: Seq<u8>) -> Seq<u8> { seq![] }
 

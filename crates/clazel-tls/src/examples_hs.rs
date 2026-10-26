@@ -345,6 +345,8 @@ pub proof fn lemma_server_hello()
         parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 7, 0, 0x2b, 0, 3, 3, 4, 5]), 32) == Res::<HsMsg>::Err(ErrKind::Decode),
         // RFC 5246's legacy extension syntax permits a five-byte extension vector.
         parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) is Ok,
+        // An empty extension vector is syntactically allowed; negotiation reports protocol_version.
+        parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 0]), 32) is Ok,
 {
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 6] + sv_ext()), 32) == Res::<HsMsg>::Ok(
         HsMsg::ServerHello(
@@ -405,6 +407,7 @@ pub proof fn lemma_server_hello()
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 7, 0, 0x2b, 0, 3, 3, 4, 5]), 32) == Res::<HsMsg>::Err(ErrKind::Decode))
         by (compute_only);
     assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) is Ok)
+        by (compute_only);    assert(parse_handshake_body(2, sh_body(z32(), 0, seq![0u8, 0]), 32) is Ok)
         by (compute_only);
 }
 
