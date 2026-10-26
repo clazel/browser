@@ -23,5 +23,5 @@ mod resolve;
 
 pub use conn::{Connection, Finish, Flow, Timeouts, connect, run, run_with};
 pub use error::{NetError, ResolveError, Stage};
-pub use fetch::{FetchError, fetch, fetch_with};
+pub use fetch::{FetchError, fetch, fetch_jar, fetch_with, now_1601};
 pub use resolve::resolve;

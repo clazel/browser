@@ -71,26 +71,26 @@ pub proof fn lemma_domain_of_tuple(rules: Seq<clazel_psl::spec::Rule>, urls: Url
 }
 
 /// `CookieGet` by a renderer of `d`.
-pub proof fn lemma_d_cookie_get(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
+pub proof fn lemma_d_cookie_get(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) == Some(clazel_ipc::message::spec::Message::CookieGet),
     ensures
-        step(rules, urls, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, s2, Event::FromRenderer { id, bytes }).1,
-        crate::noninterference::rel(rules, urls, d, step(rules, urls, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, s2, Event::FromRenderer { id, bytes }).0),
+        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
     lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let i2 = find_by_id(s2.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s1, e);
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s2, e);
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s1, e);
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s2, e);
-    let (s1b, o1) = step(rules, urls, s1, e);
-    let (s2b, o2) = step(rules, urls, s2, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
     if !cookie_averse(rules, r.lock) {
         lemma_domain_of_tuple(rules, urls, s1, i1, d);
         let h = lock_host(r.lock)->Some_0;
@@ -106,25 +106,25 @@ pub proof fn lemma_d_cookie_get(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 }
 
 /// `CookieSet` by a renderer of `d`.
-pub proof fn lemma_d_cookie_set(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>, cs: Seq<u8>)
+pub proof fn lemma_d_cookie_set(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>, cs: Seq<u8>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) == Some(clazel_ipc::message::spec::Message::CookieSet { cookie_string: cs }),
     ensures
-        step(rules, urls, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, s2, Event::FromRenderer { id, bytes }).1,
-        crate::noninterference::rel(rules, urls, d, step(rules, urls, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, s2, Event::FromRenderer { id, bytes }).0),
+        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
     lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s1, e);
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s2, e);
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s1, e);
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s2, e);
-    let (s1b, o1) = step(rules, urls, s1, e);
-    let (s2b, o2) = step(rules, urls, s2, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
     if !cookie_averse(rules, r.lock) {
         lemma_domain_of_tuple(rules, urls, s1, i1, d);
         crate::invariant::lemma_request_url_host_nonempty(rules, urls, r);
@@ -141,26 +141,26 @@ pub proof fn lemma_d_cookie_set(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 }
 
 /// A `localStorage` call by a renderer of `d`.
-pub proof fn lemma_d_storage(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>, m: clazel_ipc::message::spec::Message)
+pub proof fn lemma_d_storage(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>, m: clazel_ipc::message::spec::Message)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) == Some(m),
         crate::statements::is_storage_message(m),
     ensures
-        step(rules, urls, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, s2, Event::FromRenderer { id, bytes }).1,
-        crate::noninterference::rel(rules, urls, d, step(rules, urls, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, s2, Event::FromRenderer { id, bytes }).0),
+        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
     lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s1, e);
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s2, e);
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s1, e);
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s2, e);
-    let (s1b, o1) = step(rules, urls, s1, e);
-    let (s2b, o2) = step(rules, urls, s2, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s2, e);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
     if r.lock is Tuple {
         assert(crate::domain::domain_of_lock(rules, r.lock) == d);
         assert(storage_of(s1, r.lock) == storage_of(s2, r.lock));
@@ -178,21 +178,21 @@ pub proof fn lemma_d_storage(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d
 /// Anything else a renderer of `d` sends, or a frame from a renderer that
 /// is not the observed one's table: the state is unchanged and the outputs
 /// are the sender's reply, equal in both.
-pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>, url: Seq<u8>)
+pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>, url: Seq<u8>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) == Some(clazel_ipc::message::spec::Message::Navigate { url }),
     ensures
-        step(rules, urls, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, s2, Event::FromRenderer { id, bytes }).1,
-        crate::noninterference::rel(rules, urls, d, step(rules, urls, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, s2, Event::FromRenderer { id, bytes }).0),
+        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
     lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    let (s1b, o1) = step(rules, urls, s1, e);
-    let (s2b, o2) = step(rules, urls, s2, e);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
     match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
         None => {
             assert(s1b == s1 && s2b == s2);
@@ -208,7 +208,7 @@ pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
                     assert(s1.renderers.contains(r));
                     crate::unwind_base::lemma_found_contained(s1, r.tab);
                     crate::unwind_base::lemma_find_contained(urls, s1, r);
-                    crate::unwinding::lemma_navigate_tab_consistency(rules, urls, d, s1, s2, r.tab, resolved, no_script());
+                    crate::unwinding::lemma_begin_consistency(rules, urls, d, s1, s2, r.tab, resolved);
                 }
             },
         },
@@ -216,24 +216,24 @@ pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
 }
 
 /// A frame that does not decode kills the sender: for a renderer of `d`.
-pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
+pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) is None,
     ensures
-        step(rules, urls, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, s2, Event::FromRenderer { id, bytes }).1,
-        crate::noninterference::rel(rules, urls, d, step(rules, urls, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, s2, Event::FromRenderer { id, bytes }).0),
+        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
     lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let i2 = find_by_id(s2.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s1, e);
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s2, e);
-    let (s1b, o1) = step(rules, urls, s1, e);
-    let (s2b, o2) = step(rules, urls, s2, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
+    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+    let (s2b, o2) = step(rules, urls, fetch, s2, e);
     assert(s1b.renderers == s1.renderers.remove(i1));
     assert(s2b.renderers == s2.renderers.remove(i2));
     assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
@@ -249,30 +249,30 @@ pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: c
 }
 
 /// Any other message a renderer may send is not served: nothing changes.
-pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
+pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, id: nat, bytes: Seq<u8>)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
     ensures
-        step(rules, urls, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, s2, Event::FromRenderer { id, bytes }).1,
-        crate::noninterference::rel(rules, urls, d, step(rules, urls, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, s2, Event::FromRenderer { id, bytes }).0),
+        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
     lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
     match decode_renderer_frame(bytes) {
-        None => lemma_d_kill(rules, urls, d, s1, s2, id, bytes),
+        None => lemma_d_kill(rules, urls, fetch, d, s1, s2, id, bytes),
         Some(m) => match m {
-            clazel_ipc::message::spec::Message::CookieGet => lemma_d_cookie_get(rules, urls, d, s1, s2, id, bytes),
-            clazel_ipc::message::spec::Message::CookieSet { cookie_string } => lemma_d_cookie_set(rules, urls, d, s1, s2, id, bytes, cookie_string),
-            clazel_ipc::message::spec::Message::Navigate { url } => lemma_d_navigate(rules, urls, d, s1, s2, id, bytes, url),
+            clazel_ipc::message::spec::Message::CookieGet => lemma_d_cookie_get(rules, urls, fetch, d, s1, s2, id, bytes),
+            clazel_ipc::message::spec::Message::CookieSet { cookie_string } => lemma_d_cookie_set(rules, urls, fetch, d, s1, s2, id, bytes, cookie_string),
+            clazel_ipc::message::spec::Message::Navigate { url } => lemma_d_navigate(rules, urls, fetch, d, s1, s2, id, bytes, url),
             _ => {
                 if crate::statements::is_storage_message(m) {
-                    lemma_d_storage(rules, urls, d, s1, s2, id, bytes, m);
+                    lemma_d_storage(rules, urls, fetch, d, s1, s2, id, bytes, m);
                 } else {
-                    let (s1b, o1) = step(rules, urls, s1, e);
-                    let (s2b, o2) = step(rules, urls, s2, e);
-                    crate::invariant::lemma_step_preserves_wf(rules, urls, s1, e);
-                    crate::invariant::lemma_step_preserves_wf(rules, urls, s2, e);
+                    let (s1b, o1) = step(rules, urls, fetch, s1, e);
+                    let (s2b, o2) = step(rules, urls, fetch, s2, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+                    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
                     assert(s1b == s1 && s2b == s2);
                 }
             },

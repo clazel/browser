@@ -73,8 +73,8 @@
     {
       "id": "navigate-keeps-old-lock",
       "file": "src/spec.rs",
-      "find": "let r = Renderer { id, tab, url, lock };",
-      "replace": "let r = Renderer { id, tab, url, lock: old.lock };",
+      "find": "let r = Renderer { id, tab, url, lock, pending: None };",
+      "replace": "let r = Renderer { id, tab, url, lock: old.lock, pending: None };",
       "expect": "killed",
       "reason": "A renderer's Navigate to another origin gives the new renderer the old lock: the renderer on a.test is locked to b.test's origin. ml_navigate_new_lock, theorem_lock_is_committed_origin's step, is false.",
       "certificate": {
@@ -243,6 +243,301 @@
         ]
       },
       "module": "url_mutation_lemmas"
+    },
+    {
+      "id": "fetched-ignores-pending-url",
+      "file": "src/spec.rs",
+      "find": "            Some(p) => if p == outcome.url {",
+      "replace": "            Some(p) => if true {",
+      "expect": "killed",
+      "reason": "A Fetched event is taken for the navigation in flight whatever URL it was fetched for, so a tab that has navigated elsewhere commits the answer to its old navigation: ml_fetched_stale_ignored, the core of theorem_fetched_answers_navigation, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_stale_ignored(ml_f_echo(), ml_s_nav(0x61u32), 0, ml_out(0x62u32), 0, ml_u(0x61u32))",
+        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x61u32).renderers[0].pending == Some(ml_u(0x61u32)) && ml_u(0x61u32) != ml_out(0x62u32).url && fetched_run(ml_f_echo(), ml_s_nav(0x61u32), 0, ml_out(0x62u32)) is Some"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "fetched-without-navigation",
+      "file": "src/spec.rs",
+      "find": "            None => None,\n            Some(p) => if p == outcome.url {",
+      "replace": "            None => Some((fetch.run)(outcome.url, outcome.net)),\n            Some(p) => if p == outcome.url {",
+      "expect": "killed",
+      "reason": "A Fetched event for a renderer that is not navigating is run as if it were: an unsolicited answer commits a document: ml_fetched_unsolicited_ignored, part of theorem_fetched_answers_navigation, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_unsolicited_ignored(ml_f_echo(), ml_state_one(), 0, ml_out(0x61u32), 0)",
+        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && ml_state_one().renderers[0].pending is None && fetched_run(ml_f_echo(), ml_state_one(), 0, ml_out(0x61u32)) is Some"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "fetched-for-the-first-renderer",
+      "file": "src/spec.rs",
+      "find": "    match find_by_tab(s.renderers, tab, 0) {\n        None => None,\n        Some(i) => match s.renderers[i].pending {",
+      "replace": "    match (if s.renderers.len() > 0 { Some(0int) } else { None::<int> }) {\n        None => None,\n        Some(i) => match s.renderers[i].pending {",
+      "expect": "killed",
+      "reason": "A Fetched event is attributed to the first renderer of the table instead of the renderer of its tab, so an answer for a tab that is not open commits into another tab: ml_fetched_unknown_tab, part of theorem_fetched_answers_navigation and of theorem_fetched_only_to_tab, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_unknown_tab(ml_f_echo(), ml_s_nav(0x61u32), 5, ml_out(0x61u32))",
+        "witness": "find_by_tab(ml_s_nav(0x61u32).renderers, 5, 0) is None && fetched_run(ml_f_echo(), ml_s_nav(0x61u32), 5, ml_out(0x61u32)) is Some"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "fetched-commits-no-body",
+      "file": "src/spec.rs",
+      "find": "                    navigate_tab(urls, s1, tab, url, body)",
+      "replace": "                    navigate_tab(urls, s1, tab, url, seq![])",
+      "expect": "killed",
+      "reason": "The commit of a fetch carries an empty script instead of the body: ml_fetched_commit is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_commit(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32), 0, ml_u(0x63u32), seq![0x7au8], clazel_origin::spec::Origin::Opaque(1nat))",
+        "witness": "scalar_url(ml_u(0x63u32)) && 0int < ml_s_nav(0x62u32).renderers.len() && find_by_tab(ml_s_nav(0x62u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x62u32).renderers[0].pending == Some(ml_out(0x62u32).url) && (ml_f_at(0x63u32).run)(ml_out(0x62u32).url, ml_out(0x62u32).net).result == (FetchResult::Done { url: ml_u(0x63u32), body: seq![0x7au8] }) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x63u32), ml_s_nav(0x62u32).next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && fetched(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32)).1[2] != (Output::ToRenderer { id: ml_s_nav(0x62u32).next_id, bytes: commit_frame(ml_u(0x63u32), seq![0x7au8]) })"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "fetched-commits-requested-url",
+      "file": "src/spec.rs",
+      "find": "                    navigate_tab(urls, s1, tab, url, body)",
+      "replace": "                    navigate_tab(urls, s1, tab, outcome.url, body)",
+      "expect": "killed",
+      "reason": "A redirect is ignored: the commit is for the URL the tab asked for, not the final URL of the response: ml_fetched_commit is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_commit(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32), 0, ml_u(0x63u32), seq![0x7au8], clazel_origin::spec::Origin::Opaque(1nat))",
+        "witness": "scalar_url(ml_u(0x63u32)) && 0int < ml_s_nav(0x62u32).renderers.len() && find_by_tab(ml_s_nav(0x62u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x62u32).renderers[0].pending == Some(ml_out(0x62u32).url) && (ml_f_at(0x63u32).run)(ml_out(0x62u32).url, ml_out(0x62u32).net).result == (FetchResult::Done { url: ml_u(0x63u32), body: seq![0x7au8] }) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x63u32), ml_s_nav(0x62u32).next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && fetched(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32)).1[2] != (Output::ToRenderer { id: ml_s_nav(0x62u32).next_id, bytes: commit_frame(ml_u(0x63u32), seq![0x7au8]) })"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "fail-keeps-pending",
+      "file": "src/spec.rs",
+      "find": "s.renderers.update(i, Renderer { pending: None, ..old }), ..s }, reply(old,",
+      "replace": "s.renderers.update(i, old), ..s }, reply(old,",
+      "expect": "killed",
+      "reason": "A navigation that fails leaves its renderer navigating, so the same answer is accepted again: ml_fail_clears_pending, part of theorem_fetched_answers_navigation, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fail_clears_pending(ml_s_nav(0x61u32), 0, 5u64)",
+        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && fail_navigation(ml_s_nav(0x61u32), 0, ml_s_nav(0x61u32).renderers[0], 5u64).0.renderers[0].pending is Some"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "commit-keeps-pending",
+      "file": "src/spec.rs",
+      "find": "let r = Renderer { id, tab, url, lock, pending: None };",
+      "replace": "let r = Renderer { id, tab, url, lock, pending: old.pending };",
+      "expect": "killed",
+      "reason": "The renderer a commit spawns inherits the old renderer's navigation in flight: ml_commit_clears_pending, part of theorem_fetched_answers_navigation, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_commit_clears_pending(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, Seq::<u32>::empty(), Seq::<u8>::empty(), 0, clazel_origin::spec::Origin::Opaque(1nat))",
+        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), ml_s_nav(0x61u32).next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, Seq::<u32>::empty(), Seq::<u8>::empty()).0.renderers[0].pending is Some"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "begin-forgets-the-url",
+      "file": "src/spec.rs",
+      "find": "Renderer { pending: Some(url), ..s.renderers[i] }",
+      "replace": "Renderer { pending: None, ..s.renderers[i] }",
+      "expect": "killed",
+      "reason": "A navigation does not record the URL it is navigating to, so its answer is never accepted: ml_begin_records_url is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_begin_records_url(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32), 0)",
+        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x62u32), ml_state_one().next_id) is Some && begin_navigation(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32)).0.renderers[0].pending != Some(ml_u(0x62u32))"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "begin-asks-for-nothing",
+      "file": "src/spec.rs",
+      "find": "                seq![Output::Fetch { tab, url }],",
+      "replace": "                seq![],",
+      "expect": "killed",
+      "reason": "A navigation does not ask for the fetch: ml_begin_asks_fetch is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_begin_asks_fetch(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32), 0)",
+        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x62u32), ml_state_one().next_id) is Some && begin_navigation(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32)).1 != seq![Output::Fetch { tab: 0, url: ml_u(0x62u32) }]"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "begin-asks-for-the-old-url",
+      "file": "src/spec.rs",
+      "find": "                seq![Output::Fetch { tab, url }],",
+      "replace": "                seq![Output::Fetch { tab, url: s.renderers[i].url }],",
+      "expect": "killed",
+      "reason": "A navigation asks for the committed URL to be fetched instead of the one navigated to: ml_begin_asks_fetch is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_begin_asks_fetch(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32), 0)",
+        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x62u32), ml_state_one().next_id) is Some && begin_navigation(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32)).1 != seq![Output::Fetch { tab: 0, url: ml_u(0x62u32) }]"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "store-allowed-for-public-suffix",
+      "file": "src/spec.rs",
+      "find": "        Some(h) => h.name.len() > 0 && !on_public_suffix,",
+      "replace": "        Some(h) => h.name.len() > 0,",
+      "expect": "killed",
+      "reason": "A response's cookie is stored for a request to a public suffix, which step 16 of RFC 6265bis would read across cookie roots (jar_no_public_suffix and the isolation of the roots): ml_store_public_suffix_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_store_public_suffix_refused(ml_req(Some(clazel_cookie::matching::spec::CanonicalHost { name: seq![0x61u8], is_ip_address: false })))",
+        "witness": "store_allowed_given(ml_req(Some(clazel_cookie::matching::spec::CanonicalHost { name: seq![0x61u8], is_ip_address: false })), true)"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "store-allowed-for-empty-host",
+      "file": "src/spec.rs",
+      "find": "h.name.len() > 0 && !on_public_suffix",
+      "replace": "!on_public_suffix",
+      "expect": "killed",
+      "reason": "A response's cookie is stored for a request whose host name is empty (a cookie root the other cookies of the jar are not under): ml_store_empty_host_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_store_empty_host_refused(ml_req(Some(clazel_cookie::matching::spec::CanonicalHost { name: Seq::<u8>::empty(), is_ip_address: false })), false)",
+        "witness": "ml_req(Some(clazel_cookie::matching::spec::CanonicalHost { name: Seq::<u8>::empty(), is_ip_address: false })).host matches Some(h) && h.name.len() == 0 && store_allowed_given(ml_req(Some(clazel_cookie::matching::spec::CanonicalHost { name: Seq::<u8>::empty(), is_ip_address: false })), false)"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "store-allowed-without-host",
+      "file": "src/spec.rs",
+      "find": "        Some(h) => h.name.len() > 0 && !on_public_suffix,\n        None => false,",
+      "replace": "        Some(h) => h.name.len() > 0 && !on_public_suffix,\n        None => true,",
+      "expect": "killed",
+      "reason": "A response's cookie is stored for a request with no host: ml_store_no_host_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_store_no_host_refused(ml_req(None), false)",
+        "witness": "ml_req(None).host is None && store_allowed_given(ml_req(None), false)"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "store-one-ignores-allowed",
+      "file": "src/spec.rs",
+      "find": "    if store_allowed(rules, st.url) {\n        clazel_cookie::storage::spec::store_a_set_cookie_string",
+      "replace": "    if true {\n        clazel_cookie::storage::spec::store_a_set_cookie_string",
+      "expect": "killed",
+      "reason": "A line is stored whether or not its request may store (the public-suffix check is dropped where it is applied): ml_store_one_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_store_one_refused(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_store_com(), 6)",
+        "witness": "!store_allowed(clazel_cookie::storage::examples::rules(), ml_store_com().url) && store_one(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_store_com(), 6) != seq![clazel_cookie::storage::examples::cookie_expiring()]",
+        "reveal": [
+          "Seq::filter"
+        ]
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "apply-stores-skips-the-line",
+      "file": "src/spec.rs",
+      "find": "        apply_stores(rules, store_one(rules, jar, stores[0], now), stores.drop_first(), now)",
+      "replace": "        apply_stores(rules, jar, stores.drop_first(), now)",
+      "expect": "killed",
+      "reason": "The lines of a fetch's responses are not stored: ml_apply_stores_one is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_apply_stores_one(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_store(), 6)",
+        "witness": "store_allowed(clazel_cookie::storage::examples::rules(), ml_store().url) && apply_stores(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], seq![ml_store()], 6) != clazel_cookie::storage::spec::store_a_set_cookie_string(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_store().line, ml_store().url, ml_store().ctx, 6)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "fetched-drops-the-jar-update",
+      "file": "src/spec.rs",
+      "find": "            let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };\n            match run.result {",
+      "replace": "            let s1 = State { jar: s.jar, ..s };\n            match run.result {",
+      "expect": "killed",
+      "reason": "The jar the kernel owns is not updated with the response's cookies: ml_fetched_jar is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_jar(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32), (ml_f_cookie().run)(ml_out(0x61u32).url, ml_out(0x61u32).net))",
+        "witness": "fetched_run(ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)) == Some((ml_f_cookie().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)) && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)).0.jar != apply_stores(clazel_cookie::storage::examples::rules(), ml_s_nav_jar(0x61u32).jar, ((ml_f_cookie().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)).stores, ml_s_nav_jar(0x61u32).now)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "failed-fetch-drops-the-jar-update",
+      "file": "src/spec.rs",
+      "find": "FetchResult::Failed => fail_navigation(s1, i, old, error_fetch()),",
+      "replace": "FetchResult::Failed => fail_navigation(s, i, old, error_fetch()),",
+      "expect": "killed",
+      "reason": "The cookies of a response the fetch then failed on are not stored: ml_fetched_jar is false (for a failed fetch).",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_jar(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32), (ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net))",
+        "witness": "fetched_run(ml_f_failed(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)) == Some((ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)) && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)).0.jar != apply_stores(clazel_cookie::storage::examples::rules(), ml_s_nav_jar(0x61u32).jar, ((ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)).stores, ml_s_nav_jar(0x61u32).now)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "stale-answer-stores-cookies",
+      "file": "src/spec.rs",
+      "find": "    match fetched_run(fetch, s, tab, outcome) {\n        None => (s, seq![]),",
+      "replace": "    match fetched_run(fetch, s, tab, outcome) {\n        None => (State { jar: apply_stores(rules, s.jar, (fetch.run)(outcome.url, outcome.net).stores, s.now), ..s }, seq![]),",
+      "expect": "killed",
+      "reason": "An answer that is ignored (the tab has navigated elsewhere, or is closed) still sets its cookies: ml_fetched_stale_unchanged, part of theorem_fetched_answers_navigation, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_stale_unchanged(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x62u32))",
+        "witness": "fetched_run(ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x62u32)) is None && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x62u32)).0.jar != ml_s_nav_jar(0x61u32).jar",
+        "reveal": [
+          "Seq::filter"
+        ]
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "failed-fetch-reports-bad-url",
+      "file": "src/spec.rs",
+      "find": "FetchResult::Failed => fail_navigation(s1, i, old, error_fetch()),",
+      "replace": "FetchResult::Failed => fail_navigation(s1, i, old, error_bad_url()),",
+      "expect": "killed",
+      "reason": "A failed fetch is reported to the renderer as a bad URL: ml_fetch_failed_error is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetch_failed_error(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav(0x61u32), 0, ml_out(0x61u32), 0)",
+        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x61u32).renderers[0].pending == Some(ml_out(0x61u32).url) && (ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net).result is Failed && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav(0x61u32), 0, ml_out(0x61u32)).1 != reply(ml_s_nav(0x61u32).renderers[0], clazel_ipc::message::spec::Message::Error { code: error_fetch() })"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "final-url-scalar-check-dropped",
+      "file": "src/spec.rs",
+      "find": "scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {",
+      "replace": "lock_of_url(urls, url, s1.next_id) is Some {",
+      "expect": "killed",
+      "reason": "A final URL that is not a string of scalar values is committed (the commit would have to UTF-8 encode it): ml_fetched_non_scalar_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetched_non_scalar_refused(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_surrogate(), ml_s_nav(0x61u32), 0, ml_out(0x61u32), 0, seq![0xD800u32], Seq::<u8>::empty(), 0)",
+        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x61u32).renderers[0].pending == Some(ml_out(0x61u32).url) && (ml_f_surrogate().run)(ml_out(0x61u32).url, ml_out(0x61u32).net).result == (FetchResult::Done { url: seq![0xD800u32], body: Seq::<u8>::empty() }) && !clazel_encoding::utf8::spec::is_scalar_value(seq![0xD800u32][0]) && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_surrogate(), ml_s_nav(0x61u32), 0, ml_out(0x61u32)).1 != reply(ml_s_nav(0x61u32).renderers[0], clazel_ipc::message::spec::Message::Error { code: error_bad_url() })"
+      },
+      "module": "mutation_lemmas"
     }
   ]
 }

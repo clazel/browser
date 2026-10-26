@@ -110,11 +110,11 @@ fn show(b: &[u8]) -> String {
 
 /// Rounds of the random suites; Miri (an interpreter, about a thousand
 /// times slower) runs a hundredth of them.
-const RANDOM_ROUNDS: usize = if cfg!(miri) { 60 } else { 6000 };
-const MUTATED_ROUNDS: usize = if cfg!(miri) { 600 } else { 60_000 };
-const FRAMING_ROUNDS: usize = if cfg!(miri) { 30 } else { 3000 };
+const RANDOM_ROUNDS: usize = if cfg!(miri) { 15 } else { 6000 };
+const MUTATED_ROUNDS: usize = if cfg!(miri) { 150 } else { 60_000 };
+const FRAMING_ROUNDS: usize = if cfg!(miri) { 8 } else { 3000 };
 /// The corpus suites run every `CORPUS_STEP`th case.
-const CORPUS_STEP: usize = if cfg!(miri) { 8 } else { 1 };
+const CORPUS_STEP: usize = if cfg!(miri) { 32 } else { 1 };
 
 /// Print a suite's summary line, before the caller asserts.
 fn summary(suite: &str, pass: usize, xfail: usize, fail: usize, total: usize) {

@@ -27,6 +27,8 @@ pub enum Out {
     Spawn(u64),
     /// A renderer killed.
     Kill(u64),
+    /// The kernel asked for a URL to be fetched for a tab.
+    Fetch(u64, Vec<u32>),
 }
 
 /// The exec kernel, driven as the host shell would.
@@ -59,6 +61,7 @@ impl Kernel {
                 },
                 OutputRecord::Spawn { id } => Out::Spawn(id),
                 OutputRecord::Kill { id } => Out::Kill(id),
+                OutputRecord::Fetch { tab, url } => Out::Fetch(tab, url),
             })
             .collect()
     }

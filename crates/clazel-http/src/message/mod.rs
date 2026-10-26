@@ -9,6 +9,8 @@
 //! - [`lemmas`]: those properties, proven.
 //! - [`independent`]: RFC 7230 §3 framing, proven equal to the spec where
 //!   the two RFCs agree.
+//! - [`independent_fetch`]: the Fetch Standard's "extract a length", proven
+//!   against the spec's `Content-Length` framing (Fetch defines no more).
 //! - [`incremental`]: the parser fed bytes as they arrive.
 //! - [`request`]: the request parser (a spec) and the serializer's
 //!   round trip; [`request_parser`]: the request parser, executable.
@@ -18,6 +20,7 @@ pub mod contract;
 pub mod examples;
 pub mod incremental;
 pub mod independent;
+pub mod independent_fetch;
 pub mod lemmas;
 pub mod line;
 pub mod request;
