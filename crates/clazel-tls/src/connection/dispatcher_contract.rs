@@ -121,12 +121,12 @@ pub open spec fn prepare_update_ensures(c: crate::schedule::spec::Crypto,
     before.mode == super::dispatcher_spec::Mode::Ready
         && before.pending_update_request is None
         && request <= 1
+        && (!is_response || request == 0)
         && is_response == before.response_due
         && after == super::dispatcher_spec::prepare_key_update(c, ciphers, before, request, is_response)
         && super::dispatcher_spec::wf(after)
         && after.pending_update_request == Some(request)
         && after.pending_update_is_response == is_response
-        && after.pending_update_wire.len() > 0
 }
 
 /// A received KeyUpdate rotates only the peer's receive direction and queues

@@ -104,6 +104,21 @@ pub struct Ciphers {
     pub application_open: crate::traffic::contract::Open3,
 }
 
+/// Cipher functions selected by the live epoch keys (empty keys only fill
+/// inactive directions and are never invoked by the state model).
+pub open spec fn cipher_models(factory: crate::traffic::spec::Cipher, state: State) -> Ciphers {
+    Ciphers {
+        handshake_seal: |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| (factory.seal)(
+            match state.handshake_sender { Some(epoch) => epoch.key, None => seq![] }, n, ad, p),
+        handshake_open: |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| (factory.open)(
+            match state.handshake_receiver { Some(epoch) => epoch.key, None => seq![] }, n, ad, ct),
+        application_seal: |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| (factory.seal)(
+            match state.application_sender { Some(epoch) => epoch.key, None => seq![] }, n, ad, p),
+        application_open: |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| (factory.open)(
+            match state.application_receiver { Some(epoch) => epoch.key, None => seq![] }, n, ad, ct),
+    }
+}
+
 /// Reject any valid transition that has incomplete handshake input.
 pub open spec fn message_boundary(s: State) -> bool {
     crate::spec::at_message_boundary(s.reassembly)
@@ -168,13 +183,12 @@ pub open spec fn wf(s: State) -> bool {
                 && s.application_receiver is Some && s.master.len() == 0
                 && s.pending_flight.len() == 0 && !s.ccs_pending
                 && s.client_application_secret.len() == 32 && s.server_application_secret.len() == 32
-                && (s.pending_update_request is None == (s.pending_update_wire.len() == 0))
-                && (s.pending_update_request is None == (s.pending_update_secret.len() == 0))
-                && (s.pending_update_request is Some ==> s.pending_update_secret.len() == 32)
-                && (s.pending_update_request is Some ==> s.pending_update_wire.len() > 0)
-                && match s.pending_update_request { Some(request) => request <= 1, None => true }
-                && (s.pending_update_is_response ==> s.pending_update_request == Some(0))
-                && (s.response_due ==> s.pending_update_request is Some)
+                && match s.pending_update_request {
+                    Some(request) => request <= 1 && s.pending_update_secret.len() == 32
+                        && (!s.pending_update_is_response || request == 0),
+                    None => s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
+                        && !s.pending_update_is_response,
+                }
                 && crate::spec::at_message_boundary(s.reassembly)
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::Ready,
                     None => false },
@@ -216,7 +230,7 @@ pub open spec fn start(h: crate::traffic::handshake_spec::Handoff, ccs_pending: 
 pub open spec fn prepare_key_update(c: crate::schedule::spec::Crypto,
     ciphers: Ciphers, s: State, request: u8, is_response: bool) -> State
 {
-    if request > 1 || (is_response != s.response_due) { s }
+    if request > 1 || (is_response && request != 0) || (is_response != s.response_due) { s }
     else { match (s.application_sender, s.pending_update_request) {
         (Some(sender), None) => {
             let body = crate::spec::write_key_update(request);
