@@ -54,12 +54,14 @@ pub enum TimeKind {
     Generalized,
 }
 
-/// Gregorian leap-year rule, using the proleptic Gregorian calendar.
+/// Gregorian leap-year rule, using RFC 5280 §4.1.2.5's calendar date model
+/// and X.680 §46.3's ISO 8601 date form.
 pub open spec fn is_leap_year(year: nat) -> bool {
     year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
 }
 
-/// Number of days in a Gregorian month (zero for an invalid month).
+/// Number of days in a Gregorian month (zero for an invalid month), used to
+/// validate RFC 5280 §4.1.2.5 validity dates.
 pub open spec fn days_in_month(year: nat, month: nat) -> nat {
     if month == 1 || month == 3 || month == 5 || month == 7
         || month == 8 || month == 10 || month == 12 { 31 }
@@ -68,7 +70,7 @@ pub open spec fn days_in_month(year: nat, month: nat) -> nat {
     else { 0 }
 }
 
-/// True exactly for representable Gregorian whole-second civil times.
+/// Gregorian date and clock-field validity for RFC 5280 §4.1.2.5.
 pub open spec fn calendar_time_valid(time: CertificateTime) -> bool {
     1 <= time.year as nat && time.year as nat <= 9999
         && 1 <= time.month as nat && time.month as nat <= 12
@@ -108,8 +110,11 @@ pub open spec fn digits_only(bytes: Seq<u8>, pos: int, count: int) -> bool
 pub open spec fn decode_time(kind: TimeKind, bytes: Seq<u8>) -> Option<CertificateTime> {
     match kind {
         TimeKind::Utc => {
+            // 1. RFC 5280 §4.1.2.5.1 requires `YYMMDDHHMMSSZ`; X.690 §11.8.1–2
+            // require the terminal Z and seconds. 2. Verify exact content.
             if bytes.len() != 13 || bytes[12] != b'Z' || !digits_only(bytes, 0, 12) { None }
             else {
+                // 3. §4.1.2.5.1 maps YY >= 50 to 19YY and YY < 50 to 20YY.
                 let yy = decimal_digits(bytes, 0, 2);
                 let year = if yy >= 50 { 1900 + yy } else { 2000 + yy };
                 let time = CertificateTime {
@@ -120,12 +125,16 @@ pub open spec fn decode_time(kind: TimeKind, bytes: Seq<u8>) -> Option<Certifica
                     minute: decimal_digits(bytes, 8, 2) as u8,
                     second: decimal_digits(bytes, 10, 2) as u8,
                 };
+                // 4. Validate Gregorian fields and X.680 §47.3's seconds 00–59.
                 if calendar_time_valid(time) && time.second <= 59 { Some(time) } else { None }
             }
         },
         TimeKind::Generalized => {
+            // 1. RFC 5280 §4.1.2.5.2 requires `YYYYMMDDHHMMSSZ`, no fraction;
+            // X.690 §11.7.1–2 requires Z and seconds. 2. Verify exact content.
             if bytes.len() != 15 || bytes[14] != b'Z' || !digits_only(bytes, 0, 14) { None }
             else {
+                // 3. X.680 §46.3 uses a four-digit ISO 8601 calendar date.
                 let time = CertificateTime {
                     year: decimal_digits(bytes, 0, 4) as u16,
                     month: decimal_digits(bytes, 4, 2) as u8,
@@ -134,13 +143,15 @@ pub open spec fn decode_time(kind: TimeKind, bytes: Seq<u8>) -> Option<Certifica
                     minute: decimal_digits(bytes, 10, 2) as u8,
                     second: decimal_digits(bytes, 12, 2) as u8,
                 };
+                // 4. Validate Gregorian fields and leap-second position.
                 if calendar_time_valid(time) { Some(time) } else { None }
             }
         },
     }
 }
 
-/// Lexicographic ordering of fixed-width Gregorian UTC fields.
+/// RFC 5280 §4.1.2.5 orders UTC calendar fields at the profile's whole-second
+/// precision.
 pub open spec fn time_le(left: CertificateTime, right: CertificateTime) -> bool {
     left.year < right.year
         || left.year == right.year && (left.month < right.month
@@ -168,7 +179,8 @@ pub open spec fn make_validity(
     } else { None }
 }
 
-/// RFC 5280 §4.1.2.5: the validity interval includes both endpoints.
+/// RFC 5280 §4.1.2.5: the validity interval runs from notBefore through
+/// notAfter, inclusive.
 pub open spec fn validity_contains(validity: Validity, now: CertificateTime) -> bool {
     calendar_time_valid(validity.not_before)
         && calendar_time_valid(validity.not_after)
