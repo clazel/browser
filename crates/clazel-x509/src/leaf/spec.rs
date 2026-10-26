@@ -100,6 +100,18 @@ pub open spec fn find_extension(
     else { find_extension(extensions, oid, index + 1) }
 }
 
+/// Locate the first matching extension index, preserving encoded order.
+pub open spec fn find_extension_index(
+    extensions: Seq<crate::extensions::spec::Extension>, oid: Seq<nat>, index: int,
+) -> Option<int>
+    recommends 0 <= index <= extensions.len()
+    decreases extensions.len() as int - index
+{
+    if index >= extensions.len() { None }
+    else if extensions[index].oid =~= oid { Some(index) }
+    else { find_extension_index(extensions, oid, index + 1) }
+}
+
 /// RFC 5280 §4.2: every critical extension must be among the four semantics
 /// this partial checker actually processes.
 pub open spec fn supported_critical_extensions(
@@ -139,6 +151,20 @@ pub open spec fn only_supported_general_names(
 }
 
 /// RFC 9525 §6.2: match at least one same-type DNS-ID/IP-ID SAN entry.
+pub open spec fn general_name_matches_reference(
+    name: crate::extensions::spec::GeneralName,
+    reference: crate::spec::ReferenceIdentity,
+) -> bool {
+    match name {
+        crate::extensions::spec::GeneralName::DnsName(value) =>
+            crate::spec::service_identity_match(reference, crate::spec::PresentedIdentity::Dns(value)),
+        crate::extensions::spec::GeneralName::IpAddress(value) =>
+            crate::spec::service_identity_match(reference, crate::spec::PresentedIdentity::Ip(value)),
+        crate::extensions::spec::GeneralName::Other(_, _) => false,
+    }
+}
+
+/// RFC 9525 §6.2: match at least one same-type DNS-ID/IP-ID SAN entry.
 pub open spec fn san_matches_reference(
     names: Seq<crate::extensions::spec::GeneralName>,
     reference: crate::spec::ReferenceIdentity, index: int,
@@ -148,13 +174,7 @@ pub open spec fn san_matches_reference(
 {
     if index >= names.len() { false }
     else {
-        let matches = match names[index] {
-            crate::extensions::spec::GeneralName::DnsName(value) =>
-                crate::spec::service_identity_match(reference, crate::spec::PresentedIdentity::Dns(value)),
-            crate::extensions::spec::GeneralName::IpAddress(value) =>
-                crate::spec::service_identity_match(reference, crate::spec::PresentedIdentity::Ip(value)),
-            crate::extensions::spec::GeneralName::Other(_, _) => false,
-        };
+        let matches = general_name_matches_reference(names[index], reference);
         matches || san_matches_reference(names, reference, index + 1)
     }
 }
@@ -206,9 +226,9 @@ pub open spec fn check_extensions(
     policy: LeafPolicy,
 ) -> Option<PartialLeafChecks> {
     if !supported_critical_extensions(extensions, 0) { None }
-    else { match find_extension(extensions, crate::extensions::spec::subject_alt_name_oid(), 0) {
+    else { match find_extension_index(extensions, crate::extensions::spec::subject_alt_name_oid(), 0) {
         None => None,
-        Some(san_extension) => match crate::extensions::spec::parse_subject_alt_name(san_extension.value) {
+        Some(san_index) => match crate::extensions::spec::parse_subject_alt_name(extensions[san_index].value) {
             None => None,
             Some(san) => {
                 // 1. Require only GeneralName semantics implemented here and a DNS/IP match.
