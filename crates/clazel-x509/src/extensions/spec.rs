@@ -110,25 +110,33 @@ pub open spec fn parse_extension(input: Seq<u8>, pos: nat, end: nat) -> Option<(
     }
 }
 
-/// Read Extension SEQUENCE values through `end`, rejecting duplicate OIDs.
-pub open spec fn parse_extensions_from(
-    input: Seq<u8>, pos: nat, end: nat, seen: Seq<Seq<nat>>,
+/// Accumulator form of the Extension reader, used to align its prefix with
+/// an iterative executable cursor without recursively constructing a suffix.
+pub open spec fn parse_extensions_acc(
+    input: Seq<u8>, pos: nat, end: nat, seen: Seq<Seq<nat>>, acc: Seq<Extension>,
 ) -> Option<(Seq<Extension>, nat)>
     recommends pos <= end && end <= input.len()
     decreases end - pos
 {
     if pos == end {
-        Some((seq![], end))
+        Some((acc, end))
     } else {
         match parse_extension(input, pos, end) {
-            Some((extension, next)) if next > pos && next <= end && !oid_seen(seen, extension.oid, 0) =>
-                match parse_extensions_from(input, next, end, seen.push(extension.oid)) {
-                    Some((rest, final_pos)) => Some((seq![extension] + rest, final_pos)),
-                    None => None,
-                },
+            Some((extension, next)) if next > pos && next <= end
+                && !oid_seen(seen, extension.oid, 0) =>
+                parse_extensions_acc(input, next, end, seen.push(extension.oid), acc.push(extension)),
             _ => None,
         }
     }
+}
+
+/// Read Extension SEQUENCE values through `end`, rejecting duplicate OIDs.
+pub open spec fn parse_extensions_from(
+    input: Seq<u8>, pos: nat, end: nat, seen: Seq<Seq<nat>>,
+) -> Option<(Seq<Extension>, nat)>
+    recommends pos <= end && end <= input.len()
+{
+    parse_extensions_acc(input, pos, end, seen, seq![])
 }
 
 /// RFC 5280 §4.1.2.9: parse one nonempty DER Extensions SEQUENCE and consume
