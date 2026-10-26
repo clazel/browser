@@ -2,21 +2,24 @@
 # pull request. The full verification is split into parts (xtask/src/parts.rs)
 # so that no job comes near GitHub's six-hour limit:
 #
-#   check     `cargo xtask check`: the fast static checks (unsafe, lint
-#             overrides, escape hatches, tier declarations, pins, allowlist).
-#             Fails in a minute or two, so obvious mistakes show up early.
-#   crates    lists the workspace crates (`cargo xtask crates`) for the
-#             matrix below, so a new crate cannot be left out.
-#   base      `verify --part base`: static checks, rustfmt, clippy, tests and
-#             Miri over the whole workspace.
-#   base-macos the same part on macOS arm64: the Seatbelt sandbox, the demo,
-#             the host and escape tests, and the macOS-only code under clippy
-#             and Miri. Proofs and harnesses are not repeated there: Verus
-#             and Kani give the same answer for the same pinned versions on
-#             either platform.
-#   crate     one job per crate, `verify --part crate <name>`: Kani, Verus,
-#             line counts, mutations and conformance for that crate. Each
-#             uploads what it measured, tagged with the commit.
+#   crates    `cargo xtask check`, the fast static checks (unsafe, lint
+#             overrides, escape hatches, tier declarations, pins, allowlist),
+#             which fail in a minute or two so obvious mistakes show up early;
+#             then the crate groups (`cargo xtask crates`) for the matrix
+#             below, so a new crate cannot be left out.
+#   base      `verify --part base`: static checks, rustfmt, clippy and tests
+#             over the whole workspace.
+#   miri      `verify --part miri`: the workspace's tests under Miri.
+#   base-macos the base and Miri parts on macOS arm64, one after the other:
+#             the Seatbelt sandbox, the demo, the host and escape tests, and
+#             the macOS-only code under clippy and Miri. Proofs and harnesses
+#             are not repeated there: Verus and Kani give the same answer for
+#             the same pinned versions on either platform.
+#   crate     `verify --part crate <names>`: Kani, Verus, line counts,
+#             mutations (several mutants at once, xtask/src/mutate.rs) and
+#             conformance. One job per crate with proof work; the crates
+#             with none share one job. Each uploads what it measured, one
+#             file per crate, tagged with the commit.
 #   assemble  `verify --part assemble`: needs every job above to pass, then
 #             checks that every crate's measurements are present and from
 #             this commit, and reports whether README.md's table matches them.
@@ -69,10 +72,12 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  check:
-    name: Static checks
+  crates:
+    name: Static checks and crate list
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      list: ${{ steps.list.outputs.list }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -82,19 +87,6 @@ jobs:
         run: rustup toolchain install
       - name: cargo xtask check
         run: cargo xtask check
-
-  crates:
-    name: List crates
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    outputs:
-      list: ${{ steps.list.outputs.list }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Install Rust
-        run: rustup toolchain install
       - id: list
         name: cargo xtask crates
         run: echo "list=$(cargo xtask crates)" >> "$GITHUB_OUTPUT"
@@ -142,9 +134,34 @@ jobs:
       # unprivileged process enters without any setup.
       - name: Verify (base)
         run: cargo xtask verify --part base
+      # Miri runs here after the base part rather than in a job of its own:
+      # macOS runners are few (5 at once), and this job is not the slowest.
+      - name: Verify (Miri)
+        run: cargo xtask verify --part miri
+
+  miri:
+    name: Verify (Miri)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cache tool downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/share/clazel-tools/downloads
+          key: clazel-tools-${{ runner.os }}-${{ hashFiles('scripts/toolchains.env', 'scripts/checksums.txt') }}
+      - name: Install pinned toolchain
+        run: scripts/setup.sh
+      # No AppArmor step: tests that spawn the sandboxed renderer are
+      # ignored under Miri.
+      - name: Verify (Miri)
+        run: cargo xtask verify --part miri
 
   crate:
-    name: Verify ${{ matrix.crate }}
+    # A group of crates with no proofs is one job (`cargo xtask crates`).
+    name: Verify ${{ contains(matrix.crate, ',') && 'crates without proofs' || matrix.crate }}
     needs: crates
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -172,17 +189,18 @@ jobs:
         run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-adversary,deps/sandbox-*}"
       - name: Verify ${{ matrix.crate }}
         run: cargo xtask verify --part crate "${{ matrix.crate }}" --metrics parts
+      # One `<crate>.json` per crate of the job, all under parts/.
       - name: Upload measurements
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: part-${{ matrix.crate }}
-          path: parts/${{ matrix.crate }}.json
+          path: parts/
           if-no-files-found: error
           retention-days: 7
 
   assemble:
     name: Full verification
-    needs: [check, base, base-macos, crate]
+    needs: [crates, base, base-macos, miri, crate]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
