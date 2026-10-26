@@ -1,10 +1,12 @@
 //! `verify --part`: the full verification split into parts that run on
 //! separate machines (CI runs one job per part; `.github/workflows/ci.yml`).
 //!
-//! - `base`: static checks, rustfmt, clippy, tests and Miri, workspace-wide.
-//! - `crate <name>`: static checks, then Kani, Verus, line counts, mutations
-//!   and conformance for one crate. On success it writes what it measured
-//!   to `<dir>/<name>.json`, tagged with the commit it ran on.
+//! - `base`: static checks, rustfmt, clippy and tests, workspace-wide.
+//! - `miri`: static checks and the tests under Miri, workspace-wide.
+//! - `crate <names>`: static checks, then Kani, Verus, line counts,
+//!   mutations and conformance for one crate or several (comma-separated).
+//!   On success it writes what it measured to `<dir>/<name>.json` for each,
+//!   tagged with the commit it ran on.
 //! - `assemble`: static checks, then the README table built from every
 //!   crate's file. It fails if a workspace crate has no file, or a file is
 //!   from another commit, so a part that did not run, or ran on other

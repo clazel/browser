@@ -3,6 +3,7 @@
     {
       "id": "wildcard-never-matches",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "rule_label == domain_label || rule_label == star_label()",
       "replace": "rule_label == domain_label",
       "expect": "killed",
@@ -16,6 +17,7 @@
     {
       "id": "label-always-matches",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "rule_label == domain_label || rule_label == star_label()",
       "replace": "true",
       "expect": "killed",
@@ -29,6 +31,7 @@
     {
       "id": "rule-matched-from-the-left",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "d[d.len() - 1 - k]",
       "replace": "d[k as int]",
       "expect": "killed",
@@ -42,6 +45,7 @@
     {
       "id": "exception-does-not-beat",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "(a.exception && !b.exception) || (!a.exception && !b.exception && a.labels.len() > b.labels.len())",
       "replace": "(!a.exception && !b.exception && a.labels.len() > b.labels.len())",
       "expect": "killed",
@@ -55,6 +59,7 @@
     {
       "id": "exception-keeps-leftmost-label",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "(rule.labels.len() - 1) as nat",
       "replace": "rule.labels.len()",
       "expect": "killed",
@@ -68,6 +73,7 @@
     {
       "id": "longest-rule-loses",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "a.labels.len() > b.labels.len()",
       "replace": "a.labels.len() < b.labels.len()",
       "expect": "killed",
@@ -81,6 +87,7 @@
     {
       "id": "later-rule-always-prevails",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "beats(rule, rules[best->Some_0 as int])",
       "replace": "true",
       "expect": "killed",
@@ -94,6 +101,7 @@
     {
       "id": "prevailing-ignores-match",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "if rule_matches(rule, d) && (best is None",
       "replace": "if true && (best is None",
       "expect": "killed",
@@ -107,6 +115,7 @@
     {
       "id": "default-rule-has-two-labels",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "None => Rule { labels: seq![star_label()], exception: false },",
       "replace": "None => Rule { labels: seq![star_label(), star_label()], exception: false },",
       "expect": "killed",
@@ -120,6 +129,7 @@
     {
       "id": "exception-count-can-be-zero",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "if rule.exception && rule.labels.len() > 1 {",
       "replace": "if rule.exception {",
       "expect": "killed",
@@ -133,6 +143,7 @@
     {
       "id": "trailing-dot-never-recognised",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "domain.last() == 0x2Eu32",
       "replace": "domain.last() == 0x2Fu32",
       "expect": "killed",
@@ -146,6 +157,7 @@
     {
       "id": "trailing-dot-not-stripped",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "domain.drop_last()",
       "replace": "domain",
       "expect": "killed",
@@ -159,6 +171,7 @@
     {
       "id": "public-suffix-loses-trailing-dot",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "    let trailing_dot = has_trailing_dot(domain);\n    let d = domain_labels(domain);\n    if has_empty_label(d) {",
       "replace": "    let trailing_dot = false;\n    let d = domain_labels(domain);\n    if has_empty_label(d) {",
       "expect": "killed",
@@ -172,6 +185,7 @@
     {
       "id": "empty-labels-allowed",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "if has_empty_label(d) {",
       "replace": "if false {",
       "expect": "killed",
@@ -185,6 +199,7 @@
     {
       "id": "registrable-domain-is-public-suffix",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "suffix_label_count(rules, d) + 1))",
       "replace": "suffix_label_count(rules, d)))",
       "expect": "killed",
@@ -198,6 +213,7 @@
     {
       "id": "registrable-guard-inverted",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "if public_suffix == domain {",
       "replace": "if public_suffix != domain {",
       "expect": "killed",
@@ -211,6 +227,7 @@
     {
       "id": "cookie-root-is-whole-domain",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "else if !is_public_suffix(rules, label_suffix(d, trailing_dot, k)) {",
       "replace": "else if false {",
       "expect": "killed",
@@ -224,6 +241,7 @@
     {
       "id": "cookie-root-is-shortest-public-suffix",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "else if !is_public_suffix(rules, label_suffix(d, trailing_dot, k)) {",
       "replace": "else if is_public_suffix(rules, label_suffix(d, trailing_dot, k)) {",
       "expect": "killed",
@@ -237,6 +255,7 @@
     {
       "id": "cookie-root-skips-a-label",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "cookie_root_from(rules, domain, k + 1)",
       "replace": "cookie_root_from(rules, domain, k + 2)",
       "expect": "killed",
@@ -250,6 +269,7 @@
     {
       "id": "cookie-root-one-label-too-long",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "    } else if !is_public_suffix(rules, label_suffix(d, trailing_dot, k)) {\n        label_suffix(d, trailing_dot, k)",
       "replace": "    } else if !is_public_suffix(rules, label_suffix(d, trailing_dot, k)) {\n        label_suffix(d, trailing_dot, k + 1)",
       "expect": "killed",
@@ -263,6 +283,7 @@
     {
       "id": "cookie-root-of-address-is-empty",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "        _ => host,\n    }\n}\n\n}",
       "replace": "        _ => clazel_url::host::spec::Host::Empty,\n    }\n}\n\n}",
       "expect": "killed",
@@ -276,6 +297,7 @@
     {
       "id": "label-suffix-takes-first-labels",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "labels.skip(labels.len() - k)",
       "replace": "labels.take(k as int)",
       "expect": "killed",
@@ -289,6 +311,7 @@
     {
       "id": "cookie-root-search-stops-a-label-early",
       "file": "src/spec.rs",
+      "module": "examples",
       "find": "if k >= d.len() {",
       "replace": "if k + 1 >= d.len() {",
       "expect": "killed",

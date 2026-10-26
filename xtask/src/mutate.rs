@@ -237,7 +237,33 @@ fn load(c: &Crate) -> Result<Vec<Mutation>, String> {
         .collect()
 }
 
-/// Run every mutation for one crate.
+/// What one mutation's runs showed, before it is counted in a [`Report`].
+enum Outcome {
+    Killed(String),
+    Incidental(String),
+    Survived(String),
+    Problem(String),
+}
+
+/// How many mutants run at once: `CLAZEL_MUTANT_JOBS` if set, otherwise
+/// one per available core, at most 4. Each worker has its own sandbox, so
+/// runs never share files; more workers than cores only slows each run.
+fn workers() -> usize {
+    if let Some(n) = std::env::var("CLAZEL_MUTANT_JOBS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+    {
+        return n;
+    }
+    std::thread::available_parallelism()
+        .map_or(1, std::num::NonZero::get)
+        .min(4)
+}
+
+/// Run every mutation for one crate, several at a time ([`workers`]). The
+/// report lists them in the order of `mutations.json`, whatever order they
+/// finished in.
 pub fn run(c: &Crate, root: &Path) -> Result<Report, String> {
     let mutations = load(c)?;
     let sandbox = make_sandbox(c, root)?;
@@ -261,91 +287,142 @@ pub fn run(c: &Crate, root: &Path) -> Result<Report, String> {
         Run::TimedOut(_) => return Err("unmutated copy timed out".into()),
     }
     let limit = mutant_limit(started.elapsed());
-    report
-        .lines
-        .push(format!("time limit {}s per mutant run", limit.as_secs()));
+    let count = workers().min(mutations.len()).max(1);
+    report.lines.push(format!(
+        "time limit {}s per mutant run, {count} at a time",
+        limit.as_secs()
+    ));
 
-    for m in &mutations {
-        report.total = report.total.saturating_add(1);
-        let target = crate_dir.join(&m.file);
-        let original =
-            std::fs::read_to_string(&target).map_err(|e| format!("{}: {e}", target.display()))?;
-        let hits = original.matches(&m.find).count();
-        if hits != 1 {
-            report.problems.push(format!(
-                "{}: `find` occurs {hits} times in {} (must be exactly once; the mutation is stale)",
-                m.id, m.file
-            ));
-            continue;
+    // One sandbox per worker: the first is the baseline's; the others are
+    // copies of it, build output included, so no worker starts cold.
+    let mut dirs = vec![crate_dir.clone()];
+    for k in 1..count {
+        let copy = sandbox.with_file_name(format!("{}.w{k}", c.name));
+        if copy.exists() {
+            std::fs::remove_dir_all(&copy).map_err(|e| format!("{}: {e}", copy.display()))?;
         }
-        let mutated = original.replacen(&m.find, &m.replace, 1);
-        std::fs::write(&target, mutated).map_err(|e| format!("{}: {e}", target.display()))?;
-        let result = match &m.module {
-            Some(module) => verus::module(&crate_dir, &c.name, module, Some(limit)),
-            None => verus::run(&crate_dir, &c.name, false, Some(limit)),
-        };
-        std::fs::write(&target, &original).map_err(|e| format!("{}: {e}", target.display()))?;
-        match (result?, m.expect) {
-            (Run::TimedOut(t), _) => {
-                report.problems.push(format!(
-                    "{}: TIMED OUT after {}s and was stopped: the mutant makes Verus run \
-                     without end (for example `compute_only` evaluating a sequence index \
-                     out of range); rewrite the mutation so the examples stay evaluable",
-                    m.id,
-                    t.as_secs()
-                ));
-            }
-            (Run::ProofFailed(_, out), Expect::Killed) => {
-                match check_certificate(&crate_dir, &c.name, m, &original, limit) {
-                    Ok(lemma) => {
-                        report.killed = report.killed.saturating_add(1);
-                        report.lines.push(format!(
-                            "killed     {}  (certified: violates {lemma}; first failure: {})",
-                            m.id,
-                            first_failure(&out)
-                        ));
+        copy_tree(&sandbox, &copy)?;
+        dirs.push(copy.join("crates").join(&c.name));
+    }
+
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let results: Vec<(usize, Result<Outcome, String>)> = std::thread::scope(|scope| {
+        let handles: Vec<_> = dirs
+            .iter()
+            .map(|dir| {
+                let (next, mutations, name) = (&next, &mutations, &c.name);
+                scope.spawn(move || {
+                    let mut done = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        let Some(m) = mutations.get(i) else { break };
+                        done.push((i, evaluate(dir, name, m, limit)));
                     }
-                    Err(e) => report.problems.push(format!("{}: {e}", m.id)),
-                }
+                    done
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap_or_default())
+            .collect()
+    });
+    let mut results = results;
+    results.sort_by_key(|(i, _)| *i);
+    if results.len() != mutations.len() {
+        return Err(format!(
+            "{} of {} mutations ran (a worker stopped early)",
+            results.len(),
+            mutations.len()
+        ));
+    }
+    for (_, result) in results {
+        report.total = report.total.saturating_add(1);
+        match result? {
+            Outcome::Killed(line) => {
+                report.killed = report.killed.saturating_add(1);
+                report.lines.push(line);
             }
-            (Run::ProofFailed(_, out), Expect::KilledIncidentally) => {
+            Outcome::Incidental(line) => {
                 report.incidental = report.incidental.saturating_add(1);
-                report.lines.push(format!(
-                    "incidental {}  (first failure: {}; {})",
-                    m.id,
-                    first_failure(&out),
-                    m.reason
-                ));
+                report.lines.push(line);
             }
-            (Run::ProofFailed(s, out), Expect::Survives) => {
-                report.problems.push(format!(
-                    "{}: expected to survive but was killed ({s}; first failure: {}); \
-                     find out why before changing expect",
-                    m.id,
-                    first_failure(&out)
-                ));
-            }
-            (Run::Verified(_), Expect::Survives) => {
+            Outcome::Survived(line) => {
                 report.survived = report.survived.saturating_add(1);
-                report
-                    .lines
-                    .push(format!("survives   {}  (known gap: {})", m.id, m.reason));
+                report.lines.push(line);
             }
-            (Run::Verified(_), Expect::Killed | Expect::KilledIncidentally) => {
-                report.problems.push(format!(
-                    "{}: SURVIVED, but must be killed: {}",
-                    m.id, m.reason
-                ));
-            }
-            (Run::BuildFailed(out), _) => {
-                report.problems.push(format!(
-                    "{}: mutated crate does not build, so it tests nothing:\n{out}",
-                    m.id
-                ));
-            }
+            Outcome::Problem(p) => report.problems.push(p),
         }
     }
     Ok(report)
+}
+
+/// Apply one mutation in `crate_dir`, run it, restore the file, and judge
+/// the result against `expect`. `Err` only for I/O failures.
+fn evaluate(
+    crate_dir: &Path,
+    name: &str,
+    m: &Mutation,
+    limit: std::time::Duration,
+) -> Result<Outcome, String> {
+    let target = crate_dir.join(&m.file);
+    let original =
+        std::fs::read_to_string(&target).map_err(|e| format!("{}: {e}", target.display()))?;
+    let hits = original.matches(&m.find).count();
+    if hits != 1 {
+        return Ok(Outcome::Problem(format!(
+            "{}: `find` occurs {hits} times in {} (must be exactly once; the mutation is stale)",
+            m.id, m.file
+        )));
+    }
+    let mutated = original.replacen(&m.find, &m.replace, 1);
+    std::fs::write(&target, mutated).map_err(|e| format!("{}: {e}", target.display()))?;
+    let result = match &m.module {
+        Some(module) => verus::module(crate_dir, name, module, Some(limit)),
+        None => verus::run(crate_dir, name, false, Some(limit)),
+    };
+    std::fs::write(&target, &original).map_err(|e| format!("{}: {e}", target.display()))?;
+    Ok(match (result?, m.expect) {
+        (Run::TimedOut(t), _) => Outcome::Problem(format!(
+            "{}: TIMED OUT after {}s and was stopped: the mutant makes Verus run \
+             without end (for example `compute_only` evaluating a sequence index \
+             out of range); rewrite the mutation so the examples stay evaluable",
+            m.id,
+            t.as_secs()
+        )),
+        (Run::ProofFailed(_, out), Expect::Killed) => {
+            match check_certificate(crate_dir, name, m, &original, limit) {
+                Ok(lemma) => Outcome::Killed(format!(
+                    "killed     {}  (certified: violates {lemma}; first failure: {})",
+                    m.id,
+                    first_failure(&out)
+                )),
+                Err(e) => Outcome::Problem(format!("{}: {e}", m.id)),
+            }
+        }
+        (Run::ProofFailed(_, out), Expect::KilledIncidentally) => Outcome::Incidental(format!(
+            "incidental {}  (first failure: {}; {})",
+            m.id,
+            first_failure(&out),
+            m.reason
+        )),
+        (Run::ProofFailed(s, out), Expect::Survives) => Outcome::Problem(format!(
+            "{}: expected to survive but was killed ({s}; first failure: {}); \
+             find out why before changing expect",
+            m.id,
+            first_failure(&out)
+        )),
+        (Run::Verified(_), Expect::Survives) => {
+            Outcome::Survived(format!("survives   {}  (known gap: {})", m.id, m.reason))
+        }
+        (Run::Verified(_), Expect::Killed | Expect::KilledIncidentally) => Outcome::Problem(
+            format!("{}: SURVIVED, but must be killed: {}", m.id, m.reason),
+        ),
+        (Run::BuildFailed(out), _) => Outcome::Problem(format!(
+            "{}: mutated crate does not build, so it tests nothing:\n{out}",
+            m.id
+        )),
+    })
 }
 
 /// How long one mutant (or certificate) run may take: five times the
@@ -557,18 +634,28 @@ fn make_sandbox(c: &Crate, root: &Path) -> Result<PathBuf, String> {
     Ok(sandbox)
 }
 
+/// Copy a whole sandbox, its build output included.
+fn copy_tree(from: &Path, to: &Path) -> Result<(), String> {
+    copy_entries(from, to, true)
+}
+
 fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+    copy_entries(from, to, false)
+}
+
+/// Copy `from` to `to`; `target` directories only if `with_target`.
+fn copy_entries(from: &Path, to: &Path, with_target: bool) -> Result<(), String> {
     std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
     let entries = std::fs::read_dir(from).map_err(|e| format!("{}: {e}", from.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| format!("{}: {e}", from.display()))?;
         let path = entry.path();
-        if path.file_name().is_some_and(|n| n == "target") {
+        if !with_target && path.file_name().is_some_and(|n| n == "target") {
             continue;
         }
         let dest = to.join(entry.file_name());
         if path.is_dir() {
-            copy_dir(&path, &dest)?;
+            copy_entries(&path, &dest, with_target)?;
         } else {
             std::fs::copy(&path, &dest).map_err(|e| format!("{}: {e}", path.display()))?;
         }
