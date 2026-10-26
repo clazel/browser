@@ -43,7 +43,7 @@ pub open spec fn view_certificate_result(
     result: Option<super::exec::CertificateEnvelope<'_>>,
 ) -> Option<CertificateEnvelope> {
     match result {
-        Some(certificate) => Some(certificate@),
+        Some(certificate) => Some(super::exec::view_certificate_envelope(&certificate)),
         None => None,
     }
 }

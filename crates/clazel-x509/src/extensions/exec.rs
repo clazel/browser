@@ -50,12 +50,14 @@ pub struct Extension<'a> {
 impl View for Extension<'_> {
     type V = x509_spec::Extension;
     closed spec fn view(&self) -> Self::V {
-        x509_spec::Extension {
-            oid: der::nats(self.oid@),
-            critical: self.critical,
-            value: self.value@,
-        }
+        view_extension(self)
     }
+}
+
+/// Public mapping needed by composed certificate checks to inspect extension
+/// records without opening a sibling module's closed `View` implementation.
+pub open spec fn view_extension(value: &Extension<'_>) -> x509_spec::Extension {
+    x509_spec::Extension { oid: der::nats(value.oid@), critical: value.critical, value: value.value@ }
 }
 
 /// Extracted subjectAltName entries. Other GeneralName choices retain their
@@ -72,11 +74,16 @@ pub enum GeneralName<'a> {
 impl View for GeneralName<'_> {
     type V = x509_spec::GeneralName;
     closed spec fn view(&self) -> Self::V {
-        match self {
-            GeneralName::DnsName(bytes) => x509_spec::GeneralName::DnsName(bytes@),
-            GeneralName::IpAddress(bytes) => x509_spec::GeneralName::IpAddress(bytes@),
-            GeneralName::Other(number, bytes) => x509_spec::GeneralName::Other(*number, bytes@),
-        }
+        view_general_name(self)
+    }
+}
+
+/// Public mapping for composed parsers inspecting SAN GeneralName variants.
+pub open spec fn view_general_name(value: &GeneralName<'_>) -> x509_spec::GeneralName {
+    match value {
+        GeneralName::DnsName(bytes) => x509_spec::GeneralName::DnsName(bytes@),
+        GeneralName::IpAddress(bytes) => x509_spec::GeneralName::IpAddress(bytes@),
+        GeneralName::Other(number, bytes) => x509_spec::GeneralName::Other(*number, bytes@),
     }
 }
 
@@ -89,18 +96,21 @@ pub struct SubjectAltName<'a> {
 impl View for SubjectAltName<'_> {
     type V = x509_spec::SubjectAltName;
     closed spec fn view(&self) -> Self::V {
-        x509_spec::SubjectAltName {
-            names: view_general_names(self.names@),
-        }
+        view_subject_alt_name(self)
     }
 }
 
+/// Public mapping for composing parsed SAN entries with identity checks.
+pub open spec fn view_subject_alt_name(value: &SubjectAltName<'_>) -> x509_spec::SubjectAltName {
+    x509_spec::SubjectAltName { names: view_general_names(value.names@) }
+}
+
 pub open spec fn view_extensions(items: Seq<Extension<'_>>) -> Seq<x509_spec::Extension> {
-    items.map(|_i: int, item: Extension<'_>| item@)
+    items.map(|_i: int, item: Extension<'_>| view_extension(&item))
 }
 
 pub open spec fn view_general_names(items: Seq<GeneralName<'_>>) -> Seq<x509_spec::GeneralName> {
-    items.map(|_i: int, item: GeneralName<'_>| item@)
+    items.map(|_i: int, item: GeneralName<'_>| view_general_name(&item))
 }
 
 pub open spec fn view_seen_oids(items: Seq<Vec<u64>>) -> Seq<Seq<nat>> {
@@ -122,7 +132,7 @@ pub open spec fn view_subject_alt_name_result(
     result: Option<SubjectAltName<'_>>,
 ) -> Option<x509_spec::SubjectAltName> {
     match result {
-        Some(value) => Some(value@),
+        Some(value) => Some(view_subject_alt_name(&value)),
         None => None,
     }
 }

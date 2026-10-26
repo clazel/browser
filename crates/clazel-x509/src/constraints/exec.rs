@@ -50,13 +50,18 @@ pub struct BasicConstraints<'a> {
 impl View for BasicConstraints<'_> {
     type V = constraint_spec::BasicConstraints;
     closed spec fn view(&self) -> Self::V {
-        constraint_spec::BasicConstraints {
-            ca: self.ca,
-            path_len_constraint: match self.path_len_constraint {
-                Some(bytes) => Some(bytes@),
-                None => None,
-            },
-        }
+        view_basic_constraints(self)
+    }
+}
+
+/// Public mapping for composing BasicConstraints with leaf-role policy.
+pub open spec fn view_basic_constraints(value: &BasicConstraints<'_>) -> constraint_spec::BasicConstraints {
+    constraint_spec::BasicConstraints {
+        ca: value.ca,
+        path_len_constraint: match value.path_len_constraint {
+            Some(bytes) => Some(bytes@),
+            None => None,
+        },
     }
 }
 
@@ -72,8 +77,13 @@ pub struct KeyUsage<'a> {
 impl View for KeyUsage<'_> {
     type V = constraint_spec::KeyUsage;
     closed spec fn view(&self) -> Self::V {
-        constraint_spec::KeyUsage { bits: self.bits@, bit_count: self.bit_count as nat }
+        view_key_usage(self)
     }
+}
+
+/// Public mapping for composing a decoded KeyUsage value with policy checks.
+pub open spec fn view_key_usage(value: &KeyUsage<'_>) -> constraint_spec::KeyUsage {
+    constraint_spec::KeyUsage { bits: value.bits@, bit_count: value.bit_count as nat }
 }
 
 /// Names of the nine RFC 5280 KeyUsage bits.
@@ -102,7 +112,13 @@ pub enum KeyUsageBit {
 impl View for KeyUsageBit {
     type V = constraint_spec::KeyUsageBit;
     closed spec fn view(&self) -> Self::V {
-        match self {
+        view_key_usage_bit(self)
+    }
+}
+
+/// Public mapping for composing KeyUsage checks with policy decoders.
+pub open spec fn view_key_usage_bit(bit: &KeyUsageBit) -> constraint_spec::KeyUsageBit {
+    match bit {
             KeyUsageBit::DigitalSignature => constraint_spec::KeyUsageBit::DigitalSignature,
             KeyUsageBit::ContentCommitment => constraint_spec::KeyUsageBit::ContentCommitment,
             KeyUsageBit::KeyEncipherment => constraint_spec::KeyUsageBit::KeyEncipherment,
@@ -112,7 +128,6 @@ impl View for KeyUsageBit {
             KeyUsageBit::CrlSign => constraint_spec::KeyUsageBit::CrlSign,
             KeyUsageBit::EncipherOnly => constraint_spec::KeyUsageBit::EncipherOnly,
             KeyUsageBit::DecipherOnly => constraint_spec::KeyUsageBit::DecipherOnly,
-        }
     }
 }
 
@@ -134,11 +149,11 @@ impl View for ExtendedKeyUsage {
 }
 
 pub open spec fn view_basic_result(result: Option<BasicConstraints<'_>>) -> Option<constraint_spec::BasicConstraints> {
-    match result { Some(value) => Some(value@), None => None }
+    match result { Some(value) => Some(view_basic_constraints(&value)), None => None }
 }
 
 pub open spec fn view_key_usage_result(result: Option<KeyUsage<'_>>) -> Option<constraint_spec::KeyUsage> {
-    match result { Some(value) => Some(value@), None => None }
+    match result { Some(value) => Some(view_key_usage(&value)), None => None }
 }
 
 pub open spec fn view_eku_result(result: Option<ExtendedKeyUsage>) -> Option<constraint_spec::ExtendedKeyUsage> {
@@ -148,13 +163,13 @@ pub open spec fn view_eku_result(result: Option<ExtendedKeyUsage>) -> Option<con
 pub open spec fn view_basic_option(
     value: Option<BasicConstraints<'_>>,
 ) -> Option<constraint_spec::BasicConstraints> {
-    match value { Some(item) => Some(item@), None => None }
+    match value { Some(item) => Some(view_basic_constraints(&item)), None => None }
 }
 
 pub open spec fn view_key_usage_option(
     value: Option<KeyUsage<'_>>,
 ) -> Option<constraint_spec::KeyUsage> {
-    match value { Some(item) => Some(item@), None => None }
+    match value { Some(item) => Some(view_key_usage(&item)), None => None }
 }
 
 /// RFC 5280 §4.2.1.9: decode the complete BasicConstraints SEQUENCE.
@@ -230,7 +245,7 @@ fn key_usage_index(bit: KeyUsageBit) -> (result: usize)
 
 /// Query one of the nine named KeyUsage bits.
 pub fn key_usage_has(usage: KeyUsage<'_>, bit: KeyUsageBit) -> (result: bool)
-    ensures result == constraint_spec::key_usage_has(usage@, bit@)
+    ensures result == constraint_spec::key_usage_has(view_key_usage(&usage), view_key_usage_bit(&bit))
 {
     let index = key_usage_index(bit);
     assert(index <= 8);
@@ -257,8 +272,12 @@ pub fn key_usage_has(usage: KeyUsage<'_>, bit: KeyUsageBit) -> (result: bool)
         assert(quotient as nat == (byte as nat) / clazel_der::spec::pow2_unused(exponent));
         assert(remainder as nat
             == ((byte as nat) / clazel_der::spec::pow2_unused(exponent)) % 2);
-        assert(index as nat == constraint_spec::key_usage_bit_index(bit@));
+        assert(index as nat == constraint_spec::key_usage_bit_index(view_key_usage_bit(&bit)));
         assert((index as nat) < usage.bits@.len() * 8);
+        assert(view_key_usage(&usage).bits == usage.bits@);
+        assert(view_key_usage(&usage).bit_count == usage.bit_count as nat);
+        reveal(view_key_usage);
+        reveal(view_key_usage_bit);
         reveal(constraint_spec::key_usage_has);
     }
     remainder == 1

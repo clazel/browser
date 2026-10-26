@@ -38,12 +38,17 @@ pub struct CertificateEnvelope<'a> {
 impl View for CertificateEnvelope<'_> {
     type V = cert_spec::CertificateEnvelope;
     closed spec fn view(&self) -> Self::V {
-        cert_spec::CertificateEnvelope {
-            tbs_certificate_der: self.tbs_certificate_der@,
-            signature_algorithm: self.signature_algorithm@,
-            signature_unused_bits: self.signature_unused_bits,
-            signature_bits: self.signature_bits@,
-        }
+        view_certificate_envelope(self)
+    }
+}
+
+/// Public mapping for composing the parsed envelope with TBS and leaf checks.
+pub open spec fn view_certificate_envelope(value: &CertificateEnvelope<'_>) -> cert_spec::CertificateEnvelope {
+    cert_spec::CertificateEnvelope {
+        tbs_certificate_der: value.tbs_certificate_der@,
+        signature_algorithm: super::contract::view_algorithm_identifier(&value.signature_algorithm),
+        signature_unused_bits: value.signature_unused_bits,
+        signature_bits: value.signature_bits@,
     }
 }
 
