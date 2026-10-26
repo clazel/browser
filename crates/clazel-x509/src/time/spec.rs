@@ -106,6 +106,16 @@ pub open spec fn digits_only(bytes: Seq<u8>, pos: int, count: int) -> bool
         ==> b'0' <= bytes[i] && bytes[i] <= b'9'
 }
 
+/// RFC 5280 §4.1.2.5.1's two-digit year pivot.
+pub open spec fn utc_year(yy: nat) -> nat {
+    if yy >= 50 { 1900 + yy } else { 2000 + yy }
+}
+
+/// X.680 §47.3 UTCTime seconds are in the range 00 through 59.
+pub open spec fn utc_seconds_valid(time: CertificateTime) -> bool {
+    time.second <= 59
+}
+
 /// UTCTime or GeneralizedTime content under the RFC 5280 §4.1.2.5 profile.
 pub open spec fn decode_time(kind: TimeKind, bytes: Seq<u8>) -> Option<CertificateTime> {
     match kind {
@@ -116,7 +126,7 @@ pub open spec fn decode_time(kind: TimeKind, bytes: Seq<u8>) -> Option<Certifica
             else {
                 // 3. §4.1.2.5.1 maps YY >= 50 to 19YY and YY < 50 to 20YY.
                 let yy = decimal_digits(bytes, 0, 2);
-                let year = if yy >= 50 { 1900 + yy } else { 2000 + yy };
+                let year = utc_year(yy);
                 let time = CertificateTime {
                     year: year as u16,
                     month: decimal_digits(bytes, 2, 2) as u8,
@@ -126,7 +136,7 @@ pub open spec fn decode_time(kind: TimeKind, bytes: Seq<u8>) -> Option<Certifica
                     second: decimal_digits(bytes, 10, 2) as u8,
                 };
                 // 4. Validate Gregorian fields and X.680 §47.3's seconds 00–59.
-                if calendar_time_valid(time) && time.second <= 59 { Some(time) } else { None }
+                if calendar_time_valid(time) && utc_seconds_valid(time) { Some(time) } else { None }
             }
         },
         TimeKind::Generalized => {
