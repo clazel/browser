@@ -1,0 +1,438 @@
+{
+  "mutations": [
+    {
+      "id": "certificate-tbs-preserves-full-der-tlv",
+      "file": "src/certificate/spec.rs",
+      "find": "tbs_certificate_der: input.subrange(outer.cstart as int, tbs.cend as int),",
+      "replace": "tbs_certificate_der: input.subrange(tbs.cstart as int, tbs.cend as int),",
+      "expect": "killed",
+      "reason": "The signature-covered TBS value would omit its SEQUENCE tag and length, violating RFC 5280 \u00a74.1.1.3's requirement to sign the DER-encoded TBSCertificate.",
+      "certificate": {
+        "file": "src/certificate/certificates.rs",
+        "lemma": "super::lemmas::lemma_fixture_preserves_full_tbs_tlv()",
+        "witness": "match parse_certificate(seq![0x30u8, 0x0E, 0x30, 0x02, 0x05, 0x00, 0x30, 0x04, 0x06, 0x02, 0x2A, 0x03, 0x03, 0x02, 0x03, 0xA8]) { Some(c) => c.tbs_certificate_der =~= seq![0x05u8, 0x00], None => false }"
+      }
+    },
+    {
+      "id": "certificate-rejects-input-after-outer-sequence",
+      "file": "src/certificate/spec.rs",
+      "find": "outer.cend == input.len()",
+      "replace": "outer.cend <= input.len()",
+      "expect": "killed",
+      "reason": "Bytes after the outer Certificate SEQUENCE would be silently accepted, rather than requiring exactly one Certificate value.",
+      "certificate": {
+        "file": "src/certificate/certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_trailing_input()",
+        "witness": "parse_certificate(seq![0x30u8, 0x0E, 0x30, 0x02, 0x05, 0x00, 0x30, 0x04, 0x06, 0x02, 0x2A, 0x03, 0x03, 0x02, 0x00, 0xAB, 0x05, 0x00]).is_some()"
+      }
+    },
+    {
+      "id": "certificate-rejects-extra-outer-child",
+      "file": "src/certificate/spec.rs",
+      "find": "if after_signature == outer.cend",
+      "replace": "if after_signature <= outer.cend",
+      "expect": "killed",
+      "reason": "A fourth child after signatureValue would be accepted, although RFC 5280 \u00a74.1 defines exactly three required outer fields.",
+      "certificate": {
+        "file": "src/certificate/certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_extra_outer_child()",
+        "witness": "parse_certificate(seq![0x30u8, 0x10, 0x30, 0x02, 0x05, 0x00, 0x30, 0x04, 0x06, 0x02, 0x2A, 0x03, 0x03, 0x02, 0x00, 0xAB, 0x05, 0x00]).is_some()"
+      }
+    },
+    {
+      "id": "dns-wildcard-one-label-only",
+      "file": "src/spec.rs",
+      "find": "let dot = first_dot(reference, 0);",
+      "replace": "let dot = first_dot(reference, first_dot(reference, 0) + 1);",
+      "expect": "killed",
+      "reason": "The wildcard would skip two reference labels and match a.b.example.test, contrary to RFC 9525 \u00a76.3's one-label wildcard rule.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::lemmas::lemma_dns_wildcard_matches_one_label_only()",
+        "witness": "wildcard_matches_reference(seq![b'a', b'.', b'b', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'], seq![b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'])"
+      }
+    },
+    {
+      "id": "ip-id-must-compare-all-octets",
+      "file": "src/spec.rs",
+      "find": "&& reference =~= presented",
+      "replace": "&& reference.len() == presented.len()",
+      "expect": "killed",
+      "reason": "Equal-width but unequal IP identifiers would match, contradicting RFC 9525 \u00a76.4's octet-for-octet comparison.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::lemmas::lemma_ip_unequal_does_not_match(seq![192u8, 0, 2, 1], seq![192u8, 0, 2, 2])",
+        "witness": "service_identity_match(ReferenceIdentity::Ip(seq![192u8, 0, 2, 1]), PresentedIdentity::Ip(seq![192u8, 0, 2, 2]))"
+      }
+    },
+    {
+      "id": "x509-utc-pivot-50-is-1950",
+      "file": "src/time/spec.rs",
+      "find": "if yy >= 50 { 1900 + yy } else { 2000 + yy }",
+      "replace": "if yy > 50 { 1900 + yy } else { 2000 + yy }",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.5.1 maps UTC year 50 to 1950; the mutant maps it to 2050.",
+      "certificate": {
+        "file": "src/time/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_utc_pivot_50_is_1950()",
+        "witness": "utc_year(50) == 2050"
+      }
+    },
+    {
+      "id": "x509-utc-rejects-leap-second",
+      "file": "src/time/spec.rs",
+      "find": "pub open spec fn utc_seconds_valid(time: CertificateTime) -> bool {\n    time.second <= 59\n}",
+      "replace": "pub open spec fn utc_seconds_valid(time: CertificateTime) -> bool {\n    time.second <= 60\n}",
+      "expect": "killed",
+      "reason": "UTCTime seconds are 00 through 59; RFC 5280 does not allow the GeneralizedTime leap-second exception.",
+      "certificate": {
+        "file": "src/time/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_utc_second_60()",
+        "witness": "utc_seconds_valid(CertificateTime { year: 2016, month: 12, day: 31, hour: 23, minute: 59, second: 60 })"
+      }
+    },
+    {
+      "id": "x509-validity-endpoints-ordered",
+      "file": "src/time/spec.rs",
+      "find": "&& time_le(not_before, not_after)",
+      "replace": "&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 validity requires notBefore no later than notAfter.",
+      "certificate": {
+        "file": "src/time/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_reversed_validity()",
+        "witness": "make_validity(CertificateTime { year: 2021, month: 1, day: 1, hour: 0, minute: 0, second: 0 }, CertificateTime { year: 2020, month: 1, day: 1, hour: 0, minute: 0, second: 0 }) is Some"
+      }
+    },
+    {
+      "id": "x509-extensions-reject-duplicate-oids",
+      "file": "src/extensions/spec.rs",
+      "find": "&& !oid_seen(seen, extension.oid, 0) =>",
+      "replace": "&& true =>",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.9 prohibits duplicate extnID values in Extensions.",
+      "certificate": {
+        "file": "src/extensions/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_duplicate_san_extensions()",
+        "witness": "parse_extensions(seq![0x30u8, 0x12, 0x30, 0x07, 0x06, 0x03, 0x55, 0x1d, 0x11, 0x04, 0x00, 0x30, 0x07, 0x06, 0x03, 0x55, 0x1d, 0x11, 0x04, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-san-ip-address-width",
+      "file": "src/extensions/spec.rs",
+      "find": "if value.len() == 4 || value.len() == 16 {",
+      "replace": "if value.len() > 0 {",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.2.1.6 requires iPAddress to contain exactly four or sixteen octets.",
+      "certificate": {
+        "file": "src/extensions/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_one_octet_ip_address()",
+        "witness": "parse_subject_alt_name(seq![0x30u8, 0x03, 0x87, 0x01, 0x01]) is Some"
+      }
+    },
+    {
+      "id": "x509-der-omits-critical-default-false",
+      "file": "src/extensions/spec.rs",
+      "find": "Some((true, after_critical)) => match clazel_der::spec::read_octet_string(input, after_critical, contents_end) {",
+      "replace": "Some((critical, after_critical)) => match clazel_der::spec::read_octet_string(input, after_critical, contents_end) {",
+      "expect": "killed",
+      "reason": "X.690 \u00a711.5 requires the DEFAULT FALSE critical component to be omitted from DER.",
+      "certificate": {
+        "file": "src/extensions/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_explicit_default_false()",
+        "witness": "parse_extensions(seq![0x30u8, 0x0c, 0x30, 0x0a, 0x06, 0x03, 0x55, 0x1d, 0x11, 0x01, 0x01, 0x00, 0x04, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-rejects-explicit-default-v1",
+      "file": "src/tbs/spec.rs",
+      "find": "if value == 1 || value == 2 { Some((value, first.cend)) } else { None }",
+      "replace": "if value <= 2 { Some((value, first.cend)) } else { None }",
+      "expect": "killed",
+      "reason": "DER DEFAULT v1 must be omitted; RFC 5280 \u00a74.1.2.1 gives omitted version as v1.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_explicit_default_v1()",
+        "witness": "parse_version(seq![0xa0u8, 0x03, 0x02, 0x01, 0x00], 0, 5) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-v1-rejects-unique-id",
+      "file": "src/tbs/spec.rs",
+      "find": "if version == 0 || !valid_implicit_bit_string(contents) { None }",
+      "replace": "if !valid_implicit_bit_string(contents) { None }",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.1/.2 permits unique identifiers only in v2 and v3 certificates.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_v1_unique_id()",
+        "witness": "optional_unique(seq![0x81u8, 0x02, 0x00, 0x80], 0, 4, 1, 0) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-extensions-require-v3",
+      "file": "src/tbs/spec.rs",
+      "find": "Some(inner) if version == 2 && inner.cstart == start",
+      "replace": "Some(inner) if version <= 2 && inner.cstart == start",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.3 permits Extensions only for version 3 certificates.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_v2_extensions()",
+        "witness": "optional_extensions(seq![0xa3u8, 0x02, 0x30, 0x00], 0, 4, 1) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-retains-full-signed-tlv",
+      "file": "src/tbs/spec.rs",
+      "find": "tbs_der: input.subrange(0, outer.cend as int),",
+      "replace": "tbs_der: input.subrange(outer.cstart as int, outer.cend as int),",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.1.3 requires the complete DER-encoded TBSCertificate as the signature input, including the SEQUENCE tag and length.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_prefix_preserves_complete_tlv()",
+        "witness": "match parse_prefix(seq![0x30u8, 0x03, 0x02, 0x01, 0x01]) { Some(prefix) => prefix.tbs_der =~= seq![0x02u8, 0x01, 0x01], None => false }"
+      }
+    },
+    {
+      "id": "x509-basic-constraints-omits-default-ca-false",
+      "file": "src/constraints/spec.rs",
+      "find": "Some((true, after_ca)) => parse_path_len(input, after_ca, end, true),",
+      "replace": "Some((ca, after_ca)) => parse_path_len(input, after_ca, end, ca),",
+      "expect": "killed",
+      "reason": "DER omits BasicConstraints cA when its DEFAULT value is FALSE (X.690 §11.5).",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_explicit_default_ca_false()",
+        "witness": "parse_basic_constraints(seq![0x30u8, 0x03, 0x01, 0x01, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-basic-constraints-pathlen-requires-ca",
+      "file": "src/constraints/spec.rs",
+      "find": "} else if !ca {\n        None\n    } else {",
+      "replace": "} else if false {\n        None\n    } else {",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.9 permits pathLenConstraint only when cA is asserted.",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_path_length_without_ca()",
+        "witness": "parse_basic_constraints(seq![0x30u8, 0x03, 0x02, 0x01, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-key-usage-rejects-unnamed-bits",
+      "file": "src/constraints/spec.rs",
+      "find": "if count > 0 && count <= 9",
+      "replace": "if count > 0",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.3 names KeyUsage bits only through bit 8; higher bits are unsupported.",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_unknown_key_usage_bit()",
+        "witness": "parse_key_usage(seq![0x03u8, 0x03, 0x06, 0x00, 0x40]) is Some"
+      }
+    },
+    {
+      "id": "x509-extended-key-usage-rejects-duplicate-oids",
+      "file": "src/constraints/spec.rs",
+      "find": "&& !oid_in(seen, oid, 0) =>",
+      "replace": "&& true =>",
+      "expect": "killed",
+      "reason": "Repeated KeyPurposeId values are rejected by this decoder's uniqueness policy.",
+      "certificate": {
+        "file": "src/constraints/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_duplicate_eku_oid()",
+        "witness": "parse_extended_key_usage(seq![0x30u8, 0x0c, 0x06, 0x04, 0x55, 0x1d, 0x25, 0x00, 0x06, 0x04, 0x55, 0x1d, 0x25, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "spki-rsa-requires-null-parameters",
+      "file": "src/spki/spec.rs",
+      "find": "if algorithm.parameters_der != Some(seq![0x05u8, 0x00u8]) || unused != 0 { None }",
+      "replace": "if unused != 0 { None }",
+      "expect": "killed",
+      "reason": "RFC 3279 §2.3.1 requires rsaEncryption AlgorithmIdentifier parameters to be DER NULL.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_rsa_without_null_parameters()",
+        "witness": "parse_subject_public_key_info(seq![0x30u8,0x18,0x30,0x0B,0x06,0x09,0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x01,0x01,0x03,0x09,0x00,0x30,0x06,0x02,0x01,0x03,0x02,0x01,0x03]) is Some"
+      }
+    },
+    {
+      "id": "spki-rsa-modulus-nonzero",
+      "file": "src/spki/spec.rs",
+      "find": "if positive_integer_value(input, modulus_start, modulus_end) =>",
+      "replace": "if true =>",
+      "expect": "killed",
+      "reason": "The supported RSA structural profile requires a nonzero positive modulus.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_zero_rsa_modulus()",
+        "witness": "parse_subject_public_key_info(seq![0x30u8,0x1A,0x30,0x0D,0x06,0x09,0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x01,0x01,0x05,0x00,0x03,0x09,0x00,0x30,0x06,0x02,0x01,0x00,0x02,0x01,0x03]) is Some"
+      }
+    },
+    {
+      "id": "spki-rejects-trailing-input",
+      "file": "src/spki/spec.rs",
+      "find": "outer.cend == input.len()",
+      "replace": "outer.cend <= input.len()",
+      "expect": "killed",
+      "reason": "An SPKI decoder consumes exactly the complete input DER value and rejects trailing bytes.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_trailing_spki_input()",
+        "witness": "parse_subject_public_key_info(seq![0x30u8,0x1A,0x30,0x0D,0x06,0x09,0x2A,0x86,0x48,0x86,0xF7,0x0D,0x01,0x01,0x01,0x05,0x00,0x03,0x09,0x00,0x30,0x06,0x02,0x01,0x03,0x02,0x01,0x03,0x00]) is Some"
+      }
+    },
+    {
+      "id": "leaf-rejects-unprocessed-critical-extension",
+      "file": "src/leaf/spec.rs",
+      "find": "if !supported_critical_extensions(extensions, 0) { None }",
+      "replace": "if false { None }",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2 requires a certificate processor to reject a critical extension whose semantics it does not process.",
+      "certificate": {
+        "file": "src/leaf/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_unknown_critical_extension_blocks_leaf_result()",
+        "witness": "check_extensions(seq![crate::extensions::spec::Extension { oid: seq![2nat,5,29,17], critical: false, value: seq![0x30u8,0x12,0x82,0x10,b'w',b'w',b'w',b'.',b'e',b'x',b'a',b'm',b'p',b'l',b'e',b'.',b't',b'e',b's',b't'] }, crate::extensions::spec::Extension { oid: seq![1nat,2,3], critical: true, value: seq![0x05u8,0x00] }], crate::tbs::spec::TbsCertificate { version: 2, serial_number_der: seq![0x02u8,0x01,0x01], signature: crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2,3], parameters_der: None }, issuer_der: seq![0x30u8,0x00], not_before: crate::time::spec::CertificateTime { year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0 }, not_after: crate::time::spec::CertificateTime { year: 2027, month: 1, day: 1, hour: 0, minute: 0, second: 0 }, subject_der: seq![0x30u8,0x00], subject_public_key_info_der: seq![0x30u8,0x00], issuer_unique_id_der: None, subject_unique_id_der: None, extensions_der: None, extensions_sequence_der: None, tbs_certificate_der: seq![0x30u8,0x00] }, crate::spec::ReferenceIdentity::Dns(seq![b'w',b'w',b'w',b'.',b'e',b'x',b'a',b'm',b'p',b'l',b'e',b'.',b't',b'e',b's',b't']), crate::time::spec::CertificateTime { year: 2026, month: 6, day: 1, hour: 0, minute: 0, second: 0 }, LeafPolicy { allow_any_extended_key_usage: false }) is Some"
+      }
+    },
+    {
+      "id": "sig-rsa-sha2-accepts-null",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "parameters == None || parameters == Some(seq![0x05u8, 0x00u8])",
+      "replace": "parameters == None",
+      "expect": "killed",
+      "reason": "RFC 4055 §5 permits rsaEncryption SHA-2 parameters to be absent or DER NULL.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_sha256_null_parameters_are_accepted()",
+        "witness": "classify(crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,840nat,113549nat,1nat,1nat,11nat], parameters_der: Some(seq![0x05u8,0x00u8]) }) == None"
+      }
+    },
+    {
+      "id": "sig-match-supported-profile-hash",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "tbs_hash == outer_hash && signature_unused_bits == 0",
+      "replace": "signature_unused_bits == 0",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.1.1.2 requires the TBS and outer signature algorithms to identify the same profile.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_rsa_sha256_and_sha384_do_not_match()",
+        "witness": "prepare_signature(crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,840nat,113549nat,1nat,1nat,11nat], parameters_der: None }, crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,840nat,113549nat,1nat,1nat,12nat], parameters_der: None }, seq![0x30u8,0x00], seq![0x01u8], 0) is Some"
+      }
+    },
+    {
+      "id": "sig-supported-unused-bits-zero",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "&& signature_unused_bits == 0",
+      "replace": "&& true",
+      "expect": "killed",
+      "reason": "The supported RSA signature profile requires an octet-aligned BIT STRING.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_supported_signature_requires_zero_unused_bits()",
+        "witness": "prepare_signature(crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,840nat,113549nat,1nat,1nat,11nat], parameters_der: None }, crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,840nat,113549nat,1nat,1nat,11nat], parameters_der: None }, seq![0x30u8,0x00], seq![0xA0u8], 1) is Some"
+      }
+    },
+    {
+      "id": "sig-unsupported-identifiers-must-match",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "if unsupported_identifiers_equal(tbs_algorithm, outer_algorithm) =>",
+      "replace": "if true =>",
+      "expect": "killed",
+      "reason": "Even when an algorithm is unsupported here, RFC 5280 §4.1.1.2 requires both identifiers to agree.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_unsupported_identifiers_must_match()",
+        "witness": "prepare_signature(crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,3nat], parameters_der: None }, crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,4nat], parameters_der: None }, seq![0x30u8,0x00], seq![0xA0u8], 0) is Some"
+      }
+    },
+    {
+      "id": "name-constraints-general-subtrees-nonempty",
+      "file": "src/name_constraints/spec.rs",
+      "find": "if acc.len() > 0 { Some((acc, end)) } else { None }",
+      "replace": "Some((acc, end))",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.2.1.10 defines GeneralSubtrees with SIZE (1..MAX); an empty permittedSubtrees field is rejected.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_empty_general_subtrees_are_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x02,0xa0,0x00]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-default-minimum-omitted-and-maximum-absent",
+      "file": "src/name_constraints/spec.rs",
+      "find": "Some((base, next)) if next == finish =>",
+      "replace": "Some((base, next)) if next <= finish =>",
+      "expect": "killed",
+      "reason": "X.690 \u00a711.5 requires omission of DEFAULT minimum zero, and this profile requires maximum absent.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_explicit_default_minimum_is_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x0a,0xa0,0x08,0x30,0x06,0x82,0x01,b'a',0x80,0x01,0x00]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-ip-requires-address-mask-pair",
+      "file": "src/name_constraints/spec.rs",
+      "find": "if value.len() == 8 {",
+      "replace": "if value.len() == 4 {",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.2.1.10 encodes IPv4 name constraints as eight octets: four address plus four mask.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ip_constraint_requires_address_and_mask()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x0a,0xa0,0x08,0x30,0x06,0x87,0x04,192,0,2,1]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-permitted-precedes-excluded",
+      "file": "src/name_constraints/spec.rs",
+      "find": "Some((excluded, next)) if next == end =>",
+      "replace": "Some((excluded, next)) if next <= end =>",
+      "expect": "killed",
+      "reason": "The parser must not ignore a trailing permittedSubtrees field after excludedSubtrees; NameConstraints fields retain ASN.1 order.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reversed_name_constraints_fields_are_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x0e,0xa1,0x05,0x30,0x03,0x82,0x01,b'a',0xa0,0x05,0x30,0x03,0x82,0x01,b'a']) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-rejects-trailing-outer-bytes",
+      "file": "src/name_constraints/spec.rs",
+      "find": "outer.cstart == start && outer.cend == end && end == input.len()",
+      "replace": "outer.cstart == start && outer.cend == end && end <= input.len()",
+      "expect": "killed",
+      "reason": "The parser consumes exactly one complete NameConstraints DER value and rejects trailing bytes.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_trailing_name_constraints_bytes_are_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x00,0x05,0x00]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-rdn-rejects-descending-set-of",
+      "file": "src/name/spec.rs",
+      "find": "if !ordered",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.4 and X.690 \u00a711.6 require SET OF AttributeTypeAndValue encodings to be nondecreasing under padded octet comparison.",
+      "certificate": {
+        "file": "src/name/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_descending_rdn_attributes_are_rejected()",
+        "witness": "parse_name(seq![0x30u8,0x16,0x31,0x14,0x30,0x08,0x06,0x03,0x55,0x04,0x03,0x0c,0x01,b'z',0x30,0x08,0x06,0x03,0x55,0x04,0x03,0x0c,0x01,b'a']) is Some"
+      }
+    }
+  ]
+}
