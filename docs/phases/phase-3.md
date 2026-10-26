@@ -598,8 +598,21 @@ every continuation, resuming from the saved state equals parsing from the
 start; `feed` requires and keeps `wf`. `request.rs` specifies a request
 parser (HTTP/1.1 only, the target a run of VCHAR, no leading empty lines,
 no body) and proves `parse_request(serialize_request(r) + more)` gives `r`
-back for every valid request within the limits. Not written: the Fetch
-"HTTP-network fetch" comparison the plan names.
+back for every valid request within the limits. The Fetch comparison
+(`message/independent_fetch.rs`, Fetch commit `59afe34`) is narrower than the
+plan expected: "HTTP-network fetch" defers the wire format to HTTP ("follow
+the relevant requirements from HTTP") and only forwards the bytes HTTP
+transmits (closing the stream when the body is "done normally", erroring it
+on abort), and Fetch has no text for the chunked coding, the read-until-close
+rule or truncation, so none is invented. What Fetch does define is "extract a
+length" (with header list "get" and "get, decode, and split"), transcribed
+and proven (`theorem_fetch_extract_length`) against `body_length` for every
+field section when no `Transfer-Encoding` is present and the status and
+method give a body: a number exactly when the spec's `Content-Length` is
+valid (the same number, `Invalid` only past the body limit), failure only for
+`Invalid`, no line for `Close`. The difference: a present but non-numeric
+`Content-Length` is null in Fetch (ignored) and `Invalid` here (RFC 9112
+§6.3 item 5). The header lists the rest.
 
 ### 3.3 HTTP conformance (M)
 
