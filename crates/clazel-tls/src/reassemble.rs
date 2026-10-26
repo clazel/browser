@@ -88,7 +88,7 @@ impl Reassembler {
     /// The buffer holds fewer bytes than a message header and the largest
     /// body: the reassembler is bounded. Every method keeps it.
     pub open spec fn wf(&self) -> bool {
-        self.buf@.len() < HANDSHAKE_HEADER + MAX_HANDSHAKE_BODY
+        self@.buf.len() < HANDSHAKE_HEADER + MAX_HANDSHAKE_BODY
     }
 
     /// The state before any record ([`super::spec::reasm_new`]).
