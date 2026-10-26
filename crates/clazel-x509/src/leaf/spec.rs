@@ -232,46 +232,55 @@ pub open spec fn check_extensions(
             None => None,
             Some(san) => {
                 // 1. Require only GeneralName semantics implemented here and a DNS/IP match.
-                let identity_ok = only_supported_general_names(san.names, 0)
-                    && san_matches_reference(san.names, reference, 0);
-                match (optional_basic_constraints(extensions), optional_key_usage(extensions),
-                    optional_extended_key_usage(extensions)) {
-                    // 2. Malformed recognized extension values fail closed.
-                    (Some(basic), Some(usage), Some(eku)) => {
+                if !only_supported_general_names(san.names, 0)
+                    || !san_matches_reference(san.names, reference, 0) { None }
+                else { match (optional_basic_constraints(extensions), optional_key_usage(extensions)) {
+                    (Some(basic), Some(usage)) => {
+                        // 2. If KeyUsage is present, TLS 1.3 server auth needs digitalSignature.
                         let digital_signature_allowed = match usage {
                             Some(value) => crate::constraints::spec::key_usage_has(
                                 value, crate::constraints::spec::KeyUsageBit::DigitalSignature),
                             None => true,
                         };
-                        // 3. Process keyCertSign/pathLen coupling and reject CA-role leaves.
-                        let role_compatible = crate::constraints::spec::basic_constraints_compatible(basic, usage);
-                        let leaf_role_allowed = role_compatible && match basic {
-                            Some(value) => !value.ca, None => true,
-                        };
-                        // 4. An absent EKU is unrestricted; a present EKU must permit serverAuth.
-                        let server_auth_allowed = match eku {
-                            Some(value) => crate::constraints::spec::eku_allows_server_auth(
-                                value, policy.allow_any_extended_key_usage),
-                            None => true,
-                        };
-                        // 5. Compare captured time with the inclusive certificate validity.
-                        let valid_at = crate::time::spec::validity_contains(
-                            crate::time::spec::Validity { not_before: tbs.not_before, not_after: tbs.not_after }, now);
-                        if identity_ok && digital_signature_allowed && leaf_role_allowed
-                            && server_auth_allowed && valid_at {
-                            Some(PartialLeafChecks {
-                                reference, now, not_before: tbs.not_before, not_after: tbs.not_after,
-                                identity_matched: true, valid_at_captured_time: true,
-                                server_auth_purpose_allowed: true, digital_signature_allowed: true,
-                                leaf_role_allowed: true, key_usage_present: usage.is_some(),
-                                extended_key_usage_present: eku.is_some(),
-                                basic_constraints_present: basic.is_some(),
-                                state: PartialValidationState::NeedsPathValidation,
-                            })
-                        } else { None }
+                        if !digital_signature_allowed { None }
+                        else {
+                            // 3. Process keyCertSign/pathLen coupling and reject CA-role leaves.
+                            let role_compatible = crate::constraints::spec::basic_constraints_compatible(basic, usage);
+                            let leaf_role_allowed = role_compatible && match basic {
+                                Some(value) => !value.ca, None => true,
+                            };
+                            if !leaf_role_allowed { None }
+                            else { match optional_extended_key_usage(extensions) {
+                                None => None,
+                                Some(eku) => {
+                                    // 4. An absent EKU is unrestricted; a present EKU must permit serverAuth.
+                                    let server_auth_allowed = match eku {
+                                        Some(value) => crate::constraints::spec::eku_allows_server_auth(
+                                            value, policy.allow_any_extended_key_usage),
+                                        None => true,
+                                    };
+                                    if !server_auth_allowed { None }
+                                    else {
+                                        // 5. Compare captured time with the inclusive certificate validity.
+                                        let valid_at = crate::time::spec::validity_contains(
+                                            crate::time::spec::Validity { not_before: tbs.not_before, not_after: tbs.not_after }, now);
+                                        if !valid_at { None }
+                                        else { Some(PartialLeafChecks {
+                                            reference, now, not_before: tbs.not_before, not_after: tbs.not_after,
+                                            identity_matched: true, valid_at_captured_time: true,
+                                            server_auth_purpose_allowed: true, digital_signature_allowed: true,
+                                            leaf_role_allowed: true, key_usage_present: usage.is_some(),
+                                            extended_key_usage_present: eku.is_some(),
+                                            basic_constraints_present: basic.is_some(),
+                                            state: PartialValidationState::NeedsPathValidation,
+                                        }) }
+                                    }
+                                },
+                            }}
+                        }
                     },
                     _ => None,
-                }
+                }}
             },
         },
     }}
