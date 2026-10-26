@@ -141,7 +141,7 @@ fn exact_send_ack_gates_peer_input_and_wrong_ack_is_terminal() -> Result<(), Str
 }
 
 #[test]
-fn ccs_is_dropped_during_fragmented_server_hello_without_losing_prefix() -> Result<(), String> {
+fn ccs_inside_fragmented_server_hello_is_unexpected_message() -> Result<(), String> {
     let (mut bootstrap, client_wire) = started(SESSION)?;
     ack_initial(&mut bootstrap, &client_wire)?;
 
@@ -152,27 +152,35 @@ fn ccs_is_dropped_during_fragmented_server_hello_without_losing_prefix() -> Resu
     assert_eq!(consumed, first_record.len());
     assert!(matches!(first_action, Action::None));
 
-    // RFC 8446 §5 specifically requires dropping a valid unencrypted CCS
-    // between ClientHello and peer Finished, including during reassembly.
+    // RFC 8446 §5 says to drop a CCS at any time, but §5.1 forbids any other
+    // record between fragments of one handshake message. Inside a message the
+    // CCS is fatal (docs/ERRATA.md); it is dropped only at a boundary.
+    let dummy_ccs = [20, 3, 3, 0, 1, 1];
+    let (consumed, ccs_action) = bootstrap.feed(&dummy_ccs);
+    assert_eq!(consumed, dummy_ccs.len());
+    assert!(matches!(ccs_action, Action::Fail(UNEXPECTED_MESSAGE)));
+
+    // The failure is terminal: the remaining fragment is not accepted.
+    let last_record = plaintext(22, hello.get(split..).ok_or("missing last fragment")?);
+    let (_, final_action) = bootstrap.feed(&last_record);
+    assert!(!matches!(final_action, Action::Established(_)));
+    Ok(())
+}
+
+#[test]
+fn ccs_at_message_boundary_before_server_hello_is_dropped() -> Result<(), String> {
+    let (mut bootstrap, client_wire) = started(SESSION)?;
+    ack_initial(&mut bootstrap, &client_wire)?;
+
     let dummy_ccs = [20, 3, 3, 0, 1, 1];
     let (consumed, ccs_action) = bootstrap.feed(&dummy_ccs);
     assert_eq!(consumed, dummy_ccs.len());
     assert!(matches!(ccs_action, Action::None));
 
-    let last_record = plaintext(22, hello.get(split..).ok_or("missing last fragment")?);
-    let (consumed, final_action) = bootstrap.feed(&last_record);
-    assert_eq!(consumed, last_record.len());
-    let established = match final_action {
-        Action::Established(established) => established,
-        _ => return Err("fragmented final ServerHello was not accepted".to_owned()),
-    };
-    let (accepted_config, transcript, peer_key) = established.into_parts();
-    assert_eq!(accepted_config.host, HOST);
-    assert_eq!(peer_key, SERVER_KEY);
-    assert_eq!(
-        transcript.phase(),
-        clazel_tls::transcript::spec::Phase::Handshake
-    );
+    let hello = plaintext(22, &handshake(2, &server_hello(SESSION, false)));
+    let (consumed, action) = bootstrap.feed(&hello);
+    assert_eq!(consumed, hello.len());
+    assert!(matches!(action, Action::Established(_)));
     Ok(())
 }
 

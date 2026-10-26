@@ -50,4 +50,26 @@ pub proof fn lemma_legacy_server_hello_uses_protocol_version()
     ) == Some(crate::spec::PROTOCOL_VERSION)) by (compute_only);
 }
 
+/// A hash that is irrelevant to a CCS event.
+pub open spec fn empty_hash(_messages: Seq<u8>) -> Seq<u8> { seq![] }
+
+/// A bootstrap state awaiting ServerHello with `buf` already reassembled.
+pub open spec fn awaiting_with_buffer(buf: Seq<u8>) -> super::bootstrap_spec::State {
+    super::bootstrap_spec::State { mode: super::bootstrap_spec::Mode::AwaitServerHello,
+        hello: None, pending_flight: seq![], compatibility: true,
+        reassembly: crate::spec::Reasm { buf } }
+}
+
+/// RFC 8446 §5.1 (docs/ERRATA.md): a CCS inside a fragmented ServerHello is
+/// fatal, while the same record at a message boundary is still dropped.
+pub proof fn lemma_ccs_fatal_mid_message()
+    ensures
+        super::bootstrap_spec::receive(|m: Seq<u8>| empty_hash(m), awaiting_with_buffer(seq![1u8]),
+            super::bootstrap_spec::PeerEvent::Ccs).1
+            == super::bootstrap_spec::Action::Fail(crate::spec::UNEXPECTED_MESSAGE),
+        super::bootstrap_spec::receive(|m: Seq<u8>| empty_hash(m), awaiting_with_buffer(seq![]),
+            super::bootstrap_spec::PeerEvent::Ccs)
+            == (awaiting_with_buffer(seq![]), super::bootstrap_spec::Action::None),
+{
+}
 }

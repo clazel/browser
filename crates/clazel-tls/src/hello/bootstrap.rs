@@ -442,8 +442,12 @@ impl<C: Crypto> Bootstrap<C> {
     {
         match crate::record::read_record(wire, false) {
             ReadOut::Done(Frame::Ccs, rest) => {
-                if !rest.is_empty() { self.fail(crate::spec::UNEXPECTED_MESSAGE) }
-                else { Action::None }
+                // RFC 8446 §5.1: a CCS inside a fragmented handshake message
+                // is fatal; §5's drop applies only at a message boundary
+                // (docs/ERRATA.md, "RFC 8446 §5 and §5.1").
+                if !rest.is_empty() || !self.reassembler.at_message_boundary() {
+                    self.fail(crate::spec::UNEXPECTED_MESSAGE)
+                } else { Action::None }
             },
             ReadOut::Done(Frame::Plain(typ, bytes), rest) => {
                 if !rest.is_empty() { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }

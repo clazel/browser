@@ -144,7 +144,13 @@ pub open spec fn record_step(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: super::bootst
                 (terminal(s, Mode::Failed, s.reassembly), Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
             } else {
                 match frame {
-                    crate::spec::Frame::Ccs => (s, Action::None),
+                    // RFC 8446 §5.1: dropped only at a message boundary (docs/ERRATA.md).
+                    crate::spec::Frame::Ccs => if crate::spec::at_message_boundary(s.reassembly) {
+                        (s, Action::None)
+                    } else {
+                        (terminal(s, Mode::Failed, s.reassembly),
+                            Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
+                    },
                     crate::spec::Frame::Plain(rec) if rec.ctype == crate::spec::CT_HANDSHAKE =>
                         fragment_step(hash, s, rec.fragment),
                     crate::spec::Frame::Plain(rec) if rec.ctype == crate::spec::CT_ALERT =>
