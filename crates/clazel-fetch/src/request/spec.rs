@@ -19,6 +19,14 @@
 //!   generate a Host header field in a request"), `Connection: close`,
 //!   `Accept: */*` (§12.5.1) and `User-Agent: clazel` (§10.1.5). No
 //!   `Accept-Encoding`, so a conforming server sends identity content.
+//! - **The `Cookie` field** (Fetch §3.1.1 "append a request `Cookie` header",
+//!   steps 6 to 8: "If no cookies were returned, stop" and otherwise
+//!   append `Cookie` with the serialized cookies) is the last field, and is
+//!   present only when the cookie-string is not empty
+//!   ([`request_for_cookie`]). The cookie-string itself is not computed
+//!   here: the transducer passes RFC 6265bis §5.8.3's. Everything else
+//!   about the request is [`request_for`]'s, so the jar reaches the wire
+//!   through this one field value (`theorem_wire_cookies`).
 //! - A URL with a username or password is refused (§4.2.4: "A recipient
 //!   SHOULD parse for userinfo and treat its presence as an error"); a
 //!   sender would otherwise have to decide what to do with it.
@@ -143,6 +151,45 @@ pub open spec fn request_for(url: clazel_url::url::spec::Url) -> Option<clazel_h
             },
             _ => None,
         }
+    }
+}
+
+/// "Cookie" (RFC 6265bis §5.8.3 via Fetch §3.1.1).
+pub open spec fn lit_cookie() -> Seq<u8> {
+    seq![0x43u8, 0x6F, 0x6F, 0x6B, 0x69, 0x65]
+}
+
+/// The field lines Fetch §3.1.1 steps 6 to 8 add for the cookie-string
+/// `cookie`: none if it is empty ("If no cookies were returned, stop."),
+/// else one `Cookie` field line holding it.
+pub open spec fn cookie_field_lines(cookie: Seq<u8>) -> Seq<clazel_http::field::spec::FieldLine> {
+    if cookie.len() == 0 {
+        seq![]
+    } else {
+        seq![clazel_http::field::spec::FieldLine { name: lit_cookie(), value: cookie }]
+    }
+}
+
+/// The request for `url` carrying the cookie-string `cookie`: [`request_for`]
+/// with the field lines of [`cookie_field_lines`] appended.
+pub open spec fn request_for_cookie(url: clazel_url::url::spec::Url, cookie: Seq<u8>) -> Option<clazel_http::message::spec::Request> {
+    match request_for(url) {
+        Some(r) => Some(clazel_http::message::spec::Request { method: r.method, target: r.target, fields: r.fields + cookie_field_lines(cookie) }),
+        None => None,
+    }
+}
+
+/// The bytes sent for `url` carrying the cookie-string `cookie`: the
+/// request, serialized, when it is valid (RFC 9112 §2.1, §3). A cookie
+/// value no field value can carry makes the request `None`.
+pub open spec fn request_bytes_cookie(url: clazel_url::url::spec::Url, cookie: Seq<u8>) -> Option<Seq<u8>> {
+    match request_for_cookie(url, cookie) {
+        Some(r) => if clazel_http::message::spec::is_valid_request(r) {
+            Some(clazel_http::message::spec::serialize_request(r))
+        } else {
+            None
+        },
+        None => None,
     }
 }
 

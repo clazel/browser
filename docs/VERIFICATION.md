@@ -89,13 +89,20 @@ and no tier is raised, until that run is green.
 CI splits the run into parts, one job each, so no job comes near GitHub's
 six-hour limit (`xtask/src/parts.rs`):
 
-- `verify --part base`: static checks, rustfmt, clippy, tests and Miri over
-  the whole workspace.
-- `verify --part crate <name> --metrics <dir>`, one job per workspace crate
-  (the list comes from `cargo xtask crates`): static checks, then Kani,
-  Verus, line counts, mutations and conformance for that crate. On success
-  it writes what it measured to `<dir>/<name>.json`, tagged with the commit
-  (with `+dirty` if tracked files have uncommitted changes).
+- `verify --part base`: static checks, rustfmt, clippy and tests over the
+  whole workspace.
+- `verify --part miri`: static checks, then the workspace's tests under
+  Miri. On macOS it runs in the same job as `base`, after it.
+- `verify --part crate <names> --metrics <dir>`, where `<names>` is one
+  crate or several separated by commas: static checks, then Kani, Verus,
+  line counts, mutations and conformance for those crates. CI runs one job
+  per crate with proof work (Verus, Kani harnesses or mutations) and one
+  job for all the others together; the groups come from `cargo xtask
+  crates`. Mutants run several at a time, each in its own sandbox
+  (`CLAZEL_MUTANT_JOBS`, default one per core up to 4). On success it
+  writes what it measured to `<dir>/<name>.json` for each crate, tagged
+  with the commit (with `+dirty` if tracked files have uncommitted
+  changes).
 - `verify --part assemble --metrics <dir>`, which runs only after every
   other job passed: static checks, then it requires a file for every
   workspace crate from this commit, and reports whether README.md's table

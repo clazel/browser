@@ -61,6 +61,7 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
                         || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
                     Output::Spawn { id: x, .. } => x == s.next_id,
                     Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
+                    Output::Fetch { .. } => false,
                 }
         }),
 {
@@ -71,25 +72,38 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
             let out = navigate_tab(urls, s, tab, url, script).1;
             if lock is Tuple && lock == old.lock {
                 assert(out[0] == (Output::ToRenderer { id: old.id, bytes: commit_frame(url, script) }));
+                assert(out.len() == 1);
             } else {
                 assert(out.len() == 3);
+                assert(out[0] == (Output::Kill { id: old.id }));
                 assert(out[1] == (Output::Spawn { id: s.next_id, policy: Policy::Renderer }));
+                assert(out[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frame(url, script) }));
                 assert(out.contains(out[1]));
             }
         }
     }
 }
 
-/// **`theorem_reply_only_to_sender`.**
-pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, id: nat, bytes: Seq<u8>)
-    requires
-        reachable(rules, urls, s),
+/// The outputs of `begin_navigation`: nothing, or one `Fetch` for the tab asked.
+pub proof fn lemma_begin_navigation_outputs(urls: UrlFns, s: State, tab: nat, url: Seq<u32>)
     ensures
-        crate::statements::reply_only_to_sender_statement(rules, urls, s, id, bytes),
+        ({
+            let out = begin_navigation(urls, s, tab, url).1;
+            out == Seq::<Output>::empty() || out == seq![Output::Fetch { tab, url }]
+        }),
 {
-    crate::invariant::lemma_reachable_wf(rules, urls, s);
+}
+
+/// **`theorem_reply_only_to_sender`.**
+pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
+    requires
+        reachable(rules, urls, fetch, s),
+    ensures
+        crate::statements::reply_only_to_sender_statement(rules, urls, fetch, s, id, bytes),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     crate::invariant::lemma_find_by_id(s.renderers, id, 0);
-    let out = step(rules, urls, s, Event::FromRenderer { id, bytes }).1;
+    let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
     if let Some(i) = find_by_id(s.renderers, id, 0) {
         let r = s.renderers[i];
         if let Some(m) = decode_renderer_frame(bytes) {
@@ -97,30 +111,94 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                 if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                     if let Some(resolved) = (urls.resolve)(r.url, relative) {
                         if lock_of_url(urls, resolved, s.next_id) is Some {
-                            lemma_navigate_tab_outputs(urls, s, r.tab, resolved, no_script());
-                            lemma_find_by_tab_self(urls, s, i);
-                            crate::invariant::lemma_find_by_tab(s.renderers, r.tab, 0);
+                            lemma_begin_navigation_outputs(urls, s, r.tab, resolved);
                             assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
                                 Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
                                 Output::Spawn { id: x, .. } => x == s.next_id,
                                 Output::Kill { id: x } => x == id,
+                                Output::Fetch { tab: x, .. } => exists|j: int| 0 <= j < s.renderers.len() && s.renderers[j].id == id && s.renderers[j].tab == x,
                             } by {
-                                match out[k] {
-                                    Output::ToRenderer { id: x, .. } => {
-                                        if exists|j: int| 0 <= j < s.renderers.len() && s.renderers[j].tab == r.tab && s.renderers[j].id == x {
-                                            let j = choose|j: int| 0 <= j < s.renderers.len() && s.renderers[j].tab == r.tab && s.renderers[j].id == x;
-                                            tab_unique(urls, s, i, j);
-                                        }
-                                    },
-                                    Output::Kill { id: x } => {
-                                        let j = choose|j: int| 0 <= j < s.renderers.len() && s.renderers[j].tab == r.tab && s.renderers[j].id == x;
-                                        tab_unique(urls, s, i, j);
-                                    },
-                                    _ => {},
-                                }
+                                assert(out == seq![Output::Fetch { tab: r.tab, url: resolved }]);
+                                assert(s.renderers[i].id == id && s.renderers[i].tab == r.tab);
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/// **`theorem_fetched_only_to_tab`** (item 3.7).
+pub proof fn theorem_fetched_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+    requires
+        reachable(rules, urls, fetch, s),
+    ensures
+        crate::statements::fetched_only_to_tab_statement(rules, urls, fetch, s, tab, outcome),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
+    let out = step(rules, urls, fetch, s, Event::Fetched { tab, outcome }).1;
+    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
+        let i = find_by_tab(s.renderers, tab, 0)->Some_0;
+        let old = s.renderers[i];
+        let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
+        match run.result {
+            FetchResult::Done { url, body } => {
+                if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
+                    lemma_navigate_tab_outputs(urls, s1, tab, url, body);
+                } else {
+                    assert(out == seq![Output::ToRenderer { id: old.id, bytes: reply_frame(clazel_ipc::message::spec::Message::Error { code: error_bad_url() }) }]);
+                }
+            },
+            FetchResult::Failed => {
+                assert(out == seq![Output::ToRenderer { id: old.id, bytes: reply_frame(clazel_ipc::message::spec::Message::Error { code: error_fetch() }) }]);
+            },
+        }
+    }
+}
+
+/// **`theorem_fetched_answers_navigation`** (item 3.7).
+pub proof fn theorem_fetched_answers_navigation(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+    requires
+        reachable(rules, urls, fetch, s),
+    ensures
+        crate::statements::fetched_answers_navigation_statement(rules, urls, fetch, s, tab, outcome),
+{
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
+    let (s1, out) = step(rules, urls, fetch, s, Event::Fetched { tab, outcome });
+    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
+        let i = find_by_tab(s.renderers, tab, 0)->Some_0;
+        let old = s.renderers[i];
+        let sp = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
+        let ok = match run.result {
+            FetchResult::Done { url, body } => scalar_url(url) && lock_of_url(urls, url, sp.next_id) is Some,
+            FetchResult::Failed => false,
+        };
+        if ok {
+            let url = run.result->Done_url;
+            let body = run.result->Done_body;
+            let lock = lock_of_url(urls, url, sp.next_id)->Some_0;
+            assert forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab implies s1.renderers[j].pending is None by {
+                if lock is Tuple && lock == old.lock {
+                    if j != i {
+                        assert(s1.renderers[j] == s.renderers[j]);
+                        assert(s.renderers[j].tab != tab || j == i);
+                        tab_unique(urls, s, i, j);
+                    }
+                } else {
+                    if j != i {
+                        assert(s1.renderers[j] == s.renderers[j]);
+                        tab_unique(urls, s, i, j);
+                    }
+                }
+            }
+        } else {
+            assert forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab implies s1.renderers[j].pending is None by {
+                if j != i {
+                    assert(s1.renderers[j] == s.renderers[j]);
+                    tab_unique(urls, s, i, j);
                 }
             }
         }

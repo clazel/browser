@@ -12,6 +12,11 @@ pub open spec fn request_bytes_ensures(url: clazel_url::url::spec::Url, output: 
     output == request_bytes(url)
 }
 
+/// Contract for `request_bytes_cookie(&ParsedUrl, &[u8]) -> Option<Vec<u8>>`.
+pub open spec fn request_bytes_cookie_ensures(url: clazel_url::url::spec::Url, cookie: Seq<u8>, output: Option<Seq<u8>>) -> bool {
+    output == request_bytes_cookie(url, cookie)
+}
+
 /// Contract for `connect_to(&ParsedUrl) -> Option<(Vec<u8>, u16)>`.
 pub open spec fn connect_to_ensures(url: clazel_url::url::spec::Url, output: Option<(Seq<u8>, nat)>) -> bool {
     output == connect_to(url)

@@ -918,9 +918,11 @@ fn main() -> ExitCode {
     // `verify --part ...` (parts.rs) and `crates` are handled apart.
     let part = match args.as_slice() {
         ["verify", "--part", "base"] => Some(Part::Base),
-        ["verify", "--part", "crate", name, "--metrics", dir] => {
-            Some(Part::Crate((*name).to_owned(), PathBuf::from(dir)))
-        }
+        ["verify", "--part", "miri"] => Some(Part::Miri),
+        ["verify", "--part", "crate", names, "--metrics", dir] => Some(Part::Crate(
+            names.split(',').map(str::to_owned).collect(),
+            PathBuf::from(dir),
+        )),
         ["verify", "--part", "assemble", "--metrics", dir] => {
             Some(Part::Assemble(PathBuf::from(dir), false))
         }
@@ -1082,52 +1084,93 @@ fn main() -> ExitCode {
 /// One part of a split verification (parts.rs).
 enum Part {
     Base,
-    Crate(String, PathBuf),
+    Miri,
+    /// One or more crates (comma-separated on the command line; CI groups
+    /// the crates with no proofs into one job, see [`crate_groups`]).
+    Crate(Vec<String>, PathBuf),
     /// The crate parts' directory, and whether to write README.md's table
     /// from them (CI does, on main, after every part passed).
     Assemble(PathBuf, bool),
-    /// `cargo xtask crates`: the workspace crates as a JSON array, for CI's
-    /// matrix of `crate` parts.
+    /// `cargo xtask crates`: the crate groups as a JSON array of
+    /// comma-separated names, for CI's matrix of `crate` parts.
     ListCrates,
+}
+
+/// CI's crate parts: one per crate with proof work (Verus, Kani harnesses or
+/// mutations), and one for all the others together, which finish in about
+/// a minute each and would otherwise each hold a runner for its setup.
+fn crate_groups(crates: &[Crate]) -> Vec<String> {
+    let light = |c: &Crate| {
+        !c.verus
+            && !mutate::has_mutations(c)
+            && workspace::scan_crate(c).map_or(1, |s| s.kani_proofs) == 0
+    };
+    let mut groups: Vec<String> = crates
+        .iter()
+        .filter(|c| !light(c))
+        .map(|c| c.name.clone())
+        .collect();
+    let rest: Vec<&str> = crates
+        .iter()
+        .filter(|c| light(c))
+        .map(|c| c.name.as_str())
+        .collect();
+    if !rest.is_empty() {
+        groups.push(rest.join(","));
+    }
+    groups
 }
 
 fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Path) -> ExitCode {
     if let Part::ListCrates = part {
-        let names: Vec<&str> = crates.iter().map(|c| c.name.as_str()).collect();
-        println!("{}", serde_json::Value::from(names));
+        println!("{}", serde_json::Value::from(crate_groups(crates)));
         return ExitCode::SUCCESS;
     }
     static_checks(r, crates, pins);
     let done = match part {
         Part::Base => {
             build_checks(r, None);
-            miri(r, pins, None);
-            "BASE PART PASSED (static checks, rustfmt, clippy, tests and Miri; proofs run in the crate parts)".to_owned()
+            "BASE PART PASSED (static checks, rustfmt, clippy and tests; Miri runs in the miri part, proofs in the crate parts)".to_owned()
         }
-        Part::Crate(name, dir) => {
-            let Some(c) = crates.iter().find(|c| c.name == name) else {
-                r.step(
-                    "select crate",
-                    Outcome::Fail(vec![format!("no workspace crate named {name:?}")]),
-                );
-                println!("RESULT: FAILED");
-                return ExitCode::from(1);
-            };
-            let one = std::slice::from_ref(c);
-            kani(r, one, pins);
-            verus(r, one, pins);
-            mutations(r, one, root, None);
-            conformance_suites(r, one);
+        Part::Miri => {
+            miri(r, pins, None);
+            "MIRI PART PASSED (static checks and the tests under Miri)".to_owned()
+        }
+        Part::Crate(names, dir) => {
+            let mut selected: Vec<Crate> = Vec::new();
+            for name in &names {
+                match crates.iter().find(|c| &c.name == name) {
+                    Some(c) => selected.push(c.clone()),
+                    None => {
+                        r.step(
+                            "select crate",
+                            Outcome::Fail(vec![format!("no workspace crate named {name:?}")]),
+                        );
+                        println!("RESULT: FAILED");
+                        return ExitCode::from(1);
+                    }
+                }
+            }
+            kani(r, &selected, pins);
+            verus(r, &selected, pins);
+            mutations(r, &selected, root, None);
+            conformance_suites(r, &selected);
             // Never record measurements from a run where something failed.
             if !r.failed && !r.skipped {
-                let m = r.metrics.get(&name).cloned().unwrap_or_default();
-                let res = parts::head().and_then(|commit| parts::write(&dir, &name, &commit, &m));
-                r.step(
-                    "write crate measurements",
-                    from_result(res.map(|path| vec![format!("wrote {path}")])),
-                );
+                for name in &names {
+                    let m = r.metrics.get(name).cloned().unwrap_or_default();
+                    let res =
+                        parts::head().and_then(|commit| parts::write(&dir, name, &commit, &m));
+                    r.step(
+                        &format!("write crate measurements {name}"),
+                        from_result(res.map(|path| vec![format!("wrote {path}")])),
+                    );
+                }
             }
-            format!("CRATE PART PASSED ({name}: Kani, Verus, mutations and conformance)")
+            format!(
+                "CRATE PART PASSED ({}: Kani, Verus, mutations and conformance)",
+                names.join(", ")
+            )
         }
         Part::Assemble(dir, write) => {
             let res = parts::head().and_then(|commit| {

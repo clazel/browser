@@ -21,7 +21,7 @@
       "find": "let path = if p.len() == 0 { seq![0x2Fu32] } else { p };",
       "replace": "let path = p;",
       "expect": "killed",
-      "reason": "Sends an empty path instead of `/` (RFC 9112 §3.2.1). lemma_request_02 says the target is `/`.",
+      "reason": "Sends an empty path instead of `/` (RFC 9112 \u00a73.2.1). lemma_request_02 says the target is `/`.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_02()",
@@ -63,7 +63,7 @@
       "find": "Some(port) => h + seq![0x3Au32] + clazel_url::host::spec::serialize_integer(port),",
       "replace": "Some(port) => h,",
       "expect": "killed",
-      "reason": "Leaves the port out of Host (RFC 9110 §7.2). lemma_request_01 says Host is `example.com:8080`.",
+      "reason": "Leaves the port out of Host (RFC 9110 \u00a77.2). lemma_request_01 says Host is `example.com:8080`.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_01()",
@@ -91,7 +91,7 @@
       "find": "|| url.username.len() > 0 || url.password.len() > 0 {",
       "replace": "|| url.password.len() > 0 {",
       "expect": "killed",
-      "reason": "Accepts a username (RFC 9110 §4.2.4). lemma_request_06 says it is refused.",
+      "reason": "Accepts a username (RFC 9110 \u00a74.2.4). lemma_request_06 says it is refused.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_06()",
@@ -105,7 +105,7 @@
       "find": "|| url.username.len() > 0 || url.password.len() > 0 {",
       "replace": "|| url.username.len() > 0 {",
       "expect": "killed",
-      "reason": "Accepts a password (RFC 9110 §4.2.4). lemma_request_07 says it is refused.",
+      "reason": "Accepts a password (RFC 9110 \u00a74.2.4). lemma_request_07 says it is refused.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_07()",
@@ -133,7 +133,7 @@
       "find": "    seq![0x47u8, 0x45, 0x54]",
       "replace": "    seq![0x48u8, 0x45, 0x41, 0x44]",
       "expect": "killed",
-      "reason": "Sends HEAD, whose response has no body (RFC 9112 §6.3 step 1). lemma_request_00 says the method is GET.",
+      "reason": "Sends HEAD, whose response has no body (RFC 9112 \u00a76.3 step 1). lemma_request_00 says the method is GET.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_00()",
@@ -144,8 +144,8 @@
       "id": "validity-unchecked",
       "file": "src/request/spec.rs",
       "module": "request::examples",
-      "find": "Some(r) => if clazel_http::message::spec::is_valid_request(r) {",
-      "replace": "Some(r) => if true {",
+      "find": "match request_for(url) {\n        Some(r) => if clazel_http::message::spec::is_valid_request(r) {",
+      "replace": "match request_for(url) {\n        Some(r) => if true {",
       "expect": "killed",
       "reason": "Serializes an invalid request (an SP in the target would end the request line early). lemma_request_10 says it is refused.",
       "certificate": {
@@ -175,7 +175,7 @@
       "find": "                None => 80,",
       "replace": "                None => 443,",
       "expect": "killed",
-      "reason": "Uses the https default for http (RFC 9110 §4.2.1). lemma_request_12 says 80.",
+      "reason": "Uses the https default for http (RFC 9110 \u00a74.2.1). lemma_request_12 says 80.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_12()",
@@ -203,7 +203,7 @@
       "find": "100 <= status && status <= 199 && status != 101",
       "replace": "100 <= status && status <= 200 && status != 101",
       "expect": "killed",
-      "reason": "Skips a 200 as if interim (RFC 9110 §15.2 is 1xx only). lemma_request_17 says it is final.",
+      "reason": "Skips a 200 as if interim (RFC 9110 \u00a715.2 is 1xx only). lemma_request_17 says it is final.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_17()",
@@ -245,7 +245,7 @@
       "find": "status == 301 || ",
       "replace": "",
       "expect": "killed",
-      "reason": "301 is no longer a redirect status (Fetch §2.2.3). lemma_transducer_02 says a 301 with a Location is followed.",
+      "reason": "301 is no longer a redirect status (Fetch \u00a72.2.3). lemma_transducer_02 says a 301 with a Location is followed.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_02()",
@@ -329,7 +329,7 @@
       "find": "} else if s.redirects == max_redirects() {",
       "replace": "} else if s.redirects > max_redirects() {",
       "expect": "killed",
-      "reason": "Follows a 21st redirect (Fetch §4.5 step 7). lemma_transducer_07 says it is RedirectLimit.",
+      "reason": "Follows a 21st redirect (Fetch \u00a74.5 step 7). lemma_transducer_07 says it is RedirectLimit.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_07()",
@@ -354,10 +354,10 @@
       "id": "interim-not-skipped",
       "file": "src/transducer/spec.rs",
       "module": "transducer::examples",
-      "find": "if crate::request::spec::is_interim(response.status_line.status) {\n            // §15.2",
-      "replace": "if false {\n            // §15.2",
+      "find": "if crate::request::spec::is_interim(response.status_line.status) {\n            // \u00a715.2",
+      "replace": "if false {\n            // \u00a715.2",
       "expect": "killed",
-      "reason": "A 1xx response is taken as the final one (RFC 9110 §15.2). lemma_transducer_00 says the 204 after a 100 is the response.",
+      "reason": "A 1xx response is taken as the final one (RFC 9110 \u00a715.2). lemma_transducer_00 says the 204 after a 100 is the response.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_00()",
@@ -371,7 +371,7 @@
       "find": "match (http.parse_at_close)(received) {",
       "replace": "match (http.parse)(received) {",
       "expect": "killed",
-      "reason": "At close, the parser for an open connection is used, so a close-delimited body never ends (RFC 9112 §6.3 step 8). lemma_transducer_10 says it is the response.",
+      "reason": "At close, the parser for an open connection is used, so a close-delimited body never ends (RFC 9112 \u00a76.3 step 8). lemma_transducer_10 says it is the response.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_10()",
@@ -382,8 +382,8 @@
       "id": "close-closes-again",
       "file": "src/transducer/spec.rs",
       "module": "transducer::examples",
-      "find": "Settled::Final(response) => on_final(urls, s, response, false),",
-      "replace": "Settled::Final(response) => on_final(urls, s, response, true),",
+      "find": "Settled::Final(response) => on_final(urls, s, response, false, now),",
+      "replace": "Settled::Final(response) => on_final(urls, s, response, true, now),",
       "expect": "killed",
       "reason": "Asks to close a connection the server already closed. lemma_transducer_10 says the only action is Done.",
       "certificate": {
@@ -399,7 +399,7 @@
       "find": "} else if values.len() > 1 {",
       "replace": "} else if values.len() > 2 {",
       "expect": "killed",
-      "reason": "Takes the first of two Location lines (Fetch §2.2.2 step 2 says failure). lemma_transducer_11 says it is RedirectLocation.",
+      "reason": "Takes the first of two Location lines (Fetch \u00a72.2.2 step 2 says failure). lemma_transducer_11 says it is RedirectLocation.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_11()",
@@ -413,7 +413,7 @@
       "find": "if values.len() == 0 {\n            LocationUrl::Null",
       "replace": "if values.len() == 0 {\n            LocationUrl::Failure",
       "expect": "killed",
-      "reason": "A redirect status without Location becomes a network error instead of the response (Fetch §4.5 step 4). lemma_transducer_12 says it is the response.",
+      "reason": "A redirect status without Location becomes a network error instead of the response (Fetch \u00a74.5 step 4). lemma_transducer_12 says it is the response.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_12()",
@@ -427,7 +427,7 @@
       "find": "Some(location) => LocationUrl::Url(with_fragment(location, request_url.fragment)),",
       "replace": "Some(location) => LocationUrl::Url(location),",
       "expect": "killed",
-      "reason": "The location URL loses the request's fragment (Fetch §2.2.6 step 4). lemma_transducer_13 says it keeps it.",
+      "reason": "The location URL loses the request's fragment (Fetch \u00a72.2.6 step 4). lemma_transducer_13 says it keeps it.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_13()",
@@ -438,14 +438,17 @@
       "id": "request-not-sent",
       "file": "src/transducer/spec.rs",
       "module": "transducer::examples",
-      "find": "seq![Action::Send(bytes)]),",
-      "replace": "seq![]),",
+      "find": "seq![Action::Send(bytes)],",
+      "replace": "seq![],",
       "expect": "killed",
       "reason": "Connected sends nothing. lemma_transducer_14 says it sends the request.",
       "certificate": {
         "file": "src/transducer/contract.rs",
         "lemma": "super::examples::lemma_transducer_14()",
-        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Connected).1) == 3000nat)"
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Connected).1) == 3000nat)",
+        "reveal": [
+          "Seq::filter"
+        ]
       }
     },
     {
@@ -458,7 +461,7 @@
       "reason": "Allows 21 redirects. theorem_redirects_bounded (a count of at most 20 stays at most 20) is false: from 20, a redirect makes it 21.",
       "certificate": {
         "file": "src/transducer/contract.rs",
-        "lemma": "super::theorems::theorem_redirects_bounded(super::real::real_http(), super::examples::example_urls(), super::examples::state_a(None, 20nat, Phase::Reading { received: Seq::<u8>::empty() }), Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A]))",
+        "lemma": "super::theorems::theorem_redirects_bounded(super::real::real_http(), super::examples::example_urls(), super::examples::state_a(None, 20nat, Phase::Reading { received: Seq::<u8>::empty() }), Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A]), Seq::<Cookie>::empty(), 0int)",
         "witness": "super::examples::ex_step(None, 20nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.redirects == 21"
       }
     },
@@ -469,11 +472,476 @@
       "find": "LocationUrl::Url(location) => if !is_http_s_scheme(location.scheme) {",
       "replace": "LocationUrl::Url(location) => if false {",
       "expect": "killed",
-      "reason": "Follows a redirect to any scheme (Fetch §4.5 step 6). theorem_url_changes_only_by_redirect is false: a redirect to mailto:x makes it the current URL.",
+      "reason": "Follows a redirect to any scheme (Fetch \u00a74.5 step 6). theorem_url_changes_only_by_redirect is false: a redirect to mailto:x makes it the current URL.",
       "certificate": {
         "file": "src/transducer/contract.rs",
-        "lemma": "super::theorems::theorem_url_changes_only_by_redirect(super::real::real_http(), super::examples::example_urls(), super::examples::state_a(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }), Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A]))",
+        "lemma": "super::theorems::theorem_url_changes_only_by_redirect(super::real::real_http(), super::examples::example_urls(), super::examples::state_a(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }), Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A]), Seq::<Cookie>::empty(), 0int)",
         "witness": "super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.redirects == 1 && !is_http_s_scheme(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.url.scheme)"
+      }
+    },
+    {
+      "id": "cookie-field-omitted",
+      "file": "src/request/spec.rs",
+      "module": "transducer::examples",
+      "find": "fields: r.fields + cookie_field_lines(cookie) }",
+      "replace": "fields: r.fields }",
+      "expect": "killed",
+      "reason": "The jar never reaches the wire: no Cookie field. lemma_cookie_00 says the cookie is sent.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_00()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 0int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x61, 0x3D, 0x31, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "cookie-field-duplicated",
+      "file": "src/request/spec.rs",
+      "module": "transducer::examples",
+      "find": "fields: r.fields + cookie_field_lines(cookie) }",
+      "replace": "fields: r.fields + cookie_field_lines(cookie) + cookie_field_lines(cookie) }",
+      "expect": "killed",
+      "reason": "Two Cookie fields. lemma_cookie_00 says one.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_00()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 0int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x61, 0x3D, 0x31, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "cookie-field-first",
+      "file": "src/request/spec.rs",
+      "module": "transducer::examples",
+      "find": "fields: r.fields + cookie_field_lines(cookie) }",
+      "replace": "fields: cookie_field_lines(cookie) + r.fields }",
+      "expect": "killed",
+      "reason": "The Cookie field before Host (Fetch appends it to the header list). lemma_cookie_00 has it last.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_00()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 0int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x61, 0x3D, 0x31, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "cookie-field-when-empty",
+      "file": "src/request/spec.rs",
+      "module": "transducer::examples",
+      "find": "if cookie.len() == 0 {\n        seq![]",
+      "replace": "if false {\n        seq![]",
+      "expect": "killed",
+      "reason": "An empty Cookie field when the cookie-string is empty (Fetch \u00a73.1.1 step 6: stop). lemma_cookie_14.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_14()",
+        "witness": "!(super::examples::ex_cstep(Seq::<Cookie>::empty(), 0int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "secure-ignored",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "    clazel_cookie::matching::spec::narrow(url.scheme)\n}",
+      "replace": "    seq![0x68u8, 0x74, 0x74, 0x70, 0x73]\n}",
+      "expect": "killed",
+      "reason": "The connection is taken as secure: a Secure cookie goes over plain http. lemma_cookie_01.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_01()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, true, clazel_cookie::set_cookie::spec::SameSite::None)], 0int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "taint-ignored",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "site_for_cookies: if s.tainted { Some(clazel_origin::spec::Origin::Opaque(0)) } else { None },",
+      "replace": "site_for_cookies: None,",
+      "expect": "killed",
+      "reason": "The redirect-taint never reaches the context: a Strict cookie goes after a cross-site redirect. lemma_cookie_02.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_02()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::Strict)], 0int, true, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "method-unsafe",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "method_is_safe: true,",
+      "replace": "method_is_safe: false,",
+      "expect": "killed",
+      "reason": "GET is not a safe method: a Lax cookie is withheld from a cross-site navigation. lemma_cookie_03.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_03()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::Lax)], 0int, true, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x61, 0x3D, 0x31, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "target-not-top-level",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "target_is_active_or_top_level: true,",
+      "replace": "target_is_active_or_top_level: false,",
+      "expect": "killed",
+      "reason": "The navigation does not target a top-level traversable: a Lax cookie is withheld. lemma_cookie_03.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_03()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::Lax)], 0int, true, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x61, 0x3D, 0x31, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "reload-navigation",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "is_reload_navigation: false,",
+      "replace": "is_reload_navigation: true,",
+      "expect": "killed",
+      "reason": "The request is a reload of a cross-site document: never same-site, a Strict cookie is withheld. lemma_cookie_04.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_04()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::Strict)], 0int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x61, 0x3D, 0x31, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "taint-never-set",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "let tainted = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));",
+      "replace": "let tainted = s.tainted;",
+      "expect": "killed",
+      "reason": "A cross-site redirect leaves the taint unset. lemma_cookie_10.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_10()",
+        "witness": "!(super::examples::ex_cstep(Seq::<Cookie>::empty(), 0int, false, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.tainted == true)"
+      }
+    },
+    {
+      "id": "taint-always-set",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "let tainted = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));",
+      "replace": "let tainted = true;",
+      "expect": "killed",
+      "reason": "Every redirect sets the taint. lemma_cookie_11.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_11()",
+        "witness": "!(super::examples::ex_cstep(Seq::<Cookie>::empty(), 0int, false, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.tainted == false)"
+      }
+    },
+    {
+      "id": "jar-after-retrieval-dropped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "seq![Action::Send(bytes)],\n                        seq![retrieval_op(urls, s, now)],",
+      "replace": "seq![Action::Send(bytes)],\n                        seq![],",
+      "expect": "killed",
+      "reason": "The retrieval's step 5 (last-access-time) is lost: the step returns no `Retrieved` operation. lemma_cookie_05.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_05()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 18446744073709551615int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 5int, false, Phase::Connecting, Input::Connected).0.jar.map_values(|c: Cookie| c.last_access_time) == seq![5int])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "storage-after-redirect-decision",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "(next.0, close_if(open) + next.1, ops)",
+      "replace": "(next.0, close_if(open) + next.1, seq![])",
+      "expect": "killed",
+      "reason": "The operations storing the cookies of the redirect response are dropped when the redirect is followed (the decision is taken without them). lemma_cookie_06.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_06()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 5int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 10int, false, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x53, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x2F, 0x62, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.jar.len() == 0nat)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "storage-skipped",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "let ops = response_ops(urls, s, response, now);",
+      "replace": "let ops = seq![];",
+      "expect": "killed",
+      "reason": "No Set-Cookie of a final response is stored: `on_final` returns no `Stored` operation. lemma_cookie_08.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_08()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 5int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 10int, false, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x34, 0x20, 0x58, 0x0D, 0x0A, 0x53, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.jar.len() == 0nat)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "storage-lost-on-failed-redirect",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "with_ops(fail(s, Reason::RedirectScheme, open), ops)",
+      "replace": "fail(s, Reason::RedirectScheme, open)",
+      "expect": "killed",
+      "reason": "A failure after a final response drops the operations storing the cookies it set. lemma_cookie_07.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_07()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 5int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 10int, false, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x33, 0x30, 0x32, 0x20, 0x58, 0x0D, 0x0A, 0x53, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x0D, 0x0A, 0x4C, 0x6F, 0x63, 0x61, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x6D, 0x61, 0x69, 0x6C, 0x74, 0x6F, 0x3A, 0x78, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x4C, 0x65, 0x6E, 0x67, 0x74, 0x68, 0x3A, 0x20, 0x30, 0x0D, 0x0A, 0x0D, 0x0A])).0.jar.len() == 0nat)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "only-first-set-cookie",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "clazel_http::field::spec::field_values_named(response.fields, lit_set_cookie())\n}",
+      "replace": "{ let v = clazel_http::field::spec::field_values_named(response.fields, lit_set_cookie()); if v.len() > 1 { seq![v[0]] } else { v } }\n}",
+      "expect": "killed",
+      "reason": "Only the first Set-Cookie field line is stored. lemma_cookie_12. (A concrete one-element list, not `.take(1)`: compute_only re-evaluates a lazy `take` on every access and runs out of recursion depth in the storage examples.)",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_12()",
+        "witness": "!(match (super::real::real_http().parse)(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x34, 0x20, 0x4E, 0x0D, 0x0A, 0x53, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x61, 0x3D, 0x31, 0x0D, 0x0A, 0x53, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x20, 0x62, 0x3D, 0x32, 0x0D, 0x0A, 0x0D, 0x0A]) { clazel_http::message::spec::Parse::Done { response, rest: _ } => set_cookie_values(response).len(), _ => 99nat } == 2nat)"
+      }
+    },
+    {
+      "id": "interim-cookies-stored",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "if crate::request::spec::is_interim(response.status_line.status) {\n            // \u00a715.2",
+      "replace": "if false {\n            // \u00a715.2",
+      "expect": "killed",
+      "reason": "A 1xx response is taken as final, so its Set-Cookie is stored (RFC 6265bis \u00a75.3). lemma_cookie_09.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_09()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 5int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 10int, false, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x30, 0x30, 0x20, 0x58, 0x0D, 0x0A, 0x53, 0x65, 0x74, 0x2D, 0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65, 0x3A, 0x0D, 0x0A, 0x0D, 0x0A])).0.jar.len() == 1nat)",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "cookie-string-wrong-time",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, jar, (urls.request_url)(s.url), request_context(urls, s), now)",
+      "replace": "clazel_cookie::storage::spec::retrieve_cookie_string(urls.rules, jar, (urls.request_url)(s.url), request_context(urls, s), 0)",
+      "expect": "killed",
+      "reason": "The retrieval ignores the time: an expired cookie is sent. lemma_cookie_13.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_cookie_13()",
+        "witness": "!(super::examples::ex_cstep(seq![super::examples::ex_cookie(seq![0x61u8], seq![0x31u8], 5int, false, clazel_cookie::set_cookie::spec::SameSite::None)], 10int, false, Phase::Connecting, Input::Connected).1 == seq![Action::Send(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x61, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A])])",
+        "reveal": [
+          "Seq::filter"
+        ]
+      }
+    },
+    {
+      "id": "closed-while-connecting-closes",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Input::Closed => fail(s, Reason::Network, false),",
+      "replace": "Input::Closed => fail(s, Reason::Network, true),",
+      "expect": "killed",
+      "reason": "Asks to close a connection that never opened (Closed while Connecting). lemma_transducer_16 says the only action is Fail.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_16()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Closed).1.len() == 1nat)"
+      }
+    },
+    {
+      "id": "error-while-connecting-closes",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Input::Error => fail(s, Reason::Network, false),",
+      "replace": "Input::Error => fail(s, Reason::Network, true),",
+      "expect": "killed",
+      "reason": "Asks to close a connection that never opened (Error while Connecting). lemma_transducer_17.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_17()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Error).1.len() == 1nat)"
+      }
+    },
+    {
+      "id": "error-while-reading-not-closed",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Input::Error => fail(s, Reason::Network, true),",
+      "replace": "Input::Error => fail(s, Reason::Network, false),",
+      "expect": "killed",
+      "reason": "Leaves the connection open after an error while reading. lemma_transducer_18 says Close comes before Fail.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_18()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Error).1.len() == 2nat)"
+      }
+    },
+    {
+      "id": "second-connected-not-closed",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Input::Connected => fail(s, Reason::Shell, true),",
+      "replace": "Input::Connected => fail(s, Reason::Shell, false),",
+      "expect": "killed",
+      "reason": "Leaves the connection open after a second Connected. lemma_transducer_19.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_19()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Connected).1.len() == 2nat)"
+      }
+    },
+    {
+      "id": "early-bytes-not-closed",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Input::Bytes(_) => fail(s, Reason::Shell, true),",
+      "replace": "Input::Bytes(_) => fail(s, Reason::Shell, false),",
+      "expect": "killed",
+      "reason": "Leaves the connection open after bytes arrive before Connected. lemma_transducer_20.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_20()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Connecting, Input::Bytes(seq![0x61u8])).1.len() == 2nat)"
+      }
+    },
+    {
+      "id": "interim-at-close-final",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "if crate::request::spec::is_interim(response.status_line.status) {\n            Settled::Bad(Reason::Incomplete)",
+      "replace": "if false {\n            Settled::Bad(Reason::Incomplete)",
+      "expect": "killed",
+      "reason": "A 100 response at close is taken for the final response. lemma_transducer_21 says the fetch is Incomplete.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_21()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x31, 0x30, 0x30, 0x20, 0x58, 0x0D, 0x0A, 0x0D, 0x0A] }, Input::Closed).1) == 1005nat)"
+      }
+    },
+    {
+      "id": "unsupported-reported-invalid",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Unsupported => Settled::Bad(Reason::Unsupported),\n        clazel_http::message::spec::Parse::Done",
+      "replace": "Unsupported => Settled::Bad(Reason::Invalid),\n        clazel_http::message::spec::Parse::Done",
+      "expect": "killed",
+      "reason": "Reports an unsupported transfer coding as an invalid message. lemma_transducer_22.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_22()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30, 0x20, 0x4F, 0x4B, 0x0D, 0x0A, 0x54, 0x72, 0x61, 0x6E, 0x73, 0x66, 0x65, 0x72, 0x2D, 0x45, 0x6E, 0x63, 0x6F, 0x64, 0x69, 0x6E, 0x67, 0x3A, 0x20, 0x67, 0x7A, 0x69, 0x70, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1004nat)"
+      }
+    },
+    {
+      "id": "invalid-reported-unsupported",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Parse::Incomplete => Settled::Wait(received),\n        clazel_http::message::spec::Parse::Invalid => Settled::Bad(Reason::Invalid),",
+      "replace": "Parse::Incomplete => Settled::Wait(received),\n        clazel_http::message::spec::Parse::Invalid => Settled::Bad(Reason::Unsupported),",
+      "expect": "killed",
+      "reason": "Reports an invalid message as unsupported. lemma_transducer_23.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_23()",
+        "witness": "!(super::examples::outcome(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x67u8, 0x61, 0x72, 0x62, 0x61, 0x67, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1003nat)"
+      }
+    },
+    {
+      "id": "connect-with-tls",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Action::Connect { host: host, port: port, tls: false }",
+      "replace": "Action::Connect { host: host, port: port, tls: true }",
+      "expect": "killed",
+      "reason": "Asks for TLS on an http: URL. lemma_transducer_24.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_24()",
+        "witness": "!(start(super::examples::url_a(None)).1 == seq![Action::Connect { host: seq![0x61u8], port: 80nat, tls: false }])"
+      }
+    },
+    {
+      "id": "connect-without-request",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "(Some((host, port)), Some(_)) => (",
+      "replace": "(Some((host, port)), _) => (",
+      "expect": "killed",
+      "reason": "Connects for a URL whose request is refused. lemma_transducer_25.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_25()",
+        "witness": "!(super::examples::outcome(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..super::examples::url_a(None) }).1) == 1001nat)"
+      }
+    },
+    {
+      "id": "wait-drops-bytes",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Settled::Wait(rest) => (State { phase: Phase::Reading { received: rest }, ..s }",
+      "replace": "Settled::Wait(rest) => (State { phase: Phase::Reading { received: seq![] }, ..s }",
+      "expect": "killed",
+      "reason": "Forgets the octets received while the head is incomplete. lemma_transducer_26.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_26()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30])).0.phase == (Phase::Reading { received: seq![0x48u8, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x20, 0x32, 0x30, 0x30] }))"
+      }
+    },
+    {
+      "id": "finished-acts",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "Phase::Finished => (s, seq![], seq![]),",
+      "replace": "Phase::Finished => (s, seq![Action::Close], seq![]),",
+      "expect": "killed",
+      "reason": "Acts on an input after the fetch is over. lemma_transducer_27.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_27()",
+        "witness": "!(super::examples::ex_step(None, 0nat, Phase::Finished, Input::Bytes(seq![0x61u8])).1.len() == 0nat)"
       }
     }
   ]
