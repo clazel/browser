@@ -194,7 +194,7 @@ impl Established {
 }
 impl Hello {
     /// Invariant established by start and each accepted retry.
-    pub closed spec fn wf(&self) -> bool { super::client_spec::wf(self@) }
+    pub open spec fn wf(&self) -> bool { super::client_spec::wf(self@) }
     /// §4.1.2/§4.4.1: retain exactly the ClientHello whose encoding is returned.
     pub fn start(config: Config) -> (out: Result<(Self, Vec<u8>), u8>)
         ensures super::client_contract::start_ensures(config@, start_view(out)),
