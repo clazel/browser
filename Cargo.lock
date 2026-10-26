@@ -81,6 +81,9 @@ dependencies = [
  "clazel-origin",
  "clazel-psl",
  "clazel-url",
+ "cookie_store",
+ "time",
+ "url",
  "vstd",
 ]
 
