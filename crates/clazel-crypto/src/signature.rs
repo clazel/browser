@@ -1,0 +1,202 @@
+//! The executable CertificateVerify signature check, proven equal to
+//! [`crate::signature_spec::verify`]. Parsing is ours (`clazel-x509`,
+//! `clazel-der`); the three verifications are the axioms of
+//! [`crate::axioms`].
+use crate::axioms;
+use crate::signature_spec::Hash;
+use clazel_der::decode as der;
+use clazel_x509::spki::exec::{PublicKey, SubjectPublicKeyInfo};
+#[allow(unused_imports)]
+use vstd::prelude::*;
+
+verus! {
+
+/// id-ecPublicKey, 1.2.840.10045.2.1 (RFC 5480 §2.1.1).
+fn is_ec_oid(oid: &[u64]) -> (r: bool)
+    ensures r == crate::signature_spec::is_ec_public_key(der::nats(oid@)),
+{
+    oid.len() == 6
+        && oid.first() == Some(&1)
+        && oid.get(1) == Some(&2)
+        && oid.get(2) == Some(&840)
+        && oid.get(3) == Some(&10045)
+        && oid.get(4) == Some(&2)
+        && oid.get(5) == Some(&1)
+}
+
+/// id-Ed25519, 1.3.101.112 (RFC 8410 §3).
+fn is_ed25519_oid(oid: &[u64]) -> (r: bool)
+    ensures r == crate::signature_spec::is_ed25519(der::nats(oid@)),
+{
+    oid.len() == 4
+        && oid.first() == Some(&1)
+        && oid.get(1) == Some(&3)
+        && oid.get(2) == Some(&101)
+        && oid.get(3) == Some(&112)
+}
+
+/// The namedCurve secp256r1 parameter (RFC 5480 §2.1.1.1).
+fn is_secp256r1_parameter(p: &[u8]) -> (r: bool)
+    ensures r == (p@ =~= crate::signature_spec::secp256r1_parameter()),
+{
+    p.len() == 10
+        && p.first() == Some(&0x06)
+        && p.get(1) == Some(&0x08)
+        && p.get(2) == Some(&0x2a)
+        && p.get(3) == Some(&0x86)
+        && p.get(4) == Some(&0x48)
+        && p.get(5) == Some(&0xce)
+        && p.get(6) == Some(&0x3d)
+        && p.get(7) == Some(&0x03)
+        && p.get(8) == Some(&0x01)
+        && p.get(9) == Some(&0x07)
+}
+
+/// `m` left-padded with zeros to 32 octets.
+fn pad32(m: &[u8]) -> (out: Vec<u8>)
+    requires m.len() <= 32,
+    ensures out@ == crate::signature_spec::pad32(m@), out.len() == 32,
+{
+    // m.len() <= 32, so this is exact.
+    let zeros = 32usize.saturating_sub(m.len());
+    let mut out: Vec<u8> = Vec::new();
+    let mut k: usize = 0;
+    while k < zeros
+        invariant k <= zeros, zeros == 32 - m.len(), out@ =~= Seq::new(k as nat, |i: int| 0u8),
+        decreases zeros - k,
+    {
+        out.push(0);
+        // k < zeros <= 32, so this is exact.
+        k = k.saturating_add(1);
+    }
+    out.extend_from_slice(m);
+    proof { assert(out@ =~= crate::signature_spec::pad32(m@)); }
+    out
+}
+
+/// RFC 5480 §2.2: the X || Y of an uncompressed secp256r1 key.
+fn p256_point<'a>(spki: &SubjectPublicKeyInfo<'a>) -> (out: Option<&'a [u8]>)
+    ensures
+        match out {
+            Some(p) => crate::signature_spec::p256_point(spki@) == Some(p@),
+            None => crate::signature_spec::p256_point(spki@) is None,
+        },
+{
+    let bits = spki.subject_public_key_bits;
+    let params_ok = match spki.algorithm.parameters_der {
+        Some(p) => is_secp256r1_parameter(p),
+        None => false,
+    };
+    if is_ec_oid(spki.algorithm.oid.as_slice()) && params_ok
+        && spki.subject_public_key_unused_bits == 0
+        && bits.len() == 65 && bits.first() == Some(&0x04) {
+        Some(vstd::slice::slice_subrange(bits, 1, 65))
+    } else {
+        None
+    }
+}
+
+/// RFC 3279 §2.2.3: r and s of one DER Ecdsa-Sig-Value, padded to 32.
+fn ecdsa_sig_value(signature: &[u8]) -> (out: Option<(Vec<u8>, Vec<u8>)>)
+    ensures
+        match out {
+            Some((r, s)) => crate::signature_spec::ecdsa_sig_value(signature@) == Some((r@, s@)),
+            None => crate::signature_spec::ecdsa_sig_value(signature@) is None,
+        },
+{
+    let (cs, ce) = der::expect_sequence(signature, 0, signature.len())?;
+    if ce != signature.len() {
+        return None;
+    }
+    let (r_negative, rs, re, after_r) = der::read_integer(signature, cs, ce)?;
+    // read_integer gives rs <= re and ss <= se, so these are exact.
+    if r_negative || re.saturating_sub(rs) > 32 {
+        return None;
+    }
+    let (s_negative, ss, se, after_s) = der::read_integer(signature, after_r, ce)?;
+    if s_negative || se.saturating_sub(ss) > 32 || after_s != ce {
+        return None;
+    }
+    let r = pad32(vstd::slice::slice_subrange(signature, rs, re));
+    let s = pad32(vstd::slice::slice_subrange(signature, ss, se));
+    Some((r, s))
+}
+
+/// ecdsa_secp256r1_sha256 (0x0403).
+fn ecdsa_p256_sha256(spki: &SubjectPublicKeyInfo, input: &[u8], signature: &[u8]) -> (out: bool)
+    ensures out == crate::signature_spec::ecdsa_p256_sha256(spki@, input@, signature@),
+{
+    match (p256_point(spki), ecdsa_sig_value(signature)) {
+        (Some(point), Some((r, s))) =>
+            axioms::ecdsa_p256_sha256_verify(input, r.as_slice(), s.as_slice(), point),
+        _ => false,
+    }
+}
+
+/// The modulus sizes libcrux-rsa accepts, with the top bit set.
+fn modulus_ok(n: &[u8]) -> (r: bool)
+    ensures r == crate::signature_spec::modulus_ok(n@),
+{
+    let len = n.len();
+    (len == 256 || len == 384 || len == 512 || len == 768 || len == 1024)
+        && match n.first() { Some(&b) => b >= 0x80, None => false }
+}
+
+/// rsa_pss_rsae_* (0x0804-0x0806).
+fn rsa_pss_rsae(spki: &SubjectPublicKeyInfo, hash: Hash, input: &[u8], signature: &[u8]) -> (out: bool)
+    ensures out == crate::signature_spec::rsa_pss_rsae(spki@, hash, input@, signature@),
+{
+    match &spki.public_key {
+        PublicKey::Rsa(key) => {
+            let e = key.public_exponent_octets;
+            let n = key.modulus_octets;
+            let e_ok = e.len() == 3 && e.first() == Some(&1) && e.get(1) == Some(&0)
+                && e.get(2) == Some(&1);
+            proof { assert(e_ok == (e@ =~= seq![0x01u8, 0x00u8, 0x01u8])); }
+            if !e_ok || !modulus_ok(n) || signature.len() != n.len() {
+                return false;
+            }
+            let salt_len: u32 = match hash {
+                Hash::Sha256 => 32,
+                Hash::Sha384 => 48,
+                Hash::Sha512 => 64,
+            };
+            axioms::rsa_pss_verify(hash, n, input, salt_len, signature)
+        },
+        PublicKey::Unsupported => false,
+    }
+}
+
+/// ed25519 (0x0807).
+fn ed25519(spki: &SubjectPublicKeyInfo, input: &[u8], signature: &[u8]) -> (out: bool)
+    ensures out == crate::signature_spec::ed25519(spki@, input@, signature@),
+{
+    let key = spki.subject_public_key_bits;
+    if is_ed25519_oid(spki.algorithm.oid.as_slice())
+        && spki.algorithm.parameters_der.is_none()
+        && spki.subject_public_key_unused_bits == 0
+        && key.len() == 32 && signature.len() == 64 {
+        axioms::ed25519_verify(input, key, signature)
+    } else {
+        false
+    }
+}
+
+/// RFC 8446 §4.4.3: whether `signature` is a valid `scheme` signature of
+/// `input` under the end-entity SubjectPublicKeyInfo `key`.
+pub fn verify(key: &[u8], scheme: u16, input: &[u8], signature: &[u8]) -> (out: bool)
+    ensures out == crate::signature_spec::verify(key@, scheme, input@, signature@),
+{
+    match clazel_x509::spki::exec::parse_subject_public_key_info(key) {
+        None => false,
+        Some(spki) =>
+            if scheme == 0x0403 { ecdsa_p256_sha256(&spki, input, signature) }
+            else if scheme == 0x0804 { rsa_pss_rsae(&spki, Hash::Sha256, input, signature) }
+            else if scheme == 0x0805 { rsa_pss_rsae(&spki, Hash::Sha384, input, signature) }
+            else if scheme == 0x0806 { rsa_pss_rsae(&spki, Hash::Sha512, input, signature) }
+            else if scheme == 0x0807 { ed25519(&spki, input, signature) }
+            else { false },
+    }
+}
+
+} // verus!

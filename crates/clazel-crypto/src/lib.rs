@@ -20,5 +20,6 @@
 pub mod axioms;
 pub mod compare;
 pub mod provider;
+pub mod signature;
 pub mod signature_spec;
 pub mod spec;
