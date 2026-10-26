@@ -11,11 +11,13 @@
 //!   call, each an `// AXIOM:`.
 //! - [`provider`]: the adapters, checked by Verus against `clazel-tls`'s
 //!   provider contracts.
+//! - [`compare`]: the timing-safe comparison for Finished values.
 //!
 //! The suite is the profile's only one, `TLS_CHACHA20_POLY1305_SHA256` with
 //! X25519 (phase-3.md 3.0, cost 2). Signature verification and certificate
 //! validation are separate (3.5b and 3.5c) and not here.
 
 pub mod axioms;
+pub mod compare;
 pub mod provider;
 pub mod spec;
