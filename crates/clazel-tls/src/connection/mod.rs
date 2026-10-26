@@ -1,4 +1,6 @@
-//! Bounded incremental framing for TLS record input.
+//! Bounded framing and the initial TLS connection dispatcher.
+pub mod dispatcher_contract;
+pub mod dispatcher_spec;
 pub mod framing;
 pub mod framing_contract;
 pub mod framing_lemmas;
