@@ -66,6 +66,18 @@ pub enum PeerEvent {
     Eof,
 }
 
+/// Result of consuming one caller-owned byte prefix.
+pub struct Feed {
+    /// Number of bytes copied into the one-record framer.
+    pub consumed: nat,
+    /// Resulting lifecycle state.
+    pub state: State,
+    /// Bytes retained by the one-record plaintext framer.
+    pub framing: Seq<u8>,
+    /// Caller-visible effect.
+    pub action: Action,
+}
+
 /// The state needed to gate the pre-ServerHello client lifecycle.
 pub struct State {
     /// Current bootstrap phase.
@@ -236,6 +248,69 @@ pub open spec fn receive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, event: Pee
                     Action::Fail(crate::spec::UNEXPECTED_MESSAGE)),
             }
         },
+    }
+}
+
+/// RFC 8446 §5.1: consume only the first unprotected record, then reassemble
+/// its handshake/alert event. Caller-owned suffix bytes remain unconsumed.
+pub open spec fn feed(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State,
+    framing: Seq<u8>, input: Seq<u8>) -> Feed
+    recommends wf(s), crate::connection::framing_spec::wf_mode(framing, false),
+{
+    if s.mode != Mode::AwaitServerHello {
+        Feed { consumed: 0, state: s, framing, action: Action::None }
+    } else {
+        let framed = crate::connection::framing_spec::feed_mode(framing, input, false);
+        match framed.status {
+            crate::connection::framing_spec::Status::Pending => Feed {
+                consumed: framed.consumed, state: s, framing: framed.buffer, action: Action::None,
+            },
+            crate::connection::framing_spec::Status::Fail(alert) => Feed {
+                consumed: framed.consumed,
+                state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                    compatibility: s.compatibility, reassembly: s.reassembly },
+                framing: framed.buffer, action: Action::Fail(alert),
+            },
+            crate::connection::framing_spec::Status::Complete => {
+                match crate::spec::read_record(framed.buffer, false) {
+                    crate::spec::Read::Done(frame, rest) => {
+                        if rest.len() != 0 {
+                            Feed { consumed: framed.consumed,
+                                state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                                    compatibility: s.compatibility, reassembly: s.reassembly },
+                                framing: seq![], action: Action::Fail(crate::spec::UNEXPECTED_MESSAGE) }
+                        } else {
+                            let received = match frame {
+                                crate::spec::Frame::Ccs => receive(hash, s, PeerEvent::Ccs),
+                                crate::spec::Frame::Plain(rec) if rec.ctype == crate::spec::CT_HANDSHAKE =>
+                                    receive(hash, s, PeerEvent::HandshakeFragment(rec.fragment)),
+                                crate::spec::Frame::Plain(rec) if rec.ctype == crate::spec::CT_ALERT =>
+                                    match crate::spec::read_alert(rec.fragment) {
+                                        Some(alert) => receive(hash, s,
+                                            PeerEvent::Alert(alert.level, alert.description)),
+                                        None => receive(hash, s, PeerEvent::Error(crate::spec::DECODE_ERROR)),
+                                    },
+                                _ => receive(hash, s, PeerEvent::Error(crate::spec::UNEXPECTED_MESSAGE)),
+                            };
+                            Feed { consumed: framed.consumed, state: received.0,
+                                framing: seq![], action: received.1 }
+                        }
+                    },
+                    crate::spec::Read::Fail(error) => Feed {
+                        consumed: framed.consumed,
+                        state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                            compatibility: s.compatibility, reassembly: s.reassembly },
+                        framing: seq![], action: Action::Fail(crate::spec::alert_of(error)),
+                    },
+                    crate::spec::Read::NeedMore => Feed {
+                        consumed: framed.consumed,
+                        state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                            compatibility: s.compatibility, reassembly: s.reassembly },
+                        framing: seq![], action: Action::Fail(crate::spec::DECODE_ERROR),
+                    },
+                }
+            },
+        }
     }
 }
 } // verus!

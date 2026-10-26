@@ -42,4 +42,16 @@ pub open spec fn receive_ensures(hash: spec_fn(Seq<u8>) -> Seq<u8>,
         && (after, action) == super::bootstrap_spec::receive(hash, before, event)
         && super::bootstrap_spec::wf(after)
 }
+
+/// Raw input consumes exactly one plaintext record prefix and follows the lifecycle model.
+pub open spec fn feed_ensures(hash: spec_fn(Seq<u8>) -> Seq<u8>,
+    before: super::bootstrap_spec::State, framing: Seq<u8>, input: Seq<u8>,
+    out: super::bootstrap_spec::Feed) -> bool {
+    super::bootstrap_spec::wf(before)
+        && crate::connection::framing_spec::wf_mode(framing, false)
+        && out == super::bootstrap_spec::feed(hash, before, framing, input)
+        && out.consumed <= input.len()
+        && super::bootstrap_spec::wf(out.state)
+        && crate::connection::framing_spec::wf_mode(out.framing, false)
+}
 } // verus!
