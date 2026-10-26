@@ -28,20 +28,30 @@ pub enum PresentedIdentity<'a> {
 impl View for ReferenceIdentity<'_> {
     type V = super::spec::ReferenceIdentity;
     closed spec fn view(&self) -> Self::V {
-        match self {
-            ReferenceIdentity::Dns(name) => super::spec::ReferenceIdentity::Dns(name@),
-            ReferenceIdentity::Ip(address) => super::spec::ReferenceIdentity::Ip(address@),
-        }
+        view_reference_identity(self)
+    }
+}
+
+/// Public mapping for composing certificate identity checks with parsed SANs.
+pub open spec fn view_reference_identity(value: &ReferenceIdentity<'_>) -> super::spec::ReferenceIdentity {
+    match value {
+        ReferenceIdentity::Dns(name) => super::spec::ReferenceIdentity::Dns(name@),
+        ReferenceIdentity::Ip(address) => super::spec::ReferenceIdentity::Ip(address@),
     }
 }
 
 impl View for PresentedIdentity<'_> {
     type V = super::spec::PresentedIdentity;
     closed spec fn view(&self) -> Self::V {
-        match self {
-            PresentedIdentity::Dns(name) => super::spec::PresentedIdentity::Dns(name@),
-            PresentedIdentity::Ip(address) => super::spec::PresentedIdentity::Ip(address@),
-        }
+        view_presented_identity(self)
+    }
+}
+
+/// Public mapping for composed matcher proofs.
+pub open spec fn view_presented_identity(value: &PresentedIdentity<'_>) -> super::spec::PresentedIdentity {
+    match value {
+        PresentedIdentity::Dns(name) => super::spec::PresentedIdentity::Dns(name@),
+        PresentedIdentity::Ip(address) => super::spec::PresentedIdentity::Ip(address@),
     }
 }
 
@@ -125,6 +135,49 @@ fn no_wildcard_from_exec(name: &[u8], i: usize) -> (result: bool)
     }
 }
 
+/// Lower-case ASCII DNS suffix bytes into the code points consumed by the
+/// repository PSL table.
+fn psl_domain_from_ascii_exec(name: &[u8]) -> (result: Vec<u32>)
+    ensures result@ == psl_domain_from_ascii(name@)
+{
+    let mut result: Vec<u32> = Vec::new();
+    let mut index = 0;
+    while index < name.len()
+        invariant
+            index <= name.len(),
+            name@.len() == name.len(),
+            result@ == psl_domain_from_ascii(name@.subrange(0, index as int)),
+        decreases name.len() - index
+    {
+        let Some(byte_ref) = name.get(index) else { return result; };
+        let byte = *byte_ref;
+        let folded = match byte { b'A'..=b'Z' => byte.saturating_add(0x20) as u32, _ => byte as u32 };
+        result.push(folded);
+        proof {
+            reveal(psl_domain_from_ascii);
+            assert(result@[index as int] == if name@[index as int] >= b'A' && name@[index as int] <= b'Z' {
+                (name@[index as int] as int + 32) as u32
+            } else { name@[index as int] as u32 });
+            assert(result@ == psl_domain_from_ascii(name@.subrange(0, (index + 1) as int)));
+        }
+        index = index.saturating_add(1);
+    }
+    result
+}
+
+/// Use the repository's full ICANN and PRIVATE suffix table.
+fn wildcard_suffix_is_public_suffix_exec(name: &[u8]) -> (result: bool)
+    ensures result == wildcard_suffix_is_public_suffix(name@)
+{
+    let domain = psl_domain_from_ascii_exec(name);
+    let result = clazel_psl::exec::is_public_suffix_exec(domain.as_slice());
+    proof {
+        reveal(wildcard_suffix_is_public_suffix);
+        assert(domain@ == psl_domain_from_ascii(name@));
+    }
+    result
+}
+
 /// RFC 9525 §6.3: the implementation follows DNS-name matching's ASCII
 /// folding and complete-leftmost-label wildcard rules.
 pub fn dns_id_matches_exec(reference: &[u8], presented: &[u8]) -> (result: bool)
@@ -139,6 +192,7 @@ pub fn dns_id_matches_exec(reference: &[u8], presented: &[u8]) -> (result: bool)
     }
     let Some(suffix) = presented.get(2..) else { return false; };
     if !valid_dns_exec(suffix) || !no_wildcard_from_exec(presented, 2) { return false; }
+    if wildcard_suffix_is_public_suffix_exec(suffix) { return false; }
     let dot = first_dot_exec(reference, 0);
     if dot == 0 || dot >= reference.len() { return false; }
     let Some(suffix_start) = dot.checked_add(1) else { return false; };
@@ -158,7 +212,8 @@ pub fn service_identity_matches_exec(
     reference: ReferenceIdentity<'_>,
     presented: PresentedIdentity<'_>,
 ) -> (result: bool)
-    ensures result == service_identity_match(reference@, presented@)
+    ensures result == service_identity_match(
+        view_reference_identity(&reference), view_presented_identity(&presented))
 {
     match (reference, presented) {
         (ReferenceIdentity::Dns(r), PresentedIdentity::Dns(p)) => dns_id_matches_exec(r, p),

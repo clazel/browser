@@ -51,6 +51,23 @@ mod tests {
     }
 
     #[test]
+    fn public_suffix_wildcards_are_blocked_with_psl_exceptions_applied() {
+        assert!(!dns_id_matches(b"evil.co.uk", b"*.co.uk"));
+        assert!(!dns_id_matches(b"evil.com", b"*.com"));
+        assert!(!dns_id_matches(b"evil.github.io", b"*.github.io"));
+        assert!(dns_id_matches(b"shop.example.co.uk", b"*.example.co.uk"));
+        // PSL exception rules lower the public suffix to ck and kawasaki.jp.
+        assert!(dns_id_matches(b"shop.www.ck", b"*.www.ck"));
+        assert!(dns_id_matches(
+            b"shop.city.kawasaki.jp",
+            b"*.city.kawasaki.jp"
+        ));
+        // Exact identities and IP comparisons do not use the wildcard PSL veto.
+        assert!(dns_id_matches(b"co.uk", b"co.uk"));
+        assert!(ip_id_matches(&[192, 0, 2, 7], &[192, 0, 2, 7]));
+    }
+
+    #[test]
     fn malformed_wildcards_and_names_are_rejected() {
         assert!(!dns_id_matches(b"www.example.test", b"w*.example.test"));
         assert!(!dns_id_matches(b"www.example.test", b"*.*.example.test"));
