@@ -78,13 +78,43 @@ pub open spec fn ce_response() -> Seq<u8> {
 /// closes the tab and its connection, then report that connection open and
 /// the response arriving.
 pub open spec fn ce_trace() -> Seq<Event> {
-    seq![
-        Event::OpenTab { url: Seq::<u32>::empty(), script: Seq::<u8>::empty() },
-        Event::NavigateTab { tab: 0, url: Seq::<u32>::empty() },
-        Event::FromRenderer { id: 0, bytes: Seq::<u8>::empty() },
-        Event::Net { conn: 0, input: clazel_fetch::transducer::spec::Input::Connected },
-        Event::Net { conn: 0, input: clazel_fetch::transducer::spec::Input::Bytes(ce_response()) },
-    ]
+    seq![ce_ev0(), ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4()]
+}
+
+/// The user opens a tab.
+pub open spec fn ce_ev0() -> Event {
+    Event::OpenTab { url: Seq::<u32>::empty(), script: Seq::<u8>::empty() }
+}
+
+/// The user navigates it.
+pub open spec fn ce_ev1() -> Event {
+    Event::NavigateTab { tab: 0, url: Seq::<u32>::empty() }
+}
+
+/// Its renderer sends an undecodable frame.
+pub open spec fn ce_ev2() -> Event {
+    Event::FromRenderer { id: 0, bytes: Seq::<u8>::empty() }
+}
+
+/// The shell reports the connection open.
+pub open spec fn ce_ev3() -> Event {
+    Event::Net { conn: 0, input: clazel_fetch::transducer::spec::Input::Connected }
+}
+
+/// ... and the response arriving.
+pub open spec fn ce_ev4() -> Event {
+    Event::Net { conn: 0, input: clazel_fetch::transducer::spec::Input::Bytes(ce_response()) }
+}
+
+/// The trace, split.
+pub proof fn lemma_ce_trace_shape()
+    ensures
+        ce_trace()[0] == ce_ev0() && ce_trace()[1] == ce_ev1() && ce_trace()[2] == ce_ev2() && ce_trace()[3] == ce_ev3() && ce_trace()[4] == ce_ev4(),
+        ce_trace().drop_first() =~= seq![ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4()],
+        ce_trace().drop_first().drop_first() =~= seq![ce_ev2(), ce_ev3(), ce_ev4()],
+        ce_trace().drop_first().drop_first().drop_first() =~= seq![ce_ev3(), ce_ev4()],
+        ce_trace().drop_first().drop_first().drop_first().drop_first() =~= seq![ce_ev4()],
+{
 }
 
 /// The transducer's step on the response, from the state that has sent the
@@ -400,12 +430,13 @@ pub proof fn lemma_ce_e0(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
-        step(rules, ce_urls(), fetch, init_state(), ce_trace()[0]).0 == ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0),
-        step(rules, ce_urls(), fetch, init_state(), ce_trace()[0]).1.len() == 2,
+        step(rules, ce_urls(), fetch, init_state(), ce_ev0()).0 == ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0),
+        step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1.len() == 2,
+        step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1[0] is Spawn && step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1[1] is ToRenderer,
 {
     assert(lock_of_url(ce_urls(), Seq::<u32>::empty(), 0) == Some(clazel_origin::spec::Origin::Opaque(0nat)));
-    assert(step(rules, ce_urls(), fetch, init_state(), ce_trace()[0]).0.renderers =~= seq![ce_r0()]);
-    assert(step(rules, ce_urls(), fetch, init_state(), ce_trace()[0]).0 == ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0));
+    assert(step(rules, ce_urls(), fetch, init_state(), ce_ev0()).0.renderers =~= seq![ce_r0()]);
+    assert(step(rules, ce_urls(), fetch, init_state(), ce_ev0()).0 == ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0));
 }
 
 /// The second event starts the fetch: a connection opens.
@@ -413,10 +444,15 @@ pub proof fn lemma_ce_e1(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
-        step(rules, ce_urls(), fetch, ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0), ce_trace()[1]).0
+        step(rules, ce_urls(), fetch, ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0), ce_ev1()).0
             == ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1),
-        step(rules, ce_urls(), fetch, ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0), ce_trace()[1]).1
+        step(rules, ce_urls(), fetch, ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0), ce_ev1()).1
             == seq![Output::Connect { conn: 0, host: seq![0x61u8], port: 80, tls: false }],
+        step(rules, ce_urls(), fetch, ce_state(seq![ce_r0()], Seq::<Connection>::empty(), 1, 0), ce_ev1())
+            == (
+            ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1),
+            seq![Output::Connect { conn: 0, host: seq![0x61u8], port: 80, tls: false }],
+        ),
 {
     lemma_ce_start();
     let urls = ce_urls();
@@ -425,7 +461,7 @@ pub proof fn lemma_ce_e1(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(lock_of_url(urls, Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)));
     assert((fetch.parse)(Seq::<u32>::empty()) == Some(ua));
     assert(find_by_tab(s1.renderers, 0, 0) == Some(0int));
-    assert(ce_trace()[1] == (Event::NavigateTab { tab: 0, url: Seq::<u32>::empty() }));
+    assert(ce_ev1() == (Event::NavigateTab { tab: 0, url: Seq::<u32>::empty() }));
     lemma_co_begin(rules, urls, fetch, s1, 0, Seq::<u32>::empty(), 0, ua);
     let st0 = clazel_fetch::transducer::examples::state_a(None, 0, clazel_fetch::transducer::spec::Phase::Connecting);
     assert(clazel_fetch::transducer::spec::start(ua) == (st0, seq![NetAction::Connect { host: seq![0x61u8], port: 80, tls: false }]));
@@ -435,7 +471,15 @@ pub proof fn lemma_ce_e1(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(u.conns =~= Seq::<Connection>::empty());
     assert(u.conns.push(ce_c0()) =~= seq![ce_c0()]);
     assert(u.renderers =~= seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }]);
-    assert(step(rules, urls, fetch, s1, ce_trace()[1]) == begin_navigation(rules, urls, fetch, s1, 0, Seq::<u32>::empty()));
+    assert(step(rules, urls, fetch, s1, ce_ev1()) == begin_navigation(rules, urls, fetch, s1, 0, Seq::<u32>::empty()));
+}
+
+/// The empty frame does not decode.
+pub proof fn lemma_ce_decode_none()
+    ensures
+        decode_renderer_frame(Seq::<u8>::empty()) is None,
+{
+    assert(decode_renderer_frame(Seq::<u8>::empty()) is None);
 }
 
 /// The third event, an undecodable frame, kills the renderer and closes its
@@ -444,10 +488,8 @@ pub proof fn lemma_ce_e2(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_trace()[2]).0
-            == ce_state(Seq::<Renderer>::empty(), Seq::<Connection>::empty(), 1, 1),
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_trace()[2]).1
-            == seq![Output::Kill { id: 0 }, Output::Close { conn: 0 }],
+        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev2())
+            == (ce_state(Seq::<Renderer>::empty(), Seq::<Connection>::empty(), 1, 1), seq![Output::Kill { id: 0 }, Output::Close { conn: 0 }]),
 {
     let s2 = ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1);
     assert(decode_renderer_frame(Seq::<u8>::empty()) is None);
@@ -459,7 +501,7 @@ pub proof fn lemma_ce_e2(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(ce_c0().tab == 0);
     assert(closes_of_tab(seq![ce_c0()], 0) =~= seq![Output::Close { conn: 0 }] + Seq::<Output>::empty());
     assert(seq![Output::Close { conn: 0 }] + Seq::<Output>::empty() =~= seq![Output::Close { conn: 0 }]);
-    assert(ce_trace()[2] == (Event::FromRenderer { id: 0, bytes: Seq::<u8>::empty() }));
+    assert(ce_ev2() == (Event::FromRenderer { id: 0, bytes: Seq::<u8>::empty() }));
     assert(s2.renderers.remove(0) =~= Seq::<Renderer>::empty());
 }
 
@@ -479,7 +521,7 @@ pub proof fn lemma_ce_e3(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_trace()[3]).0
+        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav0()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev3()).0
             == ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1),
 {
     let urls = ce_urls();
@@ -488,7 +530,7 @@ pub proof fn lemma_ce_e3(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(find_by_tab(s2.renderers, 0, 0) == Some(0int));
     assert(net_target(s2, 0) == Some((ce_c0(), 0int, ce_nav0())));
     let input = clazel_fetch::transducer::spec::Input::Connected;
-    assert(ce_trace()[3] == (Event::Net { conn: 0, input }));
+    assert(ce_ev3() == (Event::Net { conn: 0, input }));
     lemma_co_net(rules, urls, fetch, s2, 0, input, ce_c0(), 0, ce_nav0());
     let (fs1, a1, ops1) = net_transducer_step(fetch, s2, ce_nav0(), input);
     assert(fs1 == ce_nav1().fetch && a1.len() == 1 && a1[0] is Send && ops1.len() == 1 && ops1[0] is Retrieved);
@@ -507,10 +549,10 @@ pub proof fn lemma_ce_e4(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_trace()[4]).0.renderers
+        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).0.renderers
             == seq![Renderer { id: 1, tab: 0, url: ce_href(), lock: clazel_origin::spec::Origin::Opaque(1nat), pending: None }],
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_trace()[4]).1.len() == 4,
-        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_trace()[4]).1[2] == (Output::Spawn { id: 1, policy: Policy::Renderer }),
+        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1.len() == 4,
+        step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1[2] == (Output::Spawn { id: 1, policy: Policy::Renderer }),
 {
     lemma_ce_href();
     let urls = ce_urls();
@@ -520,7 +562,7 @@ pub proof fn lemma_ce_e4(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(find_by_tab(u3.renderers, 0, 0) == Some(0int));
     assert(net_target(u3, 0) == Some((ce_c0(), 0int, ce_nav1())));
     let input = clazel_fetch::transducer::spec::Input::Bytes(ce_response());
-    assert(ce_trace()[4] == (Event::Net { conn: 0, input }));
+    assert(ce_ev4() == (Event::Net { conn: 0, input }));
     lemma_co_net(rules, urls, fetch, u3, 0, input, ce_c0(), 0, ce_nav1());
     let (fs2, a2, ops2) = net_transducer_step(fetch, u3, ce_nav1(), input);
     assert(a2.len() == 2 && a2[0] is Close && a2[1] is Done && a2[1]->Done_url == ua && a2[1]->Done_response.body == Seq::<u8>::empty() && ops2 =~= Seq::<clazel_fetch::transducer::spec::JarOp>::empty());
@@ -587,24 +629,25 @@ pub proof fn lemma_ipurge_empty(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 
 /// The trace is not one the shell may report: its fourth event names a
 /// connection that is not open.
+#[verifier::spinoff_prover]
 pub proof fn lemma_ce_not_user_tabs_open(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
         !crate::noninterference::user_tabs_open(rules, ce_urls(), fetch, init_state(), ce_trace()),
 {
+    lemma_ce_trace_shape();
     lemma_ce_e0(rules, fetch);
     lemma_ce_e1(rules, fetch);
     lemma_ce_e2(rules, fetch);
     let (urls, t) = (ce_urls(), ce_trace());
-    let (e0, e1, e2, e3, e4) = (t[0], t[1], t[2], t[3], t[4]);
+    let (e0, e1, e2, e3, e4) = (ce_ev0(), ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4());
     let t1 = t.drop_first();
     let t2 = t1.drop_first();
     let t3 = t2.drop_first();
     assert(t1 =~= seq![e1, e2, e3, e4]);
     assert(t2 =~= seq![e2, e3, e4]);
     assert(t3 =~= seq![e3, e4]);
-    assert(t1[0] == e1 && t2[0] == e2 && t3[0] == e3);
     assert(find_conn(ce_s3().conns, 0, 0) is None);
     if crate::noninterference::user_tabs_open(rules, urls, fetch, init_state(), t) {
         lemma_user_tabs_open_cons(rules, urls, fetch, init_state(), t);
@@ -616,29 +659,18 @@ pub proof fn lemma_ce_not_user_tabs_open(rules: Seq<clazel_psl::spec::Rule>, fet
     }
 }
 
-/// Nothing the first three events output is addressed to the observer.
-pub proof fn lemma_ce_unaddressed(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+/// Nothing the first event outputs is addressed to the observer.
+pub proof fn lemma_ce_unaddr0(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
-        ({
-            let d = crate::domain::Domain::Opaque(1nat);
-            &&& crate::noninterference::outputs_for(rules, d, init_state(), ce_s1(), step(rules, ce_urls(), fetch, init_state(), ce_trace()[0]).1) == Seq::<Output>::empty()
-            &&& crate::noninterference::outputs_for(rules, d, ce_s1(), ce_s2(), step(rules, ce_urls(), fetch, ce_s1(), ce_trace()[1]).1) == Seq::<Output>::empty()
-            &&& crate::noninterference::outputs_for(rules, d, ce_s2(), ce_s3(), step(rules, ce_urls(), fetch, ce_s2(), ce_trace()[2]).1) == Seq::<Output>::empty()
-        }),
+        crate::noninterference::outputs_for(rules, crate::domain::Domain::Opaque(1nat), init_state(), ce_s1(), step(rules, ce_urls(), fetch, init_state(), ce_ev0()).1) == Seq::<Output>::empty(),
 {
     lemma_ce_e0(rules, fetch);
-    lemma_ce_e1(rules, fetch);
-    lemma_ce_e2(rules, fetch);
     let d = crate::domain::Domain::Opaque(1nat);
-    let (s0, s1, s2, s3) = (init_state(), ce_s1(), ce_s2(), ce_s3());
-    let r0n = Renderer { pending: Some(ce_nav0()), ..ce_r0() };
+    let (s0, s1) = (init_state(), ce_s1());
     assert(crate::domain::domain_of_renderer(rules, ce_r0()) == crate::domain::Domain::Opaque(0nat));
-    assert(crate::domain::domain_of_renderer(rules, r0n) == crate::domain::Domain::Opaque(0nat));
-    let o0 = step(rules, ce_urls(), fetch, s0, ce_trace()[0]).1;
-    let o1 = step(rules, ce_urls(), fetch, s1, ce_trace()[1]).1;
-    let o2 = step(rules, ce_urls(), fetch, s2, ce_trace()[2]).1;
+    let o0 = step(rules, ce_urls(), fetch, s0, ce_ev0()).1;
     assert forall|k: int| 0 <= k < o0.len() implies !crate::noninterference::addressed_to(rules, d, s0, s1, #[trigger] o0[k]) by {
         if crate::noninterference::addressed_to(rules, d, s0, s1, o0[k]) {
             let q = choose|q: Renderer| (s0.renderers.contains(q) || s1.renderers.contains(q)) && q.id == crate::domain::output_id(o0[k]) && crate::domain::domain_of_renderer(rules, q) == d;
@@ -647,8 +679,35 @@ pub proof fn lemma_ce_unaddressed(rules: Seq<clazel_psl::spec::Rule>, fetch: Fet
         }
     }
     crate::unwind_base::lemma_filter_none(o0, |o: Output| crate::noninterference::addressed_to(rules, d, s0, s1, o));
-    assert forall|k: int| 0 <= k < o1.len() implies !crate::noninterference::addressed_to(rules, d, s1, s2, #[trigger] o1[k]) by {}
-    crate::unwind_base::lemma_filter_none(o1, |o: Output| crate::noninterference::addressed_to(rules, d, s1, s2, o));
+}
+
+/// ... the second ...
+pub proof fn lemma_ce_unaddr1(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+    requires
+        ce_fetch_ok(fetch),
+    ensures
+        crate::noninterference::outputs_for(rules, crate::domain::Domain::Opaque(1nat), ce_s1(), ce_s2(), seq![Output::Connect { conn: 0, host: seq![0x61u8], port: 80, tls: false }]) == Seq::<Output>::empty(),
+{
+    lemma_ce_e1(rules, fetch);
+    let d = crate::domain::Domain::Opaque(1nat);
+    let o1 = seq![Output::Connect { conn: 0, host: seq![0x61u8], port: 80, tls: false }];
+    assert forall|k: int| 0 <= k < o1.len() implies !crate::noninterference::addressed_to(rules, d, ce_s1(), ce_s2(), #[trigger] o1[k]) by {}
+    crate::unwind_base::lemma_filter_none(o1, |o: Output| crate::noninterference::addressed_to(rules, d, ce_s1(), ce_s2(), o));
+}
+
+/// ... and the third.
+pub proof fn lemma_ce_unaddr2(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+    requires
+        ce_fetch_ok(fetch),
+    ensures
+        crate::noninterference::outputs_for(rules, crate::domain::Domain::Opaque(1nat), ce_s2(), ce_s3(), seq![Output::Kill { id: 0 }, Output::Close { conn: 0 }]) == Seq::<Output>::empty(),
+{
+    lemma_ce_e2(rules, fetch);
+    let d = crate::domain::Domain::Opaque(1nat);
+    let (s2, s3) = (ce_s2(), ce_s3());
+    let r0n = Renderer { pending: Some(ce_nav0()), ..ce_r0() };
+    assert(crate::domain::domain_of_renderer(rules, r0n) == crate::domain::Domain::Opaque(0nat));
+    let o2 = seq![Output::Kill { id: 0 }, Output::Close { conn: 0 }];
     assert forall|k: int| 0 <= k < o2.len() implies !crate::noninterference::addressed_to(rules, d, s2, s3, #[trigger] o2[k]) by {
         if crate::noninterference::addressed_to(rules, d, s2, s3, o2[k]) {
             let q = choose|q: Renderer| (s2.renderers.contains(q) || s3.renderers.contains(q)) && q.id == crate::domain::output_id(o2[k]) && crate::domain::domain_of_renderer(rules, q) == d;
@@ -659,6 +718,126 @@ pub proof fn lemma_ce_unaddressed(rules: Seq<clazel_psl::spec::Rule>, fetch: Fet
     crate::unwind_base::lemma_filter_none(o2, |o: Output| crate::noninterference::addressed_to(rules, d, s2, s3, o));
 }
 
+/// No renderer of `s` is in the domain `d`.
+pub open spec fn no_d(rules: Seq<clazel_psl::spec::Rule>, d: crate::domain::Domain, s: State) -> bool {
+    forall|i: int| 0 <= i < s.renderers.len() ==> crate::domain::domain_of_renderer(rules, #[trigger] s.renderers[i]) != d
+}
+
+/// A step between states with no renderer in `d` sends `d` nothing.
+pub proof fn lemma_outputs_for_quiet(rules: Seq<clazel_psl::spec::Rule>, d: crate::domain::Domain, s: State, sb: State, out: Seq<Output>)
+    requires
+        no_d(rules, d, s),
+        no_d(rules, d, sb),
+    ensures
+        crate::noninterference::outputs_for(rules, d, s, sb, out) == Seq::<Output>::empty(),
+{
+    assert forall|k: int| 0 <= k < out.len() implies !crate::noninterference::addressed_to(rules, d, s, sb, #[trigger] out[k]) by {
+        if crate::noninterference::addressed_to(rules, d, s, sb, out[k]) {
+            let r = choose|r: Renderer| (s.renderers.contains(r) || sb.renderers.contains(r)) && r.id == crate::domain::output_id(out[k]) && crate::domain::domain_of_renderer(rules, r) == d;
+            if s.renderers.contains(r) {
+                let i = choose|i: int| 0 <= i < s.renderers.len() && s.renderers[i] == r;
+            } else {
+                let i = choose|i: int| 0 <= i < sb.renderers.len() && sb.renderers[i] == r;
+            }
+        }
+    }
+    crate::unwind_base::lemma_filter_none(out, |o: Output| crate::noninterference::addressed_to(rules, d, s, sb, o));
+}
+
+/// Every state along the run of `t` from `s` has no renderer in `d`.
+pub open spec fn quiet(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s: State, t: Seq<Event>) -> bool
+    decreases t.len(),
+{
+    no_d(rules, d, s) && (t.len() == 0 || quiet(rules, urls, fetch, d, step(rules, urls, fetch, s, t[0]).0, t.drop_first()))
+}
+
+/// A quiet run sends `d` nothing.
+pub proof fn lemma_run_quiet(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s: State, t: Seq<Event>)
+    requires
+        quiet(rules, urls, fetch, d, s, t),
+    ensures
+        crate::noninterference::run_outputs_for(rules, urls, fetch, d, s, t) == Seq::<Output>::empty(),
+    decreases t.len(),
+{
+    if t.len() > 0 {
+        let sb = step(rules, urls, fetch, s, t[0]).0;
+        lemma_run_quiet(rules, urls, fetch, d, sb, t.drop_first());
+        lemma_outputs_for_quiet(rules, d, s, sb, step(rules, urls, fetch, s, t[0]).1);
+        assert(Seq::<Output>::empty() + Seq::<Output>::empty() =~= Seq::<Output>::empty());
+    }
+}
+
+/// One step of a quiet run.
+pub proof fn lemma_quiet_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s: State, t: Seq<Event>, sb: State)
+    requires
+        t.len() > 0,
+        no_d(rules, d, s),
+        step(rules, urls, fetch, s, t[0]).0 == sb,
+        quiet(rules, urls, fetch, d, sb, t.drop_first()),
+    ensures
+        quiet(rules, urls, fetch, d, s, t),
+{
+}
+
+/// The states of the original run have no renderer in the observer's domain.
+pub proof fn lemma_ce_no_d(rules: Seq<clazel_psl::spec::Rule>)
+    ensures
+        no_d(rules, crate::domain::Domain::Opaque(1nat), init_state()),
+        no_d(rules, crate::domain::Domain::Opaque(1nat), ce_s1()),
+        no_d(rules, crate::domain::Domain::Opaque(1nat), ce_s2()),
+        no_d(rules, crate::domain::Domain::Opaque(1nat), ce_s3()),
+{
+    assert(crate::domain::domain_of_renderer(rules, ce_r0()) == crate::domain::Domain::Opaque(0nat));
+    assert(crate::domain::domain_of_renderer(rules, Renderer { pending: Some(ce_nav0()), ..ce_r0() }) == crate::domain::Domain::Opaque(0nat));
+}
+
+/// The original run of [`ce_trace`] is quiet.
+pub proof fn lemma_ce_quiet(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+    requires
+        ce_fetch_ok(fetch),
+    ensures
+        quiet(rules, ce_urls(), fetch, crate::domain::Domain::Opaque(1nat), init_state(), ce_trace()),
+{
+    lemma_ce_trace_shape();
+    lemma_ce_no_d(rules);
+    lemma_ce_e0(rules, fetch);
+    lemma_ce_e1(rules, fetch);
+    lemma_ce_e2(rules, fetch);
+    lemma_ce_ignored(rules, fetch, 3);
+    lemma_ce_ignored(rules, fetch, 4);
+    let (urls, d) = (ce_urls(), crate::domain::Domain::Opaque(1nat));
+    let t = ce_trace();
+    let t1 = t.drop_first();
+    let t2 = t1.drop_first();
+    let t3 = t2.drop_first();
+    let t4 = t3.drop_first();
+    let t5 = t4.drop_first();
+    assert(t1 =~= seq![ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4()]);
+    assert(t2 =~= seq![ce_ev2(), ce_ev3(), ce_ev4()]);
+    assert(t3 =~= seq![ce_ev3(), ce_ev4()]);
+    assert(t4 =~= seq![ce_ev4()]);
+    assert(t5 =~= Seq::<Event>::empty());
+    assert(quiet(rules, urls, fetch, d, ce_s3(), t5));
+    assert(step(rules, urls, fetch, ce_s3(), t4[0]).0 == ce_s3() && step(rules, urls, fetch, ce_s3(), t3[0]).0 == ce_s3());
+    assert(step(rules, urls, fetch, ce_s2(), t2[0]).0 == ce_s3() && step(rules, urls, fetch, ce_s1(), t1[0]).0 == ce_s2() && step(rules, urls, fetch, init_state(), t[0]).0 == ce_s1());
+    lemma_quiet_step(rules, urls, fetch, d, ce_s3(), t4, ce_s3());
+    lemma_quiet_step(rules, urls, fetch, d, ce_s3(), t3, ce_s3());
+    lemma_quiet_step(rules, urls, fetch, d, ce_s2(), t2, ce_s3());
+    lemma_quiet_step(rules, urls, fetch, d, ce_s1(), t1, ce_s2());
+    lemma_quiet_step(rules, urls, fetch, d, init_state(), t, ce_s1());
+}
+
+/// ... and so sends the observer nothing.
+pub proof fn lemma_ce_run_all(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+    requires
+        ce_fetch_ok(fetch),
+    ensures
+        crate::noninterference::run_outputs_for(rules, ce_urls(), fetch, crate::domain::Domain::Opaque(1nat), init_state(), ce_trace()).len() == 0,
+{
+    lemma_ce_quiet(rules, fetch);
+    lemma_run_quiet(rules, ce_urls(), fetch, crate::domain::Domain::Opaque(1nat), init_state(), ce_trace());
+}
+
 /// The original run of [`ce_trace`] sends nothing to the observer, and the
 /// trace is not one the shell may report.
 pub proof fn lemma_ce_real(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
@@ -667,86 +846,96 @@ pub proof fn lemma_ce_real(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     ensures
         ({
             let urls = ce_urls();
-                    let t = ce_trace();
+            let t = ce_trace();
             let d = crate::domain::Domain::Opaque(1nat);
-            !crate::noninterference::user_tabs_open(rules, urls, fetch, init_state(), t) && crate::noninterference::run_outputs_for(rules, urls, fetch, d, init_state(), t) == Seq::<Output>::empty()
+            !crate::noninterference::user_tabs_open(rules, urls, fetch, init_state(), t) && crate::noninterference::run_outputs_for(rules, urls, fetch, d, init_state(), t).len() == 0
         }),
 {
     lemma_ce_not_user_tabs_open(rules, fetch);
-    lemma_ce_unaddressed(rules, fetch);
-    lemma_ce_e0(rules, fetch);
-    lemma_ce_e1(rules, fetch);
-    lemma_ce_e2(rules, fetch);
+    lemma_ce_run_all(rules, fetch);
+}
+
+/// The purge from after the third event keeps the two network events.
+#[verifier::spinoff_prover]
+pub proof fn lemma_ce_purge_tail(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+    requires
+        ce_fetch_ok(fetch),
+    ensures
+        crate::domain::ipurge(rules, ce_urls(), fetch, ce_s3(), crate::domain::Domain::Opaque(1nat), seq![ce_ev3(), ce_ev4()]) =~= seq![ce_ev3(), ce_ev4()],
+{
     lemma_ce_ignored(rules, fetch, 3);
     lemma_ce_ignored(rules, fetch, 4);
-    let urls = ce_urls();
-    let t = ce_trace();
-    let d = crate::domain::Domain::Opaque(1nat);
-    let (s0, s1, s2, s3) = (init_state(), ce_s1(), ce_s2(), ce_s3());
-    let (e0, e1, e2, e3, e4) = (t[0], t[1], t[2], t[3], t[4]);
-    assert(step(rules, urls, fetch, s0, e0).0 == s1);
-    assert(step(rules, urls, fetch, s1, e1).0 == s2);
-    assert(step(rules, urls, fetch, s2, e2).0 == s3);
-    crate::ni_theorem::lemma_run_outputs_cons(rules, urls, fetch, d, s0, e0, seq![e1, e2, e3, e4]);
-    assert(seq![e1, e2, e3, e4] =~= seq![e1] + seq![e2, e3, e4]);
-    crate::ni_theorem::lemma_run_outputs_cons(rules, urls, fetch, d, s1, e1, seq![e2, e3, e4]);
-    assert(seq![e2, e3, e4] =~= seq![e2] + seq![e3, e4]);
-    crate::ni_theorem::lemma_run_outputs_cons(rules, urls, fetch, d, s2, e2, seq![e3, e4]);
-    assert(seq![e3, e4] =~= seq![e3] + seq![e4]);
-    crate::ni_theorem::lemma_run_outputs_cons(rules, urls, fetch, d, s3, e3, seq![e4]);
-    assert(seq![e4] =~= seq![e4] + Seq::<Event>::empty());
-    crate::ni_theorem::lemma_run_outputs_cons(rules, urls, fetch, d, s3, e4, Seq::<Event>::empty());
-    assert(crate::noninterference::outputs_for(rules, d, s3, s3, Seq::<Output>::empty()) =~= Seq::<Output>::empty());
-    assert(crate::noninterference::run_outputs_for(rules, urls, fetch, d, s0, t) =~= Seq::<Output>::empty());
+    let (urls, d, s3) = (ce_urls(), crate::domain::Domain::Opaque(1nat), ce_s3());
+    assert(step(rules, urls, fetch, s3, ce_ev3()).0 == s3 && step(rules, urls, fetch, s3, ce_ev4()).0 == s3);
+    assert(crate::domain::ipurge_event(rules, urls, s3, d, ce_ev3()) == Some(ce_ev3()));
+    assert(crate::domain::ipurge_event(rules, urls, s3, d, ce_ev4()) == Some(ce_ev4()));
+    lemma_ipurge_cons(rules, urls, fetch, s3, d, seq![ce_ev3(), ce_ev4()]);
+    assert(seq![ce_ev3(), ce_ev4()].drop_first() =~= seq![ce_ev4()]);
+    lemma_ipurge_cons(rules, urls, fetch, s3, d, seq![ce_ev4()]);
+    assert(seq![ce_ev4()].drop_first() =~= Seq::<Event>::empty());
+    lemma_ipurge_empty(rules, urls, fetch, s3, d);
+    assert(seq![ce_ev3()] + (seq![ce_ev4()] + Seq::<Event>::empty()) =~= seq![ce_ev3(), ce_ev4()]);
+}
+
+/// ... and from after the second drops the frame.
+#[verifier::spinoff_prover]
+pub proof fn lemma_ce_purge_from2(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+    requires
+        ce_fetch_ok(fetch),
+    ensures
+        crate::domain::ipurge(rules, ce_urls(), fetch, ce_s2(), crate::domain::Domain::Opaque(1nat), seq![ce_ev2(), ce_ev3(), ce_ev4()]) =~= seq![ce_ev3(), ce_ev4()],
+{
+    lemma_ce_purge_tail(rules, fetch);
+    lemma_ce_e2(rules, fetch);
+    let (urls, d, s2) = (ce_urls(), crate::domain::Domain::Opaque(1nat), ce_s2());
+    assert(step(rules, urls, fetch, s2, ce_ev2()).0 == ce_s3());
+    assert(crate::domain::event_domain(rules, s2, ce_ev2()) == Some(crate::domain::Domain::Opaque(0nat)));
+    assert(crate::domain::declassified(urls, s2, ce_ev2()) is None);
+    assert(crate::domain::ipurge_event(rules, urls, s2, d, ce_ev2()) is None);
+    lemma_ipurge_cons(rules, urls, fetch, s2, d, seq![ce_ev2(), ce_ev3(), ce_ev4()]);
+    assert(seq![ce_ev2(), ce_ev3(), ce_ev4()].drop_first() =~= seq![ce_ev3(), ce_ev4()]);
+    assert(Seq::<Event>::empty() + seq![ce_ev3(), ce_ev4()] =~= seq![ce_ev3(), ce_ev4()]);
+}
+
+/// ... and from after the first.
+#[verifier::spinoff_prover]
+pub proof fn lemma_ce_purge_from1(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
+    requires
+        ce_fetch_ok(fetch),
+    ensures
+        crate::domain::ipurge(rules, ce_urls(), fetch, ce_s1(), crate::domain::Domain::Opaque(1nat), seq![ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4()]) =~= seq![ce_ev1(), ce_ev3(), ce_ev4()],
+{
+    lemma_ce_purge_from2(rules, fetch);
+    lemma_ce_e1(rules, fetch);
+    let (urls, d, s1) = (ce_urls(), crate::domain::Domain::Opaque(1nat), ce_s1());
+    assert(step(rules, urls, fetch, s1, ce_ev1()).0 == ce_s2());
+    assert(crate::domain::ipurge_event(rules, urls, s1, d, ce_ev1()) == Some(ce_ev1()));
+    lemma_ipurge_cons(rules, urls, fetch, s1, d, seq![ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4()]);
+    assert(seq![ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4()].drop_first() =~= seq![ce_ev2(), ce_ev3(), ce_ev4()]);
+    assert(seq![ce_ev1()] + seq![ce_ev3(), ce_ev4()] =~= seq![ce_ev1(), ce_ev3(), ce_ev4()]);
 }
 
 /// The purge of [`ce_trace`] drops the renderer's frame.
+#[verifier::spinoff_prover]
 pub proof fn lemma_ce_purge(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
     ensures
-        crate::domain::purge(rules, ce_urls(), fetch, crate::domain::Domain::Opaque(1nat), ce_trace()) =~= seq![ce_trace()[0], ce_trace()[1], ce_trace()[3], ce_trace()[4]],
+        crate::domain::purge(rules, ce_urls(), fetch, crate::domain::Domain::Opaque(1nat), ce_trace()) =~= seq![ce_ev0(), ce_ev1(), ce_ev3(), ce_ev4()],
 {
+    lemma_ce_trace_shape();
+    lemma_ce_purge_from1(rules, fetch);
     lemma_ce_e0(rules, fetch);
-    lemma_ce_e1(rules, fetch);
-    lemma_ce_e2(rules, fetch);
-    lemma_ce_ignored(rules, fetch, 3);
-    lemma_ce_ignored(rules, fetch, 4);
-    let (urls, t) = (ce_urls(), ce_trace());
-    let d = crate::domain::Domain::Opaque(1nat);
-    let (s0, s1, s2, s3) = (init_state(), ce_s1(), ce_s2(), ce_s3());
-    let (e0, e1, e2, e3, e4) = (t[0], t[1], t[2], t[3], t[4]);
-    let t1 = t.drop_first();
-    let t2 = t1.drop_first();
-    let t3 = t2.drop_first();
-    let t4 = t3.drop_first();
-    let t5 = t4.drop_first();
-    assert(t1 =~= seq![e1, e2, e3, e4]);
-    assert(t2 =~= seq![e2, e3, e4]);
-    assert(t3 =~= seq![e3, e4]);
-    assert(t4 =~= seq![e4]);
-    assert(t5 =~= Seq::<Event>::empty());
-    assert(t1[0] == e1 && t2[0] == e2 && t3[0] == e3 && t4[0] == e4);
-    assert(crate::domain::event_domain(rules, s2, e2) == Some(crate::domain::Domain::Opaque(0nat)));
-    assert(crate::domain::declassified(urls, s2, e2) is None);
-    lemma_ipurge_cons(rules, urls, fetch, s0, d, t);
-    lemma_ipurge_cons(rules, urls, fetch, s1, d, t1);
-    lemma_ipurge_cons(rules, urls, fetch, s2, d, t2);
-    lemma_ipurge_cons(rules, urls, fetch, s3, d, t3);
-    lemma_ipurge_cons(rules, urls, fetch, s3, d, t4);
-    lemma_ipurge_empty(rules, urls, fetch, s3, d);
-    assert(crate::domain::ipurge_event(rules, urls, s2, d, e2) is None);
-    assert(step(rules, urls, fetch, s0, e0).0 == s1 && step(rules, urls, fetch, s1, e1).0 == s2 && step(rules, urls, fetch, s2, e2).0 == s3);
-    assert(step(rules, urls, fetch, s3, e3).0 == s3 && step(rules, urls, fetch, s3, e4).0 == s3);
-    assert(crate::domain::ipurge_event(rules, urls, s0, d, e0) == Some(e0));
-    assert(crate::domain::ipurge_event(rules, urls, s1, d, e1) == Some(e1));
-    assert(crate::domain::ipurge_event(rules, urls, s3, d, e3) == Some(e3));
-    assert(crate::domain::ipurge_event(rules, urls, s3, d, e4) == Some(e4));
-    assert(seq![e3] + (seq![e4] + Seq::<Event>::empty()) =~= seq![e3, e4]);
-    assert(seq![e1] + (seq![e3] + (seq![e4] + Seq::<Event>::empty())) =~= seq![e1, e3, e4]);
+    let (urls, d, s0) = (ce_urls(), crate::domain::Domain::Opaque(1nat), init_state());
+    assert(step(rules, urls, fetch, s0, ce_ev0()).0 == ce_s1());
+    assert(crate::domain::ipurge_event(rules, urls, s0, d, ce_ev0()) == Some(ce_ev0()));
+    lemma_ipurge_cons(rules, urls, fetch, s0, d, ce_trace());
+    assert(ce_trace().drop_first() =~= seq![ce_ev1(), ce_ev2(), ce_ev3(), ce_ev4()]);
+    assert(seq![ce_ev0()] + seq![ce_ev1(), ce_ev3(), ce_ev4()] =~= seq![ce_ev0(), ce_ev1(), ce_ev3(), ce_ev4()]);
 }
 
 /// The purged run sends the observer the commit.
+#[verifier::spinoff_prover]
 pub proof fn lemma_ce_purged(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     requires
         ce_fetch_ok(fetch),
@@ -758,6 +947,7 @@ pub proof fn lemma_ce_purged(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns
             crate::noninterference::run_outputs_for(rules, urls, fetch, d, init_state(), crate::domain::purge(rules, urls, fetch, d, t)).len() > 0
         }),
 {
+    lemma_ce_trace_shape();
     lemma_ce_purge(rules, fetch);
     lemma_ce_e0(rules, fetch);
     lemma_ce_e1(rules, fetch);
@@ -768,7 +958,7 @@ pub proof fn lemma_ce_purged(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns
     let d = crate::domain::Domain::Opaque(1nat);
     let (s0, s1, s2) = (init_state(), ce_s1(), ce_s2());
     let u3 = ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1);
-    let (e0, e1, e3, e4) = (t[0], t[1], t[3], t[4]);
+    let (e0, e1, e3, e4) = (ce_ev0(), ce_ev1(), ce_ev3(), ce_ev4());
     assert(step(rules, urls, fetch, s0, e0).0 == s1);
     assert(step(rules, urls, fetch, s1, e1).0 == s2);
     assert(step(rules, urls, fetch, s2, e3).0 == u3);
@@ -779,6 +969,7 @@ pub proof fn lemma_ce_purged(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns
         assert(u4.renderers.contains(u4.renderers[0]));
     }
     let p = seq![e0, e1, e3, e4];
+    assert(p =~= seq![e0] + seq![e1, e3, e4]);
     crate::ni_theorem::lemma_run_outputs_cons(rules, urls, fetch, d, s0, e0, seq![e1, e3, e4]);
     assert(seq![e1, e3, e4] =~= seq![e1] + seq![e3, e4]);
     crate::ni_theorem::lemma_run_outputs_cons(rules, urls, fetch, d, s1, e1, seq![e3, e4]);
@@ -789,8 +980,12 @@ pub proof fn lemma_ce_purged(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns
     assert(crate::noninterference::outputs_for(rules, d, u3, u4, q4).contains(q4[2])) by {
         lemma_filter_contains_elem(q4, |o: Output| crate::noninterference::addressed_to(rules, d, u3, u4, o), 2);
     }
-    assert(p =~= crate::domain::purge(rules, urls, fetch, d, t));
+    assert(crate::noninterference::run_outputs_for(rules, urls, fetch, d, u4, Seq::<Event>::empty()) =~= Seq::<Output>::empty());
+    assert(crate::noninterference::run_outputs_for(rules, urls, fetch, d, u3, seq![e4]).len() > 0);
+    assert(crate::noninterference::run_outputs_for(rules, urls, fetch, d, s2, seq![e3, e4]).len() > 0);
+    assert(crate::noninterference::run_outputs_for(rules, urls, fetch, d, s1, seq![e1, e3, e4]).len() > 0);
     assert(crate::noninterference::run_outputs_for(rules, urls, fetch, d, s0, p).len() > 0);
+    assert(p =~= crate::domain::purge(rules, urls, fetch, d, t));
 }
 
 /// **Counterexample 1** (restated over `Net` events, item 3.7). For the
@@ -817,24 +1012,6 @@ pub proof fn example_dead_tab_breaks_noninterference(rules: Seq<clazel_psl::spec
     lemma_ce_fetch_ok();
     lemma_ce_real(rules, ce_fetch());
     lemma_ce_purged(rules, ce_fetch());
-}
-
-pub proof fn lemma_ce_probe1(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
-    requires
-        ce_fetch_ok(fetch),
-{
-    lemma_ce_e0(rules, fetch);
-}
-
-pub proof fn lemma_ce_probe2(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
-    requires
-        ce_fetch_ok(fetch),
-{
-    lemma_ce_e0(rules, fetch);
-    lemma_ce_e1(rules, fetch);
-    lemma_ce_e2(rules, fetch);
-    let t = ce_trace();
-    let (e0, e1, e2, e3, e4) = (t[0], t[1], t[2], t[3], t[4]);
 }
 
 /// A retrieval on the empty jar leaves it empty, so the jar the purged run
