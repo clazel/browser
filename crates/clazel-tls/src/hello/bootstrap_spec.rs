@@ -13,6 +13,10 @@
 //! - A nonempty legacy session ID requests compatibility mode. For an HRR,
 //!   the client dummy CCS is prefixed to the CH2 flight as Appendix D.4 allows.
 //!   Without HRR, the later protected-handshake driver owns that CCS.
+//! - A valid unencrypted CCS is dropped only at a handshake message boundary
+//!   and is fatal (unexpected_message) inside a fragmented ServerHello or HRR:
+//!   §5 and §5.1 conflict there; see docs/ERRATA.md. The connection
+//!   dispatcher applies the same rule to protected handshake messages.
 //! - Authentication, key derivation, socket I/O, early data and PSK are outside
 //!   this bootstrap model.
 #[allow(unused_imports)]
@@ -172,11 +176,19 @@ pub open spec fn receive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, event: Pee
     recommends wf(s), s.mode == Mode::AwaitServerHello,
 {
     match event {
-        // RFC 8446 §5 specifically says to drop a valid unencrypted CCS
-        // without further processing at any time after the first ClientHello
-        // and before peer Finished. Therefore it does not enter reassembly,
-        // even when a fragmented handshake message is in progress.
-        PeerEvent::Ccs => (s, Action::None),
+        // RFC 8446 §5 says to drop a valid unencrypted CCS "at any time after
+        // the first ClientHello message has been sent or received and before
+        // the peer's Finished message has been received", but §5.1 says
+        // handshake messages "MUST NOT be interleaved with other record types".
+        // We drop it only at a handshake message boundary; inside a
+        // fragmented message it is fatal (docs/ERRATA.md, RFC 8446 §5).
+        PeerEvent::Ccs => if crate::spec::at_message_boundary(s.reassembly) {
+            (s, Action::None)
+        } else {
+            (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                compatibility: s.compatibility, reassembly: s.reassembly },
+                Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
+        },
         PeerEvent::Error(alert) => (State { mode: Mode::Failed, hello: None,
             pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly }, Action::Fail(alert)),
         PeerEvent::Eof => (State { mode: Mode::Failed, hello: None,

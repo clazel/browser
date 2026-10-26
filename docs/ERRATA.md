@@ -194,3 +194,30 @@ it evidently means. Each entry records what we specified instead.
   such issue.
 - **Reported upstream:** not yet (RFC 9110, which obsoletes RFC 7230, already
   states the corrected rule).
+
+## RFC 8446 §5 and §5.1: a compatibility CCS inside a fragmented handshake message
+
+- **Spec:** RFC 8446 (August 2018), §5 "Record Protocol" and §5.1 "Record
+  Layer", <https://www.rfc-editor.org/rfc/rfc8446#section-5>
+- **Text:** §5: "An implementation may receive an unencrypted record of type
+  change_cipher_spec consisting of the single byte value 0x01 at any time
+  after the first ClientHello message has been sent or received and before
+  the peer's Finished message has been received and MUST simply drop it
+  without further processing." §5.1: "Handshake messages MUST NOT be
+  interleaved with other record types. That is, if a handshake message is
+  split over two or more records, there MUST NOT be any other records
+  between them."
+- **Problem:** a CCS record between two fragments of one handshake message
+  is covered by both. §5 says drop it; §5.1 says the peer may not send it.
+  The CCS exists only for middlebox compatibility (Appendix D.4), which has
+  the server send it immediately after its first handshake message, so it
+  evidently never needs to fall inside one. Implementations differ:
+  BoringSSL and NSS refuse a CCS inside a fragmented ServerHello, and after
+  ServerHello both drop one without checking for a message boundary.
+- **We specify:** the §5 drop applies only at a handshake message boundary;
+  inside a fragmented message a CCS is fatal with `unexpected_message`. See
+  `receive` in `crates/clazel-tls/src/hello/bootstrap_spec.rs` (plaintext
+  ServerHello/HRR) and `compatibility_ccs_dropped` in
+  `crates/clazel-tls/src/connection/dispatcher_spec.rs` (protected
+  handshake).
+- **Reported upstream:** not yet.
