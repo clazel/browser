@@ -56,7 +56,7 @@ pub enum Action {
     WriteClosed,
     /// Fatal error; caller may send at most one alert and must terminate.
     Fail(u8),
-    /// Peer close_notify or local close.
+    /// Both read and write directions have closed, or the active transport closed.
     Close,
 }
 
@@ -378,8 +378,7 @@ pub open spec fn prepare_close_notify(c: crate::schedule::spec::Crypto,
 /// A close_notify flight closes the local write side only after its exact
 /// protected bytes have been acknowledged by the transport.
 pub open spec fn acknowledge_close_notify(s: State, acknowledgement: Seq<u8>) -> State {
-    if s.pending_close_wire.len() == 0 { s }
-    else if acknowledgement != s.pending_close_wire { failed() }
+    if s.pending_close_wire.len() == 0 || acknowledgement != s.pending_close_wire { failed() }
     else if s.peer_write_closed { closed() }
     else { State { local_write_closed: true, pending_close_wire: seq![], ..s } }
 }
