@@ -8,12 +8,16 @@
 //! the standard's function is HACL*'s proof, recorded in the TCB
 //! (docs/VERIFICATION.md), and is never assumed here.
 //!
-//! The libcrux functions refuse, or panic on, inputs longer than `u32::MAX`
-//! octets. Every wrapper checks this first and calls
-//! [`std::process::abort`] instead, so it never returns a value no axiom
-//! covers and never unwinds. Callers in this browser never come near that
-//! size: a TLS record is at most 2^14 + 256 octets, and handshake messages
-//! are bounded by the reassembler.
+//! The libcrux functions refuse inputs longer than `u32::MAX` octets, and
+//! some panic close to that bound: `libcrux-hkdf`'s expand computes its
+//! buffer length with a wrapping `u32` sum, so an `info` within 33 octets of
+//! `u32::MAX` makes it slice out of range. HACL*'s preconditions also stop
+//! short of `u32::MAX` (for HMAC, data plus the 64-octet block). Every
+//! wrapper therefore checks each variable-length input against
+//! [`MAX_INPUT`] first and calls [`std::process::abort`] instead, so it
+//! never returns a value no axiom covers and never unwinds. Callers in this
+//! browser never come near that size: a TLS record is at most 2^14 + 256
+//! octets, and handshake messages are bounded by the reassembler.
 //!
 //! These axioms are counted in the README table. A session other than the
 //! one that wrote them reviews every change to this file
@@ -24,12 +28,14 @@ use vstd::prelude::*;
 
 verus! {
 
-/// `u32::MAX` as a `usize`: the longest input libcrux accepts.
-pub const MAX_INPUT: usize = 0xffff_ffff;
+/// The longest input any wrapper passes to libcrux: 2^32 - 256 octets,
+/// below every HACL* precondition (the tightest is HKDF-Expand's inner
+/// HMAC over 32 + info + 1 octets plus its 64-octet block).
+pub const MAX_INPUT: usize = 0xffff_ff00;
 
 /// SHA-256 of `message`.
 // AXIOM: libcrux-sha2 0.0.9 `sha256(&[u8]) -> [u8; 32]` returns SHA-256 of
-// its input (verified-hacl); it panics above u32::MAX octets, so we abort first.
+// its input (verified-hacl); it panics above u32::MAX, so we abort above MAX_INPUT.
 #[verifier::external_body]
 pub fn sha256(message: &[u8]) -> (out: Vec<u8>)
     ensures out@ == crate::spec::sha256(message@), out.len() == 32,
@@ -42,7 +48,7 @@ pub fn sha256(message: &[u8]) -> (out: Vec<u8>)
 
 /// HMAC-SHA256(key, message).
 // AXIOM: libcrux-hmac 0.0.9 `hmac_sha2_256(&mut [u8; 32], key, data)` writes
-// HMAC-SHA256(key, data) (verified-hacl); it panics above u32::MAX octets.
+// HMAC-SHA256(key, data) (verified-hacl); we abort above MAX_INPUT first.
 #[verifier::external_body]
 pub fn hmac_sha256(key: &[u8], message: &[u8]) -> (out: Vec<u8>)
     ensures out@ == crate::spec::hmac_sha256(key@, message@), out.len() == 32,
@@ -57,11 +63,14 @@ pub fn hmac_sha256(key: &[u8], message: &[u8]) -> (out: Vec<u8>)
 
 /// HKDF-Extract(salt, IKM) with SHA-256.
 // AXIOM: libcrux-hkdf 0.0.9 `sha2_256::extract(prk, salt, ikm)` writes the
-// 32-octet HKDF-Extract PRK and errs only on inputs above u32::MAX octets.
+// 32-octet HKDF-Extract PRK; errs only above u32::MAX; we abort above MAX_INPUT.
 #[verifier::external_body]
 pub fn hkdf_extract(salt: &[u8], ikm: &[u8]) -> (out: Vec<u8>)
     ensures out@ == crate::spec::hkdf_extract(salt@, ikm@), out.len() == 32,
 {
+    if salt.len() > MAX_INPUT || ikm.len() > MAX_INPUT {
+        std::process::abort();
+    }
     let mut prk = [0u8; 32];
     match libcrux_hkdf::sha2_256::extract(&mut prk, salt, ikm) {
         Ok(()) => prk.to_vec(),
@@ -71,12 +80,16 @@ pub fn hkdf_extract(salt: &[u8], ikm: &[u8]) -> (out: Vec<u8>)
 
 /// HKDF-Expand(PRK, info, length) with SHA-256.
 // AXIOM: libcrux-hkdf 0.0.9 `sha2_256::expand(okm, prk, info)` fills okm with
-// HKDF-Expand(prk, info, okm.len()); errs only if prk < 32, okm > 8160 or > u32::MAX.
+// HKDF-Expand(prk[..32], info, okm.len()); panics near u32::MAX info: abort above MAX_INPUT.
 #[verifier::external_body]
 pub fn hkdf_expand(prk: &[u8], info: &[u8], length: u16) -> (out: Vec<u8>)
     requires prk.len() == 32, length <= 8160,
     ensures out@ == crate::spec::hkdf_expand(prk@, info@, length as nat), out.len() == length,
 {
+    // libcrux uses only prk's first 32 octets; `requires` makes that all of it.
+    if info.len() > MAX_INPUT {
+        std::process::abort();
+    }
     let mut okm = vec![0u8; usize::from(length)];
     match libcrux_hkdf::sha2_256::expand(&mut okm, prk, info) {
         Ok(()) => okm,
@@ -86,7 +99,7 @@ pub fn hkdf_expand(prk: &[u8], info: &[u8], length: u16) -> (out: Vec<u8>)
 
 /// ChaCha20-Poly1305 encryption: ciphertext then the 16-octet tag.
 // AXIOM: libcrux-chacha20poly1305 0.0.10 `encrypt(key, ptxt, ctxt, aad, nonce)`
-// writes ciphertext then 16-octet tag into ctxt; errs only above u32::MAX octets.
+// writes ciphertext then 16-octet tag into ctxt; errs only above u32::MAX (we: MAX_INPUT).
 #[verifier::external_body]
 pub fn chacha20poly1305_seal(key: &[u8], nonce: &[u8], ad: &[u8], plaintext: &[u8])
     -> (out: Vec<u8>)
@@ -96,6 +109,9 @@ pub fn chacha20poly1305_seal(key: &[u8], nonce: &[u8], ad: &[u8], plaintext: &[u
     let (Ok(key), Ok(nonce)) = (<&[u8; 32]>::try_from(key), <&[u8; 12]>::try_from(nonce)) else {
         std::process::abort();
     };
+    if ad.len() > MAX_INPUT || plaintext.len() > MAX_INPUT {
+        std::process::abort();
+    }
     let Some(length) = plaintext.len().checked_add(libcrux_chacha20poly1305::TAG_LEN) else {
         std::process::abort();
     };
@@ -108,7 +124,7 @@ pub fn chacha20poly1305_seal(key: &[u8], nonce: &[u8], ad: &[u8], plaintext: &[u
 
 /// ChaCha20-Poly1305 decryption, or none when the tag does not verify.
 // AXIOM: libcrux-chacha20poly1305 0.0.10 `decrypt(key, ptxt, ctxt, aad, nonce)`
-// returns the plaintext iff the tag verifies, else InvalidCiphertext.
+// returns the plaintext iff the tag verifies, else Err (also for ctxt < 16 octets).
 #[verifier::external_body]
 pub fn chacha20poly1305_open(key: &[u8], nonce: &[u8], ad: &[u8], ciphertext: &[u8])
     -> (out: Option<Vec<u8>>)
