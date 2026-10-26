@@ -184,9 +184,9 @@ pub open spec fn san_matches_reference(
 pub open spec fn optional_basic_constraints(
     extensions: Seq<crate::extensions::spec::Extension>,
 ) -> Option<Option<crate::constraints::spec::BasicConstraints>> {
-    match find_extension(extensions, basic_constraints_oid(), 0) {
+    match find_extension_index(extensions, basic_constraints_oid(), 0) {
         None => Some(None),
-        Some(extension) => match crate::constraints::spec::parse_basic_constraints(extension.value) {
+        Some(index) => match crate::constraints::spec::parse_basic_constraints(extensions[index].value) {
             Some(value) => Some(Some(value)), None => None,
         },
     }
@@ -196,9 +196,9 @@ pub open spec fn optional_basic_constraints(
 pub open spec fn optional_key_usage(
     extensions: Seq<crate::extensions::spec::Extension>,
 ) -> Option<Option<crate::constraints::spec::KeyUsage>> {
-    match find_extension(extensions, key_usage_oid(), 0) {
+    match find_extension_index(extensions, key_usage_oid(), 0) {
         None => Some(None),
-        Some(extension) => match crate::constraints::spec::parse_key_usage(extension.value) {
+        Some(index) => match crate::constraints::spec::parse_key_usage(extensions[index].value) {
             Some(value) => Some(Some(value)), None => None,
         },
     }
@@ -208,9 +208,9 @@ pub open spec fn optional_key_usage(
 pub open spec fn optional_extended_key_usage(
     extensions: Seq<crate::extensions::spec::Extension>,
 ) -> Option<Option<crate::constraints::spec::ExtendedKeyUsage>> {
-    match find_extension(extensions, extended_key_usage_extension_oid(), 0) {
+    match find_extension_index(extensions, extended_key_usage_extension_oid(), 0) {
         None => Some(None),
-        Some(extension) => match crate::constraints::spec::parse_extended_key_usage(extension.value) {
+        Some(index) => match crate::constraints::spec::parse_extended_key_usage(extensions[index].value) {
             Some(value) => Some(Some(value)), None => None,
         },
     }
