@@ -4,10 +4,13 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The libcrux providers for clazel-tls's cryptographic parameters: SHA-256, HMAC, HKDF, ChaCha20-Poly1305 and X25519."
+description = "The libcrux providers for clazel-tls's cryptographic parameters: SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519 and CertificateVerify signatures."
 
 [dependencies]
 clazel-tls = { path = "../clazel-tls" }
+# The end-entity key is parsed with our own decoders (CLAUDE.md rule 8).
+clazel-der = { path = "../clazel-der" }
+clazel-x509 = { path = "../clazel-x509" }
 vstd = "=0.0.0-2026-10-04-0306"
 # Shipped cryptography (docs/DEPENDENCIES.md, class `shipped`; phase-3.md
 # items 3.0 and 3.5f). Pinned exactly: libcrux is pre-release (0.0.x), so
@@ -18,6 +21,9 @@ libcrux-hmac = { version = "=0.0.9", default-features = false }
 libcrux-hkdf = { version = "=0.0.9", default-features = false }
 libcrux-chacha20poly1305 = { version = "=0.0.10", default-features = false }
 libcrux-curve25519 = { version = "=0.0.9", default-features = false }
+libcrux-ecdsa = { version = "=0.0.9", default-features = false }
+libcrux-rsa = { version = "=0.0.9", default-features = false }
+libcrux-ed25519 = { version = "=0.0.10", default-features = false }
 
 # Verification tier (docs/VERIFICATION.md). The crate parses nothing; its
 # adapters are checked by Verus against clazel-tls's provider contracts, and
