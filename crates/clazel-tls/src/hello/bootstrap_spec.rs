@@ -310,4 +310,15 @@ pub open spec fn feed(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State,
         }
     }
 }
+
+/// EOF before a final ServerHello is truncation; terminal states stay terminal.
+pub open spec fn eof(s: State) -> (State, Action) {
+    if s.mode == Mode::Failed || s.mode == Mode::Closed || s.mode == Mode::Established {
+        (s, Action::None)
+    } else {
+        (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+            compatibility: s.compatibility, reassembly: s.reassembly },
+            Action::Fail(crate::spec::INTERNAL_ERROR))
+    }
+}
 } // verus!

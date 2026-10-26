@@ -54,4 +54,12 @@ pub open spec fn feed_ensures(hash: spec_fn(Seq<u8>) -> Seq<u8>,
         && super::bootstrap_spec::wf(out.state)
         && crate::connection::framing_spec::wf_mode(out.framing, false)
 }
+
+/// EOF is terminal before the final ServerHello and inert after terminality.
+pub open spec fn eof_ensures(before: super::bootstrap_spec::State,
+    after: super::bootstrap_spec::State, action: super::bootstrap_spec::Action) -> bool {
+    super::bootstrap_spec::wf(before)
+        && (after, action) == super::bootstrap_spec::eof(before)
+        && super::bootstrap_spec::wf(after)
+}
 } // verus!
