@@ -52,7 +52,7 @@ conformance suite beyond the http-state corpus (see below).
 
 ## Verification
 
-Tier 0, target 2. Every executable function is proven in Verus to meet its
+Tier 0, target 2 (the evidence below is that of tier 2; only CI's full run raises the tier). Every executable function is proven in Verus to meet its
 contract (`src/request/contract.rs`, `src/transducer/contract.rs`) against
 the spec. Proven of the transducer spec, for every HTTP and URL function
 (`src/transducer/theorems.rs`): at most 21 connections and 21 requests per
@@ -86,10 +86,22 @@ redirect-taint is computed from it), and a proof that, for a state and a
 request in correspondence, the transducer's cookie-string, request bytes,
 jar and decision on a final response are the independent ones. The class
 is a navigation GET with no body, no cache, no CORS and credentials "include".
-It is a one-step equivalence (which gives the same request sequence by
-induction over a run, not proven as a statement over runs), and what it
-shares with `spec.rs` is only what the standards themselves call
-(`clazel-cookie`'s algorithms, the URL parser, the field functions).
+The step-level theorems (`theorem_independent_request`,
+`theorem_independent_redirect`) are lifted to **whole runs** by induction
+over the connections: `theorem_independent_run` says that for any URL, any
+cookie jar and any hops a well-behaved shell delivers (each connection:
+`Connected`, then the octets of one final response in one `Bytes`, which
+the parser reads as that response), the transducer from `start(url)` sends
+exactly the request bytes that Fetch's own loop sends (HTTP-redirect fetch,
+then main fetch for the next URL, with the `Cookie` field of each hop from
+the jar the hops before it left), leaves the cookie jar Fetch's loop leaves
+(retrieval, then `Set-Cookie` storage, at every hop), and ends as it does
+(the response HTTP-redirect fetch returns, a network error, or still
+waiting). Fetch's loop is `indep_fetch`, a recursion over the URL list; the
+transducer's is `tx_fetch`, the transducer driven through the hops with
+`step` and the jar its operations leave. What it shares with `spec.rs` is
+only what the standards themselves call (`clazel-cookie`'s algorithms, the
+URL parser, the field functions, the request serializer).
 
 Conformance (`tests/conformance_http_state.rs`): the 222 rows of the
 `http-state` parser corpus run through the whole client (the response's
@@ -98,3 +110,20 @@ request's `Cookie` field compared): 195 pass, 27 are expected failures
 with reasons (RFC 6265 and draft 22 differ; the HTTP layer rejects a NUL
 or CR), none fail. The Fetch Standard text was read from its commit snapshot
 on the web; the repository holds no copy of it.
+
+Conformance (`tests/conformance_differential.rs`): 1500 random redirect
+chains, each run by an independent reference built from rust-url (the
+`url` crate, resolving `Location` against the request URL) and
+`cookie_store` (RFC 6265, storing `Set-Cookie` and giving each request's
+cookies), around a redirect loop written from Fetch §4.5, and by the
+client through the transducer with the real HTTP, URL and cookie
+functions. The two must send the same requests (target, `Host`, the
+`Cookie` field as a multiset) and end the same way (final status, or a
+failure). The chains use all five redirect statuses and 304, relative,
+absolute, cross-site, empty, fragment, `mailto:` and `ftp:` `Location`s, a
+missing and a doubled `Location`, up to two `Set-Cookie` lines a hop with
+`Domain`, `Path`, `HttpOnly` and `Max-Age`, and endless redirect loops that
+reach the limit of 20; the test counts the runs that follow a redirect,
+send a cookie and reach the limit, so that agreement means something. No
+WPT `fetch/` suite is vendored (the suites need a browser and a test
+server), so there is none here yet.
