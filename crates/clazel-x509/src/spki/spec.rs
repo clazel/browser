@@ -69,9 +69,10 @@ pub open spec fn is_rsa_encryption(oid: Seq<nat>) -> bool {
     oid =~= seq![1nat, 2nat, 840nat, 113549nat, 1nat, 1nat, 1nat]
 }
 
-/// A canonical nonnegative INTEGER has a positive, nonzero magnitude.
+/// A DER INTEGER magnitude is positive and nonzero iff at least one of its
+/// canonical magnitude octets is nonzero.
 pub open spec fn positive_integer_value(bytes: Seq<u8>, start: nat, end: nat) -> bool {
-    start < end && clazel_der::spec::be_value(bytes.subrange(start as int, end as int)) > 0
+    start < end && exists|i: int| start as int <= i < end as int && bytes[i] != 0
 }
 
 /// RFC 5280 §4.1.2.7: parse an exact SubjectPublicKeyInfo SEQUENCE.
