@@ -87,7 +87,7 @@ impl View for Reassembler {
 impl Reassembler {
     /// The buffer holds fewer bytes than a message header and the largest
     /// body: the reassembler is bounded. Every method keeps it.
-    pub closed spec fn wf(&self) -> bool {
+    pub open spec fn wf(&self) -> bool {
         self.buf@.len() < HANDSHAKE_HEADER + MAX_HANDSHAKE_BODY
     }
 
