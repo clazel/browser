@@ -69,10 +69,17 @@ pub open spec fn is_rsa_encryption(oid: Seq<nat>) -> bool {
     oid =~= seq![1nat, 2nat, 840nat, 113549nat, 1nat, 1nat, 1nat]
 }
 
-/// A DER INTEGER magnitude is positive and nonzero iff at least one of its
-/// canonical magnitude octets is nonzero.
-pub open spec fn positive_integer_value(bytes: Seq<u8>, start: nat, end: nat) -> bool {
-    start < end && exists|i: int| start as int <= i < end as int && bytes[i] != 0
+/// A DER INTEGER magnitude is positive and nonzero iff one octet in its
+/// bounded magnitude range is nonzero. The recursion keeps concrete witness
+/// evaluation quantifier-free.
+pub open spec fn positive_integer_value(bytes: Seq<u8>, start: nat, end: nat) -> bool
+    decreases end - start,
+{
+    if start >= end || end > bytes.len() {
+        false
+    } else {
+        bytes[(end - 1) as int] != 0 || positive_integer_value(bytes, start, (end - 1) as nat)
+    }
 }
 
 /// RFC 5280 §4.1.2.7: parse an exact SubjectPublicKeyInfo SEQUENCE.
