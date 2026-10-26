@@ -102,9 +102,15 @@ dependencies = [
 name = "clazel-fetch"
 version = "0.0.0"
 dependencies = [
+ "clazel-cookie",
  "clazel-encoding",
  "clazel-http",
+ "clazel-origin",
+ "clazel-psl",
  "clazel-url",
+ "cookie_store",
+ "time",
+ "url",
  "vstd",
 ]
 
@@ -163,6 +169,7 @@ dependencies = [
 name = "clazel-net"
 version = "0.0.0"
 dependencies = [
+ "clazel-cookie",
  "clazel-dns",
  "clazel-fetch",
  "clazel-http",

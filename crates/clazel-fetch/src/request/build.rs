@@ -175,6 +175,39 @@ pub fn request_bytes(url: &ParsedUrl) -> (out: Option<Vec<u8>>)
     serialize_request(&req)
 }
 
+/// `request_bytes_cookie`: the bytes to send for `url` carrying the
+/// cookie-string `cookie` (Fetch §3.1.1 steps 6 to 8: a `Cookie` field,
+/// last, unless it is empty), or `None` if this client does not fetch it.
+pub fn request_bytes_cookie(url: &ParsedUrl, cookie: &[u8]) -> (out: Option<Vec<u8>>)
+    ensures
+        super::contract::request_bytes_cookie_ensures(url@, cookie@, match out {
+            Some(v) => Some(v@),
+            None => None,
+        }),
+{
+    if !eq32(url.scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70]) || !url.username.is_empty() || !url.password.is_empty() {
+        return None;
+    }
+    let target = ascii_octets_exec(origin_form_exec(url).as_slice())?;
+    let host = ascii_octets_exec(host_value_exec(url)?.as_slice())?;
+    let mut fields = vec![
+        FieldLineBuf { name: copy(&[0x48, 0x6F, 0x73, 0x74]), value: host },
+        line(&[0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E], &[0x63, 0x6C, 0x6F, 0x73, 0x65]),
+        line(&[0x41, 0x63, 0x63, 0x65, 0x70, 0x74], &[0x2A, 0x2F, 0x2A]),
+        line(&[0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74], &[0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C]),
+    ];
+    let ghost base = clazel_http::field::types::lines_view(fields@);
+    if !cookie.is_empty() {
+        fields.push(line(&[0x43, 0x6F, 0x6F, 0x6B, 0x69, 0x65], cookie));
+    }
+    let req = RequestBuf { method: copy(&[0x47, 0x45, 0x54]), target, fields };
+    assert(req@ == request_for_cookie(url@, cookie@)->Some_0) by {
+        assert(base =~= request_for(url@)->Some_0.fields);
+        assert(clazel_http::field::types::lines_view(req.fields@) =~= request_for_cookie(url@, cookie@)->Some_0.fields);
+    }
+    serialize_request(&req)
+}
+
 /// `connect_to`: the host for the resolver and the port.
 pub fn connect_to(url: &ParsedUrl) -> (out: Option<(Vec<u8>, u16)>)
     ensures

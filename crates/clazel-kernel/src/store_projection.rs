@@ -534,4 +534,66 @@ pub proof fn lemma_store_agree(
     }
 }
 
+/// One `Set-Cookie` line of a fetch, seen from one root: two jars that agree
+/// on the unexpired cookies of `root` agree on them after it, whether the
+/// line's request host is under `root` (storage reads only the root's
+/// cookies) or under another root (storage leaves `root`'s cookies alone), or
+/// the line is not stored.
+pub proof fn lemma_store_one_agree(
+    rules: Seq<clazel_psl::spec::Rule>,
+    ja: Seq<clazel_cookie::storage::spec::Cookie>,
+    jb: Seq<clazel_cookie::storage::spec::Cookie>,
+    st: HttpStore,
+    now: int,
+    root: clazel_cookie::matching::spec::CanonicalHost,
+)
+    requires
+        clazel_cookie::storage::isolation::jar_domains_nonempty(ja),
+        clazel_cookie::storage::isolation::jar_domains_nonempty(jb),
+        crate::invariant::jar_no_public_suffix(rules, ja),
+        crate::invariant::jar_no_public_suffix(rules, jb),
+        crate::projection::live_root(rules, ja, now, root) == crate::projection::live_root(rules, jb, now, root),
+    ensures
+        crate::projection::live_root(rules, store_one(rules, ja, st, now), now, root) == crate::projection::live_root(rules, store_one(rules, jb, st, now), now, root),
+{
+    if store_allowed(rules, st.url) {
+        let host = st.url.host->Some_0;
+        assert(st.url.host == Some(host));
+        if root == clazel_cookie::storage::spec::cookie_root(rules, host) {
+            lemma_store_agree(rules, ja, jb, st.line, st.url, st.ctx, now, host, root);
+        } else {
+            crate::projection::lemma_foreign_store(rules, ja, st.line, st.url, st.ctx, now, host, root);
+            crate::projection::lemma_foreign_store(rules, jb, st.line, st.url, st.ctx, now, host, root);
+        }
+    }
+}
+
+/// The `Set-Cookie` lines of a fetch, in order, keep two jars that agree on
+/// a root's unexpired cookies agreeing.
+pub proof fn lemma_apply_stores_agree(
+    rules: Seq<clazel_psl::spec::Rule>,
+    ja: Seq<clazel_cookie::storage::spec::Cookie>,
+    jb: Seq<clazel_cookie::storage::spec::Cookie>,
+    stores: Seq<HttpStore>,
+    now: int,
+    root: clazel_cookie::matching::spec::CanonicalHost,
+)
+    requires
+        crate::invariant::jar_wf(rules, ja),
+        crate::invariant::jar_wf(rules, jb),
+        crate::invariant::jar_no_public_suffix(rules, ja),
+        crate::invariant::jar_no_public_suffix(rules, jb),
+        crate::projection::live_root(rules, ja, now, root) == crate::projection::live_root(rules, jb, now, root),
+    ensures
+        crate::projection::live_root(rules, apply_stores(rules, ja, stores, now), now, root) == crate::projection::live_root(rules, apply_stores(rules, jb, stores, now), now, root),
+    decreases stores.len(),
+{
+    if stores.len() > 0 {
+        lemma_store_one_agree(rules, ja, jb, stores[0], now, root);
+        crate::invariant::lemma_store_one_wf(rules, ja, stores[0], now);
+        crate::invariant::lemma_store_one_wf(rules, jb, stores[0], now);
+        lemma_apply_stores_agree(rules, store_one(rules, ja, stores[0], now), store_one(rules, jb, stores[0], now), stores.drop_first(), now, root);
+    }
+}
+
 } // verus!

@@ -580,13 +580,25 @@ passing the limits), so examples at a limit of 4 reach the boundaries, which
 the limit mutations (`line-max-off-by-one`, `line-max-widened`,
 `line-incomplete-limit-early`, `line-incomplete-limit-late`,
 `close-limit-dropped`) needed; all 150 mutations are `killed` with certificates.
-`independent.rs` is RFC 7230 §3 and §4.1 read on its own, with one theorem
-(`theorem_independent_framing`): where it says a response is there, `parse_response`
+`independent.rs` is RFC 7230 §3, §3.4 and §4.1 read on its own, with two theorems.
+`theorem_independent_framing`: where it says a response is there, `parse_response`
 finds the same one, and where it says there is none, `parse_response` is not
-`Done`; the inputs where RFC 7230 and RFC 9112 differ are `Out` and the header
-lists them (obs-fold, `Transfer-Encoding` with `Content-Length`, other codings,
-HTTP/1.0 with `Transfer-Encoding`, repeated `Content-Length`, chunk-extension
-whitespace, status line without the second SP or with another major version).
+`Done`. `theorem_independent_at_close` (`r_parse_at_close`, RFC 7230 §3.3.3
+items 5 and 7 and §3.4): on a closed connection a response it finishes is the
+one `parse_response_at_close` finishes, with the same octets after it, and a
+message it calls incomplete (a head, a `Content-Length` body or a chunked body
+cut short by the close, or a framing error or limit) is `Invalid`; a body with
+no declared length is everything received. `Transfer-Encoding` with
+`Content-Length` is covered by both: it was a plain omission, since RFC 7230
+§3.3.3 item 3 and RFC 9112 §6.3 item 3 say the same words (the field "overrides"
+`Content-Length` and the message "ought to be handled as an error"); the
+spec and the transcription both take the error, a stated choice and not a
+difference of text. Still `Out`, each with its reason in the header, are the
+places the two RFCs really differ or word a rule differently: obs-fold, other
+codings (RFC 7230 would decode them or read to the close), HTTP/1.0 with
+`Transfer-Encoding`, repeated `Content-Length` (same decimal value against same
+digits), chunk-extension whitespace, status line without the second SP or with
+another major version.
 RFC 7230's `field-content` cannot match `a b c`; the transcription reads it as
 RFC 9110 §5.5 does (`docs/ERRATA.md`). Unlike `field/independent.rs`, its
 author had read `spec.rs`, so the independence is the other RFC's grammar and
@@ -598,8 +610,21 @@ every continuation, resuming from the saved state equals parsing from the
 start; `feed` requires and keeps `wf`. `request.rs` specifies a request
 parser (HTTP/1.1 only, the target a run of VCHAR, no leading empty lines,
 no body) and proves `parse_request(serialize_request(r) + more)` gives `r`
-back for every valid request within the limits. Not written: the Fetch
-"HTTP-network fetch" comparison the plan names.
+back for every valid request within the limits. The Fetch comparison
+(`message/independent_fetch.rs`, Fetch commit `59afe34`) is narrower than the
+plan expected: "HTTP-network fetch" defers the wire format to HTTP ("follow
+the relevant requirements from HTTP") and only forwards the bytes HTTP
+transmits (closing the stream when the body is "done normally", erroring it
+on abort), and Fetch has no text for the chunked coding, the read-until-close
+rule or truncation, so none is invented. What Fetch does define is "extract a
+length" (with header list "get" and "get, decode, and split"), transcribed
+and proven (`theorem_fetch_extract_length`) against `body_length` for every
+field section when no `Transfer-Encoding` is present and the status and
+method give a body: a number exactly when the spec's `Content-Length` is
+valid (the same number, `Invalid` only past the body limit), failure only for
+`Invalid`, no line for `Close`. The difference: a present but non-numeric
+`Content-Length` is null in Fetch (ignored) and `Invalid` here (RFC 9112
+§6.3 item 5). The header lists the rest.
 
 ### 3.3 HTTP conformance (M)
 
@@ -1241,8 +1266,7 @@ lemma). Mutations for each decision. Independent: the Fetch Standard's
 fetch", transcribed and proven to give the same request sequence on a
 stated class (no caching, GET only, no CORS).
 
-**As built** (branch `phase3/fetch-transducer`, `http://` only, no
-cookies): `crates/clazel-fetch`, tier 0, target 2. Besides the `request`
+**As built** (branch `phase3/fetch-cookies`, `http://` only): `crates/clazel-fetch`, tier 0, target 2. Besides the `request`
 module, `src/transducer/`: `spec.rs` (the transducer: `start(url)` gives
 `Connect { host, port, tls }`, `step(http, urls, state, input)` maps
 `Connected`, `Bytes`, `Closed`, `Error` to `Send`, `Close`, `Done { url,
@@ -1261,7 +1285,7 @@ for the limit; in the pinned Fetch text it is §4.5 HTTP-redirect fetch,
 step 7. `Connect.tls` is always false and an `https:` URL (also as a
 redirect target) fails as not fetched. `clazel-net`'s `fetch` now only
 carries out the transducer's actions; `clazel fetch URL` follows
-redirects. Verus: `clazel-fetch` 93 verified, 0 errors (2026-10-25). **Proven**, for
+redirects. Verus: `clazel-fetch` 128 verified, 0 errors (2026-10-25). **Proven**, for
 every HTTP and URL function: `theorem_requests_bounded` (at most 21
 `Connect`s and 21 `Send`s in any trace), `theorem_redirects_bounded`,
 `theorem_url_changes_only_by_redirect` (to an HTTP(S) URL, count plus
@@ -1298,13 +1322,63 @@ fragment dropped, the request not sent); two are killed by theorems, the
 rest by examples. Tests: `clazel-net` against local servers, a redirect
 chain through all five statuses with relative and absolute `Location`s,
 exactly 20 redirects followed, the 21st refused after exactly 21
-requests, `mailto:` and two-`Location` redirects. Not built: cookies (the
-jar becomes a field of `State`, passed to `start` and returned with
-`Done`/`Fail`; `begin` adds the §5.8 `Cookie` field to the request and
-`on_final` stores the response's `Set-Cookie` lines before deciding the
-redirect, so `theorem_wire_cookies` and `theorem_jar_frame` are one-step
-statements like `theorem_sends_are_requests`), TLS, the independent
-transcription and conformance tests.
+requests, `mailto:` and two-`Location` redirects.
+
+**Tier 2 evidence added (branch `claude/heuristic-zhukovsky-53e777`, from `phase3/fetch-kernel-join`; tier still 0 until CI's full run):** (1) *Whole-run equivalence.* `independent.rs` gains `theorem_independent_run` (from `lemma_independent_run`, by induction over the hops): for any URL, any jar and any hops a well-behaved shell delivers whole (`Connected`, then one `Bytes` that the parser reads as a final response), the transducer driven by `step` (`tx_fetch`) sends the request bytes of Fetch's own loop (`indep_fetch`, a recursion over the URL list: HTTP-redirect fetch, then main fetch), leaves the same jar (retrieval and `Set-Cookie` storage at every hop) and ends the same way (response, network error, or waiting). No spec or contract changed. (2) *Conformance against independent engines.* `tests/conformance_differential.rs`: 1500 random redirect chains through the client against a Fetch §4.5 loop built on rust-url (`Location` resolution) and `cookie_store` (cookie storage and the `Cookie` field), all agree; no new package (the same pins as `clazel-cookie`'s differential). No WPT `fetch/` suite is vendored, so none is run. (3) *Mutations.* Five mutations had stopped applying when the jar left the transducer's state (their `find` text no longer matched `spec.rs`): `close-closes-again`, `jar-after-retrieval-dropped`, `storage-after-redirect-decision`, `storage-skipped` and `cookie-string-wrong-time` now mutate the current code (same `expect`, same certificate lemmas). Twelve new certified kills for decisions that had none (examples `lemma_transducer_16` to `_27`): the connection closed or not on `Closed`, `Error`, `Connected` and `Bytes` in the wrong phase, an interim response at close, the reasons `Invalid` and `Unsupported`, `tls: false`, a URL with no request, the octets kept while a head is incomplete, input after the end.
+
+**Cookies.** The jar (`clazel-cookie`'s model), the time `now` and the
+redirect-taint are fields of the state: `start(url, jar, now)`, and the
+jar is what `Done` or `Fail` ends with. When a request is sent its `Cookie`
+field, appended last and only when not empty, is RFC 6265bis §5.8.3's
+retrieval for the current URL with a fixed context (a top-level navigation
+GET with no client: same-site, unless a redirect crossed sites, which
+Fetch's redirect-taint makes cross-site so `SameSite=Strict` cookies are
+withheld), and the jar becomes the jar after the retrieval's step 5. Every
+`Set-Cookie` line of a final response is stored one by one by §5.7 as HTTP
+before the redirect is decided; a 1xx response never reaches storage, and a
+failure after a final response keeps what it stored. `Secure` follows the
+connection, which is never TLS yet, so no `Secure` cookie is sent. Proven
+for every HTTP and URL function: `theorem_wire_cookies` (every `Send` is
+the request for the current URL whose only jar-derived part is its
+`Cookie` field, and that is §5.8.3's retrieval) and `theorem_jar_frame`
+(the jar changes only by the retrieval's step 5 when a request is sent, or
+by §5.7 storage of the final response's own `Set-Cookie` lines). The
+cookie view of a URL is a parameter (`UrlFns::request_url`), joined to
+`clazel-url` and `clazel-cookie` in `real.rs`. Cookie mutations: 18, each
+with a certificate (field omitted, duplicated, first, or present when
+empty; `Secure` ignored; the taint ignored, never set or always set; an
+unsafe method; not top-level; a reload; storage skipped, after the
+redirect decision, or lost on a failed redirect; only the first
+`Set-Cookie`; interim cookies stored; step 5 dropped; the wrong time).
+Storage mutations are certified through an expired cookie's eviction,
+because `create_a_cookie`'s quantifiers do not evaluate under
+`compute_only`. `clazel-net` has `fetch_jar` and `now_1601`; `fetch`
+and `clazel fetch URL` start from an empty jar.
+
+**Independent transcription** (`transducer/independent.rs`): Fetch's
+HTTP-redirect fetch (steps 3 to 8, 18 and 22), "location URL", and the
+`Cookie` and `Set-Cookie` steps of HTTP-network-or-cache and HTTP-network
+fetch, with the request as its URL list (the redirect count and the taint
+computed from it), for a navigation GET with no body, cache or CORS and
+credentials "include". `theorem_independent_request` and
+`theorem_independent_redirect` prove the transducer's cookie-string,
+request bytes, jar and decision on a final response equal the
+independent ones for corresponding states: a one-step equivalence, not a
+theorem over whole runs. The Fetch text was read from the commit snapshot
+on the web; the repository holds no copy. Open question: Fetch §3.1.3
+"determine the same-site mode" step 3, as read, would withhold `Strict`
+cookies from a same-site navigation; the transducer follows RFC 6265bis
+§5.2, and no erratum is filed until the reading is checked.
+
+**Conformance** (`tests/conformance_http_state.rs`): the 222 rows of the
+http-state parser corpus run through `start`, `step_real` and the real
+parsers, in memory: 195 pass, 27 expected failures with reasons, none
+fail. WPT fetch/redirect rows and a differential against another engine
+are not written.
+
+Not built: TLS, a request context other than a top-level navigation (a
+client, a cross-site initiator), a theorem over whole runs for the
+independent transcription, and the conformance suites beyond http-state.
 
 ### 3.7 Kernel integration (M)
 
@@ -1320,6 +1394,8 @@ socket; a redirect is a navigation the user is treated as having made (the
 same declassification 2.11 states). Each theorem keeps its certified
 mutation. The IPC schema is unchanged. The kernel's WPT `cookies/` run adds
 the rows that needed `Set-Cookie` from HTTP.
+
+**As built** (branch `phase3/kernel-fetch`, from `phase3/net-fetch`; not joined to the real transducer, no cookies from HTTP yet): `clazel-kernel`, tier 2 as before. `NavigateTab { tab, url }` (it lost its `script`) and a renderer's `Navigate` call `begin_navigation`: the tab's renderer records the URL in a new field `Renderer::pending` and the kernel outputs `Fetch { tab, url }`; nothing is committed. `Fetched { tab, outcome }` (`outcome` is `NetOutcome { url, net }`: the URL the fetch was started for and the octets the network delivered) calls `fetched`. `OpenTab` is unchanged (the demo's script is still its document). **Deviation from the plan's text:** the plan has the outcome carry 3.6's result and the jar; here the kernel takes the fetch as a parameter, `FetchFns { run(url, net) -> FetchRun }`, as it takes `UrlFns`, and runs it itself on `outcome.net`. A `FetchRun` is the result (`Done { url, body }` or `Failed`) and the `Set-Cookie` lines of the response chain, each with the request URL and context it answers (`HttpStore`). The kernel stores them through `apply_stores` (RFC 6265bis §5.7, `store_a_set_cookie_string`), so the jar is the kernel's, the shell never sees it, and no outcome can change it except by §5.7 storage; a fetch's result does not depend on the jar. Modelling choices (stated in `spec.rs`): a `Fetched` for a tab that is closed, whose renderer is not navigating, or navigating to another URL than the outcome's is ignored in full (no state change, no output, no cookie stored); a response's cookie is not stored for a request whose host is a public suffix or empty (as a document there is cookie-averse), so `jar_no_public_suffix` holds whatever the fetch returns; a final URL that is not a string of scalar values or has no lock is `Error` 3, a failed fetch `Error` 5, and the renderer stays; a redirect lands wherever the fetch says (the user is treated as having navigated there). **Phase 2 theorems:** all keep their statements, now over every `FetchFns` (`step`, `reachable`, `run_*` and the statements take `fetch`), and are proven: `kernel_wf` is preserved by `Fetched` (`lemma_fetched_wf`, `lemma_apply_stores_wf`); `theorem_reply_only_to_sender` gains an arm for `Fetch` (it names the sender's tab); `theorem_lock_set_only_by_navigation` counts `Fetched` as a navigation event; `theorem_cookie_integrity` has a `Fetched` case (the jar is `apply_stores` of the run's lines, or unchanged); `quark_cookie_integrity` gains the disjunct "a line of the fetch, for a host that may store, has this cookie's root". `theorem_cookie_noninterference`: a `Fetched` is kept in every observer's purge (what it carries came from the network; the other domain's renderer only contributed the URL it navigated to, which is the declassified `NavigateTab`, now `NavigateTab { tab, url }`, and a redirect into the observer's domain is that navigation), `user_tabs_open` also requires a `Fetched` to name an open tab, and `example_dead_tab_breaks_noninterference` is now a trace in which a closed tab's `Fetched` commits into the observer's domain in the purged run (a `NavigateTab` to a closed tab no longer shows anything to the observer, so that clause of the hypothesis is kept but no longer shown necessary). New theorems: `theorem_fetched_only_to_tab` (a `Fetched` is attributed to its tab's renderer, as a frame to its socket: its outputs go to that renderer or the one spawned, never a `Fetch`) and `theorem_fetched_answers_navigation` (ignored unless it answers the navigation in flight; one that does leaves the renderer not navigating), and `lemma_fetched_consistency`/`lemma_apply_stores_agree` for the unwinding. **Exec:** `exec::fetch` (`FetchFnsExec`, the exec twin of `FetchFns`, and the stand-in `StubFetch`: the octets are the body of a document at the URL asked for, no cookies), `begin_navigation_exec`, `fetched_exec`, `apply_stores_exec`, `step_exec` generic over the fetch; `step_real` runs with the stand-in. The host shell (`crates/clazel`) answers a `Fetch` with a stand-in network (the user's script as the page, empty for a renderer's own `Navigate`). Verus: `clazel-kernel` 340 verified, 0 errors (2026-10-25). Mutations: 36 in `mutations.json` (16 before, 20 new for the decisions above: stale, unsolicited and wrong-tab answers, the commit's body and final URL, `pending` kept after a commit or a failure, the URL and the `Fetch` of a navigation, the public-suffix, empty-host and no-host refusals, the jar update dropped (success and failure), a stale answer storing cookies, the error code of a failed fetch, the scalar check), all certified kills (the cookie ones evaluate `Seq::filter` through the certificate's `reveal`). Tests: `tests/fetch.rs` (test fetches through `step_exec`: body committed, stale, unsolicited and closed-tab answers ignored, failure, a cross-origin redirect, cookies stored through the kernel jar for the right root, not stored for a stale answer or a public suffix), and the other kernel tests settle each `Fetch` with an empty document; WPT `cookies/`, webstorage and the differential test pass unchanged. **Not built:** the join with 3.6's transducer, and with it the WPT `cookies/` rows that need `Set-Cookie` from HTTP (open). The join needs: (1) the transducer to give, with `Done`/`Fail`, the `Set-Cookie` lines it stored with their request URLs and contexts (a list of `HttpStore`s, with `theorem_jar_frame` as "the jar is those stores folded in"), since `FetchFns::run` reads no jar (the other option is jar in and jar out, which makes the kernel theorems need a locality condition on the fetch); (2) a proven encoding of `NetOutcome::net` as the transducer's inputs (`Connected`, `Bytes`, `Closed`, `Error`), and a `RealFetch: FetchFnsExec` that replays the transducer over it with `fetch()` its spec; (3) a design for how the shell learns what to `Send` (the `Cookie` field comes from the jar): either the kernel runs the transducer step by step (outputs for connect and send, events for network input) or the shell is given the `Cookie` value per request; replaying after the fact does not give it; (4) `step_real` switched to `RealFetch` and the host and tests to a real or test server. The corollaries in `real_theorems.rs` hold for every fetch and need no change.
 
 ### 3.8 The network shell and the `curl` clone (M)
 
@@ -1369,7 +1445,7 @@ half does not wait on TLS.
 |------|-------|
 | 3.0 TLS decision | done (2026-10-23): option B, our own TLS 1.3 client over libcrux, grounds and accepted costs recorded above |
 | 3.1 HTTP field syntax | built: 146 verified, independent transcription (Fetch), 76 certified mutations, 10 unit tests; tier 2 with 3.2 and 3.3 (2026-10-25) |
-| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier 2 (2026-10-25, CI's full verification green on 9ce4086): spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `ResponseParser::received_bytes` (proven to `received_bytes_ensures`) lets the fetch transducer keep no second copy of the octets. `clazel-http` 379 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription does not cover `parse_response_at_close`, obs-fold, `Transfer-Encoding` with `Content-Length`, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
+| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier 2 (2026-10-25, CI's full verification green on 9ce4086): spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `ResponseParser::received_bytes` (proven to `received_bytes_ensures`) lets the fetch transducer keep no second copy of the octets. `clazel-http` 379 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription covers `parse_response_at_close` and `Transfer-Encoding` with `Content-Length` (2026-10-26, not yet CI-verified) but not obs-fold, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). `clazel-http` raised to tier 2 on 2026-10-25 |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | built on `phase3/tls`; tier 0, target 2, pending full PR verification (see As built) |
@@ -1379,8 +1455,8 @@ half does not wait on TLS.
 | 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters. Production providers, socket I/O and post-handshake dispatch remain; tier 0, combined full verification pending |
 | 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; production libcrux/X.509 joins not started |
 | 3.5g TLS conformance and trust store | not started |
-| 3.6 Client state machine | transducer and redirects built, `http://` only (branch `phase3/fetch-transducer`): `request` and `transducer` modules proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request and silence until decided proven for every parser; split invariance proven for every `prefix_stable` parser, and `clazel-http`'s parser proven `prefix_stable` (`theorem_real_prefix_stable`, `theorem_real_split_invariant`); the exec transducer feeds each octet once into a `ResponseParser` held in the reading state, so a fetch is linear in the response's size; 34 certified mutations; tier 0 (see As built). Not yet: cookies, `theorem_wire_cookies`, `theorem_jar_frame`, TLS, independent transcription, conformance |
-| 3.7 Kernel integration | not started |
+| 3.6 Client state machine | built, `http://` only (branch `phase3/fetch-cookies`): transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 0 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored), a CI run |
+| 3.7 Kernel integration | built, not joined to 3.6's transducer (branch `phase3/kernel-fetch`, see As built): navigations are `Fetch` outputs and `Fetched` events, the fetch a `FetchFns` parameter, the jar updated by §5.7 storage of the run's `Set-Cookie` lines; the Phase 2 theorems restated and proven over every fetch, two new theorems, 36 certified mutations, `clazel-kernel` 340 verified. Open: the join (stand-in fetch today), the WPT `cookies/` rows that need `Set-Cookie` from HTTP |
 | 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Not yet: TLS, the http-state and WPT server tests, the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | not started |
 

@@ -15,6 +15,7 @@ clazel-dns = { path = "../clazel-dns" }
 # client transducer (request, response framing, redirects) are proven
 # functions of these crates.
 clazel-url = { path = "../clazel-url" }
+clazel-cookie = { path = "../clazel-cookie" }
 clazel-fetch = { path = "../clazel-fetch" }
 clazel-http = { path = "../clazel-http" }
 
