@@ -335,11 +335,11 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
     }
     // The index's other fields have the shapes the converter promises.
     for c in CASES {
-        let names_ok = c.peer_names.iter().all(|(k, _)| matches!(*k, "DNS" | "IP"));
-        let known = matches!(
-            c.importance,
-            "undetermined" | "low" | "medium" | "high" | "critical"
-        );
+        let names_ok = c
+            .peer_names
+            .iter()
+            .all(|(k, _)| matches!(*k, "DNS" | "IP" | "RFC822"));
+        let known = matches!(c.importance, "undetermined" | "low" | "high" | "critical");
         if !names_ok || !known || c.features.iter().any(|f| f.is_empty()) {
             problems.push(format!("{}: unexpected index fields", c.id));
         }
