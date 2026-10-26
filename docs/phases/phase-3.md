@@ -580,13 +580,25 @@ passing the limits), so examples at a limit of 4 reach the boundaries, which
 the limit mutations (`line-max-off-by-one`, `line-max-widened`,
 `line-incomplete-limit-early`, `line-incomplete-limit-late`,
 `close-limit-dropped`) needed; all 150 mutations are `killed` with certificates.
-`independent.rs` is RFC 7230 §3 and §4.1 read on its own, with one theorem
-(`theorem_independent_framing`): where it says a response is there, `parse_response`
+`independent.rs` is RFC 7230 §3, §3.4 and §4.1 read on its own, with two theorems.
+`theorem_independent_framing`: where it says a response is there, `parse_response`
 finds the same one, and where it says there is none, `parse_response` is not
-`Done`; the inputs where RFC 7230 and RFC 9112 differ are `Out` and the header
-lists them (obs-fold, `Transfer-Encoding` with `Content-Length`, other codings,
-HTTP/1.0 with `Transfer-Encoding`, repeated `Content-Length`, chunk-extension
-whitespace, status line without the second SP or with another major version).
+`Done`. `theorem_independent_at_close` (`r_parse_at_close`, RFC 7230 §3.3.3
+items 5 and 7 and §3.4): on a closed connection a response it finishes is the
+one `parse_response_at_close` finishes, with the same octets after it, and a
+message it calls incomplete (a head, a `Content-Length` body or a chunked body
+cut short by the close, or a framing error or limit) is `Invalid`; a body with
+no declared length is everything received. `Transfer-Encoding` with
+`Content-Length` is covered by both: it was a plain omission, since RFC 7230
+§3.3.3 item 3 and RFC 9112 §6.3 item 3 say the same words (the field "overrides"
+`Content-Length` and the message "ought to be handled as an error"); the
+spec and the transcription both take the error, a stated choice and not a
+difference of text. Still `Out`, each with its reason in the header, are the
+places the two RFCs really differ or word a rule differently: obs-fold, other
+codings (RFC 7230 would decode them or read to the close), HTTP/1.0 with
+`Transfer-Encoding`, repeated `Content-Length` (same decimal value against same
+digits), chunk-extension whitespace, status line without the second SP or with
+another major version.
 RFC 7230's `field-content` cannot match `a b c`; the transcription reads it as
 RFC 9110 §5.5 does (`docs/ERRATA.md`). Unlike `field/independent.rs`, its
 author had read `spec.rs`, so the independence is the other RFC's grammar and
@@ -1211,7 +1223,7 @@ half does not wait on TLS.
 |------|-------|
 | 3.0 TLS decision | done (2026-10-23): option B, our own TLS 1.3 client over libcrux, grounds and accepted costs recorded above |
 | 3.1 HTTP field syntax | built: 146 verified, independent transcription (Fetch), 76 certified mutations, 10 unit tests; tier 2 with 3.2 and 3.3 (2026-10-25) |
-| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier 2 (2026-10-25, CI's full verification green on 9ce4086): spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `ResponseParser::received_bytes` (proven to `received_bytes_ensures`) lets the fetch transducer keep no second copy of the octets. `clazel-http` 379 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription does not cover `parse_response_at_close`, obs-fold, `Transfer-Encoding` with `Content-Length`, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
+| 3.2 HTTP/1.1 message framing | response side and request serializer built, tier 2 (2026-10-25, CI's full verification green on 9ce4086): spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `ResponseParser::received_bytes` (proven to `received_bytes_ensures`) lets the fetch transducer keep no second copy of the octets. `clazel-http` 379 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription covers `parse_response_at_close` and `Transfer-Encoding` with `Content-Length` (2026-10-26, not yet CI-verified) but not obs-fold, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). `clazel-http` raised to tier 2 on 2026-10-25 |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
