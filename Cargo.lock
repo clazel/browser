@@ -251,6 +251,7 @@ dependencies = [
 name = "clazel-x509"
 version = "0.0.0"
 dependencies = [
+ "clazel-der",
  "vstd",
 ]
 
