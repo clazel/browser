@@ -2353,6 +2353,20 @@
       }
     },
     {
+      "id": "bootstrap-ccs-dropped-mid-message",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "PeerEvent::Ccs => if crate::spec::at_message_boundary(s.reassembly) {",
+      "replace": "PeerEvent::Ccs => if true {",
+      "expect": "killed",
+      "reason": "RFC 8446 \u00a75.1 forbids interleaving a handshake message with another record type: a CCS between two fragments of one ServerHello must be refused with unexpected_message, not dropped (docs/ERRATA.md).",
+      "module": "hello::mutation_certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ccs_fatal_mid_message()",
+        "witness": "super::bootstrap_spec::receive(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::awaiting_with_buffer(seq![1u8]), super::bootstrap_spec::PeerEvent::Ccs).1 == super::bootstrap_spec::Action::None"
+      }
+    },
+    {
       "id": "dispatcher-ccs-dropped-mid-message",
       "file": "src/connection/dispatcher_spec.rs",
       "find": "        && crate::spec::at_message_boundary(reassembly)\n}",
