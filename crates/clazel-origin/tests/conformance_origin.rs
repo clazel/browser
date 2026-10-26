@@ -196,13 +196,21 @@ fn str_field(obj: &[(String, Json)], key: &str) -> Option<String> {
 }
 
 /// A row with an `origin`: (input, base, origin).
+#[derive(Clone)]
 struct Row {
     input: String,
     base: Option<String>,
     origin: String,
 }
 
+/// The rows and the number of objects read. The file is parsed once per
+/// test binary: under Miri the parse costs more than the rows it yields.
 fn rows() -> (usize, Vec<Row>) {
+    static ROWS: std::sync::OnceLock<(usize, Vec<Row>)> = std::sync::OnceLock::new();
+    ROWS.get_or_init(parse_rows).clone()
+}
+
+fn parse_rows() -> (usize, Vec<Row>) {
     let mut reader = Reader::new(URLTESTDATA);
     let Some(Json::Array(items)) = reader.value() else {
         return (0, Vec::new());
