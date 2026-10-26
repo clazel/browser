@@ -167,6 +167,8 @@ pub open spec fn wf(s: State) -> bool {
             Mode::Ready => s.auth is Some && s.handshake_sender is None
                 && s.handshake_receiver is None && s.application_sender is Some
                 && s.application_receiver is Some && s.master.len() == 0
+                && match s.application_sender { Some(epoch) => !epoch.failed, None => false }
+                && match s.application_receiver { Some(epoch) => !epoch.failed, None => false }
                 && s.pending_flight.len() == 0 && !s.ccs_pending
                 && s.client_application_secret.len() == 32 && s.server_application_secret.len() == 32
                 && match s.pending_update_request {
