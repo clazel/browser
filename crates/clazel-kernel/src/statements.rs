@@ -259,8 +259,9 @@ pub open spec fn lock_is_committed_origin_statement(urls: UrlFns, s: State) -> b
 /// `theorem_lock_is_committed_origin`, part 2 (a step): a renderer's lock
 /// never changes while its id lives, and an event that is not a navigation
 /// event creates no renderer (every renderer after the step was there
-/// before, unchanged). A `Fetched` is a navigation event: the lock its
-/// commit gives is `lock_of_url` of the final URL, the kernel's to lock.
+/// before, unchanged). A `Net` event that ends a fetch is a navigation
+/// event: the lock its commit gives is `lock_of_url` of the final URL, the
+/// kernel's to lock.
 pub open spec fn lock_set_only_by_navigation_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let s1 = step(rules, urls, fetch, s, e).0;
     &&& forall|i: int, j: int|

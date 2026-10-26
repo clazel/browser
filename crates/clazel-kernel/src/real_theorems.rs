@@ -6,8 +6,8 @@
 //! None of these needs a proof of its own: each theorem is proven for every
 //! `rules`, every [`UrlFns`] and every [`FetchFns`] (item 3.7), and a corollary
 //! is that theorem at `real_urls()`, for any fetch: the shipped kernel's fetch
-//! is a stand-in until item 3.6's transducer is joined (`exec::fetch`), and the
-//! corollaries need no change when it is. They exist so that the guarantee of the shipped kernel is
+//! is `clazel-fetch`'s real transducer (`urls::real_fetch()`), and the
+//! corollaries need no change for it. They exist so that the guarantee of the shipped kernel is
 //! stated, with the real parser, in one place. Each is also the guarantee
 //! of `exec::real_urls::step_real`, which is proven to equal `step(psl(),
 //! real_urls(), ..)`.

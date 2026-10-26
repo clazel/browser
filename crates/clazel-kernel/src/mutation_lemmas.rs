@@ -117,9 +117,10 @@ pub proof fn ml_find_key(list: Seq<StorageEntry>, key: Seq<u8>)
 // ---------------------------------------------------------------------
 // Item 3.7: a navigation is a fetch.
 //
-// The certified mutations of the join's decisions (connection ownership,
-// stale events, the jar-operation application, the commit) are written
-// with its proofs; those of the stand-in fetch are gone with it.
+// The certified mutations of the join's decisions: stale and unknown
+// connections, connection ownership and the partition key, the application
+// of the jar operations, the commit and the ending of a fetch, closing a
+// tab's connections, and what is written to a connection.
 // ---------------------------------------------------------------------
 
 /// A `Set-Cookie` line that does not parse, for `https://a.com/x`.

@@ -43,8 +43,9 @@ url = { version = "=2.5.8", default-features = false }
 # Verification tier (docs/VERIFICATION.md). Tier 2: the exec `step`
 # (src/exec/) is proven to meet item 2.10's contract (src/contract.rs) for any
 # implementation of the URL functions and of the fetch (item 3.7: the kernel
-# takes the fetch as a parameter, `FetchFns`; the shipped one is a stand-in,
-# `exec::fetch::StubFetch`, until item 3.6's transducer is joined), and
+# steps item 3.6's transducer itself, with the parameters `FetchFns`; the
+# shipped ones are `exec::real_urls::RealFetch`, `clazel-fetch`'s real
+# response parser and URL functions, proven to implement `urls::real_fetch()`), and
 # `exec::real_urls::RealUrls`, the
 # real URL parser, is proven to implement `urls::real_urls()` (item 2.13); the
 # mutations are certified kills (items 2.11 and 2.13); tests/conformance_*.rs run WPT cookies/ and webstorage/ and a
