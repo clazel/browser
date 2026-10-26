@@ -44,7 +44,58 @@ pub open spec fn feed_ensures(before: super::dispatcher_spec::State, input: Seq<
     super::dispatcher_spec::wf(before) && super::dispatcher_spec::wf(after)
         && consumed <= input.len()
         && (before.mode == super::dispatcher_spec::Mode::AwaitClientFlight ==> consumed == 0)
+        && (before.peer_write_closed ==> consumed == input.len()
+            && action is None && after == before)
         && super::dispatcher_spec::action_refines(action, after)
+}
+
+/// A peer close_notify closes only the peer's write direction and preserves
+/// the local send epoch until our own write side is closed.
+pub open spec fn peer_close_ensures(before: super::dispatcher_spec::State,
+    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    before.mode == super::dispatcher_spec::Mode::Ready
+        && after == super::dispatcher_spec::receive_close_notify(before)
+        && (if before.local_write_closed {
+            action is Close && super::dispatcher_spec::no_live_secrets(after)
+        } else {
+            action is PeerClosed && after.peer_write_closed
+                && after.application_sender == before.application_sender
+                && after.pending_update_wire == before.pending_update_wire
+                && after.pending_update_secret == before.pending_update_secret
+                && after.pending_update_request == before.pending_update_request
+                && after.response_due == before.response_due
+        })
+}
+
+/// A user_canceled alert is nonfatal in TLS 1.3: report cancellation without
+/// mutating directional closure or key state.
+pub open spec fn user_canceled_ensures(before: super::dispatcher_spec::State,
+    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    after == before && action is Cancelled
+}
+
+/// A local close_notify is protected and awaits acknowledgement of the exact
+/// bytes before the write direction closes.
+pub open spec fn prepare_close_ensures(c: crate::schedule::spec::Crypto,
+    ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
+    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    after == super::dispatcher_spec::prepare_close_notify(c, ciphers, before)
+        && (after.pending_close_wire.len() > 0 ==> action is Send(after.pending_close_wire))
+        && (after == before ==> action is None)
+}
+
+/// Exact send acknowledgement commits local write closure; wrong bytes fail
+/// closed, and an absent pending close is a no-op.
+pub open spec fn acknowledge_close_ensures(before: super::dispatcher_spec::State,
+    acknowledgement: Seq<u8>, action: super::dispatcher_spec::Action,
+    after: super::dispatcher_spec::State) -> bool {
+    after == super::dispatcher_spec::acknowledge_close_notify(before, acknowledgement)
+        && (before.pending_close_wire.len() > 0 && acknowledgement == before.pending_close_wire
+            ==> if before.peer_write_closed { action is Close } else {
+                action is WriteClosed && after.local_write_closed
+            })
+        && (before.pending_close_wire.len() > 0 && acknowledgement != before.pending_close_wire
+            ==> action is Fail(crate::spec::INTERNAL_ERROR))
 }
 
 /// A protected client flight remains pending until the exact wire bytes are acknowledged.

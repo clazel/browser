@@ -480,22 +480,22 @@ pub proof fn lemma_alert_mapping()
     assert(alert_for(ErrKind::Decode) == Alert { level: 2, description: 50 }) by (compute_only);
 }
 
-/// §6, §6.1: `close_notify` closes; `user_canceled` closes when it is a
-/// warning; every other alert is an error whatever its level says, and
-/// "Unknown Alert types MUST be treated as error alerts."
+/// §6, §6.1: alert level is ignored in TLS 1.3; `close_notify` and
+/// `user_canceled` are closure alerts; other and unknown descriptions are
+/// error alerts regardless of level.
 pub proof fn lemma_alert_closure()
     ensures
         alert_is_closure(Alert { level: 1, description: 0 }),
         alert_is_closure(Alert { level: 2, description: 0 }),
         alert_is_closure(Alert { level: 1, description: 90 }),
-        !alert_is_closure(Alert { level: 2, description: 90 }),
+        alert_is_closure(Alert { level: 2, description: 90 }),
         !alert_is_closure(Alert { level: 1, description: 40 }),
         !alert_is_closure(Alert { level: 1, description: 200 }),
 {
     assert(alert_is_closure(Alert { level: 1, description: 0 })) by (compute_only);
     assert(alert_is_closure(Alert { level: 2, description: 0 })) by (compute_only);
     assert(alert_is_closure(Alert { level: 1, description: 90 })) by (compute_only);
-    assert(!alert_is_closure(Alert { level: 2, description: 90 })) by (compute_only);
+    assert(alert_is_closure(Alert { level: 2, description: 90 })) by (compute_only);
     assert(!alert_is_closure(Alert { level: 1, description: 40 })) by (compute_only);
     assert(!alert_is_closure(Alert { level: 1, description: 200 })) by (compute_only);
 }

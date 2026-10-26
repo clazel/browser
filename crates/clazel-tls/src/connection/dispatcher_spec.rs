@@ -48,6 +48,12 @@ pub enum Action {
     Deliver(Seq<u8>),
     /// A permitted unprotected compatibility CCS was dropped.
     Ignored,
+    /// The peer closed its write direction with close_notify; local writes remain possible.
+    PeerClosed,
+    /// A nonfatal user_canceled alert was reported without changing TLS state.
+    Cancelled,
+    /// Local close_notify has been acknowledged; the receive direction remains open.
+    WriteClosed,
     /// Fatal error; caller may send at most one alert and must terminate.
     Fail(u8),
     /// Peer close_notify or local close.
@@ -92,6 +98,12 @@ pub struct State {
     pub pending_update_is_response: bool,
     /// A received update_requested still requires a later KeyUpdate(0).
     pub response_due: bool,
+    /// The peer's write side ended with close_notify.
+    pub peer_write_closed: bool,
+    /// Local write side ended after close_notify was acknowledged.
+    pub local_write_closed: bool,
+    /// Exact close_notify record awaiting send acknowledgement.
+    pub pending_close_wire: Seq<u8>,
 }
 
 /// Cipher functions retained from the factory for each active epoch.
@@ -137,17 +149,22 @@ pub open spec fn no_live_secrets(s: State) -> bool {
         && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
         && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
         && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due
+        && s.pending_close_wire.len() == 0
 }
 
 /// Outward effects agree with the state transition that makes them safe.
 pub open spec fn action_refines(action: Action, after: State) -> bool {
     match action {
         Action::Send(wire) => (after.mode == Mode::AwaitClientFlight && after.pending_flight == wire)
-            || (after.mode == Mode::Ready && after.pending_update_wire == wire),
+            || (after.mode == Mode::Ready && (after.pending_update_wire == wire
+                || after.pending_close_wire == wire)),
         Action::Ready => after.mode == Mode::Ready,
         Action::Deliver(_) => after.mode == Mode::Ready,
         Action::Fail(_) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
         Action::Close => super::dispatcher_contract::terminal_ensures(after, Mode::Closed),
+        Action::PeerClosed => after.mode == Mode::Ready && after.peer_write_closed,
+        Action::Cancelled => true,
+        Action::WriteClosed => after.mode == Mode::Ready && after.local_write_closed,
         Action::None | Action::Ignored => true,
     }
 }
@@ -163,6 +180,7 @@ pub open spec fn wf(s: State) -> bool {
                 && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
                 && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
                 && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due
+                && !s.peer_write_closed && !s.local_write_closed && s.pending_close_wire.len() == 0
                 && s.auth is Some,
             Mode::AwaitClientFlight => s.auth is Some && s.handshake_sender is Some
                 && s.handshake_receiver is Some && s.application_sender is None
@@ -171,6 +189,7 @@ pub open spec fn wf(s: State) -> bool {
                 && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
                 && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
                 && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due
+                && !s.peer_write_closed && !s.local_write_closed && s.pending_close_wire.len() == 0
                 && crate::spec::at_message_boundary(s.reassembly)
                 && s.framing.len() == 0
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::SendFinished,
@@ -188,6 +207,8 @@ pub open spec fn wf(s: State) -> bool {
                     None => s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
                         && !s.pending_update_is_response,
                 }
+                && (s.pending_close_wire.len() == 0 || !s.local_write_closed)
+                && (!s.local_write_closed || s.pending_close_wire.len() == 0)
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::Ready,
                     None => false },
             Mode::Failed | Mode::Closed => no_live_secrets(s)
@@ -195,7 +216,8 @@ pub open spec fn wf(s: State) -> bool {
                 && s.pending_flight.len() == 0 && !s.ccs_pending
                 && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
                 && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
-                && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due,
+                && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due
+                && !s.peer_write_closed && !s.local_write_closed && s.pending_close_wire.len() == 0,
         }
 }
 
@@ -220,6 +242,9 @@ pub open spec fn start(h: crate::traffic::handshake_spec::Handoff, ccs_pending: 
         pending_update_request: None,
         pending_update_is_response: false,
         response_due: false,
+        peer_write_closed: false,
+        local_write_closed: false,
+        pending_close_wire: seq![],
     }
 }
 
@@ -316,6 +341,49 @@ pub open spec fn receive_key_update_and_respond(c: crate::schedule::spec::Crypto
     }
 }
 
+/// Receive a close_notify as an orderly close of only the peer's write side.
+/// The local send epoch and pending sends are preserved (§6.1).
+pub open spec fn receive_close_notify(s: State) -> State {
+    if s.mode != Mode::Ready || s.peer_write_closed { s }
+    else if s.local_write_closed { closed() }
+    else { State { peer_write_closed: true, ..s } }
+}
+
+/// Protect a local close_notify under the active application epoch. It waits
+/// until any KeyUpdate and mandatory response have been acknowledged.
+pub open spec fn prepare_close_notify(c: crate::schedule::spec::Crypto,
+    ciphers: Ciphers, s: State) -> State {
+    if s.mode != Mode::Ready || s.local_write_closed || s.pending_close_wire.len() > 0
+        || s.pending_update_request is Some || s.response_due { s }
+    else { match s.application_sender {
+        Some(sender) => {
+            let close = crate::spec::write_alert(crate::spec::Alert {
+                level: crate::spec::LEVEL_WARNING,
+                description: crate::spec::CLOSE_NOTIFY,
+            });
+            let seal = |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| (ciphers.seal)(sender.key, n, ad, p);
+            match crate::traffic::spec::send(seal, sender, crate::spec::CT_ALERT, close, 0) {
+                (sender_after, Ok(wire)) => State {
+                    application_sender: Some(sender_after),
+                    pending_close_wire: wire,
+                    ..s
+                },
+                _ => failed(),
+            }
+        },
+        None => failed(),
+    } }
+}
+
+/// A close_notify flight closes the local write side only after its exact
+/// protected bytes have been acknowledged by the transport.
+pub open spec fn acknowledge_close_notify(s: State, acknowledgement: Seq<u8>) -> State {
+    if s.pending_close_wire.len() == 0 { s }
+    else if acknowledgement != s.pending_close_wire { failed() }
+    else if s.peer_write_closed { closed() }
+    else { State { local_write_closed: true, pending_close_wire: seq![], ..s } }
+}
+
 /// Drop every secret and partial input after a fatal local or peer error.
 pub open spec fn failed() -> State {
     State {
@@ -337,6 +405,9 @@ pub open spec fn failed() -> State {
         pending_update_request: None,
         pending_update_is_response: false,
         response_due: false,
+        peer_write_closed: false,
+        local_write_closed: false,
+        pending_close_wire: seq![],
     }
 }
 

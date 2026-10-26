@@ -437,16 +437,11 @@ pub open spec fn alert_description_defined(d: u8) -> bool {
         || d == 115 || d == 116 || d == 120
 }
 
-/// §6.1: whether a received alert only closes the connection in an
-/// orderly way and is not an error. §6: "All the alerts listed in
-/// Section 6.2 MUST be sent with AlertLevel=fatal and MUST be treated as
-/// error alerts when received regardless of the AlertLevel in the
-/// message. Unknown Alert types MUST be treated as error alerts." So
-/// `close_notify` (§6.1) and `user_canceled` (§6.1: "generally has
-/// AlertLevel=warning", which is how it is told from a fatal one) are
-/// closures, and everything else is an error whatever its level says.
+/// §6 and §6.1: whether a received alert closes a direction without being
+/// an error. In TLS 1.3 the level is ignored; closure semantics follow the
+/// alert description. Unknown alerts and the §6.2 error alerts are fatal.
 pub open spec fn alert_is_closure(a: Alert) -> bool {
-    a.description == CLOSE_NOTIFY || (a.description == USER_CANCELED && a.level == LEVEL_WARNING)
+    a.description == CLOSE_NOTIFY || a.description == USER_CANCELED
 }
 
 /// What went wrong, as a parse or record-layer error. Each kind names the
