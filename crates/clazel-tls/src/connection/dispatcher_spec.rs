@@ -233,7 +233,7 @@ pub open spec fn prepare_key_update(c: crate::schedule::spec::Crypto,
                     response_due: if is_response { false } else { s.response_due },
                     ..s
                 },
-                _ => s,
+                _ => failed(),
             }
         },
         _ => s,

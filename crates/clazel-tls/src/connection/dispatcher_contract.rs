@@ -108,21 +108,30 @@ pub open spec fn prepare_update_ensures(c: crate::schedule::spec::Crypto,
         && is_response == before.response_due
         && after == super::dispatcher_spec::prepare_key_update(c, ciphers, before, request, is_response)
         && super::dispatcher_spec::wf(after)
-        && after.pending_update_request == Some(request)
-        && after.pending_update_is_response == is_response
+        && (if after.mode == super::dispatcher_spec::Mode::Ready {
+            after.pending_update_request == Some(request)
+                && after.pending_update_is_response == is_response
+        } else {
+            terminal_ensures(after, super::dispatcher_spec::Mode::Failed)
+        })
 }
 
 /// A received KeyUpdate rotates only the peer's receive direction and queues
 /// the requested response before the next application send.
 pub open spec fn receive_update_ensures(c: crate::schedule::spec::Crypto,
     ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
-    request: u8, after: super::dispatcher_spec::State) -> bool
+    request: u8, action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool
 {
     before.mode == super::dispatcher_spec::Mode::Ready && request <= 1
         && after == super::dispatcher_spec::receive_key_update_and_respond(c, ciphers, before, request)
         && super::dispatcher_spec::wf(after)
-        && after.server_application_secret == crate::schedule::spec::next_traffic_secret(c, before.server_application_secret)
-        && after.client_application_secret == before.client_application_secret
+        && (if after.mode == super::dispatcher_spec::Mode::Failed {
+            terminal_ensures(after, super::dispatcher_spec::Mode::Failed) && action is Fail
+        } else {
+            after.server_application_secret == crate::schedule::spec::next_traffic_secret(c, before.server_application_secret)
+                && after.client_application_secret == before.client_application_secret
+                && super::dispatcher_spec::action_refines(action, after)
+        })
 }
 
 /// Exact acknowledgements rotate the client send epoch to sequence zero.
