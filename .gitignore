@@ -2,6 +2,8 @@
 **/*.rs.bk
 .DS_Store
 /.verus-log
+# Verus `--log-smt`/profiler output, which can run to hundreds of MB.
+.verus-solver-log/
 /kani-out
 # `cargo xtask verify --part crate` measurements (xtask/src/parts.rs)
 /parts/
