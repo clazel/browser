@@ -1830,7 +1830,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                     match read_uint(r4, 1) {
                                         None => None,
                                         Some((comp, r5)) => {
-                                            if r5.len() == 0 || r5 =~= seq![0u8, 0u8] {
+                                            if r5.len() == 0 {
                                                 Some(ServerHello {
                                                     legacy_version: ver as u16,
                                                     random,
@@ -1839,7 +1839,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                                     compression: comp as u8,
                                                     extensions: Seq::empty(),
                                                 })
-                                            } else { match read_exts(r5, 6, 65535) {
+                                            } else { match read_exts(r5, 0, 65535) {
                                                 None => None,
                                                 Some((exts, r6)) => {
                                                     if r6.len() != 0 {
