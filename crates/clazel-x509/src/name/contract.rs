@@ -12,4 +12,20 @@ pub open spec fn parse_name_ensures(input: Seq<u8>, output: Option<Name>) -> boo
     output == parse_name(input)
 }
 
+/// Contract for one AttributeTypeAndValue parser stage.
+pub open spec fn parse_attribute_ensures(
+    input: Seq<u8>, pos: nat, end: nat,
+    output: Option<(AttributeTypeAndValue, nat)>,
+) -> bool {
+    output == parse_attribute(input, pos, end)
+}
+
+/// Contract for one RelativeDistinguishedName parser stage.
+pub open spec fn parse_rdn_ensures(
+    input: Seq<u8>, pos: nat, end: nat,
+    output: Option<(RelativeDistinguishedName, nat)>,
+) -> bool {
+    output == parse_rdn(input, pos, end)
+}
+
 } // verus!

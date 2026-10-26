@@ -61,6 +61,37 @@ pub open spec fn der_octets_le(a: Seq<u8>, b: Seq<u8>) -> bool
     der_octets_le_at(a, b, 0)
 }
 
+/// An octet at an original index, or the X.690 §11.6 comparison pad.
+pub open spec fn padded_octet(value: Seq<u8>, i: nat) -> nat {
+    if i < value.len() { value[i as int] as nat } else { 0 }
+}
+
+/// The first `count` padded octets are equal.
+pub open spec fn der_octets_equal_prefix(a: Seq<u8>, b: Seq<u8>, count: nat) -> bool
+    decreases count
+{
+    if count == 0 { true }
+    else {
+        padded_octet(a, (count - 1) as nat) == padded_octet(b, (count - 1) as nat)
+            && der_octets_equal_prefix(a, b, (count - 1) as nat)
+    }
+}
+
+/// Equal padded octets before `count` do not affect the first comparison.
+pub proof fn lemma_equal_prefix_comparison(a: Seq<u8>, b: Seq<u8>, count: nat)
+    requires der_octets_equal_prefix(a, b, count)
+    ensures der_octets_le_at(a, b, 0) == der_octets_le_at(a, b, count)
+    decreases count
+{
+    if count > 0 {
+        reveal(der_octets_equal_prefix);
+        reveal(der_octets_le_at);
+        assert(padded_octet(a, (count - 1) as nat) == padded_octet(b, (count - 1) as nat));
+        lemma_equal_prefix_comparison(a, b, (count - 1) as nat);
+        assert(der_octets_le_at(a, b, (count - 1) as nat) == der_octets_le_at(a, b, count));
+    }
+}
+
 /// Compare through the maximum original extent, treating missing octets as 0.
 pub open spec fn der_octets_le_at(a: Seq<u8>, b: Seq<u8>, i: nat) -> bool
     decreases (if a.len() > b.len() { a.len() } else { b.len() }) - i
@@ -68,8 +99,8 @@ pub open spec fn der_octets_le_at(a: Seq<u8>, b: Seq<u8>, i: nat) -> bool
     let n = if a.len() > b.len() { a.len() } else { b.len() };
     if i >= n { true }
     else {
-        let x = if i < a.len() { a[i as int] as nat } else { 0 };
-        let y = if i < b.len() { b[i as int] as nat } else { 0 };
+        let x = padded_octet(a, i);
+        let y = padded_octet(b, i);
         if x < y { true }
         else if x > y { false }
         else { der_octets_le_at(a, b, i + 1) }
@@ -104,9 +135,18 @@ pub open spec fn parse_attribute(input: Seq<u8>, pos: nat, end: nat)
 pub open spec fn parse_attributes(
     input: Seq<u8>, pos: nat, end: nat, prior: Option<Seq<u8>>,
 ) -> Option<Seq<AttributeTypeAndValue>>
+{
+    parse_attributes_acc(input, pos, end, prior, Seq::empty())
+}
+
+/// Accumulating form used to state the loop invariant of RDN traversal.
+pub open spec fn parse_attributes_acc(
+    input: Seq<u8>, pos: nat, end: nat, prior: Option<Seq<u8>>,
+    accumulated: Seq<AttributeTypeAndValue>,
+) -> Option<Seq<AttributeTypeAndValue>>
     decreases end - pos
 {
-    if pos == end { Some(Seq::empty()) }
+    if pos == end { Some(accumulated) }
     else {
         match parse_attribute(input, pos, end) {
             None => None,
@@ -116,9 +156,9 @@ pub open spec fn parse_attributes(
                     Some(previous) => der_octets_le(previous, attribute.der),
                 };
                 if !ordered { None }
-                else { match parse_attributes(input, next, end, Some(attribute.der)) {
+                else { match parse_attributes_acc(input, next, end, Some(attribute.der), accumulated.push(attribute)) {
                     None => None,
-                    Some(rest) => Some(seq![attribute] + rest),
+                    Some(rest) => Some(rest),
                 }}
             },
             _ => None,
@@ -148,13 +188,21 @@ pub open spec fn parse_rdn(input: Seq<u8>, pos: nat, end: nat)
 /// Parse the RDNSequence contents in order, retaining each exact RDN TLV.
 pub open spec fn parse_rdns(input: Seq<u8>, pos: nat, end: nat)
     -> Option<Seq<RelativeDistinguishedName>>
+{
+    parse_rdns_acc(input, pos, end, Seq::empty())
+}
+
+/// Accumulating RDN sequence form used by iterative execution.
+pub open spec fn parse_rdns_acc(
+    input: Seq<u8>, pos: nat, end: nat, accumulated: Seq<RelativeDistinguishedName>,
+) -> Option<Seq<RelativeDistinguishedName>>
     decreases end - pos
 {
-    if pos == end { Some(Seq::empty()) }
+    if pos == end { Some(accumulated) }
     else {
         match parse_rdn(input, pos, end) {
-            Some((rdn, next)) if next > pos && next <= end => match parse_rdns(input, next, end) {
-                Some(rest) => Some(seq![rdn] + rest),
+            Some((rdn, next)) if next > pos && next <= end => match parse_rdns_acc(input, next, end, accumulated.push(rdn)) {
+                Some(rest) => Some(rest),
                 None => None,
             },
             _ => None,
