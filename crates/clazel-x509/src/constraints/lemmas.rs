@@ -25,9 +25,9 @@ pub proof fn lemma_reject_path_length_without_ca()
 
 /// KeyUsage's named-bit list has no bit number greater than 8.
 pub proof fn lemma_reject_unknown_key_usage_bit()
-    ensures parse_key_usage(seq![0x03u8, 0x03, 0x06, 0x00, 0x80]) is None
+    ensures parse_key_usage(seq![0x03u8, 0x03, 0x06, 0x00, 0x40]) is None
 {
-    assert(parse_key_usage(seq![0x03u8, 0x03, 0x06, 0x00, 0x80]) is None)
+    assert(parse_key_usage(seq![0x03u8, 0x03, 0x06, 0x00, 0x40]) is None)
         by (compute_only);
 }
 
