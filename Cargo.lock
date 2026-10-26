@@ -219,6 +219,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-x509"
+version = "0.0.0"
+dependencies = [
+ "clazel-der",
+ "clazel-psl",
+ "vstd",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
