@@ -9,6 +9,11 @@
 #             matrix below, so a new crate cannot be left out.
 #   base      `verify --part base`: static checks, rustfmt, clippy, tests and
 #             Miri over the whole workspace.
+#   base-macos the same part on macOS arm64: the Seatbelt sandbox, the demo,
+#             the host and escape tests, and the macOS-only code under clippy
+#             and Miri. Proofs and harnesses are not repeated there: Verus
+#             and Kani give the same answer for the same pinned versions on
+#             either platform.
 #   crate     one job per crate, `verify --part crate <name>`: Kani, Verus,
 #             line counts, mutations and conformance for that crate. Each
 #             uploads what it measured, tagged with the commit.
@@ -36,8 +41,9 @@
 # part exits non-zero when a tool is missing and checks were skipped, so a
 # skipped check is never green.
 #
-# Linux x86-64 only: it is the platform the Dockerfile reproduces, and Verus
-# publishes no Linux arm64 build.
+# The crate parts run on Linux x86-64 only: it is the platform the
+# Dockerfile reproduces, and Verus publishes no Linux arm64 build. macOS
+# arm64 runs the base part (`base-macos`).
 #
 # Actions are pinned by commit SHA (the tag is in the trailing comment). Only
 # setup.sh's download cache is cached: setup.sh re-checks every cached file
@@ -117,6 +123,26 @@ jobs:
       - name: Verify (base)
         run: cargo xtask verify --part base
 
+  base-macos:
+    name: Verify (base, macOS)
+    runs-on: macos-15
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Cache tool downloads
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.local/share/clazel-tools/downloads
+          key: clazel-tools-${{ runner.os }}-${{ hashFiles('scripts/toolchains.env', 'scripts/checksums.txt') }}
+      - name: Install pinned toolchain
+        run: scripts/setup.sh
+      # No AppArmor step: the renderer's macOS sandbox is Seatbelt, which an
+      # unprivileged process enters without any setup.
+      - name: Verify (base)
+        run: cargo xtask verify --part base
+
   crate:
     name: Verify ${{ matrix.crate }}
     needs: crates
@@ -156,7 +182,7 @@ jobs:
 
   assemble:
     name: Full verification
-    needs: [check, base, crate]
+    needs: [check, base, base-macos, crate]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

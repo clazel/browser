@@ -182,10 +182,17 @@ fn kill_tree(child: &mut std::process::Child) {
     #[cfg(unix)]
     {
         // The group's id is the child's pid (`process_group(0)`); `kill`
-        // with a negative pid signals the whole group.
-        let _ = Command::new("kill")
-            .args(["-KILL", &format!("-{}", child.id())])
-            .status();
+        // with a negative pid signals the whole group. The signal is given
+        // with `-s` and the group after `--`: procps-ng 4.0.4 (Ubuntu
+        // 24.04) reads `kill -KILL -<pgid>` as `kill(-9, SIGKILL)`, killing
+        // process group 9 instead, which on a GitHub runner took the
+        // runner down (CI runs 40140244423 and 40177978935).
+        let pgid = child.id();
+        if pgid > 1 {
+            let _ = Command::new("kill")
+                .args(["-s", "KILL", "--", &format!("-{pgid}")])
+                .status();
+        }
     }
     let _ = child.kill();
 }
