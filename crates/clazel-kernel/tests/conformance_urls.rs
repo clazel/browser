@@ -34,6 +34,9 @@
 
 mod support;
 
+use clazel_kernel::exec::fetch::NetOutcomeRecord;
+use clazel_kernel::exec::records::EventRecord;
+
 use clazel_ipc::message::codec::Msg;
 use clazel_kernel::exec::real_urls::RealUrls;
 use clazel_kernel::exec::urls::UrlFnsExec;
@@ -41,6 +44,26 @@ use clazel_origin::exec::serialization_of_origin_exec;
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::serialize::url_path_serializer;
 use support::{Kernel, Out, code_points};
+
+/// Answer every `Fetch` among `out` as a shell with no network would: the
+/// kernel's stand-in fetch makes the delivered bytes (none) the document's
+/// script. The outputs, with each `Fetch` replaced by what answering it gave.
+fn settled(kernel: &mut Kernel, out: Vec<Out>) -> Vec<Out> {
+    let mut all = Vec::new();
+    for o in out {
+        match o {
+            Out::Fetch(tab, url) => {
+                let outcome = NetOutcomeRecord {
+                    url,
+                    net: Vec::new(),
+                };
+                all.extend(kernel.event(&EventRecord::Fetched { tab, outcome }));
+            }
+            other => all.push(other),
+        }
+    }
+    all
+}
 
 const URLTESTDATA: &str =
     include_str!("../../clazel-url/tests/data/wpt-urltestdata/urltestdata.json");
@@ -291,6 +314,7 @@ fn navigate(base: &str, input: &str) -> Navigation {
     if out == vec![Out::To(id, Msg::Error { code: 3 })] {
         return Navigation::BadUrl;
     }
+    let out = settled(&mut kernel, out);
     match committed(&out) {
         Some(url) => Navigation::Committed(url.to_vec()),
         None => Navigation::Other(format!("{out:?}")),

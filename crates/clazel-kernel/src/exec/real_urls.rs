@@ -20,7 +20,7 @@ use vstd::prelude::*;
 verus! {
 
 /// Whether `s` is a scalar value string.
-fn all_scalar_values_exec(s: &[u32]) -> (r: bool)
+pub fn all_scalar_values_exec(s: &[u32]) -> (r: bool)
     ensures
         r == clazel_encoding::utf8::spec::all_scalar_values(s@),
 {
@@ -130,8 +130,9 @@ impl UrlFnsExec for RealUrls {
     }
 }
 
-/// The kernel's `step` with the real URL functions ([`RealUrls`]): the
-/// function the host shell calls. It meets [`crate::contract::step_ensures`]
+/// The kernel's `step` with the real URL functions ([`RealUrls`]) and the
+/// stand-in fetch ([`super::fetch::StubFetch`], until item 3.6's transducer is
+/// joined): the function the host shell calls. It meets [`crate::contract::step_ensures`]
 /// for [`crate::urls::real_urls`] under [`crate::contract::step_requires`],
 /// whose URL condition `urls_resolve_scalar` is
 /// [`crate::urls::lemma_real_urls_resolve_scalar`]'s.
@@ -140,13 +141,13 @@ pub fn step_real(s: StateRecord, e: &EventRecord) -> (out: (StateRecord, Vec<sup
         crate::contract::step_requires(crate::urls::real_urls(), s@, e@),
         s.exec_wf(),
     ensures
-        crate::contract::step_ensures(crate::urls::real_urls(), s@, e@, super::step::result_view(out)),
+        crate::contract::step_ensures(crate::urls::real_urls(), crate::fetch::stub_fetch(), s@, e@, super::step::result_view(out)),
         out.0.exec_wf(),
         clazel_cookie::storage::contract::jar_in_range(out.0@.jar),
         clazel_cookie::set_cookie::contract::now_in_range(out.0@.now),
         out.0@.next_id <= s@.next_id + 1,
 {
-    step_exec(&RealUrls, s, e)
+    step_exec(&RealUrls, &super::fetch::StubFetch, s, e)
 }
 
 } // verus!

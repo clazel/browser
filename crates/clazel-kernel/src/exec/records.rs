@@ -25,13 +25,15 @@ pub struct RendererRecord {
     pub url: Vec<u32>,
     /// The lock.
     pub lock: ParsedOrigin,
+    /// The URL its tab is navigating to, while the fetch for it is in flight.
+    pub pending: Option<Vec<u32>>,
 }
 
 impl View for RendererRecord {
     type V = Renderer;
 
     open spec fn view(&self) -> Renderer {
-        Renderer { id: self.id as nat, tab: self.tab as nat, url: self.url@, lock: self.lock@ }
+        Renderer { id: self.id as nat, tab: self.tab as nat, url: self.url@, lock: self.lock@, pending: super::urls::code_points_opt_view(self.pending) }
     }
 }
 
@@ -219,8 +221,13 @@ pub enum EventRecord {
         tab: u64,
         /// The URL.
         url: Vec<u32>,
-        /// The script (UTF-8 text).
-        script: Vec<u8>,
+    },
+    /// The network shell finished the fetch the kernel asked for the tab.
+    Fetched {
+        /// The tab.
+        tab: u64,
+        /// What the network delivered.
+        outcome: super::fetch::NetOutcomeRecord,
     },
     /// A renderer exited.
     RendererExited {
@@ -241,7 +248,8 @@ impl View for EventRecord {
         match self {
             EventRecord::FromRenderer { id, bytes } => Event::FromRenderer { id: *id as nat, bytes: bytes@ },
             EventRecord::OpenTab { url, script } => Event::OpenTab { url: url@, script: script@ },
-            EventRecord::NavigateTab { tab, url, script } => Event::NavigateTab { tab: *tab as nat, url: url@, script: script@ },
+            EventRecord::NavigateTab { tab, url } => Event::NavigateTab { tab: *tab as nat, url: url@ },
+            EventRecord::Fetched { tab, outcome } => Event::Fetched { tab: *tab as nat, outcome: outcome@ },
             EventRecord::RendererExited { id } => Event::RendererExited { id: *id as nat },
             EventRecord::Tick { time } => Event::Tick { time: *time as int },
         }
@@ -267,6 +275,13 @@ pub enum OutputRecord {
         /// The renderer.
         id: u64,
     },
+    /// Ask the network shell to fetch the URL for the tab.
+    Fetch {
+        /// The tab.
+        tab: u64,
+        /// The URL, absolute.
+        url: Vec<u32>,
+    },
 }
 
 impl View for OutputRecord {
@@ -277,6 +292,7 @@ impl View for OutputRecord {
             OutputRecord::ToRenderer { id, bytes } => Output::ToRenderer { id: *id as nat, bytes: bytes@ },
             OutputRecord::Spawn { id } => Output::Spawn { id: *id as nat, policy: Policy::Renderer },
             OutputRecord::Kill { id } => Output::Kill { id: *id as nat },
+            OutputRecord::Fetch { tab, url } => Output::Fetch { tab: *tab as nat, url: url@ },
         }
     }
 }

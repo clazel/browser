@@ -186,9 +186,13 @@ fn a_cross_origin_navigation_is_kill_spawn_commit_and_a_same_origin_one_is_a_com
     host.navigate_tab(0, "https://b.example/", "cookie-get");
     assert_eq!(host.live(), 1);
     let order: Vec<&str> = host.log.iter().map(String::as_str).collect();
+    // The kernel asks for the page, the stand-in network answers with the
+    // script, and the answer commits: the old renderer is killed and a new one
+    // gets the Commit.
     assert!(
         matches!(order.as_slice(),
-            [kill, commit] if kill.starts_with("renderer 0 exited: killed by the kernel")
+            [net, kill, commit] if net.starts_with("network (stand-in): tab 0 <- \"https://b.example/\"")
+                && kill.starts_with("renderer 0 exited: killed by the kernel")
                 && commit.starts_with("renderer 1 <- commit \"https://b.example/\"")),
         "{order:#?}"
     );
