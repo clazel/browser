@@ -105,7 +105,7 @@ pub open spec fn no_wildcard_from(name: Seq<u8>, i: int) -> bool
 /// Convert a valid DNS suffix to the lower-case code points consumed by PSL.
 pub open spec fn psl_domain_from_ascii(name: Seq<u8>) -> Seq<u32> {
     name.map_values(|byte: u8| if byte >= b'A' && byte <= b'Z' {
-        byte as u32 + 32
+        (byte as u32) + 32u32
     } else { byte as u32 })
 }
 
