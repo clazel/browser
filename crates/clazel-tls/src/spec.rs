@@ -1815,6 +1815,15 @@ pub open spec fn write_client_hello(ch: ClientHello) -> Seq<u8> {
 
 /// §4.1.3, the structure of a ServerHello (Appendix B.3.1), as the whole
 /// of a message body.
+/// RFC 5246 §7.4.1.3 permits the legacy extension field to be absent or empty.
+pub open spec fn read_server_hello_extensions(input: Seq<u8>) -> Option<(Seq<Ext>, Seq<u8>)> {
+    if input.len() == 0 {
+        Some((Seq::empty(), Seq::empty()))
+    } else {
+        read_exts(input, 0, 65535)
+    }
+}
+
 pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
     match read_uint(b, 2) {
         None => None,
@@ -1831,16 +1840,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                     match read_uint(r4, 1) {
                                         None => None,
                                         Some((comp, r5)) => {
-                                            if r5.len() == 0 {
-                                                Some(ServerHello {
-                                                    legacy_version: ver as u16,
-                                                    random,
-                                                    session_id_echo: sid,
-                                                    cipher_suite: cs as u16,
-                                                    compression: comp as u8,
-                                                    extensions: Seq::empty(),
-                                                })
-                                            } else { match read_exts(r5, 0, 65535) {
+                                            match read_server_hello_extensions(r5) {
                                                 None => None,
                                                 Some((exts, r6)) => {
                                                     if r6.len() != 0 {
@@ -1858,7 +1858,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                                         )
                                                     }
                                                 },
-                                            } }
+                                            }
                                         },
                                     }
                                 },
