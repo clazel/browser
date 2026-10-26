@@ -88,8 +88,12 @@ fn wait_log(host: &mut Host, needle: &str) {
 /// A server on loopback that answers every connection with a page whose body
 /// is `body`, and closes it.
 fn serve(body: &'static str) -> SocketAddr {
-    let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
-    let addr = listener.local_addr().expect("local address");
+    // A failed bind gives an address nothing listens on: the test times out.
+    let dead = SocketAddr::from(([127, 0, 0, 1], 9));
+    let Ok(listener) = TcpListener::bind("127.0.0.1:0") else {
+        return dead;
+    };
+    let addr = listener.local_addr().unwrap_or(dead);
     std::thread::spawn(move || {
         for stream in listener.incoming() {
             let Ok(mut stream) = stream else { continue };
@@ -246,7 +250,7 @@ fn a_cross_origin_navigation_is_kill_spawn_commit_and_a_same_origin_one_is_a_com
         position("renderer 1 <- commit \"http://b.example/\""),
     ];
     assert!(
-        order.iter().all(Option::is_some) && order.windows(2).all(|w| w[0] < w[1]),
+        order.iter().all(Option::is_some) && order.windows(2).all(|w| matches!(w, [a, b] if a < b)),
         "{order:?} in {:#?}",
         host.log
     );
