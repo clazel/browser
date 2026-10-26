@@ -19,4 +19,13 @@ pub open spec fn label_ensures(label: Seq<u8>, context: Seq<u8>, length: u16,
 pub open spec fn expand_requires(secret: Seq<u8>, context: Seq<u8>, length: u16) -> bool {
     secret.len() == super::spec::HASH_LEN && context.len() <= 255 && length <= 8160
 }
+
+/// RFC 8446 §7.2: update one application traffic secret with `traffic upd`.
+pub open spec fn update_traffic_secret_ensures(c: super::spec::Crypto,
+    before: Seq<u8>, after: Seq<u8>) -> bool
+{
+    before.len() == super::spec::HASH_LEN
+        && after == super::spec::next_traffic_secret(c, before)
+        && after.len() == super::spec::HASH_LEN
+}
 } // verus!

@@ -116,6 +116,12 @@ pub open spec fn master_secret(c: Crypto, handshake: Seq<u8>) -> Seq<u8> {
     (c.extract)(derive_secret(c, handshake, Label::Derived, Seq::empty()), zeros())
 }
 
+/// RFC 8446 §7.2: derive the next generation from one direction's current
+/// application traffic secret. Directions are updated independently.
+pub open spec fn next_traffic_secret(c: Crypto, secret: Seq<u8>) -> Seq<u8> {
+    expand_label(c, secret, Label::Update, Seq::empty(), HASH_LEN as u16)
+}
+
 /// §4.4.4 finished_key and verify_data equations.
 pub open spec fn finished(c: Crypto, base: Seq<u8>, messages: Seq<u8>) -> Seq<u8> {
     (c.hmac)(expand_label(c, base, Label::Finished, Seq::empty(), HASH_LEN as u16),
