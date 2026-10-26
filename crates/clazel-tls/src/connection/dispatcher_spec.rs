@@ -34,6 +34,24 @@ pub enum Mode {
     Closed,
 }
 
+/// One ordered I/O effect from the dispatcher.
+pub enum Action {
+    /// Incomplete input, or a complete record that has no outward effect.
+    None,
+    /// Exact protected client flight awaiting its send acknowledgement.
+    Send(Seq<u8>),
+    /// Application keys installed after the client flight was acknowledged.
+    Ready,
+    /// Plaintext released only by Auth in the Ready phase.
+    Deliver(Seq<u8>),
+    /// A permitted unprotected compatibility CCS was dropped.
+    Ignored,
+    /// Fatal error; caller may send at most one alert and must terminate.
+    Fail(u8),
+    /// Peer close_notify or local close.
+    Close,
+}
+
 /// Connection-owned protocol state after the final ServerHello.
 pub struct State {
     /// Protocol phase.

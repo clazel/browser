@@ -54,6 +54,24 @@ pub open spec fn terminal_ensures(out: super::dispatcher_spec::State, mode: supe
         && super::dispatcher_spec::wf(out) && super::dispatcher_spec::no_live_secrets(out)
 }
 
+/// Every feed is bounded and keeps the lifecycle invariant; while a client
+/// flight is outstanding it consumes no peer bytes.
+pub open spec fn feed_ensures(before: super::dispatcher_spec::State, input: Seq<u8>,
+    consumed: nat, action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    super::dispatcher_spec::wf(before) && super::dispatcher_spec::wf(after)
+        && consumed <= input.len()
+        && (before.mode == super::dispatcher_spec::Mode::AwaitClientFlight ==> consumed == 0)
+        && match action {
+            super::dispatcher_spec::Action::Send(wire) => after.mode == super::dispatcher_spec::Mode::AwaitClientFlight
+                && after.pending_flight == wire,
+            super::dispatcher_spec::Action::Ready => after.mode == super::dispatcher_spec::Mode::Ready,
+            super::dispatcher_spec::Action::Deliver(_) => after.mode == super::dispatcher_spec::Mode::Ready,
+            super::dispatcher_spec::Action::Fail(_) => terminal_ensures(after, super::dispatcher_spec::Mode::Failed),
+            super::dispatcher_spec::Action::Close => terminal_ensures(after, super::dispatcher_spec::Mode::Closed),
+            super::dispatcher_spec::Action::None | super::dispatcher_spec::Action::Ignored => true,
+        }
+}
+
 /// A protected client flight remains pending until the exact wire bytes are acknowledged.
 pub open spec fn await_flight_ensures(before: super::dispatcher_spec::State,
     after: super::dispatcher_spec::State, server_messages: Seq<Seq<u8>>,
@@ -97,6 +115,18 @@ pub open spec fn ready_after_ack_ensures(c: crate::schedule::spec::Crypto, v: cr
                 && after.master.len() == 0 && after.pending_flight.len() == 0
         },
         _ => false,
+    }
+}
+
+/// The acknowledgement must match the entire saved flight before Auth can
+/// release application traffic keys; a mismatch is terminal.
+pub open spec fn acknowledgement_ensures(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    before: super::dispatcher_spec::State, acknowledgement: Seq<u8>, action: super::dispatcher_spec::Action,
+    after: super::dispatcher_spec::State) -> bool {
+    if acknowledgement == before.pending_flight {
+        ready_after_ack_ensures(c, v, before, acknowledgement, after) && action is Ready
+    } else {
+        terminal_ensures(after, super::dispatcher_spec::Mode::Failed) && action is Fail
     }
 }
 } // verus!
