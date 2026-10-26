@@ -11,3 +11,4 @@ pub mod exec;
 pub mod lemmas;
 pub mod matcher;
 pub mod spec;
+pub mod time;
