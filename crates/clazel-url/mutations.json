@@ -3,6 +3,7 @@
     {
       "id": "ipv4-number-hex-prefix-upper",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "input[1] == 0x58",
       "replace": "input[1] == 0x78",
       "expect": "killed",
@@ -16,6 +17,7 @@
     {
       "id": "ipv4-number-octal-radix",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "(true, input.subrange(1, input.len() as int), 8nat)",
       "replace": "(true, input.subrange(1, input.len() as int), 10nat)",
       "expect": "killed",
@@ -29,6 +31,7 @@
     {
       "id": "ipv4-number-hex-radix",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "(true, input.subrange(2, input.len() as int), 16nat)",
       "replace": "(true, input.subrange(2, input.len() as int), 10nat)",
       "expect": "killed",
@@ -42,6 +45,7 @@
     {
       "id": "ipv4-number-empty-after-prefix",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "Some((0nat, true))",
       "replace": "None",
       "expect": "killed",
@@ -55,6 +59,7 @@
     {
       "id": "ipv4-number-radix-digit-bound",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "is_ascii_hex_digit(c) && hex_digit_value(c) < r",
       "replace": "is_ascii_hex_digit(c) && hex_digit_value(c) <= r",
       "expect": "killed",
@@ -68,6 +73,7 @@
     {
       "id": "ipv4-number-radix-value-base",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "radix_value(s.drop_last(), r) * r +",
       "replace": "radix_value(s.drop_last(), r) * 10 +",
       "expect": "killed",
@@ -81,6 +87,7 @@
     {
       "id": "hex-value-lower",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "(c - 0x57) as nat",
       "replace": "(c - 0x56) as nat",
       "expect": "killed",
@@ -94,6 +101,7 @@
     {
       "id": "hex-value-upper",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "(c - 0x37) as nat",
       "replace": "(c - 0x36) as nat",
       "expect": "killed",
@@ -107,6 +115,7 @@
     {
       "id": "hex-digit-lower-range",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "(0x61 <= c <= 0x66)",
       "replace": "(0x61 <= c <= 0x65)",
       "expect": "killed",
@@ -120,6 +129,7 @@
     {
       "id": "ends-in-number-step3",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "let parts = if parts.last().len() == 0 {",
       "replace": "let parts = if false {",
       "expect": "killed",
@@ -133,6 +143,7 @@
     {
       "id": "ends-in-number-step5-empty",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if last.len() > 0 && contains_only_ascii_digits(last) {",
       "replace": "if contains_only_ascii_digits(last) {",
       "expect": "killed",
@@ -146,6 +157,7 @@
     {
       "id": "ends-in-number-step6",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "} else if ipv4_number_parser(last) is Some {",
       "replace": "} else if false {",
       "expect": "killed",
@@ -159,6 +171,7 @@
     {
       "id": "only-digits-hex",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "s.len() == 0 || (is_ascii_digit(s.last())",
       "replace": "s.len() == 0 || (is_ascii_hex_digit(s.last())",
       "expect": "killed",
@@ -172,6 +185,7 @@
     {
       "id": "ipv4-step2-trailing-dot",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "let parts = if parts.last().len() == 0 && parts.len() > 1 {",
       "replace": "let parts = if false {",
       "expect": "killed",
@@ -185,6 +199,7 @@
     {
       "id": "ipv4-step4-five-parts",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if parts.len() > 4 {",
       "replace": "if parts.len() > 5 {",
       "expect": "killed",
@@ -198,6 +213,7 @@
     {
       "id": "ipv4-step8-bound",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "any_greater_than_255(numbers, 0, (numbers.len() - 1) as nat)",
       "replace": "any_greater_than_255(numbers, 1, (numbers.len() - 1) as nat)",
       "expect": "killed",
@@ -211,6 +227,7 @@
     {
       "id": "ipv4-step9-power",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "pow256((5 - numbers.len()) as nat)",
       "replace": "pow256((6 - numbers.len()) as nat)",
       "expect": "killed",
@@ -224,6 +241,7 @@
     {
       "id": "ipv4-step13-power",
       "file": "src/host/spec.rs",
+      "module": "host::domain_examples",
       "find": "pow256((3 - counter) as nat))",
       "replace": "pow256((2 - counter) as nat))",
       "expect": "killed",
@@ -237,6 +255,7 @@
     {
       "id": "ipv4-step13-product",
       "file": "src/host/spec.rs",
+      "module": "host::domain_examples",
       "find": "ipv4 + numbers[counter as int] * pow256",
       "replace": "ipv4 + numbers[counter as int] + pow256",
       "expect": "killed",
@@ -250,6 +269,7 @@
     {
       "id": "ipv6-step5-pointer",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "ipv6_main_loop(input, address, 1, Some(1), 2)",
       "replace": "ipv6_main_loop(input, address, 1, Some(1), 1)",
       "expect": "killed",
@@ -263,6 +283,7 @@
     {
       "id": "ipv6-step5-check",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if c_at(input, 1) != Some(0x3Au32) {",
       "replace": "if c_at(input, 1) == Some(0x3Au32) {",
       "expect": "killed",
@@ -276,6 +297,7 @@
     {
       "id": "ipv6-step6-1-too-many",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "Some(c) => if piece_index == 8 {",
       "replace": "Some(c) => if piece_index == 9 {",
       "expect": "killed",
@@ -289,6 +311,7 @@
     {
       "id": "ipv6-step6-2-multiple-compression",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if compress is Some {",
       "replace": "if false {",
       "expect": "killed",
@@ -302,6 +325,7 @@
     {
       "id": "ipv6-step6-4-length",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if length >= 4 {",
       "replace": "if length >= 5 {",
       "expect": "killed",
@@ -315,6 +339,7 @@
     {
       "id": "ipv6-step6-5-3-too-many",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "} else if piece_index > 6 {",
       "replace": "} else if piece_index > 7 {",
       "expect": "killed",
@@ -328,6 +353,7 @@
     {
       "id": "ipv4-in-ipv6-decimal",
       "file": "src/host/spec.rs",
+      "module": "host::independent",
       "find": "let ipv4_piece = ipv4_piece * 10 + number;",
       "replace": "let ipv4_piece = ipv4_piece * 16 + number;",
       "expect": "killed",
@@ -341,6 +367,7 @@
     {
       "id": "ipv4-in-ipv6-leading-zero",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if ipv4_piece == 0 {",
       "replace": "if false {",
       "expect": "killed",
@@ -354,6 +381,7 @@
     {
       "id": "ipv4-in-ipv6-range",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if ipv4_piece > 255 {",
       "replace": "if ipv4_piece > 256 {",
       "expect": "killed",
@@ -367,6 +395,7 @@
     {
       "id": "ipv4-in-ipv6-shift",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "address[piece_index] * 0x100 + ipv4_piece",
       "replace": "address[piece_index] * 0x10 + ipv4_piece",
       "expect": "killed",
@@ -380,6 +409,7 @@
     {
       "id": "ipv4-in-ipv6-piece-index",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if numbers_seen == 2 || numbers_seen == 4 {",
       "replace": "if numbers_seen == 2 {",
       "expect": "killed",
@@ -393,6 +423,7 @@
     {
       "id": "ipv4-in-ipv6-too-few",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if numbers_seen != 4 {",
       "replace": "if numbers_seen < 3 {",
       "expect": "killed",
@@ -406,6 +437,7 @@
     {
       "id": "ipv6-step6-6-trailing-colon",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if c_at(input, after + 1) is None {",
       "replace": "if false {",
       "expect": "killed",
@@ -419,6 +451,7 @@
     {
       "id": "ipv6-step6-9-value",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "ipv6_main_loop(input, address.update(piece_index, value), piece_index + 1, compress, after + 1)",
       "replace": "ipv6_main_loop(input, address.update(piece_index, value + 1), piece_index + 1, compress, after + 1)",
       "expect": "killed",
@@ -432,6 +465,7 @@
     {
       "id": "ipv6-step7-swaps",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "let swaps = piece_index - compress;",
       "replace": "let swaps = piece_index - compress - 1;",
       "expect": "killed",
@@ -445,6 +479,7 @@
     {
       "id": "ipv6-step7-swap-index",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "let other = compress + swaps - 1;",
       "replace": "let other = compress + swaps;",
       "expect": "killed",
@@ -458,6 +493,7 @@
     {
       "id": "ipv6-step8-too-few",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "None => if piece_index != 8 {",
       "replace": "None => if piece_index < 7 {",
       "expect": "killed",
@@ -471,6 +507,7 @@
     {
       "id": "forbidden-host-caret",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "|| c == 0x5C || c == 0x5D || c == 0x5E || c == 0x7C",
       "replace": "|| c == 0x5C || c == 0x5D || c == 0x7C",
       "expect": "killed",
@@ -484,6 +521,7 @@
     {
       "id": "opaque-host-encode-set",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "PercentEncodeSet::C0Control))",
       "replace": "PercentEncodeSet::Fragment))",
       "expect": "killed",
@@ -497,6 +535,7 @@
     {
       "id": "host-step1-bracket",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if input.len() > 0 && input[0] == 0x5B {",
       "replace": "if input.len() > 0 && input[0] == 0x5D {",
       "expect": "killed",
@@ -510,6 +549,7 @@
     {
       "id": "host-step1-1-close",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "if input.last() != 0x5D {",
       "replace": "if input.last() == 0x5D {",
       "expect": "killed",
@@ -523,6 +563,7 @@
     {
       "id": "host-step1-2-strip",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "match ipv6_parser(input.subrange(1, input.len() - 1)) {",
       "replace": "match ipv6_parser(input.subrange(1, input.len() as int)) {",
       "expect": "killed",
@@ -536,6 +577,7 @@
     {
       "id": "host-step2-empty",
       "file": "src/host/spec.rs",
+      "module": "api::examples",
       "find": "Some(s) => if s.len() == 0 {",
       "replace": "Some(s) => if s.len() == 1 {",
       "expect": "killed",
@@ -549,6 +591,7 @@
     {
       "id": "host-step5-no-percent-decode",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "clazel_percent::spec::percent_decode_string(input),",
       "replace": "clazel_encoding::utf8::spec::utf8_encode(input),",
       "expect": "killed",
@@ -562,6 +605,7 @@
     {
       "id": "host-step8-ends-in-number",
       "file": "src/host/spec.rs",
+      "module": "api::examples",
       "find": "Some(ascii_domain) => if ends_in_a_number(ascii_domain) {",
       "replace": "Some(ascii_domain) => if !ends_in_a_number(ascii_domain) {",
       "expect": "killed",
@@ -575,6 +619,7 @@
     {
       "id": "serialize-integer-digit",
       "file": "src/host/spec.rs",
+      "module": "api::examples",
       "find": "seq![(0x30 + n % 10) as u32]",
       "replace": "seq![(0x31 + n % 10) as u32]",
       "expect": "killed",
@@ -588,6 +633,7 @@
     {
       "id": "ipv4-serializer-dot",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "let output = if i != 4 {",
       "replace": "let output = if i != 3 {",
       "expect": "killed",
@@ -601,6 +647,7 @@
     {
       "id": "ipv4-serializer-shift",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "ipv4_serializer_loop(output, n / 256, i + 1)",
       "replace": "ipv4_serializer_loop(output, n / 255, i + 1)",
       "expect": "killed",
@@ -614,6 +661,7 @@
     {
       "id": "ipv6-serializer-uppercase",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "(0x57 + n) as u32",
       "replace": "(0x37 + n) as u32",
       "expect": "killed",
@@ -627,6 +675,7 @@
     {
       "id": "ipv6-serializer-leading-zero",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "    if n < 16 {\n        seq![lowercase_hex_digit(n)]",
       "replace": "    if n < 15 {\n        seq![lowercase_hex_digit(n)]",
       "expect": "killed",
@@ -640,6 +689,7 @@
     {
       "id": "ipv6-serializer-double-colon",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "let separator = if piece_index == 0 {",
       "replace": "let separator = if piece_index == 9 {",
       "expect": "killed",
@@ -653,6 +703,7 @@
     {
       "id": "ipv6-serializer-last-colon",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "let output = if piece_index != 7 {",
       "replace": "let output = if piece_index != 6 {",
       "expect": "killed",
@@ -666,6 +717,7 @@
     {
       "id": "ipv6-serializer-ignore0",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "} else if ignore0 && address[piece_index as int] == 0 {",
       "replace": "} else if false {",
       "expect": "killed",
@@ -679,6 +731,7 @@
     {
       "id": "compress-single-zero",
       "file": "src/host/spec.rs",
+      "module": "host::independent",
       "find": "find_compressed_loop(address, 0, None, 1, None, 0)",
       "replace": "find_compressed_loop(address, 0, None, 0, None, 0)",
       "expect": "killed",
@@ -692,6 +745,7 @@
     {
       "id": "compress-first-longest",
       "file": "src/host/spec.rs",
+      "module": "host::independent",
       "find": "        let (longest_index, longest_size) = if found_size > longest_size {",
       "replace": "        let (longest_index, longest_size) = if found_size >= longest_size {",
       "expect": "killed",
@@ -705,6 +759,7 @@
     {
       "id": "compress-trailing-run",
       "file": "src/host/spec.rs",
+      "module": "host::independent",
       "find": "        if found_size > longest_size {\n            // 6.",
       "replace": "        if false {\n            // 6.",
       "expect": "killed",
@@ -718,6 +773,7 @@
     {
       "id": "host-serializer-brackets",
       "file": "src/host/spec.rs",
+      "module": "host::examples",
       "find": "Host::Ipv6(address) => seq![0x5Bu32] + ipv6_serializer(address)",
       "replace": "Host::Ipv6(address) => ipv6_serializer(address)",
       "expect": "killed",
@@ -731,6 +787,7 @@
     {
       "id": "collect-wrong-delimiter",
       "file": "src/host/spec.rs",
+      "module": "host::domain_examples",
       "find": "if position < input.len() && input[position as int] != delimiter {",
       "replace": "if position < input.len() && input[position as int] != 0x2Fu32 {",
       "expect": "killed",
@@ -744,6 +801,7 @@
     {
       "id": "url-domain-parser-identity",
       "file": "src/host/contract.rs",
+      "module": "host::domain_examples",
       "find": "clazel_idna::uts46::spec::domain_parser(domain, be_strict)",
       "replace": "Some(domain)",
       "expect": "killed",

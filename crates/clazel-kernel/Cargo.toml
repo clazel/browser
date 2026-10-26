@@ -36,7 +36,10 @@ url = { version = "=2.5.8", default-features = false }
 
 # Verification tier (docs/VERIFICATION.md). Tier 2: the exec `step`
 # (src/exec/) is proven to meet item 2.10's contract (src/contract.rs) for any
-# implementation of the URL functions, and `exec::real_urls::RealUrls`, the
+# implementation of the URL functions and of the fetch (item 3.7: the kernel
+# takes the fetch as a parameter, `FetchFns`; the shipped one is a stand-in,
+# `exec::fetch::StubFetch`, until item 3.6's transducer is joined), and
+# `exec::real_urls::RealUrls`, the
 # real URL parser, is proven to implement `urls::real_urls()` (item 2.13); the
 # mutations are certified kills (items 2.11 and 2.13); tests/conformance_*.rs run WPT cookies/ and webstorage/ and a
 # cookie_store differential through the exec kernel; and src/independent.rs
@@ -64,6 +67,13 @@ theorems = [
     "lemma_step_consistency",
     "lemma_local_respect",
     "lemma_navigate_declassify",
+    # Item 3.7: a navigation is a fetch (`Fetched` events, `Fetch` outputs).
+    "theorem_fetched_only_to_tab",
+    "theorem_fetched_answers_navigation",
+    "lemma_fetched_wf",
+    "lemma_apply_stores_wf",
+    "lemma_apply_stores_agree",
+    "lemma_fetched_consistency",
     "quark_tab_non_interference",
     "quark_cookie_integrity",
     "quark_cookie_confidentiality",
@@ -79,6 +89,7 @@ theorems = [
     "corollary_real_cookie_confidentiality",
     "corollary_real_cookie_integrity",
     "corollary_real_storage_same_origin",
+    "corollary_real_fetched",
     "corollary_real_cookie_noninterference",
     "lemma_real_urls_resolve_scalar",
 ]

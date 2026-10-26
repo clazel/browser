@@ -38,12 +38,17 @@ use super::spec::*;
 use vstd::prelude::*;
 
 use super::contract::{HttpFnsExec, UrlFnsExec};
-use super::types::{ActionBuf, InputBuf, StateBuf};
+use super::types::{ActionBuf, InputBuf, JarOpBuf, StateBuf};
+use clazel_cookie::matching::exec::canonicalize_a_host_name;
+use clazel_cookie::storage::exec::CookieRecord;
+use clazel_cookie::storage::exec::{RequestUrlRecord, narrow_exec};
 use clazel_encoding::utf8::decode::decode_without_bom;
 use clazel_http::message::body::ResponseParser;
 use clazel_http::message::types::ParseBuf;
+use clazel_origin::exec::{ParsedOrigin, url_origin_exec};
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::record::ParsedUrl;
+use clazel_url::url::serialize::url_path_serializer;
 
 verus! {
 
@@ -68,7 +73,14 @@ pub open spec fn real_location(base: Url, value: Seq<u8>) -> Option<Url> {
 
 /// The URL functions of the shipped client.
 pub open spec fn real_urls() -> UrlFns {
-    UrlFns { location: |base: Url, value: Seq<u8>| real_location(base, value) }
+    UrlFns {
+        location: |base: Url, value: Seq<u8>| real_location(base, value),
+        // URL §4.7 "origin" with the real domain parser; the opaque origin
+        // id of a URL with none is 0 (no HTTP(S) URL has one).
+        origin: |url: Url| clazel_origin::spec::url_origin(url, clazel_url::url::contract::url_domain_parser(), 0),
+        request_url: |url: Url| request_url(url),
+        rules: clazel_psl::table::psl_rules(),
+    }
 }
 
 /// The shipped parser is prefix-stable
@@ -92,12 +104,28 @@ pub proof fn theorem_real_prefix_stable()
 /// The split does not matter for the shipped client
 /// (`super::contract::split_invariant` with [`real_http`] and
 /// [`real_urls`]), for every state and split.
-pub proof fn theorem_real_split_invariant(s: State, a: Seq<u8>, b: Seq<u8>)
+pub proof fn theorem_real_split_invariant(s: State, a: Seq<u8>, b: Seq<u8>, jar: Seq<Cookie>, now: int)
     ensures
-        super::contract::split_invariant(real_http(), real_urls(), s, a, b),
+        super::contract::split_invariant(real_http(), real_urls(), s, a, b, jar, now),
 {
     theorem_real_prefix_stable();
-    super::theorems::theorem_split_invariant(real_http(), real_urls(), s, a, b);
+    super::theorems::theorem_split_invariant(real_http(), real_urls(), s, a, b, jar, now);
+}
+
+/// `request_url` (RFC 6265bis §5.7, §5.8's view of the URL).
+pub fn request_url_exec(url: &ParsedUrl) -> (r: RequestUrlRecord)
+    ensures
+        r@ == request_url(url@),
+{
+    let scheme = narrow_exec(url.scheme.as_slice());
+    let host = canonicalize_a_host_name(&url.host);
+    let mut p = url_path_serializer(&url.path);
+    if p.is_empty() {
+        p.push(0x2F);
+        assert(p@ =~= seq![0x2Fu32]);
+    }
+    let path = narrow_exec(p.as_slice());
+    RequestUrlRecord { scheme, host, path }
 }
 
 /// [`real_http`], executable.
@@ -134,6 +162,17 @@ impl UrlFnsExec for RealUrls {
         real_urls()
     }
 
+    proof fn rules_are_psl(&self) {
+    }
+
+    fn request_url(&self, url: &ParsedUrl) -> (r: RequestUrlRecord) {
+        request_url_exec(url)
+    }
+
+    fn origin(&self, url: &ParsedUrl) -> (r: ParsedOrigin) {
+        url_origin_exec(url, 0)
+    }
+
     fn location(&self, base: &ParsedUrl, value: &[u8]) -> (r: Option<ParsedUrl>) {
         let input = decode_without_bom(value);
         proof {
@@ -144,17 +183,30 @@ impl UrlFnsExec for RealUrls {
 }
 
 /// The transducer's `step` with the real functions: what the network
-/// shell calls.
-pub fn step_real(s: StateBuf, input: &InputBuf) -> (out: (StateBuf, Vec<ActionBuf>))
+/// shell and the kernel call. The caller applies the jar operations it
+/// returns to its jar (`super::step::apply_ops_exec`).
+pub fn step_real(s: StateBuf, input: &InputBuf, jar: &[CookieRecord], now: u64) -> (out: (StateBuf, Vec<ActionBuf>, Vec<JarOpBuf>))
     requires
         super::contract::step_requires(s@),
         super::contract::state_ok(&RealHttp, &s),
+        super::contract::jar_requires(clazel_cookie::storage::exec::jar_view(jar@), now as int),
     ensures
-        super::contract::step_ensures(real_http(), real_urls(), s@, input@, out.0@, super::types::actions_view(out.1@)),
+        super::contract::step_ensures(
+            real_http(),
+            real_urls(),
+            s@,
+            input@,
+            clazel_cookie::storage::exec::jar_view(jar@),
+            now as int,
+            out.0@,
+            super::types::actions_view(out.1@),
+            super::types::ops_view(out.2@),
+        ),
         super::contract::step_requires(out.0@),
         super::contract::state_ok(&RealHttp, &out.0),
+        super::contract::ops_at(super::types::ops_view(out.2@), now as int),
 {
-    super::step::step(&RealHttp, &RealUrls, s, input)
+    super::step::step(&RealHttp, &RealUrls, s, input, jar, now)
 }
 
 } // verus!

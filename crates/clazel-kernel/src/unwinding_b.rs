@@ -28,18 +28,18 @@ pub proof fn lemma_b_sender(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d:
 
 /// A step of a renderer of another domain, that does not navigate, only
 /// addresses its sender (the only renderer it can name).
-pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, id: nat, bytes: Seq<u8>)
+pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         find_by_id(s.renderers, id, 0) is Some,
         crate::domain::declassified(urls, s, Event::FromRenderer { id, bytes }) is None,
     ensures
         forall|k: int|
-            0 <= k < step(rules, urls, s, Event::FromRenderer { id, bytes }).1.len() ==> crate::domain::output_id(#[trigger] step(rules, urls, s, Event::FromRenderer { id, bytes }).1[k]) == id,
+            0 <= k < step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1.len() ==> crate::domain::output_id(#[trigger] step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]) == id,
 {
     crate::unwind_base::lemma_found_contained(s, id);
     let i = find_by_id(s.renderers, id, 0)->Some_0;
     let r = s.renderers[i];
-    let out = step(rules, urls, s, Event::FromRenderer { id, bytes }).1;
+    let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
     if let Some(m) = decode_renderer_frame(bytes) {
         crate::lock::lemma_storage_call_frame(s, r, m);
         if let clazel_ipc::message::spec::Message::Navigate { url } = m {
@@ -53,13 +53,13 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 }
 
 /// After such a step, the state's renderers are among the old ones.
-pub proof fn lemma_local_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, id: nat, bytes: Seq<u8>)
+pub proof fn lemma_local_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         find_by_id(s.renderers, id, 0) is Some,
         crate::domain::declassified(urls, s, Event::FromRenderer { id, bytes }) is None,
     ensures
         ({
-            let s1b = step(rules, urls, s, Event::FromRenderer { id, bytes }).0;
+            let s1b = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).0;
             s1b.renderers == s.renderers || s1b.renderers == s.renderers.remove(find_by_id(s.renderers, id, 0)->Some_0)
         }),
 {
@@ -79,12 +79,12 @@ pub proof fn lemma_local_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
 }
 
 /// **`lemma_local_respect`.**
-pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
+pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::noninterference::other_domain_local(rules, urls, d, s1, e),
     ensures
-        crate::noninterference::local_respect_statement(rules, urls, d, s1, s2, e),
+        crate::noninterference::local_respect_statement(rules, urls, fetch, d, s1, s2, e),
 {
     let id = e->FromRenderer_id;
     let bytes = e->FromRenderer_bytes;
@@ -93,11 +93,11 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     lemma_b_sender(rules, urls, d, s1, s2, id, bytes, d2);
     let i1 = find_by_id(s1.renderers, id, 0)->Some_0;
     let r = s1.renderers[i1];
-    crate::invariant::lemma_step_preserves_wf(rules, urls, s1, e);
-    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, s1, e);
-    lemma_local_outputs(rules, urls, s1, id, bytes);
-    lemma_local_table(rules, urls, s1, id, bytes);
-    let (s1b, out1) = step(rules, urls, s1, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
+    crate::unwind_base::lemma_jar_no_public_suffix_step(rules, urls, fetch, s1, e);
+    lemma_local_outputs(rules, urls, fetch, s1, id, bytes);
+    lemma_local_table(rules, urls, fetch, s1, id, bytes);
+    let (s1b, out1) = step(rules, urls, fetch, s1, e);
     // Nothing is addressed to d: the outputs name the sender, who is in d2, and no renderer
     // of s1b with that id is in d.
     assert forall|k: int| 0 <= k < out1.len() implies !crate::noninterference::addressed_to(rules, d, s1, s1b, #[trigger] out1[k]) by {

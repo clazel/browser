@@ -14,6 +14,8 @@
 //! - [`exec`]: the executable kernel (item 2.12): exec state, events and
 //!   outputs with views to the spec's, and `step_exec`, proven to meet
 //!   [`contract`] for any implementation of the URL functions.
+//! - [`fetch`]: the stand-in fetch of the shipped kernel (item 3.7), until
+//!   item 3.6's transducer is joined.
 //! - [`urls`]: the URL functions of the shipped kernel (item 2.13), built from
 //!   the real URL parser; [`exec::real_urls`] is their executable
 //!   implementation and `step_real`, the function the host shell calls;
@@ -24,6 +26,7 @@ pub mod cookie_theorems;
 pub mod counterexamples;
 pub mod domain;
 pub mod exec;
+pub mod fetch;
 pub mod independent;
 pub mod independent_equivalence;
 pub mod invariant;
