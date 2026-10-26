@@ -169,14 +169,11 @@ pub open spec fn receive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, event: Pee
     recommends wf(s), s.mode == Mode::AwaitServerHello,
 {
     match event {
-        PeerEvent::Ccs => match crate::spec::feed_ccs(s.reassembly) {
-            crate::spec::Res::Ok((_, reassembly)) =>
-                (State { mode: s.mode, hello: s.hello, pending_flight: s.pending_flight,
-                    compatibility: s.compatibility, reassembly }, Action::None),
-            crate::spec::Res::Err(error) => (State { mode: Mode::Failed, hello: None,
-                pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
-                Action::Fail(crate::spec::alert_of(error))),
-        },
+        // RFC 8446 §5 specifically says to drop a valid unencrypted CCS
+        // without further processing at any time after the first ClientHello
+        // and before peer Finished. Therefore it does not enter reassembly,
+        // even when a fragmented handshake message is in progress.
+        PeerEvent::Ccs => (s, Action::None),
         PeerEvent::Error(alert) => (State { mode: Mode::Failed, hello: None,
             pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly }, Action::Fail(alert)),
         PeerEvent::Eof => (State { mode: Mode::Failed, hello: None,
