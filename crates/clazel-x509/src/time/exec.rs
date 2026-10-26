@@ -7,6 +7,7 @@ use vstd::prelude::*;
 verus! {
 
 /// ASN.1 time kind selected by the already-validated DER tag.
+#[derive(Clone, Copy)]
 pub enum TimeKind {
     /// Two-digit-year UTCTime.
     Utc,
@@ -14,13 +15,17 @@ pub enum TimeKind {
     Generalized,
 }
 
+pub open spec fn time_kind_view(kind: TimeKind) -> time_spec::TimeKind {
+    match kind {
+        TimeKind::Utc => time_spec::TimeKind::Utc,
+        TimeKind::Generalized => time_spec::TimeKind::Generalized,
+    }
+}
+
 impl View for TimeKind {
     type V = time_spec::TimeKind;
-    closed spec fn view(&self) -> Self::V {
-        match self {
-            TimeKind::Utc => time_spec::TimeKind::Utc,
-            TimeKind::Generalized => time_spec::TimeKind::Generalized,
-        }
+    open spec fn view(&self) -> Self::V {
+        time_kind_view(*self)
     }
 }
 
@@ -175,7 +180,7 @@ fn calendar_time_valid(time: &CertificateTime) -> (result: bool)
 }
 
 /// Compare fixed-width UTC calendar fields lexicographically.
-fn time_le(left: &CertificateTime, right: &CertificateTime) -> (result: bool)
+pub fn time_le(left: &CertificateTime, right: &CertificateTime) -> (result: bool)
     ensures result == time_spec::time_le(left@, right@)
 {
     left.year < right.year

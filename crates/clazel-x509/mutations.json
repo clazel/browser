@@ -6,7 +6,7 @@
       "find": "tbs_certificate_der: input.subrange(outer.cstart as int, tbs.cend as int),",
       "replace": "tbs_certificate_der: input.subrange(tbs.cstart as int, tbs.cend as int),",
       "expect": "killed",
-      "reason": "The signature-covered TBS value would omit its SEQUENCE tag and length, violating RFC 5280 §4.1.1.3's requirement to sign the DER-encoded TBSCertificate.",
+      "reason": "The signature-covered TBS value would omit its SEQUENCE tag and length, violating RFC 5280 \u00a74.1.1.3's requirement to sign the DER-encoded TBSCertificate.",
       "certificate": {
         "file": "src/certificate/certificates.rs",
         "lemma": "super::lemmas::lemma_fixture_preserves_full_tbs_tlv()",
@@ -32,7 +32,7 @@
       "find": "if after_signature == outer.cend",
       "replace": "if after_signature <= outer.cend",
       "expect": "killed",
-      "reason": "A fourth child after signatureValue would be accepted, although RFC 5280 §4.1 defines exactly three required outer fields.",
+      "reason": "A fourth child after signatureValue would be accepted, although RFC 5280 \u00a74.1 defines exactly three required outer fields.",
       "certificate": {
         "file": "src/certificate/certificates.rs",
         "lemma": "super::lemmas::lemma_reject_extra_outer_child()",
@@ -45,7 +45,7 @@
       "find": "let dot = first_dot(reference, 0);",
       "replace": "let dot = first_dot(reference, first_dot(reference, 0) + 1);",
       "expect": "killed",
-      "reason": "The wildcard would skip two reference labels and match a.b.example.test, contrary to RFC 9525 §6.3's one-label wildcard rule.",
+      "reason": "The wildcard would skip two reference labels and match a.b.example.test, contrary to RFC 9525 \u00a76.3's one-label wildcard rule.",
       "certificate": {
         "file": "src/certificates.rs",
         "lemma": "super::lemmas::lemma_dns_wildcard_matches_one_label_only()",
@@ -58,11 +58,141 @@
       "find": "&& reference =~= presented",
       "replace": "&& reference.len() == presented.len()",
       "expect": "killed",
-      "reason": "Equal-width but unequal IP identifiers would match, contradicting RFC 9525 §6.4's octet-for-octet comparison.",
+      "reason": "Equal-width but unequal IP identifiers would match, contradicting RFC 9525 \u00a76.4's octet-for-octet comparison.",
       "certificate": {
         "file": "src/certificates.rs",
         "lemma": "super::lemmas::lemma_ip_unequal_does_not_match(seq![192u8, 0, 2, 1], seq![192u8, 0, 2, 2])",
         "witness": "service_identity_match(ReferenceIdentity::Ip(seq![192u8, 0, 2, 1]), PresentedIdentity::Ip(seq![192u8, 0, 2, 2]))"
+      }
+    },
+    {
+      "id": "x509-utc-pivot-50-is-1950",
+      "file": "src/time/spec.rs",
+      "find": "if yy >= 50 { 1900 + yy } else { 2000 + yy }",
+      "replace": "if yy > 50 { 1900 + yy } else { 2000 + yy }",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.5.1 maps UTC year 50 to 1950; the mutant maps it to 2050.",
+      "certificate": {
+        "file": "src/time/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_utc_pivot_50_is_1950()",
+        "witness": "utc_year(50) == 2050"
+      }
+    },
+    {
+      "id": "x509-utc-rejects-leap-second",
+      "file": "src/time/spec.rs",
+      "find": "pub open spec fn utc_seconds_valid(time: CertificateTime) -> bool {\n    time.second <= 59\n}",
+      "replace": "pub open spec fn utc_seconds_valid(time: CertificateTime) -> bool {\n    time.second <= 60\n}",
+      "expect": "killed",
+      "reason": "UTCTime seconds are 00 through 59; RFC 5280 does not allow the GeneralizedTime leap-second exception.",
+      "certificate": {
+        "file": "src/time/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_utc_second_60()",
+        "witness": "utc_seconds_valid(CertificateTime { year: 2016, month: 12, day: 31, hour: 23, minute: 59, second: 60 })"
+      }
+    },
+    {
+      "id": "x509-validity-endpoints-ordered",
+      "file": "src/time/spec.rs",
+      "find": "&& time_le(not_before, not_after)",
+      "replace": "&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 validity requires notBefore no later than notAfter.",
+      "certificate": {
+        "file": "src/time/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_reversed_validity()",
+        "witness": "make_validity(CertificateTime { year: 2021, month: 1, day: 1, hour: 0, minute: 0, second: 0 }, CertificateTime { year: 2020, month: 1, day: 1, hour: 0, minute: 0, second: 0 }) is Some"
+      }
+    },
+    {
+      "id": "x509-extensions-reject-duplicate-oids",
+      "file": "src/extensions/spec.rs",
+      "find": "&& !oid_seen(seen, extension.oid, 0) =>",
+      "replace": "&& true =>",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.9 prohibits duplicate extnID values in Extensions.",
+      "certificate": {
+        "file": "src/extensions/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_duplicate_san_extensions()",
+        "witness": "parse_extensions(seq![0x30u8, 0x12, 0x30, 0x07, 0x06, 0x03, 0x55, 0x1d, 0x11, 0x04, 0x00, 0x30, 0x07, 0x06, 0x03, 0x55, 0x1d, 0x11, 0x04, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-san-ip-address-width",
+      "file": "src/extensions/spec.rs",
+      "find": "if value.len() == 4 || value.len() == 16 {",
+      "replace": "if value.len() > 0 {",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.2.1.6 requires iPAddress to contain exactly four or sixteen octets.",
+      "certificate": {
+        "file": "src/extensions/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_one_octet_ip_address()",
+        "witness": "parse_subject_alt_name(seq![0x30u8, 0x03, 0x87, 0x01, 0x01]) is Some"
+      }
+    },
+    {
+      "id": "x509-der-omits-critical-default-false",
+      "file": "src/extensions/spec.rs",
+      "find": "Some((true, after_critical)) => match clazel_der::spec::read_octet_string(input, after_critical, contents_end) {",
+      "replace": "Some((critical, after_critical)) => match clazel_der::spec::read_octet_string(input, after_critical, contents_end) {",
+      "expect": "killed",
+      "reason": "X.690 \u00a711.5 requires the DEFAULT FALSE critical component to be omitted from DER.",
+      "certificate": {
+        "file": "src/extensions/mutation_certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_explicit_default_false()",
+        "witness": "parse_extensions(seq![0x30u8, 0x0c, 0x30, 0x0a, 0x06, 0x03, 0x55, 0x1d, 0x11, 0x01, 0x01, 0x00, 0x04, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-rejects-explicit-default-v1",
+      "file": "src/tbs/spec.rs",
+      "find": "if value == 1 || value == 2 { Some((value, first.cend)) } else { None }",
+      "replace": "if value <= 2 { Some((value, first.cend)) } else { None }",
+      "expect": "killed",
+      "reason": "DER DEFAULT v1 must be omitted; RFC 5280 \u00a74.1.2.1 gives omitted version as v1.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_explicit_default_v1()",
+        "witness": "parse_version(seq![0xa0u8, 0x03, 0x02, 0x01, 0x00], 0, 5) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-v1-rejects-unique-id",
+      "file": "src/tbs/spec.rs",
+      "find": "if version == 0 || !valid_implicit_bit_string(contents) { None }",
+      "replace": "if !valid_implicit_bit_string(contents) { None }",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.1/.2 permits unique identifiers only in v2 and v3 certificates.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_v1_unique_id()",
+        "witness": "optional_unique(seq![0x81u8, 0x02, 0x00, 0x80], 0, 4, 1, 0) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-extensions-require-v3",
+      "file": "src/tbs/spec.rs",
+      "find": "Some(inner) if version == 2 && inner.cstart == start",
+      "replace": "Some(inner) if version <= 2 && inner.cstart == start",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.3 permits Extensions only for version 3 certificates.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reject_v2_extensions()",
+        "witness": "optional_extensions(seq![0xa3u8, 0x02, 0x30, 0x00], 0, 4, 1) is Some"
+      }
+    },
+    {
+      "id": "x509-tbs-retains-full-signed-tlv",
+      "file": "src/tbs/spec.rs",
+      "find": "tbs_der: input.subrange(0, outer.cend as int),",
+      "replace": "tbs_der: input.subrange(outer.cstart as int, outer.cend as int),",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.1.3 requires the complete DER-encoded TBSCertificate as the signature input, including the SEQUENCE tag and length.",
+      "certificate": {
+        "file": "src/tbs/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_prefix_preserves_complete_tlv()",
+        "witness": "match parse_prefix(seq![0x30u8, 0x03, 0x02, 0x01, 0x01]) { Some(prefix) => prefix.tbs_der =~= seq![0x02u8, 0x01, 0x01], None => false }"
       }
     }
   ]

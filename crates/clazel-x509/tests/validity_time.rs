@@ -1,7 +1,7 @@
 //! RFC 5280 §4.1.2.5 time decoding boundaries and adversarial encodings.
 
 use clazel_x509::time::exec::{
-    decode_time, make_validity, validity_contains, CertificateTime, TimeKind,
+    CertificateTime, TimeKind, decode_time, make_validity, validity_contains,
 };
 
 fn utc(value: &[u8]) -> Option<CertificateTime> {
