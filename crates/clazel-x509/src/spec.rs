@@ -65,7 +65,7 @@ pub open spec fn valid_name_from(name: Seq<u8>, i: int) -> bool
 /// RFC 9525 §6.3 compares DNS labels using case-insensitive ASCII.
 /// The wildcard case is handled by `dns_match`.
 pub open spec fn ascii_fold(b: u8) -> nat {
-    if b >= b'A' && b <= b'Z' { (b as nat) + 32 } else { b as nat }
+    if b >= b'A' && b <= b'Z' { (b | 0x20) as nat } else { b as nat }
 }
 
 /// Case-insensitive ASCII equality from position `i` onward.
@@ -119,7 +119,7 @@ pub open spec fn dns_match(reference: Seq<u8>, presented: Seq<u8>) -> bool {
 /// RFC 9525 §6.4 requires octet-for-octet comparison of IP-ID values.
 pub open spec fn ip_match(reference: Seq<u8>, presented: Seq<u8>) -> bool {
     (reference.len() == 4 || reference.len() == 16)
-        && reference == presented
+        && reference =~= presented
 }
 
 /// RFC 9525 §6.2 selects DNS comparison for DNS-ID and binary IP comparison

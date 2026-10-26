@@ -6,6 +6,7 @@
 
 pub mod contract;
 pub mod certificates;
+pub mod exec;
 pub mod lemmas;
 pub mod matcher;
 pub mod spec;

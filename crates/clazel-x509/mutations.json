@@ -1,9 +1,22 @@
 {
   "mutations": [
     {
+      "id": "dns-wildcard-one-label-only",
+      "file": "src/spec.rs",
+      "find": "let dot = first_dot(reference, 0);",
+      "replace": "let dot = first_dot(reference, first_dot(reference, 0) + 1);",
+      "expect": "killed",
+      "reason": "The wildcard would skip two reference labels and match a.b.example.test, contrary to RFC 9525 §6.3's one-label wildcard rule.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::lemmas::lemma_dns_wildcard_matches_one_label_only()",
+        "witness": "dns_match(seq![b'a', b'.', b'b', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'], seq![b'*', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'])"
+      }
+    },
+    {
       "id": "ip-id-must-compare-all-octets",
       "file": "src/spec.rs",
-      "find": "&& reference == presented",
+      "find": "&& reference =~= presented",
       "replace": "&& reference.len() == presented.len()",
       "expect": "killed",
       "reason": "Equal-width but unequal IP identifiers would match, contradicting RFC 9525 §6.4's octet-for-octet comparison.",

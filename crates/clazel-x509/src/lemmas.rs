@@ -47,4 +47,18 @@ pub proof fn lemma_ip_unequal_does_not_match(reference: Seq<u8>, presented: Seq<
         ReferenceIdentity::Ip(reference), PresentedIdentity::Ip(presented)));
 }
 
+/// RFC 9525 §6.3 security property: a wildcard matches only one reference
+/// label, so `*.example.test` does not match `a.b.example.test`.
+pub proof fn lemma_dns_wildcard_matches_one_label_only()
+    ensures !dns_match(
+        seq![b'a', b'.', b'b', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'],
+        seq![b'*', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'],
+    )
+{
+    assert(!dns_match(
+        seq![b'a', b'.', b'b', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'],
+        seq![b'*', b'.', b'e', b'x', b'a', b'm', b'p', b'l', b'e', b'.', b't', b'e', b's', b't'],
+    )) by (compute_only);
+}
+
 } // verus!
