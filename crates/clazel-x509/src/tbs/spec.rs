@@ -47,10 +47,15 @@ pub struct TbsCertificate {
 
 /// Prefix fields parsed in order before signature and issuer.
 pub struct Prefix {
+    /// RFC version number.
     pub version: nat,
+    /// Complete serial INTEGER TLV.
     pub serial_der: Seq<u8>,
+    /// Cursor after the serial INTEGER.
     pub pos: nat,
+    /// Complete original TBS SEQUENCE TLV.
     pub tbs_der: Seq<u8>,
+    /// End of TBSCertificate contents.
     pub end: nat,
 }
 
@@ -69,6 +74,20 @@ pub open spec fn time_tlv(input: Seq<u8>, pos: nat, end: nat) -> Option<(crate::
     }
 }
 
+/// RFC 5280 §4.1.2.2 serialNumber: a nonnegative INTEGER with at most 20
+/// encoded contents octets; zero is allowed for graceful processing.
+pub open spec fn parse_serial(input: Seq<u8>, pos: nat, end: nat) -> Option<(Seq<u8>, nat)> {
+    match clazel_der::spec::read_tlv(input, pos, end) {
+        None => None,
+        Some(serial) => match clazel_der::spec::read_integer(input, pos, end) {
+            Some((negative, _, contents_end, next)) if !negative && next == serial.cend
+                && contents_end - serial.cstart <= 20
+                => Some((input.subrange(pos as int, serial.cend as int), serial.cend)),
+            _ => None,
+        },
+    }
+}
+
 /// RFC 5280 §4.1.2.1/.2: explicit non-default version followed by a
 /// nonnegative, at-most-20-octet serial INTEGER.
 pub open spec fn parse_prefix(input: Seq<u8>) -> Option<Prefix> {
@@ -79,14 +98,9 @@ pub open spec fn parse_prefix(input: Seq<u8>) -> Option<Prefix> {
             Some(outer) if outer.cstart != start || outer.cend != end || end != input.len() => None,
             Some(outer) => match parse_version(input, start, end) {
                 None => None,
-                Some((version, serial_pos)) => match clazel_der::spec::read_tlv(input, serial_pos, end) {
+                Some((version, serial_pos)) => match parse_serial(input, serial_pos, end) {
+                    Some((serial_der, after_serial)) => Some(Prefix { version, serial_der, pos: after_serial, tbs_der: input.subrange(0, outer.cend as int), end }),
                     None => None,
-                    Some(serial) => match clazel_der::spec::read_integer(input, serial_pos, end) {
-                        Some((negative, _, contents_end, next))
-                            if !negative && next == serial.cend && contents_end - serial.cstart <= 20 =>
-                            Some(Prefix { version, serial_der: input.subrange(serial_pos as int, serial.cend as int), pos: serial.cend, tbs_der: input.subrange(0, outer.cend as int), end }),
-                        _ => None,
-                    },
                 },
             },
         },
