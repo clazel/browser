@@ -163,7 +163,7 @@ We list this openly. Proofs are only as good as their assumptions.
   `impl_hkdf!`); and libcrux's `pre-verification` support crates
   (`libcrux-hacl-rs`, `-secrets`, `-traits`, `-macros`). Every call into
   libcrux is one axiom in `crates/clazel-crypto/src/axioms.rs`, stating only
-  libcrux's documented input and output types
+  libcrux's documented types, output lengths and failure cases
 - That each spec matches the standard it transcribes. No proof can check
   this, because the standard is English. It is backed by machine-checked
   evidence instead of a reviewer (next section), and that evidence is only as

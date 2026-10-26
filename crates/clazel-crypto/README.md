@@ -32,10 +32,12 @@ never assumed here. A session other than the one that changed
 `src/axioms.rs` reviews each change to it.
 
 Modelling choices:
-- **Oversized inputs abort.** libcrux refuses, or panics on, inputs longer
-  than `u32::MAX` octets. Each wrapper checks first and aborts the process,
-  so it never returns a value no axiom covers and never unwinds. No caller
-  in this browser comes near that size.
+- **Oversized inputs abort.** libcrux refuses, or panics on, inputs at or
+  near `u32::MAX` octets, and HACL\*'s preconditions stop just short of it.
+  Each wrapper checks every variable-length input against `MAX_INPUT`
+  (2^32 - 256 octets) first and aborts the process above it, so it never
+  returns a value no axiom covers and never unwinds. No caller in this
+  browser comes near that size.
 - **X25519 refuses an all-zero result.** libcrux's `ecdh` already does this
   (RFC 7748 §6.1). `clazel-tls` also checks it (RFC 8446 §7.4.2).
 - **The SHA-3 crates are compiled but never called.** `libcrux-hmac` 0.0.9

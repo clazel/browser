@@ -17,10 +17,10 @@
 //!   <https://www.rfc-editor.org/rfc/rfc7748#section-5>.
 //!
 //! Modelling choices:
-//! - Each function is total over byte sequences. Inputs libcrux refuses
-//!   (longer than `u32::MAX` octets) are never returned from: the wrapper
-//!   aborts the process instead (see [`crate::axioms`]), so no axiom states
-//!   a value there.
+//! - Each function is total over byte sequences. Inputs longer than
+//!   [`crate::axioms::MAX_INPUT`] (2^32 - 256) octets, which includes
+//!   everything libcrux refuses or panics on, are never returned from: the
+//!   wrapper aborts the process instead, so no axiom states a value there.
 //! - X25519 returns no shared secret when libcrux reports failure, which it
 //!   does for an all-zero result (RFC 7748 §6.1, RFC 8446 §7.4.2).
 #[allow(unused_imports)]
