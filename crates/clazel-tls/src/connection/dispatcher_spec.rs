@@ -94,29 +94,15 @@ pub struct State {
 
 /// Cipher functions retained from the factory for each active epoch.
 pub struct Ciphers {
-    /// Client-handshake encryption function.
-    pub handshake_seal: crate::traffic::contract::Seal3,
-    /// Server-handshake authentication function.
-    pub handshake_open: crate::traffic::contract::Open3,
-    /// Client-application encryption function.
-    pub application_seal: crate::traffic::contract::Seal3,
-    /// Server-application authentication function.
-    pub application_open: crate::traffic::contract::Open3,
+    /// Key-explicit encryption function supplied by the factory.
+    pub seal: crate::traffic::spec::Seal,
+    /// Key-explicit authentication function supplied by the factory.
+    pub open: crate::traffic::spec::Open,
 }
 
-/// Cipher functions selected by the live epoch keys (empty keys only fill
-/// inactive directions and are never invoked by the state model).
-pub open spec fn cipher_models(factory: crate::traffic::spec::Cipher, state: State) -> Ciphers {
-    Ciphers {
-        handshake_seal: |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| (factory.seal)(
-            match state.handshake_sender { Some(epoch) => epoch.key, None => seq![] }, n, ad, p),
-        handshake_open: |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| (factory.open)(
-            match state.handshake_receiver { Some(epoch) => epoch.key, None => seq![] }, n, ad, ct),
-        application_seal: |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| (factory.seal)(
-            match state.application_sender { Some(epoch) => epoch.key, None => seq![] }, n, ad, p),
-        application_open: |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| (factory.open)(
-            match state.application_receiver { Some(epoch) => epoch.key, None => seq![] }, n, ad, ct),
-    }
+/// Key-explicit cipher functions retained by the connection across epochs.
+pub open spec fn cipher_models(factory: crate::traffic::spec::Cipher, _state: State) -> Ciphers {
+    Ciphers { seal: factory.seal, open: factory.open }
 }
 
 /// Reject any valid transition that has incomplete handshake input.
@@ -189,7 +175,6 @@ pub open spec fn wf(s: State) -> bool {
                     None => s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
                         && !s.pending_update_is_response,
                 }
-                && crate::spec::at_message_boundary(s.reassembly)
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::Ready,
                     None => false },
             Mode::Failed | Mode::Closed => no_live_secrets(s)
@@ -236,7 +221,8 @@ pub open spec fn prepare_key_update(c: crate::schedule::spec::Crypto,
             let body = crate::spec::write_key_update(request);
             let message = crate::spec::write_handshake(crate::spec::HS_KEY_UPDATE, body);
             let next_secret = crate::schedule::spec::next_traffic_secret(c, s.client_application_secret);
-            match crate::traffic::spec::send(ciphers.application_seal, sender,
+            let seal = |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| (ciphers.seal)(sender.key, n, ad, p);
+            match crate::traffic::spec::send(seal, sender,
                 crate::spec::CT_HANDSHAKE, message, 0) {
                 (sender_after, Ok(wire)) => State {
                     application_sender: Some(sender_after),

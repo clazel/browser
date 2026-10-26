@@ -15,22 +15,7 @@ pub open spec fn start_ensures(h: crate::traffic::handshake_spec::Handoff, ccs_p
 /// Active epoch closures remain bound to the exact factory and active keys.
 pub open spec fn cipher_bindings(factory: crate::traffic::spec::Cipher,
     ciphers: super::dispatcher_spec::Ciphers, state: super::dispatcher_spec::State) -> bool {
-    (match state.handshake_sender {
-        Some(epoch) => crate::traffic::contract::sealed_bound(factory, epoch.key, ciphers.handshake_seal),
-        None => true,
-    })
-        && (match state.handshake_receiver {
-            Some(epoch) => crate::traffic::contract::opened_bound(factory, epoch.key, ciphers.handshake_open),
-            None => true,
-        })
-        && (match state.application_sender {
-            Some(epoch) => crate::traffic::contract::sealed_bound(factory, epoch.key, ciphers.application_seal),
-            None => true,
-        })
-        && (match state.application_receiver {
-            Some(epoch) => crate::traffic::contract::opened_bound(factory, epoch.key, ciphers.application_open),
-            None => true,
-        })
+    ciphers.seal == factory.seal && ciphers.open == factory.open
 }
 
 /// Initial provider binding follows the handoff's direction labels exactly.
@@ -38,8 +23,6 @@ pub open spec fn start_bound_ensures(h: crate::traffic::handshake_spec::Handoff,
     factory: crate::traffic::spec::Cipher, ciphers: super::dispatcher_spec::Ciphers,
     out: super::dispatcher_spec::State) -> bool {
     start_ensures(h, ccs_pending, out)
-        && crate::traffic::contract::sealed_bound(factory, h.1.key, ciphers.handshake_seal)
-        && crate::traffic::contract::opened_bound(factory, h.2.key, ciphers.handshake_open)
         && cipher_bindings(factory, ciphers, out)
 }
 
