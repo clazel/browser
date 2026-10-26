@@ -170,7 +170,10 @@ pub open spec fn make_validity(
 
 /// RFC 5280 §4.1.2.5: the validity interval includes both endpoints.
 pub open spec fn validity_contains(validity: Validity, now: CertificateTime) -> bool {
-    calendar_time_valid(now)
+    calendar_time_valid(validity.not_before)
+        && calendar_time_valid(validity.not_after)
+        && time_le(validity.not_before, validity.not_after)
+        && calendar_time_valid(now)
         && time_le(validity.not_before, now)
         && time_le(now, validity.not_after)
 }
