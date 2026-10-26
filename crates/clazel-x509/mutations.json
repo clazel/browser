@@ -1,0 +1,17 @@
+{
+  "mutations": [
+    {
+      "id": "ip-id-must-compare-all-octets",
+      "file": "src/spec.rs",
+      "find": "&& reference == presented",
+      "replace": "&& reference.len() == presented.len()",
+      "expect": "killed",
+      "reason": "Equal-width but unequal IP identifiers would match, contradicting RFC 9525 §6.4's octet-for-octet comparison.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::lemmas::lemma_ip_unequal_does_not_match(seq![192u8, 0, 2, 1], seq![192u8, 0, 2, 2])",
+        "witness": "service_identity_match(ReferenceIdentity::Ip(seq![192u8, 0, 2, 1]), PresentedIdentity::Ip(seq![192u8, 0, 2, 2]))"
+      }
+    }
+  ]
+}
