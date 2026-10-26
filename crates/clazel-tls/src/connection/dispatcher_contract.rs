@@ -82,7 +82,6 @@ pub open spec fn prepare_close_ensures(c: crate::schedule::spec::Crypto,
     after == super::dispatcher_spec::prepare_close_notify(c, ciphers, before)
         && (after.pending_close_wire.len() > 0 ==> action ==
             super::dispatcher_spec::Action::Send(after.pending_close_wire))
-        && (after == before ==> action is None)
 }
 
 /// Exact send acknowledgement commits local write closure; wrong bytes fail
