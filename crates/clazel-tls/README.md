@@ -173,8 +173,12 @@ what is proven today is stated below, not implied by the tier.
   Premature application records and malformed/authentication failures become
   terminal, dropping live epochs and partial buffers. Post-handshake KeyUpdate
   preserves independent send/receive epochs; valid NewSessionTicket messages
-  are discarded without deriving or caching PSKs. Ten targeted tests pass
-  locally and under Miri with deterministic, input-sensitive test providers.
+  are discarded without deriving or caching PSKs. `close_notify` closes one
+  direction at a time, the local alert is protected and waits for exact send
+  acknowledgement, and EOF before peer notification is treated as truncation.
+  A received `user_canceled` is reported nonfatally without interpreting the
+  TLS 1.3 alert level. Fifteen targeted tests pass locally and under Miri with
+  deterministic, input-sensitive test providers.
   They do not prove production crypto, certificate path validation, timing
   behavior or socket I/O.
 

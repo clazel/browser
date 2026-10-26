@@ -53,6 +53,12 @@ pub enum Action {
     Deliver(Vec<u8>),
     /// Permitted dummy compatibility CCS was dropped.
     Ignored,
+    /// The peer's write direction ended; local writes remain open.
+    PeerClosed,
+    /// The peer sent a nonfatal user_canceled closure alert.
+    Cancelled,
+    /// The local close_notify send was acknowledged; reads remain open.
+    WriteClosed,
     /// Fatal error; this action does not send an alert automatically.
     Fail(u8),
     /// Peer close_notify or local close.
@@ -67,6 +73,9 @@ impl View for Action {
             Action::Ready => super::dispatcher_spec::Action::Ready,
             Action::Deliver(bytes) => super::dispatcher_spec::Action::Deliver(bytes@),
             Action::Ignored => super::dispatcher_spec::Action::Ignored,
+            Action::PeerClosed => super::dispatcher_spec::Action::PeerClosed,
+            Action::Cancelled => super::dispatcher_spec::Action::Cancelled,
+            Action::WriteClosed => super::dispatcher_spec::Action::WriteClosed,
             Action::Fail(alert) => super::dispatcher_spec::Action::Fail(*alert),
             Action::Close => super::dispatcher_spec::Action::Close,
         }
@@ -92,6 +101,9 @@ pub struct Connection<C: Crypto, F: Factory, V: Verifier> {
     pending_update_request: Option<u8>,
     pending_update_is_response: bool,
     response_due: bool,
+    peer_write_closed: bool,
+    local_write_closed: bool,
+    pending_close_wire: Vec<u8>,
     reassembler: Reassembler,
     framer: Buffer,
     ccs_pending: bool,
@@ -122,6 +134,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> {
             pending_update_request: self.pending_update_request,
             pending_update_is_response: self.pending_update_is_response,
             response_due: self.response_due,
+            peer_write_closed: self.peer_write_closed,
+            local_write_closed: self.local_write_closed,
+            pending_close_wire: self.pending_close_wire@,
         }
     }
 }
@@ -162,10 +177,41 @@ fn parse_key_update_wire(message: &[u8]) -> Result<u8, u8> {
 fn is_discarded_ticket(message: &[u8]) -> (out: bool)
     ensures out == super::dispatcher_spec::valid_discarded_ticket(message@),
 {
-    matches!(
-        crate::handshake::parse_handshake(message, crate::schedule::spec::HASH_LEN),
-        Ok(crate::types::HsMsg::NewSessionTicket(_))
-    )
+    if message.len() < crate::spec::HANDSHAKE_HEADER {
+        proof {
+            reveal(super::dispatcher_spec::valid_discarded_ticket);
+            reveal(crate::spec::parse_handshake);
+            assert(!super::dispatcher_spec::valid_discarded_ticket(message@));
+        }
+        return false;
+    }
+    let message_type = crate::reader::byte_at(message, 0);
+    if message_type != crate::spec::HS_NEW_SESSION_TICKET {
+        proof {
+            reveal(super::dispatcher_spec::valid_discarded_ticket);
+            reveal(crate::spec::parse_handshake);
+            assert(message_type == message@[0]);
+            assert(!super::dispatcher_spec::valid_discarded_ticket(message@));
+        }
+        return false;
+    }
+    let parsed = crate::handshake::parse_handshake(message, crate::schedule::spec::HASH_LEN);
+    let out = matches!(&parsed, Ok(crate::types::HsMsg::NewSessionTicket(_)));
+    let ghost parsed_view = crate::types::res_view(parsed);
+    proof {
+        reveal(super::dispatcher_spec::valid_discarded_ticket);
+        reveal(crate::spec::parse_handshake);
+        assert(message_type == message@[0]);
+        assert(message@[0] == crate::spec::HS_NEW_SESSION_TICKET);
+        assert(crate::contract::parse_handshake_ensures(message@,
+            crate::schedule::spec::HASH_LEN as nat, parsed_view));
+        assert(out == match parsed_view {
+            crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => true,
+            _ => false,
+        });
+        assert(out == super::dispatcher_spec::valid_discarded_ticket(message@));
+    }
+    out
 }
 
 impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: KeyedAead {
@@ -229,6 +275,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             client_application_secret: Vec::new(), server_application_secret: Vec::new(),
             pending_update_secret: Vec::new(), pending_update_wire: Vec::new(),
             pending_update_request: None, pending_update_is_response: false, response_due: false,
+            peer_write_closed: false, local_write_closed: false, pending_close_wire: Vec::new(),
             reassembler: Reassembler::new(), framer: Buffer::new(), ccs_pending,
             pending_flight: Vec::new(),
         };
@@ -296,6 +343,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         self.pending_update_request = None;
         self.pending_update_is_response = false;
         self.response_due = false;
+        self.peer_write_closed = false;
+        self.local_write_closed = false;
+        self.pending_close_wire.clear();
         self.reassembler = Reassembler::new();
         self.framer = Buffer::new();
         self.ccs_pending = false;
@@ -337,6 +387,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             final(self)@.pending_update_request == old(self)@.pending_update_request,
             final(self)@.pending_update_is_response == old(self)@.pending_update_is_response,
             final(self)@.response_due == old(self)@.response_due,
+            final(self)@.peer_write_closed == old(self)@.peer_write_closed,
+            final(self)@.local_write_closed == old(self)@.local_write_closed,
+            final(self)@.pending_close_wire == old(self)@.pending_close_wire,
             final(self)@.reassembly == old(self)@.reassembly,
             final(self)@.framing == old(self)@.framing,
             final(self)@.mode == old(self)@.mode,
@@ -394,6 +447,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             assert(self.pending_flight@ == wire@);
             assert(self@.auth is Some);
             assert(match self@.auth { Some(auth) => auth.phase == crate::auth::spec::Phase::SendFinished, None => false });
+            assert(!self@.peer_write_closed);
+            assert(!self@.local_write_closed);
+            assert(self@.pending_close_wire.len() == 0);
             assert(crate::spec::at_message_boundary(self@.reassembly));
             assert(self.framer@.len() == 0);
             assert(self.wf());
@@ -591,8 +647,21 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 }
             },
             Ok(ReassemblyEvent::Alert(alert)) => {
-                if alert.description == 0 { self.close() }
-                else { self.fail(alert.description) }
+                if alert.description == crate::spec::CLOSE_NOTIFY {
+                    if matches!(self.mode, Mode::Ready) {
+                        if self.local_write_closed { self.close() }
+                        else {
+                            self.peer_write_closed = true;
+                            Action::PeerClosed
+                        }
+                    } else {
+                        self.close()
+                    }
+                } else if alert.description == crate::spec::USER_CANCELED {
+                    Action::Cancelled
+                } else {
+                    self.fail(alert.description)
+                }
             },
             Ok(ReassemblyEvent::Ignored) => Action::Ignored,
         }
@@ -650,6 +719,11 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(), out.0 <= input.len(),
             super::dispatcher_contract::feed_ensures(old(self)@, input@, out.0 as nat, out.1@, final(self)@),
     {
+        if self.peer_write_closed {
+            proof { assert(super::dispatcher_contract::feed_ensures(old(self)@,
+                input@, input@.len(), Action::None@, self@)); }
+            return (input.len(), Action::None);
+        }
         if matches!(self.mode, Mode::AwaitClientFlight | Mode::Failed | Mode::Closed) {
             return (0, Action::None);
         }
@@ -685,7 +759,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                         assert(self@.pending_flight == wire);
                     } else {
                         assert(self@.mode == super::dispatcher_spec::Mode::Ready);
-                        assert(self@.pending_update_wire == wire);
+                        assert(self@.pending_update_wire == wire || self@.pending_close_wire == wire);
                     }
                 },
                 super::dispatcher_spec::Action::Ready => assert(self@.mode == super::dispatcher_spec::Mode::Ready),
@@ -1056,6 +1130,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
     {
         if !matches!(self.mode, Mode::Ready) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
+        if self.local_write_closed || !self.pending_close_wire.is_empty() { return Action::None; }
         if self.pending_update_request.is_some() { return Action::None; }
         if self.response_due {
             return match self.queue_key_update(0, true) {
@@ -1077,6 +1152,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
     {
         if !matches!(self.mode, Mode::Ready) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
+        if self.local_write_closed || !self.pending_close_wire.is_empty() { return Action::None; }
         if self.pending_update_request.is_some() || self.response_due { return Action::None; }
         let sender = match self.application_sender.as_mut() {
             Some(sender) => sender,
@@ -1088,12 +1164,141 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         }
     }
 
-    /// EOF without a received close_notify is a local transport failure.
+    /// Protect close_notify under the active application epoch. A pending
+    /// KeyUpdate or mandatory response must be acknowledged first; retry this
+    /// call after that send completes. RFC 8446 §6.1 closes only the write side.
+    pub fn close_write(&mut self) -> (out: Action)
+        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
+        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+            super::dispatcher_contract::prepare_close_ensures(old(self).crypto_functions(),
+                old(self).cipher_models(), old(self)@, out@, final(self)@),
+    {
+        let ghost before = self@;
+        if !matches!(self.mode, Mode::Ready) || self.local_write_closed
+            || !self.pending_close_wire.is_empty() || self.pending_update_request.is_some()
+            || self.response_due {
+            proof {
+                reveal(super::dispatcher_spec::prepare_close_notify);
+                reveal(super::dispatcher_contract::prepare_close_ensures);
+                assert(self@ == before);
+                assert(self@.mode != super::dispatcher_spec::Mode::Ready
+                    || self@.local_write_closed || self@.pending_close_wire.len() > 0
+                    || self@.pending_update_request is Some || self@.response_due);
+                assert(self@ == super::dispatcher_spec::prepare_close_notify(
+                    self.crypto_functions(), self.cipher_models(), before));
+                assert(super::dispatcher_contract::prepare_close_ensures(
+                    self.crypto_functions(), self.cipher_models(), before,
+                    Action::None@, self@));
+            }
+            return Action::None;
+        }
+        let ghost ciphers = self.cipher_models();
+        let sender = match self.application_sender.as_mut() {
+            Some(sender) => sender,
+            None => return self.fail(crate::spec::INTERNAL_ERROR),
+        };
+        let mut alert = Vec::new();
+        crate::encode::write_alert(&mut alert, crate::spec::Alert {
+            level: crate::spec::LEVEL_WARNING,
+            description: crate::spec::CLOSE_NOTIFY,
+        });
+        let wire_result = sender.seal(crate::spec::CT_ALERT, alert.as_slice(), 0);
+        let wire = match wire_result {
+            Ok(wire) => wire,
+            Err(alert) => return self.fail(alert),
+        };
+        self.pending_close_wire.extend_from_slice(wire.as_slice());
+        let out = Action::Send(wire);
+        proof {
+            reveal(Connection::state);
+            reveal(super::dispatcher_contract::prepare_close_ensures);
+            reveal(super::dispatcher_spec::prepare_close_notify);
+            reveal(crate::traffic::contract::send_ensures);
+            reveal(crate::traffic::spec::send);
+            reveal(crate::traffic::spec::advance);
+            reveal(crate::spec::encrypt_record);
+            reveal(crate::spec::additional_data);
+            assert(before.mode == super::dispatcher_spec::Mode::Ready);
+            assert(!before.local_write_closed);
+            assert(before.pending_close_wire.len() == 0);
+            assert(before.pending_update_request is None);
+            assert(!before.response_due);
+            assert(before.application_sender is Some);
+            assert(alert@ == crate::spec::write_alert(crate::spec::Alert {
+                level: crate::spec::LEVEL_WARNING,
+                description: crate::spec::CLOSE_NOTIFY,
+            }));
+            assert(self.pending_close_wire@ == wire@);
+            assert(self@.pending_close_wire == wire@);
+            match before.application_sender {
+                Some(old_sender) => match old_sender.next {
+                    Some(n) => assert(wire@ == crate::spec::encrypt_record(
+                        |nonce: Seq<u8>, ad: Seq<u8>, plaintext: Seq<u8>| (ciphers.seal)(old_sender.key, nonce, ad, plaintext),
+                        16, old_sender.iv, n, crate::spec::CT_ALERT, alert@, 0)) by {
+                        reveal(crate::traffic::contract::send_ensures);
+                        reveal(crate::traffic::spec::send);
+                        reveal(crate::spec::encrypt_record);
+                        reveal(crate::spec::additional_data);
+                    },
+                    None => assert(false),
+                },
+                None => assert(false),
+            }
+            assert(final(self)@ == super::dispatcher_spec::prepare_close_notify(
+                old(self).crypto_functions(), ciphers, before));
+            assert(super::dispatcher_contract::prepare_close_ensures(
+                old(self).crypto_functions(), old(self).cipher_models(), before,
+                out@, final(self)@));
+        }
+        out
+    }
+
+    /// Commit local write closure only after the exact protected close_notify
+    /// record is acknowledged by the I/O owner.
+    pub fn acknowledge_close_notify(&mut self, sent: &[u8]) -> (out: Action)
+        requires old(self).wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
+        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+            super::dispatcher_contract::acknowledge_close_ensures(old(self)@, sent@, out@, final(self)@),
+    {
+        let ghost before = self@;
+        if !matches!(self.mode, Mode::Ready) || self.pending_close_wire.is_empty()
+            || sent != self.pending_close_wire.as_slice() {
+            let out = self.fail(crate::spec::INTERNAL_ERROR);
+            proof {
+                reveal(super::dispatcher_contract::acknowledge_close_ensures);
+                reveal(super::dispatcher_spec::acknowledge_close_notify);
+                assert(final(self)@ == super::dispatcher_spec::failed());
+                assert(super::dispatcher_contract::acknowledge_close_ensures(
+                    before, sent@, out@, final(self)@));
+            }
+            return out;
+        }
+        self.pending_close_wire.clear();
+        let out = if self.peer_write_closed {
+            self.close()
+        } else {
+            self.local_write_closed = true;
+            Action::WriteClosed
+        };
+        proof {
+            reveal(super::dispatcher_contract::acknowledge_close_ensures);
+            reveal(super::dispatcher_spec::acknowledge_close_notify);
+            assert(before.pending_close_wire.len() > 0);
+            assert(sent@ == before.pending_close_wire);
+            assert(self.pending_close_wire@ == seq![]);
+            assert(final(self)@ == super::dispatcher_spec::acknowledge_close_notify(before, sent@));
+        }
+        out
+    }
+
+    /// EOF before peer close_notify is truncation; after it, only the read
+    /// direction is closed and the independent write direction remains live.
     pub fn eof(&mut self) -> (out: Action)
         requires old(self).wf(),
         ensures final(self).wf(),
     {
         if matches!(self.mode, Mode::Failed | Mode::Closed) { Action::None }
+        else if self.peer_write_closed { Action::PeerClosed }
         else { self.fail(crate::spec::INTERNAL_ERROR) }
     }
 }

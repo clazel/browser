@@ -512,7 +512,44 @@ fn fragmented_server_flight_gates_client_finished_and_application_keys() -> Resu
         .map_err(|e| format!("close-notify seal alert {e}"))?;
     assert_eq!(
         fixture.connection.feed(&close_notify),
-        (close_notify.len(), Action::Close)
+        (close_notify.len(), Action::PeerClosed)
+    );
+    assert_eq!(fixture.connection.mode(), Mode::Ready);
+    assert_eq!(fixture.connection.feed(&[0xff, 0xff]), (2, Action::None));
+    assert_eq!(fixture.connection.eof(), Action::PeerClosed);
+
+    let after_peer_close = match fixture
+        .connection
+        .send_application(b"write side remains open", 0)
+    {
+        Action::Send(wire) => wire,
+        other => {
+            return Err(format!(
+                "expected send after peer half-close, got {other:?}"
+            ));
+        }
+    };
+    assert!(matches!(
+        client_app_reader.open(&after_peer_close),
+        clazel_tls::traffic::exec::Read::Record(23, bytes, consumed)
+            if bytes == b"write side remains open" && consumed == after_peer_close.len()
+    ));
+    let local_close = match fixture.connection.close_write() {
+        Action::Send(wire) => wire,
+        other => {
+            return Err(format!(
+                "expected protected local close_notify, got {other:?}"
+            ));
+        }
+    };
+    assert!(matches!(
+        client_app_reader.open(&local_close),
+        clazel_tls::traffic::exec::Read::Record(21, bytes, consumed)
+            if bytes == [1, 0] && consumed == local_close.len()
+    ));
+    assert_eq!(
+        fixture.connection.acknowledge_close_notify(&local_close),
+        Action::Close
     );
     assert_eq!(fixture.connection.mode(), Mode::Closed);
     Ok(())
@@ -845,6 +882,232 @@ fn valid_new_session_tickets_are_discarded_without_resumption_state() -> Result<
             Action::Deliver(b"ticket did not replace application state".to_vec())
         )
     );
+    Ok(())
+}
+
+#[test]
+fn compatibility_ccs_is_dropped_between_handshake_fragments() -> Result<(), String> {
+    let mut fixture = fixture()?;
+    let encrypted_extensions = handshake(8, &encrypted_extensions());
+    let certificate = handshake(11, &certificate_body());
+    let certificate_verify = handshake(15, &certificate_verify());
+    let (_, client_hello) = Hello::start(config()).map_err(|e| format!("Hello alert {e}"))?;
+    let mut server_transcript = client_hello;
+    server_transcript.extend_from_slice(&handshake(2, &server_hello()));
+    server_transcript.extend_from_slice(&encrypted_extensions);
+    server_transcript.extend_from_slice(&certificate);
+    server_transcript.extend_from_slice(&certificate_verify);
+    let finished_body = finished(&fixture.crypto, &fixture.server_secret, &server_transcript);
+    let finished = handshake(20, &finished_body);
+    let split = encrypted_extensions.len().saturating_div(2);
+    let prefix = encrypted_extensions.get(..split).ok_or("short EE prefix")?;
+    let suffix = encrypted_extensions
+        .get(split..)
+        .ok_or("missing EE suffix")?;
+    let mut server = Encryptor::new(&fixture.crypto, &fixture.factory, &fixture.server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+
+    let prefix_record = server
+        .seal(22, prefix, 0)
+        .map_err(|e| format!("prefix seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&prefix_record),
+        (prefix_record.len(), Action::None)
+    );
+    let ccs = [20, 3, 3, 0, 1, 1];
+    assert_eq!(fixture.connection.feed(&ccs), (ccs.len(), Action::Ignored));
+
+    let suffix_record = server
+        .seal(22, suffix, 0)
+        .map_err(|e| format!("suffix seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&suffix_record),
+        (suffix_record.len(), Action::None)
+    );
+    let mut last_action = Action::None;
+    for message in [certificate, certificate_verify, finished] {
+        let record = server
+            .seal(22, &message, 0)
+            .map_err(|e| format!("server flight seal alert {e}"))?;
+        let (consumed, action) = fixture.connection.feed(&record);
+        assert_eq!(consumed, record.len());
+        last_action = action;
+    }
+    if !matches!(last_action, Action::Send(_)) {
+        return Err(format!(
+            "expected client flight after in-fragment CCS, got {last_action:?}"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn invalid_or_protected_ccs_and_other_record_interleaving_fail() -> Result<(), String> {
+    let mut invalid_fixture = fixture()?;
+    let invalid_ccs = [20, 3, 3, 0, 1, 2];
+    assert_eq!(
+        invalid_fixture.connection.feed(&invalid_ccs),
+        (
+            invalid_ccs.len(),
+            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
+        )
+    );
+
+    let mut interleaved_fixture = fixture()?;
+    let mut server = Encryptor::new(
+        &interleaved_fixture.crypto,
+        &interleaved_fixture.factory,
+        &interleaved_fixture.server_secret,
+    )
+    .map_err(|e| format!("interleaved server epoch alert {e}"))?;
+    let prefix = handshake(8, &encrypted_extensions());
+    let prefix = prefix.get(..3).ok_or("short handshake prefix")?;
+    let partial_record = server
+        .seal(22, prefix, 0)
+        .map_err(|e| format!("partial handshake seal alert {e}"))?;
+    assert_eq!(
+        interleaved_fixture.connection.feed(&partial_record),
+        (partial_record.len(), Action::None)
+    );
+    let app_record = server
+        .seal(23, b"interleaved application record", 0)
+        .map_err(|e| format!("interleaved app seal alert {e}"))?;
+    assert_eq!(
+        interleaved_fixture.connection.feed(&app_record),
+        (
+            app_record.len(),
+            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
+        )
+    );
+
+    let mut protected_fixture = ready_fixture()?;
+    let (_, server_secret) = application_secrets(&protected_fixture);
+    let key = clazel_tls::schedule::exec::write_key(&protected_fixture.crypto, &server_secret);
+    let iv = clazel_tls::schedule::exec::write_iv(&protected_fixture.crypto, &server_secret);
+    let cipher = ToyCipher { key };
+    let protected_ccs = clazel_tls::record::encrypt_record(&cipher, &iv, 0, 20, &[1], 0);
+    assert_eq!(
+        protected_fixture.connection.feed(&protected_ccs),
+        (
+            protected_ccs.len(),
+            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn user_canceled_is_nonfatal_and_eof_without_close_notify_is_truncation() -> Result<(), String> {
+    let mut fixture = ready_fixture()?;
+    let (_, server_secret) = application_secrets(&fixture);
+    let mut server = Encryptor::new(&fixture.crypto, &fixture.factory, &server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+    for level in [1, 2] {
+        let alert = server
+            .seal(21, &[level, 90], 0)
+            .map_err(|e| format!("user-canceled seal alert {e}"))?;
+        assert_eq!(
+            fixture.connection.feed(&alert),
+            (alert.len(), Action::Cancelled)
+        );
+        assert_eq!(fixture.connection.mode(), Mode::Ready);
+    }
+    let app = server
+        .seal(23, b"user_canceled did not close the write direction", 0)
+        .map_err(|e| format!("app seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&app),
+        (
+            app.len(),
+            Action::Deliver(b"user_canceled did not close the write direction".to_vec())
+        )
+    );
+    assert_eq!(
+        fixture.connection.eof(),
+        Action::Fail(clazel_tls::spec::INTERNAL_ERROR)
+    );
+    assert_eq!(fixture.connection.mode(), Mode::Failed);
+    Ok(())
+}
+
+#[test]
+fn peer_close_notify_preserves_an_unacknowledged_local_key_update() -> Result<(), String> {
+    let mut fixture = ready_fixture()?;
+    let (old_client_secret, old_server_secret) = application_secrets(&fixture);
+    let next_client_secret = updated_traffic_secret(&fixture.crypto, &old_client_secret);
+    let key_update = match fixture.connection.request_key_update(false) {
+        Action::Send(wire) => wire,
+        other => return Err(format!("expected pending KeyUpdate, got {other:?}")),
+    };
+    assert_eq!(
+        fixture
+            .connection
+            .send_application(b"blocked until update ack", 0),
+        Action::None
+    );
+
+    let mut server = Encryptor::new(&fixture.crypto, &fixture.factory, &old_server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+    let close = server
+        .seal(21, &[1, 0], 0)
+        .map_err(|e| format!("close-notify seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&close),
+        (close.len(), Action::PeerClosed)
+    );
+    assert_eq!(fixture.connection.mode(), Mode::Ready);
+
+    assert_eq!(
+        fixture.connection.acknowledge_key_update(&key_update),
+        Action::None
+    );
+    let app = match fixture
+        .connection
+        .send_application(b"write survives peer close", 0)
+    {
+        Action::Send(wire) => wire,
+        other => return Err(format!("expected send after KeyUpdate ack, got {other:?}")),
+    };
+    let mut peer = Decryptor::new(&fixture.crypto, &fixture.factory, &next_client_secret)
+        .map_err(|e| format!("peer epoch alert {e}"))?;
+    assert!(matches!(
+        peer.open(&app),
+        clazel_tls::traffic::exec::Read::Record(23, bytes, consumed)
+            if bytes == b"write survives peer close" && consumed == app.len()
+    ));
+
+    let local_close = match fixture.connection.close_write() {
+        Action::Send(wire) => wire,
+        other => {
+            return Err(format!(
+                "expected local close after KeyUpdate, got {other:?}"
+            ));
+        }
+    };
+    assert_eq!(
+        fixture.connection.acknowledge_close_notify(&local_close),
+        Action::Close
+    );
+    assert_eq!(fixture.connection.mode(), Mode::Closed);
+    Ok(())
+}
+
+#[test]
+fn close_notify_write_requires_exact_send_acknowledgement() -> Result<(), String> {
+    let mut fixture = ready_fixture()?;
+    let wire = match fixture.connection.close_write() {
+        Action::Send(wire) => wire,
+        other => return Err(format!("expected protected close_notify, got {other:?}")),
+    };
+    let mut wrong = wire.clone();
+    if let Some(last) = wrong.last_mut() {
+        *last ^= 1;
+    }
+    assert_eq!(
+        fixture.connection.acknowledge_close_notify(&wrong),
+        Action::Fail(clazel_tls::spec::INTERNAL_ERROR)
+    );
+    assert_eq!(fixture.connection.mode(), Mode::Failed);
     Ok(())
 }
 
