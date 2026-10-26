@@ -11,12 +11,6 @@
 
 #[allow(unused_imports)]
 use super::spec::*;
-use crate::invariant::*;
-use crate::net_theorems::*;
-use crate::net_wf::*;
-use crate::store_projection::lemma_apply_net_ops_agree;
-use crate::unwinding::cookies_agree;
-use crate::noninterference::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -31,7 +25,7 @@ pub proof fn lemma_tab_open_iff(rs: Seq<Renderer>, tab: nat)
     ensures
         (find_by_tab(rs, tab, 0) is Some) == (exists|j: int| 0 <= j < rs.len() && (#[trigger] rs[j]).tab == tab),
 {
-    lemma_find_by_tab(rs, tab, 0);
+    crate::invariant::lemma_find_by_tab(rs, tab, 0);
 }
 
 /// Replacing a renderer by one of the same tab opens no new tab.
@@ -56,7 +50,7 @@ pub proof fn lemma_tabs_update(rs: Seq<Renderer>, i: int, r: Renderer)
 /// Removing a renderer opens no new tab, and closes its own.
 pub proof fn lemma_tabs_remove(urls: UrlFns, rs: Seq<Renderer>, next_id: nat, i: int)
     requires
-        renderers_wf(urls, rs, next_id),
+        crate::invariant::renderers_wf(urls, rs, next_id),
         0 <= i < rs.len(),
     ensures
         forall|tab: nat| find_by_tab(rs.remove(i), tab, 0) is Some ==> find_by_tab(rs, tab, 0) is Some && tab != rs[i].tab,
@@ -80,31 +74,31 @@ pub open spec fn ghost_state_of(rs: Seq<Renderer>, next_id: nat) -> State {
 }
 
 // ---------------------------------------------------------------------
-// `rel` through a change of connections only.
+// `crate::noninterference::rel` through a change of connections only.
 // ---------------------------------------------------------------------
 
-/// `rel_conn` of two states whose connections are those of two related states
+/// `crate::noninterference::rel_conn` of two states whose connections are those of two related states
 /// and whose tabs are among theirs.
 pub proof fn lemma_rel_conn_tabs(s1: State, s2: State, s1b: State, s2b: State)
     requires
-        rel_conn(s1, s2),
+        crate::noninterference::rel_conn(s1, s2),
         s1b.conns == s1.conns,
         s2b.conns == s2.conns,
         s1b.next_conn == s1.next_conn,
         s2b.next_conn == s2.next_conn,
         forall|tab: nat| find_by_tab(s1b.renderers, tab, 0) is Some ==> find_by_tab(s1.renderers, tab, 0) is Some,
     ensures
-        rel_conn(s1b, s2b),
+        crate::noninterference::rel_conn(s1b, s2b),
 {
 }
 
-/// `rel` of two states that differ from related ones in their connections
+/// `crate::noninterference::rel` of two states that differ from related ones in their connections
 /// (and counter) only.
 pub proof fn lemma_rel_conns_only(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, s1b: State, s2b: State)
     requires
-        rel(rules, urls, d, s1, s2),
-        kernel_wf(rules, urls, s1b),
-        kernel_wf(rules, urls, s2b),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::invariant::kernel_wf(rules, urls, s1b),
+        crate::invariant::kernel_wf(rules, urls, s2b),
         s1b.renderers == s1.renderers,
         s1b.jar == s1.jar,
         s1b.storage == s1.storage,
@@ -115,35 +109,35 @@ pub proof fn lemma_rel_conns_only(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         s2b.storage == s2.storage,
         s2b.next_id == s2.next_id,
         s2b.now == s2.now,
-        rel_conn(s1b, s2b),
+        crate::noninterference::rel_conn(s1b, s2b),
     ensures
-        rel(rules, urls, d, s1b, s2b),
+        crate::noninterference::rel(rules, urls, d, s1b, s2b),
 {
 }
 
 /// Closing the connections of a tab, in both runs, keeps them related.
 pub proof fn lemma_rel_close_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
     ensures
-        rel(rules, urls, d, close_tab_conns(s1, tab).0, close_tab_conns(s2, tab).0),
+        crate::noninterference::rel(rules, urls, d, close_tab_conns(s1, tab).0, close_tab_conns(s2, tab).0),
 {
     let s1m = close_tab_conns(s1, tab).0;
     let s2m = close_tab_conns(s2, tab).0;
-    lemma_close_tab_conns_wf(rules, urls, s1, tab);
-    lemma_close_tab_conns_wf(rules, urls, s2, tab);
+    crate::net_wf::lemma_close_tab_conns_wf(rules, urls, s1, tab);
+    crate::net_wf::lemma_close_tab_conns_wf(rules, urls, s2, tab);
     assert forall|i: int| 0 <= i < s1m.conns.len() implies s2m.conns.contains(#[trigger] s1m.conns[i]) by {
         assert(s1m.conns.contains(s1m.conns[i]));
         clazel_cookie::storage::isolation::lemma_filter_elem(s1.conns, |c: Connection| c.tab != tab, s1m.conns[i]);
         assert(s2.conns.contains(s1m.conns[i]));
-        lemma_without_tab_keeps(s2.conns, tab, s1m.conns[i]);
+        crate::net_wf::lemma_without_tab_keeps(s2.conns, tab, s1m.conns[i]);
     }
     assert forall|i: int| 0 <= i < s2m.conns.len() && find_by_tab(s1m.renderers, (#[trigger] s2m.conns[i]).tab, 0) is Some implies s1m.conns.contains(s2m.conns[i]) by {
         assert(s2m.conns.contains(s2m.conns[i]));
         clazel_cookie::storage::isolation::lemma_filter_elem(s2.conns, |c: Connection| c.tab != tab, s2m.conns[i]);
         let j = choose|j: int| 0 <= j < s2.conns.len() && s2.conns[j] == s2m.conns[i];
         assert(s1.conns.contains(s2m.conns[i]));
-        lemma_without_tab_keeps(s1.conns, tab, s2m.conns[i]);
+        crate::net_wf::lemma_without_tab_keeps(s1.conns, tab, s2m.conns[i]);
     }
     lemma_rel_conns_only(rules, urls, d, s1, s2, s1m, s2m);
 }
@@ -151,25 +145,25 @@ pub proof fn lemma_rel_close_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 /// Forgetting the same connection in both runs keeps them related.
 pub proof fn lemma_rel_without_conn(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, id: nat)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
     ensures
-        rel(rules, urls, d, State { conns: without_conn(s1.conns, id), ..s1 }, State { conns: without_conn(s2.conns, id), ..s2 }),
+        crate::noninterference::rel(rules, urls, d, State { conns: without_conn(s1.conns, id), ..s1 }, State { conns: without_conn(s2.conns, id), ..s2 }),
 {
     let s1m = State { conns: without_conn(s1.conns, id), ..s1 };
     let s2m = State { conns: without_conn(s2.conns, id), ..s2 };
-    lemma_without_conn_wf(s1.renderers, s1.conns, s1.next_conn, id);
-    lemma_without_conn_wf(s2.renderers, s2.conns, s2.next_conn, id);
+    crate::net_wf::lemma_without_conn_wf(s1.renderers, s1.conns, s1.next_conn, id);
+    crate::net_wf::lemma_without_conn_wf(s2.renderers, s2.conns, s2.next_conn, id);
     assert forall|i: int| 0 <= i < s1m.conns.len() implies s2m.conns.contains(#[trigger] s1m.conns[i]) by {
         assert(s1m.conns.contains(s1m.conns[i]));
         clazel_cookie::storage::isolation::lemma_filter_elem(s1.conns, |c: Connection| c.id != id, s1m.conns[i]);
         assert(s2.conns.contains(s1m.conns[i]));
-        lemma_filter_keeps(s2.conns, |c: Connection| c.id != id, s1m.conns[i]);
+        crate::net_wf::lemma_filter_keeps(s2.conns, |c: Connection| c.id != id, s1m.conns[i]);
     }
     assert forall|i: int| 0 <= i < s2m.conns.len() && find_by_tab(s1m.renderers, (#[trigger] s2m.conns[i]).tab, 0) is Some implies s1m.conns.contains(s2m.conns[i]) by {
         assert(s2m.conns.contains(s2m.conns[i]));
         clazel_cookie::storage::isolation::lemma_filter_elem(s2.conns, |c: Connection| c.id != id, s2m.conns[i]);
         assert(s1.conns.contains(s2m.conns[i]));
-        lemma_filter_keeps(s1.conns, |c: Connection| c.id != id, s2m.conns[i]);
+        crate::net_wf::lemma_filter_keeps(s1.conns, |c: Connection| c.id != id, s2m.conns[i]);
     }
     lemma_rel_conns_only(rules, urls, d, s1, s2, s1m, s2m);
 }
@@ -178,12 +172,12 @@ pub proof fn lemma_rel_without_conn(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
 /// is navigating in both.
 pub proof fn lemma_rel_push_conn(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, c: Connection)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
         c.id == s1.next_conn,
-        conn_backed(s1.renderers, c),
-        conn_backed(s2.renderers, c),
+        crate::invariant::conn_backed(s1.renderers, c),
+        crate::invariant::conn_backed(s2.renderers, c),
     ensures
-        rel(
+        crate::noninterference::rel(
             rules,
             urls,
             d,
@@ -193,8 +187,8 @@ pub proof fn lemma_rel_push_conn(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 {
     let s1m = State { conns: s1.conns.push(c), next_conn: s1.next_conn + 1, ..s1 };
     let s2m = State { conns: s2.conns.push(c), next_conn: s2.next_conn + 1, ..s2 };
-    lemma_conns_wf_push_conn(s1.renderers, s1.conns, s1.next_conn, c);
-    lemma_conns_wf_push_conn(s2.renderers, s2.conns, s2.next_conn, c);
+    crate::net_wf::lemma_conns_wf_push_conn(s1.renderers, s1.conns, s1.next_conn, c);
+    crate::net_wf::lemma_conns_wf_push_conn(s2.renderers, s2.conns, s2.next_conn, c);
     assert forall|i: int| 0 <= i < s1m.conns.len() implies s2m.conns.contains(#[trigger] s1m.conns[i]) by {
         if i < s1.conns.len() {
             assert(s1m.conns[i] == s1.conns[i]);
@@ -223,19 +217,19 @@ pub proof fn lemma_rel_push_conn(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 /// The renderer-bound outputs of a sequence of `Close`s are none.
 pub proof fn lemma_closes_not_renderer(conns: Seq<Connection>, tab: nat)
     ensures
-        renderer_outs(closes_of_tab(conns, tab)) == Seq::<Output>::empty(),
+        crate::noninterference::renderer_outs(closes_of_tab(conns, tab)) == Seq::<Output>::empty(),
 {
-    lemma_closes_of_tab(conns, tab);
+    crate::net_theorems::lemma_closes_of_tab(conns, tab);
     let cs = closes_of_tab(conns, tab);
-    assert forall|k: int| 0 <= k < cs.len() implies !(|o: Output| renderer_bound(o))(#[trigger] cs[k]) by {}
-    crate::unwind_base::lemma_filter_none(cs, |o: Output| renderer_bound(o));
+    assert forall|k: int| 0 <= k < cs.len() implies !(|o: Output| crate::noninterference::renderer_bound(o))(#[trigger] cs[k]) by {}
+    crate::unwind_base::lemma_filter_none(cs, |o: Output| crate::noninterference::renderer_bound(o));
 }
 
 /// Opening a new tab, in both runs, keeps the connections related.
 pub proof fn lemma_rel_conn_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s1: State, s2: State, s1b: State, s2b: State, rn: Renderer)
     requires
-        rel_conn(s1, s2),
-        kernel_wf(rules, urls, s2),
+        crate::noninterference::rel_conn(s1, s2),
+        crate::invariant::kernel_wf(rules, urls, s2),
         s1.next_id == s2.next_id,
         s1b.renderers == s1.renderers.push(rn),
         rn.tab == s1.next_id,
@@ -244,13 +238,13 @@ pub proof fn lemma_rel_conn_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: U
         s1b.next_conn == s1.next_conn,
         s2b.next_conn == s2.next_conn,
     ensures
-        rel_conn(s1b, s2b),
+        crate::noninterference::rel_conn(s1b, s2b),
 {
     assert forall|i: int| 0 <= i < s2b.conns.len() && find_by_tab(s1b.renderers, (#[trigger] s2b.conns[i]).tab, 0) is Some implies s1b.conns.contains(s2b.conns[i]) by {
         let c = s2b.conns[i];
         lemma_tab_open_iff(s1b.renderers, c.tab);
         let j = choose|j: int| 0 <= j < s1b.renderers.len() && s1b.renderers[j].tab == c.tab;
-        assert(conn_backed(s2.renderers, c));
+        assert(crate::invariant::conn_backed(s2.renderers, c));
         let m = choose|m: int| 0 <= m < s2.renderers.len() && s2.renderers[m].tab == c.tab && (s2.renderers[m].pending matches Some(nav) && nav.partition == c.partition);
         assert(s2.renderers[m].tab < s2.next_id);
         if j < s1.renderers.len() {
@@ -266,14 +260,14 @@ pub proof fn lemma_rel_conn_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: U
 /// A renderer's exit, in both runs (the same renderer), keeps the connections related.
 pub proof fn lemma_rel_conn_exit_both(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s1: State, s2: State, i1: int, i2: int)
     requires
-        rel_conn(s1, s2),
-        kernel_wf(rules, urls, s1),
-        kernel_wf(rules, urls, s2),
+        crate::noninterference::rel_conn(s1, s2),
+        crate::invariant::kernel_wf(rules, urls, s1),
+        crate::invariant::kernel_wf(rules, urls, s2),
         0 <= i1 < s1.renderers.len(),
         0 <= i2 < s2.renderers.len(),
         s1.renderers[i1] == s2.renderers[i2],
     ensures
-        rel_conn(
+        crate::noninterference::rel_conn(
             State { conns: without_tab(s1.conns, s1.renderers[i1].tab), renderers: s1.renderers.remove(i1), ..s1 },
             State { conns: without_tab(s2.conns, s2.renderers[i2].tab), renderers: s2.renderers.remove(i2), ..s2 },
         ),
@@ -285,7 +279,7 @@ pub proof fn lemma_rel_conn_exit_both(rules: Seq<clazel_psl::spec::Rule>, urls: 
         assert(s1b.conns.contains(s1b.conns[i]));
         clazel_cookie::storage::isolation::lemma_filter_elem(s1.conns, |c: Connection| c.tab != t, s1b.conns[i]);
         assert(s2.conns.contains(s1b.conns[i]));
-        lemma_without_tab_keeps(s2.conns, t, s1b.conns[i]);
+        crate::net_wf::lemma_without_tab_keeps(s2.conns, t, s1b.conns[i]);
     }
     lemma_tabs_remove(urls, s1.renderers, s1.next_id, i1);
     assert forall|i: int| 0 <= i < s2b.conns.len() && find_by_tab(s1b.renderers, (#[trigger] s2b.conns[i]).tab, 0) is Some implies s1b.conns.contains(s2b.conns[i]) by {
@@ -293,18 +287,18 @@ pub proof fn lemma_rel_conn_exit_both(rules: Seq<clazel_psl::spec::Rule>, urls: 
         clazel_cookie::storage::isolation::lemma_filter_elem(s2.conns, |c: Connection| c.tab != t, s2b.conns[i]);
         assert(find_by_tab(s1.renderers, s2b.conns[i].tab, 0) is Some);
         assert(s1.conns.contains(s2b.conns[i]));
-        lemma_without_tab_keeps(s1.conns, t, s2b.conns[i]);
+        crate::net_wf::lemma_without_tab_keeps(s1.conns, t, s2b.conns[i]);
     }
 }
 
 /// A renderer's exit in the first run only keeps the connections related.
 pub proof fn lemma_rel_conn_exit_first(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s1: State, s2: State, i1: int)
     requires
-        rel_conn(s1, s2),
-        kernel_wf(rules, urls, s1),
+        crate::noninterference::rel_conn(s1, s2),
+        crate::invariant::kernel_wf(rules, urls, s1),
         0 <= i1 < s1.renderers.len(),
     ensures
-        rel_conn(State { conns: without_tab(s1.conns, s1.renderers[i1].tab), renderers: s1.renderers.remove(i1), ..s1 }, s2),
+        crate::noninterference::rel_conn(State { conns: without_tab(s1.conns, s1.renderers[i1].tab), renderers: s1.renderers.remove(i1), ..s1 }, s2),
 {
     let t = s1.renderers[i1].tab;
     let s1b = State { conns: without_tab(s1.conns, t), renderers: s1.renderers.remove(i1), ..s1 };
@@ -316,7 +310,7 @@ pub proof fn lemma_rel_conn_exit_first(rules: Seq<clazel_psl::spec::Rule>, urls:
     assert forall|i: int| 0 <= i < s2.conns.len() && find_by_tab(s1b.renderers, (#[trigger] s2.conns[i]).tab, 0) is Some implies s1b.conns.contains(s2.conns[i]) by {
         assert(find_by_tab(s1.renderers, s2.conns[i].tab, 0) is Some);
         assert(s1.conns.contains(s2.conns[i]));
-        lemma_without_tab_keeps(s1.conns, t, s2.conns[i]);
+        crate::net_wf::lemma_without_tab_keeps(s1.conns, t, s2.conns[i]);
     }
 }
 
@@ -324,14 +318,14 @@ pub proof fn lemma_rel_conn_exit_first(rules: Seq<clazel_psl::spec::Rule>, urls:
 /// keeps the connections related.
 pub proof fn lemma_rel_conn_exit_second(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s1: State, s2: State, i2: int)
     requires
-        rel_conn(s1, s2),
-        kernel_wf(rules, urls, s1),
-        kernel_wf(rules, urls, s2),
+        crate::noninterference::rel_conn(s1, s2),
+        crate::invariant::kernel_wf(rules, urls, s1),
+        crate::invariant::kernel_wf(rules, urls, s2),
         0 <= i2 < s2.renderers.len(),
         forall|k: int| 0 <= k < s1.renderers.len() ==> s2.renderers.contains(#[trigger] s1.renderers[k]),
         !s1.renderers.contains(s2.renderers[i2]),
     ensures
-        rel_conn(s1, State { conns: without_tab(s2.conns, s2.renderers[i2].tab), renderers: s2.renderers.remove(i2), ..s2 }),
+        crate::noninterference::rel_conn(s1, State { conns: without_tab(s2.conns, s2.renderers[i2].tab), renderers: s2.renderers.remove(i2), ..s2 }),
 {
     let t = s2.renderers[i2].tab;
     let s2b = State { conns: without_tab(s2.conns, t), renderers: s2.renderers.remove(i2), ..s2 };
@@ -349,10 +343,10 @@ pub proof fn lemma_rel_conn_exit_second(rules: Seq<clazel_psl::spec::Rule>, urls
     assert forall|i: int| 0 <= i < s1.conns.len() implies s2b.conns.contains(#[trigger] s1.conns[i]) by {
         assert(s1.conns.contains(s1.conns[i]));
         assert(s2.conns.contains(s1.conns[i]));
-        assert(conn_backed(s1.renderers, s1.conns[i]));
+        assert(crate::invariant::conn_backed(s1.renderers, s1.conns[i]));
         let m = choose|m: int| 0 <= m < s1.renderers.len() && s1.renderers[m].tab == s1.conns[i].tab && (s1.renderers[m].pending matches Some(nav) && nav.partition == s1.conns[i].partition);
         assert(s1.conns[i].tab != t);
-        lemma_without_tab_keeps(s2.conns, t, s1.conns[i]);
+        crate::net_wf::lemma_without_tab_keeps(s2.conns, t, s1.conns[i]);
     }
     assert forall|i: int| 0 <= i < s2b.conns.len() && find_by_tab(s1.renderers, (#[trigger] s2b.conns[i]).tab, 0) is Some implies s1.conns.contains(s2b.conns[i]) by {
         assert(s2b.conns.contains(s2b.conns[i]));
@@ -367,19 +361,19 @@ pub proof fn lemma_rel_conn_exit_second(rules: Seq<clazel_psl::spec::Rule>, urls
 /// The renderer-bound outputs of a concatenation.
 pub proof fn lemma_renderer_outs_concat(a: Seq<Output>, b: Seq<Output>)
     ensures
-        renderer_outs(a + b) == renderer_outs(a) + renderer_outs(b),
+        crate::noninterference::renderer_outs(a + b) == crate::noninterference::renderer_outs(a) + crate::noninterference::renderer_outs(b),
 {
-    Seq::<Output>::filter_distributes_over_add(a, b, |o: Output| renderer_bound(o));
+    Seq::<Output>::filter_distributes_over_add(a, b, |o: Output| crate::noninterference::renderer_bound(o));
 }
 
 /// A single output that is not renderer-bound has no renderer-bound outputs.
 pub proof fn lemma_renderer_outs_single(o: Output)
     requires
-        !renderer_bound(o),
+        !crate::noninterference::renderer_bound(o),
     ensures
-        renderer_outs(seq![o]) == Seq::<Output>::empty(),
+        crate::noninterference::renderer_outs(seq![o]) == Seq::<Output>::empty(),
 {
-    let p = |x: Output| renderer_bound(x);
+    let p = |x: Output| crate::noninterference::renderer_bound(x);
     reveal(Seq::filter);
     assert(seq![o].drop_last() =~= Seq::<Output>::empty());
     assert(Seq::<Output>::empty().filter(p) =~= Seq::<Output>::empty());
@@ -391,9 +385,9 @@ pub proof fn lemma_renderer_outs_single(o: Output)
 /// The renderer-bound outputs of a kill are the `Kill` alone.
 pub proof fn lemma_renderer_outs_kill(id: nat, conns: Seq<Connection>, tab: nat)
     ensures
-        renderer_outs(seq![Output::Kill { id }] + closes_of_tab(conns, tab)) == seq![Output::Kill { id }],
+        crate::noninterference::renderer_outs(seq![Output::Kill { id }] + closes_of_tab(conns, tab)) == seq![Output::Kill { id }],
 {
-    let p = |x: Output| renderer_bound(x);
+    let p = |x: Output| crate::noninterference::renderer_bound(x);
     lemma_renderer_outs_concat(seq![Output::Kill { id }], closes_of_tab(conns, tab));
     lemma_closes_not_renderer(conns, tab);
     reveal(Seq::filter);
@@ -408,7 +402,7 @@ pub proof fn lemma_renderer_outs_kill(id: nat, conns: Seq<Connection>, tab: nat)
 /// The renderer in related states, found by tab, is the same one.
 pub proof fn lemma_same_renderer_by_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
     ensures
         find_by_tab(s2.renderers, tab, 0) is Some,
@@ -427,22 +421,22 @@ pub proof fn lemma_same_renderer_by_tab(rules: Seq<clazel_psl::spec::Rule>, urls
 /// `commit_navigation` from related states, for a tab open in the first.
 pub proof fn lemma_commit_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
     ensures
-        renderer_outs(commit_navigation(urls, s1, tab, href, body).1) == renderer_outs(commit_navigation(urls, s2, tab, href, body).1),
-        rel(rules, urls, d, commit_navigation(urls, s1, tab, href, body).0, commit_navigation(urls, s2, tab, href, body).0),
+        crate::noninterference::renderer_outs(commit_navigation(urls, s1, tab, href, body).1) == crate::noninterference::renderer_outs(commit_navigation(urls, s2, tab, href, body).1),
+        crate::noninterference::rel(rules, urls, d, commit_navigation(urls, s1, tab, href, body).0, commit_navigation(urls, s2, tab, href, body).0),
 {
     let (m1, c1) = close_tab_conns(s1, tab);
     let (m2, c2) = close_tab_conns(s2, tab);
     lemma_rel_close_tab(rules, urls, d, s1, s2, tab);
     lemma_closes_not_renderer(s1.conns, tab);
     lemma_closes_not_renderer(s2.conns, tab);
-    lemma_without_tab_wf_conns(s1.conns, tab);
-    lemma_without_tab_wf_conns(s2.conns, tab);
+    crate::net_theorems::lemma_without_tab_wf_conns(s1.conns, tab);
+    crate::net_theorems::lemma_without_tab_wf_conns(s2.conns, tab);
     lemma_same_renderer_by_tab(rules, urls, d, s1, s2, tab);
-    lemma_find_by_tab(m1.renderers, tab, 0);
-    lemma_find_by_tab(m2.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(m1.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(m2.renderers, tab, 0);
     let i1 = find_by_tab(m1.renderers, tab, 0)->Some_0;
     let i2 = find_by_tab(m2.renderers, tab, 0)->Some_0;
     assert(m1.renderers[i1] == m2.renderers[i2]);
@@ -464,22 +458,22 @@ pub proof fn lemma_commit_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
 /// `abort_navigation` from related states, for a tab open in the first.
 pub proof fn lemma_abort_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, code: u64)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
     ensures
-        renderer_outs(abort_navigation(s1, tab, code).1) == renderer_outs(abort_navigation(s2, tab, code).1),
-        rel(rules, urls, d, abort_navigation(s1, tab, code).0, abort_navigation(s2, tab, code).0),
+        crate::noninterference::renderer_outs(abort_navigation(s1, tab, code).1) == crate::noninterference::renderer_outs(abort_navigation(s2, tab, code).1),
+        crate::noninterference::rel(rules, urls, d, abort_navigation(s1, tab, code).0, abort_navigation(s2, tab, code).0),
 {
     let (m1, c1) = close_tab_conns(s1, tab);
     let (m2, c2) = close_tab_conns(s2, tab);
     lemma_rel_close_tab(rules, urls, d, s1, s2, tab);
     lemma_closes_not_renderer(s1.conns, tab);
     lemma_closes_not_renderer(s2.conns, tab);
-    lemma_without_tab_wf_conns(s1.conns, tab);
-    lemma_without_tab_wf_conns(s2.conns, tab);
+    crate::net_theorems::lemma_without_tab_wf_conns(s1.conns, tab);
+    crate::net_theorems::lemma_without_tab_wf_conns(s2.conns, tab);
     lemma_same_renderer_by_tab(rules, urls, d, s1, s2, tab);
-    lemma_find_by_tab(m1.renderers, tab, 0);
-    lemma_find_by_tab(m2.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(m1.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(m2.renderers, tab, 0);
     let i1 = find_by_tab(m1.renderers, tab, 0)->Some_0;
     let i2 = find_by_tab(m2.renderers, tab, 0)->Some_0;
     assert(m1.renderers[i1] == m2.renderers[i2]);
@@ -509,14 +503,14 @@ pub proof fn lemma_carry_out_consistency(
     a2: Seq<NetAction>,
 )
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
-        tab_navigating(s1, tab, partition),
-        tab_navigating(s2, tab, partition),
+        crate::net_wf::tab_navigating(s1, tab, partition),
+        crate::net_wf::tab_navigating(s2, tab, partition),
         clazel_fetch::transducer::contract::same_but_sends(a1, a2),
     ensures
-        renderer_outs(carry_out(urls, s1, tab, partition, cur, a1).1) == renderer_outs(carry_out(urls, s2, tab, partition, cur, a2).1),
-        rel(rules, urls, d, carry_out(urls, s1, tab, partition, cur, a1).0, carry_out(urls, s2, tab, partition, cur, a2).0),
+        crate::noninterference::renderer_outs(carry_out(urls, s1, tab, partition, cur, a1).1) == crate::noninterference::renderer_outs(carry_out(urls, s2, tab, partition, cur, a2).1),
+        crate::noninterference::rel(rules, urls, d, carry_out(urls, s1, tab, partition, cur, a1).0, carry_out(urls, s2, tab, partition, cur, a2).0),
     decreases a1.len(),
 {
     if a1.len() > 0 {
@@ -600,11 +594,11 @@ pub proof fn lemma_carry_out_consistency(
 /// same renderer-bound outputs, and related states.
 pub proof fn lemma_begin_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, url: Seq<u32>)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
     ensures
-        renderer_outs(begin_navigation(rules, urls, fetch, s1, tab, url).1) == renderer_outs(begin_navigation(rules, urls, fetch, s2, tab, url).1),
-        rel(rules, urls, d, begin_navigation(rules, urls, fetch, s1, tab, url).0, begin_navigation(rules, urls, fetch, s2, tab, url).0),
+        crate::noninterference::renderer_outs(begin_navigation(rules, urls, fetch, s1, tab, url).1) == crate::noninterference::renderer_outs(begin_navigation(rules, urls, fetch, s2, tab, url).1),
+        crate::noninterference::rel(rules, urls, d, begin_navigation(rules, urls, fetch, s1, tab, url).0, begin_navigation(rules, urls, fetch, s2, tab, url).0),
 {
     lemma_same_renderer_by_tab(rules, urls, d, s1, s2, tab);
     if lock_of_url(urls, url, s1.next_id) is Some {
@@ -613,10 +607,10 @@ pub proof fn lemma_begin_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: U
         lemma_rel_close_tab(rules, urls, d, s1, s2, tab);
         lemma_closes_not_renderer(s1.conns, tab);
         lemma_closes_not_renderer(s2.conns, tab);
-        lemma_without_tab_wf_conns(s1.conns, tab);
-        lemma_without_tab_wf_conns(s2.conns, tab);
-        lemma_find_by_tab(m1.renderers, tab, 0);
-        lemma_find_by_tab(m2.renderers, tab, 0);
+        crate::net_theorems::lemma_without_tab_wf_conns(s1.conns, tab);
+        crate::net_theorems::lemma_without_tab_wf_conns(s2.conns, tab);
+        crate::invariant::lemma_find_by_tab(m1.renderers, tab, 0);
+        crate::invariant::lemma_find_by_tab(m2.renderers, tab, 0);
         let i1 = find_by_tab(m1.renderers, tab, 0)->Some_0;
         let i2 = find_by_tab(m2.renderers, tab, 0)->Some_0;
         let old = m1.renderers[i1];
@@ -659,13 +653,13 @@ pub proof fn lemma_begin_started(
     parsed: clazel_url::url::spec::Url,
 )
     requires
-        rel(rules, urls, d, m1, m2),
+        crate::noninterference::rel(rules, urls, d, m1, m2),
         0 <= i1 < m1.renderers.len(),
         0 <= i2 < m2.renderers.len(),
         m1.renderers[i1].tab == tab,
         m1.renderers[i1] == m2.renderers[i2],
-        no_tab_conns(m1.conns, tab),
-        no_tab_conns(m2.conns, tab),
+        crate::invariant::no_tab_conns(m1.conns, tab),
+        crate::invariant::no_tab_conns(m2.conns, tab),
     ensures
         ({
             let old = m1.renderers[i1];
@@ -673,26 +667,26 @@ pub proof fn lemma_begin_started(
             let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
             let u1 = State { renderers: m1.renderers.update(i1, Renderer { pending: Some(nav), ..old }), ..m1 };
             let u2 = State { renderers: m2.renderers.update(i2, Renderer { pending: Some(nav), ..old }), ..m2 };
-            renderer_outs(carry_out(urls, u1, tab, nav.partition, None, actions).1) == renderer_outs(carry_out(urls, u2, tab, nav.partition, None, actions).1)
-                && rel(rules, urls, d, carry_out(urls, u1, tab, nav.partition, None, actions).0, carry_out(urls, u2, tab, nav.partition, None, actions).0)
+            crate::noninterference::renderer_outs(carry_out(urls, u1, tab, nav.partition, None, actions).1) == crate::noninterference::renderer_outs(carry_out(urls, u2, tab, nav.partition, None, actions).1)
+                && crate::noninterference::rel(rules, urls, d, carry_out(urls, u1, tab, nav.partition, None, actions).0, carry_out(urls, u2, tab, nav.partition, None, actions).0)
         }),
 {
     let old = m1.renderers[i1];
     let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
-    lemma_start_shape(parsed);
+    crate::net_theorems::lemma_start_shape(parsed);
     let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
     let r = Renderer { pending: Some(nav), ..old };
     let u1 = State { renderers: m1.renderers.update(i1, r), ..m1 };
     let u2 = State { renderers: m2.renderers.update(i2, r), ..m2 };
-    lemma_begin_mid_wf(rules, urls, m1, i1, nav);
-    lemma_begin_mid_wf(rules, urls, m2, i2, nav);
-    assert(cookies_agree(rules, d, u1, u2));
+    crate::net_wf::lemma_begin_mid_wf(rules, urls, m1, i1, nav);
+    crate::net_wf::lemma_begin_mid_wf(rules, urls, m2, i2, nav);
+    assert(crate::unwinding::cookies_agree(rules, d, u1, u2));
     crate::unwinding::lemma_rel_after_update(rules, urls, d, m1, m2, i1, i2, r, u1, u2);
     assert(u1.renderers[i1] == r);
     assert(u2.renderers[i2] == r);
-    assert(tab_navigating(u1, tab, nav.partition));
-    assert(tab_navigating(u2, tab, nav.partition));
-    lemma_find_by_tab(u1.renderers, tab, 0);
+    assert(crate::net_wf::tab_navigating(u1, tab, nav.partition));
+    assert(crate::net_wf::tab_navigating(u2, tab, nav.partition));
+    crate::invariant::lemma_find_by_tab(u1.renderers, tab, 0);
     assert(find_by_tab(u1.renderers, tab, 0) is Some) by {
         assert(u1.renderers[i1].tab == tab);
     }
@@ -705,13 +699,13 @@ pub proof fn lemma_begin_started(
 /// A connection of a well-formed table is found by its id.
 pub proof fn lemma_find_conn_contains(rs: Seq<Renderer>, cs: Seq<Connection>, nc: nat, c: Connection)
     requires
-        conns_wf(rs, cs, nc),
+        crate::invariant::conns_wf(rs, cs, nc),
         cs.contains(c),
     ensures
         find_conn(cs, c.id, 0) is Some,
         cs[find_conn(cs, c.id, 0)->Some_0] == c,
 {
-    lemma_find_conn(cs, c.id, 0);
+    crate::net_wf::lemma_find_conn(cs, c.id, 0);
     let j = choose|j: int| 0 <= j < cs.len() && cs[j] == c;
     assert(cs[j].id == c.id);
     let k = find_conn(cs, c.id, 0)->Some_0;
@@ -722,19 +716,19 @@ pub proof fn lemma_find_conn_contains(rs: Seq<Renderer>, cs: Seq<Connection>, nc
 /// the same renderer-bound outputs, and related states.
 pub proof fn lemma_net_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, conn: nat, input: NetInput)
     requires
-        rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1, s2),
         net_target(s1, conn) is Some,
     ensures
-        renderer_outs(net(rules, urls, fetch, s1, conn, input).1) == renderer_outs(net(rules, urls, fetch, s2, conn, input).1),
-        rel(rules, urls, d, net(rules, urls, fetch, s1, conn, input).0, net(rules, urls, fetch, s2, conn, input).0),
+        crate::noninterference::renderer_outs(net(rules, urls, fetch, s1, conn, input).1) == crate::noninterference::renderer_outs(net(rules, urls, fetch, s2, conn, input).1),
+        crate::noninterference::rel(rules, urls, d, net(rules, urls, fetch, s1, conn, input).0, net(rules, urls, fetch, s2, conn, input).0),
 {
-    lemma_net_target(s1, conn);
+    crate::net_wf::lemma_net_target(s1, conn);
     let (c, i1, nav) = net_target(s1, conn)->Some_0;
     // The second run has the same connection, renderer and navigation.
     assert(s2.conns.contains(c));
     lemma_find_conn_contains(s2.renderers, s2.conns, s2.next_conn, c);
     lemma_same_renderer_by_tab(rules, urls, d, s1, s2, c.tab);
-    lemma_find_by_tab(s2.renderers, c.tab, 0);
+    crate::invariant::lemma_find_by_tab(s2.renderers, c.tab, 0);
     let i2 = find_by_tab(s2.renderers, c.tab, 0)->Some_0;
     assert(s2.renderers[i2] == s1.renderers[i1]);
     assert(net_target(s2, conn) == Some((c, i2, nav)));
@@ -743,10 +737,10 @@ pub proof fn lemma_net_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: Url
     let (fs2, a2, ops2) = net_transducer_step(fetch, s2, nav, input);
     clazel_fetch::transducer::theorems::theorem_jar_only_in_sends(fetch.http, fetch.urls, nav.fetch, input, s1.jar, s2.jar, s1.now);
     assert(fs1 == fs2 && ops1 == ops2);
-    lemma_net_mid_wf(rules, urls, fetch, s1, conn, input);
-    lemma_net_mid_wf(rules, urls, fetch, s2, conn, input);
-    let mid1 = net_mid(rules, fetch, s1, conn, input, i1, nav);
-    let mid2 = net_mid(rules, fetch, s2, conn, input, i2, nav);
+    crate::net_wf::lemma_net_mid_wf(rules, urls, fetch, s1, conn, input);
+    crate::net_wf::lemma_net_mid_wf(rules, urls, fetch, s2, conn, input);
+    let mid1 = crate::net_theorems::net_mid(rules, fetch, s1, conn, input, i1, nav);
+    let mid2 = crate::net_theorems::net_mid(rules, fetch, s2, conn, input, i2, nav);
     // The connection the event reports dead is forgotten in both.
     let closed = input is Closed || input is Error;
     let sa1 = State { conns: if closed { without_conn(s1.conns, conn) } else { s1.conns }, ..s1 };
@@ -754,7 +748,7 @@ pub proof fn lemma_net_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: Url
     if closed {
         lemma_rel_without_conn(rules, urls, d, s1, s2, conn);
     }
-    assert(rel(rules, urls, d, sa1, sa2));
+    assert(crate::noninterference::rel(rules, urls, d, sa1, sa2));
     // The jars agree for `d` after the operations.
     clazel_fetch::transducer::theorems::theorem_ops_name_request(fetch.http, fetch.urls, nav.fetch, input, s1.jar, s1.now);
     assert(clazel_fetch::transducer::contract::ops_at(ops1, s1.now)) by {
@@ -766,16 +760,16 @@ pub proof fn lemma_net_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: Url
         }
     }
     if let crate::domain::Domain::Root(root) = d {
-        lemma_apply_net_ops_agree(rules, s1.jar, s2.jar, ops1, s1.now, root);
+        crate::store_projection::lemma_apply_net_ops_agree(rules, s1.jar, s2.jar, ops1, s1.now, root);
     }
-    assert(cookies_agree(rules, d, mid1, mid2));
+    assert(crate::unwinding::cookies_agree(rules, d, mid1, mid2));
     crate::unwinding::lemma_rel_after_update(rules, urls, d, sa1, sa2, i1, i2, Renderer { pending: Some(Navigation { fetch: fs1, ..nav }), ..s1.renderers[i1] }, mid1, mid2);
-    assert(tab_navigating(mid1, c.tab, nav.partition));
-    assert(tab_navigating(mid2, c.tab, nav.partition));
+    assert(crate::net_wf::tab_navigating(mid1, c.tab, nav.partition));
+    assert(crate::net_wf::tab_navigating(mid2, c.tab, nav.partition));
     lemma_tab_open_iff(mid1.renderers, c.tab);
     assert(find_by_tab(mid1.renderers, c.tab, 0) is Some) by {
         assert(mid1.renderers[i1].tab == c.tab);
-        lemma_find_by_tab(mid1.renderers, c.tab, 0);
+        crate::invariant::lemma_find_by_tab(mid1.renderers, c.tab, 0);
     }
     lemma_carry_out_consistency(rules, urls, d, mid1, mid2, c.tab, nav.partition, Some(conn), a1, a2);
 }

@@ -5,8 +5,6 @@
 
 #[allow(unused_imports)]
 use super::spec::*;
-use crate::invariant::*;
-use crate::net_wf::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -218,7 +216,7 @@ pub proof fn lemma_commit_conns(urls: UrlFns, s: State, tab: nat, href: Seq<u32>
         assert(s0.conns.contains(s0.conns[j]));
         clazel_cookie::storage::isolation::lemma_filter_elem(s.conns, |c: Connection| c.tab != tab, s0.conns[j]);
     }
-    lemma_find_by_tab(s0.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s0.renderers, tab, 0);
     if let Some(i) = find_by_tab(s0.renderers, tab, 0) {
         let (s2, out) = if scalar_url(href) && lock_of_url(urls, href, s0.next_id) is Some {
             navigate_tab(urls, s0, tab, href, body)
@@ -302,7 +300,7 @@ pub proof fn lemma_abort_conns(s: State, tab: nat, code: u64)
 /// renderer (a reply, a `Kill`), or for the renderer a commit spawns.
 pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, cur: Option<nat>, actions: Seq<NetAction>)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
             let (s1, out) = carry_out(urls, s, tab, partition, cur, actions);
@@ -410,7 +408,7 @@ pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, 
 /// The renderer-bound outputs of `commit_navigation`.
 pub proof fn lemma_commit_renderer_outputs(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
             let out = commit_navigation(urls, s, tab, href, body).1;
@@ -428,7 +426,7 @@ pub proof fn lemma_commit_renderer_outputs(urls: UrlFns, s: State, tab: nat, hre
     let (s0, closes) = close_tab_conns(s, tab);
     assert(s0.renderers == s.renderers && s0.next_id == s.next_id);
     lemma_closes_of_tab(s.conns, tab);
-    lemma_find_by_tab(s0.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s0.renderers, tab, 0);
     if let Some(i) = find_by_tab(s0.renderers, tab, 0) {
         let all = commit_navigation(urls, s, tab, href, body).1;
         if scalar_url(href) && lock_of_url(urls, href, s0.next_id) is Some {
@@ -491,7 +489,7 @@ pub proof fn lemma_abort_renderer_outputs(urls: UrlFns, s: State, tab: nat, code
     let (s0, closes) = close_tab_conns(s, tab);
     assert(s0.renderers == s.renderers);
     lemma_closes_of_tab(s.conns, tab);
-    lemma_find_by_tab(s0.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s0.renderers, tab, 0);
     if let Some(i) = find_by_tab(s0.renderers, tab, 0) {
         let out = fail_navigation(s0, i, s0.renderers[i], code).1;
         let all = closes + out;
@@ -515,13 +513,13 @@ pub proof fn lemma_abort_renderer_outputs(urls: UrlFns, s: State, tab: nat, code
 /// no renderer of the tab is navigating, and the tab has no connection.
 pub proof fn lemma_carry_out_terminal(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, cur: Option<nat>, actions: Seq<NetAction>)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
         exists|a: int| 0 <= a < actions.len() && ((#[trigger] actions[a]) is Done || actions[a] is Fail),
     ensures
         ({
             let s1 = carry_out(urls, s, tab, partition, cur, actions).0;
             &&& forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab ==> s1.renderers[j].pending is None
-            &&& no_tab_conns(s1.conns, tab)
+            &&& crate::invariant::no_tab_conns(s1.conns, tab)
         }),
     decreases actions.len(),
 {
@@ -559,17 +557,17 @@ pub proof fn lemma_carry_out_terminal(urls: UrlFns, s: State, tab: nat, partitio
 /// A commit leaves no renderer of the tab navigating and no connection.
 pub proof fn lemma_commit_terminal(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
             let s1 = commit_navigation(urls, s, tab, href, body).0;
             &&& forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab ==> s1.renderers[j].pending is None
-            &&& no_tab_conns(s1.conns, tab)
+            &&& crate::invariant::no_tab_conns(s1.conns, tab)
         }),
 {
     let s0 = close_tab_conns(s, tab).0;
     lemma_without_tab_wf_conns(s.conns, tab);
-    lemma_find_by_tab(s0.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s0.renderers, tab, 0);
     if let Some(i) = find_by_tab(s0.renderers, tab, 0) {
         if scalar_url(href) && lock_of_url(urls, href, s0.next_id) is Some {
             assert(s0.next_id == s.next_id);
@@ -583,17 +581,17 @@ pub proof fn lemma_commit_terminal(urls: UrlFns, s: State, tab: nat, href: Seq<u
 /// An abort leaves no renderer of the tab navigating and no connection.
 pub proof fn lemma_abort_terminal(urls: UrlFns, s: State, tab: nat, code: u64)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
             let s1 = abort_navigation(s, tab, code).0;
             &&& forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab ==> s1.renderers[j].pending is None
-            &&& no_tab_conns(s1.conns, tab)
+            &&& crate::invariant::no_tab_conns(s1.conns, tab)
         }),
 {
     let s0 = close_tab_conns(s, tab).0;
     lemma_without_tab_wf_conns(s.conns, tab);
-    lemma_find_by_tab(s0.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s0.renderers, tab, 0);
     if let Some(i) = find_by_tab(s0.renderers, tab, 0) {
         lemma_fail_pending(urls, s0, tab, i, code);
     }
@@ -602,7 +600,7 @@ pub proof fn lemma_abort_terminal(urls: UrlFns, s: State, tab: nat, code: u64)
 /// `without_tab` holds no connection of the tab.
 pub proof fn lemma_without_tab_wf_conns(cs: Seq<Connection>, tab: nat)
     ensures
-        no_tab_conns(without_tab(cs, tab), tab),
+        crate::invariant::no_tab_conns(without_tab(cs, tab), tab),
 {
     let t = without_tab(cs, tab);
     assert forall|k: int| 0 <= k < t.len() implies (#[trigger] t[k]).tab != tab by {
@@ -614,7 +612,7 @@ pub proof fn lemma_without_tab_wf_conns(cs: Seq<Connection>, tab: nat)
 /// After `navigate_tab` at index `i`, every renderer of the tab is not navigating.
 pub proof fn lemma_navigate_tab_pending(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>, i: int)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
         find_by_tab(s.renderers, tab, 0) == Some(i),
         0 <= i < s.renderers.len(),
         lock_of_url(urls, href, s.next_id) is Some,
@@ -624,7 +622,7 @@ pub proof fn lemma_navigate_tab_pending(urls: UrlFns, s: State, tab: nat, href: 
             forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab ==> s1.renderers[j].pending is None
         }),
 {
-    lemma_find_by_tab(s.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     let s1 = navigate_tab(urls, s, tab, href, body).0;
     assert forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab implies s1.renderers[j].pending is None by {
         if j != i {
@@ -637,7 +635,7 @@ pub proof fn lemma_navigate_tab_pending(urls: UrlFns, s: State, tab: nat, href: 
 /// After `fail_navigation` at index `i`, every renderer of the tab is not navigating.
 pub proof fn lemma_fail_pending(urls: UrlFns, s: State, tab: nat, i: int, code: u64)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
         find_by_tab(s.renderers, tab, 0) == Some(i),
         0 <= i < s.renderers.len(),
     ensures
@@ -646,7 +644,7 @@ pub proof fn lemma_fail_pending(urls: UrlFns, s: State, tab: nat, i: int, code: 
             forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab ==> s1.renderers[j].pending is None
         }),
 {
-    lemma_find_by_tab(s.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     let s1 = fail_navigation(s, i, s.renderers[i], code).0;
     assert forall|j: int| 0 <= j < s1.renderers.len() && (#[trigger] s1.renderers[j]).tab == tab implies s1.renderers[j].pending is None by {
         if j != i {
@@ -676,7 +674,7 @@ pub proof fn lemma_start_shape(url: clazel_url::url::spec::Url)
 /// and kills nothing and sends nothing.
 pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
             let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url);
@@ -695,7 +693,7 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
             &&& s1.next_id == s.next_id
         }),
 {
-    lemma_find_by_tab(s.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
         if lock_of_url(urls, url, s.next_id) is Some {
             let (s0, closes) = close_tab_conns(s, tab);
@@ -941,12 +939,12 @@ pub open spec fn net_mid(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s:
 /// the renderer table well formed.
 pub proof fn lemma_net_mid(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput, i: int, nav: Navigation)
     requires
-        renderers_wf(urls, s.renderers, s.next_id),
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
         0 <= i < s.renderers.len(),
     ensures
         ({
             let s1 = net_mid(rules, fetch, s, conn, input, i, nav);
-            &&& renderers_wf(urls, s1.renderers, s1.next_id)
+            &&& crate::invariant::renderers_wf(urls, s1.renderers, s1.next_id)
             &&& s1.next_id == s.next_id
             &&& s1.renderers.len() == s.renderers.len()
             &&& forall|a: int| 0 <= a < s.renderers.len() ==> (#[trigger] s1.renderers[a]).id == s.renderers[a].id && s1.renderers[a].tab == s.renderers[a].tab
@@ -956,7 +954,7 @@ pub proof fn lemma_net_mid(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
     let old = s.renderers[i];
     let r = Renderer { pending: Some(Navigation { fetch: fs, ..nav }), ..old };
     assert(lock_of_url(urls, old.url, old.id) == Some(old.lock));
-    lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
+    crate::invariant::lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
 }
 
 /// **`theorem_net_only_to_tab`.**
@@ -966,8 +964,8 @@ pub proof fn theorem_net_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, urls: U
     ensures
         crate::statements::net_only_to_tab_statement(rules, urls, fetch, s, conn, input),
 {
-    lemma_reachable_wf(rules, urls, fetch, s);
-    lemma_net_target(s, conn);
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::net_wf::lemma_net_target(s, conn);
     if let Some((c, i, nav)) = net_target(s, conn) {
         let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
         lemma_net_mid(rules, urls, fetch, s, conn, input, i, nav);
@@ -1009,16 +1007,16 @@ pub proof fn theorem_net_answers_connection(rules: Seq<clazel_psl::spec::Rule>, 
     ensures
         crate::statements::net_answers_connection_statement(rules, urls, fetch, s, conn, input),
 {
-    lemma_reachable_wf(rules, urls, fetch, s);
-    lemma_net_target(s, conn);
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::net_wf::lemma_net_target(s, conn);
     let e = Event::Net { conn, input };
     let (r1, out) = step(rules, urls, fetch, s, e);
-    lemma_step_preserves_wf(rules, urls, fetch, s, e);
+    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s, e);
     if let Some((c, i, nav)) = net_target(s, conn) {
         let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
         // Every connection of the tab is backed by a navigating renderer; tabs are unique.
         assert forall|j: int, k: int| 0 <= j < r1.renderers.len() && 0 <= k < r1.conns.len() && (#[trigger] r1.renderers[j]).tab == c.tab && (#[trigger] r1.conns[k]).tab == c.tab implies r1.renderers[j].pending is Some by {
-            assert(conn_backed(r1.renderers, r1.conns[k]));
+            assert(crate::invariant::conn_backed(r1.renderers, r1.conns[k]));
             let m = choose|m: int| 0 <= m < r1.renderers.len() && r1.renderers[m].tab == r1.conns[k].tab && (r1.renderers[m].pending matches Some(n) && n.partition == r1.conns[k].partition);
             crate::theorems::tab_unique(urls, r1, j, m);
         }
@@ -1038,8 +1036,8 @@ pub proof fn theorem_wire_cookies(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
     ensures
         crate::statements::wire_cookies_statement(rules, urls, fetch, s, conn, input),
 {
-    lemma_reachable_wf(rules, urls, fetch, s);
-    lemma_net_target(s, conn);
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::net_wf::lemma_net_target(s, conn);
     if fetch.urls.rules == rules {
         if let Some((c, i, nav)) = net_target(s, conn) {
             let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
@@ -1144,7 +1142,7 @@ pub proof fn lemma_carry_out_keeps(urls: UrlFns, s: State, tab: nat, partition: 
             clazel_fetch::transducer::spec::Action::Close => match cur {
                 Some(cc) => {
                     let sa = State { conns: without_conn(s.conns, cc), ..s };
-                    lemma_filter_keeps(s.conns, |x: Connection| x.id != cc, c);
+                    crate::net_wf::lemma_filter_keeps(s.conns, |x: Connection| x.id != cc, c);
                     assert forall|j: int| 0 <= j < sa.conns.len() implies (#[trigger] sa.conns[j]).id < sa.next_conn by {
                         assert(sa.conns.contains(sa.conns[j]));
                         clazel_cookie::storage::isolation::lemma_filter_elem(s.conns, |x: Connection| x.id != cc, sa.conns[j]);
@@ -1157,11 +1155,11 @@ pub proof fn lemma_carry_out_keeps(urls: UrlFns, s: State, tab: nat, partition: 
                 },
             },
             clazel_fetch::transducer::spec::Action::Done { url, response } => {
-                lemma_without_tab_keeps(s.conns, tab, c);
+                crate::net_wf::lemma_without_tab_keeps(s.conns, tab, c);
                 lemma_commit_keeps(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response.body, c);
             },
             clazel_fetch::transducer::spec::Action::Fail(_) => {
-                lemma_without_tab_keeps(s.conns, tab, c);
+                crate::net_wf::lemma_without_tab_keeps(s.conns, tab, c);
                 lemma_abort_keeps(s, tab, error_fetch(), c);
             },
         }
@@ -1176,7 +1174,7 @@ pub proof fn lemma_commit_keeps(urls: UrlFns, s: State, tab: nat, href: Seq<u32>
     ensures
         commit_navigation(urls, s, tab, href, body).0.conns.contains(c),
 {
-    lemma_without_tab_keeps(s.conns, tab, c);
+    crate::net_wf::lemma_without_tab_keeps(s.conns, tab, c);
 }
 
 /// `abort_navigation` keeps the connections of other tabs.
@@ -1187,7 +1185,7 @@ pub proof fn lemma_abort_keeps(s: State, tab: nat, code: u64, c: Connection)
     ensures
         abort_navigation(s, tab, code).0.conns.contains(c),
 {
-    lemma_without_tab_keeps(s.conns, tab, c);
+    crate::net_wf::lemma_without_tab_keeps(s.conns, tab, c);
 }
 
 /// A message other than a `Navigate` that resolves changes no connection and
@@ -1350,7 +1348,7 @@ pub proof fn lemma_own_close(s: State, s1: State, out: Seq<Output>, pre: Seq<Out
     }
     assert forall|j: int| 0 <= j < s.conns.len() && (#[trigger] s.conns[j]).tab != t implies s1.conns.contains(s.conns[j]) by {
         assert(s.conns.contains(s.conns[j]));
-        lemma_without_tab_keeps(s.conns, t, s.conns[j]);
+        crate::net_wf::lemma_without_tab_keeps(s.conns, t, s.conns[j]);
     }
     assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
         Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
@@ -1369,7 +1367,7 @@ pub proof fn lemma_own_close(s: State, s1: State, out: Seq<Output>, pre: Seq<Out
 /// `begin_navigation` is about its tab.
 pub proof fn lemma_own_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
     requires
-        kernel_wf(rules, urls, s),
+        crate::invariant::kernel_wf(rules, urls, s),
     ensures
         ({
             let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url);
@@ -1379,8 +1377,8 @@ pub proof fn lemma_own_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
     lemma_begin_outputs(rules, urls, fetch, s, tab, url);
     lemma_begin_wf_helper(rules, urls, fetch, s, tab, url);
     let (s1, out) = begin_navigation(rules, urls, fetch, s, tab, url);
-    assert(kernel_wf(rules, urls, s1));
-    lemma_find_by_tab(s.renderers, tab, 0);
+    assert(crate::invariant::kernel_wf(rules, urls, s1));
+    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     assert forall|j: int| 0 <= j < s.conns.len() && (#[trigger] s.conns[j]).tab != tab implies s1.conns.contains(s.conns[j]) by {
         assert(s.conns.contains(s.conns[j]));
         lemma_begin_keeps(rules, urls, fetch, s, tab, url, s.conns[j]);
@@ -1391,7 +1389,7 @@ pub proof fn lemma_own_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
             let m = choose|m: int| 0 <= m < s.conns.len() && s.conns[m] == s1.conns[j];
             assert(s.conns[m].id < s.next_conn);
         }
-        assert(conn_backed(s1.renderers, s1.conns[j]));
+        assert(crate::invariant::conn_backed(s1.renderers, s1.conns[j]));
     }
     assert forall|j: int| 0 <= j < s1.conns.len() && (#[trigger] s1.conns[j]).id < s.next_conn implies s.conns.contains(s1.conns[j]) by {}
     assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
@@ -1412,27 +1410,27 @@ pub proof fn lemma_own_begin(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
 /// `begin_navigation` keeps the well-formedness (and the connections of other tabs).
 pub proof fn lemma_begin_wf_helper(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
     requires
-        kernel_wf(rules, urls, s),
+        crate::invariant::kernel_wf(rules, urls, s),
     ensures
-        kernel_wf(rules, urls, begin_navigation(rules, urls, fetch, s, tab, url).0),
+        crate::invariant::kernel_wf(rules, urls, begin_navigation(rules, urls, fetch, s, tab, url).0),
 {
-    lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url);
+    crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s, tab, url);
 }
 
 /// The connections of other tabs survive `begin_navigation`.
 pub proof fn lemma_begin_keeps(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, c: Connection)
     requires
-        kernel_wf(rules, urls, s),
+        crate::invariant::kernel_wf(rules, urls, s),
         s.conns.contains(c),
         c.tab != tab,
     ensures
         begin_navigation(rules, urls, fetch, s, tab, url).0.conns.contains(c),
 {
-    lemma_find_by_tab(s.renderers, tab, 0);
+    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
         if lock_of_url(urls, url, s.next_id) is Some {
             let (s0, closes) = close_tab_conns(s, tab);
-            lemma_without_tab_keeps(s.conns, tab, c);
+            crate::net_wf::lemma_without_tab_keeps(s.conns, tab, c);
             let old = s0.renderers[i];
             assert forall|j: int| 0 <= j < s0.conns.len() implies (#[trigger] s0.conns[j]).id < s0.next_conn by {
                 assert(s0.conns.contains(s0.conns[j]));
@@ -1457,15 +1455,15 @@ pub proof fn lemma_begin_keeps(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
 /// A `Net` event about an open connection is about its tab.
 pub proof fn lemma_own_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
-        kernel_wf(rules, urls, s),
+        crate::invariant::kernel_wf(rules, urls, s),
     ensures
         ({
             let (s1, out) = net(rules, urls, fetch, s, conn, input);
             net_target(s, conn) matches Some((c, _, _)) ==> own_common(s, s1) && own_some(s, s1, out, c.tab)
         }),
 {
-    lemma_net_target(s, conn);
-    lemma_net_wf(rules, urls, fetch, s, conn, input);
+    crate::net_wf::lemma_net_target(s, conn);
+    crate::net_wf::lemma_net_wf(rules, urls, fetch, s, conn, input);
     if let Some((c, i, nav)) = net_target(s, conn) {
         let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
         let mid = net_mid(rules, fetch, s, conn, input, i, nav);
@@ -1497,7 +1495,7 @@ pub proof fn lemma_own_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
             }
             assert(mid.conns.contains(c2)) by {
                 if input is Closed || input is Error {
-                    lemma_filter_keeps(s.conns, |x: Connection| x.id != conn, c2);
+                    crate::net_wf::lemma_filter_keeps(s.conns, |x: Connection| x.id != conn, c2);
                 } else {
                     assert(mid.conns == s.conns);
                     assert(s.conns.contains(c2));
@@ -1517,7 +1515,7 @@ pub proof fn lemma_own_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                 let m = choose|m: int| 0 <= m < s.conns.len() && s.conns[m] == s1.conns[j];
                 assert(s.conns[m].id < s.next_conn);
             }
-            assert(conn_backed(s1.renderers, s1.conns[j]));
+            assert(crate::invariant::conn_backed(s1.renderers, s1.conns[j]));
         }
         // (c) the outputs.
         assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
@@ -1580,7 +1578,7 @@ pub proof fn lemma_own_all_unchanged(s: State, s1: State, out: Seq<Output>, t: O
 /// A renderer's frame.
 pub proof fn lemma_own_all_from_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
-        kernel_wf(rules, urls, s),
+        crate::invariant::kernel_wf(rules, urls, s),
     ensures
         ({
             let e = Event::FromRenderer { id, bytes };
@@ -1589,7 +1587,7 @@ pub proof fn lemma_own_all_from_renderer(rules: Seq<clazel_psl::spec::Rule>, url
         }),
 {
     assert(kernel_wf_conns(s));
-    lemma_find_by_id(s.renderers, id, 0);
+    crate::invariant::lemma_find_by_id(s.renderers, id, 0);
     let e = Event::FromRenderer { id, bytes };
     let (s1, out) = step(rules, urls, fetch, s, e);
     let t = crate::statements::event_tab(s, e);
@@ -1624,7 +1622,7 @@ pub proof fn lemma_own_all_from_renderer(rules: Seq<clazel_psl::spec::Rule>, url
 /// A renderer's exit.
 pub proof fn lemma_own_all_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat)
     requires
-        kernel_wf(rules, urls, s),
+        crate::invariant::kernel_wf(rules, urls, s),
     ensures
         ({
             let e = Event::RendererExited { id };
@@ -1633,7 +1631,7 @@ pub proof fn lemma_own_all_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         }),
 {
     assert(kernel_wf_conns(s));
-    lemma_find_by_id(s.renderers, id, 0);
+    crate::invariant::lemma_find_by_id(s.renderers, id, 0);
     let e = Event::RendererExited { id };
     let (s1, out) = step(rules, urls, fetch, s, e);
     if let Some(i) = find_by_id(s.renderers, id, 0) {
@@ -1646,7 +1644,7 @@ pub proof fn lemma_own_all_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
 /// A network event.
 pub proof fn lemma_own_all_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
-        kernel_wf(rules, urls, s),
+        crate::invariant::kernel_wf(rules, urls, s),
     ensures
         ({
             let e = Event::Net { conn, input };
@@ -1655,7 +1653,7 @@ pub proof fn lemma_own_all_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
         }),
 {
     assert(kernel_wf_conns(s));
-    lemma_net_target(s, conn);
+    crate::net_wf::lemma_net_target(s, conn);
     let e = Event::Net { conn, input };
     let (s1, out) = step(rules, urls, fetch, s, e);
     if net_target(s, conn) is Some {
@@ -1672,7 +1670,7 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
     ensures
         crate::statements::connection_ownership_statement(rules, urls, fetch, s, e),
 {
-    lemma_reachable_wf(rules, urls, fetch, s);
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     assert(kernel_wf_conns(s));
     match e {
         Event::Tick { time } => {

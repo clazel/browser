@@ -13,10 +13,9 @@ use super::spec::*;
 use super::storage::*;
 use super::urls::*;
 use clazel_cookie::storage::exec::{
-    CookieRecord, RequestContextRecord, RequestUrlRecord, evict_expired_exec, is_public_suffix_string_exec,
+    CookieRecord, RequestUrlRecord, evict_expired_exec, is_public_suffix_string_exec,
     retrieve_a_cookie_string_exec, store_a_set_cookie_string_exec,
 };
-use clazel_fetch::transducer::contract::HttpFnsExec;
 use clazel_fetch::transducer::types::{ActionBuf, InputBuf, JarOpBuf};
 use clazel_ipc::message::codec::Msg;
 use clazel_origin::exec::ParsedOrigin;
@@ -912,11 +911,12 @@ pub fn store_allowed_exec(url: &RequestUrlRecord) -> (r: bool)
 
 /// [`apply_net_ops`]: the jar after each jar operation of a transducer step,
 /// in order.
-pub fn apply_net_ops_exec(jar: Vec<CookieRecord>, ops: &[JarOpBuf], now: u64) -> (out: Vec<CookieRecord>)
+pub fn apply_net_ops_exec(jar: Vec<CookieRecord>, ops: &[JarOpBuf]) -> (out: Vec<CookieRecord>)
     requires
-        clazel_cookie::storage::contract::jar_in_range(clazel_cookie::storage::exec::jar_view(jar@)),
-        clazel_cookie::set_cookie::contract::now_in_range(now as int),
-        clazel_fetch::transducer::contract::ops_at(clazel_fetch::transducer::types::ops_view(ops@), now as int),
+        clazel_fetch::transducer::contract::apply_ops_requires(
+            clazel_cookie::storage::exec::jar_view(jar@),
+            clazel_fetch::transducer::types::ops_view(ops@),
+        ),
     ensures
         clazel_cookie::storage::exec::jar_view(out@) == apply_net_ops(
             crate::contract::psl(),
@@ -938,8 +938,7 @@ pub fn apply_net_ops_exec(jar: Vec<CookieRecord>, ops: &[JarOpBuf], now: u64) ->
             i <= ops.len(),
             ov == clazel_fetch::transducer::types::ops_view(ops@),
             rules == crate::contract::psl(),
-            clazel_cookie::set_cookie::contract::now_in_range(now as int),
-            clazel_fetch::transducer::contract::ops_at(ov, now as int),
+            forall|k: int| 0 <= k < ov.len() ==> clazel_cookie::set_cookie::contract::now_in_range(clazel_fetch::transducer::contract::op_now(#[trigger] ov[k])),
             clazel_cookie::storage::contract::jar_in_range(clazel_cookie::storage::exec::jar_view(cur@)),
             apply_net_ops(rules, clazel_cookie::storage::exec::jar_view(cur@), ov.skip(i as int)) == apply_net_ops(rules, jar0, ov),
         decreases ops.len() - i,
@@ -949,7 +948,7 @@ pub fn apply_net_ops_exec(jar: Vec<CookieRecord>, ops: &[JarOpBuf], now: u64) ->
             assert(ov[i as int] == ops@[i as int]@);
             assert(ov.skip(i as int).drop_first() =~= ov.skip(i as int + 1));
             assert(ov.skip(i as int)[0] == ov[i as int]);
-            assert(clazel_fetch::transducer::contract::op_now(ov[i as int]) == now as int);
+            assert(clazel_cookie::set_cookie::contract::now_in_range(clazel_fetch::transducer::contract::op_now(ov[i as int])));
         }
         if let Some(op) = ops.get(i) {
             match op {
@@ -1140,7 +1139,6 @@ pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F
         out.0.next_id <= s.next_id + 1,
         out.0.next_conn as nat <= s.next_conn as nat + conn_headroom(),
 {
-    let h = fetch.http_fns();
     match find_by_tab_exec(s.renderers.as_slice(), tab) {
         None => (s, no_outputs()),
         Some(i) => match lock_of_url_exec(urls, url, s.next_id) {
@@ -1229,11 +1227,21 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                     if !navigating {
                         return (s, no_outputs());
                     }
-                    let StateRecord { renderers, jar, storage, next_id, conns, next_conn, now } = s;
+                    let renderers = s.renderers;
+                    let jar = s.jar;
+                    let storage = s.storage;
+                    let next_id = s.next_id;
+                    let conns = s.conns;
+                    let next_conn = s.next_conn;
+                    let now = s.now;
                     let mut renderers = renderers;
                     let ghost old_renderers = renderers@;
                     let rec = renderers.remove(i);
-                    let RendererRecord { id, tab, url, lock, pending } = rec;
+                    let id = rec.id;
+                    let tab = rec.tab;
+                    let url = rec.url;
+                    let lock = rec.lock;
+                    let pending = rec.pending;
                     match pending {
                         None => {
                             proof {
@@ -1242,7 +1250,9 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                             (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now }, no_outputs())
                         },
                         Some(nav) => {
-                            let NavigationRecord { url: nurl, fetch: fstate, partition } = nav;
+                            let nurl = nav.url;
+                            let fstate = nav.fetch;
+                            let partition = nav.partition;
                             proof {
                                 assert(old_renderers[i as int].pending is Some);
                             }
@@ -1257,7 +1267,13 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                                     sv.now,
                                 );
                             }
-                            let jar1 = apply_net_ops_exec(jar, ops.as_slice(), now);
+                            proof {
+                                let ov = clazel_fetch::transducer::types::ops_view(ops@);
+                                assert forall|k: int| 0 <= k < ov.len() implies clazel_cookie::set_cookie::contract::now_in_range(clazel_fetch::transducer::contract::op_now(#[trigger] ov[k])) by {
+                                    assert(clazel_fetch::transducer::contract::op_now(ov[k]) == now as int);
+                                }
+                            }
+                            let jar1 = apply_net_ops_exec(jar, ops.as_slice());
                             let conns1 = match input {
                                 InputBuf::Closed | InputBuf::Error => without_conn_exec(conns.as_slice(), conn),
                                 _ => conns,
@@ -1538,7 +1554,6 @@ pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRe
     proof {
         clazel_cookie::storage::exec::lemma_jar_view_in_range(s.jar@);
     }
-    let h = fetch.http_fns();
     let out = match e {
         EventRecord::FromRenderer { id, bytes } => from_renderer_exec(urls, fetch, s, *id, bytes.as_slice()),
         EventRecord::OpenTab { url, script } => open_tab_exec::<U, F>(urls, s, url.as_slice(), script.as_slice()),

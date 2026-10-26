@@ -11,8 +11,7 @@
 #[allow(unused_imports)]
 use super::spec::*;
 use clazel_fetch::transducer::contract::{HttpFnsExec, UrlFnsExec};
-use clazel_fetch::transducer::types::StateBuf;
-use clazel_url::url::record::{ParsedUrl, opt_url_view};
+use clazel_url::url::record::ParsedUrl;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -33,11 +32,11 @@ pub trait FetchFnsExec {
     /// parser invariant of [`FetchFnsExec::http_fns`]
     /// (`clazel_fetch::transducer::contract::state_ok`), stated without an
     /// instance so that the kernel's state invariant is a spec.
-    spec fn nav_ok(s: &StateBuf) -> bool;
+    spec fn nav_ok(s: &clazel_fetch::transducer::types::StateBuf) -> bool;
 
     /// A state that is not reading keeps it, whatever the parser (as every
     /// state `start` gives).
-    proof fn nav_ok_idle(s: &StateBuf)
+    proof fn nav_ok_idle(s: &clazel_fetch::transducer::types::StateBuf)
         requires
             !(s.phase is Reading),
         ensures
@@ -48,7 +47,7 @@ pub trait FetchFnsExec {
     fn http_fns(&self) -> (r: &Self::H)
         ensures
             r.http() == self.fetch().http,
-            forall|s: &StateBuf| #[trigger] clazel_fetch::transducer::contract::state_ok(r, s) == Self::nav_ok(s),
+            forall|s: &clazel_fetch::transducer::types::StateBuf| #[trigger] clazel_fetch::transducer::contract::state_ok(r, s) == Self::nav_ok(s),
     ;
 
     /// The URL functions of the transducer: [`FetchFns::urls`].
@@ -60,7 +59,7 @@ pub trait FetchFnsExec {
     /// [`FetchFns::parse`].
     fn parse(&self, url: &[u32]) -> (r: Option<ParsedUrl>)
         ensures
-            opt_url_view(r) == (self.fetch().parse)(url@),
+            clazel_url::url::record::opt_url_view(r) == (self.fetch().parse)(url@),
     ;
 }
 

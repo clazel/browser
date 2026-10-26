@@ -5,10 +5,20 @@
 //! `MAX_FRAME` (refused from its first 4 bytes) or a closed socket becomes
 //! `RendererExited`. Outputs are carried out in order, and every frame, exit
 //! and stderr (which names a failed sandbox layer) is printed.
+//!
+//! The network (phase-3.md item 3.7) is the same kind of thing: the kernel
+//! asks for connections (`Connect`), writes (`Send`) and closes (`Close`), and
+//! the shell carries them out on TCP sockets with `clazel-net` (its resolver
+//! and its connect) and reports what happened as `Net` events (connected,
+//! bytes, closed, failed). It decides nothing about the bytes: the kernel steps
+//! the fetch transducer itself. A connection thread connects and then reads;
+//! writes are made from the host's thread. TLS is not carried out: a
+//! `Connect` with `tls` fails.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
-use std::net::Shutdown;
+use std::collections::HashSet;
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
 use std::os::{fd::OwnedFd, unix::net::UnixStream};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -18,23 +28,45 @@ use clazel_ipc::{
     frame::codec::payload_length,
     message::codec::{Msg, decode_framed},
 };
-use clazel_kernel::exec::fetch::NetOutcomeRecord;
-use clazel_kernel::exec::real_urls::step_real;
+use clazel_fetch::transducer::types::InputBuf;
+use clazel_kernel::exec::real_urls::{RealFetch, step_real};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
+
+/// What a connection's thread reports.
+enum NetEv {
+    /// The socket is open (the host keeps this end to write to).
+    Connected(TcpStream),
+    /// Octets arrived.
+    Bytes(Vec<u8>),
+    /// The peer closed it.
+    Closed,
+    /// It could not be opened, or failed.
+    Failed(String),
+}
 
 /// What a socket's reader thread reports; the id is the socket's.
 enum Ev {
     Frame(u64, Vec<u8>),
     Gone(u64, String),
+    Net(u64, NetEv),
 }
+
+/// The longest a connection may be silent, and the longest to connect.
+const IDLE: Duration = Duration::from_secs(30);
+const CONNECT: Duration = Duration::from_secs(10);
 
 /// The host: the kernel state and the renderers (socket and process) it runs.
 pub struct Host {
     /// The kernel's state. Tests preload the cookie jar (the HTTP layer that
     /// would fill it is Phase 3); nothing else writes it but `step_real`.
     pub state: StateRecord,
-    /// The user's script for a tab's navigation: the stand-in network's page.
-    scripts: HashMap<u64, Vec<u8>>,
+    /// A test hook: every connection goes to this address, whatever host and
+    /// port the kernel asked for (so a test can serve a page for any name).
+    pub route: Option<SocketAddr>,
+    /// The connections the kernel asked for and has not closed.
+    wanted: HashSet<u64>,
+    /// The write end of each connection that is open.
+    open: HashMap<u64, TcpStream>,
     /// A fixed kernel clock (seconds since 1601) for tests; `None`: wall clock.
     pub clock: Option<u64>,
     table: HashMap<u64, (UnixStream, Child)>,
@@ -66,6 +98,58 @@ fn read_frames(id: u64, mut sock: UnixStream, tx: Sender<Ev>) {
         }
     };
     let _ = tx.send(Ev::Gone(id, why));
+}
+
+/// A connection's thread: connect, report, then read until the end.
+fn net_thread(conn: u64, host: &[u8], port: u16, tls: bool, route: Option<SocketAddr>, tx: &Sender<Ev>) {
+    let report = |ev: NetEv| tx.send(Ev::Net(conn, ev)).is_ok();
+    if tls {
+        report(NetEv::Failed("TLS is not carried out".to_owned()));
+        return;
+    }
+    let target: Result<(Vec<IpAddr>, u16), String> = match route {
+        Some(addr) => Ok((vec![addr.ip()], addr.port())),
+        None => clazel_net::resolve(host)
+            .map(|addrs| (addrs, port))
+            .map_err(|e| e.to_string()),
+    };
+    let sock = target.and_then(|(addrs, port)| {
+        clazel_net::connect(&addrs, port, CONNECT).map_err(|e| e.to_string())
+    });
+    let (sock, mut reader) = match sock.and_then(|s| {
+        s.set_read_timeout(Some(IDLE)).map_err(|e| e.to_string())?;
+        s.set_write_timeout(Some(IDLE)).map_err(|e| e.to_string())?;
+        let reader = s.try_clone().map_err(|e| e.to_string())?;
+        Ok((s, reader))
+    }) {
+        Ok(pair) => pair,
+        Err(why) => {
+            report(NetEv::Failed(why));
+            return;
+        }
+    };
+    if !report(NetEv::Connected(sock)) {
+        return;
+    }
+    let mut buf = vec![0u8; 16 * 1024];
+    loop {
+        match reader.read(&mut buf) {
+            Ok(0) => {
+                report(NetEv::Closed);
+                return;
+            }
+            Ok(n) => {
+                if !report(NetEv::Bytes(buf.get(..n).unwrap_or_default().to_vec())) {
+                    return;
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => {
+                report(NetEv::Failed(e.to_string()));
+                return;
+            }
+        }
+    }
 }
 
 /// Seconds since 1601-01-01, the kernel's clock (far below its upper bound).
@@ -111,8 +195,10 @@ impl Host {
     pub fn new(command: impl FnMut(u64) -> Command + 'static) -> Host {
         let (tx, rx) = channel();
         Host {
-            state: init_record(),
-            scripts: HashMap::new(),
+            state: init_record::<RealFetch>(),
+            route: None,
+            wanted: HashSet::new(),
+            open: HashMap::new(),
             clock: None,
             table: HashMap::new(),
             tx,
@@ -134,11 +220,13 @@ impl Host {
 
     /// The kernel's step, unless its ids are used up (`step_requires`).
     fn step(&mut self, e: EventRecord) -> Vec<OutputRecord> {
-        if self.state.next_id == u64::MAX {
+        // `step_requires`: room for one more renderer id and for the 21
+        // connection ids a step may use.
+        if self.state.next_id == u64::MAX || self.state.next_conn > u64::MAX.saturating_sub(21) {
             self.say("kernel ids exhausted; event dropped".to_owned());
             return Vec::new();
         }
-        let (s, outputs) = step_real(std::mem::replace(&mut self.state, init_record()), &e);
+        let (s, outputs) = step_real(std::mem::replace(&mut self.state, init_record::<RealFetch>()), &e);
         self.state = s;
         outputs
     }
@@ -148,7 +236,7 @@ impl Host {
         let time = self.clock.unwrap_or_else(now);
         self.step(EventRecord::Tick { time });
         let mut dead = Vec::new();
-        let mut fetches = Vec::new();
+        let mut failed = Vec::new();
         for output in self.step(e) {
             match output {
                 OutputRecord::Spawn { id } => {
@@ -163,27 +251,67 @@ impl Host {
                     }
                 }
                 OutputRecord::Kill { id } => self.reap(id, "killed by the kernel", Duration::ZERO),
-                OutputRecord::Fetch { tab, url } => fetches.push((tab, url)),
+                OutputRecord::Connect {
+                    conn,
+                    host,
+                    port,
+                    tls,
+                } => self.connect(conn, &host, port, tls),
+                OutputRecord::Send { conn, bytes } => {
+                    if !self.write(conn, &bytes) {
+                        failed.push(conn);
+                    }
+                }
+                OutputRecord::Close { conn } => self.close(conn),
             }
         }
         for (id, why) in dead {
             self.exit(id, why);
         }
-        for (tab, url) in fetches {
-            self.stand_in_network(tab, url);
+        for conn in failed {
+            self.net_event(conn, InputBuf::Error);
         }
     }
 
-    /// Answer a `Fetch` with the user's script (empty for a `Navigate`).
-    fn stand_in_network(&mut self, tab: u64, url: Vec<u32>) {
-        let net = self.scripts.remove(&tab).unwrap_or_default();
-        let shown: String = url.iter().filter_map(|c| char::from_u32(*c)).collect();
+    /// Report on a connection to the kernel, if it is still wanted.
+    fn net_event(&mut self, conn: u64, input: InputBuf) {
+        if self.wanted.contains(&conn) {
+            self.event(EventRecord::Net { conn, input });
+        }
+    }
+
+    /// Start connecting for the kernel: a thread resolves, connects, reports
+    /// `Connected`, then reads until the peer closes.
+    fn connect(&mut self, conn: u64, host: &[u8], port: u64, tls: bool) {
+        self.wanted.insert(conn);
+        let shown = String::from_utf8_lossy(host).into_owned();
+        self.say(format!("network: connection {conn} to {shown}:{port}"));
+        let (tx, route, host) = (self.tx.clone(), self.route, host.to_vec());
+        let port = u16::try_from(port).unwrap_or(80);
+        std::thread::spawn(move || net_thread(conn, &host, port, tls, route, &tx));
+    }
+
+    /// Write the kernel's octets to a connection; false if that failed.
+    fn write(&mut self, conn: u64, bytes: &[u8]) -> bool {
+        let Some(sock) = self.open.get_mut(&conn) else {
+            return false;
+        };
+        let ok = sock.write_all(bytes).and_then(|()| sock.flush()).is_ok();
         self.say(format!(
-            "network (stand-in): tab {tab} <- {shown:?}, {} bytes",
-            net.len()
+            "network: connection {conn} <- {} bytes{}",
+            bytes.len(),
+            if ok { "" } else { " (failed)" }
         ));
-        let outcome = NetOutcomeRecord { url, net };
-        self.event(EventRecord::Fetched { tab, outcome });
+        ok
+    }
+
+    /// The kernel closes a connection.
+    fn close(&mut self, conn: u64) {
+        self.wanted.remove(&conn);
+        if let Some(sock) = self.open.remove(&conn) {
+            let _ = sock.shutdown(Shutdown::Both);
+            self.say(format!("network: connection {conn} closed"));
+        }
     }
 
     /// The user opens a tab at `url`; the script's format is `clazel-renderer`'s.
@@ -195,12 +323,11 @@ impl Host {
         self.event(EventRecord::OpenTab { url, script });
     }
 
-    /// The user navigates tab `tab`; with no network, the page is `script`.
-    pub fn navigate_tab(&mut self, tab: u64, url: &str, script: &str) {
+    /// The user navigates tab `tab` to `url`: the kernel asks for the page,
+    /// and the document is what the network serves (its body is the script).
+    pub fn navigate_tab(&mut self, tab: u64, url: &str) {
         let url = url.chars().map(u32::from).collect();
-        self.scripts.insert(tab, script.as_bytes().to_vec());
         self.event(EventRecord::NavigateTab { tab, url });
-        self.scripts.remove(&tab);
     }
 
     fn spawn(&mut self, id: u64) -> std::io::Result<()> {
@@ -272,6 +399,31 @@ impl Host {
             }
             Ok(Ev::Gone(id, why)) if self.table.contains_key(&id) => {
                 self.exit(id, &why);
+                true
+            }
+            Ok(Ev::Net(conn, ev)) => {
+                let input = match ev {
+                    NetEv::Connected(sock) => {
+                        if self.wanted.contains(&conn) {
+                            self.open.insert(conn, sock);
+                        }
+                        InputBuf::Connected
+                    }
+                    NetEv::Bytes(bytes) => InputBuf::Bytes(bytes),
+                    NetEv::Closed => InputBuf::Closed,
+                    NetEv::Failed(why) => {
+                        self.say(format!("network: connection {conn} failed: {why}"));
+                        InputBuf::Error
+                    }
+                };
+                // The peer closing or a failure ends the connection.
+                if matches!(input, InputBuf::Closed | InputBuf::Error) {
+                    self.net_event(conn, input);
+                    self.wanted.remove(&conn);
+                    self.open.remove(&conn);
+                } else {
+                    self.net_event(conn, input);
+                }
                 true
             }
             Ok(_) => true,
