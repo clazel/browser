@@ -239,6 +239,7 @@ fn str_field(obj: &[(String, Json)], key: &str) -> Option<String> {
 }
 
 /// One row of the file.
+#[derive(Clone)]
 struct Row {
     input: String,
     base: Option<String>,
@@ -248,8 +249,15 @@ struct Row {
     pathname: Option<String>,
 }
 
-/// Every row (an object with an `input`), thinned under Miri.
+/// Every row (an object with an `input`), thinned under Miri. The file is
+/// parsed once per test binary: under Miri the parse costs more than the
+/// rows it yields.
 fn rows() -> Vec<Row> {
+    static ROWS: std::sync::OnceLock<Vec<Row>> = std::sync::OnceLock::new();
+    ROWS.get_or_init(parse_rows).clone()
+}
+
+fn parse_rows() -> Vec<Row> {
     let mut reader = Reader::new(URLTESTDATA);
     let Some(Json::Array(items)) = reader.value() else {
         return Vec::new();
