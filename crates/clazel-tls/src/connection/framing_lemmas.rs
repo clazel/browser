@@ -8,6 +8,15 @@ pub proof fn lemma_need_more_bound(buffer: Seq<u8>)
         crate::spec::read_record(buffer, true) is NeedMore,
     ensures buffer.len() < super::framing_spec::MAX_BUFFER,
 {
+    lemma_need_more_bound_mode(buffer, true);
+}
+
+/// A NeedMore result cannot fill the shared record buffer in either mode.
+pub proof fn lemma_need_more_bound_mode(buffer: Seq<u8>, protected: bool)
+    requires super::framing_spec::wf_mode(buffer, protected),
+        crate::spec::read_record(buffer, protected) is NeedMore,
+    ensures buffer.len() < super::framing_spec::MAX_BUFFER,
+{
     reveal(crate::spec::read_record);
 }
 
@@ -20,9 +29,21 @@ pub proof fn lemma_one_byte_rest_empty(buffer: Seq<u8>, byte: u8)
         _ => true,
     },
 {
+    lemma_one_byte_rest_empty_mode(buffer, byte, true);
+}
+
+/// Appending one byte cannot leave a suffix in either parser mode.
+pub proof fn lemma_one_byte_rest_empty_mode(buffer: Seq<u8>, byte: u8, protected: bool)
+    requires super::framing_spec::wf_mode(buffer, protected),
+        crate::spec::read_record(buffer, protected) is NeedMore,
+    ensures match crate::spec::read_record(buffer.push(byte), protected) {
+        crate::spec::Read::Done(_, rest) => rest.len() == 0,
+        _ => true,
+    },
+{
     reveal(crate::spec::read_record);
     let appended = buffer.push(byte);
-    match crate::spec::read_record(buffer, true) {
+    match crate::spec::read_record(buffer, protected) {
         crate::spec::Read::NeedMore => {
             if buffer.len() < crate::spec::RECORD_HEADER {
                 assert(appended.len() <= crate::spec::RECORD_HEADER);
@@ -32,7 +53,7 @@ pub proof fn lemma_one_byte_rest_empty(buffer: Seq<u8>, byte: u8)
                 assert(appended.len() == buffer.len() + 1);
                 assert(appended.len() <= crate::spec::RECORD_HEADER + payload_len);
             }
-            match crate::spec::read_record(appended, true) {
+            match crate::spec::read_record(appended, protected) {
                 crate::spec::Read::Done(_, rest) => {
                     reveal(crate::spec::read_record);
                     if buffer.len() < crate::spec::RECORD_HEADER {
@@ -99,7 +120,32 @@ pub proof fn lemma_feed_step(buffer: Seq<u8>, input: Seq<u8>)
         }
     },
 {
-    reveal(super::framing_spec::feed);
+    lemma_feed_step_mode(buffer, input, true);
+}
+
+/// One mode-sensitive model step at a Pending prefix.
+pub proof fn lemma_feed_step_mode(buffer: Seq<u8>, input: Seq<u8>, protected: bool)
+    requires super::framing_spec::wf_mode(buffer, protected),
+        super::framing_spec::status_mode(buffer, protected) is Pending, input.len() > 0,
+    ensures {
+        let appended = buffer.push(input[0]);
+        match crate::spec::read_record(appended, protected) {
+            crate::spec::Read::NeedMore => {
+                let tail = super::framing_spec::feed_mode(appended, input.skip(1), protected);
+                super::framing_spec::feed_mode(buffer, input, protected)
+                    == super::framing_spec::Feed { buffer: tail.buffer,
+                        consumed: tail.consumed + 1, status: tail.status }
+            },
+            crate::spec::Read::Fail(error) => super::framing_spec::feed_mode(buffer, input, protected)
+                == super::framing_spec::Feed { buffer: appended, consumed: 1,
+                    status: super::framing_spec::Status::Fail(crate::spec::alert_of(error)) },
+            crate::spec::Read::Done(_, _) => super::framing_spec::feed_mode(buffer, input, protected)
+                == super::framing_spec::Feed { buffer: appended, consumed: 1,
+                    status: super::framing_spec::Status::Complete },
+        }
+    },
+{
+    reveal(super::framing_spec::feed_mode);
 }
 
 /// No bytes are consumed after a terminal status or from an empty suffix.
@@ -111,6 +157,19 @@ pub proof fn lemma_feed_stops(buffer: Seq<u8>, input: Seq<u8>)
         == (super::framing_spec::Feed { buffer,
             consumed: 0, status: super::framing_spec::status(buffer) }),
 {
-    reveal(super::framing_spec::feed);
+    lemma_feed_stops_mode(buffer, input, true);
+}
+
+/// No bytes are consumed after a terminal status in either mode.
+pub proof fn lemma_feed_stops_mode(buffer: Seq<u8>, input: Seq<u8>, protected: bool)
+    requires super::framing_spec::wf_mode(buffer, protected),
+        super::framing_spec::status_mode(buffer, protected) is Complete
+            || super::framing_spec::status_mode(buffer, protected) is Fail
+            || input.len() == 0,
+    ensures super::framing_spec::feed_mode(buffer, input, protected)
+        == (super::framing_spec::Feed { buffer,
+            consumed: 0, status: super::framing_spec::status_mode(buffer, protected) }),
+{
+    reveal(super::framing_spec::feed_mode);
 }
 } // verus!
