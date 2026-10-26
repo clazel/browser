@@ -16,10 +16,11 @@
 //!   encode through 2049 as UTCTime and from 2050 as GeneralizedTime, but
 //!   requires applications to process either encoding; this decoder does not
 //!   reject a parseable value based on its encoding/year pair.
-//! - Gregorian years are 1..=9999. Seconds are 0..=59: the RFC 5280 profile
-//!   does not specify leap-second handling, and this calendar representation
-//!   models ordinary Gregorian civil seconds only. It therefore rejects a
-//!   second value of 60 rather than aliasing it to the next minute.
+//! - Gregorian years are 1..=9999. UTCTime seconds are 0..=59, as X.680
+//!   §47.3 states explicitly. GeneralizedTime uses X.680 §46.3's ISO 8601
+//!   form and permits second 60 only at 23:59. The decoder validates that
+//!   position but does not consult IERS data to confirm that the specific
+//!   date had an announced leap second.
 //! - UTCTime content is exactly YYMMDDHHMMSSZ; GeneralizedTime content is
 //!   exactly YYYYMMDDHHMMSSZ. Offsets, fractions, omitted seconds, extra
 //!   bytes, and non-ASCII digits are rejected as outside RFC 5280's profile.
@@ -31,17 +32,25 @@ verus! {
 
 /// Calendar fields for one whole-second UTC instant.
 pub struct CertificateTime {
+    /// Four-digit Gregorian year.
     pub year: u16,
+    /// Month of year, 1 through 12.
     pub month: u8,
+    /// Day of month, validated against the Gregorian month length.
     pub day: u8,
+    /// Hour of day, 0 through 23.
     pub hour: u8,
+    /// Minute of hour, 0 through 59.
     pub minute: u8,
+    /// Second of minute, 0 through 59, or 60 at a modeled leap second.
     pub second: u8,
 }
 
 /// ASN.1 time type from the already-checked DER universal tag.
 pub enum TimeKind {
+    /// Two-digit-year UTCTime.
     Utc,
+    /// Four-digit-year GeneralizedTime.
     Generalized,
 }
 
@@ -65,34 +74,34 @@ pub open spec fn calendar_time_valid(time: CertificateTime) -> bool {
         && 1 <= time.month as nat && time.month as nat <= 12
         && 1 <= time.day as nat
         && time.day as nat <= days_in_month(time.year as nat, time.month as nat)
-        && time.hour <= 23 && time.minute <= 59 && time.second <= 59
+        && time.hour <= 23 && time.minute <= 59
+        && (time.second <= 59 || time.second == 60 && time.hour == 23 && time.minute == 59)
 }
 
 /// Decimal value of `count` ASCII digits beginning at `pos`.
 pub open spec fn decimal_digits(bytes: Seq<u8>, pos: int, count: int) -> nat
     recommends 0 <= pos && 0 <= count && pos + count <= bytes.len()
-    decreases count
+        && digits_only(bytes, pos, count)
 {
-    if count == 0 { 0 }
-    else { (bytes[pos] - b'0') as nat * pow10((count - 1) as nat)
-        + decimal_digits(bytes, pos + 1, count - 1) }
+    decimal_value(bytes.subrange(pos, pos + count))
 }
 
-/// Small exponentiation for decimal digit parsing.
-pub open spec fn pow10(power: nat) -> nat
-    decreases power
+/// Decimal value of a sequence of ASCII digits, most significant first.
+pub open spec fn decimal_value(bytes: Seq<u8>) -> nat
+    recommends forall|i: int| 0 <= i < bytes.len()
+        ==> b'0' <= bytes[i] && bytes[i] <= b'9'
+    decreases bytes.len()
 {
-    if power == 0 { 1 } else { 10 * pow10(power - 1) }
+    if bytes.len() == 0 { 0 }
+    else { decimal_value(bytes.drop_last()) * 10 + (bytes.last() - b'0') as nat }
 }
 
 /// All bytes in a bounded range are ASCII decimal digits.
 pub open spec fn digits_only(bytes: Seq<u8>, pos: int, count: int) -> bool
     recommends 0 <= pos && 0 <= count && pos + count <= bytes.len()
-    decreases count
 {
-    if count == 0 { true }
-    else { b'0' <= bytes[pos] && bytes[pos] <= b'9'
-        && digits_only(bytes, pos + 1, count - 1) }
+    forall|i: int| pos <= i < pos + count
+        ==> b'0' <= bytes[i] && bytes[i] <= b'9'
 }
 
 /// UTCTime or GeneralizedTime content under the RFC 5280 §4.1.2.5 profile.
@@ -111,7 +120,7 @@ pub open spec fn decode_time(kind: TimeKind, bytes: Seq<u8>) -> Option<Certifica
                     minute: decimal_digits(bytes, 8, 2) as u8,
                     second: decimal_digits(bytes, 10, 2) as u8,
                 };
-                if calendar_time_valid(time) { Some(time) } else { None }
+                if calendar_time_valid(time) && time.second <= 59 { Some(time) } else { None }
             }
         },
         TimeKind::Generalized => {
@@ -143,7 +152,9 @@ pub open spec fn time_le(left: CertificateTime, right: CertificateTime) -> bool 
 
 /// A well-formed inclusive certificate validity interval.
 pub struct Validity {
+    /// Inclusive start of the certificate validity interval.
     pub not_before: CertificateTime,
+    /// Inclusive end of the certificate validity interval.
     pub not_after: CertificateTime,
 }
 
