@@ -12,7 +12,9 @@
 //! - The caller supplies IP addresses as exactly 4 or 16 octets. Textual IP
 //!   parsing and host classification are outside this matching function.
 //! - A wildcard suffix is rejected when it is a Public Suffix List public
-//!   suffix. The repository's complete table (ICANN and PRIVATE sections) is
+//!   suffix. This veto is additional browser policy; RFC 9525 defines the
+//!   matching algorithm but does not require public-suffix filtering. The
+//!   repository's complete table (ICANN and PRIVATE sections) is
 //!   used after lower-casing the ASCII suffix. This prevents wildcards such
 //!   as `*.co.uk`, `*.com`, and `*.github.io` from crossing a registry or
 //!   hosted-service boundary while allowing a registrable suffix such as
