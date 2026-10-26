@@ -36,9 +36,9 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// Why `root` does not decode, or `None`.
-fn decode_failure(root: &Root) -> Option<String> {
-    let Some(cert) = parse_certificate(root.der) else {
+/// Why the certificate `der` does not decode, or `None`.
+fn decode_failure(der: &[u8]) -> Option<String> {
+    let Some(cert) = parse_certificate(der) else {
         return Some("envelope".into());
     };
     let Some(tbs) = parse_tbs_certificate(cert.tbs_certificate_der) else {
@@ -68,7 +68,7 @@ fn decode_failure(root: &Root) -> Option<String> {
 fn every_root_decodes() {
     let mut failures: Vec<(&str, String)> = Vec::new();
     for root in &ROOTS {
-        if let Some(why) = decode_failure(root) {
+        if let Some(why) = decode_failure(root.der) {
             failures.push((root.label, why));
         }
     }
@@ -84,11 +84,7 @@ fn the_decode_check_can_fail() {
     // The check above is not vacuous: a damaged root is reported.
     let mut der = ROOTS[0].der.to_vec();
     der.truncate(der.len() - 1);
-    let damaged = Root {
-        der: der.leak(),
-        ..ROOTS[0]
-    };
-    assert_eq!(decode_failure(&damaged).as_deref(), Some("envelope"));
+    assert_eq!(decode_failure(&der).as_deref(), Some("envelope"));
     let with_extensions = ROOTS
         .iter()
         .filter(|r| {
