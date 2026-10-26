@@ -160,6 +160,9 @@ pub proof fn theorem_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: 
                 }
             }
         },
+        Event::NavigateTab { tab, url } => {
+            crate::unwind_base::lemma_navigation_frame(rules, urls, fetch, s, tab, url, seq![]);
+        },
         Event::Net { conn, input } => {
             crate::unwind_base::lemma_net_frame(rules, urls, fetch, s, conn, input);
         },

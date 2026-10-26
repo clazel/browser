@@ -88,6 +88,29 @@ pub open spec fn run_outputs_for(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 // The relation between the run of the trace (`s1`) and of its purge (`s2`).
 // ---------------------------------------------------------------------
 
+/// The outputs addressed to renderers (a reply, a `Spawn`, a `Kill`), as
+/// opposed to those addressed to the network shell.
+pub open spec fn renderer_bound(o: Output) -> bool {
+    o is ToRenderer || o is Spawn || o is Kill
+}
+
+/// The renderer-bound outputs of `out`, in order. Two related runs' outputs
+/// agree on these (the network-bound ones differ in the order of `Close`s and
+/// the octets of `Send`s, which no renderer sees).
+pub open spec fn renderer_outs(out: Seq<Output>) -> Seq<Output> {
+    out.filter(|o: Output| renderer_bound(o))
+}
+
+/// What `s1` and `s2` agree on of the connections (item 3.7): the counters,
+/// every connection of `s1` is in `s2`, and every connection of `s2` whose tab
+/// is open in `s1` is in `s1`. (`s2` may still hold the connections of tabs
+/// that closed in the run of `t`.)
+pub open spec fn rel_conn(s1: State, s2: State) -> bool {
+    &&& s1.next_conn == s2.next_conn
+    &&& forall|i: int| 0 <= i < s1.conns.len() ==> s2.conns.contains(#[trigger] s1.conns[i])
+    &&& forall|i: int| 0 <= i < s2.conns.len() && find_by_tab(s1.renderers, (#[trigger] s2.conns[i]).tab, 0) is Some ==> s1.conns.contains(s2.conns[i])
+}
+
 /// What `s1` and `s2` agree on for observer `d`: the renderers of `d`, its
 /// unexpired cookies, its storage maps, the counters and the time; and, to
 /// keep them in step, that every renderer of `s1` is also in `s2` (`s2` may
@@ -103,9 +126,7 @@ pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate:
     &&& forall|i: int| 0 <= i < s1.renderers.len() ==> s2.renderers.contains(#[trigger] s1.renderers[i])
     &&& forall|i: int| 0 <= i < s2.renderers.len() && crate::domain::domain_of_renderer(rules, #[trigger] s2.renderers[i]) == d ==> s1.renderers.contains(s2.renderers[i])
     &&& s1.next_id == s2.next_id
-    &&& s1.next_conn == s2.next_conn
-    &&& forall|i: int| 0 <= i < s1.conns.len() ==> s2.conns.contains(#[trigger] s1.conns[i])
-    &&& forall|i: int| 0 <= i < s2.conns.len() && find_by_tab(s1.renderers, (#[trigger] s2.conns[i]).tab, 0) is Some ==> s1.conns.contains(s2.conns[i])
+    &&& rel_conn(s1, s2)
     &&& s1.now == s2.now
     &&& (d is Root ==> crate::domain::cookies_of_domain(rules, clazel_cookie::storage::spec::evict_expired(s1.jar, s1.now), d) == crate::domain::cookies_of_domain(
         rules,

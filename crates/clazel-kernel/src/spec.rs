@@ -108,8 +108,8 @@
 //!   carrying one request with `Connection: close`; which connection a
 //!   `Connect` uses is one function, [`choose_connection`], and it is the
 //!   decision a later item changes (always `None` now: a new connection).
-//!   A connection ends when the transducer asks for its `Close`, when its
-//!   navigation ends (`Done` or `Fail`: whatever is left of the tab's
+//!   A connection ends when the transducer asks for its `Close`, when the
+//!   shell reports it `Closed` or failed (`Error`), when its navigation ends (`Done` or `Fail`: whatever is left of the tab's
 //!   connections is closed with it), when the navigation is replaced by
 //!   another, or when its renderer exits or is killed; every `Connect` is
 //!   matched by a `Close` once its tab's navigation is over. A `Close` for
@@ -1211,8 +1211,17 @@ pub open spec fn net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: Fe
         None => (s, seq![]),
         Some((c, i, nav)) => {
             let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
+            // The peer closing a connection, or it failing, ends it: the
+            // kernel forgets it before anything else (a `Close` the transducer
+            // asks for after it is then harmless to the shell).
+            let conns = if input is Closed || input is Error {
+                without_conn(s.conns, conn)
+            } else {
+                s.conns
+            };
             let s1 = State {
                 jar: apply_net_ops(rules, s.jar, ops),
+                conns,
                 renderers: s.renderers.update(i, Renderer { pending: Some(Navigation { fetch: fs, ..nav }), ..s.renderers[i] }),
                 ..s
             };

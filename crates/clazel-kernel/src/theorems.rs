@@ -85,15 +85,75 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
 }
 
 /// **`theorem_reply_only_to_sender`.**
-///
-/// Stage 2 of the join re-proves this over the new outputs (`Connect`, `Send`,
-/// `Close`).
 pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         reachable(rules, urls, fetch, s),
     ensures
         crate::statements::reply_only_to_sender_statement(rules, urls, fetch, s, id, bytes),
 {
+    crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
+    crate::invariant::lemma_find_by_id(s.renderers, id, 0);
+    let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
+    if let Some(i) = find_by_id(s.renderers, id, 0) {
+        let r = s.renderers[i];
+        match decode_renderer_frame(bytes) {
+            None => {
+                crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
+                let closes = closes_of_tab(s.conns, r.tab);
+                assert(out == seq![Output::Kill { id }] + closes);
+                assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
+                    Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
+                    Output::Spawn { id: x, .. } => x == s.next_id,
+                    Output::Kill { id: x } => x == id,
+                    Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
+                    Output::Send { .. } => false,
+                    Output::Close { conn: x } => exists|i2: int, j: int|
+                        0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
+                } by {
+                    if k > 0 {
+                        assert(out[k] == closes[k - 1]);
+                        match closes[k - 1] {
+                            Output::Close { conn: x } => {
+                                let j = choose|j: int| 0 <= j < s.conns.len() && s.conns[j].id == x && s.conns[j].tab == r.tab;
+                            },
+                            _ => {},
+                        }
+                    }
+                }
+            },
+            Some(m) => {
+                if let clazel_ipc::message::spec::Message::Navigate { url } = m {
+                    if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+                        if let Some(resolved) = (urls.resolve)(r.url, relative) {
+                            if lock_of_url(urls, resolved, s.next_id) is Some {
+                                crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, r.tab, resolved);
+                                assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
+                                    Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
+                                    Output::Spawn { id: x, .. } => x == s.next_id,
+                                    Output::Kill { id: x } => x == id,
+                                    Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
+                                    Output::Send { .. } => false,
+                                    Output::Close { conn: x } => exists|i2: int, j: int|
+                                        0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
+                                } by {
+                                    match out[k] {
+                                        Output::ToRenderer { id: x, .. } => {
+                                            let i2 = choose|i2: int| 0 <= i2 < s.renderers.len() && s.renderers[i2].tab == r.tab && s.renderers[i2].id == x;
+                                            tab_unique(urls, s, i, i2);
+                                        },
+                                        Output::Close { conn: x } => {
+                                            let j = choose|j: int| 0 <= j < s.conns.len() && s.conns[j].id == x && s.conns[j].tab == r.tab;
+                                        },
+                                        _ => {},
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+        }
+    }
 }
 
 /// Two renderers of a well-formed table with the same tab are the same.

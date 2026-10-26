@@ -41,6 +41,10 @@ pub proof fn lemma_rel_same_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         s2b.renderers == s2.renderers,
         s1b.next_id == s1.next_id,
         s2b.next_id == s2.next_id,
+        s1b.conns == s1.conns,
+        s2b.conns == s2.conns,
+        s1b.next_conn == s1.next_conn,
+        s2b.next_conn == s2.next_conn,
         s1b.now == s1.now,
         s2b.now == s2.now,
         crate::unwinding::cookies_agree(rules, d, s1b, s2b),
@@ -53,6 +57,7 @@ pub proof fn lemma_rel_same_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
     assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
         let k = choose|k: int| 0 <= k < s1.renderers.len() && s1.renderers[k] == x;
     }
+    crate::net_rel::lemma_rel_conn_tabs(s1, s2, s1b, s2b);
     crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2b);
 }
 
@@ -77,7 +82,7 @@ pub proof fn lemma_d_cookie_get(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) == Some(clazel_ipc::message::spec::Message::CookieGet),
     ensures
-        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
@@ -102,6 +107,8 @@ pub proof fn lemma_d_cookie_get(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
         crate::retrieval_projection::lemma_retrieval_agree(rules, s1.jar, s2.jar, url, ctx, s1.now, h, root);
         crate::retrieval_projection::lemma_retrieval_jar_agree(rules, s1.jar, s2.jar, url, ctx, s1.now, h, root);
     }
+    crate::net_theorems::lemma_step_non_navigate_conns(rules, urls, fetch, s1, id, bytes);
+    crate::net_theorems::lemma_step_non_navigate_conns(rules, urls, fetch, s2, id, bytes);
     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
 }
 
@@ -112,7 +119,7 @@ pub proof fn lemma_d_cookie_set(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) == Some(clazel_ipc::message::spec::Message::CookieSet { cookie_string: cs }),
     ensures
-        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
@@ -137,6 +144,8 @@ pub proof fn lemma_d_cookie_set(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
         assert(crate::projection::live_root(rules, s1.jar, s1.now, root) == crate::projection::live_root(rules, s2.jar, s2.now, root));
         crate::store_projection::lemma_store_agree(rules, s1.jar, s2.jar, cs, url, ctx, s1.now, h, root);
     }
+    crate::net_theorems::lemma_step_non_navigate_conns(rules, urls, fetch, s1, id, bytes);
+    crate::net_theorems::lemma_step_non_navigate_conns(rules, urls, fetch, s2, id, bytes);
     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
 }
 
@@ -148,7 +157,7 @@ pub proof fn lemma_d_storage(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
         decode_renderer_frame(bytes) == Some(m),
         crate::statements::is_storage_message(m),
     ensures
-        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
@@ -172,6 +181,8 @@ pub proof fn lemma_d_storage(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
             }
         }
     }
+    crate::net_theorems::lemma_step_non_navigate_conns(rules, urls, fetch, s1, id, bytes);
+    crate::net_theorems::lemma_step_non_navigate_conns(rules, urls, fetch, s2, id, bytes);
     lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2b);
 }
 
@@ -184,7 +195,7 @@ pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) == Some(clazel_ipc::message::spec::Message::Navigate { url }),
     ensures
-        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
@@ -208,7 +219,7 @@ pub proof fn lemma_d_navigate(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
                     assert(s1.renderers.contains(r));
                     crate::unwind_base::lemma_found_contained(s1, r.tab);
                     crate::unwind_base::lemma_find_contained(urls, s1, r);
-                    crate::unwinding::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved);
+                    crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1, s2, r.tab, resolved);
                 }
             },
         },
@@ -222,7 +233,7 @@ pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
         decode_renderer_frame(bytes) is None,
     ensures
-        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
@@ -245,6 +256,11 @@ pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
         crate::unwind_base::lemma_remove_contains(urls, s1.renderers, s1.next_id, i1, x);
         crate::unwind_base::lemma_remove_contains(urls, s2.renderers, s2.next_id, i2, x);
     }
+    assert(s1b.conns == without_tab(s1.conns, r.tab) && s2b.conns == without_tab(s2.conns, r.tab));
+    assert(o1 == seq![Output::Kill { id }] + closes_of_tab(s1.conns, r.tab) && o2 == seq![Output::Kill { id }] + closes_of_tab(s2.conns, r.tab));
+    crate::net_rel::lemma_renderer_outs_kill(id, s1.conns, r.tab);
+    crate::net_rel::lemma_renderer_outs_kill(id, s2.conns, r.tab);
+    crate::net_rel::lemma_rel_conn_exit_both(rules, urls, s1, s2, i1, i2);
     crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2b);
 }
 
@@ -254,7 +270,7 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
     ensures
-        step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1 == step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1,
+        crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
 {
     let e = Event::FromRenderer { id, bytes };
