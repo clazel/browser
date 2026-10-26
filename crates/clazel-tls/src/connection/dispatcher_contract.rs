@@ -165,6 +165,18 @@ pub open spec fn action_refines_key_update_ack(action: super::dispatcher_spec::A
     }
 }
 
+/// RFC 8446 §4.6.1: a valid ticket is consumed and discarded in the
+/// non-resumption profile; it does not change the authenticated connection.
+pub open spec fn discarded_ticket_ensures(before: super::dispatcher_spec::State,
+    messages: Seq<Seq<u8>>, action: super::dispatcher_spec::Action,
+    after: super::dispatcher_spec::State) -> bool {
+    before.mode == super::dispatcher_spec::Mode::Ready
+        && messages.len() == 1
+        && crate::spec::at_message_boundary(before.reassembly)
+        && super::dispatcher_spec::valid_discarded_ticket(messages[0])
+        ==> after == before && action is None
+}
+
 /// The acknowledgement must match the entire saved flight before Auth can
 /// release application traffic keys; a mismatch is terminal.
 pub open spec fn acknowledgement_ensures(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,

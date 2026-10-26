@@ -13,8 +13,10 @@
 //!   from the protected record epochs. For an HRR retry it was already sent
 //!   before ClientHello2 by the Hello driver.
 //! - Terminal states retain no authentication secrets, traffic epochs, or
-//!   partial input. No production transport, cryptography, X.509 validation,
-//!   ticket processing, or secret-erasure guarantee is modelled here.
+//!   partial input. NewSessionTicket bodies are parsed and discarded; ticket
+//!   caching, PSK resumption, 0-RTT, and secret-erasure guarantees are not
+//!   modelled. Production transport, cryptography, and X.509 validation are
+//!   also outside this module.
 //! - RFC prose and equations have no numbered algorithm steps.
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -117,6 +119,15 @@ pub open spec fn compatibility_ccs_record() -> Seq<u8> { seq![20u8, 3u8, 3u8, 0u
 pub open spec fn finished_is_last(messages: Seq<Seq<u8>>) -> bool {
     messages.len() > 0 && messages.last().len() >= crate::spec::HANDSHAKE_HEADER
         && messages.last()[0] == 20
+}
+
+/// RFC 8446 §4.6.1: recognize a fully parsed NewSessionTicket body inside its
+/// handshake encoding. This profile discards tickets and never derives PSKs.
+pub open spec fn valid_discarded_ticket(message: Seq<u8>) -> bool {
+    match crate::spec::parse_handshake(message, crate::schedule::spec::HASH_LEN as nat) {
+        crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => true,
+        _ => false,
+    }
 }
 
 /// Whether all traffic epochs and authentication state have been discarded.
