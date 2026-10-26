@@ -20,8 +20,6 @@
 //!   overrun. This parser accepts the clazel-der reader's DER profile.
 
 #[allow(unused_imports)]
-use clazel_der::spec as der;
-#[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
@@ -54,15 +52,15 @@ pub struct CertificateEnvelope {
 pub open spec fn parse_algorithm_identifier(
     input: Seq<u8>, pos: nat, end: nat,
 ) -> Option<(AlgorithmIdentifier, nat)> {
-    match der::expect_sequence(input, pos, end) {
+    match clazel_der::spec::expect_sequence(input, pos, end) {
         None => None,
-        Some((contents_start, contents_end)) => match der::read_oid(input, contents_start, contents_end) {
+        Some((contents_start, contents_end)) => match clazel_der::spec::read_oid(input, contents_start, contents_end) {
             None => None,
             Some((oid, after_oid)) => {
                 if after_oid == contents_end {
                     Some((AlgorithmIdentifier { oid, parameters_der: None }, contents_end))
                 } else {
-                    match der::read_tlv(input, after_oid, contents_end) {
+                    match clazel_der::spec::read_tlv(input, after_oid, contents_end) {
                         Some(parameter) if parameter.cend == contents_end => {
                             Some((AlgorithmIdentifier {
                                 oid,
@@ -80,15 +78,17 @@ pub open spec fn parse_algorithm_identifier(
 /// RFC 5280 §4.1 Certificate: parse the outer three fields and preserve the
 /// exact TBSCertificate encoding used by §4.1.1.3's signature input.
 pub open spec fn parse_certificate(input: Seq<u8>) -> Option<CertificateEnvelope> {
-    match der::read_tlv(input, 0, input.len()) {
-        Some(outer) if outer.tag == der::universal_constructed(der::SEQUENCE)
+    match clazel_der::spec::expect_sequence(input, 0, input.len()) {
+        Some((outer_start, outer_end)) => match clazel_der::spec::read_tlv(input, 0, input.len()) {
+        Some(outer) if outer.cstart == outer_start && outer.cend == outer_end
             && outer.cend == input.len() =>
         {
-            match der::read_tlv(input, outer.cstart, outer.cend) {
-                Some(tbs) if tbs.tag == der::universal_constructed(der::SEQUENCE) => {
+            match clazel_der::spec::expect_sequence(input, outer.cstart, outer.cend) {
+                Some((tbs_start, tbs_end)) => match clazel_der::spec::read_tlv(input, outer.cstart, outer.cend) {
+                Some(tbs) if tbs.cstart == tbs_start && tbs.cend == tbs_end => {
                     match parse_algorithm_identifier(input, tbs.cend, outer.cend) {
                         Some((algorithm, after_algorithm)) =>
-                        match der::read_bit_string(input, after_algorithm, outer.cend) {
+                        match clazel_der::spec::read_bit_string(input, after_algorithm, outer.cend) {
                             Some((unused, bits_start, bits_end, after_signature))
                                 if after_signature == outer.cend =>
                             {
@@ -105,9 +105,13 @@ pub open spec fn parse_certificate(input: Seq<u8>) -> Option<CertificateEnvelope
                     }
                 },
                 _ => None,
+                },
+                None => None,
             }
         },
         _ => None,
+        },
+        None => None,
     }
 }
 

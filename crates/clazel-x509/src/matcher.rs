@@ -25,14 +25,29 @@ pub fn service_identity_matches(
 
 #[cfg(test)]
 mod tests {
-    use super::{PresentedIdentity, ReferenceIdentity, dns_id_matches, ip_id_matches, service_identity_matches};
+    use super::{
+        PresentedIdentity, ReferenceIdentity, dns_id_matches, ip_id_matches,
+        service_identity_matches,
+    };
 
     #[test]
     fn rfc9525_dns_case_and_wildcard_examples() {
-        assert!(dns_id_matches(b"www.bigcompany.example", b"WWW.BigCompany.Example"));
-        assert!(dns_id_matches(b"www.bigcompany.example", b"*.bigcompany.example"));
-        assert!(!dns_id_matches(b"a.b.bigcompany.example", b"*.bigcompany.example"));
-        assert!(!dns_id_matches(b"bigcompany.example", b"*.bigcompany.example"));
+        assert!(dns_id_matches(
+            b"www.bigcompany.example",
+            b"WWW.BigCompany.Example"
+        ));
+        assert!(dns_id_matches(
+            b"www.bigcompany.example",
+            b"*.bigcompany.example"
+        ));
+        assert!(!dns_id_matches(
+            b"a.b.bigcompany.example",
+            b"*.bigcompany.example"
+        ));
+        assert!(!dns_id_matches(
+            b"bigcompany.example",
+            b"*.bigcompany.example"
+        ));
     }
 
     #[test]
@@ -58,10 +73,12 @@ mod tests {
     #[test]
     fn dns_and_ip_identifiers_never_cross_match() {
         assert!(!service_identity_matches(
-            ReferenceIdentity::Dns(b"192.0.2.107"), PresentedIdentity::Ip(&[192, 0, 2, 107]),
+            ReferenceIdentity::Dns(b"192.0.2.107"),
+            PresentedIdentity::Ip(&[192, 0, 2, 107]),
         ));
         assert!(!service_identity_matches(
-            ReferenceIdentity::Ip(&[192, 0, 2, 107]), PresentedIdentity::Dns(b"192.0.2.107"),
+            ReferenceIdentity::Ip(&[192, 0, 2, 107]),
+            PresentedIdentity::Dns(b"192.0.2.107"),
         ));
     }
 }

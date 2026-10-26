@@ -4,10 +4,10 @@
 //! supplies already-extracted subjectAltName values and a canonical
 //! reference identifier from the URL layer.
 
-pub mod contract;
+pub mod certificate;
 pub mod certificates;
+pub mod contract;
 pub mod exec;
 pub mod lemmas;
 pub mod matcher;
 pub mod spec;
-pub mod certificate;

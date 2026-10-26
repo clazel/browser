@@ -4,5 +4,8 @@
 //! not validate the TBS fields, algorithm-specific parameters, signatures,
 //! certificate paths, or trust.
 
+pub mod certificates;
 pub mod contract;
+pub mod exec;
+pub mod lemmas;
 pub mod spec;

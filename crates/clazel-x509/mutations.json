@@ -1,6 +1,45 @@
 {
   "mutations": [
     {
+      "id": "certificate-tbs-preserves-full-der-tlv",
+      "file": "src/certificate/spec.rs",
+      "find": "tbs_certificate_der: input.subrange(outer.cstart as int, tbs.cend as int),",
+      "replace": "tbs_certificate_der: input.subrange(tbs.cstart as int, tbs.cend as int),",
+      "expect": "killed",
+      "reason": "The signature-covered TBS value would omit its SEQUENCE tag and length, violating RFC 5280 §4.1.1.3's requirement to sign the DER-encoded TBSCertificate.",
+      "certificate": {
+        "file": "src/certificate/certificates.rs",
+        "lemma": "super::lemmas::lemma_fixture_preserves_full_tbs_tlv()",
+        "witness": "match parse_certificate(seq![0x30u8, 0x0E, 0x30, 0x02, 0x05, 0x00, 0x30, 0x04, 0x06, 0x02, 0x2A, 0x03, 0x03, 0x02, 0x03, 0xA8]) { Some(c) => c.tbs_certificate_der =~= seq![0x05u8, 0x00], None => false }"
+      }
+    },
+    {
+      "id": "certificate-rejects-input-after-outer-sequence",
+      "file": "src/certificate/spec.rs",
+      "find": "outer.cend == input.len()",
+      "replace": "outer.cend <= input.len()",
+      "expect": "killed",
+      "reason": "Bytes after the outer Certificate SEQUENCE would be silently accepted, rather than requiring exactly one Certificate value.",
+      "certificate": {
+        "file": "src/certificate/certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_trailing_input()",
+        "witness": "parse_certificate(seq![0x30u8, 0x0E, 0x30, 0x02, 0x05, 0x00, 0x30, 0x04, 0x06, 0x02, 0x2A, 0x03, 0x03, 0x02, 0x00, 0xAB, 0x05, 0x00]).is_some()"
+      }
+    },
+    {
+      "id": "certificate-rejects-extra-outer-child",
+      "file": "src/certificate/spec.rs",
+      "find": "if after_signature == outer.cend",
+      "replace": "if after_signature <= outer.cend",
+      "expect": "killed",
+      "reason": "A fourth child after signatureValue would be accepted, although RFC 5280 §4.1 defines exactly three required outer fields.",
+      "certificate": {
+        "file": "src/certificate/certificates.rs",
+        "lemma": "super::lemmas::lemma_reject_extra_outer_child()",
+        "witness": "parse_certificate(seq![0x30u8, 0x10, 0x30, 0x02, 0x05, 0x00, 0x30, 0x04, 0x06, 0x02, 0x2A, 0x03, 0x03, 0x02, 0x00, 0xAB, 0x05, 0x00]).is_some()"
+      }
+    },
+    {
       "id": "dns-wildcard-one-label-only",
       "file": "src/spec.rs",
       "find": "let dot = first_dot(reference, 0);",
