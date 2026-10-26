@@ -104,7 +104,7 @@ pub struct RsaPublicKey<'a> {
 
 impl View for RsaPublicKey<'_> {
     type V = super::spec::RsaPublicKey;
-    closed spec fn view(&self) -> Self::V {
+    open spec fn view(&self) -> Self::V {
         Self::V {
             encoded_der: self.encoded_der@,
             modulus_der: self.modulus_der@,
@@ -125,7 +125,7 @@ pub enum PublicKey<'a> {
 
 impl View for PublicKey<'_> {
     type V = super::spec::PublicKey;
-    closed spec fn view(&self) -> Self::V {
+    open spec fn view(&self) -> Self::V {
         match self {
             PublicKey::Rsa(key) => super::spec::PublicKey::Rsa(key@),
             PublicKey::Unsupported => super::spec::PublicKey::Unsupported,
@@ -151,7 +151,7 @@ pub struct SubjectPublicKeyInfo<'a> {
 
 impl View for SubjectPublicKeyInfo<'_> {
     type V = super::spec::SubjectPublicKeyInfo;
-    closed spec fn view(&self) -> Self::V {
+    open spec fn view(&self) -> Self::V {
         Self::V {
             algorithm: crate::certificate::contract::view_algorithm_identifier(&self.algorithm),
             public_key: self.public_key@,
