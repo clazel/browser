@@ -55,6 +55,18 @@ pub open spec fn feed_ensures(hash: spec_fn(Seq<u8>) -> Seq<u8>,
         && crate::connection::framing_spec::wf_mode(out.framing, false)
 }
 
+/// Runtime stream feed refines the byte-prefix model and returns the exact boundary.
+pub open spec fn feed_exec_ensures(hash: spec_fn(Seq<u8>) -> Seq<u8>,
+    before: super::bootstrap_spec::State, framing: Seq<u8>, input: Seq<u8>,
+    consumed: nat, action: super::bootstrap_spec::Action,
+    after: super::bootstrap_spec::State, final_framing: Seq<u8>) -> bool {
+    let expected = super::bootstrap_spec::feed(hash, before, framing, input);
+    consumed == expected.consumed
+        && action == expected.action
+        && after == expected.state
+        && final_framing == expected.framing
+}
+
 /// EOF is terminal before the final ServerHello and inert after terminality.
 pub open spec fn eof_ensures(before: super::bootstrap_spec::State,
     after: super::bootstrap_spec::State, action: super::bootstrap_spec::Action) -> bool {
