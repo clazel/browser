@@ -17,6 +17,17 @@ pub open spec fn feed_ensures(before: Seq<u8>, input: Seq<u8>, out: super::frami
         && super::framing_spec::status_matches(out.buffer, out.status)
 }
 
+/// Feed in the immutable parser mode selected by the buffer constructor.
+pub open spec fn feed_mode_ensures(protected: bool, before: Seq<u8>, input: Seq<u8>,
+    out: super::framing_spec::Feed) -> bool {
+    super::framing_spec::wf_mode(before, protected)
+        && out == super::framing_spec::feed_mode(before, input, protected)
+        && out.consumed <= input.len()
+        && out.buffer == before + input.take(out.consumed as int)
+        && super::framing_spec::wf_mode(out.buffer, protected)
+        && super::framing_spec::status_matches_mode(out.buffer, out.status, protected)
+}
+
 /// take returns the exact held prefix, clears it, and restores the invariant.
 pub open spec fn take_ensures(before: Seq<u8>, returned: Seq<u8>, after: Seq<u8>) -> bool {
     super::framing_spec::wf(before)

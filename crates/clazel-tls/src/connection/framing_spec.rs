@@ -2,8 +2,9 @@
 //! Source: <https://www.rfc-editor.org/rfc/rfc8446#section-5.1>.
 //!
 //! Modelling choices:
-//! - The existing record parser is authoritative and is called with
-//!   `protected = true`; connection policy handles the returned CCS frame.
+//! - The existing record parser is authoritative; a framer has an immutable
+//!   mode bit so the initial Hello flight uses `protected = false` and later
+//!   epochs use `protected = true`.
 //! - The buffer owns only a prefix of one record. It stops on the exact first
 //!   complete or invalid record boundary and never buffers a suffix.
 //! - Consumed bytes are owned by this buffer. The caller retains/resubmits
@@ -45,9 +46,9 @@ pub struct Feed {
     pub status: Status,
 }
 
-/// Parse the current prefix in protected mode and map parser errors to alerts.
-pub open spec fn status(buffer: Seq<u8>) -> Status {
-    match crate::spec::read_record(buffer, true) {
+/// Parse the current prefix in the selected record mode.
+pub open spec fn status_mode(buffer: Seq<u8>, protected: bool) -> Status {
+    match crate::spec::read_record(buffer, protected) {
         crate::spec::Read::NeedMore => Status::Pending,
         crate::spec::Read::Fail(error) => Status::Fail(crate::spec::alert_of(error)),
         crate::spec::Read::Done(_, rest) => {
@@ -56,17 +57,28 @@ pub open spec fn status(buffer: Seq<u8>) -> Status {
     }
 }
 
+/// Existing protected-record status view.
+pub open spec fn status(buffer: Seq<u8>) -> Status { status_mode(buffer, true) }
+
 /// Buffer invariant: bounded, and any complete parse is exactly at its boundary.
-pub open spec fn wf(buffer: State) -> bool {
-    buffer.len() <= MAX_BUFFER && match crate::spec::read_record(buffer, true) {
+pub open spec fn wf_mode(buffer: State, protected: bool) -> bool {
+    buffer.len() <= MAX_BUFFER && match crate::spec::read_record(buffer, protected) {
         crate::spec::Read::Done(_, rest) => rest.len() == 0,
         _ => true,
     }
 }
 
+/// Existing protected-record buffer invariant.
+pub open spec fn wf(buffer: State) -> bool { wf_mode(buffer, true) }
+
 /// Explicit contract for the externally visible status.
 pub open spec fn status_matches(buffer: Seq<u8>, result: Status) -> bool {
-    match (result, crate::spec::read_record(buffer, true)) {
+    status_matches_mode(buffer, result, true)
+}
+
+/// Status correctness in the selected record mode.
+pub open spec fn status_matches_mode(buffer: Seq<u8>, result: Status, protected: bool) -> bool {
+    match (result, crate::spec::read_record(buffer, protected)) {
         (Status::Pending, crate::spec::Read::NeedMore) => true,
         (Status::Complete, crate::spec::Read::Done(_, rest)) => rest.len() == 0,
         (Status::Fail(alert), crate::spec::Read::Fail(error)) => alert == crate::spec::alert_of(error),
@@ -76,9 +88,15 @@ pub open spec fn status_matches(buffer: Seq<u8>, result: Status) -> bool {
 
 /// Append bytewise, stopping at the first complete record or parser error.
 pub open spec fn feed(buffer: Seq<u8>, input: Seq<u8>) -> Feed
+{
+    feed_mode(buffer, input, true)
+}
+
+/// Append bytewise in the selected mode, stopping at the first record.
+pub open spec fn feed_mode(buffer: Seq<u8>, input: Seq<u8>, protected: bool) -> Feed
     decreases input.len(),
 {
-    match status(buffer) {
+    match status_mode(buffer, protected) {
         Status::Complete => Feed { buffer, consumed: 0, status: Status::Complete },
         Status::Fail(alert) => Feed { buffer, consumed: 0, status: Status::Fail(alert) },
         Status::Pending => {
@@ -86,9 +104,9 @@ pub open spec fn feed(buffer: Seq<u8>, input: Seq<u8>) -> Feed
                 Feed { buffer, consumed: 0, status: Status::Pending }
             } else {
                 let appended = buffer.push(input[0]);
-                match crate::spec::read_record(appended, true) {
+                match crate::spec::read_record(appended, protected) {
                     crate::spec::Read::NeedMore => {
-                        let tail = feed(appended, input.skip(1));
+                        let tail = feed_mode(appended, input.skip(1), protected);
                         Feed { buffer: tail.buffer, consumed: tail.consumed + 1, status: tail.status }
                     },
                     crate::spec::Read::Fail(error) => Feed {
