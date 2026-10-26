@@ -1,5 +1,7 @@
 //! Bounded framing and the initial TLS connection dispatcher.
 pub mod dispatcher_contract;
+pub mod dispatcher_certificates;
+pub mod dispatcher_lemmas;
 pub mod dispatcher_spec;
 pub mod framing;
 pub mod framing_contract;

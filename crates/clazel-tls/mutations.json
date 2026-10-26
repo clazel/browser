@@ -468,7 +468,7 @@
       "find": "if t == EXT_SERVER_NAME {\n        m is Ch || m is Ee",
       "replace": "if t == EXT_SERVER_NAME {\n        m is Ch",
       "expect": "killed",
-      "reason": "The §4.2 table row `server_name` is changed: lemma_ext_row_server_name is false.",
+      "reason": "The \u00a74.2 table row `server_name` is changed: lemma_ext_row_server_name is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -482,7 +482,7 @@
       "find": "} else if t == EXT_STATUS_REQUEST {\n        m is Ch || m is Cr || m is Ct",
       "replace": "} else if t == EXT_STATUS_REQUEST {\n        m is Ch || m is Cr",
       "expect": "killed",
-      "reason": "The §4.2 table row `status_request` is changed: lemma_ext_row_status_request is false.",
+      "reason": "The \u00a74.2 table row `status_request` is changed: lemma_ext_row_status_request is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -496,7 +496,7 @@
       "find": "} else if t == EXT_SIGNATURE_ALGORITHMS {\n        m is Ch || m is Cr",
       "replace": "} else if t == EXT_SIGNATURE_ALGORITHMS {\n        m is Ch || m is Cr || m is Sh",
       "expect": "killed",
-      "reason": "The §4.2 table row `signature_algorithms` is changed: lemma_ext_row_signature_algorithms is false.",
+      "reason": "The \u00a74.2 table row `signature_algorithms` is changed: lemma_ext_row_signature_algorithms is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -510,7 +510,7 @@
       "find": "} else if t == EXT_PADDING {\n        m is Ch",
       "replace": "} else if t == EXT_PADDING {\n        m is Ch || m is Ee",
       "expect": "killed",
-      "reason": "The §4.2 table row `padding` is changed: lemma_ext_row_padding is false.",
+      "reason": "The \u00a74.2 table row `padding` is changed: lemma_ext_row_padding is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -524,7 +524,7 @@
       "find": "} else if t == EXT_KEY_SHARE {\n        m is Ch || m is Sh || m is Hrr",
       "replace": "} else if t == EXT_KEY_SHARE {\n        m is Ch || m is Sh",
       "expect": "killed",
-      "reason": "The §4.2 table row `key_share` is changed: lemma_ext_row_key_share is false.",
+      "reason": "The \u00a74.2 table row `key_share` is changed: lemma_ext_row_key_share is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -538,7 +538,7 @@
       "find": "} else if t == EXT_COOKIE {\n        m is Ch || m is Hrr",
       "replace": "} else if t == EXT_COOKIE {\n        m is Ch || m is Hrr || m is Sh",
       "expect": "killed",
-      "reason": "The §4.2 table row `cookie` is changed: lemma_ext_row_cookie is false.",
+      "reason": "The \u00a74.2 table row `cookie` is changed: lemma_ext_row_cookie is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -552,7 +552,7 @@
       "find": "} else if t == EXT_EARLY_DATA {\n        m is Ch || m is Ee || m is Nst",
       "replace": "} else if t == EXT_EARLY_DATA {\n        m is Ch || m is Ee",
       "expect": "killed",
-      "reason": "The §4.2 table row `early_data` is changed: lemma_ext_row_early_data is false.",
+      "reason": "The \u00a74.2 table row `early_data` is changed: lemma_ext_row_early_data is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -566,7 +566,7 @@
       "find": "} else if t == EXT_OID_FILTERS {\n        m is Cr",
       "replace": "} else if t == EXT_OID_FILTERS {\n        m is Cr || m is Ch",
       "expect": "killed",
-      "reason": "The §4.2 table row `oid_filters` is changed: lemma_ext_row_oid_filters is false.",
+      "reason": "The \u00a74.2 table row `oid_filters` is changed: lemma_ext_row_oid_filters is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -580,7 +580,7 @@
       "find": "} else if t == EXT_SUPPORTED_VERSIONS {\n        m is Ch || m is Sh || m is Hrr",
       "replace": "} else if t == EXT_SUPPORTED_VERSIONS {\n        m is Ch || m is Hrr",
       "expect": "killed",
-      "reason": "The §4.2 table row `supported_versions` is changed: lemma_ext_row_supported_versions is false.",
+      "reason": "The \u00a74.2 table row `supported_versions` is changed: lemma_ext_row_supported_versions is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -594,7 +594,7 @@
       "find": "} else if t == EXT_PRE_SHARED_KEY {\n        m is Ch || m is Sh",
       "replace": "} else if t == EXT_PRE_SHARED_KEY {\n        m is Ch || m is Sh || m is Hrr",
       "expect": "killed",
-      "reason": "The §4.2 table row `pre_shared_key` is changed: lemma_ext_row_pre_shared_key is false.",
+      "reason": "The \u00a74.2 table row `pre_shared_key` is changed: lemma_ext_row_pre_shared_key is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -608,7 +608,7 @@
       "find": "} else if t == EXT_SCT {\n        m is Ch || m is Cr || m is Ct",
       "replace": "} else if t == EXT_SCT {\n        m is Ch || m is Ct",
       "expect": "killed",
-      "reason": "The §4.2 table row `signed_certificate_timestamp` is changed: lemma_ext_row_signed_certificate_timestamp is false.",
+      "reason": "The \u00a74.2 table row `signed_certificate_timestamp` is changed: lemma_ext_row_signed_certificate_timestamp is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -622,7 +622,7 @@
       "find": "} else if t == EXT_CERTIFICATE_AUTHORITIES {\n        m is Ch || m is Cr",
       "replace": "} else if t == EXT_CERTIFICATE_AUTHORITIES {\n        m is Ch",
       "expect": "killed",
-      "reason": "The §4.2 table row `certificate_authorities` is changed: lemma_ext_row_certificate_authorities is false.",
+      "reason": "The \u00a74.2 table row `certificate_authorities` is changed: lemma_ext_row_certificate_authorities is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -636,7 +636,7 @@
       "find": "} else if t == EXT_SIGNATURE_ALGORITHMS_CERT {\n        m is Ch || m is Cr",
       "replace": "} else if t == EXT_SIGNATURE_ALGORITHMS_CERT {\n        m is Ch || m is Cr || m is Ct",
       "expect": "killed",
-      "reason": "The §4.2 table row `signature_algorithms_cert` is changed: lemma_ext_row_signature_algorithms_cert is false.",
+      "reason": "The \u00a74.2 table row `signature_algorithms_cert` is changed: lemma_ext_row_signature_algorithms_cert is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -650,7 +650,7 @@
       "find": "} else if t == EXT_ALPN {\n        m is Ch || m is Ee",
       "replace": "} else if t == EXT_ALPN {\n        m is Ch",
       "expect": "killed",
-      "reason": "The §4.2 table row `alpn` is changed: lemma_ext_row_alpn is false.",
+      "reason": "The \u00a74.2 table row `alpn` is changed: lemma_ext_row_alpn is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -664,7 +664,7 @@
       "find": "} else if t == EXT_SUPPORTED_GROUPS {\n        m is Ch || m is Ee",
       "replace": "} else if t == EXT_SUPPORTED_GROUPS {\n        m is Ch || m is Ee || m is Sh",
       "expect": "killed",
-      "reason": "The §4.2 table row `supported_groups` is changed: lemma_ext_row_supported_groups is false.",
+      "reason": "The \u00a74.2 table row `supported_groups` is changed: lemma_ext_row_supported_groups is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -678,7 +678,7 @@
       "find": "} else if t == EXT_PSK_KEY_EXCHANGE_MODES {\n        m is Ch",
       "replace": "} else if t == EXT_PSK_KEY_EXCHANGE_MODES {\n        m is Ch || m is Cr",
       "expect": "killed",
-      "reason": "The §4.2 table row `psk_key_exchange_modes` is changed: lemma_ext_row_psk_key_exchange_modes is false.",
+      "reason": "The \u00a74.2 table row `psk_key_exchange_modes` is changed: lemma_ext_row_psk_key_exchange_modes is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -692,7 +692,7 @@
       "find": "} else if t == EXT_POST_HANDSHAKE_AUTH {\n        m is Ch",
       "replace": "} else if t == EXT_POST_HANDSHAKE_AUTH {\n        m is Ch || m is Ee",
       "expect": "killed",
-      "reason": "The §4.2 table row `post_handshake_auth` is changed: lemma_ext_row_post_handshake_auth is false.",
+      "reason": "The \u00a74.2 table row `post_handshake_auth` is changed: lemma_ext_row_post_handshake_auth is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -2255,26 +2255,26 @@
       }
     },
     {
-      "id": "traffic-padding-tag-bound",
+      "id": "traffic-padding-inner-bound",
       "file": "src/traffic/spec.rs",
-      "find": "content.len() + 1 + padding + 16 >",
-      "replace": "content.len() + 1 + padding >",
+      "find": "content.len() + 1 + padding > crate::spec::MAX_PLAINTEXT + 1",
+      "replace": "content.len() + 1 > crate::spec::MAX_PLAINTEXT + 1",
       "expect": "killed",
-      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "reason": "Ignoring padding admits a full inner plaintext above RFC 8446 section 5.4's 16385-byte bound.",
       "module": "traffic::examples",
       "certificate": {
         "file": "src/traffic/certificates.rs",
-        "lemma": "super::examples::lemma_traffic_padding_tag_bound()",
-        "witness": "!(super::spec::send_error(23, seq![42u8], 16623) == Some(22u8))"
+        "lemma": "super::examples::lemma_traffic_padding_inner_bound()",
+        "witness": "super::spec::send_error(23, seq![42u8], 16384) != Some(22u8)"
       }
     },
     {
       "id": "traffic-plaintext-bound",
       "file": "src/traffic/spec.rs",
-      "find": "content.len() > crate::spec::MAX_PLAINTEXT",
-      "replace": "false",
+      "find": "content.len() + 1 + padding > crate::spec::MAX_PLAINTEXT + 1",
+      "replace": "content.len() + 1 + padding > crate::spec::MAX_PLAINTEXT + 2",
       "expect": "killed",
-      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "reason": "Raising the full inner-plaintext limit admits an extra content byte. The previous separate content limit is implied by the correct full-inner bound.",
       "module": "traffic::examples",
       "certificate": {
         "file": "src/traffic/certificates.rs",
@@ -2322,6 +2322,34 @@
         "file": "src/traffic/handshake_certificates.rs",
         "lemma": "super::handshake_lemmas::lemma_server_read_key()",
         "witness": "super::handshake_lemmas::handoff().2.key != Seq::new(32, |i: int| 98u8)"
+      }
+    },
+    {
+      "id": "inner-full-length-padding",
+      "file": "src/spec.rs",
+      "find": "if p.len() > MAX_PLAINTEXT + 1",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "A 16386-byte inner plaintext with only one padding byte must be refused even though its content and ciphertext lengths fit their separate bounds.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_inner_full_length()",
+        "witness": "open_inner_plaintext(Seq::new(16384, |i: int| 42u8) + seq![23u8, 0u8]) != Res::<Record>::Err(ErrKind::RecordOverflow)"
+      }
+    },
+    {
+      "id": "dispatcher-key-update-request-bound",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "if request > 1 || (is_response && request != 0)",
+      "replace": "if request > 2 || (is_response && request != 0)",
+      "expect": "killed",
+      "reason": "RFC 8446 \u00a74.6.3 restricts request_update to 0 or 1; the dispatcher must not queue an out-of-range KeyUpdate.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_request_is_bounded()",
+        "witness": "super::dispatcher_spec::prepare_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::ciphers(), super::dispatcher_certificates::sample_ready_state(), 2, false) != super::dispatcher_certificates::sample_ready_state()"
       }
     }
   ]

@@ -966,4 +966,11 @@ pub proof fn lemma_ext_unknown_rows()
     assert(extension_allowed(0xFFFF, MsgKind::Ct)) by (compute_only);
 }
 
+/// RFC 8446 §5.4: padding counts toward the complete 2^14+1 inner bound.
+pub proof fn lemma_inner_full_length()
+    ensures open_inner_plaintext(Seq::new(16384, |i: int| 42u8) + seq![23u8, 0u8]) == Res::<Record>::Err(ErrKind::RecordOverflow),
+{
+    assert(open_inner_plaintext(Seq::new(16384, |i: int| 42u8) + seq![23u8, 0u8]) == Res::<Record>::Err(ErrKind::RecordOverflow)) by (compute_only);
+}
+
 } // verus!

@@ -812,8 +812,8 @@ pub open spec fn split_inner_plaintext(p: Seq<u8>) -> Option<(Seq<u8>, u8)>
 ///    received, the receiving implementation MUST terminate the
 ///    connection with an "unexpected_message" alert." (§5.4)
 pub open spec fn open_inner_plaintext(p: Seq<u8>) -> Res<Record> {
-    if p.len() > MAX_PLAINTEXT + 1 { return Res::Err(ErrKind::RecordOverflow); }
-    match split_inner_plaintext(p) {
+    if p.len() > MAX_PLAINTEXT + 1 { Res::Err(ErrKind::RecordOverflow) }
+    else { match split_inner_plaintext(p) {
         None => Res::Err(ErrKind::AllZeroInnerPlaintext),
         Some((content, t)) => {
             if t == CT_CHANGE_CIPHER_SPEC {
@@ -828,6 +828,7 @@ pub open spec fn open_inner_plaintext(p: Seq<u8>) -> Res<Record> {
                 Res::Ok(Record { ctype: t, fragment: content })
             }
         },
+    }
     }
 }
 

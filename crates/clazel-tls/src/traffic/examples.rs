@@ -93,11 +93,11 @@ pub proof fn lemma_traffic_mac_terminal()
 {
     assert(super::spec::receive(open(), initial(), seq![23u8,3u8,3u8,0u8,1u8,0u8]).0.failed) by (compute_only);
 }
-/// Concrete record-epoch requirement: traffic padding tag bound.
-pub proof fn lemma_traffic_padding_tag_bound()
-    ensures super::spec::send_error(23, seq![42u8], 16623) == Some(22u8),
+/// Concrete record-epoch requirement: traffic padding inner bound.
+pub proof fn lemma_traffic_padding_inner_bound()
+    ensures super::spec::send_error(23, seq![42u8], 16384) == Some(22u8),
 {
-    assert(super::spec::send_error(23, seq![42u8], 16623) == Some(22u8)) by (compute_only);
+    assert(super::spec::send_error(23, seq![42u8], 16384) == Some(22u8)) by (compute_only);
 }
 /// Concrete record-epoch requirement: traffic plaintext bound.
 pub proof fn lemma_traffic_plaintext_bound()

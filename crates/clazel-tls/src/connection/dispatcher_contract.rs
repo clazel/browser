@@ -160,6 +160,7 @@ pub open spec fn action_refines_key_update_ack(action: super::dispatcher_spec::A
             && after.pending_update_request is Some && wire == after.pending_update_wire,
         super::dispatcher_spec::Action::None => after.pending_update_request is None
             && after.application_sender is Some && before.application_sender is Some,
+        super::dispatcher_spec::Action::Fail(_) => terminal_ensures(after, super::dispatcher_spec::Mode::Failed),
         _ => false,
     }
 }
