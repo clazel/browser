@@ -376,13 +376,22 @@ impl<C: Crypto> Bootstrap<C> {
                 (final(self).state(), out@)),
     {
         let ghost before = self.state();
+        let ghost mode0 = self.mode;
+        let ghost pending0 = self.pending_flight@;
         proof {
             reveal(Bootstrap::state);
             assert(before.mode == self.mode@);
+            assert(before.mode == mode0@);
             assert(before.pending_flight == self.pending_flight@);
+            assert(before.pending_flight == pending0);
         }
-        if (self.mode != Mode::AwaitClientHelloSend && self.mode != Mode::AwaitClientHello2Send)
-            || sent != self.pending_flight.as_slice() {
+        let mode_ok = matches!(self.mode, Mode::AwaitClientHelloSend | Mode::AwaitClientHello2Send);
+        let same = crate::handshake::bytes_eq(sent, self.pending_flight.as_slice());
+        proof {
+            assert(mode_ok == (mode0 == Mode::AwaitClientHelloSend || mode0 == Mode::AwaitClientHello2Send));
+            assert(same == (sent@ == pending0));
+        }
+        if !mode_ok || !same {
             let action = self.fail(crate::spec::INTERNAL_ERROR);
             proof {
                 reveal(Bootstrap::state);
@@ -391,10 +400,11 @@ impl<C: Crypto> Bootstrap<C> {
                 assert(action@ == super::bootstrap_spec::Action::Fail(crate::spec::INTERNAL_ERROR));
                 let ghost expected = super::bootstrap_spec::acknowledge(before, sent@);
                 let ghost after = self.state();
-                if self.mode != Mode::AwaitClientHelloSend && self.mode != Mode::AwaitClientHello2Send {
+                if !mode_ok {
                     assert(before.mode != super::bootstrap_spec::Mode::AwaitClientHelloSend
                         && before.mode != super::bootstrap_spec::Mode::AwaitClientHello2Send);
                 } else {
+                    assert(sent@ != pending0);
                     assert(sent@ != before.pending_flight);
                 }
                 assert(after.mode == expected.0.mode);
@@ -416,6 +426,8 @@ impl<C: Crypto> Bootstrap<C> {
             reveal(Bootstrap::state);
             reveal(super::bootstrap_spec::acknowledge);
             assert(super::bootstrap_spec::wf(before));
+            assert(mode_ok && same);
+            assert(mode0 == Mode::AwaitClientHelloSend || mode0 == Mode::AwaitClientHello2Send);
             assert(before.mode == super::bootstrap_spec::Mode::AwaitClientHelloSend
                 || before.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send);
             let ghost expected = super::bootstrap_spec::acknowledge(before, sent@);
@@ -475,6 +487,13 @@ impl<C: Crypto> Bootstrap<C> {
                 proof {
                     reveal(Bootstrap::state);
                     reveal(super::bootstrap_spec::eof);
+                    let ghost after = self.state();
+                    let ghost expected = super::bootstrap_spec::eof(before).0;
+                    assert(after.mode == expected.mode);
+                    assert(after.hello == expected.hello);
+                    assert(after.pending_flight == expected.pending_flight);
+                    assert(after.compatibility == expected.compatibility);
+                    assert(after.reassembly == expected.reassembly);
                     assert(self.state() == super::bootstrap_spec::eof(before).0);
                     assert(action@ == super::bootstrap_spec::eof(before).1);
                 }
