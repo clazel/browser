@@ -14,7 +14,7 @@
 //!   before ClientHello2 by the Hello driver.
 //! - Terminal states retain no authentication secrets, traffic epochs, or
 //!   partial input. No production transport, cryptography, X.509 validation,
-//!   post-handshake messages, or secret-erasure guarantee is modelled here.
+//!   ticket processing, or secret-erasure guarantee is modelled here.
 //! - RFC prose and equations have no numbered algorithm steps.
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -68,6 +68,10 @@ pub struct State {
     pub application_receiver: Option<crate::traffic::spec::State>,
     /// Application master secret, retained only until application epochs install.
     pub master: Seq<u8>,
+    /// Current client application traffic secret for the send direction.
+    pub client_application_secret: Seq<u8>,
+    /// Current server application traffic secret for the receive direction.
+    pub server_application_secret: Seq<u8>,
     /// Bytes of one incomplete handshake message.
     pub reassembly: crate::spec::Reasm,
     /// Consumed wire prefix for one record; never contains a following record.
@@ -76,6 +80,16 @@ pub struct State {
     pub ccs_pending: bool,
     /// Exact protected client flight awaiting acknowledgement.
     pub pending_flight: Seq<u8>,
+    /// Next client traffic secret awaiting exact KeyUpdate send acknowledgement.
+    pub pending_update_secret: Seq<u8>,
+    /// Exact protected KeyUpdate record awaiting send acknowledgement.
+    pub pending_update_wire: Seq<u8>,
+    /// Request bit carried by the pending KeyUpdate.
+    pub pending_update_request: Option<u8>,
+    /// Whether the pending update is the required response to a peer request.
+    pub pending_update_is_response: bool,
+    /// A received update_requested still requires a later KeyUpdate(0).
+    pub response_due: bool,
 }
 
 /// Cipher functions retained from the factory for each active epoch.
@@ -108,12 +122,16 @@ pub open spec fn finished_is_last(messages: Seq<Seq<u8>>) -> bool {
 pub open spec fn no_live_secrets(s: State) -> bool {
     s.auth is None && s.handshake_sender is None && s.handshake_receiver is None
         && s.application_sender is None && s.application_receiver is None && s.master.len() == 0
+        && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
+        && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
+        && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due
 }
 
 /// Outward effects agree with the state transition that makes them safe.
 pub open spec fn action_refines(action: Action, after: State) -> bool {
     match action {
-        Action::Send(wire) => after.mode == Mode::AwaitClientFlight && after.pending_flight == wire,
+        Action::Send(wire) => (after.mode == Mode::AwaitClientFlight && after.pending_flight == wire)
+            || (after.mode == Mode::Ready && after.pending_update_wire == wire),
         Action::Ready => after.mode == Mode::Ready,
         Action::Deliver(_) => after.mode == Mode::Ready,
         Action::Fail(_) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
@@ -130,11 +148,17 @@ pub open spec fn wf(s: State) -> bool {
                 && s.handshake_receiver is Some && s.application_sender is None
                 && s.application_receiver is None && s.master.len() == 32
                 && s.pending_flight.len() == 0
+                && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
+                && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
+                && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due
                 && s.auth is Some,
             Mode::AwaitClientFlight => s.auth is Some && s.handshake_sender is Some
                 && s.handshake_receiver is Some && s.application_sender is None
                 && s.application_receiver is None && s.master.len() == 32
                 && s.pending_flight.len() > 0 && !s.ccs_pending
+                && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
+                && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
+                && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due
                 && crate::spec::at_message_boundary(s.reassembly)
                 && s.framing.len() == 0
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::SendFinished,
@@ -143,12 +167,23 @@ pub open spec fn wf(s: State) -> bool {
                 && s.handshake_receiver is None && s.application_sender is Some
                 && s.application_receiver is Some && s.master.len() == 0
                 && s.pending_flight.len() == 0 && !s.ccs_pending
+                && s.client_application_secret.len() == 32 && s.server_application_secret.len() == 32
+                && (s.pending_update_request is None == (s.pending_update_wire.len() == 0))
+                && (s.pending_update_request is None == (s.pending_update_secret.len() == 0))
+                && (s.pending_update_request is Some ==> s.pending_update_secret.len() == 32)
+                && (s.pending_update_request is Some ==> s.pending_update_wire.len() > 0)
+                && match s.pending_update_request { Some(request) => request <= 1, None => true }
+                && (s.pending_update_is_response ==> s.pending_update_request == Some(0))
+                && (s.response_due ==> s.pending_update_request is Some)
                 && crate::spec::at_message_boundary(s.reassembly)
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::Ready,
                     None => false },
             Mode::Failed | Mode::Closed => no_live_secrets(s)
                 && s.reassembly.buf.len() == 0 && s.framing.len() == 0
-                && s.pending_flight.len() == 0 && !s.ccs_pending,
+                && s.pending_flight.len() == 0 && !s.ccs_pending
+                && s.client_application_secret.len() == 0 && s.server_application_secret.len() == 0
+                && s.pending_update_secret.len() == 0 && s.pending_update_wire.len() == 0
+                && s.pending_update_request is None && !s.pending_update_is_response && !s.response_due,
         }
 }
 
@@ -162,10 +197,109 @@ pub open spec fn start(h: crate::traffic::handshake_spec::Handoff, ccs_pending: 
         application_sender: None,
         application_receiver: None,
         master: h.3,
+        client_application_secret: seq![],
+        server_application_secret: seq![],
         reassembly: crate::spec::reasm_new(),
         framing: seq![],
         ccs_pending,
         pending_flight: seq![],
+        pending_update_secret: seq![],
+        pending_update_wire: seq![],
+        pending_update_request: None,
+        pending_update_is_response: false,
+        response_due: false,
+    }
+}
+
+/// Protect a KeyUpdate with the current client epoch. The epoch changes only
+/// after the caller acknowledges the exact returned wire bytes.
+pub open spec fn prepare_key_update(c: crate::schedule::spec::Crypto,
+    ciphers: Ciphers, s: State, request: u8, is_response: bool) -> State
+{
+    if request > 1 || (is_response != s.response_due) { s }
+    else { match (s.application_sender, s.pending_update_request) {
+        (Some(sender), None) => {
+            let body = crate::spec::write_key_update(request);
+            let message = crate::spec::write_handshake(crate::spec::HS_KEY_UPDATE, body);
+            let next_secret = crate::schedule::spec::next_traffic_secret(c, s.client_application_secret);
+            match crate::traffic::spec::send(ciphers.application_seal, sender,
+                crate::spec::CT_HANDSHAKE, message, 0) {
+                (sender_after, Ok(wire)) => State {
+                    application_sender: Some(sender_after),
+                    pending_update_secret: next_secret,
+                    pending_update_wire: wire,
+                    pending_update_request: Some(request),
+                    pending_update_is_response: is_response,
+                    response_due: if is_response { false } else { s.response_due },
+                    ..s
+                },
+                _ => s,
+            }
+        },
+        _ => s,
+    } }
+}
+
+/// Receive a syntactically valid KeyUpdate under the old receive epoch and
+/// install the next server secret before processing another record.
+pub open spec fn receive_key_update(c: crate::schedule::spec::Crypto, s: State,
+    request: u8) -> State
+{
+    let next_secret = crate::schedule::spec::next_traffic_secret(c, s.server_application_secret);
+    State {
+        application_receiver: match crate::traffic::spec::start(c, next_secret) {
+            Ok(epoch) => Some(epoch), Err(_) => s.application_receiver,
+        },
+        server_application_secret: next_secret,
+        response_due: s.response_due || request == 1,
+        ..s
+    }
+}
+
+/// Acknowledging a protected KeyUpdate installs its next send epoch at
+/// sequence zero; it does not modify the independently advancing receive side.
+pub open spec fn acknowledge_key_update(c: crate::schedule::spec::Crypto,
+    s: State, acknowledgement: Seq<u8>) -> State
+{
+    match s.pending_update_request {
+        Some(_) if acknowledgement == s.pending_update_wire => State {
+            application_sender: match crate::traffic::spec::start(c, s.pending_update_secret) {
+                Ok(epoch) => Some(epoch), Err(_) => s.application_sender,
+            },
+            client_application_secret: s.pending_update_secret,
+            pending_update_secret: seq![],
+            pending_update_wire: seq![],
+            pending_update_request: None,
+            pending_update_is_response: false,
+            ..s
+        },
+        _ => s,
+    }
+}
+
+/// Complete a send acknowledgement and, if a peer request arrived while the
+/// previous update was in flight, immediately queue the required KeyUpdate(0).
+pub open spec fn acknowledge_key_update_and_respond(c: crate::schedule::spec::Crypto,
+    ciphers: Ciphers, s: State, acknowledgement: Seq<u8>) -> State
+{
+    let acknowledged = acknowledge_key_update(c, s, acknowledgement);
+    if acknowledged.response_due {
+        prepare_key_update(c, ciphers, acknowledged, 0, true)
+    } else {
+        acknowledged
+    }
+}
+
+/// A peer request rotates the receive epoch immediately. If no local update is
+/// outstanding, queue its mandatory unrequested response before app data.
+pub open spec fn receive_key_update_and_respond(c: crate::schedule::spec::Crypto,
+    ciphers: Ciphers, s: State, request: u8) -> State
+{
+    let received = receive_key_update(c, s, request);
+    if received.response_due && received.pending_update_request is None {
+        prepare_key_update(c, ciphers, received, 0, true)
+    } else {
+        received
     }
 }
 
@@ -179,10 +313,17 @@ pub open spec fn failed() -> State {
         application_sender: None,
         application_receiver: None,
         master: seq![],
+        client_application_secret: seq![],
+        server_application_secret: seq![],
         reassembly: crate::spec::reasm_new(),
         framing: seq![],
         ccs_pending: false,
         pending_flight: seq![],
+        pending_update_secret: seq![],
+        pending_update_wire: seq![],
+        pending_update_request: None,
+        pending_update_is_response: false,
+        response_due: false,
     }
 }
 

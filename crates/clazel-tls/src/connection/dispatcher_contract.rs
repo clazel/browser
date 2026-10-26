@@ -104,8 +104,70 @@ pub open spec fn ready_after_ack_ensures(c: crate::schedule::spec::Crypto, v: cr
                 && after.application_receiver == match crate::traffic::spec::start(c, server_secret) {
                     Ok(s) => Some(s), Err(_) => None,
                 }
+                && after.client_application_secret == client_secret
+                && after.server_application_secret == server_secret
                 && after.master.len() == 0 && after.pending_flight.len() == 0
         },
+        _ => false,
+    }
+}
+
+/// A local KeyUpdate is protected under the old send epoch and saved verbatim
+/// until the I/O layer acknowledges the complete record.
+pub open spec fn prepare_update_ensures(c: crate::schedule::spec::Crypto,
+    ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
+    request: u8, is_response: bool, after: super::dispatcher_spec::State) -> bool
+{
+    before.mode == super::dispatcher_spec::Mode::Ready
+        && before.pending_update_request is None
+        && request <= 1
+        && is_response == before.response_due
+        && after == super::dispatcher_spec::prepare_key_update(c, ciphers, before, request, is_response)
+        && super::dispatcher_spec::wf(after)
+        && after.pending_update_request == Some(request)
+        && after.pending_update_is_response == is_response
+        && after.pending_update_wire.len() > 0
+}
+
+/// A received KeyUpdate rotates only the peer's receive direction and queues
+/// the requested response before the next application send.
+pub open spec fn receive_update_ensures(c: crate::schedule::spec::Crypto,
+    ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
+    request: u8, after: super::dispatcher_spec::State) -> bool
+{
+    before.mode == super::dispatcher_spec::Mode::Ready && request <= 1
+        && after == super::dispatcher_spec::receive_key_update_and_respond(c, ciphers, before, request)
+        && super::dispatcher_spec::wf(after)
+        && after.server_application_secret == crate::schedule::spec::next_traffic_secret(c, before.server_application_secret)
+        && after.client_application_secret == before.client_application_secret
+}
+
+/// Exact acknowledgements rotate the client send epoch to sequence zero.
+/// A mismatched acknowledgement is connection-fatal.
+pub open spec fn key_update_ack_ensures(c: crate::schedule::spec::Crypto,
+    ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
+    sent: Seq<u8>, action: super::dispatcher_spec::Action,
+    after: super::dispatcher_spec::State) -> bool
+{
+    if before.mode == super::dispatcher_spec::Mode::Ready
+        && before.pending_update_request is Some && sent == before.pending_update_wire {
+        after == super::dispatcher_spec::acknowledge_key_update_and_respond(c, ciphers, before, sent)
+            && super::dispatcher_spec::wf(after)
+            && action_refines_key_update_ack(action, before, after)
+    } else {
+        terminal_ensures(after, super::dispatcher_spec::Mode::Failed)
+            && action is Fail
+    }
+}
+
+pub open spec fn action_refines_key_update_ack(action: super::dispatcher_spec::Action,
+    before: super::dispatcher_spec::State, after: super::dispatcher_spec::State) -> bool
+{
+    match action {
+        super::dispatcher_spec::Action::Send(wire) => after.mode == super::dispatcher_spec::Mode::Ready
+            && after.pending_update_request is Some && wire == after.pending_update_wire,
+        super::dispatcher_spec::Action::None => after.pending_update_request is None
+            && after.application_sender is Some && before.application_sender is Some,
         _ => false,
     }
 }
