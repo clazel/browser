@@ -164,7 +164,7 @@ pub open spec fn ab_client_hello(s: Seq<u8>) -> bool {
 
 /// B.3.1 `ServerHello`: `ProtocolVersion legacy_version; Random random;
 /// opaque legacy_session_id_echo<0..32>; CipherSuite cipher_suite; uint8
-/// legacy_compression_method; Extension extensions<6..2^16-1>`.
+/// legacy_compression_method; Extension extensions<0..2^16-1>`.
 pub open spec fn ab_server_hello_enc(m: ServerHello) -> Seq<u8> {
     ab_num(m.legacy_version as nat, 2) + m.random + ab_opaque(m.session_id_echo, 32) + ab_num(m.cipher_suite as nat, 2)
         + ab_num(m.compression as nat, 1) + ab_extensions(m.extensions, 65535)
@@ -174,7 +174,7 @@ pub open spec fn ab_server_hello_enc(m: ServerHello) -> Seq<u8> {
 pub open spec fn ab_server_hello_ok(m: ServerHello) -> bool {
     &&& m.random.len() == 32
     &&& ab_opaque_ok(m.session_id_echo, 0, 32)
-    &&& ab_extensions_ok(m.extensions, 6, 65535)
+    &&& ab_extensions_ok(m.extensions, 0, 65535)
 }
 
 /// The byte strings that B.3.1's `ServerHello` generates.
@@ -589,7 +589,7 @@ pub proof fn lemma_ab_server_hello_enc(m: ServerHello)
     super::lemmas_pl::lemma_pow256_widths();
     lemma_ab_pow_is_pow256(1);
     lemma_ab_pow_is_pow256(2);
-    lemma_exts_ok(m.extensions, 6, 65535);
+    lemma_exts_ok(m.extensions, 0, 65535);
     assert(ab_server_hello_ok(m) <==> super::lemmas_hs::server_hello_requires(m));
     if ab_server_hello_ok(m) {
         lemma_ab_num(m.legacy_version as nat, 2);

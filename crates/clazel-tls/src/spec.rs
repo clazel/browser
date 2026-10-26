@@ -1813,17 +1813,41 @@ pub open spec fn write_client_hello(ch: ClientHello) -> Seq<u8> {
     ) + (write_vec(ch.compression, 255) + write_exts(ch.extensions, 65535)))))
 }
 
-/// §4.1.3, the structure of a ServerHello (Appendix B.3.1), as the whole
-/// of a message body.
-/// RFC 5246 §7.4.1.3 permits the legacy extension field to be absent or empty.
-pub open spec fn read_server_hello_extensions(input: Seq<u8>) -> Option<(Seq<Ext>, Seq<u8>)> {
-    if input.len() == 0 {
-        Some((Seq::empty(), Seq::empty()))
-    } else {
-        read_exts(input, 0, 65535)
+/// RFC 8446 §4.1.3 and RFC 5246 §7.4.1.3: a complete legacy ServerHello
+/// body without `supported_versions`. This is a negotiation failure for a
+/// TLS 1.3-only client, not a framing error. If an extension vector is
+/// present, it must be fully well-formed and consume the remainder.
+pub open spec fn legacy_server_hello_without_supported_versions(b: Seq<u8>) -> bool {
+    match read_uint(b, 2) {
+        None => false,
+        Some((_, r1)) => match read_fixed(r1, 32) {
+            None => false,
+            Some((_, r2)) => match read_vec(r2, 0, 32) {
+                None => false,
+                Some((_, r3)) => match read_uint(r3, 2) {
+                    None => false,
+                    Some((_, r4)) => match read_uint(r4, 1) {
+                        None => false,
+                        Some((_, r5)) => {
+                            if r5.len() == 0 { true }
+                            else {
+                                match read_exts(r5, 0, 65535) {
+                                    None => false,
+                                    Some((es, rest)) => rest.len() == 0 && !has_ext(es, 43),
+                                }
+                            }
+                        },
+                    },
+                },
+            },
+        },
     }
 }
 
+/// §4.1.3, the structure of a ServerHello (Appendix B.3.1), as the whole
+/// of a message body. The TLS 1.3 extension field is length-prefixed; its
+/// generic syntax permits empty vectors so negotiation can report the
+/// missing `supported_versions` extension as `protocol_version`.
 pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
     match read_uint(b, 2) {
         None => None,
@@ -1840,7 +1864,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                     match read_uint(r4, 1) {
                                         None => None,
                                         Some((comp, r5)) => {
-                                            match read_server_hello_extensions(r5) {
+                                            match read_exts(r5, 0, 65535) {
                                                 None => None,
                                                 Some((exts, r6)) => {
                                                     if r6.len() != 0 {

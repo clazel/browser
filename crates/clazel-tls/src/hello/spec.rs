@@ -19,10 +19,10 @@
 //!   Its duplicate, placement and structural errors win before negotiation;
 //!   absent `supported_versions` is a protocol-version negotiation failure.
 //!   Multi-fault inputs need only one fatal alert.
-//! - For legacy-version fallback, absent and explicit zero-length ServerHello
-//!   extension fields both map to an empty extension sequence. The structure
-//!   model does not retain which encoding was used; the writer emits the
-//!   length-prefixed form, so byte-for-byte round-trip preservation is not claimed.
+//! - RFC 5246 permits a legacy ServerHello to omit its extension field. A
+//!   complete body with that form, or a complete valid extension vector that
+//!   lacks `supported_versions`, is classified as `protocol_version` before
+//!   the TLS 1.3 parser. Malformed/truncated vectors remain `decode_error`.
 //! - Body size inherits the transcript limit; invalid local session IDs and
 //!   oversized bodies yield internal_error. RFC prose has no step numbers;
 //!   comments name the exact field or clause rather than inventing steps.
@@ -106,6 +106,9 @@ pub open spec fn parsed(sh: crate::spec::ServerHello, session_id: Seq<u8>, retri
 /// §4.1.3 and §4.1.4: accept one complete ServerHello/HRR body.
 pub open spec fn validate(session_id: Seq<u8>, retried: bool, body: Seq<u8>) -> Result<Selection, u8> {
     if session_id.len() > 32 || body.len() > crate::transcript::spec::MAX_BODY { Err(80) }
+    else if crate::spec::legacy_server_hello_without_supported_versions(body) {
+        Err(crate::spec::PROTOCOL_VERSION)
+    }
     else {
         match crate::spec::parse_handshake_body(2, body, 32) {
             crate::spec::Res::Err(error) => Err(crate::spec::alert_of(error)),
