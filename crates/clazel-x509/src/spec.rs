@@ -23,13 +23,17 @@ verus! {
 /// A typed reference identity. `Dns` is canonical ASCII supplied by URL;
 /// `Ip` is a binary IPv4 or IPv6 address.
 pub enum ReferenceIdentity {
+    /// A canonical ASCII DNS reference from the URL layer.
     Dns(Seq<u8>),
+    /// A binary IPv4 or IPv6 reference.
     Ip(Seq<u8>),
 }
 
 /// A typed identifier extracted from subjectAltName.
 pub enum PresentedIdentity {
+    /// A dNSName subjectAltName value.
     Dns(Seq<u8>),
+    /// An iPAddress subjectAltName value.
     Ip(Seq<u8>),
 }
 
@@ -41,50 +45,54 @@ pub open spec fn dns_name_shape(name: Seq<u8>) -> bool {
 
 /// Every DNS label is nonempty and each byte is in the RFC preferred-name
 /// ASCII alphabet. `i` is the next byte to inspect.
-pub open spec fn valid_name_from(name: Seq<u8>, i: nat) -> bool
-    decreases name.len() - i
+pub open spec fn valid_name_from(name: Seq<u8>, i: int) -> bool
+    recommends 0 <= i <= name.len()
+    decreases name.len() as int - i
 {
-    if i >= name.len() {
+    if i >= name.len() as int {
         false
     } else if name[i] == b'.' {
-        i > 0 && i + 1 < name.len() && name[i + 1] != b'.'
+        i > 0 && i + 1 < name.len() as int && name[i + 1] != b'.'
             && valid_name_from(name, i + 1)
     } else {
         let b = name[i];
         (b >= b'a' && b <= b'z' || b >= b'A' && b <= b'Z'
             || b >= b'0' && b <= b'9' || b == b'-')
-            && (i + 1 == name.len() || valid_name_from(name, i + 1))
+            && (i + 1 == name.len() as int || valid_name_from(name, i + 1))
     }
 }
 
 /// RFC 9525 §6.3 compares DNS labels using case-insensitive ASCII.
 /// The wildcard case is handled by `dns_match`.
-pub open spec fn ascii_fold(b: u8) -> u8 {
-    if b >= b'A' && b <= b'Z' { b + 32 } else { b }
+pub open spec fn ascii_fold(b: u8) -> nat {
+    if b >= b'A' && b <= b'Z' { (b as nat) + 32 } else { b as nat }
 }
 
 /// Case-insensitive ASCII equality from position `i` onward.
-pub open spec fn folded_equal_from(a: Seq<u8>, b: Seq<u8>, i: nat) -> bool
-    decreases a.len() - i
+pub open spec fn folded_equal_from(a: Seq<u8>, b: Seq<u8>, i: int) -> bool
+    recommends a.len() == b.len() && 0 <= i <= a.len()
+    decreases a.len() as int - i
 {
-    a.len() == b.len() && if i == a.len() { true }
+    a.len() == b.len() && if i >= a.len() as int { true }
     else { ascii_fold(a[i]) == ascii_fold(b[i]) && folded_equal_from(a, b, i + 1) }
 }
 
 /// Locate the first label separator; `name.len()` means none exists.
-pub open spec fn first_dot(name: Seq<u8>, i: nat) -> nat
-    decreases name.len() - i
+pub open spec fn first_dot(name: Seq<u8>, i: int) -> int
+    recommends 0 <= i <= name.len()
+    decreases name.len() as int - i
 {
-    if i >= name.len() { name.len() }
+    if i >= name.len() as int { name.len() as int }
     else if name[i] == b'.' { i }
     else { first_dot(name, i + 1) }
 }
 
 /// No wildcard byte occurs in a DNS suffix.
-pub open spec fn no_wildcard_from(name: Seq<u8>, i: nat) -> bool
-    decreases name.len() - i
+pub open spec fn no_wildcard_from(name: Seq<u8>, i: int) -> bool
+    recommends 0 <= i <= name.len()
+    decreases name.len() as int - i
 {
-    if i >= name.len() { true }
+    if i >= name.len() as int { true }
     else { name[i] != b'*' && no_wildcard_from(name, i + 1) }
 }
 

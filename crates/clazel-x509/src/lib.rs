@@ -5,4 +5,5 @@
 //! reference identifier from the URL layer.
 
 pub mod contract;
+pub mod matcher;
 pub mod spec;
