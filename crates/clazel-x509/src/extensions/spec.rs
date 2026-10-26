@@ -198,23 +198,28 @@ pub open spec fn parse_general_name(input: Seq<u8>, pos: nat, end: nat) -> Optio
 }
 
 /// Read the nonempty ordered GeneralName list in a SubjectAltName value.
-pub open spec fn parse_general_names_from(input: Seq<u8>, pos: nat, end: nat)
+pub open spec fn parse_general_names_acc(input: Seq<u8>, pos: nat, end: nat, acc: Seq<GeneralName>)
     -> Option<(Seq<GeneralName>, nat)>
     recommends pos <= end && end <= input.len()
     decreases end - pos
 {
     if pos == end {
-        Some((seq![], end))
+        Some((acc, end))
     } else {
         match parse_general_name(input, pos, end) {
             Some((name, next)) if next > pos && next <= end =>
-                match parse_general_names_from(input, next, end) {
-                    Some((rest, final_pos)) => Some((seq![name] + rest, final_pos)),
-                    None => None,
-                },
+                parse_general_names_acc(input, next, end, acc.push(name)),
             _ => None,
         }
     }
+}
+
+/// Read the nonempty ordered GeneralName list in a SubjectAltName value.
+pub open spec fn parse_general_names_from(input: Seq<u8>, pos: nat, end: nat)
+    -> Option<(Seq<GeneralName>, nat)>
+    recommends pos <= end && end <= input.len()
+{
+    parse_general_names_acc(input, pos, end, seq![])
 }
 
 /// RFC 5280 §4.2.1.6: parse a complete nonempty DER GeneralNames SEQUENCE.
