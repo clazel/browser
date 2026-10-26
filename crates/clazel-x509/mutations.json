@@ -350,6 +350,89 @@
         "lemma": "super::certificates::lemma_unsupported_identifiers_must_match()",
         "witness": "prepare_signature(crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,3nat], parameters_der: None }, crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat,2nat,4nat], parameters_der: None }, seq![0x30u8,0x00], seq![0xA0u8], 0) is Some"
       }
+    },
+    {
+      "id": "name-constraints-general-subtrees-nonempty",
+      "file": "src/name_constraints/spec.rs",
+      "find": "if acc.len() > 0 { Some((acc, end)) } else { None }",
+      "replace": "Some((acc, end))",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.2.1.10 defines GeneralSubtrees with SIZE (1..MAX); an empty permittedSubtrees field is rejected.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_empty_general_subtrees_are_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x02,0xa0,0x00]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-default-minimum-omitted-and-maximum-absent",
+      "file": "src/name_constraints/spec.rs",
+      "find": "Some((base, next)) if next == finish =>",
+      "replace": "Some((base, next)) if next <= finish =>",
+      "expect": "killed",
+      "reason": "X.690 \u00a711.5 requires omission of DEFAULT minimum zero, and this profile requires maximum absent.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_explicit_default_minimum_is_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x0a,0xa0,0x08,0x30,0x06,0x82,0x01,b'a',0x80,0x01,0x00]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-ip-requires-address-mask-pair",
+      "file": "src/name_constraints/spec.rs",
+      "find": "if value.len() == 8 {",
+      "replace": "if value.len() == 4 {",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.2.1.10 encodes IPv4 name constraints as eight octets: four address plus four mask.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ip_constraint_requires_address_and_mask()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x0a,0xa0,0x08,0x30,0x06,0x87,0x04,192,0,2,1]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-permitted-precedes-excluded",
+      "file": "src/name_constraints/spec.rs",
+      "find": "Some((excluded, next)) if next == end =>",
+      "replace": "Some((excluded, next)) if next <= end =>",
+      "expect": "killed",
+      "reason": "The parser must not ignore a trailing permittedSubtrees field after excludedSubtrees; NameConstraints fields retain ASN.1 order.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_reversed_name_constraints_fields_are_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x0e,0xa1,0x05,0x30,0x03,0x82,0x01,b'a',0xa0,0x05,0x30,0x03,0x82,0x01,b'a']) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-constraints-rejects-trailing-outer-bytes",
+      "file": "src/name_constraints/spec.rs",
+      "find": "outer.cstart == start && outer.cend == end && end == input.len()",
+      "replace": "outer.cstart == start && outer.cend == end && end <= input.len()",
+      "expect": "killed",
+      "reason": "The parser consumes exactly one complete NameConstraints DER value and rejects trailing bytes.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_trailing_name_constraints_bytes_are_rejected()",
+        "witness": "parse_name_constraints(seq![0x30u8,0x00,0x05,0x00]) is Some"
+      },
+      "module": "name_constraints::certificates"
+    },
+    {
+      "id": "name-rdn-rejects-descending-set-of",
+      "file": "src/name/spec.rs",
+      "find": "if !ordered",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "RFC 5280 \u00a74.1.2.4 and X.690 \u00a711.6 require SET OF AttributeTypeAndValue encodings to be nondecreasing under padded octet comparison.",
+      "certificate": {
+        "file": "src/name/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_descending_rdn_attributes_are_rejected()",
+        "witness": "parse_name(seq![0x30u8,0x16,0x31,0x14,0x30,0x08,0x06,0x03,0x55,0x04,0x03,0x0c,0x01,b'z',0x30,0x08,0x06,0x03,0x55,0x04,0x03,0x0c,0x01,b'a']) is Some"
+      }
     }
   ]
 }
