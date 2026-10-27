@@ -221,3 +221,39 @@ it evidently means. Each entry records what we specified instead.
   `crates/clazel-tls/src/connection/dispatcher_spec.rs` (protected
   handshake).
 - **Reported upstream:** not yet.
+
+## FIPS 186-5 §6.4.2 step 3 numbers its two sub-steps "a." and "a."
+
+- **Spec:** FIPS 186-5, *Digital Signature Standard (DSS)*, published
+  3 February 2023 (PDF SHA-256
+  `fbb9c7c2ba442f03c57b63b43c888311903c9d0f29f89b06efdebd9b619140c5`),
+  §6.4.2 "ECDSA Signature Verification Algorithm", printed page 25,
+  <https://doi.org/10.6028/NIST.FIPS.186-5>
+- **Text:** step 3 "Derive the integer e from H as follows:", then "a. If
+  ⌈log2(n)⌉ ≥ hashlen, set E = H. Otherwise, set E equal to the leftmost
+  ⌈log2(n)⌉ bits of H." and then again "a. Convert the bit string E to the
+  integer e as specified in Appendix B.2.1."
+- **Problem:** two sub-steps carry the label "a." (the signing algorithm,
+  §6.4.1 step 2, labels them "a." and "b."). A citation "step 3a" is
+  ambiguous.
+- **We specify:** the second sub-step is 3b, and the first is 3a. See
+  `derive_e` in `crates/clazel-p384/src/spec.rs`.
+- **Reported upstream:** not yet.
+
+## FIPS 186-5 §6.4 says "the leftmost n bits" of a long hash, where n is the order
+
+- **Spec:** as above, §6.4 "ECDSA Digital Signature Generation and
+  Verification", printed page 23.
+- **Text:** "When the length of the output of the hash function (or XOF) is
+  greater than the bit length of n, then the leftmost n bits of the hash
+  function (or XOF) output block shall be used in any calculation using the
+  hash function (or XOF) output".
+- **Problem:** the symbol n is the order of the base point, a number of 384
+  bits for P-384 (SP 800-186 §3.2.1.4), so "the leftmost n bits" read
+  literally asks for about 2^384 bits. The same paragraph's first clause
+  says "the bit length of n", §6.1.1 says "the leftmost len(n) bits", and
+  §6.4.2 step 3a says "the leftmost ⌈log2(n)⌉ bits".
+- **We specify:** the leftmost `⌈log2 n⌉` bits, which for a prime n > 2 is
+  `len(n)`, as in §6.4.2 step 3a and SEC 1 §4.1.4 step 3.2. See `derive_e`
+  in `crates/clazel-p384/src/spec.rs`.
+- **Reported upstream:** not yet.

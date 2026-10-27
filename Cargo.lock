@@ -278,6 +278,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-p384"
+version = "0.0.0"
+dependencies = [
+ "vstd",
+]
+
+[[package]]
 name = "clazel-percent"
 version = "0.0.0"
 dependencies = [
