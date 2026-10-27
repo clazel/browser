@@ -1,10 +1,11 @@
 //! ECDSA signature verification over NIST P-384, FIPS 186-5 §6.4.2.
 //!
-//! **Specification only so far.** This crate has no executable code: no
-//! field arithmetic, no point code and no `verify` function exist yet. What
-//! is here is the part a person reviews, the meaning of "a valid ECDSA
-//! P-384 signature", written in Verus, and the contract the later
-//! implementation must meet.
+//! **Specification and field arithmetic so far.** There is no point code
+//! and no `verify` function yet. What is here is the part a person reviews,
+//! the meaning of "a valid ECDSA P-384 signature", written in Verus, the
+//! contract the later implementation must meet, and the field arithmetic
+//! modulo p and n: fiat-crypto's Montgomery code behind six axioms, with the
+//! rest (conversions, octet strings, `pow`, `inv`) proven over them.
 //!
 //! This is public-key *verification* only: the key, the signature and the
 //! digest are all public, so there is no constant-time requirement and no
@@ -17,8 +18,8 @@
 //!   toy curve for evaluated examples.
 //! - [`contract`]: what the executable `verify` will be proven to satisfy.
 //! - [`examples`]: known answers, proven by evaluating the spec.
+//! - [`field`]: the field arithmetic, over fiat-crypto, with its contracts.
 //! - [`axioms`]: the six calls into fiat-crypto, each an axiom.
-//! - [`field`]: the field arithmetic over fiat-crypto, and its contracts.
 //! - [`certificates`]: the host module for mutation kill certificates
 //!   (empty until `mutations.json` exists).
 

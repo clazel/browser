@@ -7,6 +7,15 @@
 //! - [`contract`]: what each executable field function is proven to satisfy,
 //!   as predicates over residues and octet strings (the vocabulary of
 //!   [`crate::spec`]).
+//! - [`fe`]: the executable field element [`Fe`] and its operations, proven
+//!   against the contracts over the six axioms of [`crate::axioms`].
+//! - [`lemmas`]: the facts those proofs use (about the spec's constants,
+//!   limb sequences, octet strings and modular arithmetic).
 
 pub mod contract;
+pub mod fe;
+pub mod lemmas;
 pub mod spec;
+
+pub use fe::Fe;
+pub use spec::Which;
