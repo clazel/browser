@@ -63,7 +63,7 @@ rows for the Phase 3 crates, which stay at tier 0.
 | clazel-sandbox | 1 (1) | not used | 8 successfully verified harnesses, 0 failures, 8 total | 0 | 0 (0) | — | — | none | no spec files |
 | clazel-sys | 0 (0) | not used | no harnesses | 0 | 14 (20) | — | — | none | no spec files |
 | clazel-url | 2 (2) | 565 verified, 0 errors | no harnesses | 0 | 0 (0) | 5725 / 5260 / 2026 | 144 / 0 / 0 of 144 | WPT url/ setters_tests.json: 278 / 278<br>WPT url/ toascii.json: 87 / 87<br>WPT url/ urltestdata.json: 896 / 896<br>WPT url/ urltestdata.json hosts: 359 / 359 | 0 of 7 files current |
-| clazel-x509 | 0 (2) | 227 verified, 0 errors | no harnesses | 0 | 0 (0) | 2465 / 1611 / 2009 | 33 / 0 / 0 of 33 | none | 0 of 23 files current |
+| clazel-x509 | 0 (2) | 227 verified, 0 errors | no harnesses | 0 | 0 (0) | 2465 / 1611 / 2009 | 33 / 0 / 0 of 33 | x509-limbo leaf checks: 927 / 9802 (8875 expected failures) | 0 of 23 files current |
 | xtask | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 
 ¹ From Verus's `line_count`; only code inside `verus!` is counted, and type definitions count as exec.
