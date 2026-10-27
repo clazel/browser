@@ -17,10 +17,12 @@
 //!   toy curve for evaluated examples.
 //! - [`contract`]: what the executable `verify` will be proven to satisfy.
 //! - [`examples`]: known answers, proven by evaluating the spec.
+//! - [`field`]: the field arithmetic over fiat-crypto, and its contracts.
 //! - [`certificates`]: the host module for mutation kill certificates
 //!   (empty until `mutations.json` exists).
 
 pub mod certificates;
 pub mod contract;
 pub mod examples;
+pub mod field;
 pub mod spec;
