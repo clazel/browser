@@ -228,6 +228,46 @@ fn ed25519_rfc_8032_tests_1_and_2() -> TestResult {
     Ok(())
 }
 
+/// The canonical encodings of edwards25519's eight points of order dividing
+/// 8, computed independently from RFC 8032 §5.1's curve: each y below with
+/// the x sign bit clear and, where x != 0, set.
+const SMALL_ORDER_KEYS: [&str; 8] = [
+    "0100000000000000000000000000000000000000000000000000000000000000",
+    "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+    "0000000000000000000000000000000000000000000000000000000000000000",
+    "0000000000000000000000000000000000000000000000000000000000000080",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+    "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+    "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+];
+
+#[test]
+#[cfg_attr(miri, ignore = "full Ed25519 verifications are slow under Miri")]
+fn ed25519_refuses_small_order_keys() -> TestResult {
+    // Under the identity key, R = identity and S = 0 satisfy RFC 8032
+    // §5.1.7's check for every message: libcrux alone accepts them, the
+    // signature check refuses them.
+    let identity = hex(SMALL_ORDER_KEYS.first().ok_or("table")?)?;
+    let forged = hex(&format!("01{}", "00".repeat(63)))?;
+    for message in [&b""[..], b"any message", &[0x72]] {
+        assert!(clazel_crypto::axioms::ed25519_verify(
+            message, &identity, &forged
+        ));
+        assert!(!verify(
+            &ed25519_spki(&identity, false)?,
+            ED25519,
+            message,
+            &forged
+        ));
+    }
+    for key in SMALL_ORDER_KEYS {
+        let key = hex(key)?;
+        assert!(!verify(&ed25519_spki(&key, false)?, ED25519, b"", &forged));
+    }
+    Ok(())
+}
+
 fn fixture(name: &str) -> Result<Vec<u8>, String> {
     let path = format!(
         "{}/tests/fixtures/rsa-pss/{name}",

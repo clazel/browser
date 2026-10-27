@@ -167,6 +167,106 @@ fn rsa_pss_rsae(spki: &SubjectPublicKeyInfo, hash: Hash, input: &[u8], signature
     }
 }
 
+/// Whether `key`, ignoring its x sign bit, has y-coordinate `y`.
+fn same_y(key: &[u8], y: &[u8]) -> (r: bool)
+    requires key.len() == 32, y.len() == 32,
+    ensures r == crate::signature::spec::same_y(key@, y@),
+{
+    let mut i: usize = 0;
+    while i < 31
+        invariant i <= 31, key.len() == 32, y.len() == 32,
+            forall|j: int| 0 <= j < i ==> key@[j] == y@[j],
+        decreases 31 - i,
+    {
+        match (key.get(i), y.get(i)) {
+            (Some(a), Some(b)) if *a == *b => {},
+            _ => {
+                proof { assert(key@.subrange(0, 31)[i as int] != y@.subrange(0, 31)[i as int]); }
+                return false;
+            },
+        }
+        // i < 31, so this is exact.
+        i = i.saturating_add(1);
+    }
+    proof { assert(key@.subrange(0, 31) =~= y@.subrange(0, 31)); }
+    match (key.get(31), y.get(31)) {
+        (Some(a), Some(b)) => *a & 0x7f == *b,
+        _ => false,
+    }
+}
+
+/// Whether the 32-octet `key` encodes a point of small order.
+fn is_small_order(key: &[u8]) -> (r: bool)
+    requires key.len() == 32,
+    ensures r == crate::signature::spec::is_small_order(key@),
+{
+    // 0: (sqrt(-1), 0) and (-sqrt(-1), 0), order 4
+    let y0: [u8; 32] = [
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+    // 1: the identity (0, 1), order 1
+    let y1: [u8; 32] = [
+                0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ];
+    // p - 1: (0, -1), order 2
+    let y2: [u8; 32] = [
+                0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+    ];
+    // two of the order-8 points
+    let y3: [u8; 32] = [
+                0x26, 0xe8, 0x95, 0x8f, 0xc2, 0xb2, 0x27, 0xb0,
+                0x45, 0xc3, 0xf4, 0x89, 0xf2, 0xef, 0x98, 0xf0,
+                0xd5, 0xdf, 0xac, 0x05, 0xd3, 0xc6, 0x33, 0x39,
+                0xb1, 0x38, 0x02, 0x88, 0x6d, 0x53, 0xfc, 0x05,
+    ];
+    // the other two order-8 points
+    let y4: [u8; 32] = [
+                0xc7, 0x17, 0x6a, 0x70, 0x3d, 0x4d, 0xd8, 0x4f,
+                0xba, 0x3c, 0x0b, 0x76, 0x0d, 0x10, 0x67, 0x0f,
+                0x2a, 0x20, 0x53, 0xfa, 0x2c, 0x39, 0xcc, 0xc6,
+                0x4e, 0xc7, 0xfd, 0x77, 0x92, 0xac, 0x03, 0x7a,
+    ];
+    // p: a non-canonical encoding of 0
+    let y5: [u8; 32] = [
+                0xed, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+    ];
+    // p + 1: a non-canonical encoding of 1
+    let y6: [u8; 32] = [
+                0xee, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f,
+    ];
+    let r = same_y(key, y0.as_slice()) || same_y(key, y1.as_slice())
+        || same_y(key, y2.as_slice()) || same_y(key, y3.as_slice())
+        || same_y(key, y4.as_slice()) || same_y(key, y5.as_slice())
+        || same_y(key, y6.as_slice());
+    proof {
+        let ys = crate::signature::spec::small_order_y();
+        assert(ys.len() == 7);
+        assert(y0@ =~= ys[0]);
+        assert(y1@ =~= ys[1]);
+        assert(y2@ =~= ys[2]);
+        assert(y3@ =~= ys[3]);
+        assert(y4@ =~= ys[4]);
+        assert(y5@ =~= ys[5]);
+        assert(y6@ =~= ys[6]);
+    }
+    r
+}
+
 /// ed25519 (0x0807).
 fn ed25519(spki: &SubjectPublicKeyInfo, input: &[u8], signature: &[u8]) -> (out: bool)
     ensures out == crate::signature::spec::ed25519(spki@, input@, signature@),
@@ -175,7 +275,8 @@ fn ed25519(spki: &SubjectPublicKeyInfo, input: &[u8], signature: &[u8]) -> (out:
     if is_ed25519_oid(spki.algorithm.oid.as_slice())
         && spki.algorithm.parameters_der.is_none()
         && spki.subject_public_key_unused_bits == 0
-        && key.len() == 32 && signature.len() == 64 {
+        && key.len() == 32 && signature.len() == 64
+        && !is_small_order(key) {
         axioms::ed25519_verify(input, key, signature)
     } else {
         false
