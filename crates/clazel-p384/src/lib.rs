@@ -16,9 +16,11 @@
 //!   §2.2.1, §2.3, §3.2.2.1 and §4.1.4), the P-384 domain parameters, and a
 //!   toy curve for evaluated examples.
 //! - [`contract`]: what the executable `verify` will be proven to satisfy.
+//! - [`examples`]: known answers, proven by evaluating the spec.
 //! - [`certificates`]: the host module for mutation kill certificates
 //!   (empty until `mutations.json` exists).
 
 pub mod certificates;
 pub mod contract;
+pub mod examples;
 pub mod spec;
