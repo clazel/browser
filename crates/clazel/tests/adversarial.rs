@@ -131,12 +131,25 @@ fn hostile_renderers_are_killed_and_well_behaved_ones_are_unaffected() {
             seed_of(id)
         );
         let ends: Vec<&String> = lines.iter().filter(|l| l.starts_with("exited: ")).collect();
+        // A truncated frame is the one kind whose renderer exits at once
+        // (every other kind waits to be cut off). The host and that process
+        // race: if the host reads the closed socket first it logs "closed
+        // its socket"; if the process has already exited when the host writes
+        // the Commit, that write fails and the host logs "cannot write". Both
+        // end the same way: the host reaps the renderer and tells the kernel
+        // it exited, and the Commit is the only frame ever sent (checked
+        // above), so a renderer that was not cut off, or one that was sent
+        // more, still fails here. Every other kind keeps its one outcome.
+        let says: &[&str] = if kind == Kind::Truncated {
+            &[kind.host_says(), "cannot write"]
+        } else {
+            &[kind.host_says()]
+        };
         assert!(
-            matches!(ends.as_slice(), [end] if end.contains(kind.host_says())
+            matches!(ends.as_slice(), [end] if says.iter().any(|s| end.starts_with(&format!("exited: {s}")))
                 && end.contains(&format!("hostile: seed={} kind={kind:?}", seed_of(id)))),
-            "renderer {id} ({kind:?}, seed {}) did not end with {:?}: {lines:#?}",
-            seed_of(id),
-            kind.host_says()
+            "renderer {id} ({kind:?}, seed {}) did not end with one of {says:?}: {lines:#?}",
+            seed_of(id)
         );
     }
     println!("hostile frames by kind: {kinds:?}");

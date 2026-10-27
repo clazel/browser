@@ -95,6 +95,9 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | generic-array | 0.14.7 | test | Fixed-size arrays with type-level lengths, required by `block-buffer` and `crypto-common`. Its dependencies are `typenum` and, as a build dependency, `version_check` (already listed). |
 | typenum | 1.20.1 | test | Type-level numbers, required by `generic-array` and `crypto-common`. No dependencies. |
 | cpufeatures | 0.2.17 | test | CPU feature detection for `sha2`'s hardware paths. Its only dependency is `libc` (already listed, class `shipped`, which is the stricter class). |
+| der | 0.8.2 | test | RustCrypto's DER implementation (used by `rsa`, `x509-cert` and `pkcs8`): the reference engine in `clazel-der`'s differential test (`tests/conformance_der.rs`). Used with default features off and only `alloc` and `oid`, so its only dependencies are `const-oid` and `zeroize` (the smallest DER crate that parses and writes every type item 3.5a covers; no other candidate was needed). Pinned to 0.8.2, the latest stable release. |
+| const-oid | 0.10.2 | test | `der`'s OBJECT IDENTIFIER type (the `oid` feature). No dependencies with default features off. |
+| zeroize | 1.9.1 | test | Zeroing of memory on drop, required by `der`'s `alloc` feature. No dependencies as built. |
 | serde_json | 1.0.154 | tooling | `xtask` parses `cargo metadata` output. |
 | serde_core | 1.0.229 | test | Required by `serde_json`. |
 | itoa | 1.0.18 | test | Integer formatting, required by `serde_json`. |
