@@ -4,6 +4,11 @@
 //! X.690 (02/2021) §§11.7–11.8 additionally specify DER time encoding:
 //! <https://www.itu.int/rec/T-REC-X.690-202102-I/en>
 //!
+//! `from_unix_seconds` converts the verifier's clock, in Unix seconds, to the
+//! same calendar fields. The definition of Unix time is POSIX.1-2017 (IEEE Std
+//! 1003.1-2017) XBD §4.16 "Seconds Since the Epoch":
+//! <https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap04.html#tag_04_16>
+//!
 //! Modelling choices and limits:
 //! - Inputs are the contents octets of an already tag-checked DER UTCTime or
 //!   GeneralizedTime value. Tag, length, and DER structure are checked by
@@ -24,6 +29,32 @@
 //! - UTCTime content is exactly YYMMDDHHMMSSZ; GeneralizedTime content is
 //!   exactly YYYYMMDDHHMMSSZ. Offsets, fractions, omitted seconds, extra
 //!   bytes, and non-ASCII digits are rejected as outside RFC 5280's profile.
+//! - `from_unix_seconds` takes the count of seconds as a `nat` (the exec
+//!   function takes a `u64`, which embeds). POSIX §4.16 defines the count by
+//!   a closed formula over broken-down UTC time:
+//!   `tm_sec + tm_min*60 + tm_hour*3600 + tm_yday*86400 + (tm_year-70)*31536000
+//!   + ((tm_year-69)/4)*86400 - ((tm_year-1)/100)*86400 + ((tm_year+299)/400)*86400`.
+//!   That formula is a closed form of "a day is exactly 86400 seconds and the
+//!   Gregorian calendar runs on from 1970-01-01T00:00:00Z". The spec writes
+//!   the inverse the plain way instead: whole days and the seconds into the
+//!   day by division (`seconds_per_day`), then the year found by walking
+//!   forward from 1970 year by year (`days_in_year`), then the month found
+//!   by walking forward month by month (`days_in_month`). No closed form
+//!   (for example Hinnant's `civil_from_days`) is in the spec; the exec
+//!   function may use one, proven equal.
+//! - Unix time ignores leap seconds: every UTC day has exactly 86400 seconds
+//!   and its formula has no term for leap seconds, so a leap second has no
+//!   number of its own. So
+//!   `from_unix_seconds` **never produces second 60**; the seconds field is
+//!   `second_of_day % 60`. A clock that cannot name second 60 never needs the
+//!   `calendar_time_valid` allowance for it. RFC 5280 §4.1.2.5 requires
+//!   certificate times in UTC, with seconds present, so the conversion
+//!   needs no time zone.
+//! - Years are 1970 onward because the count is a `nat`. The result is `None`
+//!   exactly when the year is above 9999, which is exactly when the count is
+//!   above 253402300799 (9999-12-31T23:59:59Z); `lemma_from_unix_none_iff`
+//!   proves this. RFC 5280 §4.1.2.5 cannot encode a later year, so a clock
+//!   that far ahead is refused rather than wrapped.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -198,6 +229,93 @@ pub open spec fn validity_contains(validity: Validity, now: CertificateTime) -> 
         && calendar_time_valid(now)
         && time_le(validity.not_before, now)
         && time_le(now, validity.not_after)
+}
+
+/// POSIX.1-2017 XBD §4.16: Unix time counts from 1970-01-01T00:00:00Z.
+pub open spec fn epoch_year() -> nat {
+    1970
+}
+
+/// POSIX.1-2017 XBD §4.16: every day is exactly 86400 seconds; leap seconds
+/// are not counted.
+pub open spec fn seconds_per_day() -> nat {
+    86400
+}
+
+/// Number of days in a Gregorian year, from the leap-year rule above.
+pub open spec fn days_in_year(year: nat) -> nat {
+    if is_leap_year(year) { 366 } else { 365 }
+}
+
+/// The calendar year containing day number `days`, counting days from 1
+/// January of `year` (day 0). Walks forward one year at a time.
+pub open spec fn year_of_day(days: nat, year: nat) -> nat
+    decreases days
+{
+    // 1. If `days` falls inside `year`, that is the year.
+    if days < days_in_year(year) { year }
+    // 2. Otherwise skip the whole year and look at the next one.
+    else { year_of_day((days - days_in_year(year)) as nat, year + 1) }
+}
+
+/// The zero-based day within its year of day number `days`, counting from
+/// 1 January of `year`. Walks forward one year at a time, as `year_of_day`.
+pub open spec fn day_in_year(days: nat, year: nat) -> nat
+    decreases days
+{
+    if days < days_in_year(year) { days }
+    else { day_in_year((days - days_in_year(year)) as nat, year + 1) }
+}
+
+/// The month (1..=12) containing zero-based day `day_of_year` of `year`,
+/// starting the walk at `month`. Walks forward one month at a time; month 12
+/// takes whatever days remain.
+pub open spec fn month_of_day(day_of_year: nat, year: nat, month: nat) -> nat
+    decreases 12 - month
+{
+    // 1. If the day falls inside `month` (or no month is left), that is it.
+    if month >= 12 || day_of_year < days_in_month(year, month) { month }
+    // 2. Otherwise skip the whole month and look at the next one.
+    else { month_of_day((day_of_year - days_in_month(year, month)) as nat, year, month + 1) }
+}
+
+/// The zero-based day within its month of zero-based day `day_of_year` of
+/// `year`, starting the walk at `month`; walks as `month_of_day`.
+pub open spec fn day_in_month(day_of_year: nat, year: nat, month: nat) -> nat
+    decreases 12 - month
+{
+    if month >= 12 || day_of_year < days_in_month(year, month) { day_of_year }
+    else { day_in_month((day_of_year - days_in_month(year, month)) as nat, year, month + 1) }
+}
+
+/// POSIX.1-2017 XBD §4.16 "Seconds Since the Epoch", read backwards: the UTC
+/// calendar time `t` seconds after 1970-01-01T00:00:00Z, with every day 86400
+/// seconds long. `None` when the year is above 9999, which RFC 5280
+/// §4.1.2.5 cannot represent. The seconds field is never 60 (see the
+/// modelling choices).
+pub open spec fn from_unix_seconds(t: nat) -> Option<CertificateTime> {
+    // 1. Split into whole days since the epoch and seconds into that day.
+    let days = t / seconds_per_day();
+    let second_of_day = t % seconds_per_day();
+    // 2. Find the year and the zero-based day within it.
+    let year = year_of_day(days, epoch_year());
+    let day_of_year = day_in_year(days, epoch_year());
+    // 3. Find the month and the zero-based day within it.
+    let month = month_of_day(day_of_year, year, 1);
+    let day = day_in_month(day_of_year, year, 1);
+    // 4. RFC 5280 §4.1.2.5 has no year above 9999.
+    if year > 9999 { None }
+    else {
+        // 5. Clock fields from the seconds into the day; 0..=59, never 60.
+        Some(CertificateTime {
+            year: year as u16,
+            month: month as u8,
+            day: (day + 1) as u8,
+            hour: (second_of_day / 3600) as u8,
+            minute: (second_of_day % 3600 / 60) as u8,
+            second: (second_of_day % 60) as u8,
+        })
+    }
 }
 
 } // verus!
