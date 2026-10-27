@@ -278,6 +278,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-p384"
+version = "0.0.0"
+dependencies = [
+ "fiat-crypto",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-percent"
 version = "0.0.0"
 dependencies = [
@@ -490,6 +498,12 @@ name = "equivalent"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64cd1e32ddd350061ae6edb1b082d7c54915b5c672c389143b9a63403a109f24"
 
 [[package]]
 name = "find-msvc-tools"

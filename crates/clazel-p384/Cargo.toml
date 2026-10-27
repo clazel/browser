@@ -1,0 +1,26 @@
+[package]
+name = "clazel-p384"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "ECDSA signature verification over NIST P-384 (FIPS 186-5 §6.4.2), specified in Verus."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+fiat-crypto = { version = "=0.3.0", default-features = false }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires. The spec,
+# the field, the group law and `verify` exist and are proven, but none of the
+# tier 1 or tier 2 evidence (Kani harnesses, mutations of the code, an
+# independent transcription, conformance suites) does yet, so tier 0.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
