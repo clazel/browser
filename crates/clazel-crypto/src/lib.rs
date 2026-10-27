@@ -12,14 +12,14 @@
 //! - [`provider`]: the adapters, checked by Verus against `clazel-tls`'s
 //!   provider contracts.
 //! - [`compare`]: the timing-safe comparison for Finished values.
+//! - [`signature`]: the CertificateVerify signature check (3.5b), whose key
+//!   parsing is ours and whose three verifications are axioms.
 //!
 //! The suite is the profile's only one, `TLS_CHACHA20_POLY1305_SHA256` with
-//! X25519 (phase-3.md 3.0, cost 2). Signature verification and certificate
-//! validation are separate (3.5b and 3.5c) and not here.
+//! X25519 (phase-3.md 3.0, cost 2). Certificate validation (3.5c) is not here.
 
 pub mod axioms;
 pub mod compare;
 pub mod provider;
 pub mod signature;
-pub mod signature_spec;
 pub mod spec;

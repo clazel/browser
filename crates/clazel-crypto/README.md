@@ -19,7 +19,7 @@ independent). Its own code is the adapters, which Verus checks against
 | `Crypto::expand` | HKDF-Expand, RFC 5869 §2.3 | `libcrux_hkdf::sha2_256::expand` |
 | `traffic::provider::Factory` and `record::Aead` | ChaCha20-Poly1305, RFC 8439 §2.8 | `libcrux_chacha20poly1305::{encrypt, decrypt}` |
 | `hello::key_exchange::KeyExchange` | X25519, RFC 7748 | `libcrux_curve25519::{secret_to_public, ecdh}` |
-| `auth::spec::Verification::signature` (CertificateVerify), as `signature::verify` | ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256/384/512, ed25519 (RFC 8446 §4.2.3) | `libcrux_ecdsa::p256::verify`, `libcrux_rsa::verify`, `libcrux_ed25519::verify` |
+| `auth::spec::Verification::signature` (CertificateVerify), as `signature::exec::verify` | ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256/384/512, ed25519 (RFC 8446 §4.2.3) | `libcrux_ecdsa::p256::verify`, `libcrux_rsa::verify`, `libcrux_ed25519::verify` |
 | Finished comparison (`Verifier::finished_equal`), as `compare::constant_time_eq` | RFC 8446 §4.4.4 | none: ours, proven, no data-dependent branch |
 
 ## The trust boundary
@@ -50,11 +50,11 @@ Modelling choices:
 
 ## Signature verification
 
-`signature::verify(key, scheme, input, signature)` is proven equal to
-`signature_spec::verify`. The end-entity key is its DER SubjectPublicKeyInfo,
+`signature::exec::verify(key, scheme, input, signature)` is proven equal to
+`signature::spec::verify`. The end-entity key is its DER SubjectPublicKeyInfo,
 parsed by `clazel-x509`, and an ECDSA signature's Ecdsa-Sig-Value is parsed by
 `clazel-der`. Only the three verifications are libcrux's. What it accepts, and
-everything it refuses, is listed at the top of `src/signature_spec.rs`: the
+everything it refuses, is listed at the top of `src/signature/spec.rs`: the
 secp256r1 uncompressed point only, RSA keys with e = 65537 and a modulus of
 exactly 2048/3072/4096/6144/8192 bits, and Ed25519 keys without parameters.
 The `rsa_pss_pss_*` schemes are neither offered nor verified.

@@ -1,11 +1,11 @@
-//! CertificateVerify signature checks (`clazel_crypto::signature::verify`)
+//! CertificateVerify signature checks (`clazel_crypto::signature::exec::verify`)
 //! with the standards' own vectors where they exist: RFC 8032 §7.1 TEST 1
 //! and TEST 2 (Ed25519) and RFC 6979 A.2.5 (ECDSA P-256, SHA-256, message
 //! "sample"). RSA-PSS has no deterministic vector; its fixtures are in
 //! tests/fixtures/rsa-pss (see SOURCE.md there). Every refusal the spec's
 //! modelling choices list is exercised.
 
-use clazel_crypto::signature::verify;
+use clazel_crypto::signature::exec::verify;
 
 const ECDSA_P256_SHA256: u16 = 0x0403;
 const RSA_PSS_RSAE_SHA256: u16 = 0x0804;

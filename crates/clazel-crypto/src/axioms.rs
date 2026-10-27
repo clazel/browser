@@ -201,7 +201,7 @@ pub fn x25519_shared(private_key: &[u8], peer_key: &[u8]) -> (out: Option<Vec<u8
 #[verifier::external_body]
 pub fn ecdsa_p256_sha256_verify(message: &[u8], r: &[u8], s: &[u8], point: &[u8]) -> (out: bool)
     requires r.len() == 32, s.len() == 32, point.len() == 64,
-    ensures out == crate::signature_spec::ecdsa_p256_sha256_verify(message@, r@, s@, point@),
+    ensures out == crate::signature::spec::ecdsa_p256_sha256_verify(message@, r@, s@, point@),
 {
     if message.len() > MAX_INPUT {
         std::process::abort();
@@ -220,22 +220,22 @@ pub fn ecdsa_p256_sha256_verify(message: &[u8], r: &[u8], s: &[u8], point: &[u8]
 // AXIOM: libcrux-rsa 0.0.9 `verify(alg, &VarLenPublicKey(n), msg, salt_len, sig)` (e fixed to 65537)
 // is Ok iff HACL's rsapss_pkey_verify is true; its other errors are excluded by `requires`.
 #[verifier::external_body]
-pub fn rsa_pss_verify(hash: crate::signature_spec::Hash, modulus: &[u8], message: &[u8],
+pub fn rsa_pss_verify(hash: crate::signature::spec::Hash, modulus: &[u8], message: &[u8],
     salt_len: u32, signature: &[u8]) -> (out: bool)
     requires
-        crate::signature_spec::modulus_ok(modulus@),
+        crate::signature::spec::modulus_ok(modulus@),
         signature.len() == modulus.len(),
-        salt_len == crate::signature_spec::hash_len(hash),
-    ensures out == crate::signature_spec::rsa_pss_verify(hash, modulus@, message@,
+        salt_len == crate::signature::spec::hash_len(hash),
+    ensures out == crate::signature::spec::rsa_pss_verify(hash, modulus@, message@,
         salt_len as nat, signature@),
 {
     if message.len() > MAX_INPUT {
         std::process::abort();
     }
     let alg = match hash {
-        crate::signature_spec::Hash::Sha256 => libcrux_rsa::DigestAlgorithm::Sha2_256,
-        crate::signature_spec::Hash::Sha384 => libcrux_rsa::DigestAlgorithm::Sha2_384,
-        crate::signature_spec::Hash::Sha512 => libcrux_rsa::DigestAlgorithm::Sha2_512,
+        crate::signature::spec::Hash::Sha256 => libcrux_rsa::DigestAlgorithm::Sha2_256,
+        crate::signature::spec::Hash::Sha384 => libcrux_rsa::DigestAlgorithm::Sha2_384,
+        crate::signature::spec::Hash::Sha512 => libcrux_rsa::DigestAlgorithm::Sha2_512,
     };
     let Ok(key) = libcrux_rsa::VarLenPublicKey::try_from(modulus) else {
         std::process::abort();
@@ -253,7 +253,7 @@ pub fn rsa_pss_verify(hash: crate::signature_spec::Hash, modulus: &[u8], message
 #[verifier::external_body]
 pub fn ed25519_verify(message: &[u8], key: &[u8], signature: &[u8]) -> (out: bool)
     requires key.len() == 32, signature.len() == 64,
-    ensures out == crate::signature_spec::ed25519_verify(message@, key@, signature@),
+    ensures out == crate::signature::spec::ed25519_verify(message@, key@, signature@),
 {
     if message.len() > MAX_INPUT {
         std::process::abort();
