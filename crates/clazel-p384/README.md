@@ -31,6 +31,9 @@ the contract below the six axioms. The tier 1 and tier 2 evidence is not
 - `tests/field.rs`: known answers for the field, computed with Python.
 - `tests/verify.rs`: smoke tests of `verify` (Wycheproof vectors and
   hand-damaged inputs), described below.
+- `tests/conformance_ecdsa.rs`, `tests/conformance_differential.rs`: the
+  conformance suites and the differential against `ring`, described under
+  Conformance below.
 
 What is evaluated in `examples.rs` is the spec itself, which shows the
 transcription computes what was worked out independently, not that it matches
@@ -108,14 +111,57 @@ new axiom, no `assume`, no `external_body` outside `axioms.rs`).
   operation. Measured by `tests/verify.rs`'s `timing` test on the development
   machine (Apple silicon): about 0.94 s per verification in a debug build and
   about 45 ms in a release build.
-- **Smoke tests, not conformance.** `tests/verify.rs` accepts eight valid
-  and rejects six invalid vectors of Wycheproof's
-  `ecdsa_secp384r1_sha384_test.json` (commit `d17cc89f`; tcIds in the file),
-  and rejects damaged `r`, `s`, digests and keys. Wycheproof in full, ACVP and
-  a differential against another engine are later work.
+- **Smoke tests.** `tests/verify.rs` accepts eight valid and rejects six
+  invalid vectors of Wycheproof's `ecdsa_secp384r1_sha384_test.json`
+  (commit `d17cc89f`; tcIds in the file), and rejects damaged `r`, `s`,
+  digests and keys. The full suites are under Conformance below.
 - **One addition to `field::Fe`:** `Fe::dup`, a copy with the same
   `which` and `val`. `Fe` is not `Clone` and `Fe`'s contracts and the axioms
   are unchanged.
+
+## Conformance
+
+Three test targets run `verify` against the outside world. The numbers are
+printed by the tests (`clazel-conformance:` lines) and read by `cargo xtask
+verify`; the README table is written from them by CI.
+
+- **Wycheproof** (`tests/conformance_ecdsa.rs`; Apache-2.0, commit
+  `d17cc89f`, vendored under `tests/data/wycheproof-ecdsa-p384/` and
+  converted to a Rust table by `cargo xtask testdata`):
+  `ecdsa_secp384r1_sha256_test.json` (472 tests), `..._sha384_...` (504) and
+  `..._sha512_...` (542), 1,518 in all, all passing, none `acceptable`, no
+  expected failure. The signatures are DER, so each test runs the way a TLS
+  client would use the crate: `clazel-der` reads the `Ecdsa-Sig-Value` into
+  `r` and `s` (a dev-dependency; this crate has no DER layer), then `verify`
+  decides. The malformed-DER tests (BER lengths, negative or oversized
+  INTEGERs, trailing bytes) are rejected by `clazel-der`: 705 of the 1,518
+  signatures never reach `verify`, none of them a `valid` test, and each
+  still counts in `total`. The SHA-512 digest is 64 octets, which `verify`
+  truncates (spec choice 10). The converter hashes the messages itself.
+- **NIST CAVP 186-4 `SigVer.rsp`** (public domain, vendored under
+  `tests/data/nist-cavp-ecdsa-sigver/`): the five `[P-384,SHA-x]` sections,
+  SHA-1, SHA-224, SHA-256, SHA-384 and SHA-512, 15 cases each, 75 in all, all
+  passing. `R` and `S` are integers, so the DER layer is not involved. SHA-1
+  is included because `verify` takes any digest of 0 to 64 octets.
+- **Differential against `ring` 0.17.14** (`tests/conformance_differential.rs`):
+  a fixed-seed generator picks 2,000 messages and which of 8 key pairs signs
+  each; `ring` signs (SHA-384) and verifies; for each signature seven cases
+  (the valid one, a flipped bit in `r`, in `s`, in the message, in the public
+  key, another key, and edge values 0, 1, n - 1, n, n + 1, 2^384 - 1 for `r`
+  and `s`) are given to both engines, 14,000 comparisons, and the verdicts
+  must be equal (and the valid signature accepted). `ring`'s keys and nonces
+  come from the operating system (its random source cannot be replaced), so
+  the signatures differ between runs and only the choices around them are
+  seeded. There is no SHA-256 differential: `ring` can verify but not sign
+  P-384 with SHA-256 in a fixed-width form.
+- **Speed and Miri.** A verification is about 1 s in an unoptimised build, so
+  the workspace manifest builds this package with `opt-level = 3` in the dev
+  profile (overflow checks stay on); the Wycheproof and CAVP suites then
+  take about 30 s together and the differential about 80 s on an 8-core
+  machine. All three targets are ignored under Miri.
+- **Not done:** the independent field differential of the design was dropped
+  (it would test fiat-crypto against itself); ACVP-Server's JSON is not
+  vendored; the P1363 Wycheproof files are not vendored.
 
 ## What it is, and what it is not
 
@@ -172,8 +218,9 @@ meets its contract in `field/contract.rs`, and that `ec_add`,
 `mutations.json` holds 26 mutations of `spec.rs`, each killed with a
 certificate that contradicts one of those examples; the executable code has
 no mutations yet. There is no lemma about the spec of the signature itself,
-no independent transcription, no conformance test against an official suite
-and no Kani harness yet, so the crate stays at tier 0; see
+no independent transcription, no mutation of the executable code and no
+Kani harness yet, so the crate stays at tier 0 even though the conformance
+suites and the differential pass; see
 [docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier
 requires. The proofs cover memory and arithmetic safety of the Verus-checked
 code, but the claim is only as good as `spec.rs` (read against the standards

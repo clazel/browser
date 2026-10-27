@@ -281,7 +281,10 @@ dependencies = [
 name = "clazel-p384"
 version = "0.0.0"
 dependencies = [
+ "clazel-der",
  "fiat-crypto",
+ "ring",
+ "sha2",
  "vstd",
 ]
 

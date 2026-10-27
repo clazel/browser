@@ -9,8 +9,9 @@
 //! [`verify::verify`], each proven against [`spec`] over those six axioms and
 //! nothing else. The crate is still at tier 0: the evidence tier 1 and tier 2
 //! require beyond these proofs (Kani harnesses, an independent
-//! transcription, certified mutations of the code, conformance against
-//! Wycheproof and ACVP) is not written yet.
+//! transcription, certified mutations of the code) is not written yet.
+//! Conformance tests (Wycheproof, NIST CAVP) and a differential against
+//! `ring` run in `tests/`.
 //!
 //! This is public-key *verification* only: the key, the signature and the
 //! digest are all public, so there is no constant-time requirement and no
