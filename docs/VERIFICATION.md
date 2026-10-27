@@ -162,7 +162,15 @@ We list this openly. Proofs are only as good as their assumptions.
 - `clazel-sys`, the one crate with `unsafe` (see "The `unsafe` exception"
   below): a handful of foreign calls that enter the OS sandbox, and `libc`,
   its only shipped dependency, for struct layouts and constants
-- Cryptography, which comes from formally verified libraries (libcrux / HACL\*), not our own code
+- Cryptography, which comes from formally verified libraries (libcrux / HACL\*), not our own code.
+  What that trusts, precisely: HACL\*'s F\* proofs; the toolchain that
+  translates the verified code to the Rust libcrux ships (in the TCB, not
+  itself proven); libcrux's hand-written, unverified glue around that code
+  (each crate's `impl_hacl.rs` and macros, such as `libcrux-hkdf`'s
+  `impl_hkdf!`); and libcrux's `pre-verification` support crates
+  (`libcrux-hacl-rs`, `-secrets`, `-traits`, `-macros`). Every call into
+  libcrux is one axiom in `crates/clazel-crypto/src/axioms.rs`, stating only
+  libcrux's documented types, output lengths and failure cases
 - That each spec matches the standard it transcribes. No proof can check
   this, because the standard is English. It is backed by machine-checked
   evidence instead of a reviewer (next section), and that evidence is only as

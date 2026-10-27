@@ -100,6 +100,16 @@ impl Reassembler {
         Reassembler { buf: Vec::new() }
     }
 
+    /// A copy of the unfinished-message bytes, to restore after a feed that
+    /// fails (its contract leaves the state unspecified then).
+    pub fn snapshot(&self) -> (r: Reassembler)
+        ensures
+            r@ == self@,
+            r.wf() == self.wf(),
+    {
+        Reassembler { buf: vstd::slice::slice_to_vec(self.buf.as_slice()) }
+    }
+
     /// §5.1: whether no message has begun, as is required at a key
     /// change ([`super::spec::at_message_boundary`]).
     pub fn at_message_boundary(&self) -> (b: bool)

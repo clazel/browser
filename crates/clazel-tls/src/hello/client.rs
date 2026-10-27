@@ -33,7 +33,7 @@ pub fn signatures() -> (out: Vec<u16>)
     ensures out@ == super::client_spec::signatures(),
 {
     let out = vec![0x0403u16, 0x0804u16, 0x0805u16, 0x0806u16, 0x0807u16,
-        0x0809u16, 0x080au16, 0x080bu16, 0x0401u16, 0x0501u16, 0x0601u16];
+        0x0401u16, 0x0501u16, 0x0601u16];
     proof { assert(out@ =~= super::client_spec::signatures()); }
     out
 }

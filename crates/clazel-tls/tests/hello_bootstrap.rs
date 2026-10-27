@@ -15,9 +15,8 @@ const RANDOM: [u8; 32] = [0x35; 32];
 const CLIENT_KEY: [u8; 32] = [0x48; 32];
 const SERVER_KEY: [u8; 32] = [0x5a; 32];
 const HRR_RANDOM: [u8; 32] = [
-    0xcf, 0x21, 0xad, 0x74, 0xe5, 0x9a, 0x61, 0x11, 0xbe, 0x1d, 0x8c, 0x02, 0x1e, 0x65, 0xb8,
-    0x91, 0xc2, 0xa2, 0x11, 0x16, 0x7a, 0xbb, 0x8c, 0x5e, 0x07, 0x9e, 0x09, 0xe2, 0xc8, 0xa8,
-    0x33, 0x9c,
+    0xcf, 0x21, 0xad, 0x74, 0xe5, 0x9a, 0x61, 0x11, 0xbe, 0x1d, 0x8c, 0x02, 0x1e, 0x65, 0xb8, 0x91,
+    0xc2, 0xa2, 0x11, 0x16, 0x7a, 0xbb, 0x8c, 0x5e, 0x07, 0x9e, 0x09, 0xe2, 0xc8, 0xa8, 0x33, 0x9c,
 ];
 
 /// Deterministic transcript provider only; not an interoperable crypto suite.
@@ -131,7 +130,10 @@ fn exact_send_ack_gates_peer_input_and_wrong_ack_is_terminal() -> Result<(), Str
     assert_eq!(client_wire.first(), Some(&22));
 
     let wrong = [client_wire.as_slice(), &[0]].concat();
-    assert!(matches!(bootstrap.acknowledge_send(&wrong), Action::Fail(INTERNAL_ERROR)));
+    assert!(matches!(
+        bootstrap.acknowledge_send(&wrong),
+        Action::Fail(INTERNAL_ERROR)
+    ));
     let peer = plaintext(22, &handshake(2, &server_hello(SESSION, false)));
     assert_eq!(bootstrap.feed(&peer).0, 0);
     assert!(matches!(bootstrap.eof(), Action::None));
@@ -139,35 +141,46 @@ fn exact_send_ack_gates_peer_input_and_wrong_ack_is_terminal() -> Result<(), Str
 }
 
 #[test]
-fn ccs_is_dropped_during_fragmented_server_hello_without_losing_prefix() -> Result<(), String> {
+fn ccs_inside_fragmented_server_hello_is_unexpected_message() -> Result<(), String> {
     let (mut bootstrap, client_wire) = started(SESSION)?;
     ack_initial(&mut bootstrap, &client_wire)?;
 
     let hello = handshake(2, &server_hello(SESSION, false));
     let split = hello.len() / 2;
-    let first_record = plaintext(22, &hello[..split]);
+    let first_record = plaintext(22, hello.get(..split).ok_or("missing first fragment")?);
     let (consumed, first_action) = bootstrap.feed(&first_record);
     assert_eq!(consumed, first_record.len());
     assert!(matches!(first_action, Action::None));
 
-    // RFC 8446 §5 specifically requires dropping a valid unencrypted CCS
-    // between ClientHello and peer Finished, including during reassembly.
+    // RFC 8446 §5 says to drop a CCS at any time, but §5.1 forbids any other
+    // record between fragments of one handshake message. Inside a message the
+    // CCS is fatal (docs/ERRATA.md); it is dropped only at a boundary.
+    let dummy_ccs = [20, 3, 3, 0, 1, 1];
+    let (consumed, ccs_action) = bootstrap.feed(&dummy_ccs);
+    assert_eq!(consumed, dummy_ccs.len());
+    assert!(matches!(ccs_action, Action::Fail(UNEXPECTED_MESSAGE)));
+
+    // The failure is terminal: the remaining fragment is not accepted.
+    let last_record = plaintext(22, hello.get(split..).ok_or("missing last fragment")?);
+    let (_, final_action) = bootstrap.feed(&last_record);
+    assert!(!matches!(final_action, Action::Established(_)));
+    Ok(())
+}
+
+#[test]
+fn ccs_at_message_boundary_before_server_hello_is_dropped() -> Result<(), String> {
+    let (mut bootstrap, client_wire) = started(SESSION)?;
+    ack_initial(&mut bootstrap, &client_wire)?;
+
     let dummy_ccs = [20, 3, 3, 0, 1, 1];
     let (consumed, ccs_action) = bootstrap.feed(&dummy_ccs);
     assert_eq!(consumed, dummy_ccs.len());
     assert!(matches!(ccs_action, Action::None));
 
-    let last_record = plaintext(22, &hello[split..]);
-    let (consumed, final_action) = bootstrap.feed(&last_record);
-    assert_eq!(consumed, last_record.len());
-    let established = match final_action {
-        Action::Established(established) => established,
-        _ => return Err("fragmented final ServerHello was not accepted".to_owned()),
-    };
-    let (accepted_config, transcript, peer_key) = established.into_parts();
-    assert_eq!(accepted_config.host, HOST);
-    assert_eq!(peer_key, SERVER_KEY);
-    assert_eq!(transcript.phase(), clazel_tls::transcript::spec::Phase::Handshake);
+    let hello = plaintext(22, &handshake(2, &server_hello(SESSION, false)));
+    let (consumed, action) = bootstrap.feed(&hello);
+    assert_eq!(consumed, hello.len());
+    assert!(matches!(action, Action::Established(_)));
     Ok(())
 }
 
@@ -188,7 +201,10 @@ fn retry_flight_orders_compatibility_ccs_and_requires_exact_ack() -> Result<(), 
 
     let server = plaintext(22, &handshake(2, &server_hello(SESSION, false)));
     assert_eq!(bootstrap.feed(&server).0, 0);
-    assert!(matches!(bootstrap.acknowledge_send(&retry_wire), Action::None));
+    assert!(matches!(
+        bootstrap.acknowledge_send(&retry_wire),
+        Action::None
+    ));
     let (consumed, action) = bootstrap.feed(&server);
     assert_eq!(consumed, server.len());
     assert!(matches!(action, Action::Established(_)));
@@ -196,7 +212,8 @@ fn retry_flight_orders_compatibility_ccs_and_requires_exact_ack() -> Result<(), 
 }
 
 #[test]
-fn no_compatibility_ccs_for_empty_session_id_and_coalesced_suffix_stays_unconsumed() -> Result<(), String> {
+fn no_compatibility_ccs_for_empty_session_id_and_coalesced_suffix_stays_unconsumed()
+-> Result<(), String> {
     let (mut bootstrap, client_wire) = started(&[])?;
     ack_initial(&mut bootstrap, &client_wire)?;
     let retry = plaintext(22, &handshake(2, &server_hello(&[], true)));
@@ -206,14 +223,22 @@ fn no_compatibility_ccs_for_empty_session_id_and_coalesced_suffix_stays_unconsum
         _ => return Err("valid HRR did not produce a retry flight".to_owned()),
     };
     assert_eq!(retry_wire.first(), Some(&22));
-    assert!(matches!(bootstrap.acknowledge_send(&retry_wire), Action::None));
+    assert!(matches!(
+        bootstrap.acknowledge_send(&retry_wire),
+        Action::None
+    ));
 
     let final_record = plaintext(22, &handshake(2, &server_hello(&[], false)));
     let suffix = [final_record.as_slice(), &[20, 3, 3, 0, 1, 1]].concat();
     let (consumed, action) = bootstrap.feed(&suffix);
     assert_eq!(consumed, final_record.len());
     assert!(matches!(action, Action::Established(_)));
-    assert_eq!(bootstrap.feed(&suffix[consumed..]).0, 0);
+    assert_eq!(
+        bootstrap
+            .feed(suffix.get(consumed..).ok_or("bad consumed boundary")?)
+            .0,
+        0
+    );
     Ok(())
 }
 

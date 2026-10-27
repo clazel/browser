@@ -885,20 +885,12 @@ fn valid_new_session_tickets_are_discarded_without_resumption_state() -> Result<
     Ok(())
 }
 
+/// RFC 8446 §5.1: a compatibility CCS between the fragments of one handshake
+/// message interleaves another record type and is fatal unexpected_message.
 #[test]
-fn compatibility_ccs_is_dropped_between_handshake_fragments() -> Result<(), String> {
+fn compatibility_ccs_between_handshake_fragments_is_refused() -> Result<(), String> {
     let mut fixture = fixture()?;
     let encrypted_extensions = handshake(8, &encrypted_extensions());
-    let certificate = handshake(11, &certificate_body());
-    let certificate_verify = handshake(15, &certificate_verify());
-    let (_, client_hello) = Hello::start(config()).map_err(|e| format!("Hello alert {e}"))?;
-    let mut server_transcript = client_hello;
-    server_transcript.extend_from_slice(&handshake(2, &server_hello()));
-    server_transcript.extend_from_slice(&encrypted_extensions);
-    server_transcript.extend_from_slice(&certificate);
-    server_transcript.extend_from_slice(&certificate_verify);
-    let finished_body = finished(&fixture.crypto, &fixture.server_secret, &server_transcript);
-    let finished = handshake(20, &finished_body);
     let split = encrypted_extensions.len().saturating_div(2);
     let prefix = encrypted_extensions.get(..split).ok_or("short EE prefix")?;
     let suffix = encrypted_extensions
@@ -915,29 +907,39 @@ fn compatibility_ccs_is_dropped_between_handshake_fragments() -> Result<(), Stri
         (prefix_record.len(), Action::None)
     );
     let ccs = [20, 3, 3, 0, 1, 1];
-    assert_eq!(fixture.connection.feed(&ccs), (ccs.len(), Action::Ignored));
-
+    assert_eq!(fixture.connection.feed(&ccs), (ccs.len(), Action::Fail(10)));
+    // The failure is terminal: the rest of the message is not accepted.
     let suffix_record = server
         .seal(22, suffix, 0)
         .map_err(|e| format!("suffix seal alert {e}"))?;
+    assert_eq!(fixture.connection.feed(&suffix_record).1, Action::None);
+    Ok(())
+}
+
+/// A compatibility CCS between two whole handshake messages is still dropped.
+#[test]
+fn compatibility_ccs_between_whole_handshake_messages_is_dropped() -> Result<(), String> {
+    let mut fixture = fixture()?;
+    let encrypted_extensions = handshake(8, &encrypted_extensions());
+    let certificate = handshake(11, &certificate_body());
+    let mut server = Encryptor::new(&fixture.crypto, &fixture.factory, &fixture.server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+    let ee_record = server
+        .seal(22, &encrypted_extensions, 0)
+        .map_err(|e| format!("EE seal alert {e}"))?;
     assert_eq!(
-        fixture.connection.feed(&suffix_record),
-        (suffix_record.len(), Action::None)
+        fixture.connection.feed(&ee_record),
+        (ee_record.len(), Action::None)
     );
-    let mut last_action = Action::None;
-    for message in [certificate, certificate_verify, finished] {
-        let record = server
-            .seal(22, &message, 0)
-            .map_err(|e| format!("server flight seal alert {e}"))?;
-        let (consumed, action) = fixture.connection.feed(&record);
-        assert_eq!(consumed, record.len());
-        last_action = action;
-    }
-    if !matches!(last_action, Action::Send(_)) {
-        return Err(format!(
-            "expected client flight after in-fragment CCS, got {last_action:?}"
-        ));
-    }
+    let ccs = [20, 3, 3, 0, 1, 1];
+    assert_eq!(fixture.connection.feed(&ccs), (ccs.len(), Action::Ignored));
+    let certificate_record = server
+        .seal(22, &certificate, 0)
+        .map_err(|e| format!("certificate seal alert {e}"))?;
+    assert_eq!(
+        fixture.connection.feed(&certificate_record),
+        (certificate_record.len(), Action::None)
+    );
     Ok(())
 }
 

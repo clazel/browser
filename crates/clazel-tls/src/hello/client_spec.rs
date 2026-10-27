@@ -15,6 +15,9 @@
 //!   The record driver must implement Appendix D.4's dummy CCS rules later.
 //! - Signature schemes include TLS 1.3 schemes and RSA PKCS#1 for certificate
 //!   signatures only. The auth machine already excludes PKCS#1 in CV.
+//!   rsa_pss_pss_* (0x0809-0x080b, certificates with an RSASSA-PSS key) are
+//!   not offered: verifying them needs an RFC 4055 RSASSA-PSS-params parser,
+//!   and we offer only what the signature verifier accepts.
 //! - HRR cookie extension_data is capped at 4098 bytes (4096-byte cookie),
 //!   a resource policy, so ClientHello2's extension vector stays representable.
 //! - The controller is consumed on receive. A fatal error discards it;
@@ -52,7 +55,7 @@ pub open spec fn config_ok(c: Config) -> bool {
 /// §4.2.3: schemes offered for CV and certificate signatures.
 pub open spec fn signatures() -> Seq<u16> {
     seq![0x0403u16, 0x0804u16, 0x0805u16, 0x0806u16, 0x0807u16,
-        0x0809u16, 0x080au16, 0x080bu16, 0x0401u16, 0x0501u16, 0x0601u16]
+        0x0401u16, 0x0501u16, 0x0601u16]
 }
 /// §4.2.2: an absent initial cookie or a structurally valid bounded retry cookie.
 pub open spec fn cookie_ok(cookie: Seq<u8>) -> bool {

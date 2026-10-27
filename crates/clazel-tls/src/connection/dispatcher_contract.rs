@@ -49,6 +49,16 @@ pub open spec fn feed_ensures(before: super::dispatcher_spec::State, input: Seq<
         && super::dispatcher_spec::action_refines(action, after)
 }
 
+/// RFC 8446 §5.1: a valid unprotected compatibility CCS record, in a state
+/// that still holds authentication, is dropped only at a handshake message
+/// boundary; in the middle of a fragmented handshake message it is fatal.
+pub open spec fn ccs_record_ensures(wire: Seq<u8>, before: super::dispatcher_spec::State,
+    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    (before.auth is Some && crate::spec::read_record(wire, true) is Done
+        && crate::spec::read_record(wire, true)->Done_0 is Ccs)
+        ==> (action, after) == super::dispatcher_spec::receive_compatibility_ccs(before)
+}
+
 /// A peer close_notify closes only the peer's write direction and preserves
 /// the local send epoch until our own write side is closed.
 pub open spec fn peer_close_ensures(before: super::dispatcher_spec::State,

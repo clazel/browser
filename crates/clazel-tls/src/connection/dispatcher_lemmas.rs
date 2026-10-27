@@ -78,4 +78,17 @@ pub proof fn lemma_peer_close_is_directional()
             ..super::dispatcher_certificates::sample_ready_state()
         });
 }
+
+/// RFC 8446 §5.1: a compatibility CCS between the fragments of one handshake
+/// message interleaves another record type and is refused; at a boundary the
+/// same record is still dropped.
+pub proof fn lemma_compatibility_ccs_not_dropped_mid_message()
+    ensures
+        !super::dispatcher_spec::compatibility_ccs_dropped(super::dispatcher_spec::Mode::Handshake,
+            Some(crate::auth::spec::Phase::Finished), crate::spec::Reasm { buf: seq![1u8] }),
+        super::dispatcher_spec::compatibility_ccs_dropped(super::dispatcher_spec::Mode::Handshake,
+            Some(crate::auth::spec::Phase::Finished), crate::spec::reasm_new()),
+{
+    reveal(crate::spec::reasm_new);
+}
 } // verus!

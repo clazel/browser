@@ -671,6 +671,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
         ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
+            super::dispatcher_contract::ccs_record_ensures(wire@, old(self)@, out@, final(self)@),
     {
         match crate::record::read_record(wire, true) {
             ReadOut::Done(Frame::Ccs, _) => {
@@ -678,8 +679,12 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                     Some(auth) => auth,
                     None => return self.fail(crate::spec::INTERNAL_ERROR),
                 };
+                // RFC 8446 §5.1: handshake messages "MUST NOT be interleaved with
+                // other record types", so a compatibility CCS is dropped only at a
+                // message boundary; inside a fragmented message it is fatal.
                 if matches!(self.mode, Mode::Handshake)
-                    && !matches!(auth.phase(), crate::auth::spec::Phase::SendFinished | crate::auth::spec::Phase::Ready) {
+                    && !matches!(auth.phase(), crate::auth::spec::Phase::SendFinished | crate::auth::spec::Phase::Ready)
+                    && self.reassembler.at_message_boundary() {
                     Action::Ignored
                 } else {
                     self.fail(crate::spec::UNEXPECTED_MESSAGE)

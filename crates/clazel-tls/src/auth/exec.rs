@@ -170,7 +170,7 @@ pub fn signature_scheme(scheme: u16) -> (out: bool)
     ensures out == super::spec::signature_scheme(scheme),
 {
     scheme == 0x0403 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
-        || scheme == 0x0807 || scheme == 0x0809 || scheme == 0x080a || scheme == 0x080b
+        || scheme == 0x0807
 }
 /// RFC 8446 §4.2: every parsed server response answers an actual offer.
 pub fn extensions_offered(es: &[Extension<'_>], offers: &[u16]) -> (out: bool)

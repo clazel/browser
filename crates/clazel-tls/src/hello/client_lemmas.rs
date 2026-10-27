@@ -87,11 +87,11 @@ pub proof fn lemma_profile(c: super::client_spec::Config, cookie: Seq<u8>)
     lemma_vec_len(c.public_key, 65535);
     lemma_vec_len(crate::spec::write_key_share(crate::spec::KeyShare { group: 29, key_exchange: c.public_key }), 65535);
     assert(key.len() == 38);
-    assert(crate::spec::write_signature_schemes(super::client_spec::signatures()).len() == 24) by (compute_only);
+    assert(crate::spec::write_signature_schemes(super::client_spec::signatures()).len() == 18) by (compute_only);
     let es = super::client_spec::extensions(c, cookie);
     reveal_with_fuel(extension_len, 8);
     lemma_extensions_len(es);
-    assert(extension_len(es) == 85 + (if c.send_sni { c.host.len() + 9 } else { 0 })
+    assert(extension_len(es) == 79 + (if c.send_sni { c.host.len() + 9 } else { 0 })
         + (if cookie.len() == 0 { 0 } else { cookie.len() + 4 }));
     assert forall|i: int| 0 <= i < es.len() implies (#[trigger] es[i]).data.len() <= 65535 by {
         if c.send_sni { if i == 0 {} else if i == 1 {} else if i == 2 {} else if i == 3 {} else if i == 4 {} }

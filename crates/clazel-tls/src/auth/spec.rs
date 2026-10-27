@@ -165,10 +165,12 @@ pub open spec fn profile_extensions(es: Seq<u16>) -> bool
     es.len() == 0 || ((es[0] == 0 || es[0] == 10 || es[0] == 13 || es[0] == 43
         || es[0] == 44 || es[0] == 50 || es[0] == 51) && profile_extensions(es.skip(1)))
 }
-/// §4.4.3: permitted TLS 1.3 schemes in the selected library profile.
+/// §4.4.3: permitted TLS 1.3 schemes in the selected library profile:
+/// ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256/384/512 and ed25519. The
+/// rsa_pss_pss_* schemes are not offered (see hello::client_spec).
 pub open spec fn signature_scheme(scheme: u16) -> bool {
     scheme == 0x0403 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
-        || scheme == 0x0807 || scheme == 0x0809 || scheme == 0x080a || scheme == 0x080b
+        || scheme == 0x0807
 }
 /// §4.2: EE responses must have been offered. Placement/body rules are parsed first.
 pub open spec fn extensions_offered(es: Seq<crate::spec::Ext>, offers: Seq<u16>) -> bool

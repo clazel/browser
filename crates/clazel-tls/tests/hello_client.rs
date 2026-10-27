@@ -344,10 +344,10 @@ fn expected_sni(host: &[u8]) -> Vec<u8> {
 
 fn expected_signatures() -> Vec<u8> {
     let schemes = [
-        0x0403u16, 0x0804, 0x0805, 0x0806, 0x0807, 0x0809, 0x080a, 0x080b, 0x0401, 0x0501, 0x0601,
+        0x0403u16, 0x0804, 0x0805, 0x0806, 0x0807, 0x0401, 0x0501, 0x0601,
     ];
     let mut data = Vec::new();
-    data.extend_from_slice(&22u16.to_be_bytes());
+    data.extend_from_slice(&16u16.to_be_bytes());
     for scheme in schemes {
         data.extend_from_slice(&scheme.to_be_bytes());
     }

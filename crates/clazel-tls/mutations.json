@@ -451,15 +451,15 @@
     {
       "id": "alert-closure-any-level",
       "file": "src/spec.rs",
-      "find": "a.description == CLOSE_NOTIFY || (a.description == USER_CANCELED && a.level == LEVEL_WARNING)",
-      "replace": "a.description == CLOSE_NOTIFY || a.description == USER_CANCELED",
+      "find": "a.description == CLOSE_NOTIFY || a.description == USER_CANCELED",
+      "replace": "a.description == CLOSE_NOTIFY || (a.description == USER_CANCELED && a.level == LEVEL_WARNING)",
       "expect": "killed",
-      "reason": "A fatal user_canceled is a closure: lemma_alert_closure is false.",
+      "reason": "Restores the old warning-only rule (TLS 1.3 §6.1 ignores the level): a fatal user_canceled is no longer a closure, so lemma_alert_closure is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
         "lemma": "super::examples::lemma_alert_closure()",
-        "witness": "alert_is_closure(Alert { level: 2, description: 90 })"
+        "witness": "!alert_is_closure(Alert { level: 2, description: 90 })"
       }
     },
     {
@@ -468,7 +468,7 @@
       "find": "if t == EXT_SERVER_NAME {\n        m is Ch || m is Ee",
       "replace": "if t == EXT_SERVER_NAME {\n        m is Ch",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `server_name` is changed: lemma_ext_row_server_name is false.",
+      "reason": "The §4.2 table row `server_name` is changed: lemma_ext_row_server_name is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -482,7 +482,7 @@
       "find": "} else if t == EXT_STATUS_REQUEST {\n        m is Ch || m is Cr || m is Ct",
       "replace": "} else if t == EXT_STATUS_REQUEST {\n        m is Ch || m is Cr",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `status_request` is changed: lemma_ext_row_status_request is false.",
+      "reason": "The §4.2 table row `status_request` is changed: lemma_ext_row_status_request is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -496,7 +496,7 @@
       "find": "} else if t == EXT_SIGNATURE_ALGORITHMS {\n        m is Ch || m is Cr",
       "replace": "} else if t == EXT_SIGNATURE_ALGORITHMS {\n        m is Ch || m is Cr || m is Sh",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `signature_algorithms` is changed: lemma_ext_row_signature_algorithms is false.",
+      "reason": "The §4.2 table row `signature_algorithms` is changed: lemma_ext_row_signature_algorithms is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -510,7 +510,7 @@
       "find": "} else if t == EXT_PADDING {\n        m is Ch",
       "replace": "} else if t == EXT_PADDING {\n        m is Ch || m is Ee",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `padding` is changed: lemma_ext_row_padding is false.",
+      "reason": "The §4.2 table row `padding` is changed: lemma_ext_row_padding is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -524,7 +524,7 @@
       "find": "} else if t == EXT_KEY_SHARE {\n        m is Ch || m is Sh || m is Hrr",
       "replace": "} else if t == EXT_KEY_SHARE {\n        m is Ch || m is Sh",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `key_share` is changed: lemma_ext_row_key_share is false.",
+      "reason": "The §4.2 table row `key_share` is changed: lemma_ext_row_key_share is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -538,7 +538,7 @@
       "find": "} else if t == EXT_COOKIE {\n        m is Ch || m is Hrr",
       "replace": "} else if t == EXT_COOKIE {\n        m is Ch || m is Hrr || m is Sh",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `cookie` is changed: lemma_ext_row_cookie is false.",
+      "reason": "The §4.2 table row `cookie` is changed: lemma_ext_row_cookie is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -552,7 +552,7 @@
       "find": "} else if t == EXT_EARLY_DATA {\n        m is Ch || m is Ee || m is Nst",
       "replace": "} else if t == EXT_EARLY_DATA {\n        m is Ch || m is Ee",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `early_data` is changed: lemma_ext_row_early_data is false.",
+      "reason": "The §4.2 table row `early_data` is changed: lemma_ext_row_early_data is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -566,7 +566,7 @@
       "find": "} else if t == EXT_OID_FILTERS {\n        m is Cr",
       "replace": "} else if t == EXT_OID_FILTERS {\n        m is Cr || m is Ch",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `oid_filters` is changed: lemma_ext_row_oid_filters is false.",
+      "reason": "The §4.2 table row `oid_filters` is changed: lemma_ext_row_oid_filters is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -580,7 +580,7 @@
       "find": "} else if t == EXT_SUPPORTED_VERSIONS {\n        m is Ch || m is Sh || m is Hrr",
       "replace": "} else if t == EXT_SUPPORTED_VERSIONS {\n        m is Ch || m is Hrr",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `supported_versions` is changed: lemma_ext_row_supported_versions is false.",
+      "reason": "The §4.2 table row `supported_versions` is changed: lemma_ext_row_supported_versions is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -594,7 +594,7 @@
       "find": "} else if t == EXT_PRE_SHARED_KEY {\n        m is Ch || m is Sh",
       "replace": "} else if t == EXT_PRE_SHARED_KEY {\n        m is Ch || m is Sh || m is Hrr",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `pre_shared_key` is changed: lemma_ext_row_pre_shared_key is false.",
+      "reason": "The §4.2 table row `pre_shared_key` is changed: lemma_ext_row_pre_shared_key is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -608,7 +608,7 @@
       "find": "} else if t == EXT_SCT {\n        m is Ch || m is Cr || m is Ct",
       "replace": "} else if t == EXT_SCT {\n        m is Ch || m is Ct",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `signed_certificate_timestamp` is changed: lemma_ext_row_signed_certificate_timestamp is false.",
+      "reason": "The §4.2 table row `signed_certificate_timestamp` is changed: lemma_ext_row_signed_certificate_timestamp is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -622,7 +622,7 @@
       "find": "} else if t == EXT_CERTIFICATE_AUTHORITIES {\n        m is Ch || m is Cr",
       "replace": "} else if t == EXT_CERTIFICATE_AUTHORITIES {\n        m is Ch",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `certificate_authorities` is changed: lemma_ext_row_certificate_authorities is false.",
+      "reason": "The §4.2 table row `certificate_authorities` is changed: lemma_ext_row_certificate_authorities is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -636,7 +636,7 @@
       "find": "} else if t == EXT_SIGNATURE_ALGORITHMS_CERT {\n        m is Ch || m is Cr",
       "replace": "} else if t == EXT_SIGNATURE_ALGORITHMS_CERT {\n        m is Ch || m is Cr || m is Ct",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `signature_algorithms_cert` is changed: lemma_ext_row_signature_algorithms_cert is false.",
+      "reason": "The §4.2 table row `signature_algorithms_cert` is changed: lemma_ext_row_signature_algorithms_cert is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -650,7 +650,7 @@
       "find": "} else if t == EXT_ALPN {\n        m is Ch || m is Ee",
       "replace": "} else if t == EXT_ALPN {\n        m is Ch",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `alpn` is changed: lemma_ext_row_alpn is false.",
+      "reason": "The §4.2 table row `alpn` is changed: lemma_ext_row_alpn is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -664,7 +664,7 @@
       "find": "} else if t == EXT_SUPPORTED_GROUPS {\n        m is Ch || m is Ee",
       "replace": "} else if t == EXT_SUPPORTED_GROUPS {\n        m is Ch || m is Ee || m is Sh",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `supported_groups` is changed: lemma_ext_row_supported_groups is false.",
+      "reason": "The §4.2 table row `supported_groups` is changed: lemma_ext_row_supported_groups is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -678,7 +678,7 @@
       "find": "} else if t == EXT_PSK_KEY_EXCHANGE_MODES {\n        m is Ch",
       "replace": "} else if t == EXT_PSK_KEY_EXCHANGE_MODES {\n        m is Ch || m is Cr",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `psk_key_exchange_modes` is changed: lemma_ext_row_psk_key_exchange_modes is false.",
+      "reason": "The §4.2 table row `psk_key_exchange_modes` is changed: lemma_ext_row_psk_key_exchange_modes is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -692,7 +692,7 @@
       "find": "} else if t == EXT_POST_HANDSHAKE_AUTH {\n        m is Ch",
       "replace": "} else if t == EXT_POST_HANDSHAKE_AUTH {\n        m is Ch || m is Ee",
       "expect": "killed",
-      "reason": "The \u00a74.2 table row `post_handshake_auth` is changed: lemma_ext_row_post_handshake_auth is false.",
+      "reason": "The §4.2 table row `post_handshake_auth` is changed: lemma_ext_row_post_handshake_auth is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -757,17 +757,17 @@
       }
     },
     {
-      "id": "missing-version-only-sh",
+      "id": "legacy-server-hello-extensions-without-supported-versions",
       "file": "src/spec.rs",
-      "find": "} else if (m is Sh || m is Hrr) && !has_ext(es, EXT_SUPPORTED_VERSIONS) {",
-      "replace": "} else if (m is Sh) && !has_ext(es, EXT_SUPPORTED_VERSIONS) {",
+      "find": "Some((es, rest)) => rest.len() == 0 && !has_ext(es, 43),",
+      "replace": "Some((es, rest)) => rest.len() == 0 && false,",
       "expect": "killed",
-      "reason": "A HelloRetryRequest without supported_versions is accepted: lemma_extension_checks is false.",
-      "module": "examples_hs",
+      "reason": "A ServerHello with a nonempty extension list lacking supported_versions is no longer recognised as legacy and falls to the generic parser, so it is not reported as protocol_version: lemma_legacy_server_hello_extensions_without_supported_versions is false.",
+      "module": "hello::certificates",
       "certificate": {
-        "file": "src/certificates.rs",
-        "lemma": "super::examples_hs::lemma_extension_checks()",
-        "witness": "check_extensions(Seq::<Ext>::empty(), MsgKind::Hrr) != Some(ErrKind::MissingExtension)"
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_legacy_server_hello_extensions_without_supported_versions()",
+        "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_with_extensions(seq![0u8, 0, 0, 0])) != Err(crate::spec::PROTOCOL_VERSION)"
       }
     },
     {
@@ -776,12 +776,12 @@
       "find": "es[0].etype == t || has_ext(es.skip(1), t)",
       "replace": "es[0].etype == t",
       "expect": "killed",
-      "reason": "supported_versions is only found in the first place: lemma_extension_checks is false.",
-      "module": "examples_hs",
+      "reason": "has_ext sees only the first extension, so a supported_versions after another extension is missed and the message is misclassified as a legacy ServerHello: lemma_supported_versions_found_after_other_extension is false.",
+      "module": "hello::certificates",
       "certificate": {
-        "file": "src/certificates.rs",
-        "lemma": "super::examples_hs::lemma_extension_checks()",
-        "witness": "check_extensions(seq![Ext { etype: 1234, data: seq![9u8] }, Ext { etype: 43, data: seq![3u8, 4] }], MsgKind::Sh) is Some"
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_supported_versions_found_after_other_extension()",
+        "witness": "crate::spec::legacy_server_hello_without_supported_versions(super::certificates::legacy_server_hello_with_extensions(seq![0x12u8, 0x34, 0, 1, 9, 0, 0x2b, 0, 2, 3, 4]))"
       }
     },
     {
@@ -997,15 +997,15 @@
     {
       "id": "server-hello-extensions-floor",
       "file": "src/spec.rs",
-      "find": "match read_exts(r5, 6, 65535) {",
-      "replace": "match read_exts(r5, 5, 65535) {",
+      "find": "                                            match read_exts(r5, 0, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
+      "replace": "                                            match read_exts(r5, 6, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
       "expect": "killed",
-      "reason": "A ServerHello whose extension block is 5 bytes is read: lemma_server_hello is false.",
+      "reason": "Raising the floor to 6 makes an empty extension vector a decode error: lemma_server_hello (an empty extension vector parses) is false.",
       "module": "examples_hs",
       "certificate": {
         "file": "src/certificates.rs",
         "lemma": "super::examples_hs::lemma_server_hello()",
-        "witness": "parse_handshake_body(2, super::examples_hs::sh_body(super::examples_hs::z32(), 0, seq![0u8, 5, 0x12, 0x34, 0, 1, 9]), 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+        "witness": "!(parse_handshake_body(2, super::examples_hs::sh_body(super::examples_hs::z32(), 0, seq![0u8, 0]), 32) is Ok)"
       }
     },
     {
@@ -1020,20 +1020,6 @@
         "file": "src/certificates.rs",
         "lemma": "super::examples_hs::lemma_server_messages()",
         "witness": "parse_handshake(seq![11u8, 0, 0, 9, 0, 0, 0, 5, 0, 0, 0, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
-      }
-    },
-    {
-      "id": "certificate-context",
-      "file": "src/spec.rs",
-      "find": "if c.context.len() != 0 {",
-      "replace": "if c.context.len() > 1 {",
-      "expect": "killed",
-      "reason": "A server Certificate with a context of one byte is accepted: lemma_server_messages is false.",
-      "module": "examples_hs",
-      "certificate": {
-        "file": "src/certificates.rs",
-        "lemma": "super::examples_hs::lemma_server_messages()",
-        "witness": "parse_handshake(seq![11u8, 0, 0, 5, 1, 7, 0, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::NonEmptyContext)"
       }
     },
     {
@@ -2344,12 +2330,40 @@
       "find": "if request > 1 || (is_response && request != 0)",
       "replace": "if request > 2 || (is_response && request != 0)",
       "expect": "killed",
-      "reason": "RFC 8446 \u00a74.6.3 restricts request_update to 0 or 1; the dispatcher must not queue an out-of-range KeyUpdate.",
+      "reason": "RFC 8446 §4.6.3 restricts request_update to 0 or 1; the dispatcher must not queue an out-of-range KeyUpdate.",
       "module": "connection::dispatcher_lemmas",
       "certificate": {
         "file": "src/connection/dispatcher_certificates.rs",
         "lemma": "super::dispatcher_lemmas::lemma_key_update_request_is_bounded()",
         "witness": "super::dispatcher_spec::prepare_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::ciphers(), super::dispatcher_certificates::sample_ready_state(), 2, false) != super::dispatcher_certificates::sample_ready_state()"
+      }
+    },
+    {
+      "id": "bootstrap-ccs-dropped-mid-message",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "PeerEvent::Ccs => if crate::spec::at_message_boundary(s.reassembly) {",
+      "replace": "PeerEvent::Ccs => if true {",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1 forbids interleaving a handshake message with another record type: a CCS between two fragments of one ServerHello must be refused with unexpected_message, not dropped (docs/ERRATA.md).",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ccs_fatal_mid_message()",
+        "witness": "super::bootstrap_spec::receive(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::awaiting_with_buffer(seq![1u8]), super::bootstrap_spec::PeerEvent::Ccs).1 == super::bootstrap_spec::Action::None"
+      }
+    },
+    {
+      "id": "dispatcher-ccs-dropped-mid-message",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "        && crate::spec::at_message_boundary(reassembly)\n}",
+      "replace": "        && true\n}",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1 forbids interleaving a handshake message with another record type: a compatibility CCS between two fragments of one handshake message must be refused, not dropped.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_compatibility_ccs_not_dropped_mid_message()",
+        "witness": "super::dispatcher_spec::compatibility_ccs_dropped(super::dispatcher_spec::Mode::Handshake, Some(crate::auth::spec::Phase::Finished), crate::spec::Reasm { buf: seq![1u8] })"
       }
     },
     {
@@ -2387,7 +2401,7 @@
       "replace": "pub open spec fn initial_certificate_context_valid(context: Seq<u8>) -> bool {\n    true",
       "expect": "killed",
       "reason": "RFC 8446 §4.4.2 requires the server Certificate context to be empty during initial server authentication; nonempty client contexts remain supported by the generic parser.",
-      "module": "auth::mutation_certificates",
+      "module": "auth::certificates",
       "certificate": {
         "file": "src/auth/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_nonempty_server_certificate_context_is_rejected()",
@@ -2401,7 +2415,7 @@
       "replace": "else if false {",
       "expect": "killed",
       "reason": "RFC 5246 §7.4.1.3 allows the legacy ServerHello extension field to be absent; a complete pre-TLS-1.3 response maps to protocol_version, while the strict generic TLS 1.3 parser would report decode_error.",
-      "module": "hello::mutation_certificates",
+      "module": "hello::certificates",
       "certificate": {
         "file": "src/hello/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_absent_legacy_extension_field_uses_protocol_version()",
@@ -2415,7 +2429,7 @@
       "replace": "None => Some(crate::spec::MISSING_EXTENSION),",
       "expect": "killed",
       "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version.",
-      "module": "hello::mutation_certificates",
+      "module": "hello::certificates",
       "certificate": {
         "file": "src/hello/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_legacy_server_hello_uses_protocol_version()",

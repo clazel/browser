@@ -1,0 +1,377 @@
+{
+  "mutations": [
+    {
+      "id": "ec-public-key-oid",
+      "file": "src/signature/spec.rs",
+      "find": "10045nat, 2nat, 1nat]",
+      "replace": "10045nat, 4nat, 1nat]",
+      "expect": "killed",
+      "reason": "id-ecPublicKey is 1.2.840.10045.2.1 (RFC 5480 §2.1.1); with arc 4 the real key OID is not recognised.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_oid_examples()",
+        "witness": "!is_ec_public_key(seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat])"
+      }
+    },
+    {
+      "id": "ed25519-oid",
+      "file": "src/signature/spec.rs",
+      "find": "101nat, 112nat]",
+      "replace": "101nat, 113nat]",
+      "expect": "killed",
+      "reason": "1.3.101.113 is id-Ed448 (RFC 8410 §3): Ed448 keys would be passed to Ed25519 verification and Ed25519 keys refused.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_oid_examples()",
+        "witness": "is_ed25519(seq![1nat, 3nat, 101nat, 113nat])"
+      }
+    },
+    {
+      "id": "secp256r1-parameter-arc",
+      "file": "src/signature/spec.rs",
+      "find": "0x03u8, 0x01u8, 0x07u8]",
+      "replace": "0x03u8, 0x01u8, 0x22u8]",
+      "expect": "killed",
+      "reason": "Changes the last arc of the parameter from 7 to 34, so it no longer names secp256r1: the parameter must decode to 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1).",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_secp256r1_parameter_example()",
+        "witness": "clazel_der::spec::read_oid(secp256r1_parameter(), 0, 10) == Some((seq![1nat, 2nat, 840nat, 10045nat, 3nat, 1nat, 34nat], 10nat))"
+      }
+    },
+    {
+      "id": "pad32-zeros-after",
+      "file": "src/signature/spec.rs",
+      "find": "Seq::new((32 - m.len()) as nat, |i: int| 0u8) + m",
+      "replace": "m + Seq::new((32 - m.len()) as nat, |i: int| 0u8)",
+      "expect": "killed",
+      "reason": "Padding on the right multiplies r and s by a power of 256.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_pad32_example()",
+        "witness": "pad32(seq![0x01u8])[31] == 0u8"
+      }
+    },
+    {
+      "id": "p256-compressed",
+      "file": "src/signature/spec.rs",
+      "find": "bits.len() == 65 && bits[0] == 0x04u8",
+      "replace": "bits.len() == 65 && bits[0] == 0x02u8",
+      "expect": "killed",
+      "reason": "0x04 marks the uncompressed point (RFC 5480 §2.2); with 0x02 the real key is refused.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_p256_point_examples()",
+        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())) is None"
+      }
+    },
+    {
+      "id": "p256-length",
+      "file": "src/signature/spec.rs",
+      "find": "bits.len() == 65 && bits[0] == 0x04u8",
+      "replace": "bits.len() == 64 && bits[0] == 0x04u8",
+      "expect": "killed",
+      "reason": "The uncompressed point is 1 + 64 octets; at 64 the real key is refused.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_p256_point_examples()",
+        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())) is None"
+      }
+    },
+    {
+      "id": "p256-subrange",
+      "file": "src/signature/spec.rs",
+      "find": "Some(bits.subrange(1, 65))",
+      "replace": "Some(bits.subrange(0, 64))",
+      "expect": "killed",
+      "reason": "X || Y starts after the 0x04 octet; from 0 the point handed to libcrux is shifted.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_p256_point_examples()",
+        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())).unwrap()[0] == 0x04u8"
+      }
+    },
+    {
+      "id": "ecdsa-r-length",
+      "file": "src/signature/spec.rs",
+      "find": "!r_negative && re - rs <= 32",
+      "replace": "!r_negative && re - rs <= 31",
+      "expect": "killed",
+      "reason": "r may have 32 magnitude octets (r < n < 2^256); at 31 every r whose top octet is nonzero is refused.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_ecdsa_sig_value_examples()",
+        "witness": "ecdsa_sig_value(crate::signature::examples::ex_sig_max()) is None"
+      }
+    },
+    {
+      "id": "ecdsa-s-length",
+      "file": "src/signature/spec.rs",
+      "find": "!s_negative && se - ss <= 32",
+      "replace": "!s_negative && se - ss <= 31",
+      "expect": "killed",
+      "reason": "s may have 32 magnitude octets, as r.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_ecdsa_sig_value_examples()",
+        "witness": "ecdsa_sig_value(crate::signature::examples::ex_sig_max()) is None"
+      }
+    },
+    {
+      "id": "ecdsa-negative-r",
+      "file": "src/signature/spec.rs",
+      "find": "Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 32",
+      "replace": "Some((r_negative, rs, re, after_r)) if re - rs <= 32",
+      "expect": "killed",
+      "reason": "r is a non-negative INTEGER (RFC 3279 §2.2.3); without the check -128 is read as the magnitude 0x80, a second encoding of r = 128.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_ecdsa_sig_value_examples()",
+        "witness": "ecdsa_sig_value(seq![0x30u8, 0x06, 0x02, 0x01, 0x80, 0x02, 0x01, 0x02]) is Some"
+      }
+    },
+    {
+      "id": "ecdsa-nothing-after-s",
+      "file": "src/signature/spec.rs",
+      "find": "&& se - ss <= 32 && after_s == ce",
+      "replace": "&& se - ss <= 32",
+      "expect": "killed",
+      "reason": "The SEQUENCE holds exactly r and s; without the check a third INTEGER is ignored, a second encoding of one signature.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_ecdsa_sig_value_examples()",
+        "witness": "ecdsa_sig_value(seq![0x30u8, 0x09, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x02, 0x01, 0x03]) is Some"
+      }
+    },
+    {
+      "id": "ecdsa-nothing-after-sequence",
+      "file": "src/signature/spec.rs",
+      "find": "Some((cs, ce)) if ce == signature.len() =>",
+      "replace": "Some((cs, ce)) =>",
+      "expect": "killed",
+      "reason": "Nothing may follow the Ecdsa-Sig-Value; without the check trailing octets are ignored.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_ecdsa_sig_value_examples()",
+        "witness": "ecdsa_sig_value(seq![0x30u8, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "ecdsa-r-from-s",
+      "file": "src/signature/spec.rs",
+      "find": "Some((pad32(signature.subrange(rs as int, re as int)),",
+      "replace": "Some((pad32(signature.subrange(ss as int, se as int)),",
+      "expect": "killed",
+      "reason": "r is the first INTEGER; reading s twice verifies (s, s).",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_ecdsa_sig_value_examples()",
+        "witness": "ecdsa_sig_value(crate::signature::examples::ex_sig_1_2()).unwrap().0[31] == 0x02u8"
+      }
+    },
+    {
+      "id": "modulus-top-bit",
+      "file": "src/signature/spec.rs",
+      "find": "&& n[0] >= 0x80u8",
+      "replace": "&& n[0] >= 0x7fu8",
+      "expect": "killed",
+      "reason": "A first octet of 0x7f makes a 2047-bit modulus, which libcrux-rsa refuses as a 2048-bit one.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_modulus_ok_examples()",
+        "witness": "modulus_ok(Seq::new(256, |i: int| if i == 0 { 0x7fu8 } else { 0xffu8 }))"
+      }
+    },
+    {
+      "id": "modulus-6144",
+      "file": "src/signature/spec.rs",
+      "find": "|| n.len() == 768 ||",
+      "replace": "|| n.len() == 767 ||",
+      "expect": "killed",
+      "reason": "6144 bits is 768 octets.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_modulus_ok_examples()",
+        "witness": "!modulus_ok(crate::signature::examples::ex_ones(768))"
+      }
+    },
+    {
+      "id": "hash-len-sha384",
+      "file": "src/signature/spec.rs",
+      "find": "Hash::Sha384 => 48,",
+      "replace": "Hash::Sha384 => 32,",
+      "expect": "killed",
+      "reason": "SHA-384's digest, and so rsa_pss_rsae_sha384's salt, is 48 octets.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_hash_len_examples()",
+        "witness": "hash_len(Hash::Sha384) == 32"
+      }
+    },
+    {
+      "id": "same-y-sign-bit",
+      "file": "src/signature/spec.rs",
+      "find": "&& key[31] & 0x7fu8 == y[31]",
+      "replace": "&& key[31] == y[31]",
+      "expect": "killed",
+      "reason": "Bit 255 is x's sign (RFC 8032 §5.1.2); compared, the negated small-order points are not refused.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_key(0x00, 0x00, 0x80), small_order_y()[0])"
+      }
+    },
+    {
+      "id": "same-y-prefix",
+      "file": "src/signature/spec.rs",
+      "find": "&& key.subrange(0, 31) =~= y.subrange(0, 31)",
+      "replace": "&& key.subrange(1, 31) =~= y.subrange(1, 31)",
+      "expect": "killed",
+      "reason": "Every octet but the last is compared; skipping the first, the identity key matches y = 0's entry.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "same_y(crate::signature::examples::ex_key(0x01, 0x00, 0x00), small_order_y()[0])"
+      }
+    },
+    {
+      "id": "small-order-y-0",
+      "file": "src/signature/spec.rs",
+      "find": "// 0: (sqrt(-1), 0) and (-sqrt(-1), 0), order 4\n        seq![\n            0x00u8",
+      "replace": "// 0: (sqrt(-1), 0) and (-sqrt(-1), 0), order 4\n        seq![\n            0x02u8",
+      "expect": "killed",
+      "reason": "A wrong table entry lets that small-order key through; the entry must match the encoding computed from the curve.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_key(0x00, 0x00, 0x00), small_order_y()[0])"
+      }
+    },
+    {
+      "id": "small-order-y-1",
+      "file": "src/signature/spec.rs",
+      "find": "// 1: the identity (0, 1), order 1\n        seq![\n            0x01u8",
+      "replace": "// 1: the identity (0, 1), order 1\n        seq![\n            0x02u8",
+      "expect": "killed",
+      "reason": "A wrong table entry lets that small-order key through; the entry must match the encoding computed from the curve.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_key(0x01, 0x00, 0x00), small_order_y()[1])"
+      }
+    },
+    {
+      "id": "small-order-y-2",
+      "file": "src/signature/spec.rs",
+      "find": "// p - 1: (0, -1), order 2\n        seq![\n            0xecu8",
+      "replace": "// p - 1: (0, -1), order 2\n        seq![\n            0xebu8",
+      "expect": "killed",
+      "reason": "A wrong table entry lets that small-order key through; the entry must match the encoding computed from the curve.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_key(0xec, 0xff, 0x7f), small_order_y()[2])"
+      }
+    },
+    {
+      "id": "small-order-y-3",
+      "file": "src/signature/spec.rs",
+      "find": "// two of the order-8 points\n        seq![\n            0x26u8",
+      "replace": "// two of the order-8 points\n        seq![\n            0x27u8",
+      "expect": "killed",
+      "reason": "A wrong table entry lets that small-order key through; the entry must match the encoding computed from the curve.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_order8_a(0x00), small_order_y()[3])"
+      }
+    },
+    {
+      "id": "small-order-y-4",
+      "file": "src/signature/spec.rs",
+      "find": "// the other two order-8 points\n        seq![\n            0xc7u8",
+      "replace": "// the other two order-8 points\n        seq![\n            0xc6u8",
+      "expect": "killed",
+      "reason": "A wrong table entry lets that small-order key through; the entry must match the encoding computed from the curve.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_order8_b(0x00), small_order_y()[4])"
+      }
+    },
+    {
+      "id": "small-order-y-5",
+      "file": "src/signature/spec.rs",
+      "find": "// p: a non-canonical encoding of 0\n        seq![\n            0xedu8",
+      "replace": "// p: a non-canonical encoding of 0\n        seq![\n            0xefu8",
+      "expect": "killed",
+      "reason": "A wrong table entry lets that small-order key through; the entry must match the encoding computed from the curve.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_key(0xed, 0xff, 0x7f), small_order_y()[5])"
+      }
+    },
+    {
+      "id": "small-order-y-6",
+      "file": "src/signature/spec.rs",
+      "find": "// p + 1: a non-canonical encoding of 1\n        seq![\n            0xeeu8",
+      "replace": "// p + 1: a non-canonical encoding of 1\n        seq![\n            0xefu8",
+      "expect": "killed",
+      "reason": "A wrong table entry lets that small-order key through; the entry must match the encoding computed from the curve.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_small_order_examples()",
+        "witness": "!same_y(crate::signature::examples::ex_key(0xee, 0xff, 0x7f), small_order_y()[6])"
+      }
+    },
+    {
+      "id": "small-order-count",
+      "file": "src/signature/spec.rs",
+      "find": "0 <= i < small_order_y().len() && #[trigger]",
+      "replace": "0 <= i < 6 && #[trigger]",
+      "expect": "killed-incidentally",
+      "reason": "Leaves p + 1 out. The exec check's proof breaks; no example can evaluate the quantifier by compute_only."
+    },
+    {
+      "id": "ed25519-small-order-guard",
+      "file": "src/signature/spec.rs",
+      "find": "        && !is_small_order(spki.subject_public_key_bits)\n",
+      "replace": "",
+      "expect": "killed-incidentally",
+      "reason": "Accepts small-order keys again. It only removes a guard on the uninterpreted ed25519_verify, so no concrete theorem is false; the exec proof breaks and tests/signature.rs (ed25519_refuses_small_order_keys) catches it."
+    },
+    {
+      "id": "ed25519-parameters",
+      "file": "src/signature/spec.rs",
+      "find": "        && spki.algorithm.parameters_der is None\n",
+      "replace": "",
+      "expect": "killed-incidentally",
+      "reason": "Accepts Ed25519 keys with parameters (RFC 8410 §3 says absent). A guard on an uninterpreted verification: the exec proof breaks and tests/signature.rs catches it."
+    },
+    {
+      "id": "rsa-exponent",
+      "file": "src/signature/spec.rs",
+      "find": "key.public_exponent_octets =~= seq![0x01u8, 0x00u8, 0x01u8]",
+      "replace": "key.public_exponent_octets =~= seq![0x03u8]",
+      "expect": "killed-incidentally",
+      "reason": "Passes e = 3 keys to libcrux-rsa, which verifies with 65537 only. A guard on an uninterpreted verification: the exec proof breaks and tests/signature.rs catches it."
+    },
+    {
+      "id": "rsa-signature-length",
+      "file": "src/signature/spec.rs",
+      "find": "&& signature.len() == key.modulus_octets.len()\n",
+      "replace": "\n",
+      "expect": "killed-incidentally",
+      "reason": "Drops the length guard that keeps libcrux-rsa's precondition. The exec proof (and the axiom's requires) breaks."
+    },
+    {
+      "id": "dispatch-ed25519",
+      "file": "src/signature/spec.rs",
+      "find": "if scheme == 0x0807 { ed25519(",
+      "replace": "if scheme == 0x0808 { ed25519(",
+      "expect": "killed-incidentally",
+      "reason": "Routes ed448 (0x0808) to Ed25519 and refuses ed25519. The exec dispatcher's proof breaks; tests/signature.rs verifies RFC 8032 under 0x0807."
+    }
+  ]
+}
