@@ -32,8 +32,8 @@
 //! - `from_unix_seconds` takes the count of seconds as a `nat` (the exec
 //!   function takes a `u64`, which embeds). POSIX §4.16 defines the count by
 //!   a closed formula over broken-down UTC time:
-//!   `tm_sec + tm_min*60 + tm_hour*3600 + tm_yday*86400 + (tm_year-70)*31536000
-//!   + ((tm_year-69)/4)*86400 - ((tm_year-1)/100)*86400 + ((tm_year+299)/400)*86400`.
+//!   `tm_sec + tm_min*60 + tm_hour*3600 + tm_yday*86400 + (tm_year-70)*31536000 +
+//!   ((tm_year-69)/4)*86400 - ((tm_year-1)/100)*86400 + ((tm_year+299)/400)*86400`.
 //!   That formula is a closed form of "a day is exactly 86400 seconds and the
 //!   Gregorian calendar runs on from 1970-01-01T00:00:00Z". The spec writes
 //!   the inverse the plain way instead: whole days and the seconds into the
