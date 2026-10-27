@@ -549,4 +549,16 @@ pub proof fn lemma_example_u64_max()
     lemma_from_unix_none_iff(18446744073709551615);
 }
 
+/// Example: Unix time 1735689599 is the last second of 2024, a leap year,
+/// after the 30-day months (checked with `calendar.timegm`).
+pub proof fn lemma_example_2024_12_31_end()
+    ensures from_unix_seconds(1735689599) == Some(CertificateTime {
+        year: 2024, month: 12, day: 31, hour: 23, minute: 59, second: 59,
+    })
+{
+    assert(from_unix_seconds(1735689599) == Some(CertificateTime {
+        year: 2024, month: 12, day: 31, hour: 23, minute: 59, second: 59,
+    })) by (compute_only);
+}
+
 } // verus!
