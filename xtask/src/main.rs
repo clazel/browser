@@ -6,12 +6,16 @@
 //! - `cargo xtask verify --changed [base]`: the same checks, but tests, Miri,
 //!   Kani, Verus, mutations and conformance only for the crates that changed
 //!   since `base` (default `origin/main`) and their dependents (`changed.rs`).
-//!   Ends in `CHANGED CRATES PASSED`; CI's full run is the gate.
-//! - `cargo xtask verify --part (base|crate <name> --metrics <dir>|assemble
-//!   --metrics <dir> [--write])`: the same checks split into parts for
-//!   separate CI jobs (`parts.rs`); `cargo xtask crates` lists the crates for
-//!   them. `assemble --write` writes README.md's table from the parts, which
-//!   CI does on main.
+//!   Ends in `CHANGED CRATES PASSED`; the full run on `main` is the gate.
+//! - `cargo xtask verify --part (base|miri [--changed [base]]|crate <name>
+//!   --metrics <dir>|assemble --metrics <dir> [--write|--only <names>])`: the
+//!   same checks split into parts for separate CI jobs (`parts.rs`);
+//!   `cargo xtask crates [--names] [--changed [base]]` lists the crates for
+//!   them, only the changed ones with `--changed`, which CI uses on pull
+//!   requests. `assemble --write` writes README.md's table from the parts,
+//!   which CI does on main. `assemble --only` requires just those crates'
+//!   parts, for a pull request's partial run, and ends in `CHANGED CRATES
+//!   PASSED`.
 //! - `cargo xtask check`: only the fast static checks (no build, no proofs).
 //! - `cargo xtask mutate`: only the proof mutation tests (also part of
 //!   `verify`).
@@ -47,6 +51,7 @@ mod unicode;
 mod verus;
 mod workspace;
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
@@ -919,30 +924,59 @@ fn generate_tables() -> ExitCode {
     }
 }
 
+/// The crates a `--changed` run repeats proofs and tests for, against
+/// `base`, recorded as a step; `None` means every crate (or a failure,
+/// which the step records). Also returns the merge base used.
+fn changed_selection(
+    r: &mut Runner,
+    crates: &[Crate],
+    root: &Path,
+    base: &str,
+) -> Option<(String, Vec<Crate>)> {
+    match changed::select(crates, root, base) {
+        Ok((merge_base, changed::Selection::All(why))) => {
+            r.step(
+                "select changed crates",
+                Outcome::Pass(vec![format!(
+                    "every crate is checked: {why} since {base} ({merge_base})"
+                )]),
+            );
+            None
+        }
+        Ok((merge_base, changed::Selection::Some(names))) => {
+            let picked: Vec<Crate> = crates
+                .iter()
+                .filter(|c| names.contains(&c.name))
+                .cloned()
+                .collect();
+            r.step(
+                "select changed crates",
+                Outcome::Pass(vec![format!(
+                    "{} of {} crates changed since {base} ({merge_base}), or depend on one that did: {}",
+                    picked.len(),
+                    crates.len(),
+                    if names.is_empty() {
+                        "none".to_owned()
+                    } else {
+                        names.iter().cloned().collect::<Vec<_>>().join(", ")
+                    }
+                )]),
+            );
+            Some((merge_base, picked))
+        }
+        Err(e) => {
+            r.step("select changed crates", Outcome::Fail(vec![e]));
+            None
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
-    // `verify --part ...` (parts.rs) and `crates` are handled apart.
-    let part = match args.as_slice() {
-        ["verify", "--part", "base"] => Some(Part::Base),
-        ["verify", "--part", "miri"] => Some(Part::Miri),
-        ["verify", "--part", "crate", names, "--metrics", dir] => Some(Part::Crate(
-            names.split(',').map(str::to_owned).collect(),
-            PathBuf::from(dir),
-        )),
-        ["verify", "--part", "assemble", "--metrics", dir] => {
-            Some(Part::Assemble(PathBuf::from(dir), false))
-        }
-        ["verify", "--part", "assemble", "--metrics", dir, "--write"] => {
-            Some(Part::Assemble(PathBuf::from(dir), true))
-        }
-        ["crates"] => Some(Part::ListCrates),
-        _ => None,
-    };
-    let args = if part.is_some() { vec!["check"] } else { args };
-    // `mutate <crate>` runs one crate's mutations, for iterating on them.
-    let mut only_crate: Option<&str> = None;
-    // `verify` and `report` take `--changed [<base>]` (changed.rs).
+    // `verify` and `report` take `--changed [<base>]` (changed.rs), and so do
+    // the `base` and `miri` parts and `crates`, which CI runs that way on
+    // pull requests.
     let (args, base) = match args.iter().position(|a| *a == "--changed") {
         Some(i) => {
             let (head, tail) = args.split_at(i);
@@ -954,6 +988,56 @@ fn main() -> ExitCode {
         }
         None => (args.as_slice(), None),
     };
+    let base_owned = base.map(str::to_owned);
+    // `verify --part ...` (parts.rs) and `crates` are handled apart.
+    let part = match (args, base) {
+        (["verify", "--part", "base"], _) => Some(Part::Base(base_owned)),
+        (["verify", "--part", "miri"], _) => Some(Part::Miri(base_owned)),
+        (["verify", "--part", "crate", names, "--metrics", dir], None) => Some(Part::Crate(
+            names.split(',').map(str::to_owned).collect(),
+            PathBuf::from(dir),
+        )),
+        (["verify", "--part", "assemble", "--metrics", dir], None) => {
+            Some(Part::Assemble(PathBuf::from(dir), false, None))
+        }
+        (["verify", "--part", "assemble", "--metrics", dir, "--write"], None) => {
+            Some(Part::Assemble(PathBuf::from(dir), true, None))
+        }
+        // A pull request's partial run: only these crates' measurements.
+        // Never together with `--write`: the table comes from full runs.
+        (
+            [
+                "verify",
+                "--part",
+                "assemble",
+                "--metrics",
+                dir,
+                "--only",
+                names,
+            ],
+            None,
+        ) => Some(Part::Assemble(
+            PathBuf::from(dir),
+            false,
+            Some(
+                names
+                    .split(',')
+                    .filter(|n| !n.is_empty())
+                    .map(str::to_owned)
+                    .collect(),
+            ),
+        )),
+        (["crates"], _) => Some(Part::ListCrates(false, base_owned)),
+        (["crates", "--names"], _) => Some(Part::ListCrates(true, base_owned)),
+        _ => None,
+    };
+    let (args, base) = if part.is_some() {
+        (&["check"][..], None)
+    } else {
+        (args, base)
+    };
+    // `mutate <crate>` runs one crate's mutations, for iterating on them.
+    let mut only_crate: Option<&str> = None;
     let (full, only_mutate, report_mode, write) = match (args, base) {
         (["testdata"], None) => return generate_testdata(),
         (["tables"], None) => return generate_tables(),
@@ -968,7 +1052,7 @@ fn main() -> ExitCode {
         (["report", "--write"], _) => (false, false, true, true),
         _ => {
             eprintln!(
-                "usage: cargo xtask <verify [--changed [base]]|verify --part (base|crate <name> --metrics <dir>|assemble --metrics <dir> [--write])|crates|check|mutate [crate]|testdata|tables|report [--write] [--changed [base]]>"
+                "usage: cargo xtask <verify [--changed [base]]|verify --part (base|miri [--changed [base]]|crate <name> --metrics <dir>|assemble --metrics <dir> [--write|--only <names>])|crates [--names] [--changed [base]]|check|mutate [crate]|testdata|tables|report [--write] [--changed [base]]>"
             );
             return ExitCode::from(64);
         }
@@ -1013,36 +1097,7 @@ fn main() -> ExitCode {
     // `None` means every crate.
     let mut partial: Option<(String, Vec<Crate>)> = None;
     if let Some(base) = base {
-        match changed::select(&crates, &root, base) {
-            Ok((merge_base, changed::Selection::All(why))) => r.step(
-                "select changed crates",
-                Outcome::Pass(vec![format!(
-                    "every crate is checked: {why} since {base} ({merge_base})"
-                )]),
-            ),
-            Ok((merge_base, changed::Selection::Some(names))) => {
-                let picked: Vec<Crate> = crates
-                    .iter()
-                    .filter(|c| names.contains(&c.name))
-                    .cloned()
-                    .collect();
-                r.step(
-                    "select changed crates",
-                    Outcome::Pass(vec![format!(
-                        "{} of {} crates changed since {base} ({merge_base}), or depend on one that did: {}",
-                        picked.len(),
-                        crates.len(),
-                        if names.is_empty() {
-                            "none".to_owned()
-                        } else {
-                            names.iter().cloned().collect::<Vec<_>>().join(", ")
-                        }
-                    )]),
-                );
-                partial = Some((merge_base, picked));
-            }
-            Err(e) => r.step("select changed crates", Outcome::Fail(vec![e])),
-        }
+        partial = changed_selection(&mut r, &crates, &root, base);
     }
     let checked: &[Crate] = partial.as_ref().map_or(&crates, |(_, p)| p.as_slice());
     let only = partial.as_ref().map(|(_, p)| p.as_slice());
@@ -1090,23 +1145,38 @@ fn main() -> ExitCode {
 
 /// One part of a split verification (parts.rs).
 enum Part {
-    Base,
-    Miri,
+    /// With a base ref (`--changed`), tests only for the changed crates.
+    Base(Option<String>),
+    /// With a base ref (`--changed`), Miri only for the changed crates.
+    Miri(Option<String>),
     /// One or more crates (comma-separated on the command line; CI groups
     /// the crates with no proofs into one job, see [`crate_groups`]).
     Crate(Vec<String>, PathBuf),
-    /// The crate parts' directory, and whether to write README.md's table
-    /// from them (CI does, on main, after every part passed).
-    Assemble(PathBuf, bool),
+    /// The crate parts' directory, whether to write README.md's table
+    /// from them (CI does, on main, after every part passed), and, for a
+    /// pull request's partial run, the only crates whose measurements are
+    /// required (never together with writing).
+    Assemble(PathBuf, bool, Option<Vec<String>>),
     /// `cargo xtask crates`: the crate groups as a JSON array of
-    /// comma-separated names, for CI's matrix of `crate` parts.
-    ListCrates,
+    /// comma-separated names, for CI's matrix of `crate` parts; with a base
+    /// ref (`--changed`), only the groups of the changed crates. With
+    /// `--names` (the flag), the crates themselves, comma-separated.
+    ListCrates(bool, Option<String>),
 }
 
 /// CI's crate parts: one per crate with proof work (Verus, Kani harnesses or
 /// mutations), and one for all the others together, which finish in about
 /// a minute each and would otherwise each hold a runner for its setup.
-fn crate_groups(crates: &[Crate]) -> Vec<String> {
+///
+/// Only the crates in `selected` are grouped (a pull request's job list);
+/// a group left empty is dropped.
+fn crate_groups(crates: &[Crate], selected: &BTreeSet<&str>) -> Vec<String> {
+    let crates: Vec<Crate> = crates
+        .iter()
+        .filter(|c| selected.contains(c.name.as_str()))
+        .cloned()
+        .collect();
+    let crates = crates.as_slice();
     let light = |c: &Crate| {
         !c.verus
             && !mutate::has_mutations(c)
@@ -1129,19 +1199,85 @@ fn crate_groups(crates: &[Crate]) -> Vec<String> {
 }
 
 fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Path) -> ExitCode {
-    if let Part::ListCrates = part {
-        println!("{}", serde_json::Value::from(crate_groups(crates)));
+    if let Part::ListCrates(names, base) = part {
+        // The selection goes to stderr (the CI log); stdout is the list.
+        let selected: BTreeSet<&str> = match base {
+            None => crates.iter().map(|c| c.name.as_str()).collect(),
+            Some(base) => match changed::select(crates, root, &base) {
+                Ok((merge_base, changed::Selection::All(why))) => {
+                    eprintln!("every crate: {why} since {base} ({merge_base})");
+                    crates.iter().map(|c| c.name.as_str()).collect()
+                }
+                Ok((merge_base, changed::Selection::Some(sel))) => {
+                    eprintln!(
+                        "{} of {} crates changed since {base} ({merge_base}), or depend on one that did: {}",
+                        sel.len(),
+                        crates.len(),
+                        sel.iter().cloned().collect::<Vec<_>>().join(", ")
+                    );
+                    crates
+                        .iter()
+                        .map(|c| c.name.as_str())
+                        .filter(|n| sel.contains(*n))
+                        .collect()
+                }
+                Err(e) => {
+                    eprintln!("select changed crates: {e}");
+                    return ExitCode::from(1);
+                }
+            },
+        };
+        if names {
+            println!(
+                "{}",
+                crates
+                    .iter()
+                    .map(|c| c.name.as_str())
+                    .filter(|n| selected.contains(n))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            );
+        } else {
+            println!(
+                "{}",
+                serde_json::Value::from(crate_groups(crates, &selected))
+            );
+        }
         return ExitCode::SUCCESS;
     }
     static_checks(r, crates, pins);
     let done = match part {
-        Part::Base => {
-            build_checks(r, None);
-            "BASE PART PASSED (static checks, rustfmt, clippy and tests; Miri runs in the miri part, proofs in the crate parts)".to_owned()
+        Part::Base(base) => {
+            // Rustfmt and clippy always cover the whole workspace; only the
+            // tests narrow to the changed crates and their dependents.
+            let picked = base
+                .as_deref()
+                .and_then(|b| changed_selection(r, crates, root, b));
+            let only = picked.as_ref().map(|(_, p)| p.as_slice());
+            build_checks(r, only);
+            match &picked {
+                Some((_, p)) => format!(
+                    "BASE PART PASSED (static checks, rustfmt and clippy over the workspace; tests of {} of {} crates, the changed ones and their dependents)",
+                    p.len(),
+                    crates.len()
+                ),
+                None => "BASE PART PASSED (static checks, rustfmt, clippy and tests; Miri runs in the miri part, proofs in the crate parts)".to_owned(),
+            }
         }
-        Part::Miri => {
-            miri(r, pins, None);
-            "MIRI PART PASSED (static checks and the tests under Miri)".to_owned()
+        Part::Miri(base) => {
+            let picked = base
+                .as_deref()
+                .and_then(|b| changed_selection(r, crates, root, b));
+            let only = picked.as_ref().map(|(_, p)| p.as_slice());
+            miri(r, pins, only);
+            match &picked {
+                Some((_, p)) => format!(
+                    "MIRI PART PASSED (static checks and the tests of {} of {} crates under Miri, the changed ones and their dependents)",
+                    p.len(),
+                    crates.len()
+                ),
+                None => "MIRI PART PASSED (static checks and the tests under Miri)".to_owned(),
+            }
         }
         Part::Crate(names, dir) => {
             let mut selected: Vec<Crate> = Vec::new();
@@ -1179,10 +1315,33 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
                 names.join(", ")
             )
         }
-        Part::Assemble(dir, write) => {
+        Part::Assemble(dir, write, only) => {
+            // With `only` (a pull request's partial run) just those crates
+            // are required; every other crate is not claimed at all.
+            let mut required: Vec<Crate> = Vec::new();
+            match &only {
+                None => required = crates.to_vec(),
+                Some(names) => {
+                    for name in names {
+                        match crates.iter().find(|c| &c.name == name) {
+                            Some(c) => required.push(c.clone()),
+                            None => {
+                                r.step(
+                                    "select crate",
+                                    Outcome::Fail(vec![format!(
+                                        "no workspace crate named {name:?}"
+                                    )]),
+                                );
+                                println!("RESULT: FAILED");
+                                return ExitCode::from(1);
+                            }
+                        }
+                    }
+                }
+            }
             let res = parts::head().and_then(|commit| {
                 let mut problems = Vec::new();
-                for c in crates {
+                for c in &required {
                     let path = dir.join(format!("{}.json", c.name));
                     let entry = r.metrics.entry(c.name.clone()).or_default();
                     let read = std::fs::read_to_string(&path)
@@ -1194,7 +1353,8 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
                 }
                 if problems.is_empty() {
                     Ok(vec![format!(
-                        "{} crate parts, all from {commit}",
+                        "{} of {} crate parts, all from {commit}",
+                        required.len(),
                         crates.len()
                     )])
                 } else {
@@ -1203,11 +1363,20 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
             });
             r.step("read crate parts", from_result(res));
             if !r.failed {
-                readme_table(r, write, None);
+                readme_table(r, write, only.as_ref().map(|_| required.as_slice()));
             }
-            "PARTS ASSEMBLED (every crate part present and from this commit; the gate is this and every part passing on the same commit)".to_owned()
+            match &only {
+                None => "PARTS ASSEMBLED (every crate part present and from this commit; the gate is this and every part passing on the same commit)".to_owned(),
+                // Never "ALL CHECKS PASSED" or "PARTS ASSEMBLED": most
+                // crates' proofs did not run.
+                Some(_) => format!(
+                    "CHANGED CRATES PASSED ({} of {} crates' parts present and from this commit; the other crates' proofs did not run here, and the full verification runs on main after merge)",
+                    required.len(),
+                    crates.len()
+                ),
+            }
         }
-        Part::ListCrates => String::new(),
+        Part::ListCrates(..) => String::new(),
     };
     if r.failed {
         println!("RESULT: FAILED");
