@@ -176,13 +176,19 @@ We list this openly. Proofs are only as good as their assumptions.
   and `sub` modulo P-384's p and n). What that trusts, precisely: the Coq
   kernel; Coq's extraction to OCaml and the OCaml compiler that runs the
   synthesizer; fiat's unverified printer from its intermediate representation
-  to Rust text (the Rust it ships is not itself proven); and rustc's `u128`
-  arithmetic and `as` casts, which the generated code relies on. Every call
+  to Rust text (the Rust it ships is not itself proven), including the
+  pre- and postcondition comments it prints above each function, which are
+  taken to state the Coq theorem; rustc's fixed-width integer arithmetic
+  (`u128`, `i128`, `u64`, `i8`) and `as` casts, which the generated code
+  relies on and whose freedom from overflow comes from fiat's bounds
+  analysis; and that the published 0.3.0 crate is the synthesizer's output
+  (`Cargo.lock` pins the tarball's checksum, not a regeneration). Every call
   into fiat is one of six axioms in `crates/clazel-p384/src/axioms.rs`, each
-  stating only the postcondition fiat prints above that function. The ECDSA
-  group law and the verification steps are our own code, proven over those
-  axioms, as are the conversions into and out of the Montgomery domain, the
-  octet-string conversions, exponentiation and inversion
+  stating only the postcondition fiat prints above that function. The
+  conversions into and out of the Montgomery domain, the octet-string
+  conversions, exponentiation and inversion are our own code, proven over
+  those axioms; the ECDSA group law and verification steps will be too, but
+  are not written yet
 - That each spec matches the standard it transcribes. No proof can check
   this, because the standard is English. It is backed by machine-checked
   evidence instead of a reviewer (next section), and that evidence is only as

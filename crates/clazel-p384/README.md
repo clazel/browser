@@ -115,8 +115,10 @@ times out on it.
 Run `cargo verus focus -- -A missing_docs` in this directory. What it
 proves today is that every spec function terminates (each recursive one has a
 `decreases`), that the evaluated examples hold, and that each field function
-meets its contract in `field/contract.rs` over the six axioms. There is no
-`mutations.json`, no lemma about the spec of the signature itself, no
+meets its contract in `field/contract.rs` over the six axioms.
+`mutations.json` holds 26 mutations of `spec.rs`, each killed with a
+certificate that contradicts one of those examples; the field code has no
+mutations yet. There is no lemma about the spec of the signature itself, no
 independent transcription, no conformance test against an official suite and
 no Kani harness yet, so the crate stays at tier 0; see
 [docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier
