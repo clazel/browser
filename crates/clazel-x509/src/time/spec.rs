@@ -242,6 +242,12 @@ pub open spec fn seconds_per_day() -> nat {
     86400
 }
 
+/// RFC 5280 §4.1.2.5: both time types carry at most a four-digit year, so no
+/// certificate time is after the year 9999.
+pub open spec fn max_year() -> nat {
+    9999
+}
+
 /// Number of days in a Gregorian year, from the leap-year rule above.
 pub open spec fn days_in_year(year: nat) -> nat {
     if is_leap_year(year) { 366 } else { 365 }
@@ -304,7 +310,7 @@ pub open spec fn from_unix_seconds(t: nat) -> Option<CertificateTime> {
     let month = month_of_day(day_of_year, year, 1);
     let day = day_in_month(day_of_year, year, 1);
     // 4. RFC 5280 §4.1.2.5 has no year above 9999.
-    if year > 9999 { None }
+    if year > max_year() { None }
     else {
         // 5. Clock fields from the seconds into the day; 0..=59, never 60.
         Some(CertificateTime {
