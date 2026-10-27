@@ -28,4 +28,5 @@ pub mod certificates;
 pub mod contract;
 pub mod examples;
 pub mod field;
+pub mod point_contract;
 pub mod spec;
