@@ -83,40 +83,59 @@ installs nothing if a checksum differs.
 
 The full `cargo xtask verify` takes hours, so it runs where it is the gate:
 in CI (`.github/workflows/ci.yml`), on Linux x86-64 with the pinned
-toolchain, on every push to `main` and every pull request. Nothing is done,
-and no tier is raised, until that run is green.
+toolchain. Every push to `main` is verified in full. A pull request is
+verified in part: the crates it changes and every crate that depends on one
+(the selection of `--changed`, below, against the merge base with `origin/main`;
+for a stacked pull request that also includes the lower pull requests'
+crates, which is conservative). A change to anything shared, to
+`.github/workflows/ci.yml`, or to any crate's `tier` or `target-tier`
+selects every crate, so a pull request that raises a tier gets a full
+verification. Nothing is done, and no tier is raised, until that run is
+green, and `main`'s full run after the merge is green too.
 
 CI splits the run into parts, one job each, so no job comes near GitHub's
 six-hour limit (`xtask/src/parts.rs`):
 
 - `verify --part base`: static checks, rustfmt, clippy and tests over the
-  whole workspace.
+  whole workspace. On a pull request, `--changed origin/main` narrows the
+  tests to the selected crates; the static checks, rustfmt and clippy still
+  cover the whole workspace.
 - `verify --part miri`: static checks, then the workspace's tests under
-  Miri. On macOS it runs in the same job as `base`, after it.
+  Miri (on a pull request, the selected crates' only). On macOS it runs in
+  the same job as `base`, after it.
 - `verify --part crate <names> --metrics <dir>`, where `<names>` is one
   crate or several separated by commas: static checks, then Kani, Verus,
   line counts, mutations and conformance for those crates. CI runs one job
   per crate with proof work (Verus, Kani harnesses or mutations) and one
   job for all the others together; the groups come from `cargo xtask
-  crates`. Mutants run several at a time, each in its own sandbox
+  crates` (on a pull request `cargo xtask crates --changed origin/main`, the
+  groups of the selected crates only). Mutants run several at a time, each in its own sandbox
   (`CLAZEL_MUTANT_JOBS`, default one per core up to 4). On success it
   writes what it measured to `<dir>/<name>.json` for each crate, tagged
   with the commit (with `+dirty` if tracked files have uncommitted
   changes).
-- `verify --part assemble --metrics <dir>`, which runs only after every
-  other job passed: static checks, then it requires a file for every
-  workspace crate from this commit, and reports whether README.md's table
-  matches them.
+- `verify --part assemble --metrics <dir>`, the `Full verification` job,
+  which fails unless every other job passed: static checks, then it
+  requires a file for every workspace crate from this commit, and reports
+  whether README.md's table matches them. On a pull request it gets
+  `--only <crates>` and requires the selected crates' files only; it then
+  ends in `RESULT: CHANGED CRATES PASSED (n of m crates …)`, never `ALL
+  CHECKS PASSED`, as `verify --changed` does. The job keeps the name `Full
+  verification` in both cases; the result line says which it was.
 - On pushes to `main` only, the `table` job runs the same part with
   `--write` after `assemble` passed, and commits README.md's regenerated
   table to `main` as github-actions[bot] if it changed. So the committed
   table always comes from CI's own measurements of a fully verified commit,
-  and no change has to carry it.
+  and no change has to carry it. A push to `main` always selects every
+  crate, and `--write` cannot be combined with `--only`.
 
 The parts together run exactly the checks of one `cargo xtask verify`, which
 `scripts/verify.sh` and the Docker command in README.md still run on one
 machine. "CI is green" means every job passed on the same commit, the
-`Full verification` (assemble) job included.
+`Full verification` (assemble) job included. On a pull request that is a
+verification of the selected crates; only a run that selected every crate
+(`main`, a manual run, a change to something shared or to a tier) is a full
+one.
 
 Locally, `cargo xtask verify --changed [base]` runs the same checks over
 less. `base` defaults to `origin/main`, the last commit CI verified, and
@@ -128,10 +147,15 @@ untracked files) with HEAD's merge base with it (`xtask/src/changed.rs`):
 - Tests, Miri, Kani, Verus, mutations and conformance run only for the
   crates with a changed file and every crate that depends on one of them,
   directly or not, dev-dependencies included.
-- A change anywhere else, except `docs/`, `.github/`, `.claude/`, README.md,
-  CLAUDE.md, LICENSE and `.gitignore`, checks every crate. That covers
-  `Cargo.lock`, the workspace `Cargo.toml`, `rust-toolchain.toml`,
-  `scripts/` and `xtask/`, which decides what passing means.
+- A change anywhere else, except `docs/`, `.github/` (but not
+  `.github/workflows/ci.yml`), `.claude/`, README.md, CLAUDE.md, LICENSE and
+  `.gitignore`, checks every crate. That covers `Cargo.lock`, the workspace
+  `Cargo.toml`, `rust-toolchain.toml`, `scripts/`, `xtask/`, which decides
+  what passing means, and the CI workflow, which decides what CI runs.
+- So does any change to a line of a crate's `Cargo.toml` that mentions a
+  tier (`tier`, `target-tier`), or a new or removed crate manifest: rule 7
+  requires a tier raise to pass a full verification, so the safest choice
+  is a full one for every tier change.
 - The run ends in `RESULT: CHANGED CRATES PASSED (n of m crates …)`, never
   `ALL CHECKS PASSED`.
 
@@ -149,8 +173,8 @@ What this relies on: that a crate's proofs and tests depend only on its own
 files, the workspace crates it depends on, and the shared files listed
 above. Verus, Kani and the tests read nothing else, but a crate that read a
 file outside its directory (say, another crate's vendored data through
-`include_str!`) would not be re-checked when that file changed. CI's full
-run catches it; the local run may not.
+`include_str!`) would not be re-checked when that file changed. The full
+run on `main` catches it; a local run or a pull request's CI may not.
 
 ## Trusted computing base (what we do *not* prove)
 

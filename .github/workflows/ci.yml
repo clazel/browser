@@ -1,16 +1,24 @@
-# Runs the checks in docs/VERIFICATION.md on every push to main and every
-# pull request. The full verification is split into parts (xtask/src/parts.rs)
-# so that no job comes near GitHub's six-hour limit:
+# Runs the checks in docs/VERIFICATION.md. Every push to main (and every
+# manual run) is verified in full. A pull request is verified in part: the
+# crates it changes and the crates that depend on them (below). The
+# verification is split into parts (xtask/src/parts.rs) so that no job comes
+# near GitHub's six-hour limit:
 #
 #   crates    `cargo xtask check`, the fast static checks (unsafe, lint
 #             overrides, escape hatches, tier declarations, pins, allowlist),
 #             which fail in a minute or two so obvious mistakes show up early;
 #             then the crate groups (`cargo xtask crates`) for the matrix
-#             below, so a new crate cannot be left out.
+#             below, so a new crate cannot be left out. On a pull request the
+#             groups are only those of the selected crates
+#             (`cargo xtask crates --changed origin/main`, below).
 #   base      `verify --part base`: static checks, rustfmt, clippy and tests
-#             over the whole workspace.
-#   miri      `verify --part miri`: the workspace's tests under Miri.
-#   base-macos the base and Miri parts on macOS arm64, one after the other:
+#             over the whole workspace. On a pull request the tests narrow to
+#             the selected crates (`--changed origin/main`); the static
+#             checks, rustfmt and clippy still cover the whole workspace.
+#   miri      `verify --part miri`: the workspace's tests under Miri. On a
+#             pull request, the selected crates' tests only.
+#   base-macos the base and Miri parts on macOS arm64, one after the other
+#             (narrowed the same way on a pull request):
 #             the Seatbelt sandbox, the demo, the host and escape tests, and
 #             the macOS-only code under clippy and Miri. Proofs and harnesses
 #             are not repeated there: Verus and Kani give the same answer for
@@ -20,10 +28,17 @@
 #             conformance. One job per crate with proof work; the crates
 #             with none share one job. Each uploads what it measured, one
 #             file per crate, tagged with the commit.
-#   assemble  `verify --part assemble`: needs every job above to pass, then
-#             checks that every crate's measurements are present and from
-#             this commit, and reports whether README.md's table matches them.
-#   table     on pushes to main only, after `assemble` passed: writes
+#   assemble  `verify --part assemble`, the job named `Full verification`:
+#             needs every job above to pass, then checks that every crate's
+#             measurements are present and from this commit, and reports
+#             whether README.md's table matches them. On a pull request it
+#             checks only the selected crates (`--only`), says so, and ends
+#             in `CHANGED CRATES PASSED`, never `ALL CHECKS PASSED`: it
+#             verified n of m crates, not all. The job keeps its name because
+#             CLAUDE.md and the branch protection refer to it; only its
+#             result line tells a partial run from a full one.
+#   table     on pushes to main only (which are always full runs), after
+#             `assemble` passed: writes
 #             README.md's table from the same measurements
 #             (`verify --part assemble --write`) and, if it changed, commits
 #             it to main as github-actions[bot]. Changes therefore never need
@@ -38,11 +53,27 @@
 #             binaries are only as verified as the commit's Full
 #             verification says.
 #
-# Together the parts run exactly the checks of one `scripts/verify.sh`, which
-# still runs them all on one machine. Verification has passed only when every
-# job above is green; `assemble` cannot be, unless the others were. Every
-# part exits non-zero when a tool is missing and checks were skipped, so a
-# skipped check is never green.
+# Which crates a pull request verifies is chosen by `xtask/src/changed.rs`,
+# the same selection as `cargo xtask verify --changed`: the crates with a
+# changed file, and every crate that depends on one of them, against the
+# merge base of the pull request and `origin/main`. Stacked pull requests have
+# other bases than main; selecting against main also includes the lower pull
+# requests' crates, which is conservative and fine. A change to anything
+# shared (Cargo.lock, the workspace manifest, the toolchain pins, scripts/,
+# xtask/) or to this workflow selects every crate. So does any change to a
+# crate's `tier` or `target-tier`: CLAUDE.md rule 7 requires a tier raise to
+# pass a full verification on its pull request, and the safest way to keep
+# that true is to run one for every tier change. Pushes to main and manual
+# runs always select every crate, so main is verified in full after every
+# merge.
+#
+# With every crate selected, the parts together run exactly the checks of one
+# `scripts/verify.sh`, which still runs them all on one machine. Full
+# verification has passed only when every job above is green on a run that
+# selected every crate (a push to main, a manual run, or a pull request that
+# touched something shared); `assemble` cannot be green unless the others
+# were. Every part exits non-zero when a tool is missing and checks were
+# skipped, so a skipped check is never green.
 #
 # The crate parts run on Linux x86-64 only: it is the platform the
 # Dockerfile reproduces, and Verus publishes no Linux arm64 build. macOS
@@ -52,6 +83,10 @@
 # setup.sh's download cache is cached: setup.sh re-checks every cached file
 # against scripts/checksums.txt before using it, so a stale or tampered cache
 # entry cannot reach the proof tools. Build output is never cached.
+#
+# The `crates` and `base*`/`miri` jobs check out the full history on a pull
+# request (`fetch-depth: 0`): the default depth of 1 has no merge base with
+# main to select against.
 
 name: CI
 
@@ -77,19 +112,37 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
+      # The matrix of crate groups, and the crates in it, comma-separated
+      # (for `assemble`). Both are everything unless this is a pull request.
       list: ${{ steps.list.outputs.list }}
+      names: ${{ steps.list.outputs.names }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
       # rustup reads rust-toolchain.toml and installs the pinned toolchain.
       - name: Install Rust
         run: rustup toolchain install
       - name: cargo xtask check
         run: cargo xtask check
+      # Pull requests: only the crates they change and their dependents (see
+      # the header). The selection is printed to the log. Assigned apart from
+      # the echo so that a failing xtask fails the step.
       - id: list
         name: cargo xtask crates
-        run: echo "list=$(cargo xtask crates)" >> "$GITHUB_OUTPUT"
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            list=$(cargo xtask crates --changed origin/main)
+            names=$(cargo xtask crates --names --changed origin/main)
+          else
+            list=$(cargo xtask crates)
+            names=$(cargo xtask crates --names)
+          fi
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+          echo "names=$names" >> "$GITHUB_OUTPUT"
 
   base:
     name: Verify (base)
@@ -99,6 +152,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
       - name: Cache tool downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -113,7 +167,7 @@ jobs:
       - name: Allow the sandbox's user namespace
         run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-adversary,deps/sandbox-*}"
       - name: Verify (base)
-        run: cargo xtask verify --part base
+        run: cargo xtask verify --part base ${{ github.event_name == 'pull_request' && '--changed origin/main' || '' }}
 
   base-macos:
     name: Verify (base, macOS)
@@ -123,6 +177,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
       - name: Cache tool downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -133,11 +188,11 @@ jobs:
       # No AppArmor step: the renderer's macOS sandbox is Seatbelt, which an
       # unprivileged process enters without any setup.
       - name: Verify (base)
-        run: cargo xtask verify --part base
+        run: cargo xtask verify --part base ${{ github.event_name == 'pull_request' && '--changed origin/main' || '' }}
       # Miri runs here after the base part rather than in a job of its own:
       # macOS runners are few (5 at once), and this job is not the slowest.
       - name: Verify (Miri)
-        run: cargo xtask verify --part miri
+        run: cargo xtask verify --part miri ${{ github.event_name == 'pull_request' && '--changed origin/main' || '' }}
 
   miri:
     name: Verify (Miri)
@@ -147,6 +202,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
       - name: Cache tool downloads
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -157,12 +213,15 @@ jobs:
       # No AppArmor step: tests that spawn the sandboxed renderer are
       # ignored under Miri.
       - name: Verify (Miri)
-        run: cargo xtask verify --part miri
+        run: cargo xtask verify --part miri ${{ github.event_name == 'pull_request' && '--changed origin/main' || '' }}
 
   crate:
     # A group of crates with no proofs is one job (`cargo xtask crates`).
     name: Verify ${{ contains(matrix.crate, ',') && 'crates without proofs' || matrix.crate }}
     needs: crates
+    # A pull request that selects no crate has an empty matrix, which GitHub
+    # rejects; the job is skipped, and `assemble` accepts that only then.
+    if: needs.crates.outputs.list != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -199,24 +258,59 @@ jobs:
           retention-days: 7
 
   assemble:
+    # Named `Full verification` for CLAUDE.md and the branch protection. On a
+    # pull request it verifies only the selected crates and ends in
+    # `CHANGED CRATES PASSED`; see the header.
     name: Full verification
     needs: [crates, base, base-macos, miri, crate]
+    # Runs even when a job it needs failed or was skipped, and fails then:
+    # a skipped job is not a pass, and a skipped required check would count
+    # as one. Only a cancelled run is not judged.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          LIST: ${{ needs.crates.outputs.list }}
+        run: |
+          # `crate` may be skipped only when no crate was selected.
+          bad=$(echo "$NEEDS" | jq -r --arg list "$LIST" '
+            to_entries[]
+            | select(.value.result != "success")
+            | select(.key != "crate" or $list != "[]" or .value.result != "skipped")
+            | "\(.key): \(.value.result)"')
+          if [ -n "$bad" ]; then
+            echo "Not every job passed:"
+            echo "$bad"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - name: Install Rust
         run: rustup toolchain install
       - name: Download measurements
+        # Nothing was measured when no crate was selected.
+        if: needs.crates.outputs.list != '[]'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: part-*
           path: parts
           merge-multiple: true
+      # Pull requests require the selected crates' measurements only. Pushes
+      # to main and manual runs require every crate's.
       - name: Assemble
-        run: cargo xtask verify --part assemble --metrics parts
+        env:
+          EVENT: ${{ github.event_name }}
+          NAMES: ${{ needs.crates.outputs.names }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            cargo xtask verify --part assemble --metrics parts --only "$NAMES"
+          else
+            cargo xtask verify --part assemble --metrics parts
+          fi
 
   table:
     name: Update README table
