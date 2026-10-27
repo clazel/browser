@@ -754,12 +754,9 @@ fn conformance_suites(r: &mut Runner, crates: &[Crate]) {
     }
 }
 
-/// Compare (or, with `write`, update) README.md's status table against what
-/// this run measured. With `only` (a `--changed` run), the other crates'
-/// proof and test columns are carried over from README.md's current table,
-/// since their inputs did not change; CI's full run re-measures them all.
-fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
-    const NAME: &str = "README status table";
+/// The host shell's size against its limit, as a step; its line count when
+/// it could be counted (`None` if the directory does not exist).
+fn host_shell_size(r: &mut Runner) -> Option<Result<usize, String>> {
     let host_shell_count = report::host_shell_lines(std::path::Path::new(report::HOST_SHELL_DIR));
     if let Some(counted) = host_shell_count.as_ref() {
         match counted {
@@ -777,6 +774,16 @@ fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
             Err(e) => r.step("host shell size", Outcome::Fail(vec![e.clone()])),
         }
     }
+    host_shell_count
+}
+
+/// Compare (or, with `write`, update) README.md's status table against what
+/// this run measured. With `only` (a `--changed` run), the other crates'
+/// proof and test columns are carried over from README.md's current table,
+/// since their inputs did not change; CI's full run re-measures them all.
+fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
+    const NAME: &str = "README status table";
+    let host_shell_count = host_shell_size(r);
     let carried = match only {
         None => report::Rows::new(),
         Some(cs) => {
@@ -1362,8 +1369,19 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
                 }
             });
             r.step("read crate parts", from_result(res));
-            if !r.failed {
-                readme_table(r, write, only.as_ref().map(|_| required.as_slice()));
+            if only.is_some() {
+                // A partial run has measured too few rows to compare the
+                // table, whose rows the full run on main checks and writes.
+                // The host shell's size limit does not depend on them.
+                host_shell_size(r);
+                r.step(
+                    "README status table",
+                    Outcome::Pass(vec![
+                        "compared only in a full run (main), which measures every row".into(),
+                    ]),
+                );
+            } else if !r.failed {
+                readme_table(r, write, None);
             }
             match &only {
                 None => "PARTS ASSEMBLED (every crate part present and from this commit; the gate is this and every part passing on the same commit)".to_owned(),

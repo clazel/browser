@@ -32,7 +32,9 @@
 #             needs every job above to pass, then checks that every crate's
 #             measurements are present and from this commit, and reports
 #             whether README.md's table matches them. On a pull request it
-#             checks only the selected crates (`--only`), says so, and ends
+#             checks only the selected crates (`--only`) and not README.md's
+#             table (too few rows were measured; main's full run compares
+#             and writes it), says so, and ends
 #             in `CHANGED CRATES PASSED`, never `ALL CHECKS PASSED`: it
 #             verified n of m crates, not all. The job keeps its name because
 #             CLAUDE.md and the branch protection refer to it; only its

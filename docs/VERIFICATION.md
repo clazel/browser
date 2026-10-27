@@ -118,8 +118,9 @@ six-hour limit (`xtask/src/parts.rs`):
   which fails unless every other job passed: static checks, then it
   requires a file for every workspace crate from this commit, and reports
   whether README.md's table matches them. On a pull request it gets
-  `--only <crates>` and requires the selected crates' files only; it then
-  ends in `RESULT: CHANGED CRATES PASSED (n of m crates …)`, never `ALL
+  `--only <crates>` and requires the selected crates' files only, and does
+  not compare README.md's table (it has too few rows measured; the full run
+  on `main` compares and writes it); it then ends in `RESULT: CHANGED CRATES PASSED (n of m crates …)`, never `ALL
   CHECKS PASSED`, as `verify --changed` does. The job keeps the name `Full
   verification` in both cases; the result line says which it was.
 - On pushes to `main` only, the `table` job runs the same part with
