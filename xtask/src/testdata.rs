@@ -27,6 +27,7 @@ mod wpt_url_percent;
 mod wpt_url_setters;
 mod wpt_urltestdata;
 mod wpt_webstorage;
+mod x509_limbo;
 
 use std::path::{Path, PathBuf};
 
@@ -93,7 +94,20 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wpt_urltestdata::convert,
         wpt_urltestdata::FILES,
     ),
+    ("x509-limbo", x509_limbo::convert, x509_limbo::FILES),
 ];
+
+/// A converter for a binary artefact written beside a suite's Rust table.
+type ConvertBytes = fn(&Path) -> Result<Vec<u8>, String>;
+
+/// Binary artefacts, by suite directory name: the file name under
+/// `tests/generated/` and its converter. They are checked exactly like the
+/// Rust tables (stale or missing is a problem; orphans are rejected).
+const EXTRA_OUTPUTS: &[(&str, &str, ConvertBytes)] = &[(
+    "x509-limbo",
+    x509_limbo::CERTS_BIN,
+    x509_limbo::convert_certs,
+)];
 
 /// Files every suite directory has besides the converter's inputs.
 const ALWAYS: &[&str] = &["SOURCE.md", "LICENSE.md"];
@@ -210,6 +224,13 @@ fn orphans(c: &Crate, suites: &[Suite]) -> Vec<String> {
         .flatten()
         .map(|e| e.path())
         .filter(|p| !suites.iter().any(|s| &s.generated == p))
+        .filter(|p| {
+            !EXTRA_OUTPUTS.iter().any(|(suite, file, _)| {
+                suites
+                    .iter()
+                    .any(|s| s.dir.file_name().is_some_and(|n| n == *suite) && dir.join(file) == *p)
+            })
+        })
         .map(|p| {
             format!(
                 "{}: generated file with no suite in tests/data/",
@@ -267,6 +288,36 @@ pub fn run(crates: &[Crate], write: bool) -> (Vec<String>, Vec<String>) {
                     "{rel}: stale (differs from what the converter produces); \
                      run `cargo xtask testdata` and commit the result"
                 ));
+            }
+            for (_, file, convert) in EXTRA_OUTPUTS
+                .iter()
+                .filter(|(suite, _, _)| s.dir.file_name().is_some_and(|n| n == *suite))
+            {
+                let path = s.generated.with_file_name(file);
+                let rel = workspace::relative(&path);
+                let fresh = match convert(&s.dir) {
+                    Ok(f) => f,
+                    Err(e) => {
+                        problems.push(format!("{}: {e}", workspace::relative(&s.dir)));
+                        continue;
+                    }
+                };
+                let current = std::fs::read(&path).ok();
+                if current.as_deref() == Some(fresh.as_slice()) {
+                    notes.push(format!("{rel}: up to date ({} bytes)", fresh.len()));
+                } else if write {
+                    match std::fs::write(&path, &fresh) {
+                        Ok(()) => notes.push(format!("{rel}: written ({} bytes)", fresh.len())),
+                        Err(e) => problems.push(format!("{rel}: {e}")),
+                    }
+                } else if current.is_none() {
+                    problems.push(format!("{rel}: missing; run `cargo xtask testdata`"));
+                } else {
+                    problems.push(format!(
+                        "{rel}: stale (differs from what the converter produces); \
+                         run `cargo xtask testdata` and commit the result"
+                    ));
+                }
             }
         }
     }
