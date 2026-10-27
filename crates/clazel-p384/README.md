@@ -4,10 +4,12 @@ ECDSA signature verification over NIST P-384 (FIPS 186-5 §6.4.2), specified
 in Verus. Part of [Clazel](../../README.md), a web browser whose parsers of
 untrusted input carry machine-checked proofs.
 
-## Status: specification and field arithmetic
+## Status: specification, field, point arithmetic and `verify`
 
-**Tier 0, target tier 2.** The specification and the field arithmetic are
-written; the point arithmetic and `verify` are not. What exists:
+**Tier 0, target tier 2.** The specification, the field arithmetic, the
+point arithmetic and `verify` are written, and `verify` is proven against
+the contract below the six axioms. The tier 1 and tier 2 evidence is not
+(see Verification). What exists:
 
 - `src/spec.rs`: what "a valid ECDSA P-384 signature" means, transcribed
   step by step from FIPS 186-5 §6.4.2, with the routines it defers to taken
@@ -16,17 +18,24 @@ written; the point arithmetic and `verify` are not. What exists:
   sources are pinned by SHA-256 in the file's header, which also lists every
   modelling choice (13 of them) and how the lossy text extraction of the
   PDFs was read.
-- `src/contract.rs`: what the executable `verify(digest, r, s, point)` will
-  be proven to satisfy, as predicates over the spec.
+- `src/contract.rs`: what the executable `verify(digest, r, s, point)` is
+  proven to satisfy, as predicates over the spec. `src/point_contract.rs`:
+  the same for the group law, the scalar product, the key decoding and the
+  digest's reduction.
 - `src/examples.rs`: known answers, proven by evaluating the spec
   (`by (compute_only)`), on a toy curve and on P-384.
 - `src/axioms.rs`, `src/field/`: the field arithmetic, described below.
+- `src/point.rs`, `src/scalar.rs`, `src/verify.rs`, `src/convert.rs`,
+  `src/lemmas.rs`: the executable group law, key decoding, scalar product,
+  `verify`, and their lemmas, described below.
 - `tests/field.rs`: known answers for the field, computed with Python.
+- `tests/verify.rs`: smoke tests of `verify` (Wycheproof vectors and
+  hand-damaged inputs), described below.
 
-Nothing here claims verification of `verify`, which does not exist yet. What
-is evaluated is the spec itself, which shows the transcription computes what
-was worked out independently, not that it matches the standards (a person
-reads it against them; [docs/SPEC-STYLE.md](../../docs/SPEC-STYLE.md)).
+What is evaluated in `examples.rs` is the spec itself, which shows the
+transcription computes what was worked out independently, not that it matches
+the standards (a person reads it against them;
+[docs/SPEC-STYLE.md](../../docs/SPEC-STYLE.md)).
 
 ## The field (modulo p and modulo n)
 
@@ -65,6 +74,48 @@ they stand for.
   `inv`, `pow` and the octet conversions with known answers for both moduli.
   That is the check on the axioms' fit to the real fiat, and on the constants
   of `field/spec.rs` and `fe.rs` (the moduli, `R^2 mod m`, the exponents).
+
+## The group law, the scalar product and `verify`
+
+Proven in Verus against `spec.rs`, over the six axioms and nothing else (no
+new axiom, no `assume`, no `external_body` outside `axioms.rs`).
+
+- **`point::Point`** is the point at infinity or an affine pair of `Fe`s
+  modulo p, with a view to `spec::Point`. `point::ec_add` runs SEC 1 §2.2.1's
+  rules in the spec's order (rules 1 and 2, then the negation test `x1 == x2
+  && (y1 + y2) % p == 0`, then different x, then doubling), each field
+  operation an `Fe` operation, so its contract is `r == spec::ec_add(p384(),
+  a, b)`, `None` exactly when the spec's is (a failed `inv`).
+- **`point::decode_public_key`** is `spec::decode_public_key`: length 97, first
+  octet `04`, each coordinate below p by `Fe::from_octets`, and the curve
+  equation. Compressed, hybrid and infinity encodings are refused.
+- **`scalar::scalar_mul`** is MSB-first double-and-add over the 48 octets of
+  the scalar, one bit at a time; the loop invariant is that after the top `i`
+  bits the accumulator is `spec::scalar_mul` of the integer they make, from
+  the spec's own recursion. No associativity is used.
+- **`scalar::derive_e`** reads the leftmost `min(|H|, 48)` octets of the digest
+  and reduces them modulo n by Horner's rule in the field, so `e >= n` is
+  handled; the proof relates the spec's bit-string `derive_e` to `os2ip`.
+- **`verify::verify`** follows the spec's order: the key first, step 1 (`r`
+  and `s` in `[1, n - 1]` as integers, before any reduction), step 3, step 4
+  (`Fe::inv` mod n), step 5, step 6 as the sum of two separately computed
+  products (infinity and any failed operation reject), and step 9 with
+  `x_R mod n` reduced properly (`x_R < p` can exceed n). Its contract is
+  `ok == ecdsa_verify(p384(), digest, os2ip(r), os2ip(s), point)` for a
+  digest of 0 to 64 octets.
+- **Not constant time, by design**, and slow by design: this is the affine
+  stage, one field inversion (about 768 multiplications) per group
+  operation. Measured by `tests/verify.rs`'s `timing` test on the development
+  machine (Apple silicon): about 0.94 s per verification in a debug build and
+  about 45 ms in a release build.
+- **Smoke tests, not conformance.** `tests/verify.rs` accepts eight valid
+  and rejects six invalid vectors of Wycheproof's
+  `ecdsa_secp384r1_sha384_test.json` (commit `d17cc89f`; tcIds in the file),
+  and rejects damaged `r`, `s`, digests and keys. Wycheproof in full, ACVP and
+  a differential against another engine are later work.
+- **One addition to `field::Fe`:** `Fe::dup`, a copy with the same
+  `which` and `val`. `Fe` is not `Clone` and `Fe`'s contracts and the axioms
+  are unchanged.
 
 ## What it is, and what it is not
 
@@ -114,16 +165,19 @@ times out on it.
 
 Run `cargo verus focus -- -A missing_docs` in this directory. What it
 proves today is that every spec function terminates (each recursive one has a
-`decreases`), that the evaluated examples hold, and that each field function
-meets its contract in `field/contract.rs` over the six axioms.
+`decreases`), that the evaluated examples hold, that each field function
+meets its contract in `field/contract.rs`, and that `ec_add`,
+`scalar_mul`, `decode_public_key`, `derive_e` and `verify` meet theirs
+(`point_contract.rs`, `contract.rs`), over the six axioms.
 `mutations.json` holds 26 mutations of `spec.rs`, each killed with a
-certificate that contradicts one of those examples; the field code has no
-mutations yet. There is no lemma about the spec of the signature itself, no
-independent transcription, no conformance test against an official suite and
-no Kani harness yet, so the crate stays at tier 0; see
+certificate that contradicts one of those examples; the executable code has
+no mutations yet. There is no lemma about the spec of the signature itself,
+no independent transcription, no conformance test against an official suite
+and no Kani harness yet, so the crate stays at tier 0; see
 [docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier
-requires. `verify` is not written, so nothing here proves anything about
-ECDSA verification yet.
+requires. The proofs cover memory and arithmetic safety of the Verus-checked
+code, but the claim is only as good as `spec.rs` (read against the standards
+by a person) and the six axioms (fiat-crypto's printed postconditions).
 
 ## Licence
 

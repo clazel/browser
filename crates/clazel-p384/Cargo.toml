@@ -11,9 +11,10 @@ vstd = "=0.0.0-2026-10-04-0306"
 fiat-crypto = { version = "=0.3.0", default-features = false }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
-# the shipped code today; `target-tier` is what the policy requires. The spec
-# and the field arithmetic exist, but there is no `verify` and none of the
-# tier 1 or tier 2 evidence yet, so tier 0.
+# the shipped code today; `target-tier` is what the policy requires. The spec,
+# the field, the group law and `verify` exist and are proven, but none of the
+# tier 1 or tier 2 evidence (Kani harnesses, mutations of the code, an
+# independent transcription, conformance suites) does yet, so tier 0.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2

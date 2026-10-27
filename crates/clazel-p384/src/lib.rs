@@ -1,11 +1,16 @@
 //! ECDSA signature verification over NIST P-384, FIPS 186-5 §6.4.2.
 //!
-//! **Specification and field arithmetic so far.** There is no point code
-//! and no `verify` function yet. What is here is the part a person reviews,
-//! the meaning of "a valid ECDSA P-384 signature", written in Verus, the
-//! contract the later implementation must meet, and the field arithmetic
-//! modulo p and n: fiat-crypto's Montgomery code behind six axioms, with the
-//! rest (conversions, octet strings, `pow`, `inv`) proven over them.
+//! **Specification, field arithmetic, point arithmetic and `verify`.** What
+//! is here is the part a person reviews, the meaning of "a valid ECDSA P-384
+//! signature", written in Verus, the contract the implementation is proven
+//! to meet, the field arithmetic modulo p and n (fiat-crypto's Montgomery
+//! code behind six axioms, with the rest proven over them), and on top of
+//! that the affine group law, the scalar product, the key decoding and
+//! [`verify::verify`], each proven against [`spec`] over those six axioms and
+//! nothing else. The crate is still at tier 0: the evidence tier 1 and tier 2
+//! require beyond these proofs (Kani harnesses, an independent
+//! transcription, certified mutations of the code, conformance against
+//! Wycheproof and ACVP) is not written yet.
 //!
 //! This is public-key *verification* only: the key, the signature and the
 //! digest are all public, so there is no constant-time requirement and no
@@ -16,9 +21,18 @@
 //!   routines it defers to (SP 800-186 Appendices D.1 and F.1, SEC 1
 //!   §2.2.1, §2.3, §3.2.2.1 and §4.1.4), the P-384 domain parameters, and a
 //!   toy curve for evaluated examples.
-//! - [`contract`]: what the executable `verify` will be proven to satisfy.
+//! - [`contract`]: what the executable `verify` is proven to satisfy, and
+//!   [`point_contract`], the same for the group law, the scalar product, the
+//!   key decoding and the digest's reduction.
 //! - [`examples`]: known answers, proven by evaluating the spec.
 //! - [`field`]: the field arithmetic, over fiat-crypto, with its contracts.
+//! - [`point`]: affine points and SEC 1 §2.2.1's group law, and the key
+//!   decoding (SEC 1 §2.3.4, SP 800-186 D.1.1.1).
+//! - [`scalar`]: MSB-first double-and-add against `spec::scalar_mul`, and the
+//!   digest's step 3 and reduction mod n.
+//! - [`verify`]: FIPS 186-5 §6.4.2.
+//! - [`convert`] and [`lemmas`]: small conversions and the facts the proofs
+//!   above use.
 //! - [`axioms`]: the six calls into fiat-crypto, each an axiom.
 //! - [`certificates`]: the host module for mutation kill certificates
 //!   (empty until `mutations.json` exists).
@@ -26,7 +40,12 @@
 pub mod axioms;
 pub mod certificates;
 pub mod contract;
+pub mod convert;
 pub mod examples;
 pub mod field;
+pub mod lemmas;
+pub mod point;
 pub mod point_contract;
+pub mod scalar;
 pub mod spec;
+pub mod verify;

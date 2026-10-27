@@ -1,8 +1,9 @@
-//! The contract the executable `verify` must be proven to meet. There is no
-//! executable code yet; these predicates are what its `requires` and
-//! `ensures` clauses will be, so reviewing them and [`super::spec`] is
-//! enough to know what the implementation will guarantee (the same shape as
-//! `clazel-pkcs1`'s `contract.rs`).
+//! The contract the executable `verify` is proven to meet. These predicates
+//! are its `requires` and `ensures` clauses (`src/verify.rs`), so reviewing
+//! them and [`super::spec`] is enough to know what the implementation
+//! guarantees (the same shape as `clazel-pkcs1`'s `contract.rs`). The
+//! contracts of the functions it is built from are in
+//! [`super::point_contract`] and [`super::field::contract`].
 //!
 //! ```text
 //! pub fn verify(digest: &[u8], r: &[u8; 48], s: &[u8; 48], point: &[u8]) -> (ok: bool)

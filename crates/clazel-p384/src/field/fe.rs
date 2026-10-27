@@ -50,6 +50,19 @@ impl Fe {
         from_montgomery(self.which, self.limbs@)
     }
 
+    /// A copy: the same limbs, so the same modulus and residue. (`Fe` is not
+    /// `Clone`: the derive would give no contract.)
+    pub fn dup(&self) -> (r: Fe)
+        ensures
+            r.which() == self.which(),
+            r.val() == self.val(),
+    {
+        proof {
+            use_type_invariant(self);
+        }
+        Fe { which: self.which, limbs: self.limbs }
+    }
+
     /// The residue is below the modulus. A no-op at run time: it hands the
     /// type invariant to the caller's proof.
     pub fn val_lt_modulus(&self)
