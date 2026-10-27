@@ -194,6 +194,18 @@ pub proof fn lemma_year_of_day_bounds(days: nat, year: nat)
     }
 }
 
+/// A day inside the first `count` years from `year` is in one of them.
+pub proof fn lemma_year_of_day_within(days: nat, year: nat, count: nat)
+    requires days < days_in_years(year, count),
+    ensures year_of_day(days, year) < year + count,
+    decreases count
+{
+    if days >= days_in_year(year) {
+        lemma_year_of_day_within(
+            (days - days_in_year(year)) as nat, year + 1, (count - 1) as nat);
+    }
+}
+
 /// A later day is in a later year, or later in the same year.
 pub proof fn lemma_year_of_day_strict(first: nat, second: nat, year: nat)
     requires first < second,
