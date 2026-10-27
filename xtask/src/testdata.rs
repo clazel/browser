@@ -9,13 +9,16 @@
 //! can never drift from the vendored files.
 //!
 //! Every suite directory holds a `SOURCE.md` with `Upstream:`, `Commit:`
-//! (a full 40-hex commit) and `License:` lines.
+//! (a full 40-hex commit; or `SHA-256:` of the archive, for a suite that is
+//! published as one) and `License:` lines.
 
 mod cbor_appendix_a;
+mod hash;
 mod http_state_dates;
 mod http_state_parser;
 mod js;
 mod llhttp;
+mod nist_cavp_sigver;
 mod wpt_base64;
 mod wpt_cookies;
 mod wpt_encoding;
@@ -27,6 +30,7 @@ mod wpt_url_percent;
 mod wpt_url_setters;
 mod wpt_urltestdata;
 mod wpt_webstorage;
+mod wycheproof_ecdsa;
 mod wycheproof_rsa;
 
 use std::path::{Path, PathBuf};
@@ -55,6 +59,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         http_state_parser::FILES,
     ),
     ("llhttp", llhttp::convert, llhttp::FILES),
+    (
+        "nist-cavp-ecdsa-sigver",
+        nist_cavp_sigver::convert,
+        nist_cavp_sigver::FILES,
+    ),
     ("wpt-base64", wpt_base64::convert, wpt_base64::FILES),
     ("wpt-cookies", wpt_cookies::convert, wpt_cookies::FILES),
     ("wpt-encoding", wpt_encoding::convert, wpt_encoding::FILES),
@@ -93,6 +102,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         "wpt-urltestdata",
         wpt_urltestdata::convert,
         wpt_urltestdata::FILES,
+    ),
+    (
+        "wycheproof-ecdsa-p384",
+        wycheproof_ecdsa::convert,
+        wycheproof_ecdsa::FILES,
     ),
     (
         "wycheproof-rsa-pkcs1",
@@ -195,10 +209,17 @@ fn source_problems(text: &str) -> Vec<String> {
     if !field("Upstream:").is_some_and(|u| u.starts_with("https://")) {
         problems.push("no \"Upstream: https://...\" line".to_owned());
     }
-    if !field("Commit:")
-        .is_some_and(|c| c.len() == 40 && c.chars().all(|ch| ch.is_ascii_hexdigit()))
-    {
-        problems.push("no \"Commit:\" line with a full 40-hex commit".to_owned());
+    let hex_of = |v: Option<&str>, len: usize| {
+        v.is_some_and(|c| c.len() == len && c.chars().all(|ch| ch.is_ascii_hexdigit()))
+    };
+    // A git-hosted suite names its commit; one published as an archive (NIST
+    // CAVP) names the archive's SHA-256 instead.
+    if !hex_of(field("Commit:"), 40) && !hex_of(field("SHA-256:"), 64) {
+        problems.push(
+            "no \"Commit:\" line with a full 40-hex commit (or, for an archive, \
+             a \"SHA-256:\" line with 64 hex digits)"
+                .to_owned(),
+        );
     }
     if field("License:").is_none() {
         problems.push("no \"License:\" line".to_owned());
@@ -292,5 +313,13 @@ mod tests {
         assert_eq!(source_problems("").len(), 3);
         let short = good.replace("4ad507b28db0a636f528def9161d109fe11b93a3", "4ad507b");
         assert_eq!(source_problems(&short).len(), 1);
+        let archive = "Upstream: https://csrc.nist.gov/x.zip\n\
+                       SHA-256: fe47cc92b4cee418236125c9ffbcd9bb01c8c34e74a4ba195d954bcb72824752\n\
+                       License: Public domain\n";
+        assert!(source_problems(archive).is_empty());
+        assert_eq!(
+            source_problems(&archive.replace("fe47cc92", "fe47")).len(),
+            1
+        );
     }
 }
