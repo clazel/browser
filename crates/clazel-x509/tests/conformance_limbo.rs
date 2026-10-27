@@ -292,7 +292,7 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
         }
     }
     let mut seen = std::collections::BTreeSet::new();
-    let (mut pinned_pass, mut listed_count) = (0usize, 0usize);
+    let (mut pinned_pass, mut listed_count, mut case_fail) = (0usize, 0usize, 0usize);
     for c in CASES {
         if !seen.insert(c.id) {
             problems.push(format!("{}: duplicate id in the corpus", c.id));
@@ -300,22 +300,31 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
         let is_listed = listed.contains_key(c.id);
         listed_count = listed_count.saturating_add(usize::from(is_listed));
         match pin_of(c) {
-            Pin::None if !is_listed => problems.push(format!(
-                "{}: new testcase: neither pinned nor in NOT_YET_SUPPORTED",
-                c.id
-            )),
+            Pin::None if !is_listed => {
+                case_fail = case_fail.saturating_add(1);
+                problems.push(format!(
+                    "{}: new testcase: neither pinned nor in NOT_YET_SUPPORTED",
+                    c.id
+                ));
+            }
             Pin::None => {}
             Pin::Accept => match leaf_accepted(c) {
-                Some(true) if is_listed => problems.push(format!(
-                    "{}: listed as not yet supported, but its pin now passes: remove it from the list",
-                    c.id
-                )),
+                Some(true) if is_listed => {
+                    // Counted below as listed; the stale entry fails the run.
+                    problems.push(format!(
+                        "{}: listed as not yet supported, but its pin now passes: remove it from the list",
+                        c.id
+                    ));
+                }
                 Some(true) => pinned_pass = pinned_pass.saturating_add(1),
                 Some(false) | None if is_listed => {}
-                Some(false) | None => problems.push(format!(
-                    "{}: limbo expects SUCCESS for {:?} at {}, but the leaf is rejected",
-                    c.id, c.peer, c.time
-                )),
+                Some(false) | None => {
+                    case_fail = case_fail.saturating_add(1);
+                    problems.push(format!(
+                        "{}: limbo expects SUCCESS for {:?} at {}, but the leaf is rejected",
+                        c.id, c.peer, c.time
+                    ));
+                }
             },
         }
     }
@@ -326,6 +335,13 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
     }
     println!(
         "limbo: {} testcases, {pinned_pass} pinned and passing, {listed_count} not yet supported",
+        CASES.len()
+    );
+    // One unit per testcase: a pin that passes, a listed testcase (an
+    // expected failure, with its reason in NOT_YET_SUPPORTED), or a
+    // testcase that is neither (xtask/src/conformance.rs).
+    println!(
+        "clazel-conformance: suite=\"x509-limbo leaf checks\" pass={pinned_pass} xfail={listed_count} fail={case_fail} total={}",
         CASES.len()
     );
     let reasons: std::collections::BTreeSet<&&str> = listed.values().collect();
