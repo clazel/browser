@@ -162,7 +162,8 @@ We list this openly. Proofs are only as good as their assumptions.
 - `clazel-sys`, the one crate with `unsafe` (see "The `unsafe` exception"
   below): a handful of foreign calls that enter the OS sandbox, and `libc`,
   its only shipped dependency, for struct layouts and constants
-- Cryptography, which comes from formally verified libraries (libcrux / HACL\*), not our own code.
+- Cryptographic primitives, which come from formally verified libraries (libcrux / HACL\*, and
+  fiat-crypto for P-384's field arithmetic), not our own code.
   What that trusts, precisely: HACL\*'s F\* proofs; the toolchain that
   translates the verified code to the Rust libcrux ships (in the TCB, not
   itself proven); libcrux's hand-written, unverified glue around that code
@@ -171,6 +172,17 @@ We list this openly. Proofs are only as good as their assumptions.
   (`libcrux-hacl-rs`, `-secrets`, `-traits`, `-macros`). Every call into
   libcrux is one axiom in `crates/clazel-crypto/src/axioms.rs`, stating only
   libcrux's documented types, output lengths and failure cases
+- fiat-crypto 0.3.0, for the field arithmetic of `clazel-p384` (`mul`, `add`
+  and `sub` modulo P-384's p and n). What that trusts, precisely: the Coq
+  kernel; Coq's extraction to OCaml and the OCaml compiler that runs the
+  synthesizer; fiat's unverified printer from its intermediate representation
+  to Rust text (the Rust it ships is not itself proven); and rustc's `u128`
+  arithmetic and `as` casts, which the generated code relies on. Every call
+  into fiat is one of six axioms in `crates/clazel-p384/src/axioms.rs`, each
+  stating only the postcondition fiat prints above that function. The ECDSA
+  group law and the verification steps are our own code, proven over those
+  axioms, as are the conversions into and out of the Montgomery domain, the
+  octet-string conversions, exponentiation and inversion
 - That each spec matches the standard it transcribes. No proof can check
   this, because the standard is English. It is backed by machine-checked
   evidence instead of a reviewer (next section), and that evidence is only as

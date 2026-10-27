@@ -8,6 +8,7 @@ description = "ECDSA signature verification over NIST P-384 (FIPS 186-5 §6.4.2)
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
+fiat-crypto = { version = "=0.3.0", default-features = false }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires. This

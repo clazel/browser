@@ -17,10 +17,12 @@
 //!   toy curve for evaluated examples.
 //! - [`contract`]: what the executable `verify` will be proven to satisfy.
 //! - [`examples`]: known answers, proven by evaluating the spec.
+//! - [`axioms`]: the six calls into fiat-crypto, each an axiom.
 //! - [`field`]: the field arithmetic over fiat-crypto, and its contracts.
 //! - [`certificates`]: the host module for mutation kill certificates
 //!   (empty until `mutations.json` exists).
 
+pub mod axioms;
 pub mod certificates;
 pub mod contract;
 pub mod examples;
