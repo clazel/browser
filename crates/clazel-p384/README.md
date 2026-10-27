@@ -74,9 +74,11 @@ times out on it.
 
 Run `cargo verus focus -- -A missing_docs` in this directory. What it
 proves today is that every spec function terminates (each recursive one has a
-`decreases`) and that the evaluated examples hold. There is no
-`mutations.json`, no lemma about the spec, no independent transcription, no
-conformance test and no Kani harness yet, so the crate stays at tier 0; see
+`decreases`) and that the evaluated examples hold. `mutations.json` holds 26
+mutations of `spec.rs`, each killed with a certificate that contradicts one
+of those examples. There is no lemma about the spec, no independent
+transcription, no conformance test and no Kani harness yet, so the crate
+stays at tier 0; see
 [docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier
 requires.
 
