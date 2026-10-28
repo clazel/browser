@@ -132,6 +132,13 @@ pub open spec fn rank(input: Seq<u32>, t: Tokenizer) -> nat {
     rank_of(t.state, next_char(input, t.pos))
 }
 
+/// A step's tokens hold an end-of-file token only as their last, and the
+/// step marks the tokenizer done exactly when it emits one.
+pub open spec fn eof_last(s: Step) -> bool {
+    s.0.done == (s.1.len() > 0 && s.1.last() is EndOfFile) && forall|k: int|
+        0 <= k < s.1.len() - 1 ==> !(#[trigger] s.1[k] is EndOfFile)
+}
+
 /// The step from `t` to `n` stops the tokenizer or lowers (characters
 /// left, rank) lexicographically.
 pub open spec fn decreases_ok(input: Seq<u32>, t: Tokenizer, n: Tokenizer) -> bool {
@@ -148,6 +155,8 @@ proof fn lemma_data_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, data_state(input, t).0),
         data_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(data_state(input, t)),
+        !(t.current is EndOfFile) ==> !(data_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -158,6 +167,8 @@ proof fn lemma_rcdata_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rcdata_state(input, t).0),
         rcdata_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rcdata_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rcdata_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -168,6 +179,8 @@ proof fn lemma_rawtext_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rawtext_state(input, t).0),
         rawtext_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rawtext_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rawtext_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -178,6 +191,8 @@ proof fn lemma_script_data_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_state(input, t).0),
         script_data_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -188,6 +203,8 @@ proof fn lemma_plaintext_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, plaintext_state(input, t).0),
         plaintext_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(plaintext_state(input, t)),
+        !(t.current is EndOfFile) ==> !(plaintext_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -198,6 +215,8 @@ proof fn lemma_tag_open_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, tag_open_state(input, t).0),
         tag_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(tag_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(tag_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -208,6 +227,8 @@ proof fn lemma_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, end_tag_open_state(input, t).0),
         end_tag_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(end_tag_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(end_tag_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -218,6 +239,8 @@ proof fn lemma_tag_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, tag_name_state(input, t).0),
         tag_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(tag_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(tag_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -228,6 +251,8 @@ proof fn lemma_rcdata_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rcdata_less_than_sign_state(input, t).0),
         rcdata_less_than_sign_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rcdata_less_than_sign_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rcdata_less_than_sign_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -238,6 +263,8 @@ proof fn lemma_rcdata_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rcdata_end_tag_open_state(input, t).0),
         rcdata_end_tag_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rcdata_end_tag_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rcdata_end_tag_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -248,6 +275,8 @@ proof fn lemma_rcdata_end_tag_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rcdata_end_tag_name_state(input, t).0),
         rcdata_end_tag_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rcdata_end_tag_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rcdata_end_tag_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -258,6 +287,8 @@ proof fn lemma_rawtext_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rawtext_less_than_sign_state(input, t).0),
         rawtext_less_than_sign_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rawtext_less_than_sign_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rawtext_less_than_sign_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -268,6 +299,8 @@ proof fn lemma_rawtext_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rawtext_end_tag_open_state(input, t).0),
         rawtext_end_tag_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rawtext_end_tag_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rawtext_end_tag_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -278,6 +311,8 @@ proof fn lemma_rawtext_end_tag_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, rawtext_end_tag_name_state(input, t).0),
         rawtext_end_tag_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(rawtext_end_tag_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(rawtext_end_tag_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -288,6 +323,8 @@ proof fn lemma_script_data_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_less_than_sign_state(input, t).0),
         script_data_less_than_sign_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_less_than_sign_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_less_than_sign_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -298,6 +335,8 @@ proof fn lemma_script_data_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_end_tag_open_state(input, t).0),
         script_data_end_tag_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_end_tag_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_end_tag_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -308,6 +347,8 @@ proof fn lemma_script_data_end_tag_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_end_tag_name_state(input, t).0),
         script_data_end_tag_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_end_tag_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_end_tag_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -318,6 +359,8 @@ proof fn lemma_script_data_escape_start_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_escape_start_state(input, t).0),
         script_data_escape_start_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escape_start_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escape_start_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -328,6 +371,8 @@ proof fn lemma_script_data_escape_start_dash_state(input: Seq<u32>, t: Tokenizer
     ensures
         decreases_ok(input, t, script_data_escape_start_dash_state(input, t).0),
         script_data_escape_start_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escape_start_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escape_start_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -338,6 +383,8 @@ proof fn lemma_script_data_escaped_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_escaped_state(input, t).0),
         script_data_escaped_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escaped_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escaped_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -348,6 +395,8 @@ proof fn lemma_script_data_escaped_dash_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_escaped_dash_state(input, t).0),
         script_data_escaped_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escaped_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escaped_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -358,6 +407,8 @@ proof fn lemma_script_data_escaped_dash_dash_state(input: Seq<u32>, t: Tokenizer
     ensures
         decreases_ok(input, t, script_data_escaped_dash_dash_state(input, t).0),
         script_data_escaped_dash_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escaped_dash_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escaped_dash_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -368,6 +419,8 @@ proof fn lemma_script_data_escaped_less_than_sign_state(input: Seq<u32>, t: Toke
     ensures
         decreases_ok(input, t, script_data_escaped_less_than_sign_state(input, t).0),
         script_data_escaped_less_than_sign_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escaped_less_than_sign_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escaped_less_than_sign_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -378,6 +431,8 @@ proof fn lemma_script_data_escaped_end_tag_open_state(input: Seq<u32>, t: Tokeni
     ensures
         decreases_ok(input, t, script_data_escaped_end_tag_open_state(input, t).0),
         script_data_escaped_end_tag_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escaped_end_tag_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escaped_end_tag_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -388,6 +443,8 @@ proof fn lemma_script_data_escaped_end_tag_name_state(input: Seq<u32>, t: Tokeni
     ensures
         decreases_ok(input, t, script_data_escaped_end_tag_name_state(input, t).0),
         script_data_escaped_end_tag_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_escaped_end_tag_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_escaped_end_tag_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -398,6 +455,8 @@ proof fn lemma_script_data_double_escape_start_state(input: Seq<u32>, t: Tokeniz
     ensures
         decreases_ok(input, t, script_data_double_escape_start_state(input, t).0),
         script_data_double_escape_start_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_double_escape_start_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_double_escape_start_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -408,6 +467,8 @@ proof fn lemma_script_data_double_escaped_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, script_data_double_escaped_state(input, t).0),
         script_data_double_escaped_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_double_escaped_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_double_escaped_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -418,6 +479,8 @@ proof fn lemma_script_data_double_escaped_dash_state(input: Seq<u32>, t: Tokeniz
     ensures
         decreases_ok(input, t, script_data_double_escaped_dash_state(input, t).0),
         script_data_double_escaped_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_double_escaped_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_double_escaped_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -428,6 +491,8 @@ proof fn lemma_script_data_double_escaped_dash_dash_state(input: Seq<u32>, t: To
     ensures
         decreases_ok(input, t, script_data_double_escaped_dash_dash_state(input, t).0),
         script_data_double_escaped_dash_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_double_escaped_dash_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_double_escaped_dash_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -438,6 +503,8 @@ proof fn lemma_script_data_double_escaped_less_than_sign_state(input: Seq<u32>, 
     ensures
         decreases_ok(input, t, script_data_double_escaped_less_than_sign_state(input, t).0),
         script_data_double_escaped_less_than_sign_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_double_escaped_less_than_sign_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_double_escaped_less_than_sign_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -448,6 +515,8 @@ proof fn lemma_script_data_double_escape_end_state(input: Seq<u32>, t: Tokenizer
     ensures
         decreases_ok(input, t, script_data_double_escape_end_state(input, t).0),
         script_data_double_escape_end_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(script_data_double_escape_end_state(input, t)),
+        !(t.current is EndOfFile) ==> !(script_data_double_escape_end_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -458,6 +527,8 @@ proof fn lemma_before_attribute_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, before_attribute_name_state(input, t).0),
         before_attribute_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(before_attribute_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(before_attribute_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -468,6 +539,8 @@ proof fn lemma_attribute_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, attribute_name_state(input, t).0),
         attribute_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(attribute_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(attribute_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -478,6 +551,8 @@ proof fn lemma_after_attribute_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, after_attribute_name_state(input, t).0),
         after_attribute_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_attribute_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_attribute_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -488,6 +563,8 @@ proof fn lemma_before_attribute_value_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, before_attribute_value_state(input, t).0),
         before_attribute_value_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(before_attribute_value_state(input, t)),
+        !(t.current is EndOfFile) ==> !(before_attribute_value_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -498,6 +575,8 @@ proof fn lemma_attribute_value_double_quoted_state(input: Seq<u32>, t: Tokenizer
     ensures
         decreases_ok(input, t, attribute_value_double_quoted_state(input, t).0),
         attribute_value_double_quoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(attribute_value_double_quoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(attribute_value_double_quoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -508,6 +587,8 @@ proof fn lemma_attribute_value_single_quoted_state(input: Seq<u32>, t: Tokenizer
     ensures
         decreases_ok(input, t, attribute_value_single_quoted_state(input, t).0),
         attribute_value_single_quoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(attribute_value_single_quoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(attribute_value_single_quoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -518,6 +599,8 @@ proof fn lemma_attribute_value_unquoted_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, attribute_value_unquoted_state(input, t).0),
         attribute_value_unquoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(attribute_value_unquoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(attribute_value_unquoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -528,6 +611,8 @@ proof fn lemma_after_attribute_value_quoted_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, after_attribute_value_quoted_state(input, t).0),
         after_attribute_value_quoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_attribute_value_quoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_attribute_value_quoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -538,6 +623,8 @@ proof fn lemma_self_closing_start_tag_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, self_closing_start_tag_state(input, t).0),
         self_closing_start_tag_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(self_closing_start_tag_state(input, t)),
+        !(t.current is EndOfFile) ==> !(self_closing_start_tag_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -548,6 +635,8 @@ proof fn lemma_bogus_comment_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, bogus_comment_state(input, t).0),
         bogus_comment_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(bogus_comment_state(input, t)),
+        !(t.current is EndOfFile) ==> !(bogus_comment_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -558,6 +647,8 @@ proof fn lemma_markup_declaration_open_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, markup_declaration_open_state(input, t).0),
         markup_declaration_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(markup_declaration_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(markup_declaration_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -568,6 +659,8 @@ proof fn lemma_comment_start_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_start_state(input, t).0),
         comment_start_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_start_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_start_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -578,6 +671,8 @@ proof fn lemma_comment_start_dash_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_start_dash_state(input, t).0),
         comment_start_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_start_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_start_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -588,6 +683,8 @@ proof fn lemma_comment_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_state(input, t).0),
         comment_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -598,6 +695,8 @@ proof fn lemma_comment_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_less_than_sign_state(input, t).0),
         comment_less_than_sign_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_less_than_sign_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_less_than_sign_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -608,6 +707,8 @@ proof fn lemma_comment_less_than_sign_bang_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_less_than_sign_bang_state(input, t).0),
         comment_less_than_sign_bang_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_less_than_sign_bang_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_less_than_sign_bang_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -618,6 +719,8 @@ proof fn lemma_comment_less_than_sign_bang_dash_state(input: Seq<u32>, t: Tokeni
     ensures
         decreases_ok(input, t, comment_less_than_sign_bang_dash_state(input, t).0),
         comment_less_than_sign_bang_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_less_than_sign_bang_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_less_than_sign_bang_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -628,6 +731,8 @@ proof fn lemma_comment_less_than_sign_bang_dash_dash_state(input: Seq<u32>, t: T
     ensures
         decreases_ok(input, t, comment_less_than_sign_bang_dash_dash_state(input, t).0),
         comment_less_than_sign_bang_dash_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_less_than_sign_bang_dash_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_less_than_sign_bang_dash_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -638,6 +743,8 @@ proof fn lemma_comment_end_dash_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_end_dash_state(input, t).0),
         comment_end_dash_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_end_dash_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_end_dash_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -648,6 +755,8 @@ proof fn lemma_comment_end_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_end_state(input, t).0),
         comment_end_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_end_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_end_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -658,6 +767,8 @@ proof fn lemma_comment_end_bang_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, comment_end_bang_state(input, t).0),
         comment_end_bang_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(comment_end_bang_state(input, t)),
+        !(t.current is EndOfFile) ==> !(comment_end_bang_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -668,6 +779,8 @@ proof fn lemma_doctype_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, doctype_state(input, t).0),
         doctype_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(doctype_state(input, t)),
+        !(t.current is EndOfFile) ==> !(doctype_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -678,6 +791,8 @@ proof fn lemma_before_doctype_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, before_doctype_name_state(input, t).0),
         before_doctype_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(before_doctype_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(before_doctype_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -688,6 +803,8 @@ proof fn lemma_doctype_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, doctype_name_state(input, t).0),
         doctype_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(doctype_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(doctype_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -698,6 +815,8 @@ proof fn lemma_after_doctype_name_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, after_doctype_name_state(input, t).0),
         after_doctype_name_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_doctype_name_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_doctype_name_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -708,6 +827,8 @@ proof fn lemma_after_doctype_public_keyword_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, after_doctype_public_keyword_state(input, t).0),
         after_doctype_public_keyword_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_doctype_public_keyword_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_doctype_public_keyword_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -718,6 +839,8 @@ proof fn lemma_before_doctype_public_identifier_state(input: Seq<u32>, t: Tokeni
     ensures
         decreases_ok(input, t, before_doctype_public_identifier_state(input, t).0),
         before_doctype_public_identifier_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(before_doctype_public_identifier_state(input, t)),
+        !(t.current is EndOfFile) ==> !(before_doctype_public_identifier_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -728,6 +851,8 @@ proof fn lemma_doctype_public_identifier_double_quoted_state(input: Seq<u32>, t:
     ensures
         decreases_ok(input, t, doctype_public_identifier_double_quoted_state(input, t).0),
         doctype_public_identifier_double_quoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(doctype_public_identifier_double_quoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(doctype_public_identifier_double_quoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -738,6 +863,8 @@ proof fn lemma_doctype_public_identifier_single_quoted_state(input: Seq<u32>, t:
     ensures
         decreases_ok(input, t, doctype_public_identifier_single_quoted_state(input, t).0),
         doctype_public_identifier_single_quoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(doctype_public_identifier_single_quoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(doctype_public_identifier_single_quoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -748,6 +875,8 @@ proof fn lemma_after_doctype_public_identifier_state(input: Seq<u32>, t: Tokeniz
     ensures
         decreases_ok(input, t, after_doctype_public_identifier_state(input, t).0),
         after_doctype_public_identifier_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_doctype_public_identifier_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_doctype_public_identifier_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -758,6 +887,8 @@ proof fn lemma_between_doctype_public_and_system_identifiers_state(input: Seq<u3
     ensures
         decreases_ok(input, t, between_doctype_public_and_system_identifiers_state(input, t).0),
         between_doctype_public_and_system_identifiers_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(between_doctype_public_and_system_identifiers_state(input, t)),
+        !(t.current is EndOfFile) ==> !(between_doctype_public_and_system_identifiers_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -768,6 +899,8 @@ proof fn lemma_after_doctype_system_keyword_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, after_doctype_system_keyword_state(input, t).0),
         after_doctype_system_keyword_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_doctype_system_keyword_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_doctype_system_keyword_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -778,6 +911,8 @@ proof fn lemma_before_doctype_system_identifier_state(input: Seq<u32>, t: Tokeni
     ensures
         decreases_ok(input, t, before_doctype_system_identifier_state(input, t).0),
         before_doctype_system_identifier_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(before_doctype_system_identifier_state(input, t)),
+        !(t.current is EndOfFile) ==> !(before_doctype_system_identifier_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -788,6 +923,8 @@ proof fn lemma_doctype_system_identifier_double_quoted_state(input: Seq<u32>, t:
     ensures
         decreases_ok(input, t, doctype_system_identifier_double_quoted_state(input, t).0),
         doctype_system_identifier_double_quoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(doctype_system_identifier_double_quoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(doctype_system_identifier_double_quoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -798,6 +935,8 @@ proof fn lemma_doctype_system_identifier_single_quoted_state(input: Seq<u32>, t:
     ensures
         decreases_ok(input, t, doctype_system_identifier_single_quoted_state(input, t).0),
         doctype_system_identifier_single_quoted_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(doctype_system_identifier_single_quoted_state(input, t)),
+        !(t.current is EndOfFile) ==> !(doctype_system_identifier_single_quoted_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -808,6 +947,8 @@ proof fn lemma_after_doctype_system_identifier_state(input: Seq<u32>, t: Tokeniz
     ensures
         decreases_ok(input, t, after_doctype_system_identifier_state(input, t).0),
         after_doctype_system_identifier_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_doctype_system_identifier_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_doctype_system_identifier_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -818,6 +959,8 @@ proof fn lemma_bogus_doctype_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, bogus_doctype_state(input, t).0),
         bogus_doctype_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(bogus_doctype_state(input, t)),
+        !(t.current is EndOfFile) ==> !(bogus_doctype_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -828,6 +971,8 @@ proof fn lemma_cdata_section_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, cdata_section_state(input, t).0),
         cdata_section_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(cdata_section_state(input, t)),
+        !(t.current is EndOfFile) ==> !(cdata_section_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -838,6 +983,8 @@ proof fn lemma_cdata_section_bracket_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, cdata_section_bracket_state(input, t).0),
         cdata_section_bracket_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(cdata_section_bracket_state(input, t)),
+        !(t.current is EndOfFile) ==> !(cdata_section_bracket_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -848,6 +995,8 @@ proof fn lemma_cdata_section_end_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, cdata_section_end_state(input, t).0),
         cdata_section_end_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(cdata_section_end_state(input, t)),
+        !(t.current is EndOfFile) ==> !(cdata_section_end_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -858,6 +1007,8 @@ proof fn lemma_processing_instruction_open_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, processing_instruction_open_state(input, t).0),
         processing_instruction_open_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(processing_instruction_open_state(input, t)),
+        !(t.current is EndOfFile) ==> !(processing_instruction_open_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -868,6 +1019,8 @@ proof fn lemma_processing_instruction_target_state(input: Seq<u32>, t: Tokenizer
     ensures
         decreases_ok(input, t, processing_instruction_target_state(input, t).0),
         processing_instruction_target_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(processing_instruction_target_state(input, t)),
+        !(t.current is EndOfFile) ==> !(processing_instruction_target_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -878,6 +1031,8 @@ proof fn lemma_after_processing_instruction_target_state(input: Seq<u32>, t: Tok
     ensures
         decreases_ok(input, t, after_processing_instruction_target_state(input, t).0),
         after_processing_instruction_target_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(after_processing_instruction_target_state(input, t)),
+        !(t.current is EndOfFile) ==> !(after_processing_instruction_target_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -888,6 +1043,8 @@ proof fn lemma_processing_instruction_data_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, processing_instruction_data_state(input, t).0),
         processing_instruction_data_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(processing_instruction_data_state(input, t)),
+        !(t.current is EndOfFile) ==> !(processing_instruction_data_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -898,6 +1055,8 @@ proof fn lemma_processing_instruction_questionable_state(input: Seq<u32>, t: Tok
     ensures
         decreases_ok(input, t, processing_instruction_questionable_state(input, t).0),
         processing_instruction_questionable_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(processing_instruction_questionable_state(input, t)),
+        !(t.current is EndOfFile) ==> !(processing_instruction_questionable_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -908,6 +1067,8 @@ proof fn lemma_character_reference_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, character_reference_state(input, t).0),
         character_reference_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(character_reference_state(input, t)),
+        !(t.current is EndOfFile) ==> !(character_reference_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -918,6 +1079,8 @@ proof fn lemma_named_character_reference_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, named_character_reference_state(input, t).0),
         named_character_reference_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(named_character_reference_state(input, t)),
+        !(t.current is EndOfFile) ==> !(named_character_reference_state(input, t).0.current is EndOfFile),
 {
     crate::charref::lemmas::lemma_match_consumes_two(input, t.pos as int);
 }
@@ -929,6 +1092,8 @@ proof fn lemma_ambiguous_ampersand_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, ambiguous_ampersand_state(input, t).0),
         ambiguous_ampersand_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(ambiguous_ampersand_state(input, t)),
+        !(t.current is EndOfFile) ==> !(ambiguous_ampersand_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -939,6 +1104,8 @@ proof fn lemma_numeric_character_reference_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, numeric_character_reference_state(input, t).0),
         numeric_character_reference_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(numeric_character_reference_state(input, t)),
+        !(t.current is EndOfFile) ==> !(numeric_character_reference_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -949,6 +1116,8 @@ proof fn lemma_hexadecimal_character_reference_start_state(input: Seq<u32>, t: T
     ensures
         decreases_ok(input, t, hexadecimal_character_reference_start_state(input, t).0),
         hexadecimal_character_reference_start_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(hexadecimal_character_reference_start_state(input, t)),
+        !(t.current is EndOfFile) ==> !(hexadecimal_character_reference_start_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -959,6 +1128,8 @@ proof fn lemma_hexadecimal_character_reference_state(input: Seq<u32>, t: Tokeniz
     ensures
         decreases_ok(input, t, hexadecimal_character_reference_state(input, t).0),
         hexadecimal_character_reference_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(hexadecimal_character_reference_state(input, t)),
+        !(t.current is EndOfFile) ==> !(hexadecimal_character_reference_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -969,6 +1140,8 @@ proof fn lemma_decimal_character_reference_state(input: Seq<u32>, t: Tokenizer)
     ensures
         decreases_ok(input, t, decimal_character_reference_state(input, t).0),
         decimal_character_reference_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(decimal_character_reference_state(input, t)),
+        !(t.current is EndOfFile) ==> !(decimal_character_reference_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -979,6 +1152,8 @@ proof fn lemma_numeric_character_reference_end_state(input: Seq<u32>, t: Tokeniz
     ensures
         decreases_ok(input, t, numeric_character_reference_end_state(input, t).0),
         numeric_character_reference_end_state(input, t).0.pos <= input.len(),
+        !(t.current is EndOfFile) ==> eof_last(numeric_character_reference_end_state(input, t)),
+        !(t.current is EndOfFile) ==> !(numeric_character_reference_end_state(input, t).0.current is EndOfFile),
 {
 }
 
@@ -987,6 +1162,8 @@ pub proof fn lemma_step_decreases(input: Seq<u32>, t: Tokenizer)
     ensures
         !stopped(input, t) ==> decreases_ok(input, t, step(input, t).0),
         !stopped(input, t) ==> step(input, t).0.pos <= input.len(),
+        !stopped(input, t) && !(t.current is EndOfFile) ==> eof_last(step(input, t)),
+        !stopped(input, t) && !(t.current is EndOfFile) ==> !(step(input, t).0.current is EndOfFile),
 {
     if !stopped(input, t) {
         reveal(step);
