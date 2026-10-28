@@ -87,12 +87,13 @@ pub proof fn lemma_pop_until_popped(p: Parser, tag: Tag)
     }
 }
 
-/// `pop_until_cell_popped` keeps every field but `open` and never lengthens
-/// the stack.
+/// `pop_until_cell_popped` keeps every field but `open` and leaves a prefix
+/// of the stack.
 pub proof fn lemma_pop_until_cell_popped(p: Parser)
     ensures
         pop_until_cell_popped(p) == (Parser { open: pop_until_cell_popped(p).open, ..p }),
         pop_until_cell_popped(p).open.len() <= p.open.len(),
+        is_prefix(pop_until_cell_popped(p).open, p.open),
     decreases p.open.len(),
 {
     if p.open.len() > 0 {
@@ -119,19 +120,25 @@ pub proof fn lemma_clear_to_last_marker(p: Parser)
 }
 
 /// "close the cell" keeps the template modes and the original insertion
-/// mode, never lengthens the stack, and switches to "in row".
+/// mode, never lengthens the stack, adds no `template` element, keeps the
+/// list of active formatting elements fine, and switches to "in row".
 pub proof fn lemma_close_the_cell(p: Parser)
     ensures
         close_the_cell(p).template_modes == p.template_modes,
         close_the_cell(p).original_mode == p.original_mode,
         close_the_cell(p).mode == Mode::InRow,
         close_the_cell(p).open.len() <= p.open.len(),
+        close_the_cell(p).pending_table_text == p.pending_table_text,
+        template_count(close_the_cell(p)) <= template_count(p),
+        formatting_ok(p) ==> formatting_ok(close_the_cell(p)),
 {
     lemma_pop_while_all(p);
     let p1 = generate_implied_end_tags(p, None);
     lemma_pop_until_cell_popped(p1);
     let p2 = pop_until_cell_popped(p1);
-    lemma_clear_to_last_marker(p2);
+    super::helpers_ranking::lemma_clear_to_last_marker(p2);
+    super::helpers_ranking::lemma_template_count_prefix(p, p1);
+    super::helpers_ranking::lemma_template_count_prefix(p1, p2);
 }
 
 /// The stack has an entry satisfying `target` below index `i` when
@@ -239,37 +246,9 @@ pub proof fn lemma_insert_characters(p: Parser, data: Seq<u32>)
 // ---------------------------------------------------------------------
 // Reset the insertion mode appropriately
 
-/// "Reset the insertion mode appropriately" cannot reach the current
-/// template insertion mode while the stack of template insertion modes is
-/// empty: no template element is on the stack of open elements, nor is the
-/// fragment context element one. (Not part of [`modes_ok`]: see the gaps
-/// noted in [`super::tables`].)
-pub open spec fn template_reset_ok(p: Parser) -> bool {
-    p.template_modes.len() > 0 || ((forall|j: int| 0 <= j < p.open.len() ==> !is_html(#[trigger] p.open[j], Tag::Template))
-        && !(p.context is Some && is_html(p.context->Some_0, Tag::Template)))
-}
-
 /// The modes "reset the insertion mode appropriately" can land on.
 pub open spec fn reset_mode_ok(m: Mode) -> bool {
     m != Mode::Text && m != Mode::InTableText && m != Mode::Initial && m != Mode::BeforeHtml && m != Mode::InHeadNoscript
-}
-
-/// Where [`reset_from`] lands.
-pub proof fn lemma_reset_from(p: Parser, i: int)
-    requires
-        modes_ok(p),
-        template_reset_ok(p),
-        i < p.open.len(),
-    ensures
-        reset_mode_ok(reset_from(p, i)),
-    decreases i,
-{
-    if p.template_modes.len() > 0 {
-        assert(template_mode_ok(p.template_modes[p.template_modes.len() - 1]));
-    }
-    if i >= 1 {
-        lemma_reset_from(p, i - 1);
-    }
 }
 
 /// A mode "reset the insertion mode appropriately" lands on gives a `table`
@@ -292,24 +271,6 @@ pub proof fn lemma_growth_le_4(m: Mode, t: Tok)
     ensures
         growth(Rules::Html(m), t) <= 4,
 {
-}
-
-/// The stack keeps a prefix of a stack that satisfies
-/// [`template_reset_ok`], with the same template modes and context.
-pub proof fn lemma_template_reset_ok_prefix(p: Parser, q: Parser)
-    requires
-        template_reset_ok(p),
-        is_prefix(q.open, p.open),
-        q.template_modes == p.template_modes,
-        q.context == p.context,
-    ensures
-        template_reset_ok(q),
-{
-    if p.template_modes.len() == 0 {
-        assert forall|j: int| 0 <= j < q.open.len() implies !is_html(#[trigger] q.open[j], Tag::Template) by {
-            assert(q.open[j] == p.open[j]);
-        }
-    }
 }
 
 // ---------------------------------------------------------------------
@@ -342,6 +303,8 @@ pub open spec fn in_table_else_tok(t: Tok) -> bool {
 pub proof fn lemma_in_table_anything_else_edges(env: EncFns, p: Parser, t: Tok)
     requires
         modes_ok(p),
+        p.mode != Mode::Text,
+        p.mode != Mode::InTableText,
         in_table_else_tok(t),
     ensures
         edge_ok(Rules::Html(Mode::InTable), p, t, in_table_anything_else(env, p, t)),
@@ -365,7 +328,8 @@ pub proof fn lemma_in_table_anything_else_edges(env: EncFns, p: Parser, t: Tok)
                     lemma_components_bounded(Rules::Html(q.mode), t2);
                     assert(img(t) == 1);
                     assert(img(t2) == 0);
-                    assert(modes_ok(q));
+                    super::helpers_ranking::lemma_modes_ok_from(p, q);
+                    lemma_growth_le_4(q.mode, t2);
                 },
                 Outcome::Done(_) => {},
             }

@@ -70,10 +70,36 @@ pub proof fn lemma_foreign_reprocess(p: Parser, q: Parser, t: Tok)
     requires
         q.open.len() <= p.open.len(),
         q.template_modes == p.template_modes,
+        q.formatting == p.formatting,
+        q.pending_table_text == p.pending_table_text,
     ensures
         decreases_to(Rules::Foreign, p, t, Rules::Html(q.mode), q, t),
 {
     lemma_below_foreign(q.mode, t);
+}
+
+/// The "in head" rules handle the "in head" start tags that "after head"
+/// sends them ("base", "basefont", "bgsound", "link", "meta", "noframes",
+/// "script", "style", "template", "title") themselves.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_head_start_done(env: EncFns, p: Parser, t: Tok)
+    requires
+        t is Start,
+        after_head_in_head_tag(t->Start_0.tag),
+    ensures
+        mode_in_head(env, p, t) is Done,
+{
+    hide(insert_html_element);
+    hide(pop);
+    hide(in_head_meta);
+    hide(generic_text_parsing);
+    hide(in_head_script);
+    hide(in_head_template_start);
+    hide(in_head_template_end);
+    hide(in_head_anything_else);
+    hide(insert_char);
+    hide(insert_comment);
+    hide(insert_pi);
 }
 
 } // verus!

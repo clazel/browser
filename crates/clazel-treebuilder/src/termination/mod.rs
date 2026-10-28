@@ -18,16 +18,23 @@
 //! starting `B`; with each component bounded, the rank is a number below
 //! `fuel_bound`, which decreases on every edge ([`lemma_run_some`]).
 //!
-//! Two facts about the parser's modes are needed, [`modes_ok`]: the stack of
+//! Facts about the parser's state are needed, [`modes_ok`]: the stack of
 //! template insertion modes holds only the modes the parser pushes onto it
 //! (so "reset the insertion mode appropriately" lands on a mode whose budget
-//! is known), and in the "in table text" mode the original insertion mode
-//! is neither "text" nor "in table text" (else "in table text"'s anything
-//! else would reprocess in itself forever), and likewise in the "text" mode. They are part of the reachable
-//! state invariant; within one token they are kept by every edge.
+//! is known), and has an entry for every `template` element on the stack
+//! of open elements and a `template` context ([`template_count`], so that
+//! reset finds a current template insertion mode), and one at all in "in
+//! template" (or in "text" or "in table text" returning to it); in the "in
+//! table text" mode the original insertion mode is neither "text" nor "in
+//! table text" (else "in table text"'s anything else would reprocess in
+//! itself forever), and likewise in the "text" mode; and no entry of the
+//! list of active formatting elements is for a `template` start tag
+//! ([`formatting_ok`], so reconstructing it pushes no `template` element).
+//! They are part of the reachable state invariant; within one token they
+//! are kept by every edge.
 
 #[allow(unused_imports)]
-use crate::spec::*;
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -35,6 +42,7 @@ pub mod early;
 pub mod frameset;
 pub mod helpers_early;
 pub mod helpers_in_body;
+pub mod helpers_ranking;
 pub mod helpers_tables;
 pub mod in_body;
 pub mod tables;
@@ -245,6 +253,16 @@ pub open spec fn modes_ok(p: Parser) -> bool {
     &&& p.mode == Mode::Text ==> p.original_mode != Mode::Text && p.original_mode != Mode::InTableText
     &&& template_count(p) <= p.template_modes.len()
     &&& p.mode == Mode::InTemplate ==> p.template_modes.len() > 0
+    &&& (p.mode == Mode::Text || p.mode == Mode::InTableText) && p.original_mode == Mode::InTemplate ==> p.template_modes.len() > 0
+    &&& formatting_ok(p)
+}
+
+/// No entry of the list of active formatting elements was created for a
+/// `template` start tag (the parser pushes entries only for the formatting
+/// tags), so "reconstruct the active formatting elements" never pushes a
+/// `template` element, which would need a template insertion mode.
+pub open spec fn formatting_ok(p: Parser) -> bool {
+    forall|i: int| 0 <= i < p.formatting.len() && #[trigger] p.formatting[i] is Entry ==> p.formatting[i]->Entry_token.tag != Tag::Template
 }
 
 /// The number of HTML `template` elements among the first `i` entries of
@@ -448,6 +466,8 @@ pub proof fn lemma_run_some(env: EncFns, p: Parser, t: Tok, r: Rules, fuel: nat,
 
 /// The dispatcher chooses the current mode's rules or foreign content.
 pub proof fn lemma_dispatcher_rules_ok(p: Parser, t: Tok)
+    requires
+        modes_ok(p),
     ensures
         rules_ok(dispatcher(p, t), p),
 {

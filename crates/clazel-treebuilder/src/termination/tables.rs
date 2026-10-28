@@ -1,26 +1,16 @@
 //! The edges of the "in table", "in table text", "in caption", "in column group", "in table body", "in row", "in cell", "in template" modes are ranked
 //! (see [`super`]).
 //!
-//! Gaps (each is an `assert` marked `GAP` below, which fails: the edge is
-//! not ranked from [`modes_ok`] and [`rules_ok`] alone):
-//! - "in table" `table` start tag and "in template" end-of-file: "reset the
-//!   insertion mode appropriately" returns `template_modes.last()` on
-//!   reaching a template element (or a template context element), which is
-//!   unspecified when the stack of template insertion modes is empty (it
-//!   could be "text" or "in table text", breaking `modes_ok`, or "initial",
-//!   whose growth budget 3 exceeds the token's 2). Needs the invariant
-//!   [`super::helpers_tables::template_reset_ok`] (better: as many template insertion modes as
-//!   template elements on the stack, counting a template context).
-//! - "in template" cases 3 to 7 and end-of-file pop the stack of template
-//!   insertion modes, whose length after `drop_last` is unspecified when it
-//!   is empty. Needs "the mode (or rules) is "in template" ⇒ the stack of
-//!   template insertion modes is not empty".
-//! - "in table text" "anything else", when the pending characters are
-//!   reprocessed with the "in body" rules: each reconstructs the active
-//!   formatting elements, which pushes up to one element per entry of the
-//!   list, so the stack can grow by more than the growth budget released (5
-//!   to at most 4); the budget `B` increases. A ranking gap, not a table
-//!   value (see the report).
+//! "Reset the insertion mode appropriately" reads the current template
+//! insertion mode on reaching a `template` element (or a `template` context
+//! element); [`modes_ok`]'s bound on [`template_count`] makes the stack of
+//! template insertion modes non-empty there
+//! ([`super::helpers_ranking::lemma_reset_from`]). The "in table text"
+//! mode's "anything else" reprocesses each pending character with the "in
+//! body" rules, whose reconstruction of the active formatting elements
+//! pushes at most one element per entry of the list: the budget's
+//! [`pending_growth`] pays for them
+//! ([`super::helpers_ranking::lemma_reprocess_pending`]).
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -56,13 +46,18 @@ pub proof fn lemma_in_table_edges(env: EncFns, p: Parser, t: Tok)
         Tag::Tfoot,
     ) || is_html(cur, Tag::Thead) || is_html(cur, Tag::Tr)) {
         // 1. In table text, original mode the current mode.
+        let q = Parser { pending_table_text: seq![], original_mode: p.mode, mode: Mode::InTableText, ..p };
+        assert(mode_in_table(env, p, t) == Outcome::Reprocess(q, t));
+        super::helpers_ranking::lemma_modes_ok_from(p, q);
     } else if t is Comment || t is Pi || t is Doctype {
     } else if t is Start && t->Start_0.tag == Tag::Caption {
     } else if t is Start && t->Start_0.tag == Tag::Colgroup {
     } else if t is Start && t->Start_0.tag == Tag::Col {
+        super::helpers_ranking::lemma_not_template(name_colgroup());
         lemma_in_table_insert_reprocess(p, t, start_tag_named(name_colgroup()), Mode::InColumnGroup);
     } else if t is Start && (t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead) {
     } else if t is Start && (t->Start_0.tag == Tag::Td || t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Tr) {
+        super::helpers_ranking::lemma_not_template(name_tbody());
         lemma_in_table_insert_reprocess(p, t, start_tag_named(name_tbody()), Mode::InTableBody);
     } else if t is Start && t->Start_0.tag == Tag::Table {
         if has_in_scope(p, Tag::Table, Scope::Table) {
@@ -94,6 +89,7 @@ pub proof fn lemma_in_table_edges(env: EncFns, p: Parser, t: Tok)
 pub proof fn lemma_in_table_insert_reprocess(p: Parser, t: Tok, tt: TagTok, m: Mode)
     requires
         modes_ok(p),
+        tt.tag != Tag::Template,
         (m == Mode::InColumnGroup && is_start(t, Tag::Col)) || (m == Mode::InTableBody && (is_start(t, Tag::Td) || is_start(
             t,
             Tag::Th,
@@ -108,7 +104,10 @@ pub proof fn lemma_in_table_insert_reprocess(p: Parser, t: Tok, tt: TagTok, m: M
 {
     super::helpers_tables::lemma_pop_while_all(p);
     let p1 = clear_stack_back_to_table_context(p);
-    super::helpers_tables::lemma_insert_html_element(p1, tt);
+    super::helpers_ranking::lemma_template_count_prefix(p, p1);
+    super::helpers_ranking::lemma_insert_html_element(p1, tt);
+    let q = Parser { mode: m, ..insert_html_element(p1, tt).0 };
+    super::helpers_ranking::lemma_modes_ok_from(p, q);
 }
 
 /// "in table" case 10 with a table in table scope: pop to the table (L
@@ -125,10 +124,9 @@ pub proof fn lemma_in_table_table_start(p: Parser, t: Tok)
     assert(p.open.len() > 0);
     let p1 = pop_until_popped(p, Tag::Table);
     super::helpers_tables::lemma_pop_until_popped(p, Tag::Table);
-    // GAP: reset with an empty stack of template insertion modes.
-    assert(super::helpers_tables::template_reset_ok(p));
-    super::helpers_tables::lemma_template_reset_ok_prefix(p, p1);
-    super::helpers_tables::lemma_reset_from(p1, p1.open.len() - 1);
+    super::helpers_ranking::lemma_template_count_prefix(p, p1);
+    assert(formatting_ok(p1));
+    super::helpers_ranking::lemma_reset_modes_ok(p1);
     let p2 = reset_insertion_mode(p1);
     super::helpers_tables::lemma_reset_mode_growth_table(p2.mode, t);
 }
@@ -142,19 +140,34 @@ pub proof fn lemma_in_table_text_edges(env: EncFns, p: Parser, t: Tok)
         edge_ok(Rules::Html(Mode::InTableText), p, t, mode_in_table_text(env, p, t)),
 {
     hide(reprocess_pending);
+    hide(insert_characters);
     if !(t is Char) {
-        // 3. Anything else: reprocess in the original mode, G 5 to at most 4.
+        // 3. Anything else: reprocess in the original mode, G 5 to at most 4;
+        // the pending characters push at most F elements each (`F × P` of
+        // the budget), the stack of template modes is kept.
         assert(p.mode == Mode::InTableText);
         let pending = p.pending_table_text;
         super::helpers_tables::lemma_growth_le_4(p.original_mode, t);
+        let p1 = if has_non_whitespace(pending) {
+            reprocess_pending(env, p, pending, 0)
+        } else if pending.len() == 0 {
+            p
+        } else {
+            insert_characters(p, pending)
+        };
+        assert(p.formatting.len() * pending.len() >= 0) by (nonlinear_arith);
         if has_non_whitespace(pending) {
-            // GAP: reprocessing the pending characters with the "in body"
-            // rules reconstructs the active formatting elements, which can
-            // push more elements than the growth budget releases.
-            assert(edge_ok(Rules::Html(Mode::InTableText), p, t, mode_in_table_text(env, p, t)));
+            super::helpers_ranking::lemma_reprocess_pending(env, p, pending, 0);
         } else if pending.len() != 0 {
-            super::helpers_tables::lemma_insert_characters(p, pending);
+            super::helpers_ranking::lemma_insert_characters_counts(p, pending);
         }
+        assert(p1.open.len() <= p.open.len() + p.formatting.len() * pending.len());
+        let q = Parser { mode: p1.original_mode, ..p1 };
+        assert(mode_in_table_text(env, p, t) == Outcome::Reprocess(q, t));
+        assert(template_count(q) <= template_count(p));
+        super::helpers_ranking::lemma_modes_ok_from(p, q);
+        assert(pending_growth(Rules::Html(Mode::InTableText), p, t) == p.formatting.len() * pending.len());
+        assert(pending_growth(Rules::Html(q.mode), q, t) == 0);
     }
 }
 
@@ -175,7 +188,12 @@ pub proof fn lemma_in_caption_edges(env: EncFns, p: Parser, t: Tok)
         let p1 = generate_implied_end_tags(p, None);
         super::helpers_tables::lemma_pop_until_popped(p1, Tag::Caption);
         let p2 = pop_until_popped(p1, Tag::Caption);
-        super::helpers_tables::lemma_clear_to_last_marker(p2);
+        super::helpers_ranking::lemma_clear_to_last_marker(p2);
+        super::helpers_ranking::lemma_template_count_prefix(p, p1);
+        super::helpers_ranking::lemma_template_count_prefix(p1, p2);
+        let p3 = clear_to_last_marker(p2);
+        let q = Parser { mode: Mode::InTable, ..p3 };
+        super::helpers_ranking::lemma_modes_ok_from(p, q);
     }
 }
 
@@ -193,10 +211,11 @@ pub proof fn lemma_in_column_group_edges(env: EncFns, p: Parser, t: Tok)
     } else if t is End && (t->End_0.tag == Tag::Colgroup || t->End_0.tag == Tag::Col || t->End_0.tag == Tag::Template) {
     } else if t is Eof {
     } else if is_html(current_node(p), Tag::Colgroup) {
-        // 11. Pop the colgroup and reprocess in table: G kept, L lower.
-        if p.open.len() > 0 {
-            super::helpers_tables::lemma_pop(p);
-        }
+        // 11. Pop the colgroup and reprocess in table: G kept, L lower (or
+        // kept with the order 18 to 13).
+        super::helpers_ranking::lemma_pop(p);
+        let q = Parser { mode: Mode::InTable, ..pop(p) };
+        super::helpers_ranking::lemma_modes_ok_from(p, q);
     }
 }
 
@@ -208,31 +227,90 @@ pub proof fn lemma_in_table_body_edges(env: EncFns, p: Parser, t: Tok)
     ensures
         edge_ok(Rules::Html(Mode::InTableBody), p, t, mode_in_table_body(env, p, t)),
 {
-    super::helpers_tables::lemma_pop_while_all(p);
-    let p1 = clear_stack_back_to_table_body_context(p);
-    if t is Start && t->Start_0.tag == Tag::Tr {
-    } else if t is Start && (t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Td) {
-        // 2. Insert a tr and reprocess in row: G 3 to 2.
-        super::helpers_tables::lemma_insert_html_element(p1, start_tag_named(name_tr()));
-    } else if t is End && (t->End_0.tag == Tag::Tbody || t->End_0.tag == Tag::Tfoot || t->End_0.tag == Tag::Thead) {
+    if t is Start && (t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Td) {
+        lemma_in_table_body_cell(env, p, t);
     } else if (t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
         || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead)) || (t is End
         && t->End_0.tag == Tag::Table) {
-        // 4. Clear to the table section, pop it, reprocess in table: G kept,
-        // L lower.
-        if has_table_section_in_table_scope(p) {
-            super::helpers_tables::lemma_scope_witness_all(p.open);
-            let j = super::helpers_tables::scope_witness(
-                p.open,
-                p.open.len() as int,
-                |e: Elem| is_html(e, Tag::Tbody) || is_html(e, Tag::Thead) || is_html(e, Tag::Tfoot),
-                Scope::Table,
-            );
-            assert(0 <= j < p.open.len());
-            assert(p1.open.len() > j);
-            super::helpers_tables::lemma_pop(p1);
-        }
+        lemma_in_table_body_section(env, p, t);
+    } else {
+        lemma_in_table_body_other(env, p, t);
     }
+}
+
+/// "in table body" case 2: insert a `tr` and reprocess in row: G 3 to 2.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_table_body_cell(env: EncFns, p: Parser, t: Tok)
+    requires
+        modes_ok(p),
+        rules_ok(Rules::Html(Mode::InTableBody), p),
+        t is Start && (t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Td),
+    ensures
+        edge_ok(Rules::Html(Mode::InTableBody), p, t, mode_in_table_body(env, p, t)),
+{
+    hide(insert_html_element);
+    super::helpers_tables::lemma_pop_while_all(p);
+    let p1 = clear_stack_back_to_table_body_context(p);
+    super::helpers_ranking::lemma_template_count_prefix(p, p1);
+    super::helpers_ranking::lemma_not_template(name_tr());
+    super::helpers_ranking::lemma_insert_html_element(p1, start_tag_named(name_tr()));
+    let q = Parser { mode: Mode::InRow, ..insert_html_element(p1, start_tag_named(name_tr())).0 };
+    assert(mode_in_table_body(env, p, t) == Outcome::Reprocess(q, t));
+    super::helpers_ranking::lemma_modes_ok_from(p, q);
+}
+
+/// "in table body" case 4: clear to the table section, pop it, reprocess in
+/// table: G kept, L lower.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_table_body_section(env: EncFns, p: Parser, t: Tok)
+    requires
+        modes_ok(p),
+        rules_ok(Rules::Html(Mode::InTableBody), p),
+        (t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
+            || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead)) || (t is End
+            && t->End_0.tag == Tag::Table),
+    ensures
+        edge_ok(Rules::Html(Mode::InTableBody), p, t, mode_in_table_body(env, p, t)),
+{
+    hide(insert_html_element);
+    if has_table_section_in_table_scope(p) {
+        super::helpers_tables::lemma_pop_while_all(p);
+        let p1 = clear_stack_back_to_table_body_context(p);
+        super::helpers_tables::lemma_scope_witness_all(p.open);
+        let j = super::helpers_tables::scope_witness(
+            p.open,
+            p.open.len() as int,
+            |e: Elem| is_html(e, Tag::Tbody) || is_html(e, Tag::Thead) || is_html(e, Tag::Tfoot),
+            Scope::Table,
+        );
+        assert(0 <= j < p.open.len());
+        assert(p1.open.len() > j);
+        super::helpers_ranking::lemma_template_count_prefix(p, p1);
+        super::helpers_ranking::lemma_pop(p1);
+        let q = Parser { mode: Mode::InTable, ..pop(p1) };
+        assert(mode_in_table_body(env, p, t) == Outcome::Reprocess(q, t));
+        super::helpers_ranking::lemma_modes_ok_from(p, q);
+    }
+}
+
+/// The other "in table body" cases: handled, or using the "in table" rules.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_table_body_other(env: EncFns, p: Parser, t: Tok)
+    requires
+        modes_ok(p),
+        rules_ok(Rules::Html(Mode::InTableBody), p),
+        !(t is Start && (t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Td)),
+        !((t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
+            || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead)) || (t is End
+            && t->End_0.tag == Tag::Table)),
+    ensures
+        edge_ok(Rules::Html(Mode::InTableBody), p, t, mode_in_table_body(env, p, t)),
+{
+    hide(insert_html_element);
+    hide(clear_stack_back_to_table_body_context);
+    hide(pop);
+    let o = mode_in_table_body(env, p, t);
+    assert(o is Done || o == Outcome::Using(Mode::InTable, p, t));
 }
 
 /// The edges of the "in row" mode are ranked.
@@ -243,24 +321,66 @@ pub proof fn lemma_in_row_edges(env: EncFns, p: Parser, t: Tok)
     ensures
         edge_ok(Rules::Html(Mode::InRow), p, t, mode_in_row(env, p, t)),
 {
-    super::helpers_tables::lemma_pop_while_all(p);
-    let p1 = clear_stack_back_to_table_row_context(p);
-    if t is Start && (t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Td) {
-    } else if t is End && t->End_0.tag == Tag::Tr {
-    } else if ((t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
+    if ((t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
         || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead || t->Start_0.tag
         == Tag::Tr)) || (t is End && t->End_0.tag == Tag::Table)) || (t is End && (t->End_0.tag == Tag::Tbody
         || t->End_0.tag == Tag::Tfoot || t->End_0.tag == Tag::Thead)) {
-        // 3., 4. Clear to the tr, pop it, reprocess in table body: G 1 to 0
-        // or kept, L lower.
-        if has_in_scope(p, Tag::Tr, Scope::Table) {
-            super::helpers_tables::lemma_scope_witness_all(p.open);
-            let j = super::helpers_tables::scope_witness(p.open, p.open.len() as int, |e: Elem| is_html(e, Tag::Tr), Scope::Table);
-            assert(0 <= j < p.open.len());
-            assert(p1.open.len() > j);
-            super::helpers_tables::lemma_pop(p1);
-        }
+        lemma_in_row_pop(env, p, t);
+    } else {
+        lemma_in_row_other(env, p, t);
     }
+}
+
+/// "in row" cases 3 and 4: clear to the `tr`, pop it, reprocess in table
+/// body: G 1 to 0 or kept, L lower.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_row_pop(env: EncFns, p: Parser, t: Tok)
+    requires
+        modes_ok(p),
+        rules_ok(Rules::Html(Mode::InRow), p),
+        ((t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
+            || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead || t->Start_0.tag
+            == Tag::Tr)) || (t is End && t->End_0.tag == Tag::Table)) || (t is End && (t->End_0.tag == Tag::Tbody
+            || t->End_0.tag == Tag::Tfoot || t->End_0.tag == Tag::Thead)),
+    ensures
+        edge_ok(Rules::Html(Mode::InRow), p, t, mode_in_row(env, p, t)),
+{
+    hide(insert_html_element);
+    hide(has_same_name_in_table_scope);
+    if has_in_scope(p, Tag::Tr, Scope::Table) {
+        super::helpers_tables::lemma_pop_while_all(p);
+        let p1 = clear_stack_back_to_table_row_context(p);
+        super::helpers_tables::lemma_scope_witness_all(p.open);
+        let j = super::helpers_tables::scope_witness(p.open, p.open.len() as int, |e: Elem| is_html(e, Tag::Tr), Scope::Table);
+        assert(0 <= j < p.open.len());
+        assert(p1.open.len() > j);
+        super::helpers_ranking::lemma_template_count_prefix(p, p1);
+        super::helpers_ranking::lemma_pop(p1);
+        let q = Parser { mode: Mode::InTableBody, ..pop(p1) };
+        super::helpers_ranking::lemma_modes_ok_from(p, q);
+        assert(mode_in_row(env, p, t) is Done || mode_in_row(env, p, t) == Outcome::Reprocess(q, t));
+    }
+}
+
+/// The other "in row" cases: handled, or using the "in table" rules.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_row_other(env: EncFns, p: Parser, t: Tok)
+    requires
+        modes_ok(p),
+        rules_ok(Rules::Html(Mode::InRow), p),
+        !(((t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
+            || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead || t->Start_0.tag
+            == Tag::Tr)) || (t is End && t->End_0.tag == Tag::Table)) || (t is End && (t->End_0.tag == Tag::Tbody
+            || t->End_0.tag == Tag::Tfoot || t->End_0.tag == Tag::Thead))),
+    ensures
+        edge_ok(Rules::Html(Mode::InRow), p, t, mode_in_row(env, p, t)),
+{
+    hide(insert_html_element);
+    hide(clear_stack_back_to_table_row_context);
+    hide(pop);
+    hide(push_marker);
+    let o = mode_in_row(env, p, t);
+    assert(o is Done || o == Outcome::Using(Mode::InTable, p, t));
 }
 
 /// The edges of the "in cell" mode are ranked.
@@ -274,6 +394,7 @@ pub proof fn lemma_in_cell_edges(env: EncFns, p: Parser, t: Tok)
     // 2., 4. Close the cell and reprocess in row: G kept, L kept or lower,
     // order 17 to 15.
     super::helpers_tables::lemma_close_the_cell(p);
+    super::helpers_ranking::lemma_modes_ok_from(p, close_the_cell(p));
 }
 
 /// The edges of the "in template" mode are ranked.
@@ -290,52 +411,87 @@ pub proof fn lemma_in_template_edges(env: EncFns, p: Parser, t: Tok)
         || t->Start_0.tag == Tag::Script || t->Start_0.tag == Tag::Style || t->Start_0.tag == Tag::Template
         || t->Start_0.tag == Tag::Title)) || (t is End && t->End_0.tag == Tag::Template) {
     } else if t is Start {
-        // 3. to 7. Switch the current template insertion mode: T kept, G
-        // lower or kept with the order 19 to 15 or lower.
-        // GAP: an empty stack of template insertion modes.
-        assert(p.template_modes.len() > 0);
-        let m = if t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Colgroup || t->Start_0.tag == Tag::Tbody
-            || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead {
-            Mode::InTable
-        } else if t->Start_0.tag == Tag::Col {
-            Mode::InColumnGroup
-        } else if t->Start_0.tag == Tag::Tr {
-            Mode::InTableBody
-        } else if t->Start_0.tag == Tag::Td || t->Start_0.tag == Tag::Th {
-            Mode::InRow
-        } else {
-            Mode::InBody
-        };
-        assert(mode_in_template(env, p, t) == in_template_switch(p, t, m));
-        let s = p.template_modes.drop_last().push(m);
-        assert(s.len() == p.template_modes.len());
-        assert forall|i: int| 0 <= i < s.len() implies template_mode_ok(#[trigger] s[i]) by {
-            if i < s.len() - 1 {
-                assert(s[i] == p.template_modes[i]);
-            }
-        }
+        lemma_in_template_switch(env, p, t);
     } else if t is End {
     } else if open_has_html(p, Tag::Template) {
-        // 9. End of file: pop to the template and pop the template insertion
-        // mode (T lower), reset.
-        assert(p.open.len() > 0);
-        // GAP: an empty stack of template insertion modes.
-        assert(p.template_modes.len() > 0);
-        super::helpers_tables::lemma_pop_until_popped(p, Tag::Template);
-        let p1 = pop_until_popped(p, Tag::Template);
-        super::helpers_tables::lemma_clear_to_last_marker(p1);
-        let p2 = clear_to_last_marker(p1);
-        let p3 = Parser { template_modes: p2.template_modes.drop_last(), ..p2 };
-        let s = p3.template_modes;
-        assert(s.len() == p.template_modes.len() - 1);
-        assert forall|i: int| 0 <= i < s.len() implies template_mode_ok(#[trigger] s[i]) by {
+        lemma_in_template_eof(env, p, t);
+    }
+}
+
+/// "in template" cases 3 to 7: switch the current template insertion mode
+/// (T kept, the stack of template modes non-empty by [`rules_ok`]), G
+/// lower or kept with the order 19 to 15 or lower.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_template_switch(env: EncFns, p: Parser, t: Tok)
+    requires
+        modes_ok(p),
+        rules_ok(Rules::Html(Mode::InTemplate), p),
+        t is Start,
+        !(t->Start_0.tag == Tag::Base || t->Start_0.tag == Tag::Basefont || t->Start_0.tag == Tag::Bgsound || t->Start_0.tag
+            == Tag::Link || t->Start_0.tag == Tag::Meta || t->Start_0.tag == Tag::Noframes || t->Start_0.tag == Tag::Script
+            || t->Start_0.tag == Tag::Style || t->Start_0.tag == Tag::Template || t->Start_0.tag == Tag::Title),
+    ensures
+        edge_ok(Rules::Html(Mode::InTemplate), p, t, mode_in_template(env, p, t)),
+{
+    assert(p.template_modes.len() > 0);
+    let m = if t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Colgroup || t->Start_0.tag == Tag::Tbody
+        || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag == Tag::Thead {
+        Mode::InTable
+    } else if t->Start_0.tag == Tag::Col {
+        Mode::InColumnGroup
+    } else if t->Start_0.tag == Tag::Tr {
+        Mode::InTableBody
+    } else if t->Start_0.tag == Tag::Td || t->Start_0.tag == Tag::Th {
+        Mode::InRow
+    } else {
+        Mode::InBody
+    };
+    assert(mode_in_template(env, p, t) == in_template_switch(p, t, m));
+    let s = p.template_modes.drop_last().push(m);
+    let q = Parser { template_modes: s, mode: m, ..p };
+    assert(s.len() == p.template_modes.len());
+    assert forall|i: int| 0 <= i < s.len() implies template_mode_ok(#[trigger] s[i]) by {
+        if i < s.len() - 1 {
             assert(s[i] == p.template_modes[i]);
         }
-        // GAP: reset with an empty stack of template insertion modes.
-        assert(super::helpers_tables::template_reset_ok(p3));
-        super::helpers_tables::lemma_reset_from(p3, p3.open.len() - 1);
-        lemma_components_bounded(Rules::Html(reset_insertion_mode(p3).mode), t);
     }
+    assert(template_count(q) == template_count(p));
+    assert(formatting_ok(q));
+    assert(modes_ok(q));
+}
+
+/// "in template" case 9, end of file with a `template` element on the
+/// stack: pop to it (a `template` element fewer) and pop the template
+/// insertion mode (T lower), then reset.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_template_eof(env: EncFns, p: Parser, t: Tok)
+    requires
+        modes_ok(p),
+        rules_ok(Rules::Html(Mode::InTemplate), p),
+        t is Eof,
+        open_has_html(p, Tag::Template),
+    ensures
+        edge_ok(Rules::Html(Mode::InTemplate), p, t, mode_in_template(env, p, t)),
+{
+    assert(p.template_modes.len() > 0);
+    let j = super::helpers_ranking::lemma_open_has_html(p, Tag::Template);
+    super::helpers_ranking::lemma_pop_until_template(p, j);
+    super::helpers_tables::lemma_pop_until_popped(p, Tag::Template);
+    let p1 = pop_until_popped(p, Tag::Template);
+    super::helpers_ranking::lemma_clear_to_last_marker(p1);
+    let p2 = clear_to_last_marker(p1);
+    let p3 = Parser { template_modes: p2.template_modes.drop_last(), ..p2 };
+    let s = p3.template_modes;
+    assert(s.len() == p.template_modes.len() - 1);
+    assert forall|i: int| 0 <= i < s.len() implies template_mode_ok(#[trigger] s[i]) by {
+        assert(s[i] == p.template_modes[i]);
+    }
+    assert(template_count(p3) + 1 <= template_count(p));
+    assert(super::helpers_ranking::count_ok(p3));
+    super::helpers_ranking::lemma_reset_modes_ok(p3);
+    let q = reset_insertion_mode(p3);
+    assert(mode_in_template(env, p, t) == Outcome::Reprocess(q, t));
+    super::helpers_tables::lemma_growth_le_4(q.mode, t);
 }
 
 } // verus!
