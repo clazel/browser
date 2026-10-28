@@ -46,7 +46,13 @@ fn local_name(a: &Arena, n: usize) -> Vec<u32> {
 fn builds_and_edits_a_small_tree() {
     let mut a = Arena::new(s("about:blank"));
     assert_eq!(a.len(), 1);
-    assert!(matches!(a.kind(0), ExecKind::Document { mode: DocumentMode::NoQuirks, .. }));
+    assert!(matches!(
+        a.kind(0),
+        ExecKind::Document {
+            mode: DocumentMode::NoQuirks,
+            ..
+        }
+    ));
 
     let html = create(&mut a, element("html"));
     let head = create(&mut a, element("head"));
@@ -101,11 +107,22 @@ fn builds_and_edits_a_small_tree() {
     // Attributes and the document's mode.
     a.append_attribute(
         b,
-        ExecAttr { namespace: None, prefix: None, local_name: s("class"), value: s("x") },
+        ExecAttr {
+            namespace: None,
+            prefix: None,
+            local_name: s("class"),
+            value: s("x"),
+        },
     );
     assert!(matches!(a.kind(b), ExecKind::Element { attributes, .. } if attributes.len() == 1));
     a.set_mode(DocumentMode::Quirks);
-    assert!(matches!(a.kind(0), ExecKind::Document { mode: DocumentMode::Quirks, .. }));
+    assert!(matches!(
+        a.kind(0),
+        ExecKind::Document {
+            mode: DocumentMode::Quirks,
+            ..
+        }
+    ));
     assert_eq!(a.wrapper(b), None);
 }
 
@@ -118,7 +135,9 @@ fn reparent_children_moves_all_in_order() {
     a.append(0, from);
     let kept = create(&mut a, text("0"));
     a.append(to, kept);
-    let kids: Vec<usize> = (0..5).map(|i| create(&mut a, text(&i.to_string()))).collect();
+    let kids: Vec<usize> = (0..5)
+        .map(|i| create(&mut a, text(&i.to_string())))
+        .collect();
     for &k in &kids {
         a.append(from, k);
     }
@@ -142,9 +161,7 @@ fn template_contents() {
     assert!(f.is_some(), "the node limit is far away");
     let f = f.unwrap_or_default();
     assert!(matches!(a.kind(f), ExecKind::DocumentFragment { host: Some(h) } if *h == t));
-    assert!(
-        matches!(a.kind(t), ExecKind::Element { template_contents: Some(c), .. } if *c == f)
-    );
+    assert!(matches!(a.kind(t), ExecKind::Element { template_contents: Some(c), .. } if *c == f));
     assert!(a.children(t).is_empty());
     assert_eq!(a.parent(f), None);
     let x = create(&mut a, text("x"));
