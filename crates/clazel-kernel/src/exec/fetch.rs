@@ -1,134 +1,66 @@
 //! The exec counterpart of [`crate::spec::FetchFns`] (item 3.7): a trait whose
-//! method is proven equal to the spec's `run`, so the kernel's proof holds
-//! for any implementation and never unfolds the HTTP client. [`StubFetch`] is
-//! the stand-in ([`crate::fetch::stub_fetch`]) the shipped kernel runs with
-//! until item 3.6's transducer is joined.
+//! methods are proven equal to the spec's, so the kernel's proof holds for any
+//! implementation and never unfolds the HTTP client or the URL parser. The
+//! shipped kernel runs with `real_urls::RealFetch`, joined to `clazel-fetch`'s
+//! `RealHttp` and `RealUrls`.
 //!
-//! The records are the exec forms of what a fetch gives: a result, and the
-//! `Set-Cookie` lines of its responses with the request each answers (the
-//! exec request URL and context of `clazel-cookie`, the same the kernel's
-//! cookie calls use).
+//! The kernel steps the transducer of `clazel-fetch` itself, so the trait
+//! hands out that crate's exec parameters (`H` and `U`) and adds the one
+//! function the transducer does not have: the parser of a navigation URL.
 
 #[allow(unused_imports)]
 use super::spec::*;
-use clazel_cookie::storage::exec::{RequestContextRecord, RequestUrlRecord};
-use clazel_url::host::record::copy;
+use clazel_fetch::transducer::contract::{HttpFnsExec, UrlFnsExec};
+use clazel_url::url::record::ParsedUrl;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
 
-/// What the network shell reports, viewed as [`NetOutcome`].
-pub struct NetOutcomeRecord {
-    /// The URL the fetch was started for.
-    pub url: Vec<u32>,
-    /// What the network delivered.
-    pub net: Vec<u8>,
-}
-
-impl View for NetOutcomeRecord {
-    type V = NetOutcome;
-
-    open spec fn view(&self) -> NetOutcome {
-        NetOutcome { url: self.url@, net: self.net@ }
-    }
-}
-
-/// How a fetch ended, viewed as [`FetchResult`].
-pub enum FetchResultRecord {
-    /// The response: the final URL and the body.
-    Done {
-        /// The final URL.
-        url: Vec<u32>,
-        /// The body.
-        body: Vec<u8>,
-    },
-    /// The fetch failed.
-    Failed,
-}
-
-impl View for FetchResultRecord {
-    type V = FetchResult;
-
-    open spec fn view(&self) -> FetchResult {
-        match self {
-            FetchResultRecord::Done { url, body } => FetchResult::Done { url: url@, body: body@ },
-            FetchResultRecord::Failed => FetchResult::Failed,
-        }
-    }
-}
-
-/// One `Set-Cookie` line of a response and the request it answers, viewed as
-/// [`HttpStore`].
-pub struct HttpStoreRecord {
-    /// The `Set-Cookie` field value.
-    pub line: Vec<u8>,
-    /// The request's URL (scheme, canonical host and path).
-    pub url: RequestUrlRecord,
-    /// The request's context.
-    pub ctx: RequestContextRecord,
-}
-
-impl View for HttpStoreRecord {
-    type V = HttpStore;
-
-    open spec fn view(&self) -> HttpStore {
-        HttpStore { line: self.line@, url: self.url@, ctx: self.ctx@ }
-    }
-}
-
-/// The view of a list of stores.
-pub open spec fn stores_view(v: Seq<HttpStoreRecord>) -> Seq<HttpStore> {
-    v.map_values(|s: HttpStoreRecord| s@)
-}
-
-/// What running a fetch gives, viewed as [`FetchRun`].
-pub struct FetchRunRecord {
-    /// How it ended.
-    pub result: FetchResultRecord,
-    /// The `Set-Cookie` lines of the responses of the chain.
-    pub stores: Vec<HttpStoreRecord>,
-}
-
-impl View for FetchRunRecord {
-    type V = FetchRun;
-
-    open spec fn view(&self) -> FetchRun {
-        FetchRun { result: self.result@, stores: stores_view(self.stores@) }
-    }
-}
-
-/// The fetch of the kernel: an exec function whose result is that of the
-/// spec function of [`FetchFnsExec::fetch`].
+/// The transducer's parameters of the kernel, executable: each is proven
+/// equal to the spec of [`FetchFnsExec::fetch`].
 pub trait FetchFnsExec {
-    /// The spec the method implements.
+    /// The response parser.
+    type H: HttpFnsExec;
+    /// The URL-side functions.
+    type U: UrlFnsExec;
+
+    /// The spec the methods implement.
     spec fn fetch(&self) -> FetchFns;
 
-    /// [`FetchFns::run`].
-    fn run(&self, url: &[u32], net: &[u8]) -> (r: FetchRunRecord)
+    /// What a navigation's transducer state keeps between steps: the
+    /// parser invariant of [`FetchFnsExec::http_fns`]
+    /// (`clazel_fetch::transducer::contract::state_ok`), stated without an
+    /// instance so that the kernel's state invariant is a spec.
+    spec fn nav_ok(s: &clazel_fetch::transducer::types::StateBuf) -> bool;
+
+    /// A state that is not reading keeps it, whatever the parser (as every
+    /// state `start` gives).
+    proof fn nav_ok_idle(s: &clazel_fetch::transducer::types::StateBuf)
+        requires
+            !(s.phase is Reading),
         ensures
-            r@ == (self.fetch().run)(url@, net@),
+            Self::nav_ok(s),
     ;
-}
 
-/// The stand-in fetch: the octets are the body of a document at the URL
-/// asked for ([`crate::fetch::stub_fetch`]).
-pub struct StubFetch;
+    /// The HTTP functions: [`FetchFns::http`].
+    fn http_fns(&self) -> (r: &Self::H)
+        ensures
+            r.http() == self.fetch().http,
+            forall|s: &clazel_fetch::transducer::types::StateBuf| #[trigger] clazel_fetch::transducer::contract::state_ok(r, s) == Self::nav_ok(s),
+    ;
 
-impl FetchFnsExec for StubFetch {
-    open spec fn fetch(&self) -> FetchFns {
-        crate::fetch::stub_fetch()
-    }
+    /// The URL functions of the transducer: [`FetchFns::urls`].
+    fn url_fns(&self) -> (r: &Self::U)
+        ensures
+            r.urls() == self.fetch().urls,
+    ;
 
-    fn run(&self, url: &[u32], net: &[u8]) -> (r: FetchRunRecord) {
-        let body = vstd::slice::slice_to_vec(net);
-        let stores: Vec<HttpStoreRecord> = Vec::new();
-        let r = FetchRunRecord { result: FetchResultRecord::Done { url: copy(url), body }, stores };
-        proof {
-            assert(stores_view(r.stores@) =~= Seq::<HttpStore>::empty());
-        }
-        r
-    }
+    /// [`FetchFns::parse`].
+    fn parse(&self, url: &[u32]) -> (r: Option<ParsedUrl>)
+        ensures
+            clazel_url::url::record::opt_url_view(r) == (self.fetch().parse)(url@),
+    ;
 }
 
 } // verus!

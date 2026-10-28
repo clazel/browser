@@ -34,6 +34,7 @@ name = "clazel"
 version = "0.0.0"
 dependencies = [
  "clazel-cookie",
+ "clazel-fetch",
  "clazel-ipc",
  "clazel-kernel",
  "clazel-net",
@@ -136,6 +137,8 @@ version = "0.0.0"
 dependencies = [
  "clazel-cookie",
  "clazel-encoding",
+ "clazel-fetch",
+ "clazel-http",
  "clazel-ipc",
  "clazel-origin",
  "clazel-psl",

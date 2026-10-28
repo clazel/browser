@@ -5,9 +5,10 @@
 //! - [`urls`]: [`urls::UrlFnsExec`], the exec counterpart of
 //!   [`crate::spec::UrlFns`].
 //! - [`real_urls`]: [`real_urls::RealUrls`], the URL functions with the real
-//!   parser (item 2.13), and [`real_urls::step_real`], `step` with them.
+//!   parser (item 2.13), [`real_urls::RealFetch`], the transducer's real
+//!   functions (item 3.7), and [`real_urls::step_real`], `step` with them.
 //! - [`fetch`]: [`fetch::FetchFnsExec`], the exec counterpart of
-//!   [`crate::spec::FetchFns`] (item 3.7), and the stand-in [`fetch::StubFetch`].
+//!   [`crate::spec::FetchFns`] (item 3.7).
 //! - [`locks`]: locks, cookie-averse documents and cookie requests.
 //! - [`frames`]: the frames sent to renderers.
 //! - [`storage`]: Web Storage over the exec buckets.

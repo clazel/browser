@@ -8,7 +8,7 @@
 //! not proven equal to anything; it is gone.)
 
 use clazel_ipc::message::codec::{Msg, decode_framed, encode_framed};
-use clazel_kernel::exec::real_urls::step_real;
+use clazel_kernel::exec::real_urls::{RealFetch, step_real};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
 
 /// The code points of a string.
@@ -27,8 +27,13 @@ pub enum Out {
     Spawn(u64),
     /// A renderer killed.
     Kill(u64),
-    /// The kernel asked for a URL to be fetched for a tab.
-    Fetch(u64, Vec<u32>),
+    /// The kernel asked for connection `conn` to `host:port` (the TLS flag
+    /// last).
+    Connect(u64, Vec<u8>, u64, bool),
+    /// The kernel wrote these octets to connection `conn`.
+    Send(u64, Vec<u8>),
+    /// The kernel closed connection `conn`.
+    Close(u64),
 }
 
 /// The exec kernel, driven as the host shell would.
@@ -41,7 +46,7 @@ impl Kernel {
     /// A kernel before anything happens.
     pub fn new() -> Self {
         Self {
-            state: Some(init_record()),
+            state: Some(init_record::<RealFetch>()),
         }
     }
 
@@ -61,7 +66,14 @@ impl Kernel {
                 },
                 OutputRecord::Spawn { id } => Out::Spawn(id),
                 OutputRecord::Kill { id } => Out::Kill(id),
-                OutputRecord::Fetch { tab, url } => Out::Fetch(tab, url),
+                OutputRecord::Connect {
+                    conn,
+                    host,
+                    port,
+                    tls,
+                } => Out::Connect(conn, host, port, tls),
+                OutputRecord::Send { conn, bytes } => Out::Send(conn, bytes),
+                OutputRecord::Close { conn } => Out::Close(conn),
             })
             .collect()
     }
