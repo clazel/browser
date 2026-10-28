@@ -6,5 +6,9 @@
 //! `docs/VERIFICATION.md`.
 //!
 //! - [`spec`]: the transcription, split by section and insertion mode.
+//! - [`invariant`]: `parser_wf`, the invariant of reachable parser states.
+//! - [`contract`]: what the executable parser is proven to satisfy.
 
+pub mod contract;
+pub mod invariant;
 pub mod spec;
