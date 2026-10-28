@@ -8,6 +8,7 @@
 //! node" needs the stack rooted at an `html` element ([`stack_rooted`]) or
 //! the parser stopped; a given insertion location must be [`loc_ok`].
 
+use super::formatting::fmt_on_stack_exec;
 #[cfg(verus_only)]
 use super::frame::*;
 use super::names::*;
@@ -933,4 +934,578 @@ pub fn insert_html_element_exec(p: &mut ParserBuf, t: &ExecTagTok) -> (r: ExecEl
     insert_foreign_element_exec(p, t, Namespace::Html)
 }
 
+// ---------------------------------------------------------------------
+// Attribute adjustments (§13.2.6.1), in place
+
+/// A placeholder attribute (no allocation), to swap one out of a list.
+fn placeholder_attr() -> (r: ExecAttr) {
+    ExecAttr { namespace: None, prefix: None, local_name: Vec::new(), value: Vec::new() }
+}
+
+/// "adjust MathML attributes for a token" ([`adjust_mathml_attributes`]).
+pub fn adjust_mathml_attributes_exec(t: &mut ExecTagTok)
+    ensures
+        final(t)@ == adjust_mathml_attributes(old(t)@),
+{
+    let ghost t0 = t@;
+    let ghost a0 = t.attrs@;
+    let from: &[u32] = &[0x64u32, 0x65, 0x66, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x75, 0x72, 0x6c];
+    proof {
+        assert(from@ =~= name_definitionurl());
+    }
+    let n = t.attrs.len();
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            n == t.attrs@.len(),
+            n == a0.len(),
+            i <= n,
+            from@ == name_definitionurl(),
+            t.name@ == t0.name,
+            t.tag == t0.tag,
+            t.self_closing == t0.self_closing,
+            t0 == old(t)@,
+            t0.attrs == clazel_dom::exec::attrs_view(a0),
+            forall|j: int| 0 <= j < i ==> (#[trigger] t.attrs@[j])@ == adjust_mathml_attributes(t0).attrs[j],
+            forall|j: int| i <= j < n ==> #[trigger] t.attrs@[j] == a0[j],
+        decreases n - i,
+    {
+        let mut a = placeholder_attr();
+        t.attrs.set_and_swap(i, &mut a);
+        if a.namespace.is_none() && u32s_eq(a.local_name.as_slice(), from) {
+            let v = vec![0x64u32, 0x65, 0x66, 0x69, 0x6e, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x55, 0x52, 0x4c];
+            proof {
+                assert(v@ =~= name_definition_url());
+            }
+            a.local_name = v;
+        }
+        t.attrs.set(i, a);
+        // Never saturates: i < n.
+        i = i.saturating_add(1);
+    }
+    proof {
+        assert(clazel_dom::exec::attrs_view(t.attrs@) =~= adjust_mathml_attributes(t0).attrs);
+    }
+}
+
+/// "adjust SVG attributes for a token" ([`adjust_svg_attributes`]).
+pub fn adjust_svg_attributes_exec(t: &mut ExecTagTok)
+    ensures
+        final(t)@ == adjust_svg_attributes(old(t)@),
+{
+    let ghost t0 = t@;
+    let ghost a0 = t.attrs@;
+    let n = t.attrs.len();
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            n == t.attrs@.len(),
+            n == a0.len(),
+            i <= n,
+            t.name@ == t0.name,
+            t.tag == t0.tag,
+            t.self_closing == t0.self_closing,
+            t0 == old(t)@,
+            t0.attrs == clazel_dom::exec::attrs_view(a0),
+            forall|j: int| 0 <= j < i ==> (#[trigger] t.attrs@[j])@ == adjust_svg_attributes(t0).attrs[j],
+            forall|j: int| i <= j < n ==> #[trigger] t.attrs@[j] == a0[j],
+        decreases n - i,
+    {
+        let mut a = placeholder_attr();
+        t.attrs.set_and_swap(i, &mut a);
+        let mapped = if a.namespace.is_none() {
+            svg_attribute_name_exec(a.local_name.as_slice())
+        } else {
+            None
+        };
+        if let Some(v) = mapped {
+            a.local_name = v;
+        }
+        t.attrs.set(i, a);
+        // Never saturates: i < n.
+        i = i.saturating_add(1);
+    }
+    proof {
+        assert(clazel_dom::exec::attrs_view(t.attrs@) =~= adjust_svg_attributes(t0).attrs);
+    }
+}
+
+/// "adjust foreign attributes for a token" ([`adjust_foreign_attributes`]).
+pub fn adjust_foreign_attributes_exec(t: &mut ExecTagTok)
+    ensures
+        final(t)@ == adjust_foreign_attributes(old(t)@),
+{
+    let ghost t0 = t@;
+    let ghost a0 = t.attrs@;
+    let n = t.attrs.len();
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            n == t.attrs@.len(),
+            n == a0.len(),
+            i <= n,
+            t.name@ == t0.name,
+            t.tag == t0.tag,
+            t.self_closing == t0.self_closing,
+            t0 == old(t)@,
+            t0.attrs == clazel_dom::exec::attrs_view(a0),
+            forall|j: int| 0 <= j < i ==> (#[trigger] t.attrs@[j])@ == adjust_foreign_attributes(t0).attrs[j],
+            forall|j: int| i <= j < n ==> #[trigger] t.attrs@[j] == a0[j],
+        decreases n - i,
+    {
+        let mut a = placeholder_attr();
+        t.attrs.set_and_swap(i, &mut a);
+        let row = if a.namespace.is_none() {
+            foreign_attribute_exec(a.local_name.as_slice())
+        } else {
+            None
+        };
+        if let Some((prefix, local, ns)) = row {
+            a = ExecAttr { namespace: Some(ns), prefix, local_name: local, value: a.value };
+        }
+        t.attrs.set(i, a);
+        // Never saturates: i < n.
+        i = i.saturating_add(1);
+    }
+    proof {
+        assert(clazel_dom::exec::attrs_view(t.attrs@) =~= adjust_foreign_attributes(t0).attrs);
+    }
+}
+
+// ---------------------------------------------------------------------
+// Inserting characters, comments and processing instructions
+
+/// The insertion location (the Document object, null)
+/// ([`document_location`]).
+pub fn document_location_exec() -> (r: Location)
+    ensures
+        r == document_location(),
+{
+    Location { parent: 0, child: None }
+}
+
+/// (The Document object, null) is [`loc_ok`].
+pub proof fn lemma_document_location_ok(p: Parser)
+    requires
+        parser_inv(p),
+    ensures
+        loc_ok(p.doc, document_location()),
+{
+    lemma_inv_iff(p);
+    lemma_wf_nonempty(p.doc);
+}
+
+/// Create a node of kind `k` and insert it at `l` (the last two steps of
+/// "insert a character", "insert a comment" and "insert a processing
+/// instruction").
+pub open spec fn create_insert(p: Parser, k: NodeKind, l: Location) -> Parser {
+    let (p1, n) = create(p, k);
+    dom_insert(p1, n, l.parent, l.child)
+}
+
+/// [`create_insert`].
+pub fn create_insert_exec(p: &mut ParserBuf, k: ExecKind, l: Location)
+    requires
+        parser_inv(old(p)@),
+        dom::creatable(old(p)@.doc, k@),
+        loc_ok(old(p)@.doc, l),
+    ensures
+        final(p)@ == create_insert(old(p)@, k@, l),
+        parser_inv(final(p)@),
+        same_but_tree(old(p)@, final(p)@),
+{
+    let ghost p0 = p@;
+    let n = create_exec(p, k);
+    proof {
+        lemma_loc_ok_extends(p0.doc, p@.doc, l);
+    }
+    dom_insert_exec(p, n, l.parent, l.child);
+}
+
+/// "insert a character" from step 3, at the location `loc` step 2 gave.
+pub open spec fn chars_at(p: Parser, data: Seq<u32>, loc: Location) -> Parser {
+    let doc = p.doc;
+    if p.stopped || doc.nodes[loc.parent as int].kind is Document {
+        p
+    } else {
+        let prev = match loc.child {
+            Some(c) => dom::previous_sibling(doc, c),
+            None => dom::last_child(doc, loc.parent),
+        };
+        match prev {
+            Some(s) if dom::valid(doc, s) && doc.nodes[s as int].kind is Text => Parser { doc: dom::append_data(doc, s, data), ..p },
+            _ => create_insert(p, NodeKind::Text { data }, loc),
+        }
+    }
+}
+
+/// [`insert_characters`] is [`chars_at`] the adjusted insertion location.
+proof fn lemma_chars_at(p: Parser, data: Seq<u32>)
+    ensures
+        insert_characters(p, data) == chars_at(p, data, adjusted_location(p, None)),
+{
+}
+
+/// [`chars_at`].
+fn chars_at_exec(p: &mut ParserBuf, data: &[u32], loc: Location)
+    requires
+        parser_inv(old(p)@),
+        !old(p)@.stopped,
+        loc_ok(old(p)@.doc, loc),
+    ensures
+        final(p)@ == chars_at(old(p)@, data@, loc),
+        parser_inv(final(p)@),
+        same_but_tree(old(p)@, final(p)@),
+{
+    // 3.
+    if matches!(p.arena.kind(loc.parent), ExecKind::Document { .. }) {
+        return ;
+    }
+    proof {
+        lemma_inv_iff(old(p)@);
+    }
+    // 4.
+    let prev = match loc.child {
+        Some(c) => p.arena.previous_sibling(c),
+        None => p.arena.last_child(loc.parent),
+    };
+    // 5.
+    let text_prev = match prev {
+        Some(s) if s < p.arena.len() && matches!(p.arena.kind(s), ExecKind::Text { .. }) => Some(s),
+        _ => None,
+    };
+    if let Some(s) = text_prev {
+        proof {
+            lemma_append_data_extends(old(p)@.doc, s, data@);
+        }
+        p.arena.append_data(s, data);
+        proof {
+            lemma_inv_doc(old(p)@, p@.doc);
+        }
+        return ;
+    }
+    create_insert_exec(p, ExecKind::Text { data: copy_str(data) }, loc);
+}
+
+/// §13.2.6.1 "insert a character" with the characters `data`
+/// ([`insert_characters`]).
+pub fn insert_characters_exec(p: &mut ParserBuf, data: &[u32])
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+    ensures
+        final(p)@ == insert_characters(old(p)@, data@),
+        parser_inv(final(p)@),
+        same_but_tree(old(p)@, final(p)@),
+{
+    proof {
+        lemma_chars_at(old(p)@, data@);
+    }
+    if p.stopped {
+        return ;
+    }
+    // 2.
+    let loc = adjusted_location_exec(p, None);
+    chars_at_exec(p, data, loc);
+}
+
+/// "insert a character" for one character ([`insert_char`]).
+pub fn insert_char_exec(p: &mut ParserBuf, c: u32)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+    ensures
+        final(p)@ == insert_char(old(p)@, c),
+        parser_inv(final(p)@),
+        same_but_tree(old(p)@, final(p)@),
+{
+    let a = [c];
+    proof {
+        assert(a@ =~= seq![c]);
+    }
+    insert_characters_exec(p, a.as_slice());
+}
+
+/// §13.2.6.1 "insert a comment" ([`insert_comment`]), moving `data`.
+pub fn insert_comment_exec(p: &mut ParserBuf, data: Vec<u32>, loc: Option<Location>)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || match loc {
+            Some(l) => loc_ok(old(p)@.doc, l),
+            None => stack_rooted(old(p)@),
+        },
+    ensures
+        final(p)@ == insert_comment(old(p)@, data@, loc),
+        parser_inv(final(p)@),
+        same_but_tree(old(p)@, final(p)@),
+{
+    if p.stopped {
+        return ;
+    }
+    // 3.
+    let l = adjusted_location_exec(p, loc);
+    let ghost p0 = p@;
+    // 4.
+    let c = create_exec(p, ExecKind::Comment { data });
+    proof {
+        lemma_loc_ok_extends(p0.doc, p@.doc, l);
+    }
+    // 5.
+    dom_insert_exec(p, c, l.parent, l.child);
+}
+
+/// §13.2.6.1 "insert a processing instruction" ([`insert_pi`]), moving
+/// `target` and `data`.
+pub fn insert_pi_exec(p: &mut ParserBuf, target: Vec<u32>, data: Vec<u32>, loc: Option<Location>)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || match loc {
+            Some(l) => loc_ok(old(p)@.doc, l),
+            None => stack_rooted(old(p)@),
+        },
+    ensures
+        final(p)@ == insert_pi(old(p)@, target@, data@, loc),
+        parser_inv(final(p)@),
+        same_but_tree(old(p)@, final(p)@),
+{
+    if p.stopped {
+        return ;
+    }
+    // 4.
+    let l = adjusted_location_exec(p, loc);
+    let ghost p0 = p@;
+    // 5.
+    let n = create_exec(p, ExecKind::ProcessingInstruction { target, data });
+    proof {
+        lemma_loc_ok_extends(p0.doc, p@.doc, l);
+    }
+    // 6.
+    dom_insert_exec(p, n, l.parent, l.child);
+}
+
+// ---------------------------------------------------------------------
+// §13.2.6.2 and §13.2.6.3
+
+/// §13.2.6.2 the generic raw text (`rawtext`) or RCDATA element parsing
+/// algorithm ([`generic_text_parsing`]). The current mode must not be
+/// "text" or "in table text" (it becomes the original insertion mode).
+pub fn generic_text_parsing_exec(p: &mut ParserBuf, t: &ExecTagTok, rawtext: bool)
+    requires
+        parser_inv(old(p)@),
+        tok_tagged(t@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+        t@.tag == Tag::Template ==> crate::termination::template_count(old(p)@) < old(p)@.template_modes.len(),
+        old(p)@.mode != Mode::Text && old(p)@.mode != Mode::InTableText,
+    ensures
+        final(p)@ == generic_text_parsing(old(p)@, t@, rawtext),
+        parser_inv(final(p)@),
+{
+    // 1.
+    let _ = insert_html_element_exec(p, t);
+    proof {
+        lemma_inv_iff(old(p)@);
+        lemma_inv_iff(p@);
+    }
+    // 2.
+    p.tokenizer = Some(
+        if rawtext {
+            TokenizerState::Rawtext
+        } else {
+            TokenizerState::Rcdata
+        },
+    );
+    // 3., 4.
+    p.original_mode = copy_mode(&p.mode);
+    p.mode = Mode::Text;
+    proof {
+        lemma_inv_iff(p@);
+    }
+}
+
+/// "generate implied end tags", except for HTML elements named `except`
+/// ([`generate_implied_end_tags`]).
+pub fn generate_implied_end_tags_exec(p: &mut ParserBuf, except: Option<Tag>)
+    requires
+        parser_inv(old(p)@),
+    ensures
+        final(p)@ == generate_implied_end_tags(old(p)@, except),
+        parser_inv(final(p)@),
+{
+    let ghost f = |e: Elem| implied_end_tag(e) && !(except is Some && e.tag == except->Some_0);
+    let pr = ElemPred::ImpliedEnd(except);
+    pop_while_exec(p, &pr, Ghost(f));
+}
+
+/// "generate all implied end tags thoroughly"
+/// ([`generate_all_implied_end_tags_thoroughly`]).
+pub fn generate_all_implied_end_tags_thoroughly_exec(p: &mut ParserBuf)
+    requires
+        parser_inv(old(p)@),
+    ensures
+        final(p)@ == generate_all_implied_end_tags_thoroughly(old(p)@),
+        parser_inv(final(p)@),
+{
+    let ghost f = |e: Elem|
+        e.ns == Namespace::Html && match e.tag {
+            Tag::Caption | Tag::Colgroup | Tag::Dd | Tag::Dt | Tag::Li | Tag::Optgroup | Tag::Option | Tag::P | Tag::Rb | Tag::Rp
+            | Tag::Rt | Tag::Rtc | Tag::Tbody | Tag::Td | Tag::Tfoot | Tag::Th | Tag::Thead | Tag::Tr => true,
+            _ => false,
+        };
+    pop_while_exec(p, &ElemPred::Thoroughly, Ghost(f));
+}
+
+// ---------------------------------------------------------------------
+// §13.2.4.3 reconstruct the active formatting elements
+
+/// The first entry to create ([`reconstruct_rewind`] from `n - 1`).
+fn reconstruct_rewind_exec(p: &ParserBuf, n: usize) -> (r: usize)
+    requires
+        0 < n <= p@.formatting.len(),
+    ensures
+        r as int == reconstruct_rewind(p@, n - 1),
+        r < n,
+{
+    let mut i: usize = n.saturating_sub(1);
+    loop
+        invariant
+            0 < n <= p@.formatting.len(),
+            i < n,
+            reconstruct_rewind(p@, n - 1) == reconstruct_rewind(p@, i as int),
+        decreases i,
+    {
+        // 4.
+        if i == 0 {
+            return 0;
+        }
+        // 5.
+        let e = match p.formatting.get(i.saturating_sub(1)) {
+            Some(e) => e,
+            None => vstd::pervasive::unreached(),
+        };
+        // 6.
+        if !matches!(e, ExecFmt::Marker) && !fmt_on_stack_exec(p, e) {
+            i = i.saturating_sub(1);
+        } else {
+            return i;
+        }
+    }
+}
+
+/// [`reconstruct_create`], hidden so that the loop's context stays small.
+#[verifier::opaque]
+pub open spec fn rc(p: Parser, i: int) -> Parser {
+    reconstruct_create(p, i)
+}
+
+/// One round of steps 8 to 10 of "reconstruct the active formatting
+/// elements" at entry `i`: `true` to go on with entry `i + 1`.
+fn reconstruct_step_exec(p: &mut ParserBuf, i: usize, n: usize) -> (cont: bool)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+        n == old(p)@.formatting.len(),
+        i < n,
+    ensures
+        parser_inv(final(p)@),
+        final(p)@.stopped || stack_rooted(final(p)@),
+        n == final(p)@.formatting.len(),
+        cont ==> i + 1 < n && rc(final(p)@, i + 1) == rc(old(p)@, i as int),
+        !cont ==> final(p)@ == rc(old(p)@, i as int),
+{
+    reveal(rc);
+    if p.stopped {
+        return false;
+    }
+    let token = match p.formatting.get(i) {
+        Some(ExecFmt::Entry { token, .. }) => copy_tagtok(token),
+        _ => return false,
+    };
+    let ghost p0 = p@;
+    proof {
+        lemma_inv_iff(p0);
+        assert(fmt_ok(p0.doc, p0.formatting[i as int]));
+    }
+    // 8.
+    let ne = insert_html_element_exec(p, &token);
+    // 9.
+    if !p.stopped {
+        let ghost p1 = p@;
+        let ghost v = p.formatting@;
+        let ghost x = Fmt::Entry { elem: ne@, token: token@ };
+        p.formatting.set(i, ExecFmt::Entry { elem: ne, token });
+        proof {
+            assert(fmts_view(p.formatting@) =~= fmts_view(v).update(i as int, x));
+            lemma_inv_iff(p1);
+            assert(elem_ok(p1.doc, p1.open[p1.open.len() - 1]));
+            lemma_fmts_update(p1.doc, fmts_view(v), i as int, x);
+            lemma_inv_iff(p@);
+        }
+    }
+    // 10., 7.
+    i.saturating_add(1) < n
+}
+
+/// §13.2.4.3 "reconstruct the active formatting elements"
+/// ([`reconstruct_formatting`]).
+pub fn reconstruct_formatting_exec(p: &mut ParserBuf)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+    ensures
+        final(p)@ == reconstruct_formatting(old(p)@),
+        parser_inv(final(p)@),
+{
+    if p.stopped {
+        return ;
+    }
+    let n = p.formatting.len();
+    // 1.
+    if n == 0 {
+        return ;
+    }
+    // 2.
+    let last = match p.formatting.get(n.saturating_sub(1)) {
+        Some(e) => e,
+        None => vstd::pervasive::unreached(),
+    };
+    if matches!(last, ExecFmt::Marker) || fmt_on_stack_exec(p, last) {
+        return ;
+    }
+    // 3. to 6.
+    let start = reconstruct_rewind_exec(p, n);
+    // 7. to 10.
+    reconstruct_loop_exec(p, start, n);
+    proof {
+        reveal(rc);
+    }
+}
+
+/// Steps 7 to 10 from entry `start` ([`rc`]).
+fn reconstruct_loop_exec(p: &mut ParserBuf, start: usize, n: usize)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+        n == old(p)@.formatting.len(),
+        start < n,
+    ensures
+        final(p)@ == rc(old(p)@, start as int),
+        parser_inv(final(p)@),
+{
+    let mut i = start;
+    loop
+        invariant
+            parser_inv(p@),
+            p@.stopped || stack_rooted(p@),
+            n == p@.formatting.len(),
+            i < n,
+            rc(p@, i as int) == rc(old(p)@, start as int),
+        decreases n - i,
+    {
+        if !reconstruct_step_exec(p, i, n) {
+            return ;
+        }
+        // Never saturates: i + 1 < n.
+        i = i.saturating_add(1);
+    }
+}
 } // verus!
