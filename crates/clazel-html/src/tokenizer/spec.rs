@@ -509,7 +509,9 @@ pub open spec fn ascii_lower(c: u32) -> u32 {
 /// The input from `pos` on starts with `s`, compared ASCII
 /// case-insensitively (`s` is lowercase).
 pub open spec fn starts_with_ci(input: Seq<u32>, pos: nat, s: Seq<u32>) -> bool {
-    pos + s.len() <= input.len() && forall|k: int| 0 <= k < s.len() ==> ascii_lower(#[trigger] input[pos + k]) == s[k]
+    pos + s.len() <= input.len() && input.subrange(pos as int, (pos + s.len()) as int).map_values(
+        |c: u32| ascii_lower(c),
+    ) == s
 }
 
 /// The input from `pos` on starts with `s`, exactly.
@@ -554,7 +556,7 @@ pub open spec fn xml_stylesheet() -> Seq<u32> {
 
 /// `a` and `b` are ASCII case-insensitive matches (`b` is lowercase).
 pub open spec fn eq_ci(a: Seq<u32>, b: Seq<u32>) -> bool {
-    a.len() == b.len() && forall|k: int| 0 <= k < a.len() ==> ascii_lower(#[trigger] a[k]) == b[k]
+    a.map_values(|c: u32| ascii_lower(c)) == b
 }
 
 // ---------------------------------------------------------------------
@@ -711,12 +713,21 @@ pub open spec fn tag_attributes(token: Token) -> Seq<Attribute> {
 /// exact same name, then this is a duplicate-attribute parse error and the
 /// new attribute must be removed from the token."
 pub open spec fn leave_attribute_name(t: Tokenizer) -> Tokenizer {
-    if t.attribute_status is Kept && exists|k: int|
-        0 <= k < tag_attributes(t.current).len() && (#[trigger] tag_attributes(t.current)[k]).name
-            == t.current_attribute.name {
+    if t.attribute_status is Kept && has_attribute_named(tag_attributes(t.current), t.current_attribute.name) {
         Tokenizer { attribute_status: AttributeStatus::Removed, ..t }
     } else {
         t
+    }
+}
+
+/// One of `attributes` has the name `name`.
+pub open spec fn has_attribute_named(attributes: Seq<Attribute>, name: Seq<u32>) -> bool
+    decreases attributes.len(),
+{
+    if attributes.len() == 0 {
+        false
+    } else {
+        attributes.last().name == name || has_attribute_named(attributes.drop_last(), name)
     }
 }
 

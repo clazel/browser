@@ -11,10 +11,12 @@
 //!   [`states_markup`] and [`states_ref`], their shared actions in
 //!   [`actions`].
 //! - [`lemmas`]: facts proven about the spec.
+//! - [`examples`]: inputs evaluated on the spec.
 
 pub mod actions;
 pub mod buffer;
 pub mod contract;
+pub mod examples;
 pub mod lemmas;
 pub mod machine;
 pub mod spec;

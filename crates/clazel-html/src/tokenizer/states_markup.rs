@@ -435,20 +435,24 @@ fn starts_with_ci_exec(input: &[u32], pos: usize, s: &[u32]) -> (r: bool)
     if s.len() > input.len().saturating_sub(pos) {
         return false;
     }
+    let ghost sub = input@.subrange(pos as int, pos + s.len()).map_values(|c: u32| ascii_lower(c));
     let mut k: usize = 0;
     while k < s.len()
         invariant
             k <= s.len(),
             pos + s.len() <= input.len(),
-            forall|j: int| 0 <= j < k ==> ascii_lower(#[trigger] input@[pos + j]) == s@[j],
+            sub == input@.subrange(pos as int, pos + s.len()).map_values(|c: u32| ascii_lower(c)),
+            forall|j: int| 0 <= j < k ==> sub[j] == s@[j],
         decreases s.len() - k,
     {
         // Never saturates: pos + k < input.len().
         if ascii_lower_exec(at32(input, pos.saturating_add(k))) != at32(s, k) {
+            assert(sub[k as int] != s@[k as int]);
             return false;
         }
         k = k.saturating_add(1);
     }
+    assert(sub =~= s@);
     true
 }
 
@@ -470,6 +474,8 @@ pub fn markup_declaration_open_state_exec(
     assert(dashes@ =~= seq![0x2Du32, 0x2D]);
     assert(doctype@ =~= doctype_lower());
     assert(cdata@ =~= cdata_open());
+    assert(dashes@.len() == 2 && doctype@.len() == 7 && cdata@.len() == 7);
+    assert(input@.len() == input.len() as nat);
     if starts_with_exec(input, t.pos, dashes.as_slice()) {
         // Never saturates: two characters follow pos.
         t.pos = t.pos.saturating_add(2);

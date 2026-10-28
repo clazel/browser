@@ -272,29 +272,53 @@ pub fn append_to_attribute_value_exec(t: &mut ExecTokenizer, c: u32, Ghost(st): 
 }
 
 /// Whether one of `attributes` has the name `name`.
-fn has_attribute_named(attributes: &[ExecAttribute], name: &Vec<u32>) -> (r: bool)
+fn has_attribute_named_exec(attributes: &[ExecAttribute], name: &Vec<u32>) -> (r: bool)
     ensures
-        r == exists|k: int| 0 <= k < attributes@.len() && (#[trigger] attributes_view(attributes@)[k]).name == name@,
+        r == has_attribute_named(attributes_view(attributes@), name@),
 {
     let mut i: usize = 0;
+    assert(attributes_view(attributes@).subrange(0, 0) =~= Seq::<Attribute>::empty());
     while i < attributes.len()
         invariant
             i <= attributes.len(),
-            forall|k: int| 0 <= k < i ==> (#[trigger] attributes_view(attributes@)[k]).name != name@,
+            !has_attribute_named(attributes_view(attributes@).subrange(0, i as int), name@),
         decreases attributes.len() - i,
     {
+        let ghost v = attributes_view(attributes@);
+        assert(v.subrange(0, i + 1).drop_last() =~= v.subrange(0, i as int));
         let found = match attributes.get(i) {
             Some(a) => eq_codes(&a.name, name),
             None => false,
         };
         if found {
-            assert(attributes_view(attributes@)[i as int].name == name@);
+            assert(has_attribute_named(v.subrange(0, i + 1), name@));
+            assert(has_attribute_named(v, name@)) by {
+                lemma_has_attribute_named_prefix(v, name@, (i + 1) as int);
+            }
             return true;
         }
         // Never saturates: i < attributes.len().
         i = i.saturating_add(1);
     }
+    assert(attributes_view(attributes@).subrange(0, i as int) =~= attributes_view(attributes@));
     false
+}
+
+/// A name in a prefix of the list is in the list.
+proof fn lemma_has_attribute_named_prefix(v: Seq<Attribute>, name: Seq<u32>, k: int)
+    requires
+        0 <= k <= v.len(),
+        has_attribute_named(v.subrange(0, k), name),
+    ensures
+        has_attribute_named(v, name),
+    decreases v.len() - k,
+{
+    if k < v.len() {
+        assert(v.subrange(0, k + 1).drop_last() =~= v.subrange(0, k));
+        lemma_has_attribute_named_prefix(v, name, k + 1);
+    } else {
+        assert(v.subrange(0, k) =~= v);
+    }
 }
 
 /// [`leave_attribute_name`].
@@ -306,8 +330,8 @@ pub fn leave_attribute_name_exec(t: &mut ExecTokenizer, Ghost(st): Ghost<Tokeniz
 {
     if matches!(t.attribute_status, AttributeStatus::Kept) {
         let dup = match &t.current {
-            ExecToken::StartTag { attributes, .. } => has_attribute_named(attributes, &t.current_attribute.name),
-            ExecToken::EndTag { attributes, .. } => has_attribute_named(attributes, &t.current_attribute.name),
+            ExecToken::StartTag { attributes, .. } => has_attribute_named_exec(attributes, &t.current_attribute.name),
+            ExecToken::EndTag { attributes, .. } => has_attribute_named_exec(attributes, &t.current_attribute.name),
             _ => false,
         };
         assert(tag_attributes(st.current).len() == match t.current {

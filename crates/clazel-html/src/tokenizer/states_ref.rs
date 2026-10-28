@@ -140,7 +140,9 @@ fn eq_ci_exec(a: &Vec<u32>, b: &[u32]) -> (r: bool)
     ensures
         r == eq_ci(a@, b@),
 {
+    let ghost m = a@.map_values(|c: u32| ascii_lower(c));
     if a.len() != b.len() {
+        assert(m.len() != b@.len());
         return false;
     }
     let mut k: usize = 0;
@@ -148,7 +150,8 @@ fn eq_ci_exec(a: &Vec<u32>, b: &[u32]) -> (r: bool)
         invariant
             k <= a.len(),
             a.len() == b.len(),
-            forall|j: int| 0 <= j < k ==> ascii_lower(#[trigger] a@[j]) == b@[j],
+            m == a@.map_values(|c: u32| ascii_lower(c)),
+            forall|j: int| 0 <= j < k ==> m[j] == b@[j],
         decreases a.len() - k,
     {
         let x = at32(a.as_slice(), k);
@@ -159,11 +162,13 @@ fn eq_ci_exec(a: &Vec<u32>, b: &[u32]) -> (r: bool)
             x
         };
         if lower != at32(b, k) {
+            assert(m[k as int] != b@[k as int]);
             return false;
         }
         // Never saturates: k < a.len().
         k = k.saturating_add(1);
     }
+    assert(m =~= b@);
     true
 }
 
