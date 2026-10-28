@@ -194,3 +194,41 @@ it evidently means. Each entry records what we specified instead.
   such issue.
 - **Reported upstream:** not yet (RFC 9110, which obsoletes RFC 7230, already
   states the corrected rule).
+
+## W3C HTML 5.2 §8.2.4.77 multiplies decimal digits by 16
+
+- **Spec:** HTML 5.2, W3C Recommendation, 14 December 2017,
+  <https://www.w3.org/TR/2017/REC-html52-20171214/syntax.html#decimal-character-reference-state>
+  (the second source of `clazel-html`'s independent tokenizer
+  transcription; the living standard is what the crate implements).
+- **Text:** "ASCII digit: Multiply the character reference code by 16. Add
+  a numeric version of the current input character (subtract 0x0030 from
+  the character's code point) to the character reference code."
+- **Problem:** this is the decimal state; read literally, `&#65;` is
+  U+0065 instead of U+0041. The hexadecimal state above it multiplies by
+  16, and the WHATWG text this was forked from, and every browser,
+  multiply by 10 here.
+- **We specify:** nothing new: the crate implements the living standard
+  (§13.2.5.83, "Multiply the character reference code by 10"). The W3C
+  transcription (`crates/clazel-html/src/tokenizer/independent.rs`)
+  keeps the text as written, and the comparison of the two
+  (`tokenizer/agreement.rs`) lists the inputs where this makes them differ.
+  W3C HTML 5.2 is superseded by the living standard.
+- **Reported upstream:** not yet.
+
+## W3C HTML 5.2 §8.2.4.72 matches named references after the current character
+
+- **Spec:** HTML 5.2, W3C Recommendation, 14 December 2017,
+  <https://www.w3.org/TR/2017/REC-html52-20171214/syntax.html#character-reference-state>
+- **Text:** "Consume the next input character: ... Anything else: Consume
+  the maximum number of characters possible, with the consumed characters
+  matching one of the identifiers in the first column of the §8.5 Named
+  character references table".
+- **Problem:** the state has already consumed the next input character;
+  read literally, the match starts after it, so `&amp;` would try to match
+  `mp;`, and on no match the character would be lost.
+- **We specify:** the W3C transcription reads "the consumed characters" as
+  including the current input character (its modelling choice 15). The
+  crate implements the living standard, whose named character reference
+  state reconsumes that character first (§13.2.5.77, §13.2.5.78).
+- **Reported upstream:** not yet.

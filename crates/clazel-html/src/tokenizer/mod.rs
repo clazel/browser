@@ -15,6 +15,7 @@
 //! - [`output`]: `theorem_output_bounded`.
 
 pub mod actions;
+pub mod agreement;
 pub mod buffer;
 pub mod contract;
 pub mod examples;
