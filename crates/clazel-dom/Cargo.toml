@@ -16,6 +16,23 @@ vstd = "=0.0.0-2026-10-04-0306"
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+# Item 4.8's theorems (src/lemmas.rs). `cargo xtask check` fails if one is
+# not defined as a `proof fn` in this crate.
+theorems = [
+    "theorem_new_document_wf",
+    "theorem_create_node_wf",
+    "theorem_create_template_contents_wf",
+    "theorem_insert_wf",
+    "theorem_append_wf",
+    "theorem_insert_before_wf",
+    "theorem_remove_wf",
+    "theorem_reparent_children_wf",
+    "theorem_append_data_wf",
+    "theorem_append_attribute_wf",
+    "theorem_set_mode_wf",
+    "theorem_remove_keeps_record",
+    "theorem_ids_stable",
+]
 
 [package.metadata.verus]
 verify = true

@@ -7,6 +7,9 @@
 //! - [`spec`]: nodes, the arena, `wf`, and the DOM §4.2.3 mutation
 //!   algorithms the parser calls.
 //! - [`contract`]: what the executable arena is proven to satisfy.
+//! - [`lemmas`]: the acyclicity witness is the ancestor chain, and every
+//!   operation keeps `wf` and does what its DOM steps say.
 
 pub mod contract;
+pub mod lemmas;
 pub mod spec;
