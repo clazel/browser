@@ -12,13 +12,16 @@
 //!   [`actions`].
 //! - [`lemmas`]: facts proven about the spec.
 //! - [`examples`]: inputs evaluated on the spec.
+//! - [`output`]: `theorem_output_bounded`.
 
 pub mod actions;
 pub mod buffer;
 pub mod contract;
 pub mod examples;
+pub mod independent;
 pub mod lemmas;
 pub mod machine;
+pub mod output;
 pub mod spec;
 pub mod states_markup;
 pub mod states_ref;
