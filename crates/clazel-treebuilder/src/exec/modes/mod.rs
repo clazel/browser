@@ -5,6 +5,7 @@ pub use crate::spec;
 
 pub mod before_head;
 pub mod before_html;
+pub mod in_head;
 pub mod in_head_noscript;
 pub mod initial;
 pub mod text;
