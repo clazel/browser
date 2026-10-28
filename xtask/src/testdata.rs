@@ -12,6 +12,7 @@
 //! (a full 40-hex commit) and `License:` lines.
 
 mod cbor_appendix_a;
+mod html5lib_tree;
 mod http_state_dates;
 mod http_state_parser;
 mod js;
@@ -44,6 +45,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         "cbor-appendix-a",
         cbor_appendix_a::convert,
         cbor_appendix_a::FILES,
+    ),
+    (
+        "html5lib-tree-construction",
+        html5lib_tree::convert,
+        html5lib_tree::FILES,
     ),
     (
         "http-state-dates",
