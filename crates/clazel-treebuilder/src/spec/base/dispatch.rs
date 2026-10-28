@@ -226,7 +226,8 @@ pub open spec fn parse_steps<S>(env: EncFns, tf: TokFns<S>, s: S, p: Parser, act
     if p.stopped {
         (p, acts)
     } else if n == 0 {
-        let q = stop_parsing(p);
+        // The previous step's actions are already in `acts`.
+        let q = stop_parsing(Parser { actions: seq![], ..p });
         (q, acts + q.actions)
     } else {
         let (s1, token) = (tf.next)(s);
