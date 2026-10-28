@@ -156,12 +156,14 @@ fn template_contents() {
 #[test]
 fn deep_chain() {
     let mut a = Arena::new(s(""));
+    // Miri interprets every step; a shorter chain keeps its run short.
+    let depth: usize = if cfg!(miri) { 300 } else { 100_000 };
     let mut parent = 0;
-    for _ in 0..100_000 {
+    for _ in 0..depth {
         let n = create(&mut a, element("div"));
         a.append(parent, n);
         parent = n;
     }
     assert!(a.is_inclusive_ancestor(0, parent));
-    assert_eq!(a.len(), 100_001);
+    assert_eq!(a.len(), depth.saturating_add(1));
 }
