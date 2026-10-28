@@ -589,14 +589,13 @@ input, each mutated, and 20,000 random inputs: 33,792 agree, 0 differ, 86
 expected differences (inputs with `<?`, which html5gum predates, or lone
 surrogates). 69 inputs are evaluated by Verus on the spec
 (`examples.rs`), visiting every state. `mutations.json` has 118 mutations:
-one or more per state and per character reference rule, 116 `killed` with
-certificates (a tokenizer mutant's tokens differ from an evaluated
-example; `cargo xtask mutate` certified all 116), and 2
-`killed-incidentally` (only the exec proof breaks, which is not coverage):
-the attribute tests of the named character reference and ambiguous
-ampersand states, reached only after a table lookup that Verus cannot
-evaluate inside a run (html5lib's 4,210 `namedEntities.test` cases cover
-them). Tier 2 needs these two certified too. The independent transcription
+one or more per state and per character reference rule, all 118
+`killed` with certificates: a tokenizer mutant's tokens differ from an
+evaluated example, or (for the attribute tests of the named character
+reference and ambiguous ampersand states, which no whole-input example
+Verus can evaluate reaches) contradict a state-level example
+(`state_examples.rs`; the named one proven from the evaluated match and
+its table row evaluated alone). The independent transcription
 (`independent.rs`) is W3C HTML 5.2 §8.2.4, written by a separate agent
 without reading `spec.rs`: 79 states (W3C 5.2 has 79), its own termination
 proof. **Not done:** the general theorem that the two transcriptions agree

@@ -1278,18 +1278,34 @@
     {
       "id": "state-named-character-reference",
       "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::state_examples",
       "find": "            if crate::charref::spec::historical_reasons(consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {",
       "replace": "            if crate::charref::spec::historical_reasons(!consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {",
-      "expect": "killed-incidentally",
-      "reason": "Only the exec proof breaks: the named character reference state's exec function still follows the unmutated text, so it no longer matches the mutated spec function; no theorem about the spec is contradicted, so this is not coverage. The state is reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine), so no evaluated example certifies it. Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row, in and out of attributes) through the proven implementation, and the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
+      "expect": "killed",
+      "reason": "The attribute test of the named character reference state's historical-reasons rule is reversed: `&notit;` in an attribute becomes U+00AC, contradicting lemma_named_in_attribute (proven from the evaluated match of charref::examples and row 1527 evaluated alone).",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "crate::charref::data::ENTITY_CP1_0",
+          "crate::charref::data::ENTITY_CP2_0"
+        ],
+        "lemma": "super::state_examples::lemma_named_in_attribute()",
+        "witness": "crate::charref::spec::entity_code_points(1527) == seq![0xACu32]"
+      }
     },
     {
       "id": "state-ambiguous-ampersand",
       "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::state_examples",
       "find": "            if consumed_as_part_of_attribute(t) {",
       "replace": "            if !consumed_as_part_of_attribute(t) {",
-      "expect": "killed-incidentally",
-      "reason": "Only the exec proof breaks: the ambiguous ampersand state's exec function still follows the unmutated text, so it no longer matches the mutated spec function; no theorem about the spec is contradicted, so this is not coverage. The state is reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine), so no evaluated example certifies it. Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row, in and out of attributes) through the proven implementation, and the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
+      "expect": "killed",
+      "reason": "The attribute test of the ambiguous ampersand state is reversed: an alphanumeric after an unmatched `&` in an attribute is emitted as a character token, contradicting the evaluated lemma_ambiguous_ampersand_in_attribute.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::state_examples::lemma_ambiguous_ampersand_in_attribute()",
+        "witness": "ambiguous_ampersand_state(seq![0x78u32], super::state_examples::in_attribute(State::AmbiguousAmpersand)).1.len() == 1"
+      }
     },
     {
       "id": "state-numeric-character-reference",

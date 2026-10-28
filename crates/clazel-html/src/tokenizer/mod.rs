@@ -12,6 +12,7 @@
 //!   [`actions`].
 //! - [`lemmas`]: facts proven about the spec.
 //! - [`examples`]: inputs evaluated on the spec.
+//! - [`state_examples`]: single states on concrete tokenizers.
 //! - [`output`]: the proof of `theorem_output_bounded`.
 //! - [`independent`]: a second transcription, from W3C HTML 5.2.
 //! - [`agreement`]: the two transcriptions compared on concrete inputs.
@@ -26,6 +27,7 @@ pub mod lemmas;
 pub mod machine;
 pub mod output;
 pub mod spec;
+pub mod state_examples;
 pub mod states_markup;
 pub mod states_ref;
 pub mod states_text;

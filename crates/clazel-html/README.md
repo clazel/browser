@@ -53,9 +53,8 @@ full verification is green on a run with everything below. See the
 - 69 inputs and the standard's character reference examples are evaluated
   by Verus on the spec (`src/tokenizer/examples.rs`,
   `src/charref/examples.rs`); they are what the certified mutation kills
-  contradict (`mutations.json`: 116 of 118 mutations killed with
-  certificates, all certified by `cargo xtask mutate`; 2 are only killed
-  incidentally, which is not coverage, and say why).
+  contradict (`mutations.json`: all 118 mutations killed with
+  certificates).
 - An independent transcription from W3C HTML 5.2 §8.2.4 (`independent.rs`,
   79 states), written without reading `spec.rs`. **Not yet proven:** that
   it agrees with the spec on every input where the texts agree. Verus
