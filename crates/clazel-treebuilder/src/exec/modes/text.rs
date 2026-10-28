@@ -25,6 +25,7 @@ pub fn mode_text_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, t: ExecTok) ->
         parser_inv(final(p)@),
 {
     hide(text_script_end);
+    hide(parser_inv);
     match t {
         ExecTok::Char(c) => {
             // 1.

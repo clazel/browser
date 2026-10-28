@@ -20,6 +20,7 @@ pub fn mode_after_after_body_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, t:
         outcome_view(o, final(p)@) == mode_after_after_body(_env.enc(), old(p)@, t@),
         parser_inv(final(p)@),
 {
+    hide(parser_inv);
     match t {
         ExecTok::Comment(data) => {
             // 1. "Insert a comment given (the Document object, null)."

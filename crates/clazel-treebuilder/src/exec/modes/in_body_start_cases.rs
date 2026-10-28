@@ -410,6 +410,7 @@ pub fn in_body_start_frameset_exec(p: &mut ParserBuf, tt: &ExecTagTok)
 {
     hide(insert_html_element);
     hide(insert_foreign_element);
+    hide(parser_inv);
     if p.open.len() == 1 {
         return ;
     }
@@ -432,6 +433,9 @@ pub fn in_body_start_frameset_exec(p: &mut ParserBuf, tt: &ExecTagTok)
     // 3.
     let _ = insert_html_element_exec(p, tt);
     // 4.
+    proof {
+        lemma_inv_iff(p@);
+    }
     p.mode = Mode::InFrameset;
     proof {
         lemma_inv_iff(p@);
