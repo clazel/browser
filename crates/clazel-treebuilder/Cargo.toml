@@ -18,6 +18,11 @@ clazel-dom = { path = "../clazel-dom" }
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+# Item 4.9's theorems. `cargo xtask check` fails if one is not defined as a
+# `proof fn` in this crate.
+theorems = [
+    "theorem_dispatch_total",
+]
 
 [package.metadata.verus]
 verify = true

@@ -48,10 +48,11 @@ pub open spec fn ids_in_doc(p: Parser) -> bool {
 }
 
 /// The invariant of every reachable parser state: the document is
-/// well formed (`clazel_dom::spec::wf`) and every id of the parse state is a
-/// node of it.
+/// well formed (`clazel_dom::spec::wf`), every id of the parse state is a
+/// node of it, and the modes satisfy `termination::modes_ok` (the
+/// hypothesis of `theorem_dispatch_total`).
 pub open spec fn parser_wf(p: Parser) -> bool {
-    dom::wf(p.doc) && ids_in_doc(p)
+    dom::wf(p.doc) && ids_in_doc(p) && crate::termination::modes_ok(p)
 }
 
 } // verus!
