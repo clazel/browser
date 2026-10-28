@@ -468,4 +468,32 @@ pub proof fn lemma_append_data_extends(doc: Document, n: NodeId, data: Seq<u32>)
     }
 }
 
+/// [`doc_extends`] is transitive.
+pub proof fn lemma_doc_extends_trans(d0: Document, d1: Document, d2: Document)
+    requires
+        doc_extends(d0, d1),
+        doc_extends(d1, d2),
+    ensures
+        doc_extends(d0, d2),
+{
+    assert forall|i: int| 0 <= i < d0.nodes.len() implies kind_kept(d0.nodes[i].kind, #[trigger] d2.nodes[i].kind) by {
+        assert(kind_kept(d0.nodes[i].kind, d1.nodes[i].kind));
+        assert(kind_kept(d1.nodes[i].kind, d2.nodes[i].kind));
+    }
+    assert forall|n: NodeId|
+        dom::valid(d2, n) && #[trigger] node_is_template(d2, n) && d2.nodes[n as int].children.len() > 0 implies has_template_contents(
+        d2,
+        n,
+    ) || (n < d0.nodes.len() && d0.nodes[n as int].children.len() > 0) by {
+        if !has_template_contents(d2, n) {
+            assert(n < d1.nodes.len() && d1.nodes[n as int].children.len() > 0);
+            assert(kind_kept(d1.nodes[n as int].kind, d2.nodes[n as int].kind));
+            assert(node_is_template(d1, n));
+            if has_template_contents(d1, n) {
+                assert(has_template_contents(d2, n));
+            }
+        }
+    }
+}
+
 } // verus!

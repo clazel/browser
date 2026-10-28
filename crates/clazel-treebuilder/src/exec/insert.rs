@@ -752,8 +752,13 @@ pub fn create_element_for_token_exec(p: &mut ParserBuf, t: &ExecTagTok, ns: Name
         same_but_tree(old(p)@, final(p)@),
         !final(p)@.stopped ==> final(p)@.open == old(p)@.open,
         r@.tag == t@.tag && r@.ns == ns,
+        doc_extends(old(p)@.doc, final(p)@.doc),
 {
     let ghost p0 = p@;
+    proof {
+        lemma_inv_iff(p0);
+        assert forall|i: int| 0 <= i < p0.doc.nodes.len() implies kind_kept(p0.doc.nodes[i].kind, #[trigger] p0.doc.nodes[i].kind) by {}
+    }
     let annotation = annotation_html_exec(&ns, t);
     if p.stopped {
         return ExecElem { id: 0, ns, tag: copy_tag(&t.tag), name: copy_str(t.name.as_slice()), annotation_html: annotation };
@@ -784,6 +789,7 @@ pub fn create_element_for_token_exec(p: &mut ParserBuf, t: &ExecTagTok, ns: Name
             Some(_) => {
                 proof {
                     lemma_create_template_contents_extends(d1, id);
+                    lemma_doc_extends_trans(p0.doc, d1, p@.doc);
                     lemma_inv_doc(p1, p@.doc);
                     clazel_dom::lemmas::theorem_create_template_contents_wf(d1, id);
                 }
@@ -1162,6 +1168,7 @@ fn chars_at_exec(p: &mut ParserBuf, data: &[u32], loc: Location)
         parser_inv(final(p)@),
         same_but_tree(old(p)@, final(p)@),
 {
+    hide(tag_of);
     // 3.
     if matches!(p.arena.kind(loc.parent), ExecKind::Document { .. }) {
         return ;
@@ -1418,6 +1425,7 @@ fn reconstruct_step_exec(p: &mut ParserBuf, i: usize, n: usize) -> (cont: bool)
         cont ==> i + 1 < n && rc(final(p)@, i + 1) == rc(old(p)@, i as int),
         !cont ==> final(p)@ == rc(old(p)@, i as int),
 {
+    hide(tag_of);
     reveal(rc);
     if p.stopped {
         return false;
