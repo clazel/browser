@@ -853,6 +853,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
             old(self)@.mode == super::dispatcher_spec::Mode::Ready,
             old(self)@.pending_update_request is None,
+            super::dispatcher_spec::write_open(old(self)@),
             request <= 1, (!is_response || request == 0), is_response == old(self)@.response_due,
         ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             final(self).crypto_functions() == old(self).crypto_functions(),
@@ -977,7 +978,11 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         let ghost receiver_view = receiver@;
         self.application_receiver = Some(receiver);
         self.server_application_secret = next_secret;
-        if request == 1 { self.response_due = true; }
+        // §4.6.3 and §6.1: after our close_notify there is no next record to
+        // precede, so a request owes no response.
+        if request == 1 && !self.local_write_closed && self.pending_close_wire.is_empty() {
+            self.response_due = true;
+        }
         proof {
             reveal(Connection::state);
             reveal(super::dispatcher_spec::receive_key_update);

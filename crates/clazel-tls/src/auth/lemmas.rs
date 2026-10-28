@@ -118,14 +118,14 @@ pub proof fn lemma_dispatch(c: crate::schedule::spec::Crypto, v: Verification, s
 }
 
 /// §4.4.2: a new chain-check flag comes from this host/time/body validation result.
-pub proof fn theorem_certificate_binding(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty: bool)
+pub proof fn theorem_certificate_binding(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty: bool, offered: bool)
     requires wf(s), !s.chain_checked,
     ensures {
-        let next = on_certificate(c, v, s, body, true, empty).0;
+        let next = on_certificate(c, v, s, body, true, empty, offered).0;
         next.chain_checked ==> (v.chain)(s.config.host, s.config.now, body) == Ok(next.key)
     },
 {
-    if (s.phase == Phase::CertificateOrRequest || s.phase == Phase::Certificate) && !empty {
+    if (s.phase == Phase::CertificateOrRequest || s.phase == Phase::Certificate) && !empty && offered {
         match (v.chain)(s.config.host, s.config.now, body) {
             Ok(key) => {
                 if key.len() <= MAX_KEY {
