@@ -9,9 +9,10 @@
 //! insertions need; the pops of these cases never pop that element (the
 //! lemmas of [`super::in_body_start_lemmas`]).
 
+use super::adoption::*;
+use super::in_body_end::*;
 #[cfg(verus_only)]
 use super::in_body_start_lemmas::*;
-use super::in_body_start_stub::*;
 #[allow(unused_imports)]
 use super::spec::*;
 use crate::exec::formatting::*;
