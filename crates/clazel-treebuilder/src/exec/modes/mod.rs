@@ -23,5 +23,7 @@ pub mod in_body_start_lemmas;
 pub mod in_frameset;
 pub mod in_head;
 pub mod in_head_noscript;
+pub mod in_table;
+pub mod in_table_text;
 pub mod initial;
 pub mod text;
