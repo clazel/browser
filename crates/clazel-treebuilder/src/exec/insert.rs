@@ -1147,6 +1147,10 @@ proof fn lemma_chars_at(p: Parser, data: Seq<u32>)
 }
 
 /// [`chars_at`].
+// The limit is raised because this proof grew past the old one (60) as the
+// mode modules joined the crate; the code did not change (the profile shows
+// `clazel_dom::spec::wf`'s quantifiers instantiated on every node term).
+// Splitting the proof so `wf` is not in context is the preferred fix.
 #[verifier::rlimit(300)]
 fn chars_at_exec(p: &mut ParserBuf, data: &[u32], loc: Location)
     requires

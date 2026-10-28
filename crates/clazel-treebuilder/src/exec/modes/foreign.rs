@@ -223,51 +223,75 @@ pub fn foreign_content_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, t: ExecT
         },
         // 6. "A DOCTYPE token": "Parse error. Ignore the token."
         ExecTok::Doctype { .. } => ExecOutcome::Done,
-        ExecTok::Start(tt) => {
-            if is_breakout_tag_exec(&tt.tag) || (matches!(tt.tag, Tag::Font) && has_font_breakout_attr_exec(&tt)) {
-                // 7.
-                breakout_exec(p);
-                return ExecOutcome::Reprocess(ExecTok::Start(tt));
-            }
-            // 8. "Any other start tag"
-            let ns = copy_ns(&adjusted_current_node_exec(p).ns);
-            let mut tt = tt;
-            adjust_foreign_start_tag_exec(&ns, &mut tt);
-            // "Insert a foreign element for the token, with the adjusted
-            // current node's namespace."
-            let _ = insert_foreign_element_exec(p, &tt, ns);
-            // "If the token has its self-closing flag set": for an SVG
-            // "script", the steps for a "script" end tag (as modelled, "pop
-            // the current node"); otherwise "pop the current node off the
-            // stack of open elements". (A parser stopped by the insertion
-            // changes nothing more.)
-            if !p.stopped && tt.self_closing {
-                pop_exec(p);
-            }
-            ExecOutcome::Done
-        },
-        ExecTok::End(tt) => {
-            if matches!(tt.tag, Tag::Br | Tag::P) {
-                // 7.
-                breakout_exec(p);
-                return ExecOutcome::Reprocess(ExecTok::End(tt));
-            }
-            if matches!(tt.tag, Tag::Script) && !p.open.is_empty() {
-                let e = current_node_exec(p);
-                if matches!(e.ns, Namespace::Svg) && matches!(e.tag, Tag::Script) {
-                    // 9. "An end tag whose tag name is "script", if the current
-                    // node is an SVG script element": the steps, as modelled
-                    // ([`svg_script_end`]).
-                    pop_exec(p);
-                    return ExecOutcome::Done;
-                }
-            }
-            // 10. "Any other end tag"
-            foreign_end_tag_loop_exec(p, tt)
-        },
+        ExecTok::Start(tt) => foreign_start_exec(_env, p, tt),
+        ExecTok::End(tt) => foreign_end_exec(_env, p, tt),
         // An end-of-file token: never here.
         ExecTok::Eof => ExecOutcome::Done,
     }
+}
+
+/// [`foreign_content`] for a start tag (split from [`foreign_content_exec`]
+/// to keep each proof small).
+fn foreign_start_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, tt: ExecTagTok) -> (o: ExecOutcome)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+        in_foreign_content(old(p)@),
+        tok_tagged(tt@),
+    ensures
+        outcome_view(o, final(p)@) == foreign_content(_env.enc(), old(p)@, Tok::Start(tt@)),
+        parser_inv(final(p)@),
+{
+        if is_breakout_tag_exec(&tt.tag) || (matches!(tt.tag, Tag::Font) && has_font_breakout_attr_exec(&tt)) {
+            // 7.
+            breakout_exec(p);
+            return ExecOutcome::Reprocess(ExecTok::Start(tt));
+        }
+        // 8. "Any other start tag"
+        let ns = copy_ns(&adjusted_current_node_exec(p).ns);
+        let mut tt = tt;
+        adjust_foreign_start_tag_exec(&ns, &mut tt);
+        // "Insert a foreign element for the token, with the adjusted
+        // current node's namespace."
+        let _ = insert_foreign_element_exec(p, &tt, ns);
+        // "If the token has its self-closing flag set": for an SVG
+        // "script", the steps for a "script" end tag (as modelled, "pop
+        // the current node"); otherwise "pop the current node off the
+        // stack of open elements". (A parser stopped by the insertion
+        // changes nothing more.)
+        if !p.stopped && tt.self_closing {
+            pop_exec(p);
+        }
+        ExecOutcome::Done
+}
+
+/// [`foreign_content`] for an end tag (split from [`foreign_content_exec`]).
+fn foreign_end_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, tt: ExecTagTok) -> (o: ExecOutcome)
+    requires
+        parser_inv(old(p)@),
+        old(p)@.stopped || stack_rooted(old(p)@),
+        in_foreign_content(old(p)@),
+    ensures
+        outcome_view(o, final(p)@) == foreign_content(_env.enc(), old(p)@, Tok::End(tt@)),
+        parser_inv(final(p)@),
+{
+        if matches!(tt.tag, Tag::Br | Tag::P) {
+            // 7.
+            breakout_exec(p);
+            return ExecOutcome::Reprocess(ExecTok::End(tt));
+        }
+        if matches!(tt.tag, Tag::Script) && !p.open.is_empty() {
+            let e = current_node_exec(p);
+            if matches!(e.ns, Namespace::Svg) && matches!(e.tag, Tag::Script) {
+                // 9. "An end tag whose tag name is "script", if the current
+                // node is an SVG script element": the steps, as modelled
+                // ([`svg_script_end`]).
+                pop_exec(p);
+                return ExecOutcome::Done;
+            }
+        }
+        // 10. "Any other end tag"
+        foreign_end_tag_loop_exec(p, tt)
 }
 
 /// Step 7's popping: "While the current node is not a MathML text
