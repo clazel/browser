@@ -818,8 +818,8 @@ fn peer_key_update_rotates_receive_epoch_and_sends_unrequested_response() -> Res
 }
 
 #[test]
-fn peer_key_update_after_local_close_notify_rotates_receive_epoch_and_sends_nothing(
-) -> Result<(), String> {
+fn peer_key_update_after_local_close_notify_rotates_receive_epoch_and_sends_nothing()
+-> Result<(), String> {
     // RFC 8446 §6.1 and §4.6.3: nothing is written after our close_notify,
     // whether it is still awaiting its send acknowledgement or already sent.
     for acknowledge_first in [false, true] {

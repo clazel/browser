@@ -449,8 +449,8 @@ fn typed_chain_failures_and_empty_chain_preserve_expected_alerts() -> Result<(),
 }
 
 #[test]
-fn unoffered_certificate_entry_extensions_are_refused_before_chain_validation(
-) -> Result<(), String> {
+fn unoffered_certificate_entry_extensions_are_refused_before_chain_validation() -> Result<(), String>
+{
     // RFC 8446 §4.4.2: Certificate entry extensions must answer ClientHello
     // offers; config() offers server_name and signature_algorithms only.
     let crypto = TestCrypto;
