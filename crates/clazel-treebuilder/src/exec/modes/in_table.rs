@@ -394,6 +394,7 @@ pub fn in_table_char_exec(p: &mut ParserBuf, c: u32)
 pub fn in_table_anything_else_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t: ExecTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
+        !old(p)@.stopped,
         rooted_or_stopped(old(p)@),
         old(p)@.mode != Mode::Text,
         old(p)@.mode != Mode::InTableText,
@@ -466,6 +467,7 @@ pub fn in_table_anything_else_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t:
 pub fn mode_in_table_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t: ExecTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
+        !old(p)@.stopped,
         stack_rooted(old(p)@),
         crate::termination::rules_ok(Rules::Html(Mode::InTable), old(p)@),
         t@ is Start ==> tok_tagged(t@->Start_0),
@@ -506,6 +508,7 @@ pub fn mode_in_table_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t: ExecTok)
 fn in_table_char_case_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, c: u32) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
+        !old(p)@.stopped,
         stack_rooted(old(p)@),
         crate::termination::rules_ok(Rules::Html(Mode::InTable), old(p)@),
     ensures
@@ -542,6 +545,7 @@ fn in_table_char_case_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, c: u32) ->
 fn in_table_start_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, tt: ExecTagTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
+        !old(p)@.stopped,
         stack_rooted(old(p)@),
         crate::termination::rules_ok(Rules::Html(Mode::InTable), old(p)@),
         tok_tagged(tt@),
@@ -685,6 +689,7 @@ fn in_table_form_exec(p: &mut ParserBuf, tt: &ExecTagTok)
 fn in_table_end_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, tt: ExecTagTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
+        !old(p)@.stopped,
         stack_rooted(old(p)@),
         crate::termination::rules_ok(Rules::Html(Mode::InTable), old(p)@),
         tok_tagged(tt@),
