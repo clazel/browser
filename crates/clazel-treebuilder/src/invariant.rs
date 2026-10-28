@@ -55,4 +55,76 @@ pub open spec fn parser_wf(p: Parser) -> bool {
     dom::wf(p.doc) && ids_in_doc(p) && crate::termination::modes_ok(p)
 }
 
+// ---------------------------------------------------------------------
+// Further invariants the executable helpers need (Phase 4 item 4.10).
+// `parser_wf` is unchanged; these are separate, and the exec helpers
+// require and keep them alongside it.
+
+/// An element record's tag is the classification of its name (`Elem::tag`
+/// is a cache of `tag_of(name)`; every record the rules make is built so).
+pub open spec fn elem_tagged(e: Elem) -> bool {
+    e.tag == tag_of(e.name)
+}
+
+/// A tag token's tag is the classification of its name.
+pub open spec fn tok_tagged(t: TagTok) -> bool {
+    t.tag == tag_of(t.name)
+}
+
+/// Every element record of the parse state, and every token of the list of
+/// active formatting elements, is tagged by its name.
+pub open spec fn tags_wf(p: Parser) -> bool {
+    &&& forall|i: int| 0 <= i < p.open.len() ==> elem_tagged(#[trigger] p.open[i])
+    &&& forall|i: int|
+        0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry ==> elem_tagged(p.formatting[i]->Entry_elem)
+            && tok_tagged(p.formatting[i]->Entry_token)
+    &&& match p.context {
+        None => true,
+        Some(c) => elem_tagged(c),
+    }
+}
+
+/// Node `n` is an element whose template contents exist.
+pub open spec fn has_template_contents(doc: Document, n: NodeId) -> bool {
+    &&& dom::valid(doc, n)
+    &&& doc.nodes[n as int].kind is Element
+    &&& doc.nodes[n as int].kind->Element_template_contents is Some
+}
+
+/// The template elements §13.2.6.1 "appropriate place for inserting a node"
+/// can read the template contents of have them: every HTML `template` on
+/// the stack of open elements, and every `template` element with a child
+/// (a table's parent, step 3.4). (A template created when the node limit
+/// stops the parser has none, but it is never pushed nor given a child.)
+pub open spec fn templates_wf(p: Parser) -> bool {
+    &&& forall|i: int|
+        0 <= i < p.open.len() && is_html(#[trigger] p.open[i], Tag::Template) ==> has_template_contents(p.doc, p.open[i].id)
+    &&& forall|n: NodeId|
+        dom::valid(p.doc, n) && #[trigger] node_is_template(p.doc, n) && p.doc.nodes[n as int].children.len() > 0
+            ==> has_template_contents(p.doc, n)
+}
+
+/// The invariant the executable helpers require and keep: `parser_wf`,
+/// `tags_wf` and `templates_wf`.
+pub open spec fn parser_inv(p: Parser) -> bool {
+    parser_wf(p) && tags_wf(p) && templates_wf(p)
+}
+
+/// The stack of template insertion modes is not empty while the parser is
+/// parsing template contents: what §13.2.4.1 "reset the insertion mode
+/// appropriately" step 10 ("the current template insertion mode") reads.
+/// (Kept by the rules that push and pop templates together with their
+/// modes; the helpers that only pop keep it.)
+pub open spec fn template_modes_wf(p: Parser) -> bool {
+    parsing_template_contents(p) ==> p.template_modes.len() > 0
+}
+
+/// The stack of open elements is rooted at an HTML `html` element: what
+/// "appropriate place for inserting a node" reads (the current node, and
+/// step 3.2's first element). It holds from "before head" on until parsing
+/// stops (and in the fragment case from the start).
+pub open spec fn stack_rooted(p: Parser) -> bool {
+    p.open.len() > 0 && is_html(p.open[0], Tag::Html)
+}
+
 } // verus!
