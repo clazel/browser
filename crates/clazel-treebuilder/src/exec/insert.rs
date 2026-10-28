@@ -1414,6 +1414,7 @@ fn reconstruct_step_exec(p: &mut ParserBuf, i: usize, n: usize) -> (cont: bool)
         parser_inv(final(p)@),
         final(p)@.stopped || stack_rooted(final(p)@),
         n == final(p)@.formatting.len(),
+        final(p)@.mode == old(p)@.mode,
         cont ==> i + 1 < n && rc(final(p)@, i + 1) == rc(old(p)@, i as int),
         !cont ==> final(p)@ == rc(old(p)@, i as int),
 {
@@ -1459,6 +1460,8 @@ pub fn reconstruct_formatting_exec(p: &mut ParserBuf)
     ensures
         final(p)@ == reconstruct_formatting(old(p)@),
         parser_inv(final(p)@),
+        final(p)@.stopped || stack_rooted(final(p)@),
+        final(p)@.mode == old(p)@.mode,
 {
     if p.stopped {
         return ;
@@ -1495,12 +1498,15 @@ fn reconstruct_loop_exec(p: &mut ParserBuf, start: usize, n: usize)
     ensures
         final(p)@ == rc(old(p)@, start as int),
         parser_inv(final(p)@),
+        final(p)@.stopped || stack_rooted(final(p)@),
+        final(p)@.mode == old(p)@.mode,
 {
     let mut i = start;
     loop
         invariant
             parser_inv(p@),
             p@.stopped || stack_rooted(p@),
+            p@.mode == old(p)@.mode,
             n == p@.formatting.len(),
             i < n,
             rc(p@, i as int) == rc(old(p)@, start as int),
