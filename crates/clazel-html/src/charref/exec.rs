@@ -6,8 +6,6 @@
 //! input; a name whose first character differs is rejected after one
 //! comparison.
 
-#[allow(unused_imports)]
-use super::contract::*;
 use super::data::*;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -77,9 +75,9 @@ fn name_matches_at(input: &[u32], pos: usize, i: usize) -> (r: bool)
 /// the named character reference state consumes from `pos` on, or `None`.
 pub fn longest_match_exec(input: &[u32], pos: usize) -> (output: Option<usize>)
     requires
-        longest_match_requires(input@, pos as int),
+        super::contract::longest_match_requires(input@, pos as int),
     ensures
-        longest_match_ensures(input@, pos as int, output),
+        super::contract::longest_match_ensures(input@, pos as int, output),
 {
     let mut best: Option<usize> = None;
     let mut best_len: usize = 0;
@@ -138,7 +136,7 @@ pub fn entity_name_last_exec(i: usize) -> (c: u32)
 /// Row `i`'s code points.
 pub fn entity_code_points_exec(i: usize) -> (out: Vec<u32>)
     ensures
-        entity_code_points_ensures(i as int, out@),
+        super::contract::entity_code_points_ensures(i as int, out@),
 {
     let cp1 = entity_cp1_at_exec(i);
     let cp2 = entity_cp2_at_exec(i);
@@ -194,7 +192,7 @@ pub fn numeric_reference_end_code_exec(capped: u32) -> (r: u32)
     requires
         capped <= 0x110000,
     ensures
-        numeric_reference_end_code_ensures(capped as nat, r),
+        super::contract::numeric_reference_end_code_ensures(capped as nat, r),
 {
     let code = if capped == 0 { 0xFFFDu32 } else { capped };
     let code = if code > 0x10FFFF { 0xFFFDu32 } else { code };
@@ -223,10 +221,10 @@ pub fn digit_step(capped: u32, base: u32, digit: u32) -> (r: u32)
         digit < 16,
     ensures
         r <= 0x110000,
-        digit_step_ensures(capped as nat, base as nat, digit as nat, r as nat),
+        super::contract::digit_step_ensures(capped as nat, base as nat, digit as nat, r as nat),
 {
     if capped >= 0x110000 {
-        assert forall|code: nat| #[trigger] capped_code(code) == capped as nat implies 0x110000 == capped_code(
+        assert forall|code: nat| #[trigger] super::contract::capped_code(code) == capped as nat implies 0x110000 == super::contract::capped_code(
             code * base as nat + digit as nat,
         ) by {
             assert(code >= 0x110000);
@@ -245,7 +243,7 @@ pub fn digit_step(capped: u32, base: u32, digit: u32) -> (r: u32)
         // Never saturates: capped < 0x110000 and base <= 16.
         let v = capped.saturating_mul(base).saturating_add(digit);
         let r = if v > 0x110000 { 0x110000 } else { v };
-        assert forall|code: nat| #[trigger] capped_code(code) == capped as nat implies r as nat == capped_code(
+        assert forall|code: nat| #[trigger] super::contract::capped_code(code) == capped as nat implies r as nat == super::contract::capped_code(
             code * base as nat + digit as nat,
         ) by {
             assert(code == capped as nat);

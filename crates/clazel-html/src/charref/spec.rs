@@ -30,22 +30,20 @@
 //!   0x10FFFF and below matter.
 
 #[allow(unused_imports)]
-use super::data::*;
-#[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
 
 /// The number of rows in the named character references table.
 pub open spec fn entity_count() -> nat {
-    ENTITY_NAME_START_LEN as nat
+    super::data::ENTITY_NAME_START_LEN as nat
 }
 
 /// Row `i`'s name: the first column of the table, without the `&`.
 pub open spec fn entity_name(i: int) -> Seq<u32> {
     Seq::new(
-        entity_name_len_at(i) as nat,
-        |k: int| entity_chars_at(entity_name_start_at(i) + k) as u32,
+        super::data::entity_name_len_at(i) as nat,
+        |k: int| super::data::entity_chars_at(super::data::entity_name_start_at(i) + k) as u32,
     )
 }
 
@@ -53,10 +51,10 @@ pub open spec fn entity_name(i: int) -> Seq<u32> {
 /// points (a second code point of 0 means there is none; no row has
 /// U+0000).
 pub open spec fn entity_code_points(i: int) -> Seq<u32> {
-    if entity_cp2_at(i) == 0 {
-        seq![entity_cp1_at(i)]
+    if super::data::entity_cp2_at(i) == 0 {
+        seq![super::data::entity_cp1_at(i)]
     } else {
-        seq![entity_cp1_at(i), entity_cp2_at(i)]
+        seq![super::data::entity_cp1_at(i), super::data::entity_cp2_at(i)]
     }
 }
 

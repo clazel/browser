@@ -3,8 +3,22 @@
 //! - [`spec`]: a state-by-state transcription of the standard. This is the
 //!   part a human must check against the standard.
 //! - [`termination`]: why the spec's state machine terminates.
+//! - [`actions`]: the executable actions the states share.
+//! - [`buffer`]: the executable state and tokens, and their views.
 //! - [`contract`]: what the executable tokenizer is proven to satisfy.
+//! - [`machine`]: the executable tokenizer's step, `next_token` and
+//!   `tokenize`, and their proofs; the states are in [`states_text`],
+//!   [`states_markup`] and [`states_ref`], their shared actions in
+//!   [`actions`].
+//! - [`lemmas`]: facts proven about the spec.
 
+pub mod actions;
+pub mod buffer;
 pub mod contract;
+pub mod lemmas;
+pub mod machine;
 pub mod spec;
+pub mod states_markup;
+pub mod states_ref;
+pub mod states_text;
 pub mod termination;

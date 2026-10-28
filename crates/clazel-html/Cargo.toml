@@ -9,6 +9,12 @@ description = "WHATWG HTML Standard: input preprocessing (§13.2.3.5), the token
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
 
+# Test-only reference engine for the differential test in
+# tests/conformance_tokenizer.rs (class `test` in docs/DEPENDENCIES.md:
+# never shipped). Without default features it has no dependencies.
+[dev-dependencies]
+html5gum = { version = "=0.8.4", default-features = false }
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (the
 # HTML tokenizer state machine is on the Tier 2 list). The crate stays at

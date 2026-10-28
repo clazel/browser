@@ -10,11 +10,11 @@
 //! - [`lemmas`]: facts proven about the spec.
 //! - [`examples`]: the standard's examples, evaluated on the spec.
 
+pub mod contract;
 pub mod data;
+pub mod examples;
 pub mod exec;
 pub mod index;
-pub mod examples;
-pub mod contract;
 pub mod lemmas;
 pub mod search;
 pub mod spec;

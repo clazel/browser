@@ -87,11 +87,6 @@
 //!   early. The insertion point and `document.write` are not modelled.
 
 #[allow(unused_imports)]
-use crate::charref::spec::{
-    entity_code_points, entity_name, historical_reasons, is_ascii_alpha, is_ascii_alphanumeric, is_ascii_digit,
-    is_ascii_lower_alpha, is_ascii_upper_alpha, longest_match, numeric_reference_end_code,
-};
-#[allow(unused_imports)]
 use vstd::prelude::*;
 
 verus! {
@@ -492,7 +487,7 @@ pub open spec fn is_ascii_lower_hex_digit(c: u32) -> bool {
 
 /// ASCII hex digit: an ASCII digit, upper hex digit or lower hex digit.
 pub open spec fn is_ascii_hex_digit(c: u32) -> bool {
-    is_ascii_digit(c) || is_ascii_upper_hex_digit(c) || is_ascii_lower_hex_digit(c)
+    crate::charref::spec::is_ascii_digit(c) || is_ascii_upper_hex_digit(c) || is_ascii_lower_hex_digit(c)
 }
 
 /// "the lowercase version of the current input character (add 0x0020 to
@@ -504,7 +499,7 @@ pub open spec fn to_lower(c: u32) -> u32 {
 /// ASCII lowercase of one code point (Infra: ASCII upper alpha to lower,
 /// others unchanged).
 pub open spec fn ascii_lower(c: u32) -> u32 {
-    if is_ascii_upper_alpha(c) {
+    if crate::charref::spec::is_ascii_upper_alpha(c) {
         to_lower(c)
     } else {
         c
@@ -1113,7 +1108,7 @@ pub open spec fn tag_open_state(input: Seq<u32>, t: Tokenizer) -> Step {
             } else if c == 0x2F {
                 // U+002F SOLIDUS (/): "Switch to the end tag open state."
                 none(switch_to(n, State::EndTagOpen))
-            } else if is_ascii_alpha(c) {
+            } else if crate::charref::spec::is_ascii_alpha(c) {
                 // ASCII alpha: "Create a new start tag token, set its tag
                 // name to the empty string. Reconsume in the tag name state."
                 none(switch_to(new_start_tag(t), State::TagName))
@@ -1142,7 +1137,7 @@ pub open spec fn end_tag_open_state(input: Seq<u32>, t: Tokenizer) -> Step {
         None => emit_eof(t, seq![ch(0x3C), ch(0x2F)]),
         Some(c) => {
             let n = consumed(t);
-            if is_ascii_alpha(c) {
+            if crate::charref::spec::is_ascii_alpha(c) {
                 // ASCII alpha: "Create a new end tag token, set its tag name
                 // to the empty string. Reconsume in the tag name state."
                 none(switch_to(new_end_tag(t), State::TagName))
@@ -1182,7 +1177,7 @@ pub open spec fn tag_name_state(input: Seq<u32>, t: Tokenizer) -> Step {
                 // U+003E GREATER-THAN SIGN (>): "Switch to the data state.
                 // Emit the current tag token."
                 emit_current_tag(switch_to(n, State::Data), seq![])
-            } else if is_ascii_upper_alpha(c) {
+            } else if crate::charref::spec::is_ascii_upper_alpha(c) {
                 // ASCII upper alpha: "Append the lowercase version of the
                 // current input character (add 0x0020 to the character's
                 // code point) to the current tag token's tag name."
@@ -1221,7 +1216,7 @@ pub open spec fn text_less_than_sign_state(input: Seq<u32>, t: Tokenizer, text: 
 /// differ only in their states.
 pub open spec fn text_end_tag_open_state(input: Seq<u32>, t: Tokenizer, text: State, end_tag_name: State) -> Step {
     match next_char(input, t.pos) {
-        Some(c) if is_ascii_alpha(c) => {
+        Some(c) if crate::charref::spec::is_ascii_alpha(c) => {
             // ASCII alpha: "Create a new end tag token, set its tag name to
             // the empty string. Reconsume in the [...] end tag name state."
             none(switch_to(new_end_tag(t), end_tag_name))
@@ -1275,7 +1270,7 @@ pub open spec fn text_end_tag_name_state(input: Seq<u32>, t: Tokenizer, text: St
                 } else {
                     anything_else
                 }
-            } else if is_ascii_upper_alpha(c) {
+            } else if crate::charref::spec::is_ascii_upper_alpha(c) {
                 // ASCII upper alpha: "Append the lowercase version of the
                 // current input character (add 0x0020 to the character's
                 // code point) to the current tag token's tag name. Append
@@ -1286,7 +1281,7 @@ pub open spec fn text_end_tag_name_state(input: Seq<u32>, t: Tokenizer, text: St
                         ..append_to_tag_name(n, to_lower(c))
                     },
                 )
-            } else if is_ascii_lower_alpha(c) {
+            } else if crate::charref::spec::is_ascii_lower_alpha(c) {
                 // ASCII lower alpha: "Append the current input character to
                 // the current tag token's tag name. Append the current input
                 // character to the temporary buffer."
@@ -1488,7 +1483,7 @@ pub open spec fn script_data_escaped_less_than_sign_state(input: Seq<u32>, t: To
                 switch_to(Tokenizer { temporary_buffer: seq![], ..consumed(t) }, State::ScriptDataEscapedEndTagOpen),
             )
         },
-        Some(c) if is_ascii_alpha(c) => {
+        Some(c) if crate::charref::spec::is_ascii_alpha(c) => {
             // ASCII alpha: "Set the temporary buffer to the empty string.
             // Emit a U+003C LESS-THAN SIGN character token. Reconsume in the
             // script data double escape start state."
@@ -1532,14 +1527,14 @@ pub open spec fn double_escape_boundary_state(
                 ch(c),
             )
         },
-        Some(c) if is_ascii_upper_alpha(c) => {
+        Some(c) if crate::charref::spec::is_ascii_upper_alpha(c) => {
             // ASCII upper alpha: "Append the lowercase version of the
             // current input character (add 0x0020 to the character's code
             // point) to the temporary buffer. Emit the current input
             // character as a character token."
             one(Tokenizer { temporary_buffer: t.temporary_buffer.push(to_lower(c)), ..consumed(t) }, ch(c))
         },
-        Some(c) if is_ascii_lower_alpha(c) => {
+        Some(c) if crate::charref::spec::is_ascii_lower_alpha(c) => {
             // ASCII lower alpha: "Append the current input character to the
             // temporary buffer. Emit the current input character as a
             // character token."
@@ -1741,7 +1736,7 @@ pub open spec fn attribute_name_state(input: Seq<u32>, t: Tokenizer) -> Step {
                 // U+003D EQUALS SIGN (=): "Switch to the before attribute
                 // value state."
                 none(switch_to(leave_attribute_name(n), State::BeforeAttributeValue))
-            } else if is_ascii_upper_alpha(c) {
+            } else if crate::charref::spec::is_ascii_upper_alpha(c) {
                 // ASCII upper alpha: "Append the lowercase version of the
                 // current input character (add 0x0020 to the character's
                 // code point) to the current attribute's name."
@@ -2282,7 +2277,7 @@ pub open spec fn before_doctype_name_state(input: Seq<u32>, t: Tokenizer) -> Ste
             if is_tab_lf_ff_space(c) {
                 // tab, LF, FF, space: "Ignore the character."
                 none(n)
-            } else if is_ascii_upper_alpha(c) {
+            } else if crate::charref::spec::is_ascii_upper_alpha(c) {
                 // ASCII upper alpha: "Create a new DOCTYPE token. Set the
                 // token's name to the lowercase version of the current input
                 // character (add 0x0020 to the character's code point). Switch
@@ -2331,7 +2326,7 @@ pub open spec fn doctype_name_state(input: Seq<u32>, t: Tokenizer) -> Step {
                 // U+003E GREATER-THAN SIGN (>): "Switch to the data state. Emit
                 // the current DOCTYPE token."
                 (switch_to(n, State::Data), emit_current(n, seq![]))
-            } else if is_ascii_upper_alpha(c) {
+            } else if crate::charref::spec::is_ascii_upper_alpha(c) {
                 // ASCII upper alpha: "Append the lowercase version of the
                 // current input character (add 0x0020 to the character's code
                 // point) to the current DOCTYPE token's name."
@@ -2834,7 +2829,7 @@ pub open spec fn processing_instruction_open_state(input: Seq<u32>, t: Tokenizer
         // end-of-file token."
         None => emit_eof(t, seq![]),
         Some(c) => {
-            if is_ascii_alpha(c) || c == 0x5F {
+            if crate::charref::spec::is_ascii_alpha(c) || c == 0x5F {
                 // ASCII alpha, U+005F LOW LINE (_): "Reconsume in the
                 // processing instruction target state."
                 none(switch_to(t, State::ProcessingInstructionTarget))
@@ -2880,7 +2875,7 @@ pub open spec fn processing_instruction_target_state(input: Seq<u32>, t: Tokeniz
                         ),
                     )
                 }
-            } else if is_ascii_alphanumeric(c) || c == 0x2D || c == 0x5F {
+            } else if crate::charref::spec::is_ascii_alphanumeric(c) || c == 0x2D || c == 0x5F {
                 // ASCII alphanumeric, U+002D HYPHEN-MINUS (-), U+005F LOW LINE
                 // (_): "Append the current input character to the temporary
                 // buffer."
@@ -2974,7 +2969,7 @@ pub open spec fn character_reference_state(input: Seq<u32>, t: Tokenizer) -> Ste
     let t = Tokenizer { temporary_buffer: seq![0x26u32], ..t };
     // "Consume the next input character:"
     match next_char(input, t.pos) {
-        Some(c) if is_ascii_alphanumeric(c) => {
+        Some(c) if crate::charref::spec::is_ascii_alphanumeric(c) => {
             // ASCII alphanumeric: "Reconsume in the named character reference
             // state."
             none(switch_to(t, State::NamedCharacterReference))
@@ -3002,16 +2997,16 @@ pub open spec fn named_character_reference_state(input: Seq<u32>, t: Tokenizer) 
     // consumed characters are one of the identifiers in the first column of
     // the named character references table. Append each character to the
     // temporary buffer when it's consumed."
-    match longest_match(input, t.pos as int) {
+    match crate::charref::spec::longest_match(input, t.pos as int) {
         Some(i) => {
             // "If there is a match":
-            let name = entity_name(i as int);
+            let name = crate::charref::spec::entity_name(i as int);
             let n = Tokenizer {
                 pos: t.pos + name.len(),
                 temporary_buffer: t.temporary_buffer + name,
                 ..t
             };
-            if historical_reasons(consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {
+            if crate::charref::spec::historical_reasons(consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {
                 // "If the character reference was consumed as part of an
                 // attribute, and the last character matched is not a U+003B
                 // SEMICOLON character (;), and the next input character is
@@ -3032,7 +3027,7 @@ pub open spec fn named_character_reference_state(input: Seq<u32>, t: Tokenizer) 
                 //    buffer."
                 // 3. "Flush code points consumed as a character reference.
                 //    Switch to the return state."
-                flush_and_return(Tokenizer { temporary_buffer: entity_code_points(i as int), ..n })
+                flush_and_return(Tokenizer { temporary_buffer: crate::charref::spec::entity_code_points(i as int), ..n })
             }
         },
         None => {
@@ -3047,7 +3042,7 @@ pub open spec fn named_character_reference_state(input: Seq<u32>, t: Tokenizer) 
 /// §13.2.5.79 Ambiguous ampersand state.
 pub open spec fn ambiguous_ampersand_state(input: Seq<u32>, t: Tokenizer) -> Step {
     match next_char(input, t.pos) {
-        Some(c) if is_ascii_alphanumeric(c) => {
+        Some(c) if crate::charref::spec::is_ascii_alphanumeric(c) => {
             // ASCII alphanumeric: "If the character reference was consumed as
             // part of an attribute, then append the current input character
             // to the current attribute's value. Otherwise, emit the current
@@ -3082,7 +3077,7 @@ pub open spec fn numeric_character_reference_state(input: Seq<u32>, t: Tokenizer
                 ),
             )
         },
-        Some(c) if is_ascii_digit(c) => {
+        Some(c) if crate::charref::spec::is_ascii_digit(c) => {
             // ASCII digit: "Reconsume in the decimal character reference
             // state."
             none(switch_to(t, State::DecimalCharacterReference))
@@ -3119,7 +3114,7 @@ pub open spec fn add_digit(t: Tokenizer, base: nat, digit: nat) -> Tokenizer {
 /// §13.2.5.82 Hexadecimal character reference state.
 pub open spec fn hexadecimal_character_reference_state(input: Seq<u32>, t: Tokenizer) -> Step {
     match next_char(input, t.pos) {
-        Some(c) if is_ascii_digit(c) => {
+        Some(c) if crate::charref::spec::is_ascii_digit(c) => {
             // ASCII digit: "Multiply the character reference code by 16. Add a
             // numeric version of the current input character (subtract 0x0030
             // from the character's code point) to the character reference
@@ -3155,7 +3150,7 @@ pub open spec fn hexadecimal_character_reference_state(input: Seq<u32>, t: Token
 /// §13.2.5.83 Decimal character reference state.
 pub open spec fn decimal_character_reference_state(input: Seq<u32>, t: Tokenizer) -> Step {
     match next_char(input, t.pos) {
-        Some(c) if is_ascii_digit(c) => {
+        Some(c) if crate::charref::spec::is_ascii_digit(c) => {
             // ASCII digit: "Multiply the character reference code by 10. Add a
             // numeric version of the current input character (subtract 0x0030
             // from the character's code point) to the character reference
@@ -3178,7 +3173,7 @@ pub open spec fn decimal_character_reference_state(input: Seq<u32>, t: Tokenizer
 pub open spec fn numeric_character_reference_end_state(input: Seq<u32>, t: Tokenizer) -> Step {
     // "Check the character reference code:" (the five checks are
     // `numeric_reference_end_code`, with the table)
-    let code = numeric_reference_end_code(t.character_reference_code);
+    let code = crate::charref::spec::numeric_reference_end_code(t.character_reference_code);
     // "Set the temporary buffer to the empty string. Append a code point
     // equal to the character reference code to the temporary buffer. Flush
     // code points consumed as a character reference. Switch to the return

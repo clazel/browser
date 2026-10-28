@@ -6,10 +6,6 @@
 //! (the whole table is beyond its evaluator's time limit).
 
 #[allow(unused_imports)]
-use super::data::*;
-#[allow(unused_imports)]
-use super::search::*;
-#[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -18,17 +14,17 @@ verus! {
 
 /// The first character of row `i`'s name.
 pub open spec fn first_char(i: int) -> nat {
-    entity_chars_at(entity_name_start_at(i) as int) as nat
+    super::data::entity_chars_at(super::data::entity_name_start_at(i) as int) as nat
 }
 
 /// The block of rows for character `c`: `lo .. hi`.
 pub open spec fn block_lo(c: nat) -> nat {
-    entity_first_start_at(c as int) as nat
+    super::data::entity_first_start_at(c as int) as nat
 }
 
 /// See [`block_lo`].
 pub open spec fn block_hi(c: nat) -> nat {
-    entity_first_end_at(c as int) as nat
+    super::data::entity_first_end_at(c as int) as nat
 }
 
 /// Rows `i .. end` lie in their first character's block.
@@ -85,8 +81,8 @@ pub proof fn lemma_blocks_ok()
     ensures
         forall|d: nat| d < 128 ==> block_lo(d) <= #[trigger] block_hi(d) <= entity_count(),
 {
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(blocks_ok_from(0)) by (compute_only);
     lemma_blocks_ok_from(0);
 }
@@ -96,26 +92,26 @@ proof fn lemma_blocks_0()
         forall|j: int|
             0 <= j < 100 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(0, 100)) by (compute_only);
     lemma_in_blocks_from(0, 100);
 }
@@ -125,26 +121,26 @@ proof fn lemma_blocks_100()
         forall|j: int|
             100 <= j < 200 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(100, 200)) by (compute_only);
     lemma_in_blocks_from(100, 200);
 }
@@ -154,26 +150,26 @@ proof fn lemma_blocks_200()
         forall|j: int|
             200 <= j < 300 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(200, 300)) by (compute_only);
     lemma_in_blocks_from(200, 300);
 }
@@ -183,26 +179,26 @@ proof fn lemma_blocks_300()
         forall|j: int|
             300 <= j < 400 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(300, 400)) by (compute_only);
     lemma_in_blocks_from(300, 400);
 }
@@ -212,26 +208,26 @@ proof fn lemma_blocks_400()
         forall|j: int|
             400 <= j < 500 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(400, 500)) by (compute_only);
     lemma_in_blocks_from(400, 500);
 }
@@ -241,26 +237,26 @@ proof fn lemma_blocks_500()
         forall|j: int|
             500 <= j < 600 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(500, 600)) by (compute_only);
     lemma_in_blocks_from(500, 600);
 }
@@ -270,26 +266,26 @@ proof fn lemma_blocks_600()
         forall|j: int|
             600 <= j < 700 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(600, 700)) by (compute_only);
     lemma_in_blocks_from(600, 700);
 }
@@ -299,26 +295,26 @@ proof fn lemma_blocks_700()
         forall|j: int|
             700 <= j < 800 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(700, 800)) by (compute_only);
     lemma_in_blocks_from(700, 800);
 }
@@ -328,26 +324,26 @@ proof fn lemma_blocks_800()
         forall|j: int|
             800 <= j < 900 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(800, 900)) by (compute_only);
     lemma_in_blocks_from(800, 900);
 }
@@ -357,26 +353,26 @@ proof fn lemma_blocks_900()
         forall|j: int|
             900 <= j < 1000 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(900, 1000)) by (compute_only);
     lemma_in_blocks_from(900, 1000);
 }
@@ -386,26 +382,26 @@ proof fn lemma_blocks_1000()
         forall|j: int|
             1000 <= j < 1100 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1000, 1100)) by (compute_only);
     lemma_in_blocks_from(1000, 1100);
 }
@@ -415,26 +411,26 @@ proof fn lemma_blocks_1100()
         forall|j: int|
             1100 <= j < 1200 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1100, 1200)) by (compute_only);
     lemma_in_blocks_from(1100, 1200);
 }
@@ -444,26 +440,26 @@ proof fn lemma_blocks_1200()
         forall|j: int|
             1200 <= j < 1300 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1200, 1300)) by (compute_only);
     lemma_in_blocks_from(1200, 1300);
 }
@@ -473,26 +469,26 @@ proof fn lemma_blocks_1300()
         forall|j: int|
             1300 <= j < 1400 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1300, 1400)) by (compute_only);
     lemma_in_blocks_from(1300, 1400);
 }
@@ -502,26 +498,26 @@ proof fn lemma_blocks_1400()
         forall|j: int|
             1400 <= j < 1500 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1400, 1500)) by (compute_only);
     lemma_in_blocks_from(1400, 1500);
 }
@@ -531,26 +527,26 @@ proof fn lemma_blocks_1500()
         forall|j: int|
             1500 <= j < 1600 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1500, 1600)) by (compute_only);
     lemma_in_blocks_from(1500, 1600);
 }
@@ -560,26 +556,26 @@ proof fn lemma_blocks_1600()
         forall|j: int|
             1600 <= j < 1700 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1600, 1700)) by (compute_only);
     lemma_in_blocks_from(1600, 1700);
 }
@@ -589,26 +585,26 @@ proof fn lemma_blocks_1700()
         forall|j: int|
             1700 <= j < 1800 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1700, 1800)) by (compute_only);
     lemma_in_blocks_from(1700, 1800);
 }
@@ -618,26 +614,26 @@ proof fn lemma_blocks_1800()
         forall|j: int|
             1800 <= j < 1900 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1800, 1900)) by (compute_only);
     lemma_in_blocks_from(1800, 1900);
 }
@@ -647,26 +643,26 @@ proof fn lemma_blocks_1900()
         forall|j: int|
             1900 <= j < 2000 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(1900, 2000)) by (compute_only);
     lemma_in_blocks_from(1900, 2000);
 }
@@ -676,26 +672,26 @@ proof fn lemma_blocks_2000()
         forall|j: int|
             2000 <= j < 2100 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(2000, 2100)) by (compute_only);
     lemma_in_blocks_from(2000, 2100);
 }
@@ -705,26 +701,26 @@ proof fn lemma_blocks_2100()
         forall|j: int|
             2100 <= j < 2200 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(2100, 2200)) by (compute_only);
     lemma_in_blocks_from(2100, 2200);
 }
@@ -734,26 +730,26 @@ proof fn lemma_blocks_2200()
         forall|j: int|
             2200 <= j < 2231 ==> #[trigger] first_char(j) < 128 && block_lo(first_char(j)) <= j < block_hi(first_char(j)),
 {
-    reveal(ENTITY_NAME_START_0);
-    reveal(ENTITY_CHARS_0);
-    reveal(ENTITY_CHARS_1);
-    reveal(ENTITY_CHARS_2);
-    reveal(ENTITY_CHARS_3);
-    reveal(ENTITY_CHARS_4);
-    reveal(ENTITY_CHARS_5);
-    reveal(ENTITY_CHARS_6);
-    reveal(ENTITY_CHARS_7);
-    reveal(ENTITY_CHARS_8);
-    reveal(ENTITY_CHARS_9);
-    reveal(ENTITY_CHARS_10);
-    reveal(ENTITY_CHARS_11);
-    reveal(ENTITY_CHARS_12);
-    reveal(ENTITY_CHARS_13);
-    reveal(ENTITY_CHARS_14);
-    reveal(ENTITY_CHARS_15);
-    reveal(ENTITY_CHARS_16);
-    reveal(ENTITY_FIRST_START_0);
-    reveal(ENTITY_FIRST_END_0);
+    reveal(super::data::ENTITY_NAME_START_0);
+    reveal(super::data::ENTITY_CHARS_0);
+    reveal(super::data::ENTITY_CHARS_1);
+    reveal(super::data::ENTITY_CHARS_2);
+    reveal(super::data::ENTITY_CHARS_3);
+    reveal(super::data::ENTITY_CHARS_4);
+    reveal(super::data::ENTITY_CHARS_5);
+    reveal(super::data::ENTITY_CHARS_6);
+    reveal(super::data::ENTITY_CHARS_7);
+    reveal(super::data::ENTITY_CHARS_8);
+    reveal(super::data::ENTITY_CHARS_9);
+    reveal(super::data::ENTITY_CHARS_10);
+    reveal(super::data::ENTITY_CHARS_11);
+    reveal(super::data::ENTITY_CHARS_12);
+    reveal(super::data::ENTITY_CHARS_13);
+    reveal(super::data::ENTITY_CHARS_14);
+    reveal(super::data::ENTITY_CHARS_15);
+    reveal(super::data::ENTITY_CHARS_16);
+    reveal(super::data::ENTITY_FIRST_START_0);
+    reveal(super::data::ENTITY_FIRST_END_0);
     assert(in_blocks_from(2200, 2231)) by (compute_only);
     lemma_in_blocks_from(2200, 2231);
 }
@@ -791,12 +787,12 @@ pub proof fn lemma_rows_in_blocks()
     lemma_blocks_2200();
 }
 
-/// Rows `lo .. hi` hold no candidate: their fold is `None`.
+/// Rows `lo .. hi` hold no super::search::candidate: their super::search::fold is `None`.
 proof fn lemma_fold_none(input: Seq<u32>, pos: int, lo: nat, hi: nat)
     requires
-        forall|j: nat| lo <= j < hi ==> #[trigger] candidate(input, pos, j) is None,
+        forall|j: nat| lo <= j < hi ==> #[trigger] super::search::candidate(input, pos, j) is None,
     ensures
-        fold(input, pos, lo, hi) is None,
+        super::search::fold(input, pos, lo, hi) is None,
     decreases hi,
 {
     if hi > lo {
@@ -819,15 +815,15 @@ pub open spec fn match_block(input: Seq<u32>, pos: int) -> (nat, nat) {
 pub proof fn lemma_match_in_block(input: Seq<u32>, pos: int)
     ensures
         match_block(input, pos).0 <= match_block(input, pos).1 <= entity_count(),
-        longest_match(input, pos) == fold(input, pos, match_block(input, pos).0, match_block(input, pos).1),
-        longest_match(input, pos) == best_in(input, pos, match_block(input, pos).0, match_block(input, pos).1),
+        longest_match(input, pos) == super::search::fold(input, pos, match_block(input, pos).0, match_block(input, pos).1),
+        longest_match(input, pos) == super::search::best_in(input, pos, match_block(input, pos).0, match_block(input, pos).1),
 {
     let (lo, hi) = match_block(input, pos);
     lemma_rows_in_blocks();
     lemma_blocks_ok();
     super::lemmas::lemma_rows_in_bounds();
     let n = entity_count();
-    assert forall|j: nat| j < n && !(lo <= j < hi) implies #[trigger] candidate(input, pos, j) is None by {
+    assert forall|j: nat| j < n && !(lo <= j < hi) implies #[trigger] super::search::candidate(input, pos, j) is None by {
         if is_prefix_at(entity_name(j as int), input, pos) {
             assert(entity_name(j as int).len() >= 1);
             assert(input.subrange(pos, pos + entity_name(j as int).len())[0] == entity_name(j as int)[0]);

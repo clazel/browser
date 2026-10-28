@@ -147,6 +147,7 @@ proof fn lemma_data_state(input: Seq<u32>, t: Tokenizer)
         t.state is Data,
     ensures
         decreases_ok(input, t, data_state(input, t).0),
+        data_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -156,6 +157,7 @@ proof fn lemma_rcdata_state(input: Seq<u32>, t: Tokenizer)
         t.state is Rcdata,
     ensures
         decreases_ok(input, t, rcdata_state(input, t).0),
+        rcdata_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -165,6 +167,7 @@ proof fn lemma_rawtext_state(input: Seq<u32>, t: Tokenizer)
         t.state is Rawtext,
     ensures
         decreases_ok(input, t, rawtext_state(input, t).0),
+        rawtext_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -174,6 +177,7 @@ proof fn lemma_script_data_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptData,
     ensures
         decreases_ok(input, t, script_data_state(input, t).0),
+        script_data_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -183,6 +187,7 @@ proof fn lemma_plaintext_state(input: Seq<u32>, t: Tokenizer)
         t.state is Plaintext,
     ensures
         decreases_ok(input, t, plaintext_state(input, t).0),
+        plaintext_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -192,6 +197,7 @@ proof fn lemma_tag_open_state(input: Seq<u32>, t: Tokenizer)
         t.state is TagOpen,
     ensures
         decreases_ok(input, t, tag_open_state(input, t).0),
+        tag_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -201,6 +207,7 @@ proof fn lemma_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
         t.state is EndTagOpen,
     ensures
         decreases_ok(input, t, end_tag_open_state(input, t).0),
+        end_tag_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -210,6 +217,7 @@ proof fn lemma_tag_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is TagName,
     ensures
         decreases_ok(input, t, tag_name_state(input, t).0),
+        tag_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -219,6 +227,7 @@ proof fn lemma_rcdata_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
         t.state is RcdataLessThanSign,
     ensures
         decreases_ok(input, t, rcdata_less_than_sign_state(input, t).0),
+        rcdata_less_than_sign_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -228,6 +237,7 @@ proof fn lemma_rcdata_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
         t.state is RcdataEndTagOpen,
     ensures
         decreases_ok(input, t, rcdata_end_tag_open_state(input, t).0),
+        rcdata_end_tag_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -237,6 +247,7 @@ proof fn lemma_rcdata_end_tag_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is RcdataEndTagName,
     ensures
         decreases_ok(input, t, rcdata_end_tag_name_state(input, t).0),
+        rcdata_end_tag_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -246,6 +257,7 @@ proof fn lemma_rawtext_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
         t.state is RawtextLessThanSign,
     ensures
         decreases_ok(input, t, rawtext_less_than_sign_state(input, t).0),
+        rawtext_less_than_sign_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -255,6 +267,7 @@ proof fn lemma_rawtext_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
         t.state is RawtextEndTagOpen,
     ensures
         decreases_ok(input, t, rawtext_end_tag_open_state(input, t).0),
+        rawtext_end_tag_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -264,6 +277,7 @@ proof fn lemma_rawtext_end_tag_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is RawtextEndTagName,
     ensures
         decreases_ok(input, t, rawtext_end_tag_name_state(input, t).0),
+        rawtext_end_tag_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -273,6 +287,7 @@ proof fn lemma_script_data_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptDataLessThanSign,
     ensures
         decreases_ok(input, t, script_data_less_than_sign_state(input, t).0),
+        script_data_less_than_sign_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -282,6 +297,7 @@ proof fn lemma_script_data_end_tag_open_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptDataEndTagOpen,
     ensures
         decreases_ok(input, t, script_data_end_tag_open_state(input, t).0),
+        script_data_end_tag_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -291,6 +307,7 @@ proof fn lemma_script_data_end_tag_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptDataEndTagName,
     ensures
         decreases_ok(input, t, script_data_end_tag_name_state(input, t).0),
+        script_data_end_tag_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -300,6 +317,7 @@ proof fn lemma_script_data_escape_start_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptDataEscapeStart,
     ensures
         decreases_ok(input, t, script_data_escape_start_state(input, t).0),
+        script_data_escape_start_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -309,6 +327,7 @@ proof fn lemma_script_data_escape_start_dash_state(input: Seq<u32>, t: Tokenizer
         t.state is ScriptDataEscapeStartDash,
     ensures
         decreases_ok(input, t, script_data_escape_start_dash_state(input, t).0),
+        script_data_escape_start_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -318,6 +337,7 @@ proof fn lemma_script_data_escaped_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptDataEscaped,
     ensures
         decreases_ok(input, t, script_data_escaped_state(input, t).0),
+        script_data_escaped_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -327,6 +347,7 @@ proof fn lemma_script_data_escaped_dash_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptDataEscapedDash,
     ensures
         decreases_ok(input, t, script_data_escaped_dash_state(input, t).0),
+        script_data_escaped_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -336,6 +357,7 @@ proof fn lemma_script_data_escaped_dash_dash_state(input: Seq<u32>, t: Tokenizer
         t.state is ScriptDataEscapedDashDash,
     ensures
         decreases_ok(input, t, script_data_escaped_dash_dash_state(input, t).0),
+        script_data_escaped_dash_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -345,6 +367,7 @@ proof fn lemma_script_data_escaped_less_than_sign_state(input: Seq<u32>, t: Toke
         t.state is ScriptDataEscapedLessThanSign,
     ensures
         decreases_ok(input, t, script_data_escaped_less_than_sign_state(input, t).0),
+        script_data_escaped_less_than_sign_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -354,6 +377,7 @@ proof fn lemma_script_data_escaped_end_tag_open_state(input: Seq<u32>, t: Tokeni
         t.state is ScriptDataEscapedEndTagOpen,
     ensures
         decreases_ok(input, t, script_data_escaped_end_tag_open_state(input, t).0),
+        script_data_escaped_end_tag_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -363,6 +387,7 @@ proof fn lemma_script_data_escaped_end_tag_name_state(input: Seq<u32>, t: Tokeni
         t.state is ScriptDataEscapedEndTagName,
     ensures
         decreases_ok(input, t, script_data_escaped_end_tag_name_state(input, t).0),
+        script_data_escaped_end_tag_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -372,6 +397,7 @@ proof fn lemma_script_data_double_escape_start_state(input: Seq<u32>, t: Tokeniz
         t.state is ScriptDataDoubleEscapeStart,
     ensures
         decreases_ok(input, t, script_data_double_escape_start_state(input, t).0),
+        script_data_double_escape_start_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -381,6 +407,7 @@ proof fn lemma_script_data_double_escaped_state(input: Seq<u32>, t: Tokenizer)
         t.state is ScriptDataDoubleEscaped,
     ensures
         decreases_ok(input, t, script_data_double_escaped_state(input, t).0),
+        script_data_double_escaped_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -390,6 +417,7 @@ proof fn lemma_script_data_double_escaped_dash_state(input: Seq<u32>, t: Tokeniz
         t.state is ScriptDataDoubleEscapedDash,
     ensures
         decreases_ok(input, t, script_data_double_escaped_dash_state(input, t).0),
+        script_data_double_escaped_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -399,6 +427,7 @@ proof fn lemma_script_data_double_escaped_dash_dash_state(input: Seq<u32>, t: To
         t.state is ScriptDataDoubleEscapedDashDash,
     ensures
         decreases_ok(input, t, script_data_double_escaped_dash_dash_state(input, t).0),
+        script_data_double_escaped_dash_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -408,6 +437,7 @@ proof fn lemma_script_data_double_escaped_less_than_sign_state(input: Seq<u32>, 
         t.state is ScriptDataDoubleEscapedLessThanSign,
     ensures
         decreases_ok(input, t, script_data_double_escaped_less_than_sign_state(input, t).0),
+        script_data_double_escaped_less_than_sign_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -417,6 +447,7 @@ proof fn lemma_script_data_double_escape_end_state(input: Seq<u32>, t: Tokenizer
         t.state is ScriptDataDoubleEscapeEnd,
     ensures
         decreases_ok(input, t, script_data_double_escape_end_state(input, t).0),
+        script_data_double_escape_end_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -426,6 +457,7 @@ proof fn lemma_before_attribute_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is BeforeAttributeName,
     ensures
         decreases_ok(input, t, before_attribute_name_state(input, t).0),
+        before_attribute_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -435,6 +467,7 @@ proof fn lemma_attribute_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is AttributeName,
     ensures
         decreases_ok(input, t, attribute_name_state(input, t).0),
+        attribute_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -444,6 +477,7 @@ proof fn lemma_after_attribute_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is AfterAttributeName,
     ensures
         decreases_ok(input, t, after_attribute_name_state(input, t).0),
+        after_attribute_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -453,6 +487,7 @@ proof fn lemma_before_attribute_value_state(input: Seq<u32>, t: Tokenizer)
         t.state is BeforeAttributeValue,
     ensures
         decreases_ok(input, t, before_attribute_value_state(input, t).0),
+        before_attribute_value_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -462,6 +497,7 @@ proof fn lemma_attribute_value_double_quoted_state(input: Seq<u32>, t: Tokenizer
         t.state is AttributeValueDoubleQuoted,
     ensures
         decreases_ok(input, t, attribute_value_double_quoted_state(input, t).0),
+        attribute_value_double_quoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -471,6 +507,7 @@ proof fn lemma_attribute_value_single_quoted_state(input: Seq<u32>, t: Tokenizer
         t.state is AttributeValueSingleQuoted,
     ensures
         decreases_ok(input, t, attribute_value_single_quoted_state(input, t).0),
+        attribute_value_single_quoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -480,6 +517,7 @@ proof fn lemma_attribute_value_unquoted_state(input: Seq<u32>, t: Tokenizer)
         t.state is AttributeValueUnquoted,
     ensures
         decreases_ok(input, t, attribute_value_unquoted_state(input, t).0),
+        attribute_value_unquoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -489,6 +527,7 @@ proof fn lemma_after_attribute_value_quoted_state(input: Seq<u32>, t: Tokenizer)
         t.state is AfterAttributeValueQuoted,
     ensures
         decreases_ok(input, t, after_attribute_value_quoted_state(input, t).0),
+        after_attribute_value_quoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -498,6 +537,7 @@ proof fn lemma_self_closing_start_tag_state(input: Seq<u32>, t: Tokenizer)
         t.state is SelfClosingStartTag,
     ensures
         decreases_ok(input, t, self_closing_start_tag_state(input, t).0),
+        self_closing_start_tag_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -507,6 +547,7 @@ proof fn lemma_bogus_comment_state(input: Seq<u32>, t: Tokenizer)
         t.state is BogusComment,
     ensures
         decreases_ok(input, t, bogus_comment_state(input, t).0),
+        bogus_comment_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -516,6 +557,7 @@ proof fn lemma_markup_declaration_open_state(input: Seq<u32>, t: Tokenizer)
         t.state is MarkupDeclarationOpen,
     ensures
         decreases_ok(input, t, markup_declaration_open_state(input, t).0),
+        markup_declaration_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -525,6 +567,7 @@ proof fn lemma_comment_start_state(input: Seq<u32>, t: Tokenizer)
         t.state is CommentStart,
     ensures
         decreases_ok(input, t, comment_start_state(input, t).0),
+        comment_start_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -534,6 +577,7 @@ proof fn lemma_comment_start_dash_state(input: Seq<u32>, t: Tokenizer)
         t.state is CommentStartDash,
     ensures
         decreases_ok(input, t, comment_start_dash_state(input, t).0),
+        comment_start_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -543,6 +587,7 @@ proof fn lemma_comment_state(input: Seq<u32>, t: Tokenizer)
         t.state is Comment,
     ensures
         decreases_ok(input, t, comment_state(input, t).0),
+        comment_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -552,6 +597,7 @@ proof fn lemma_comment_less_than_sign_state(input: Seq<u32>, t: Tokenizer)
         t.state is CommentLessThanSign,
     ensures
         decreases_ok(input, t, comment_less_than_sign_state(input, t).0),
+        comment_less_than_sign_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -561,6 +607,7 @@ proof fn lemma_comment_less_than_sign_bang_state(input: Seq<u32>, t: Tokenizer)
         t.state is CommentLessThanSignBang,
     ensures
         decreases_ok(input, t, comment_less_than_sign_bang_state(input, t).0),
+        comment_less_than_sign_bang_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -570,6 +617,7 @@ proof fn lemma_comment_less_than_sign_bang_dash_state(input: Seq<u32>, t: Tokeni
         t.state is CommentLessThanSignBangDash,
     ensures
         decreases_ok(input, t, comment_less_than_sign_bang_dash_state(input, t).0),
+        comment_less_than_sign_bang_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -579,6 +627,7 @@ proof fn lemma_comment_less_than_sign_bang_dash_dash_state(input: Seq<u32>, t: T
         t.state is CommentLessThanSignBangDashDash,
     ensures
         decreases_ok(input, t, comment_less_than_sign_bang_dash_dash_state(input, t).0),
+        comment_less_than_sign_bang_dash_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -588,6 +637,7 @@ proof fn lemma_comment_end_dash_state(input: Seq<u32>, t: Tokenizer)
         t.state is CommentEndDash,
     ensures
         decreases_ok(input, t, comment_end_dash_state(input, t).0),
+        comment_end_dash_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -597,6 +647,7 @@ proof fn lemma_comment_end_state(input: Seq<u32>, t: Tokenizer)
         t.state is CommentEnd,
     ensures
         decreases_ok(input, t, comment_end_state(input, t).0),
+        comment_end_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -606,6 +657,7 @@ proof fn lemma_comment_end_bang_state(input: Seq<u32>, t: Tokenizer)
         t.state is CommentEndBang,
     ensures
         decreases_ok(input, t, comment_end_bang_state(input, t).0),
+        comment_end_bang_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -615,6 +667,7 @@ proof fn lemma_doctype_state(input: Seq<u32>, t: Tokenizer)
         t.state is Doctype,
     ensures
         decreases_ok(input, t, doctype_state(input, t).0),
+        doctype_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -624,6 +677,7 @@ proof fn lemma_before_doctype_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is BeforeDoctypeName,
     ensures
         decreases_ok(input, t, before_doctype_name_state(input, t).0),
+        before_doctype_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -633,6 +687,7 @@ proof fn lemma_doctype_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is DoctypeName,
     ensures
         decreases_ok(input, t, doctype_name_state(input, t).0),
+        doctype_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -642,6 +697,7 @@ proof fn lemma_after_doctype_name_state(input: Seq<u32>, t: Tokenizer)
         t.state is AfterDoctypeName,
     ensures
         decreases_ok(input, t, after_doctype_name_state(input, t).0),
+        after_doctype_name_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -651,6 +707,7 @@ proof fn lemma_after_doctype_public_keyword_state(input: Seq<u32>, t: Tokenizer)
         t.state is AfterDoctypePublicKeyword,
     ensures
         decreases_ok(input, t, after_doctype_public_keyword_state(input, t).0),
+        after_doctype_public_keyword_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -660,6 +717,7 @@ proof fn lemma_before_doctype_public_identifier_state(input: Seq<u32>, t: Tokeni
         t.state is BeforeDoctypePublicIdentifier,
     ensures
         decreases_ok(input, t, before_doctype_public_identifier_state(input, t).0),
+        before_doctype_public_identifier_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -669,6 +727,7 @@ proof fn lemma_doctype_public_identifier_double_quoted_state(input: Seq<u32>, t:
         t.state is DoctypePublicIdentifierDoubleQuoted,
     ensures
         decreases_ok(input, t, doctype_public_identifier_double_quoted_state(input, t).0),
+        doctype_public_identifier_double_quoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -678,6 +737,7 @@ proof fn lemma_doctype_public_identifier_single_quoted_state(input: Seq<u32>, t:
         t.state is DoctypePublicIdentifierSingleQuoted,
     ensures
         decreases_ok(input, t, doctype_public_identifier_single_quoted_state(input, t).0),
+        doctype_public_identifier_single_quoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -687,6 +747,7 @@ proof fn lemma_after_doctype_public_identifier_state(input: Seq<u32>, t: Tokeniz
         t.state is AfterDoctypePublicIdentifier,
     ensures
         decreases_ok(input, t, after_doctype_public_identifier_state(input, t).0),
+        after_doctype_public_identifier_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -696,6 +757,7 @@ proof fn lemma_between_doctype_public_and_system_identifiers_state(input: Seq<u3
         t.state is BetweenDoctypePublicAndSystemIdentifiers,
     ensures
         decreases_ok(input, t, between_doctype_public_and_system_identifiers_state(input, t).0),
+        between_doctype_public_and_system_identifiers_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -705,6 +767,7 @@ proof fn lemma_after_doctype_system_keyword_state(input: Seq<u32>, t: Tokenizer)
         t.state is AfterDoctypeSystemKeyword,
     ensures
         decreases_ok(input, t, after_doctype_system_keyword_state(input, t).0),
+        after_doctype_system_keyword_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -714,6 +777,7 @@ proof fn lemma_before_doctype_system_identifier_state(input: Seq<u32>, t: Tokeni
         t.state is BeforeDoctypeSystemIdentifier,
     ensures
         decreases_ok(input, t, before_doctype_system_identifier_state(input, t).0),
+        before_doctype_system_identifier_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -723,6 +787,7 @@ proof fn lemma_doctype_system_identifier_double_quoted_state(input: Seq<u32>, t:
         t.state is DoctypeSystemIdentifierDoubleQuoted,
     ensures
         decreases_ok(input, t, doctype_system_identifier_double_quoted_state(input, t).0),
+        doctype_system_identifier_double_quoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -732,6 +797,7 @@ proof fn lemma_doctype_system_identifier_single_quoted_state(input: Seq<u32>, t:
         t.state is DoctypeSystemIdentifierSingleQuoted,
     ensures
         decreases_ok(input, t, doctype_system_identifier_single_quoted_state(input, t).0),
+        doctype_system_identifier_single_quoted_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -741,6 +807,7 @@ proof fn lemma_after_doctype_system_identifier_state(input: Seq<u32>, t: Tokeniz
         t.state is AfterDoctypeSystemIdentifier,
     ensures
         decreases_ok(input, t, after_doctype_system_identifier_state(input, t).0),
+        after_doctype_system_identifier_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -750,6 +817,7 @@ proof fn lemma_bogus_doctype_state(input: Seq<u32>, t: Tokenizer)
         t.state is BogusDoctype,
     ensures
         decreases_ok(input, t, bogus_doctype_state(input, t).0),
+        bogus_doctype_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -759,6 +827,7 @@ proof fn lemma_cdata_section_state(input: Seq<u32>, t: Tokenizer)
         t.state is CdataSection,
     ensures
         decreases_ok(input, t, cdata_section_state(input, t).0),
+        cdata_section_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -768,6 +837,7 @@ proof fn lemma_cdata_section_bracket_state(input: Seq<u32>, t: Tokenizer)
         t.state is CdataSectionBracket,
     ensures
         decreases_ok(input, t, cdata_section_bracket_state(input, t).0),
+        cdata_section_bracket_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -777,6 +847,7 @@ proof fn lemma_cdata_section_end_state(input: Seq<u32>, t: Tokenizer)
         t.state is CdataSectionEnd,
     ensures
         decreases_ok(input, t, cdata_section_end_state(input, t).0),
+        cdata_section_end_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -786,6 +857,7 @@ proof fn lemma_processing_instruction_open_state(input: Seq<u32>, t: Tokenizer)
         t.state is ProcessingInstructionOpen,
     ensures
         decreases_ok(input, t, processing_instruction_open_state(input, t).0),
+        processing_instruction_open_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -795,6 +867,7 @@ proof fn lemma_processing_instruction_target_state(input: Seq<u32>, t: Tokenizer
         t.state is ProcessingInstructionTarget,
     ensures
         decreases_ok(input, t, processing_instruction_target_state(input, t).0),
+        processing_instruction_target_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -804,6 +877,7 @@ proof fn lemma_after_processing_instruction_target_state(input: Seq<u32>, t: Tok
         t.state is AfterProcessingInstructionTarget,
     ensures
         decreases_ok(input, t, after_processing_instruction_target_state(input, t).0),
+        after_processing_instruction_target_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -813,6 +887,7 @@ proof fn lemma_processing_instruction_data_state(input: Seq<u32>, t: Tokenizer)
         t.state is ProcessingInstructionData,
     ensures
         decreases_ok(input, t, processing_instruction_data_state(input, t).0),
+        processing_instruction_data_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -822,6 +897,7 @@ proof fn lemma_processing_instruction_questionable_state(input: Seq<u32>, t: Tok
         t.state is ProcessingInstructionQuestionable,
     ensures
         decreases_ok(input, t, processing_instruction_questionable_state(input, t).0),
+        processing_instruction_questionable_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -831,6 +907,7 @@ proof fn lemma_character_reference_state(input: Seq<u32>, t: Tokenizer)
         t.state is CharacterReference,
     ensures
         decreases_ok(input, t, character_reference_state(input, t).0),
+        character_reference_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -840,6 +917,7 @@ proof fn lemma_named_character_reference_state(input: Seq<u32>, t: Tokenizer)
         t.state is NamedCharacterReference,
     ensures
         decreases_ok(input, t, named_character_reference_state(input, t).0),
+        named_character_reference_state(input, t).0.pos <= input.len(),
 {
     crate::charref::lemmas::lemma_match_consumes_two(input, t.pos as int);
 }
@@ -850,6 +928,7 @@ proof fn lemma_ambiguous_ampersand_state(input: Seq<u32>, t: Tokenizer)
         t.state is AmbiguousAmpersand,
     ensures
         decreases_ok(input, t, ambiguous_ampersand_state(input, t).0),
+        ambiguous_ampersand_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -859,6 +938,7 @@ proof fn lemma_numeric_character_reference_state(input: Seq<u32>, t: Tokenizer)
         t.state is NumericCharacterReference,
     ensures
         decreases_ok(input, t, numeric_character_reference_state(input, t).0),
+        numeric_character_reference_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -868,6 +948,7 @@ proof fn lemma_hexadecimal_character_reference_start_state(input: Seq<u32>, t: T
         t.state is HexadecimalCharacterReferenceStart,
     ensures
         decreases_ok(input, t, hexadecimal_character_reference_start_state(input, t).0),
+        hexadecimal_character_reference_start_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -877,6 +958,7 @@ proof fn lemma_hexadecimal_character_reference_state(input: Seq<u32>, t: Tokeniz
         t.state is HexadecimalCharacterReference,
     ensures
         decreases_ok(input, t, hexadecimal_character_reference_state(input, t).0),
+        hexadecimal_character_reference_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -886,6 +968,7 @@ proof fn lemma_decimal_character_reference_state(input: Seq<u32>, t: Tokenizer)
         t.state is DecimalCharacterReference,
     ensures
         decreases_ok(input, t, decimal_character_reference_state(input, t).0),
+        decimal_character_reference_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -895,6 +978,7 @@ proof fn lemma_numeric_character_reference_end_state(input: Seq<u32>, t: Tokeniz
         t.state is NumericCharacterReferenceEnd,
     ensures
         decreases_ok(input, t, numeric_character_reference_end_state(input, t).0),
+        numeric_character_reference_end_state(input, t).0.pos <= input.len(),
 {
 }
 
@@ -902,6 +986,7 @@ proof fn lemma_numeric_character_reference_end_state(input: Seq<u32>, t: Tokeniz
 pub proof fn lemma_step_decreases(input: Seq<u32>, t: Tokenizer)
     ensures
         !stopped(input, t) ==> decreases_ok(input, t, step(input, t).0),
+        !stopped(input, t) ==> step(input, t).0.pos <= input.len(),
 {
     if !stopped(input, t) {
         reveal(step);
@@ -999,6 +1084,7 @@ pub proof fn lemma_step_decreases(input: Seq<u32>, t: Tokenizer)
 pub proof fn lemma_next_token_decreases(input: Seq<u32>, t: Tokenizer)
     ensures
         !stopped(input, t) ==> decreases_ok(input, t, next_token(input, t).0),
+        t.pos <= input.len() ==> next_token(input, t).0.pos <= input.len(),
     decreases remaining(input, t), rank(input, t),
 {
     if !stopped(input, t) {
