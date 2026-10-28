@@ -81,6 +81,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-dom"
+version = "0.0.0"
+dependencies = [
+ "vstd",
+]
+
+[[package]]
 name = "clazel-encoding"
 version = "0.0.0"
 dependencies = [
