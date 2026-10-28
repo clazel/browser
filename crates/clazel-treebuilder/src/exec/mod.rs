@@ -18,6 +18,7 @@ pub use crate::spec;
 
 pub mod formatting;
 pub mod frame;
+pub mod insert;
 pub mod names;
 pub mod stack;
 pub mod types;

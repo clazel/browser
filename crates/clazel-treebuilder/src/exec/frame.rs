@@ -236,7 +236,8 @@ pub proof fn lemma_fmts_update(doc: Document, f: Seq<Fmt>, i: int, x: Fmt)
 
 /// What a node keeps when the document changes: an element stays an
 /// element with the same namespace and local name, and keeps its template
-/// contents; a fragment stays a fragment.
+/// contents; a fragment stays a fragment; no other node becomes an
+/// element.
 pub open spec fn kind_kept(a: NodeKind, b: NodeKind) -> bool {
     &&& a is Element ==> {
         &&& b is Element
@@ -245,6 +246,7 @@ pub open spec fn kind_kept(a: NodeKind, b: NodeKind) -> bool {
         &&& (a->Element_template_contents is Some ==> b->Element_template_contents is Some)
     }
     &&& a is DocumentFragment ==> b is DocumentFragment
+    &&& b is Element ==> a is Element
 }
 
 /// `d1` is a well-formed document that keeps every node of `d0`
