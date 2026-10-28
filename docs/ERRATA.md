@@ -194,3 +194,22 @@ it evidently means. Each entry records what we specified instead.
   such issue.
 - **Reported upstream:** not yet (RFC 9110, which obsoletes RFC 7230, already
   states the corrected rule).
+
+## HTML §13.2.6.4.10 "in table text" with an empty pending list
+
+- **Spec:** HTML Standard, Living Standard (`source` at commit
+  `939677714df7379fee3667040113b41c91c851e7`, 26 October 2026),
+  <https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-intabletext>
+- **Text:** "Otherwise, insert the characters given by the pending table
+  character tokens list." and, in "insert a character", "Let data be the
+  characters passed to the algorithm, or, if no characters were explicitly
+  specified, the character of the character token being processed."
+- **Problem:** the list is empty when every character token since the "in
+  table" mode was U+0000 NULL, which "in table text" ignores (`<table>`
+  then a NULL then `</table>`). Read literally, inserting the empty list
+  either creates an empty `Text` node ("insert a character" step 5) or falls
+  back to "the character of the character token being processed", which is
+  the end tag, not a character token.
+- **We specify:** nothing is inserted. See `mode_in_table_text` in
+  `crates/clazel-treebuilder/src/spec/modes/in_table_text.rs`.
+- **Reported upstream:** not yet.
