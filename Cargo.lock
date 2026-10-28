@@ -232,6 +232,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-treebuilder"
+version = "0.0.0"
+dependencies = [
+ "clazel-dom",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-url"
 version = "0.0.0"
 dependencies = [
