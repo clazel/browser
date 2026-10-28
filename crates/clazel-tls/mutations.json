@@ -2463,6 +2463,48 @@
         "lemma": "super::dispatcher_lemmas::lemma_peer_close_is_directional()",
         "witness": "super::dispatcher_spec::receive_close_notify(super::dispatcher_certificates::sample_ready_state()).application_sender != super::dispatcher_certificates::sample_ready_state().application_sender"
       }
+    },
+    {
+      "id": "auth-unoffered-certificate-extension",
+      "file": "src/auth/spec.rs",
+      "find": "else if !entries_offered { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }",
+      "replace": "else if false { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }",
+      "expect": "killed",
+      "reason": "RFC 8446 §4.4.2: Certificate entry extensions must correspond to ClientHello offers; an unoffered status_request is refused with unsupported_extension.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_unoffered_certificate_extension()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_extensions(), 11, super::examples::certificate_with_status_request()).1 != Action::Fail(110u8)"
+      }
+    },
+    {
+      "id": "auth-certificate-extensions-not-checked",
+      "file": "src/auth/spec.rs",
+      "find": "            certificate_extensions_offered(certificate.entries, s.config.extensions)),",
+      "replace": "            true),",
+      "expect": "killed",
+      "reason": "Dispatch must pass the offered-extension check of the received Certificate's entries, not a constant.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_unoffered_certificate_extension()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_extensions(), 11, super::examples::certificate_with_status_request()).1 != Action::Fail(110u8)"
+      }
+    },
+    {
+      "id": "dispatcher-key-update-response-after-close",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "response_due: s.response_due || (request == 1 && write_open(s)),",
+      "replace": "response_due: s.response_due || request == 1,",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.1 and §4.6.3: after our close_notify there is no next record, so update_requested must not make a KeyUpdate response due.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_after_close_owes_no_response()",
+        "witness": "super::dispatcher_spec::receive_key_update(super::dispatcher_certificates::passthrough_crypto(), super::dispatcher_certificates::sample_write_closed_state(), 1).response_due"
+      }
     }
   ]
 }

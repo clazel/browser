@@ -55,6 +55,18 @@ pub proof fn lemma_key_update_epoch_start_failure_is_terminal()
             == super::dispatcher_spec::failed());
 }
 
+/// RFC 8446 §4.6.3 and §6.1: after our close_notify, update_requested still
+/// rotates the receive epoch but owes no KeyUpdate in reply.
+pub proof fn lemma_key_update_after_close_owes_no_response()
+    ensures !super::dispatcher_spec::receive_key_update(
+        super::dispatcher_certificates::passthrough_crypto(),
+        super::dispatcher_certificates::sample_write_closed_state(), 1).response_due,
+{
+    assert(!super::dispatcher_spec::receive_key_update(
+        super::dispatcher_certificates::passthrough_crypto(),
+        super::dispatcher_certificates::sample_write_closed_state(), 1).response_due) by (compute_only);
+}
+
 /// RFC 8446 §6.1: receiving close_notify closes the peer write direction but
 /// retains local application sending resources until separately closed.
 pub proof fn lemma_peer_close_is_directional()
