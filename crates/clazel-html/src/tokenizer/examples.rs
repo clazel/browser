@@ -1,4 +1,4 @@
-//! Inputs evaluated on the spec: each lemma states the tokens
+//! Inputs evaluated on the spec (69 of them): each lemma states the tokens
 //! [`tokenize`] gives for one input, which Verus computes. Together they
 //! pass through every state and most cases of each; they are what the
 //! kill certificates of `mutations.json` contradict. The expected tokens
@@ -432,6 +432,213 @@ pub proof fn lemma_example_cdata()
 {
     reveal(step);
     assert(tokenize(seq![0x61u32, 0x5D, 0x62, 0x5D, 0x5D, 0x5D, 0x3E, 0x63, 0x5D, 0x5D], State::CdataSection, None) == seq![Token::Character(0x61), Token::Character(0x5D), Token::Character(0x62), Token::Character(0x5D), Token::Character(0x63), Token::Character(0x5D), Token::Character(0x5D), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<a b=c` from the Data state.
+pub proof fn lemma_example_unquoted_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x63], State::Data, None) == seq![Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x63], State::Data, None) == seq![Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!--` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_dash_dash_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!--<script>--` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_double_dash_dash_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::EndOfFile]) by (compute_only);
+}
+
+/// `&#65;\u{0}` from the Rcdata state (with a last start tag).
+pub proof fn lemma_example_rcdata_ref_eof()
+    ensures
+        tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x0], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) == seq![Token::Character(0x41), Token::Character(0xFFFD), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x0], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) == seq![Token::Character(0x41), Token::Character(0xFFFD), Token::EndOfFile]) by (compute_only);
+}
+
+/// `a` from the Rawtext state (with a last start tag).
+pub proof fn lemma_example_rawtext_eof()
+    ensures
+        tokenize(seq![0x61u32], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) == seq![Token::Character(0x61), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x61u32], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) == seq![Token::Character(0x61), Token::EndOfFile]) by (compute_only);
+}
+
+/// `</x <a>` from the Rcdata state (with a last start tag).
+pub proof fn lemma_example_rcdata_not_end()
+    ensures
+        tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) == seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) == seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]) by (compute_only);
+}
+
+/// `</x <a>` from the Rawtext state (with a last start tag).
+pub proof fn lemma_example_rawtext_not_end()
+    ensures
+        tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) == seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) == seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]) by (compute_only);
+}
+
+/// `</x <a>` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_not_end()
+    ensures
+        tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!--</x <a>` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_escaped_not_end()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!-- -` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_escaped_dash_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x20, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x2D), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x20, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x2D), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!--<script>x` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_double_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!--<script>-` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_double_dash_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!--<script></script></script>` from the ScriptData state (with a last start tag).
+pub proof fn lemma_example_script_double_end()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) == seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]) by (compute_only);
+}
+
+/// `<a b="&#65;">` from the Data state.
+pub proof fn lemma_example_attr_dq_ref()
+    ensures
+        tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x22, 0x26, 0x23, 0x36, 0x35, 0x3B, 0x22, 0x3E], State::Data, None) == seq![Token::StartTag { tag_name: seq![0x61u32], self_closing: false, attributes: seq![Attribute { name: seq![0x62u32], value: seq![0x41u32] }] }, Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x22, 0x26, 0x23, 0x36, 0x35, 0x3B, 0x22, 0x3E], State::Data, None) == seq![Token::StartTag { tag_name: seq![0x61u32], self_closing: false, attributes: seq![Attribute { name: seq![0x62u32], value: seq![0x41u32] }] }, Token::EndOfFile]) by (compute_only);
+}
+
+/// `<a/` from the Data state.
+pub proof fn lemma_example_self_closing_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x61, 0x2F], State::Data, None) == seq![Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x61, 0x2F], State::Data, None) == seq![Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!----x-->` from the Data state.
+pub proof fn lemma_example_comment_start_dash_dash()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E], State::Data, None) == seq![Token::Comment { data: seq![0x2Du32, 0x2D, 0x78] }, Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E], State::Data, None) == seq![Token::Comment { data: seq![0x2Du32, 0x2D, 0x78] }, Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!DOCTYPE HTML>` from the Data state.
+pub proof fn lemma_example_doctype_upper()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x48, 0x54, 0x4D, 0x4C, 0x3E], State::Data, None) == seq![Token::Doctype { name: Some(seq![0x68u32, 0x74, 0x6D, 0x6C]), public_identifier: None, system_identifier: None, force_quirks: false }, Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x48, 0x54, 0x4D, 0x4C, 0x3E], State::Data, None) == seq![Token::Doctype { name: Some(seq![0x68u32, 0x74, 0x6D, 0x6C]), public_identifier: None, system_identifier: None, force_quirks: false }, Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!DOCTYPE a >` from the Data state.
+pub proof fn lemma_example_doctype_after_name()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x3E], State::Data, None) == seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: None, system_identifier: None, force_quirks: false }, Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x3E], State::Data, None) == seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: None, system_identifier: None, force_quirks: false }, Token::EndOfFile]) by (compute_only);
+}
+
+/// `<!DOCTYPE a PUBLIC 'p' >` from the Data state.
+pub proof fn lemma_example_doctype_between_gt()
+    ensures
+        tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x27, 0x70, 0x27, 0x20, 0x3E], State::Data, None) == seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: Some(seq![0x70u32]), system_identifier: None, force_quirks: false }, Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x27, 0x70, 0x27, 0x20, 0x3E], State::Data, None) == seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: Some(seq![0x70u32]), system_identifier: None, force_quirks: false }, Token::EndOfFile]) by (compute_only);
+}
+
+/// `a` from the CdataSection state.
+pub proof fn lemma_example_cdata_eof()
+    ensures
+        tokenize(seq![0x61u32], State::CdataSection, None) == seq![Token::Character(0x61), Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x61u32], State::CdataSection, None) == seq![Token::Character(0x61), Token::EndOfFile]) by (compute_only);
+}
+
+/// `<?` from the Data state.
+pub proof fn lemma_example_pi_open_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x3F], State::Data, None) == seq![Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x3F], State::Data, None) == seq![Token::EndOfFile]) by (compute_only);
+}
+
+/// `<?a` from the Data state.
+pub proof fn lemma_example_pi_target_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x3F, 0x61], State::Data, None) == seq![Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x3F, 0x61], State::Data, None) == seq![Token::EndOfFile]) by (compute_only);
+}
+
+/// `<?a b` from the Data state.
+pub proof fn lemma_example_pi_data_eof()
+    ensures
+        tokenize(seq![0x3Cu32, 0x3F, 0x61, 0x20, 0x62], State::Data, None) == seq![Token::EndOfFile],
+{
+    reveal(step);
+    assert(tokenize(seq![0x3Cu32, 0x3F, 0x61, 0x20, 0x62], State::Data, None) == seq![Token::EndOfFile]) by (compute_only);
 }
 
 } // verus!

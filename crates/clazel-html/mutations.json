@@ -1,0 +1,1890 @@
+{
+  "mutations": [
+    {
+      "id": "state-data",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x26 {\n                // U+0026 AMPERSAND (&): \"Set the return state to the data",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x26 {\n                // U+0026 AMPERSAND (&): \"Set the return state to the data",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_data differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_data()",
+        "witness": "tokenize(seq![0x61u32, 0x3C, 0x62, 0x3E, 0x0], State::Data, None) != seq![Token::Character(0x61), Token::StartTag { tag_name: seq![0x62u32], self_closing: false, attributes: seq![] }, Token::Character(0x0), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rcdata",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x26 {\n                // U+0026 AMPERSAND (&): \"Set the return state to the RCDATA",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x26 {\n                // U+0026 AMPERSAND (&): \"Set the return state to the RCDATA",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_rcdata_ref_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rcdata_ref_eof()",
+        "witness": "tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x0], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) != seq![Token::Character(0x41), Token::Character(0xFFFD), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rawtext",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x3C {\n                // U+003C LESS-THAN SIGN (<): \"Switch to the RAWTEXT less-than",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x3C {\n                // U+003C LESS-THAN SIGN (<): \"Switch to the RAWTEXT less-than",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_rawtext_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rawtext_eof()",
+        "witness": "tokenize(seq![0x61u32], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) != seq![Token::Character(0x61), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x3C {\n                // U+003C LESS-THAN SIGN (<): \"Switch to the script data",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x3C {\n                // U+003C LESS-THAN SIGN (<): \"Switch to the script data",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_script_double differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_double()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x61, 0x2D, 0x62, 0x2D, 0x2D, 0x63, 0x3C, 0x2D, 0x0, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x0, 0x2D, 0x2D, 0x0, 0x2D, 0x2D, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x61), Token::Character(0x2D), Token::Character(0x62), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x63), Token::Character(0x3C), Token::Character(0x2D), Token::Character(0xFFFD), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0xFFFD), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0xFFFD), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3E), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-plaintext",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x00 {",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x00 {",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_plaintext differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_plaintext()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x3E, 0x0, 0x26, 0x23, 0x36, 0x35, 0x3B], State::Plaintext, None) != seq![Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::Character(0xFFFD), Token::Character(0x26), Token::Character(0x23), Token::Character(0x36), Token::Character(0x35), Token::Character(0x3B), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-tag-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![ch(0x3C)]),",
+      "replace": "        None => emit_eof(t, seq![ch(0x3D)]),",
+      "expect": "killed",
+      "reason": "A case emits U+003D instead of U+003C: the mutant's tokens for lemma_example_eof_lt differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_eof_lt()",
+        "witness": "tokenize(seq![0x3Cu32], State::Data, None) != seq![Token::Character(0x3C), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-end-tag-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![ch(0x3C), ch(0x2F)]),",
+      "replace": "        None => emit_eof(t, seq![ch(0x3D), ch(0x2F)]),",
+      "expect": "killed",
+      "reason": "A case emits U+003D instead of U+003C: the mutant's tokens for lemma_example_eof_lt_slash differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_eof_lt_slash()",
+        "witness": "tokenize(seq![0x3Cu32, 0x2F], State::Data, None) != seq![Token::Character(0x3C), Token::Character(0x2F), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-tag-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "pub open spec fn tag_name_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-tag parse error. Emit an end-of-file\n        // token.\"\n        None => emit_eof(t, seq![]),",
+      "replace": "pub open spec fn tag_name_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-tag parse error. Emit an end-of-file\n        // token.\"\n        None => emit_eof(t, seq![ch(0x3F)]),",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_rcdata_end differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rcdata_end()",
+        "witness": "tokenize(seq![0x3Cu32, 0x2F, 0x54, 0x49, 0x54, 0x4C, 0x45, 0x20, 0x3E, 0x3C, 0x2F, 0x74, 0x69, 0x74, 0x6C, 0x65, 0x2F, 0x3E, 0x3C, 0x2F, 0x74, 0x69, 0x74, 0x6C, 0x65], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) != seq![Token::EndTag { tag_name: seq![0x74u32, 0x69, 0x74, 0x6C, 0x65], self_closing: false, attributes: seq![] }, Token::EndTag { tag_name: seq![0x74u32, 0x69, 0x74, 0x6C, 0x65], self_closing: true, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rcdata-less-than-sign",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_less_than_sign_state(input, t, State::Rcdata, State::RcdataEndTagOpen)",
+      "replace": "    text_less_than_sign_state(input, t, State::Rcdata, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_rcdata differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rcdata()",
+        "witness": "tokenize(seq![0x61u32, 0x3C, 0x2F, 0x78, 0x3E, 0x3C, 0x2F, 0x74, 0x69, 0x74, 0x6C, 0x65, 0x3E, 0x62, 0x26, 0x23, 0x36, 0x35, 0x3B, 0x0, 0x3C], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) != seq![Token::Character(0x61), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x3E), Token::EndTag { tag_name: seq![0x74u32, 0x69, 0x74, 0x6C, 0x65], self_closing: false, attributes: seq![] }, Token::Character(0x62), Token::Character(0x41), Token::Character(0x0), Token::Character(0x3C), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rcdata-end-tag-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_open_state(input, t, State::Rcdata, State::RcdataEndTagName)",
+      "replace": "    text_end_tag_open_state(input, t, State::Rcdata, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_rcdata differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rcdata()",
+        "witness": "tokenize(seq![0x61u32, 0x3C, 0x2F, 0x78, 0x3E, 0x3C, 0x2F, 0x74, 0x69, 0x74, 0x6C, 0x65, 0x3E, 0x62, 0x26, 0x23, 0x36, 0x35, 0x3B, 0x0, 0x3C], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) != seq![Token::Character(0x61), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x3E), Token::EndTag { tag_name: seq![0x74u32, 0x69, 0x74, 0x6C, 0x65], self_closing: false, attributes: seq![] }, Token::Character(0x62), Token::Character(0x41), Token::Character(0x0), Token::Character(0x3C), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rcdata-end-tag-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_name_state(input, t, State::Rcdata)",
+      "replace": "    text_end_tag_name_state(input, t, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_rcdata_not_end differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rcdata_not_end()",
+        "witness": "tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::Rcdata, Some(seq![0x74u32, 0x69, 0x74, 0x6C, 0x65])) != seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rawtext-less-than-sign",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_less_than_sign_state(input, t, State::Rawtext, State::RawtextEndTagOpen)",
+      "replace": "    text_less_than_sign_state(input, t, State::Rawtext, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_rawtext differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rawtext()",
+        "witness": "tokenize(seq![0x3Cu32, 0x62, 0x3E, 0x3C, 0x2F, 0x73, 0x74, 0x79, 0x6C, 0x65, 0x3E, 0x0, 0x3C, 0x2F, 0x73], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) != seq![Token::Character(0x3C), Token::Character(0x62), Token::Character(0x3E), Token::EndTag { tag_name: seq![0x73u32, 0x74, 0x79, 0x6C, 0x65], self_closing: false, attributes: seq![] }, Token::Character(0x0), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rawtext-end-tag-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_open_state(input, t, State::Rawtext, State::RawtextEndTagName)",
+      "replace": "    text_end_tag_open_state(input, t, State::Rawtext, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_rawtext differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rawtext()",
+        "witness": "tokenize(seq![0x3Cu32, 0x62, 0x3E, 0x3C, 0x2F, 0x73, 0x74, 0x79, 0x6C, 0x65, 0x3E, 0x0, 0x3C, 0x2F, 0x73], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) != seq![Token::Character(0x3C), Token::Character(0x62), Token::Character(0x3E), Token::EndTag { tag_name: seq![0x73u32, 0x74, 0x79, 0x6C, 0x65], self_closing: false, attributes: seq![] }, Token::Character(0x0), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-rawtext-end-tag-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_name_state(input, t, State::Rawtext)",
+      "replace": "    text_end_tag_name_state(input, t, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_rawtext_not_end differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_rawtext_not_end()",
+        "witness": "tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::Rawtext, Some(seq![0x73u32, 0x74, 0x79, 0x6C, 0x65])) != seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-less-than-sign",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(Tokenizer { temporary_buffer: seq![], ..consumed(t) }, State::ScriptDataEndTagOpen))",
+      "replace": "            none(switch_to(Tokenizer { temporary_buffer: seq![], ..consumed(t) }, State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the ScriptDataEndTagOpen state: the mutant's tokens for lemma_example_script differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D, 0x3E, 0x0, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3E), Token::Character(0xFFFD), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-end-tag-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_open_state(input, t, State::ScriptData, State::ScriptDataEndTagName)",
+      "replace": "    text_end_tag_open_state(input, t, State::ScriptData, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_script differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D, 0x3E, 0x0, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3E), Token::Character(0xFFFD), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-end-tag-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_name_state(input, t, State::ScriptData)",
+      "replace": "    text_end_tag_name_state(input, t, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_script_not_end differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_not_end()",
+        "witness": "tokenize(seq![0x3Cu32, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escape-start",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            one(switch_to(consumed(t), State::ScriptDataEscapeStartDash), ch(0x2D))",
+      "replace": "            one(switch_to(consumed(t), State::Data), ch(0x2D))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the ScriptDataEscapeStartDash state: the mutant's tokens for lemma_example_script differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D, 0x3E, 0x0, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3E), Token::Character(0xFFFD), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escape-start-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            one(switch_to(consumed(t), State::ScriptDataEscapedDashDash), ch(0x2D))",
+      "replace": "            one(switch_to(consumed(t), State::Data), ch(0x2D))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the ScriptDataEscapedDashDash state: the mutant's tokens for lemma_example_script differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D, 0x3E, 0x0, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3E), Token::Character(0xFFFD), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escaped",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data escaped\n                // dash state. Emit a U+002D HYPHEN-MINUS character token.\"",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data escaped\n                // dash state. Emit a U+002D HYPHEN-MINUS character token.\"",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_script_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x61], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x61), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escaped-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data escaped\n                // dash dash state. Emit a U+002D HYPHEN-MINUS character",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data escaped\n                // dash dash state. Emit a U+002D HYPHEN-MINUS character",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_script_escaped_dash_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_escaped_dash_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x20, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x2D), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escaped-dash-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "pub open spec fn script_data_escaped_dash_dash_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-script-html-comment-like-text parse error.\n        // Emit an end-of-file token.\"\n        None => emit_eof(t, seq![]),",
+      "replace": "pub open spec fn script_data_escaped_dash_dash_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-script-html-comment-like-text parse error.\n        // Emit an end-of-file token.\"\n        None => emit_eof(t, seq![ch(0x3F)]),",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_script_dash_dash_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_dash_dash_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escaped-less-than-sign",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                switch_to(Tokenizer { temporary_buffer: seq![], ..consumed(t) }, State::ScriptDataEscapedEndTagOpen),",
+      "replace": "                switch_to(Tokenizer { temporary_buffer: seq![], ..consumed(t) }, State::Data),",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the ScriptDataEscapedEndTagOpen state: the mutant's tokens for lemma_example_script_escaped differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_escaped()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x20, 0x2D, 0x20, 0x2D, 0x2D, 0x20, 0x3C, 0x62, 0x20, 0x3C, 0x2F, 0x78, 0x20, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x62), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escaped-end-tag-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_open_state(input, t, State::ScriptDataEscaped, State::ScriptDataEscapedEndTagName)",
+      "replace": "    text_end_tag_open_state(input, t, State::ScriptDataEscaped, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_script_escaped differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_escaped()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x20, 0x2D, 0x20, 0x2D, 0x2D, 0x20, 0x3C, 0x62, 0x20, 0x3C, 0x2F, 0x78, 0x20, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x62), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-escaped-end-tag-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    text_end_tag_name_state(input, t, State::ScriptDataEscaped)",
+      "replace": "    text_end_tag_name_state(input, t, State::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_script_escaped_not_end differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_escaped_not_end()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x2F, 0x78, 0x20, 0x3C, 0x61, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x78), Token::Character(0x20), Token::Character(0x3C), Token::Character(0x61), Token::Character(0x3E), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-double-escaped",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data double\n                // escaped dash state. Emit a U+002D HYPHEN-MINUS character",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data double\n                // escaped dash state. Emit a U+002D HYPHEN-MINUS character",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_script_double_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_double_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-double-escaped-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data double\n                // escaped dash dash state. Emit a U+002D HYPHEN-MINUS",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x2D {\n                // U+002D HYPHEN-MINUS (-): \"Switch to the script data double\n                // escaped dash dash state. Emit a U+002D HYPHEN-MINUS",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_script_double_dash_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_double_dash_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-double-escaped-dash-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "pub open spec fn script_data_double_escaped_dash_dash_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-script-html-comment-like-text parse error.\n        // Emit an end-of-file token.\"\n        None => emit_eof(t, seq![]),",
+      "replace": "pub open spec fn script_data_double_escaped_dash_dash_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-script-html-comment-like-text parse error.\n        // Emit an end-of-file token.\"\n        None => emit_eof(t, seq![ch(0x3F)]),",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_script_double_dash_dash_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_double_dash_dash_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-double-escaped-less-than-sign",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                switch_to(Tokenizer { temporary_buffer: seq![], ..consumed(t) }, State::ScriptDataDoubleEscapeEnd),",
+      "replace": "                switch_to(Tokenizer { temporary_buffer: seq![], ..consumed(t) }, State::Data),",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the ScriptDataDoubleEscapeEnd state: the mutant's tokens for lemma_example_script differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D, 0x3E, 0x0, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3E), Token::Character(0xFFFD), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-before-attribute-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "none(switch_to(start_attribute(consumed(t), seq![c]), State::AttributeName))",
+      "replace": "none(switch_to(start_attribute(consumed(t), seq![]), State::AttributeName))",
+      "expect": "killed",
+      "reason": "\"=\" before an attribute name is dropped instead of starting the name: the mutant's tokens for lemma_example_attr_odd differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_attr_odd()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x20, 0x3D, 0x78, 0x20, 0x22, 0x79, 0x22, 0x20, 0x7A, 0x3D, 0x60, 0x20, 0x3E, 0x3C, 0x2F, 0x41, 0x3E], State::Data, None) != seq![Token::StartTag { tag_name: seq![0x61u32], self_closing: false, attributes: seq![Attribute { name: seq![0x3Du32, 0x78], value: seq![] }, Attribute { name: seq![0x22u32, 0x79, 0x22], value: seq![] }, Attribute { name: seq![0x7Au32], value: seq![0x60u32] }] }, Token::EndTag { tag_name: seq![0x61u32], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-attribute-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "none(append_to_attribute_name(n, to_lower(c)))",
+      "replace": "none(append_to_attribute_name(n, c))",
+      "expect": "killed",
+      "reason": "ASCII upper alpha in an attribute name is not lowercased: the mutant's tokens for lemma_example_attr_dup differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_attr_dup()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x20, 0x42, 0x3D, 0x31, 0x20, 0x62, 0x3D, 0x32, 0x20, 0x63, 0x20, 0x3E], State::Data, None) != seq![Token::StartTag { tag_name: seq![0x61u32], self_closing: false, attributes: seq![Attribute { name: seq![0x62u32], value: seq![0x31u32] }, Attribute { name: seq![0x63u32], value: seq![] }] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-attribute-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if is_tab_lf_ff_space(c) {\n                // tab, LF, FF, space: \"Ignore the character.\"",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if is_tab_lf_ff_space(c) {\n                // tab, LF, FF, space: \"Ignore the character.\"",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_eof_tag differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_eof_tag()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62], State::Data, None) != seq![Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-before-attribute-value",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(consumed(t), State::AttributeValueDoubleQuoted))",
+      "replace": "            none(switch_to(consumed(t), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the AttributeValueDoubleQuoted state: the mutant's tokens for lemma_example_tags differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_tags()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x63, 0x20, 0x64, 0x3D, 0x27, 0x65, 0x27, 0x20, 0x66, 0x3D, 0x22, 0x67, 0x22, 0x20, 0x68, 0x2F, 0x3E], State::Data, None) != seq![Token::StartTag { tag_name: seq![0x61u32], self_closing: true, attributes: seq![Attribute { name: seq![0x62u32], value: seq![0x63u32] }, Attribute { name: seq![0x64u32], value: seq![0x65u32] }, Attribute { name: seq![0x66u32], value: seq![0x67u32] }, Attribute { name: seq![0x68u32], value: seq![] }] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-attribute-value-double-quoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    attribute_value_quoted_state(input, t, 0x22, ReturnState::AttributeValueDoubleQuoted)",
+      "replace": "    attribute_value_quoted_state(input, t, 0x22, ReturnState::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_attr_dq_ref differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_attr_dq_ref()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x22, 0x26, 0x23, 0x36, 0x35, 0x3B, 0x22, 0x3E], State::Data, None) != seq![Token::StartTag { tag_name: seq![0x61u32], self_closing: false, attributes: seq![Attribute { name: seq![0x62u32], value: seq![0x41u32] }] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-attribute-value-single-quoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    attribute_value_quoted_state(input, t, 0x27, ReturnState::AttributeValueSingleQuoted)",
+      "replace": "    attribute_value_quoted_state(input, t, 0x27, ReturnState::Data)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_numeric_attr differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_numeric_attr()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x27, 0x26, 0x23, 0x36, 0x35, 0x3B, 0x27, 0x20, 0x63, 0x3D, 0x26, 0x23, 0x78, 0x34, 0x32, 0x3E], State::Data, None) != seq![Token::StartTag { tag_name: seq![0x61u32], self_closing: false, attributes: seq![Attribute { name: seq![0x62u32], value: seq![0x41u32] }, Attribute { name: seq![0x63u32], value: seq![0x42u32] }] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-attribute-value-unquoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "pub open spec fn attribute_value_unquoted_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-tag parse error. Emit an end-of-file\n        // token.\"\n        None => emit_eof(t, seq![]),",
+      "replace": "pub open spec fn attribute_value_unquoted_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-tag parse error. Emit an end-of-file\n        // token.\"\n        None => emit_eof(t, seq![ch(0x3F)]),",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_unquoted_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_unquoted_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x20, 0x62, 0x3D, 0x63], State::Data, None) != seq![Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-attribute-value-quoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "pub open spec fn after_attribute_value_quoted_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-tag parse error. Emit an end-of-file\n        // token.\"\n        None => emit_eof(t, seq![]),",
+      "replace": "pub open spec fn after_attribute_value_quoted_state(input: Seq<u32>, t: Tokenizer) -> Step {\n    match next_char(input, t.pos) {\n        // EOF: \"This is an eof-in-tag parse error. Emit an end-of-file\n        // token.\"\n        None => emit_eof(t, seq![ch(0x3F)]),",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_tag_errors differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_tag_errors()",
+        "witness": "tokenize(seq![0x3Cu32, 0x31, 0x3C, 0x2F, 0x3E, 0x3C, 0x40, 0x3C, 0x61, 0x0, 0x20, 0x62, 0x0, 0x3D, 0x27, 0x0, 0x27], State::Data, None) != seq![Token::Character(0x3C), Token::Character(0x31), Token::Character(0x3C), Token::Character(0x40), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-self-closing-start-tag",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            if c == 0x3E {\n                // U+003E GREATER-THAN SIGN (>): \"Set the self-closing flag of",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            if c == 0x3E {\n                // U+003E GREATER-THAN SIGN (>): \"Set the self-closing flag of",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_self_closing_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_self_closing_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x61, 0x2F], State::Data, None) != seq![Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-bogus-comment",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                (switch_to(n, State::Data), emit_current(n, seq![]))\n            } else if c == 0x00 {",
+      "replace": "                (switch_to(n, State::BogusComment), emit_current(n, seq![]))\n            } else if c == 0x00 {",
+      "expect": "killed",
+      "reason": "A case switches to the BogusComment state instead of the Data state: the mutant's tokens for lemma_example_end_tag differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_end_tag()",
+        "witness": "tokenize(seq![0x3Cu32, 0x2F, 0x61, 0x20, 0x62, 0x2F, 0x3E, 0x3C, 0x2F, 0x20, 0x3E], State::Data, None) != seq![Token::EndTag { tag_name: seq![0x61u32], self_closing: true, attributes: seq![Attribute { name: seq![0x62u32], value: seq![] }] }, Token::Comment { data: seq![0x20u32] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-markup-declaration-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        none(switch_to(new_comment(Tokenizer { pos: t.pos + 2, ..t }, seq![]), State::CommentStart))",
+      "replace": "        none(switch_to(new_comment(Tokenizer { pos: t.pos + 2, ..t }, seq![]), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentStart state: the mutant's tokens for lemma_example_comments differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comments()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x61, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![] }, Token::Comment { data: seq![] }, Token::Comment { data: seq![0x61u32] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-start",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(consumed(t), State::CommentStartDash))",
+      "replace": "            none(switch_to(consumed(t), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentStartDash state: the mutant's tokens for lemma_example_comments differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comments()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x61, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![] }, Token::Comment { data: seq![] }, Token::Comment { data: seq![0x61u32] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-start-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(consumed(t), State::CommentEnd))\n            } else if c == 0x3E {",
+      "replace": "                none(switch_to(consumed(t), State::Data))\n            } else if c == 0x3E {",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentEnd state: the mutant's tokens for lemma_example_comment_start_dash_dash differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comment_start_dash_dash()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![0x2Du32, 0x2D, 0x78] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(append_to_comment(n, seq![c]), State::CommentLessThanSign))",
+      "replace": "                none(switch_to(append_to_comment(n, seq![c]), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentLessThanSign state: the mutant's tokens for lemma_example_comment_nested differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comment_nested()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x78] }, Token::Comment { data: seq![0x3Cu32, 0x21] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-less-than-sign",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(append_to_comment(consumed(t), seq![c]), State::CommentLessThanSignBang))",
+      "replace": "            none(switch_to(append_to_comment(consumed(t), seq![c]), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentLessThanSignBang state: the mutant's tokens for lemma_example_comment_nested differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comment_nested()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x78] }, Token::Comment { data: seq![0x3Cu32, 0x21] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-less-than-sign-bang",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(consumed(t), State::CommentLessThanSignBangDash))",
+      "replace": "            none(switch_to(consumed(t), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentLessThanSignBangDash state: the mutant's tokens for lemma_example_comment_nested differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comment_nested()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x78] }, Token::Comment { data: seq![0x3Cu32, 0x21] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-less-than-sign-bang-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(consumed(t), State::CommentLessThanSignBangDashDash))",
+      "replace": "            none(switch_to(consumed(t), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentLessThanSignBangDashDash state: the mutant's tokens for lemma_example_comment_nested differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comment_nested()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x78] }, Token::Comment { data: seq![0x3Cu32, 0x21] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-less-than-sign-bang-dash-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    none(switch_to(t, State::CommentEnd))",
+      "replace": "    none(switch_to(t, State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentEnd state: the mutant's tokens for lemma_example_comment_nested differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comment_nested()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x78, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3C, 0x21, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x78] }, Token::Comment { data: seq![0x3Cu32, 0x21] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-end-dash",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(consumed(t), State::CommentEnd))\n            } else {",
+      "replace": "                none(switch_to(consumed(t), State::Data))\n            } else {",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentEnd state: the mutant's tokens for lemma_example_comments differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comments()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x61, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![] }, Token::Comment { data: seq![] }, Token::Comment { data: seq![0x61u32] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-end",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                (switch_to(n, State::Data), emit_current(n, seq![]))\n            } else if c == 0x21 {",
+      "replace": "                (switch_to(n, State::BogusComment), emit_current(n, seq![]))\n            } else if c == 0x21 {",
+      "expect": "killed",
+      "reason": "A case switches to the BogusComment state instead of the Data state: the mutant's tokens for lemma_example_comments differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comments()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x3E, 0x3C, 0x21, 0x2D, 0x2D, 0x61, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![] }, Token::Comment { data: seq![] }, Token::Comment { data: seq![0x61u32] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-comment-end-bang",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(append_to_comment(n, seq![0x2Du32, 0x2D, 0x21]), State::CommentEndDash))",
+      "replace": "                none(switch_to(append_to_comment(n, seq![0x2Du32, 0x2D, 0x21]), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CommentEndDash state: the mutant's tokens for lemma_example_comment_bang differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_comment_bang()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x61, 0x2D, 0x2D, 0x21, 0x2D, 0x62, 0x2D, 0x2D, 0x21, 0x63, 0x2D, 0x2D, 0x3E], State::Data, None) != seq![Token::Comment { data: seq![0x61u32, 0x2D, 0x2D, 0x21, 0x2D, 0x62, 0x2D, 0x2D, 0x21, 0x63] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-doctype",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(consumed(t), State::BeforeDoctypeName))",
+      "replace": "                none(switch_to(consumed(t), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the BeforeDoctypeName state: the mutant's tokens for lemma_example_doctype differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x68, 0x74, 0x6D, 0x6C, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x68u32, 0x74, 0x6D, 0x6C]), public_identifier: None, system_identifier: None, force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-before-doctype-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(new_doctype(n, Some(seq![to_lower(c)])), State::DoctypeName))",
+      "replace": "                none(switch_to(new_doctype(n, Some(seq![to_lower(c)])), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the DoctypeName state: the mutant's tokens for lemma_example_doctype_upper differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_upper()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x48, 0x54, 0x4D, 0x4C, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x68u32, 0x74, 0x6D, 0x6C]), public_identifier: None, system_identifier: None, force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-doctype-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(n, State::AfterDoctypeName))",
+      "replace": "                none(switch_to(n, State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the AfterDoctypeName state: the mutant's tokens for lemma_example_doctype_ids differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_ids()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x64, 0x6F, 0x63, 0x74, 0x79, 0x70, 0x65, 0x20, 0x78, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x22, 0x61, 0x22, 0x20, 0x27, 0x62, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: Some(seq![0x61u32]), system_identifier: Some(seq![0x62u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-doctype-name",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                (switch_to(n, State::Data), emit_current(n, seq![]))\n            } else if starts_with_ci(input, t.pos, public_lower()) {",
+      "replace": "                (switch_to(n, State::BogusComment), emit_current(n, seq![]))\n            } else if starts_with_ci(input, t.pos, public_lower()) {",
+      "expect": "killed",
+      "reason": "A case switches to the BogusComment state instead of the Data state: the mutant's tokens for lemma_example_doctype_after_name differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_after_name()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: None, system_identifier: None, force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-doctype-public-keyword",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    after_doctype_keyword_state(input, t, true)",
+      "replace": "    after_doctype_keyword_state(input, t, false)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_ids differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_ids()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x64, 0x6F, 0x63, 0x74, 0x79, 0x70, 0x65, 0x20, 0x78, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x22, 0x61, 0x22, 0x20, 0x27, 0x62, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: Some(seq![0x61u32]), system_identifier: Some(seq![0x62u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-before-doctype-public-identifier",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    before_doctype_identifier_state(input, t, true)",
+      "replace": "    before_doctype_identifier_state(input, t, false)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_ids differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_ids()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x64, 0x6F, 0x63, 0x74, 0x79, 0x70, 0x65, 0x20, 0x78, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x22, 0x61, 0x22, 0x20, 0x27, 0x62, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: Some(seq![0x61u32]), system_identifier: Some(seq![0x62u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-doctype-public-identifier-double-quoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    doctype_identifier_quoted_state(input, t, true, 0x22)",
+      "replace": "    doctype_identifier_quoted_state(input, t, false, 0x22)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_ids differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_ids()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x64, 0x6F, 0x63, 0x74, 0x79, 0x70, 0x65, 0x20, 0x78, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x22, 0x61, 0x22, 0x20, 0x27, 0x62, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: Some(seq![0x61u32]), system_identifier: Some(seq![0x62u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-doctype-public-identifier-single-quoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    doctype_identifier_quoted_state(input, t, true, 0x27)",
+      "replace": "    doctype_identifier_quoted_state(input, t, false, 0x27)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_between differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_between()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x27, 0x70, 0x27, 0x22, 0x73, 0x22, 0x20, 0x78, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: Some(seq![0x70u32]), system_identifier: Some(seq![0x73u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-doctype-public-identifier",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                none(switch_to(n, State::BetweenDoctypePublicAndSystemIdentifiers))",
+      "replace": "                none(switch_to(n, State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the BetweenDoctypePublicAndSystemIdentifiers state: the mutant's tokens for lemma_example_doctype_ids differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_ids()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x64, 0x6F, 0x63, 0x74, 0x79, 0x70, 0x65, 0x20, 0x78, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x22, 0x61, 0x22, 0x20, 0x27, 0x62, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: Some(seq![0x61u32]), system_identifier: Some(seq![0x62u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-between-doctype-public-and-system-identifiers",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                (switch_to(n, State::Data), emit_current(n, seq![]))\n            } else if c == 0x22 {\n                // U+0022 QUOTATION MARK (\"): \"Set the current DOCTYPE token's",
+      "replace": "                (switch_to(n, State::BogusComment), emit_current(n, seq![]))\n            } else if c == 0x22 {\n                // U+0022 QUOTATION MARK (\"): \"Set the current DOCTYPE token's",
+      "expect": "killed",
+      "reason": "A case switches to the BogusComment state instead of the Data state: the mutant's tokens for lemma_example_doctype_between_gt differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_between_gt()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x27, 0x70, 0x27, 0x20, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: Some(seq![0x70u32]), system_identifier: None, force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-doctype-system-keyword",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    after_doctype_keyword_state(input, t, false)",
+      "replace": "    after_doctype_keyword_state(input, t, true)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_system differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_system()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x78, 0x20, 0x53, 0x59, 0x53, 0x54, 0x45, 0x4D, 0x27, 0x79, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: None, system_identifier: Some(seq![0x79u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-before-doctype-system-identifier",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    before_doctype_identifier_state(input, t, false)",
+      "replace": "    before_doctype_identifier_state(input, t, true)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_quote_gt differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_quote_gt()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x53, 0x59, 0x53, 0x54, 0x45, 0x4D, 0x20, 0x22, 0x78, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: None, system_identifier: Some(seq![0x78u32]), force_quirks: true }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-doctype-system-identifier-double-quoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    doctype_identifier_quoted_state(input, t, false, 0x22)",
+      "replace": "    doctype_identifier_quoted_state(input, t, true, 0x22)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_between differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_between()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x61, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x27, 0x70, 0x27, 0x22, 0x73, 0x22, 0x20, 0x78, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x61u32]), public_identifier: Some(seq![0x70u32]), system_identifier: Some(seq![0x73u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-doctype-system-identifier-single-quoted",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "    doctype_identifier_quoted_state(input, t, false, 0x27)",
+      "replace": "    doctype_identifier_quoted_state(input, t, true, 0x27)",
+      "expect": "killed",
+      "reason": "Its call of the shared function names the wrong state (or identifier, or quote): the mutant's tokens for lemma_example_doctype_ids differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_ids()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x64, 0x6F, 0x63, 0x74, 0x79, 0x70, 0x65, 0x20, 0x78, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x22, 0x61, 0x22, 0x20, 0x27, 0x62, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: Some(seq![0x61u32]), system_identifier: Some(seq![0x62u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-doctype-system-identifier",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                (switch_to(n, State::Data), emit_current(n, seq![]))\n            } else {\n                // Anything else: \"This is an",
+      "replace": "                (switch_to(n, State::BogusComment), emit_current(n, seq![]))\n            } else {\n                // Anything else: \"This is an",
+      "expect": "killed",
+      "reason": "A case switches to the BogusComment state instead of the Data state: the mutant's tokens for lemma_example_doctype_ids differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_ids()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x64, 0x6F, 0x63, 0x74, 0x79, 0x70, 0x65, 0x20, 0x78, 0x20, 0x50, 0x55, 0x42, 0x4C, 0x49, 0x43, 0x20, 0x22, 0x61, 0x22, 0x20, 0x27, 0x62, 0x27, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: Some(seq![0x61u32]), system_identifier: Some(seq![0x62u32]), force_quirks: false }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-bogus-doctype",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                (switch_to(n, State::Data), emit_current(n, seq![]))\n            } else {\n                // U+0000 NULL: \"This is an unexpected-null-character parse",
+      "replace": "                (switch_to(n, State::BogusComment), emit_current(n, seq![]))\n            } else {\n                // U+0000 NULL: \"This is an unexpected-null-character parse",
+      "expect": "killed",
+      "reason": "A case switches to the BogusComment state instead of the Data state: the mutant's tokens for lemma_example_doctype_bogus differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_doctype_bogus()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x20, 0x78, 0x20, 0x79, 0x3E, 0x3C, 0x21, 0x44, 0x4F, 0x43, 0x54, 0x59, 0x50, 0x45, 0x3E], State::Data, None) != seq![Token::Doctype { name: Some(seq![0x78u32]), public_identifier: None, system_identifier: None, force_quirks: true }, Token::Doctype { name: None, public_identifier: None, system_identifier: None, force_quirks: true }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-cdata-section",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x5D {",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x5D {",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_cdata_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_cdata_eof()",
+        "witness": "tokenize(seq![0x61u32], State::CdataSection, None) != seq![Token::Character(0x61), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-cdata-section-bracket",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(consumed(t), State::CdataSectionEnd))",
+      "replace": "            none(switch_to(consumed(t), State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the CdataSectionEnd state: the mutant's tokens for lemma_example_cdata differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_cdata()",
+        "witness": "tokenize(seq![0x61u32, 0x5D, 0x62, 0x5D, 0x5D, 0x5D, 0x3E, 0x63, 0x5D, 0x5D], State::CdataSection, None) != seq![Token::Character(0x61), Token::Character(0x5D), Token::Character(0x62), Token::Character(0x5D), Token::Character(0x63), Token::Character(0x5D), Token::Character(0x5D), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-cdata-section-end",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            one(consumed(t), ch(0x5D))",
+      "replace": "            one(consumed(t), ch(0x5E))",
+      "expect": "killed",
+      "reason": "A case emits U+005E instead of U+005D: the mutant's tokens for lemma_example_cdata differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_cdata()",
+        "witness": "tokenize(seq![0x61u32, 0x5D, 0x62, 0x5D, 0x5D, 0x5D, 0x3E, 0x63, 0x5D, 0x5D], State::CdataSection, None) != seq![Token::Character(0x61), Token::Character(0x5D), Token::Character(0x62), Token::Character(0x5D), Token::Character(0x63), Token::Character(0x5D), Token::Character(0x5D), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-processing-instruction-open",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            if crate::charref::spec::is_ascii_alpha(c) || c == 0x5F {",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            if crate::charref::spec::is_ascii_alpha(c) || c == 0x5F {",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_pi_open_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_pi_open_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x3F], State::Data, None) != seq![Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-processing-instruction-target",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            if is_tab_lf_ff_space(c) || c == 0x3F || c == 0x3E {",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            if is_tab_lf_ff_space(c) || c == 0x3F || c == 0x3E {",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_pi_target_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_pi_target_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x3F, 0x61], State::Data, None) != seq![Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-after-processing-instruction-target",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        _ => none(switch_to(t, State::ProcessingInstructionData)),",
+      "replace": "        _ => none(switch_to(t, State::Data)),",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the ProcessingInstructionData state: the mutant's tokens for lemma_example_pi differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_pi()",
+        "witness": "tokenize(seq![0x3Cu32, 0x3F, 0x70, 0x68, 0x70, 0x20, 0x61, 0x20, 0x3F, 0x62, 0x3F, 0x3E], State::Data, None) != seq![Token::ProcessingInstruction { target: seq![0x70u32, 0x68, 0x70], data: seq![0x61u32, 0x20, 0x3F, 0x62] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-processing-instruction-data",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x3F {",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            let n = consumed(t);\n            if c == 0x3F {",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_pi_data_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_pi_data_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x3F, 0x61, 0x20, 0x62], State::Data, None) != seq![Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-processing-instruction-questionable",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "        None => emit_eof(t, seq![]),\n        Some(c) => {\n            if c == 0x3E {\n                // U+003E GREATER-THAN SIGN (>): \"Switch to the data state. Emit",
+      "replace": "        None => emit_eof(t, seq![ch(0x3F)]),\n        Some(c) => {\n            if c == 0x3E {\n                // U+003E GREATER-THAN SIGN (>): \"Switch to the data state. Emit",
+      "expect": "killed",
+      "reason": "EOF emits a U+003F character token before the end-of-file token: the mutant's tokens for lemma_example_pi_eof differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_pi_eof()",
+        "witness": "tokenize(seq![0x3Cu32, 0x3F, 0x61, 0x20, 0x62, 0x3F], State::Data, None) != seq![Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-character-reference",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "                    Tokenizer { temporary_buffer: t.temporary_buffer.push(c), ..consumed(t) },\n                    State::NumericCharacterReference,",
+      "replace": "                    Tokenizer { temporary_buffer: t.temporary_buffer.push(c), ..consumed(t) },\n                    State::Data,",
+      "expect": "killed",
+      "reason": "\"#\" switches to the data state instead of the numeric character reference state: the mutant's tokens for lemma_example_numeric differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_numeric()",
+        "witness": "tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x26, 0x23, 0x78, 0x34, 0x31, 0x3B, 0x26, 0x23, 0x58, 0x36, 0x61, 0x3B, 0x26, 0x23, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x44, 0x38, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x38, 0x30, 0x3B, 0x26, 0x23, 0x39, 0x3B], State::Data, None) != seq![Token::Character(0x41), Token::Character(0x41), Token::Character(0x6A), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0x20AC), Token::Character(0x9), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-named-character-reference",
+      "file": "src/tokenizer/spec.rs",
+      "find": "            if crate::charref::spec::historical_reasons(consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {",
+      "replace": "            if crate::charref::spec::historical_reasons(!consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {",
+      "expect": "survives",
+      "reason": "The attribute test is reversed. Reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine). Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row of the table, in and out of attributes) through the proven implementation, and by the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
+    },
+    {
+      "id": "state-ambiguous-ampersand",
+      "file": "src/tokenizer/spec.rs",
+      "find": "            if consumed_as_part_of_attribute(t) {",
+      "replace": "            if !consumed_as_part_of_attribute(t) {",
+      "expect": "survives",
+      "reason": "The attribute test is reversed. Reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine). Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row of the table, in and out of attributes) through the proven implementation, and by the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
+    },
+    {
+      "id": "state-numeric-character-reference",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(t, State::DecimalCharacterReference))",
+      "replace": "            none(switch_to(t, State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the DecimalCharacterReference state: the mutant's tokens for lemma_example_numeric differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_numeric()",
+        "witness": "tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x26, 0x23, 0x78, 0x34, 0x31, 0x3B, 0x26, 0x23, 0x58, 0x36, 0x61, 0x3B, 0x26, 0x23, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x44, 0x38, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x38, 0x30, 0x3B, 0x26, 0x23, 0x39, 0x3B], State::Data, None) != seq![Token::Character(0x41), Token::Character(0x41), Token::Character(0x6A), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0x20AC), Token::Character(0x9), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-hexadecimal-character-reference-start",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(switch_to(t, State::HexadecimalCharacterReference))",
+      "replace": "            none(switch_to(t, State::Data))",
+      "expect": "killed",
+      "reason": "A case switches to the Data state instead of the HexadecimalCharacterReference state: the mutant's tokens for lemma_example_numeric differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_numeric()",
+        "witness": "tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x26, 0x23, 0x78, 0x34, 0x31, 0x3B, 0x26, 0x23, 0x58, 0x36, 0x61, 0x3B, 0x26, 0x23, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x44, 0x38, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x38, 0x30, 0x3B, 0x26, 0x23, 0x39, 0x3B], State::Data, None) != seq![Token::Character(0x41), Token::Character(0x41), Token::Character(0x6A), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0x20AC), Token::Character(0x9), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-hexadecimal-character-reference",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(add_digit(consumed(t), 16, (c - 0x30) as nat))",
+      "replace": "            none(add_digit(consumed(t), 16, (c - 0x31) as nat))",
+      "expect": "killed",
+      "reason": "A digit is added with the wrong value: the mutant's tokens for lemma_example_numeric differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_numeric()",
+        "witness": "tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x26, 0x23, 0x78, 0x34, 0x31, 0x3B, 0x26, 0x23, 0x58, 0x36, 0x61, 0x3B, 0x26, 0x23, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x44, 0x38, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x38, 0x30, 0x3B, 0x26, 0x23, 0x39, 0x3B], State::Data, None) != seq![Token::Character(0x41), Token::Character(0x41), Token::Character(0x6A), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0x20AC), Token::Character(0x9), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-decimal-character-reference",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "            none(add_digit(consumed(t), 10, (c - 0x30) as nat))",
+      "replace": "            none(add_digit(consumed(t), 10, (c - 0x31) as nat))",
+      "expect": "killed",
+      "reason": "A digit is added with the wrong value: the mutant's tokens for lemma_example_numeric differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_numeric()",
+        "witness": "tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x26, 0x23, 0x78, 0x34, 0x31, 0x3B, 0x26, 0x23, 0x58, 0x36, 0x61, 0x3B, 0x26, 0x23, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x44, 0x38, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x38, 0x30, 0x3B, 0x26, 0x23, 0x39, 0x3B], State::Data, None) != seq![Token::Character(0x41), Token::Character(0x41), Token::Character(0x6A), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0x20AC), Token::Character(0x9), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-numeric-character-reference-end",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "flush_and_return(Tokenizer { temporary_buffer: seq![code], ..t })",
+      "replace": "flush_and_return(Tokenizer { temporary_buffer: seq![code, code], ..t })",
+      "expect": "killed",
+      "reason": "The end state appends the code point twice: the mutant's tokens for lemma_example_numeric differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_numeric()",
+        "witness": "tokenize(seq![0x26u32, 0x23, 0x36, 0x35, 0x3B, 0x26, 0x23, 0x78, 0x34, 0x31, 0x3B, 0x26, 0x23, 0x58, 0x36, 0x61, 0x3B, 0x26, 0x23, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x44, 0x38, 0x30, 0x30, 0x3B, 0x26, 0x23, 0x78, 0x38, 0x30, 0x3B, 0x26, 0x23, 0x39, 0x3B], State::Data, None) != seq![Token::Character(0x41), Token::Character(0x41), Token::Character(0x6A), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0xFFFD), Token::Character(0x20AC), Token::Character(0x9), Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-double-escape-start",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "State::ScriptDataDoubleEscaped,\n        State::ScriptDataEscaped,\n        State::ScriptDataEscaped,\n    )",
+      "replace": "State::ScriptDataEscaped,\n        State::ScriptDataEscaped,\n        State::ScriptDataEscaped,\n    )",
+      "expect": "killed",
+      "reason": "\"script\" in the temporary buffer switches to the wrong state: the mutant's tokens for lemma_example_script differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x78, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x2D, 0x2D, 0x3E, 0x0, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x78), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3E), Token::Character(0xFFFD), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "state-script-data-double-escape-end",
+      "file": "src/tokenizer/spec.rs",
+      "module": "tokenizer::examples",
+      "find": "State::ScriptDataEscaped,\n        State::ScriptDataDoubleEscaped,\n        State::ScriptDataDoubleEscaped,\n    )",
+      "replace": "State::ScriptDataDoubleEscaped,\n        State::ScriptDataDoubleEscaped,\n        State::ScriptDataDoubleEscaped,\n    )",
+      "expect": "killed",
+      "reason": "\"script\" in the temporary buffer switches to the wrong state: the mutant's tokens for lemma_example_script_double_end differ from the evaluated example.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "reveal": [
+          "super::spec::step"
+        ],
+        "lemma": "super::examples::lemma_example_script_double_end()",
+        "witness": "tokenize(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x3C, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E, 0x3C, 0x2F, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x3E], State::ScriptData, Some(seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74])) != seq![Token::Character(0x3C), Token::Character(0x21), Token::Character(0x2D), Token::Character(0x2D), Token::Character(0x3C), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::Character(0x3C), Token::Character(0x2F), Token::Character(0x73), Token::Character(0x63), Token::Character(0x72), Token::Character(0x69), Token::Character(0x70), Token::Character(0x74), Token::Character(0x3E), Token::EndTag { tag_name: seq![0x73u32, 0x63, 0x72, 0x69, 0x70, 0x74], self_closing: false, attributes: seq![] }, Token::EndOfFile]"
+      }
+    },
+    {
+      "id": "c1-row-0x80",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x80 {\n        Some(0x20AC)",
+      "replace": "if n == 0x80 {\n        Some(0x20AD)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x80 maps to U+20AD instead of U+20AC, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x80) == 0x20AD"
+      }
+    },
+    {
+      "id": "c1-row-0x82",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x82 {\n        Some(0x201A)",
+      "replace": "if n == 0x82 {\n        Some(0x201B)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x82 maps to U+201B instead of U+201A, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x82) == 0x201B"
+      }
+    },
+    {
+      "id": "c1-row-0x83",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x83 {\n        Some(0x0192)",
+      "replace": "if n == 0x83 {\n        Some(0x0193)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x83 maps to U+0193 instead of U+0192, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x83) == 0x0193"
+      }
+    },
+    {
+      "id": "c1-row-0x84",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x84 {\n        Some(0x201E)",
+      "replace": "if n == 0x84 {\n        Some(0x201F)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x84 maps to U+201F instead of U+201E, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x84) == 0x201F"
+      }
+    },
+    {
+      "id": "c1-row-0x85",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x85 {\n        Some(0x2026)",
+      "replace": "if n == 0x85 {\n        Some(0x2027)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x85 maps to U+2027 instead of U+2026, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x85) == 0x2027"
+      }
+    },
+    {
+      "id": "c1-row-0x86",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x86 {\n        Some(0x2020)",
+      "replace": "if n == 0x86 {\n        Some(0x2021)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x86 maps to U+2021 instead of U+2020, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x86) == 0x2021"
+      }
+    },
+    {
+      "id": "c1-row-0x87",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x87 {\n        Some(0x2021)",
+      "replace": "if n == 0x87 {\n        Some(0x2022)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x87 maps to U+2022 instead of U+2021, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x87) == 0x2022"
+      }
+    },
+    {
+      "id": "c1-row-0x88",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x88 {\n        Some(0x02C6)",
+      "replace": "if n == 0x88 {\n        Some(0x02C7)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x88 maps to U+02C7 instead of U+02C6, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x88) == 0x02C7"
+      }
+    },
+    {
+      "id": "c1-row-0x89",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x89 {\n        Some(0x2030)",
+      "replace": "if n == 0x89 {\n        Some(0x2031)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x89 maps to U+2031 instead of U+2030, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x89) == 0x2031"
+      }
+    },
+    {
+      "id": "c1-row-0x8a",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x8A {\n        Some(0x0160)",
+      "replace": "if n == 0x8A {\n        Some(0x0161)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x8A maps to U+0161 instead of U+0160, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x8A) == 0x0161"
+      }
+    },
+    {
+      "id": "c1-row-0x8b",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x8B {\n        Some(0x2039)",
+      "replace": "if n == 0x8B {\n        Some(0x203A)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x8B maps to U+203A instead of U+2039, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x8B) == 0x203A"
+      }
+    },
+    {
+      "id": "c1-row-0x8c",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x8C {\n        Some(0x0152)",
+      "replace": "if n == 0x8C {\n        Some(0x0153)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x8C maps to U+0153 instead of U+0152, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x8C) == 0x0153"
+      }
+    },
+    {
+      "id": "c1-row-0x8e",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x8E {\n        Some(0x017D)",
+      "replace": "if n == 0x8E {\n        Some(0x017E)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x8E maps to U+017E instead of U+017D, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x8E) == 0x017E"
+      }
+    },
+    {
+      "id": "c1-row-0x91",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x91 {\n        Some(0x2018)",
+      "replace": "if n == 0x91 {\n        Some(0x2019)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x91 maps to U+2019 instead of U+2018, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x91) == 0x2019"
+      }
+    },
+    {
+      "id": "c1-row-0x92",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x92 {\n        Some(0x2019)",
+      "replace": "if n == 0x92 {\n        Some(0x201A)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x92 maps to U+201A instead of U+2019, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x92) == 0x201A"
+      }
+    },
+    {
+      "id": "c1-row-0x93",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x93 {\n        Some(0x201C)",
+      "replace": "if n == 0x93 {\n        Some(0x201D)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x93 maps to U+201D instead of U+201C, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x93) == 0x201D"
+      }
+    },
+    {
+      "id": "c1-row-0x94",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x94 {\n        Some(0x201D)",
+      "replace": "if n == 0x94 {\n        Some(0x201E)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x94 maps to U+201E instead of U+201D, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x94) == 0x201E"
+      }
+    },
+    {
+      "id": "c1-row-0x95",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x95 {\n        Some(0x2022)",
+      "replace": "if n == 0x95 {\n        Some(0x2023)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x95 maps to U+2023 instead of U+2022, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x95) == 0x2023"
+      }
+    },
+    {
+      "id": "c1-row-0x96",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x96 {\n        Some(0x2013)",
+      "replace": "if n == 0x96 {\n        Some(0x2014)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x96 maps to U+2014 instead of U+2013, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x96) == 0x2014"
+      }
+    },
+    {
+      "id": "c1-row-0x97",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x97 {\n        Some(0x2014)",
+      "replace": "if n == 0x97 {\n        Some(0x2015)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x97 maps to U+2015 instead of U+2014, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x97) == 0x2015"
+      }
+    },
+    {
+      "id": "c1-row-0x98",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x98 {\n        Some(0x02DC)",
+      "replace": "if n == 0x98 {\n        Some(0x02DD)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x98 maps to U+02DD instead of U+02DC, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x98) == 0x02DD"
+      }
+    },
+    {
+      "id": "c1-row-0x99",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x99 {\n        Some(0x2122)",
+      "replace": "if n == 0x99 {\n        Some(0x2123)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x99 maps to U+2123 instead of U+2122, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x99) == 0x2123"
+      }
+    },
+    {
+      "id": "c1-row-0x9a",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x9A {\n        Some(0x0161)",
+      "replace": "if n == 0x9A {\n        Some(0x0162)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x9A maps to U+0162 instead of U+0161, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x9A) == 0x0162"
+      }
+    },
+    {
+      "id": "c1-row-0x9b",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x9B {\n        Some(0x203A)",
+      "replace": "if n == 0x9B {\n        Some(0x203B)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x9B maps to U+203B instead of U+203A, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x9B) == 0x203B"
+      }
+    },
+    {
+      "id": "c1-row-0x9c",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x9C {\n        Some(0x0153)",
+      "replace": "if n == 0x9C {\n        Some(0x0154)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x9C maps to U+0154 instead of U+0153, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x9C) == 0x0154"
+      }
+    },
+    {
+      "id": "c1-row-0x9e",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x9E {\n        Some(0x017E)",
+      "replace": "if n == 0x9E {\n        Some(0x017F)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x9E maps to U+017F instead of U+017E, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x9E) == 0x017F"
+      }
+    },
+    {
+      "id": "c1-row-0x9f",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "if n == 0x9F {\n        Some(0x0178)",
+      "replace": "if n == 0x9F {\n        Some(0x0179)",
+      "expect": "killed",
+      "reason": "the C1 table row 0x9F maps to U+0179 instead of U+0178, contradicting the evaluated table (lemma_c1_table).",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_c1_table()",
+        "witness": "numeric_reference_end_code(0x9F) == 0x0179"
+      }
+    },
+    {
+      "id": "numeric-null",
+      "file": "src/charref/spec.rs",
+      "module": "charref::lemmas",
+      "find": "let code = if code == 0 { 0xFFFDnat } else { code };",
+      "replace": "let code = code;",
+      "expect": "killed",
+      "reason": "U+0000 is not replaced by U+FFFD, so the end state emits U+0000, contradicting lemma_end_code_scalar.",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "lemma_end_code_scalar(0)",
+        "witness": "numeric_reference_end_code(0) == 0"
+      }
+    },
+    {
+      "id": "numeric-above-range",
+      "file": "src/charref/spec.rs",
+      "module": "charref::lemmas",
+      "find": "let code = if code > 0x10FFFF { 0xFFFDnat } else { code };",
+      "replace": "let code = if code > 0x110000 { 0xFFFDnat } else { code };",
+      "expect": "killed",
+      "reason": "0x110000 passes as a code point, contradicting lemma_end_code_scalar.",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "lemma_end_code_scalar(0x110000)",
+        "witness": "numeric_reference_end_code(0x110000) == 0x110000"
+      }
+    },
+    {
+      "id": "numeric-surrogate",
+      "file": "src/charref/spec.rs",
+      "module": "charref::lemmas",
+      "find": "let code = if is_surrogate(code) { 0xFFFDnat } else { code };",
+      "replace": "let code = code;",
+      "expect": "killed",
+      "reason": "a surrogate passes as a code point, contradicting lemma_end_code_scalar.",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "lemma_end_code_scalar(0xD800)",
+        "witness": "numeric_reference_end_code(0xD800) == 0xD800"
+      }
+    },
+    {
+      "id": "historical-semicolon-reversed",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "name.last() != semicolon()",
+      "replace": "name.last() == semicolon()",
+      "expect": "killed",
+      "reason": "the semicolon test of the attribute rule is reversed: \"&noti\" in an attribute becomes a reference.",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_historical_reasons_examples()",
+        "witness": "!historical_reasons(true, seq![0x6Eu32, 0x6F, 0x74], Some(0x69u32))"
+      }
+    },
+    {
+      "id": "historical-attribute-dropped",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "as_part_of_attribute && name.len() > 0",
+      "replace": "name.len() > 0",
+      "expect": "killed",
+      "reason": "the rule applies outside attributes too: \"&noti\" in text is not a reference.",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_historical_reasons_examples()",
+        "witness": "historical_reasons(false, seq![0x6Eu32, 0x6F, 0x74], Some(0x69u32))"
+      }
+    },
+    {
+      "id": "historical-equals-dropped",
+      "file": "src/charref/spec.rs",
+      "module": "charref::examples",
+      "find": "Some(c) => c == 0x3D || is_ascii_alphanumeric(c),",
+      "replace": "Some(c) => is_ascii_alphanumeric(c),",
+      "expect": "killed",
+      "reason": "\"=\" after a semicolon-less name in an attribute no longer stops the reference.",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "super::examples::lemma_historical_reasons_examples()",
+        "witness": "!historical_reasons(true, seq![0x6Eu32, 0x6F, 0x74], Some(0x3Du32))"
+      }
+    },
+    {
+      "id": "table-row-dropped",
+      "file": "src/charref/spec.rs",
+      "module": "charref::lemmas",
+      "find": "    super::data::ENTITY_NAME_START_LEN as nat\n",
+      "replace": "    (super::data::ENTITY_NAME_START_LEN - 1) as nat\n",
+      "expect": "killed",
+      "reason": "the last row (zwnj;) is dropped from the table the matching rule reads; lemma_table_size (the standard has 2231 rows) is false.",
+      "certificate": {
+        "file": "src/charref/lemmas.rs",
+        "lemma": "lemma_table_size()",
+        "witness": "entity_count() == 2230"
+      }
+    }
+  ]
+}

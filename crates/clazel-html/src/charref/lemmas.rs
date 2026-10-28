@@ -380,6 +380,15 @@ pub proof fn lemma_rows_in_bounds()
     lemma_rows_2200();
 }
 
+/// The table has the standard's 2231 rows (HTML §13.5; 106 of them are
+/// names without a final semicolon).
+pub proof fn lemma_table_size()
+    ensures
+        entity_count() == 2231,
+        super::data::ENTITY_ROWS_WITHOUT_SEMICOLON == 106,
+{
+}
+
 /// Row `i`'s code points are one or two.
 pub proof fn lemma_code_points_one_or_two(i: int)
     ensures
