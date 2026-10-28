@@ -12,6 +12,9 @@
 //!   answered with an empty Certificate and Finished, never CertificateVerify.
 //! - Only server_name and supported_groups responses are negotiated in EE;
 //!   the ClientHello profile offers no other EE features (no ALPN or early data).
+//!   Certificate entry extensions follow the same offered-type rule; the
+//!   profile offers neither status_request nor signed_certificate_timestamp,
+//!   so a server chain must carry none.
 //! - Chain/name/time validation and signature verification are parameters.
 //!   A successful chain result is an opaque end-entity verification key.
 //!   No X.509 implementation, crypto axiom or production provider is added.
@@ -178,6 +181,15 @@ pub open spec fn extensions_offered(es: Seq<crate::spec::Ext>, offers: Seq<u16>)
 {
     es.len() == 0 || (member(offers, es[0].etype) && extensions_offered(es.skip(1), offers))
 }
+/// §4.4.2: "extensions in the Certificate message from the server MUST
+/// correspond to ones from the ClientHello message", the same offered-type
+/// rule as EncryptedExtensions, applied to every CertificateEntry.
+pub open spec fn certificate_extensions_offered(entries: Seq<crate::spec::CertificateEntry>, offers: Seq<u16>) -> bool
+    decreases entries.len(),
+{
+    entries.len() == 0 || (extensions_offered(entries[0].extensions, offers)
+        && certificate_extensions_offered(entries.skip(1), offers))
+}
 /// Captured parameter bounds and supported profile.
 pub open spec fn config_ok(c: Config) -> bool {
     0 < c.host.len() <= 253 && c.server_secret.len() == 32 && c.client_secret.len() == 32
@@ -262,11 +274,14 @@ pub open spec fn on_request(c: crate::schedule::spec::Crypto, s: State, body: Se
     else if !has_algorithms { fail(s, crate::spec::MISSING_EXTENSION) }
     else { record(c, State { requested: true, ..s }, crate::transcript::spec::Kind::CertificateRequest, body, Phase::Certificate) }
 }
-/// §4.4.2: nonempty server chain, validated for this captured host and time.
-pub open spec fn on_certificate(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty_context: bool, empty_chain: bool) -> (State, Action) {
+/// §4.4.2: nonempty server chain whose entry extensions were all offered
+/// (§4.2: an unsolicited one is aborted with unsupported_extension),
+/// validated for this captured host and time.
+pub open spec fn on_certificate(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, empty_context: bool, empty_chain: bool, entries_offered: bool) -> (State, Action) {
     if s.phase != Phase::CertificateOrRequest && s.phase != Phase::Certificate { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
     else if !empty_context { fail(s, crate::spec::ILLEGAL_PARAMETER) }
     else if empty_chain { fail(s, crate::spec::DECODE_ERROR) }
+    else if !entries_offered { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }
     else {
         match (v.chain)(s.config.host, s.config.now, body) {
             Err(error) => fail(s, certificate_alert(error)),
@@ -293,7 +308,8 @@ pub open spec fn dispatch(c: crate::schedule::spec::Crypto, v: Verification, s: 
         crate::spec::HsMsg::EncryptedExtensions(es) => on_extensions(c, s, body, es),
         crate::spec::HsMsg::CertificateRequest(request) => on_request(c, s, body, initial_request_context_valid(request.context), crate::spec::has_ext(request.extensions, 13)),
         crate::spec::HsMsg::Certificate(certificate) => on_certificate(c, v, s, body,
-            initial_certificate_context_valid(certificate.context), certificate.entries.len() == 0),
+            initial_certificate_context_valid(certificate.context), certificate.entries.len() == 0,
+            certificate_extensions_offered(certificate.entries, s.config.extensions)),
         crate::spec::HsMsg::CertificateVerify(cv) => on_verify(c, v, s, body, cv.algorithm, cv.signature),
         crate::spec::HsMsg::Finished(verify_data) => {
             if s.phase != Phase::Finished { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
