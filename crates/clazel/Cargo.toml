@@ -13,8 +13,11 @@ clazel-kernel = { path = "../clazel-kernel" }
 # Frames: `MAX_FRAME` and `payload_length`, and the message decoder the host
 # uses to report what it carries.
 clazel-ipc = { path = "../clazel-ipc" }
-# `clazel fetch URL` (cli/fetch.rs): the network shell's http:// GET.
+# `clazel fetch URL` (cli/fetch.rs): the network shell's http:// GET; and the
+# resolver and connect the host carries the kernel's connections out with.
 clazel-net = { path = "../clazel-net" }
+# The network input of a `Net` event (`InputBuf`).
+clazel-fetch = { path = "../clazel-fetch" }
 
 # The command line (`clazel URL SCRIPT`, `clazel demo`) is outside `src/`, whose
 # line count the README reports: it only calls the host's public functions.

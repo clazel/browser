@@ -122,13 +122,115 @@ pub proof fn lemma_navigate_tab_stable(urls: UrlFns, s: State, tab: nat, url: Se
     }
 }
 
-/// The renderers after a `begin_navigation` keep the lock of every id.
-pub proof fn lemma_begin_stable(urls: UrlFns, s: State, tab: nat, url: Seq<u32>)
+/// The renderers after `carry_out` keep the lock of every id that survives.
+pub proof fn lemma_carry_out_stable(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, cur: Option<nat>, actions: Seq<NetAction>)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
-            let s1 = begin_navigation(urls, s, tab, url).0;
+            let s1 = carry_out(urls, s, tab, partition, cur, actions).0;
+            forall|a: int, b: int|
+                0 <= a < s.renderers.len() && 0 <= b < s1.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] s1.renderers[b]).id ==> s.renderers[a].lock
+                    == s1.renderers[b].lock
+        }),
+    decreases actions.len(),
+{
+    if actions.len() == 0 {
+        lemma_stable_same(urls, s.renderers, s.next_id);
+    } else {
+        let rest = actions.drop_first();
+        match actions[0] {
+            clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
+                let (s1, id, out) = open_connection(s, tab, partition, Endpoint { host, port, tls });
+                lemma_carry_out_stable(urls, s1, tab, partition, Some(id), rest);
+            },
+            clazel_fetch::transducer::spec::Action::Send(bytes) => {
+                lemma_carry_out_stable(urls, s, tab, partition, cur, rest);
+            },
+            clazel_fetch::transducer::spec::Action::Close => match cur {
+                Some(c) => {
+                    lemma_carry_out_stable(urls, State { conns: without_conn(s.conns, c), ..s }, tab, partition, None, rest);
+                },
+                None => {
+                    lemma_carry_out_stable(urls, s, tab, partition, cur, rest);
+                },
+            },
+            clazel_fetch::transducer::spec::Action::Done { url, response } => {
+                lemma_commit_stable(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response.body);
+            },
+            clazel_fetch::transducer::spec::Action::Fail(_) => {
+                lemma_abort_stable(urls, s, tab, error_fetch());
+            },
+        }
+    }
+}
+
+/// Replacing a renderer by one with the same id and lock keeps every id and
+/// lock in place.
+pub proof fn lemma_update_same_id_lock(rs: Seq<Renderer>, i: int, r: Renderer)
+    requires
+        0 <= i < rs.len(),
+        r.id == rs[i].id,
+        r.lock == rs[i].lock,
+    ensures
+        rs.update(i, r).len() == rs.len(),
+        forall|a: int| 0 <= a < rs.len() ==> (#[trigger] rs.update(i, r)[a]).id == rs[a].id && rs.update(i, r)[a].lock == rs[a].lock,
+{
+}
+
+/// `commit_navigation` keeps the lock of every surviving id.
+pub proof fn lemma_commit_stable(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
+    requires
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
+    ensures
+        ({
+            let s1 = commit_navigation(urls, s, tab, href, body).0;
+            forall|a: int, b: int|
+                0 <= a < s.renderers.len() && 0 <= b < s1.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] s1.renderers[b]).id ==> s.renderers[a].lock
+                    == s1.renderers[b].lock
+        }),
+{
+    let s0 = close_tab_conns(s, tab).0;
+    crate::invariant::lemma_find_by_tab(s0.renderers, tab, 0);
+    if let Some(i) = find_by_tab(s0.renderers, tab, 0) {
+        if scalar_url(href) && lock_of_url(urls, href, s0.next_id) is Some {
+            lemma_navigate_tab_stable(urls, s0, tab, href, body);
+        } else {
+            lemma_stable_update(urls, s0.renderers, s0.next_id, i, Renderer { pending: None, ..s0.renderers[i] });
+        }
+    } else {
+        lemma_stable_same(urls, s.renderers, s.next_id);
+    }
+}
+
+/// `abort_navigation` keeps the lock of every surviving id.
+pub proof fn lemma_abort_stable(urls: UrlFns, s: State, tab: nat, code: u64)
+    requires
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
+    ensures
+        ({
+            let s1 = abort_navigation(s, tab, code).0;
+            forall|a: int, b: int|
+                0 <= a < s.renderers.len() && 0 <= b < s1.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] s1.renderers[b]).id ==> s.renderers[a].lock
+                    == s1.renderers[b].lock
+        }),
+{
+    let s0 = close_tab_conns(s, tab).0;
+    crate::invariant::lemma_find_by_tab(s0.renderers, tab, 0);
+    if let Some(i) = find_by_tab(s0.renderers, tab, 0) {
+        lemma_stable_update(urls, s0.renderers, s0.next_id, i, Renderer { pending: None, ..s0.renderers[i] });
+    } else {
+        lemma_stable_same(urls, s.renderers, s.next_id);
+    }
+}
+
+/// The renderers after a `begin_navigation` keep the lock of every id.
+pub proof fn lemma_begin_stable(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>)
+    requires
+        crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
+    ensures
+        ({
+            let s1 = begin_navigation(rules, urls, fetch, s, tab, url).0;
             forall|a: int, b: int|
                 0 <= a < s.renderers.len() && 0 <= b < s1.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] s1.renderers[b]).id ==> s.renderers[a].lock
                     == s1.renderers[b].lock
@@ -137,39 +239,60 @@ pub proof fn lemma_begin_stable(urls: UrlFns, s: State, tab: nat, url: Seq<u32>)
     crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
     if let Some(i) = find_by_tab(s.renderers, tab, 0) {
         if lock_of_url(urls, url, s.next_id) is Some {
-            lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { pending: Some(url), ..s.renderers[i] });
+            let s0 = close_tab_conns(s, tab).0;
+            let old = s0.renderers[i];
+            match (fetch.parse)(url) {
+                None => {
+                    lemma_stable_update(urls, s0.renderers, s0.next_id, i, Renderer { pending: None, ..old });
+                },
+                Some(parsed) => {
+                    let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                    let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
+                    let r = Renderer { pending: Some(nav), ..old };
+                    let s1 = State { renderers: s0.renderers.update(i, r), ..s0 };
+                    crate::invariant::lemma_renderers_wf_update(urls, s0.renderers, s0.next_id, i, r, s0.next_id);
+                    lemma_update_same_id_lock(s0.renderers, i, r);
+                    lemma_carry_out_stable(urls, s1, tab, nav.partition, None, actions);
+                    let res = carry_out(urls, s1, tab, nav.partition, None, actions).0;
+                    assert forall|a: int, b: int| 0 <= a < s.renderers.len() && 0 <= b < res.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] res.renderers[b]).id implies s.renderers[a].lock == res.renderers[b].lock by {
+                        assert(s0.renderers[a] == s.renderers[a]);
+                        assert(s1.renderers[a].id == s.renderers[a].id && s1.renderers[a].lock == s.renderers[a].lock);
+                    }
+                },
+            }
+        } else {
+            lemma_stable_same(urls, s.renderers, s.next_id);
         }
+    } else {
+        lemma_stable_same(urls, s.renderers, s.next_id);
     }
 }
 
-/// The renderers after a `fetched` keep the lock of every id that survives.
-pub proof fn lemma_fetched_stable(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+/// The renderers after a `net` keep the lock of every id that survives.
+pub proof fn lemma_net_stable(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
         ({
-            let s1 = fetched(rules, urls, fetch, s, tab, outcome).0;
+            let s1 = net(rules, urls, fetch, s, conn, input).0;
             forall|a: int, b: int|
                 0 <= a < s.renderers.len() && 0 <= b < s1.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] s1.renderers[b]).id ==> s.renderers[a].lock
                     == s1.renderers[b].lock
         }),
 {
-    crate::invariant::lemma_find_by_tab(s.renderers, tab, 0);
-    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-        let i = find_by_tab(s.renderers, tab, 0)->Some_0;
+    crate::net_wf::lemma_net_target(s, conn);
+    if let Some((c, i, nav)) = net_target(s, conn) {
+        let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
         let old = s.renderers[i];
-        let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
-        match run.result {
-            FetchResult::Done { url, body } => {
-                if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
-                    lemma_navigate_tab_stable(urls, s1, tab, url, body);
-                } else {
-                    lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { pending: None, ..old });
-                }
-            },
-            FetchResult::Failed => {
-                lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { pending: None, ..old });
-            },
+        let r = Renderer { pending: Some(Navigation { fetch: fs, ..nav }), ..old };
+        crate::invariant::lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, s.next_id);
+        lemma_update_same_id_lock(s.renderers, i, r);
+        let conns = if input is Closed || input is Error { without_conn(s.conns, conn) } else { s.conns };
+        let s1 = State { jar: apply_net_ops(rules, s.jar, ops), conns, renderers: s.renderers.update(i, r), ..s };
+        lemma_carry_out_stable(urls, s1, c.tab, nav.partition, Some(conn), actions);
+        let res = carry_out(urls, s1, c.tab, nav.partition, Some(conn), actions).0;
+        assert forall|a: int, b: int| 0 <= a < s.renderers.len() && 0 <= b < res.renderers.len() && (#[trigger] s.renderers[a]).id == (#[trigger] res.renderers[b]).id implies s.renderers[a].lock == res.renderers[b].lock by {
+            assert(s1.renderers[a].id == s.renderers[a].id && s1.renderers[a].lock == s.renderers[a].lock);
         }
     } else {
         lemma_stable_same(urls, s.renderers, s.next_id);
@@ -267,10 +390,10 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                 }
             },
             Event::NavigateTab { tab, url } => {
-                lemma_begin_stable(urls, s, tab, url);
+                lemma_begin_stable(rules, urls, fetch, s, tab, url);
             },
-            Event::Fetched { tab, outcome } => {
-                lemma_fetched_stable(rules, urls, fetch, s, tab, outcome);
+            Event::Net { conn, input } => {
+                lemma_net_stable(rules, urls, fetch, s, conn, input);
             },
             Event::FromRenderer { id, bytes } => {
                 crate::invariant::lemma_find_by_id(s.renderers, id, 0);
@@ -280,7 +403,7 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
-                                    lemma_begin_stable(urls, s, r.tab, resolved);
+                                    lemma_begin_stable(rules, urls, fetch, s, r.tab, resolved);
                                 }
                             }
                         }

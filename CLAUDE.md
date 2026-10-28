@@ -87,7 +87,10 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
   in `CHANGED CRATES PASSED`, which is not `ALL CHECKS PASSED` and must not
   be reported as such. Work is **done** only when CI's full verification
   (every job of `.github/workflows/ci.yml`, ending in `Full verification`)
-  is green on its pull request; say so if it has not run yet. To repeat CI's run locally, use `scripts/verify.sh` or the
+  is green on its pull request; say so if it has not run yet. On a pull
+  request the proof jobs wait until a reviewer of the `full-verification`
+  environment approves the run, and every push needs a new approval: ask
+  for one, and never report a run whose proofs are waiting as passed. To repeat CI's run locally, use `scripts/verify.sh` or the
   Docker command in README.md. `cargo xtask check` runs only the fast static
   checks (unsafe, the `clazel-sys` audit, lint overrides, escape hatches,
   tier declarations, pins); use it while iterating, never as the final

@@ -128,8 +128,8 @@ pub proof fn lemma_store_elements(
 /// renderer asked to set it (`CookieSet`), and then its cookie root is the
 /// root of the sender's lock host; or because a retrieval updated its
 /// last-access-time (§5.8.3 step 5, which Quark has no analogue of); or
-/// because a fetch's response chain set it (item 3.7: a `Fetched` event that
-/// answers its tab's navigation), and then its cookie root is that of the
+/// because a fetch's response chain set it (item 3.7: a `Net` event about an
+/// open connection), and then its cookie root is that of the
 /// host of a request of the chain that may store.
 pub open spec fn quark_cookie_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let s1 = step(rules, urls, fetch, s, e).0;
@@ -138,63 +138,137 @@ pub open spec fn quark_cookie_integrity_statement(rules: Seq<clazel_psl::spec::R
         find_by_id(s.renderers, e->FromRenderer_id, 0) matches Some(i) && decode_renderer_frame(e->FromRenderer_bytes) matches Some(
             clazel_ipc::message::spec::Message::CookieSet { .. },
         ) && lock_host(s.renderers[i].lock) is Some && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, lock_host(s.renderers[i].lock)->Some_0)))
-            || fetch_stored_root(rules, fetch, s, e, c))
+            || net_stored_root(rules, fetch, s, e, c))
 }
 
-/// A `Fetched` event that answers its tab's navigation, one of whose
-/// `Set-Cookie` lines may be stored and has the cookie root of `c`.
-pub open spec fn fetch_stored_root(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, e: Event, c: clazel_cookie::storage::spec::Cookie) -> bool {
-    e is Fetched && (match fetched_run(fetch, s, e->Fetched_tab, e->Fetched_outcome) {
-        Some(run) => exists|k: int|
-            0 <= k < run.stores.len() && store_allowed(rules, (#[trigger] run.stores[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
-                rules,
-                run.stores[k].url.host->Some_0,
-            ),
+/// A `Net` event about an open connection, whose transducer step stores a
+/// `Set-Cookie` line that may be stored and has the cookie root of `c`.
+pub open spec fn net_stored_root(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, e: Event, c: clazel_cookie::storage::spec::Cookie) -> bool {
+    e is Net && (match net_target(s, e->Net_conn) {
+        Some((_, _, nav)) => {
+            let ops = net_transducer_step(fetch, s, nav, e->Net_input).2;
+            exists|k: int|
+                0 <= k < ops.len() && ((#[trigger] ops[k]) matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url)
+                    && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0))
+        },
         None => false,
     })
 }
 
-/// A cookie of the jar after a fetch's `Set-Cookie` lines was there before, or
-/// has the cookie root of the host of a line's request, for a line that may
-/// be stored.
-pub proof fn lemma_apply_stores_elements(
+/// A cookie of the jar after a retrieval was there before, or is one of
+/// them with its last-access-time set to the time of the retrieval.
+pub proof fn lemma_retrieval_elements(
     rules: Seq<clazel_psl::spec::Rule>,
     jar: Seq<clazel_cookie::storage::spec::Cookie>,
-    stores: Seq<HttpStore>,
+    url: clazel_cookie::storage::spec::RequestUrl,
+    ctx: clazel_cookie::storage::spec::RequestContext,
     now: int,
     c: clazel_cookie::storage::spec::Cookie,
 )
     requires
-        apply_stores(rules, jar, stores, now).contains(c),
+        clazel_cookie::storage::spec::jar_after_retrieval(rules, jar, url, ctx, now).contains(c),
     ensures
-        jar.contains(c) || exists|k: int|
-            0 <= k < stores.len() && store_allowed(rules, (#[trigger] stores[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
-                rules,
-                stores[k].url.host->Some_0,
-            ),
-    decreases stores.len(),
+        jar.contains(c) || exists|c0: clazel_cookie::storage::spec::Cookie| jar.contains(c0) && c == clazel_cookie::storage::spec::with_last_access_time(c0, now),
 {
-    if stores.len() > 0 {
-        let st = stores[0];
-        let jar1 = store_one(rules, jar, st, now);
-        let rest = stores.drop_first();
-        lemma_apply_stores_elements(rules, jar1, rest, now, c);
-        if jar1.contains(c) && !jar.contains(c) {
-            assert(store_allowed(rules, st.url));
-            let host = st.url.host->Some_0;
-            assert(st.url.host == Some(host));
-            lemma_store_elements(rules, jar, st.line, st.url, st.ctx, now, host, c);
-            assert(store_allowed(rules, stores[0].url));
+    let any_root = clazel_cookie::matching::spec::CanonicalHost { name: seq![], is_ip_address: false };
+    let live = clazel_cookie::storage::spec::evict_expired(jar, now);
+    clazel_cookie::storage::isolation::lemma_evict_expired_props(rules, jar, now, any_root);
+    let out = clazel_cookie::storage::spec::jar_after_retrieval(rules, jar, url, ctx, now);
+    match url.host {
+        None => {
+            assert(live.contains(c));
+        },
+        Some(h) => {
+            let g = clazel_cookie::storage::spec::update_last_access_time(rules, url, ctx, h, now);
+            let k = choose|k: int| 0 <= k < out.len() && out[k] == c;
+            assert(out[k] == g(live[k]));
+            assert(live.contains(live[k]));
+            assert(jar.contains(live[k]));
+            if clazel_cookie::storage::spec::cookie_is_retrieved(rules, url, ctx, h, live[k]) {
+                assert(c == clazel_cookie::storage::spec::with_last_access_time(live[k], now));
+            } else {
+                assert(c == live[k]);
+            }
+        },
+    }
+}
+
+/// A cookie of the jar after a step's jar operations (all at time `t`) was
+/// there before, or is one of them with its last-access-time set to `t`, or
+/// has the cookie root of the host of a `Stored` operation's request, for one
+/// that may be stored.
+pub proof fn lemma_apply_net_ops_elements(
+    rules: Seq<clazel_psl::spec::Rule>,
+    jar: Seq<clazel_cookie::storage::spec::Cookie>,
+    ops: Seq<clazel_fetch::transducer::spec::JarOp>,
+    t: int,
+    c: clazel_cookie::storage::spec::Cookie,
+)
+    requires
+        apply_net_ops(rules, jar, ops).contains(c),
+        clazel_fetch::transducer::contract::ops_at(ops, t),
+    ensures
+        jar.contains(c) || (exists|c0: clazel_cookie::storage::spec::Cookie| jar.contains(c0) && c == clazel_cookie::storage::spec::with_last_access_time(c0, t)) || exists|k: int|
+            0 <= k < ops.len() && ((#[trigger] ops[k]) matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url)
+                && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0)),
+    decreases ops.len(),
+{
+    if ops.len() > 0 {
+        let rest = ops.drop_first();
+        let jar1 = apply_net_op(rules, jar, ops[0]);
+        assert(clazel_fetch::transducer::contract::ops_at(rest, t)) by {
+            assert forall|k: int| 0 <= k < rest.len() implies clazel_fetch::transducer::contract::op_now(#[trigger] rest[k]) == t by {
+                assert(rest[k] == ops[k + 1]);
+            }
         }
-        if exists|k: int| 0 <= k < rest.len() && store_allowed(rules, (#[trigger] rest[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
+        assert(clazel_fetch::transducer::contract::op_now(ops[0]) == t);
+        lemma_apply_net_ops_elements(rules, jar1, rest, t, c);
+        // What the first operation does to an element of its result.
+        assert forall|x: clazel_cookie::storage::spec::Cookie| jar1.contains(x) implies jar.contains(x) || (exists|c0: clazel_cookie::storage::spec::Cookie|
+            jar.contains(c0) && x == clazel_cookie::storage::spec::with_last_access_time(c0, t)) || (ops[0] matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(
             rules,
-            rest[k].url.host->Some_0,
-        ) {
-            let k = choose|k: int| 0 <= k < rest.len() && store_allowed(rules, (#[trigger] rest[k]).url) && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(
-                rules,
-                rest[k].url.host->Some_0,
-            );
-            assert(stores[k + 1] == rest[k]);
+            url,
+        ) && clazel_cookie::storage::spec::cookie_root_of(rules, x) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0)) by {
+            match ops[0] {
+                clazel_fetch::transducer::spec::JarOp::Retrieved { url, ctx, now } => {
+                    lemma_retrieval_elements(rules, jar, url, ctx, now, x);
+                },
+                clazel_fetch::transducer::spec::JarOp::Stored { line, url, ctx, now } => {
+                    if store_allowed(rules, url) {
+                        let host = url.host->Some_0;
+                        assert(url.host == Some(host));
+                        lemma_store_elements(rules, jar, line, url, ctx, now, host, x);
+                    }
+                },
+            }
+        }
+        if jar1.contains(c) {
+        } else if exists|c0: clazel_cookie::storage::spec::Cookie| jar1.contains(c0) && c == clazel_cookie::storage::spec::with_last_access_time(c0, t) {
+            let c0 = choose|c0: clazel_cookie::storage::spec::Cookie| jar1.contains(c0) && c == clazel_cookie::storage::spec::with_last_access_time(c0, t);
+            // c0 is from jar, a last-access update of one, or has a storable root; the update keeps the domain.
+            if jar.contains(c0) {
+            } else if exists|c00: clazel_cookie::storage::spec::Cookie| jar.contains(c00) && c0 == clazel_cookie::storage::spec::with_last_access_time(c00, t) {
+                let c00 = choose|c00: clazel_cookie::storage::spec::Cookie| jar.contains(c00) && c0 == clazel_cookie::storage::spec::with_last_access_time(c00, t);
+                assert(c == clazel_cookie::storage::spec::with_last_access_time(c00, t));
+            } else {
+                assert(ops[0] matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url));
+                assert(clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root_of(rules, c0));
+                assert(0 <= 0 < ops.len());
+            }
+        }
+        // The elements of the rest that come from a `Stored` operation of the rest.
+        if exists|k: int| 0 <= k < rest.len() && ((#[trigger] rest[k]) matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url)
+            && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0)) {
+            let k = choose|k: int| 0 <= k < rest.len() && ((#[trigger] rest[k]) matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url)
+                && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0));
+            assert(ops[k + 1] == rest[k]);
+        }
+        // The elements of the rest that are in `jar1`.
+        if jar1.contains(c) {
+            if !(jar.contains(c)) && !(exists|c0: clazel_cookie::storage::spec::Cookie| jar.contains(c0) && c == clazel_cookie::storage::spec::with_last_access_time(c0, t)) {
+                assert(ops[0] matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url));
+                assert(0 <= 0 < ops.len());
+            }
         }
     }
 }
@@ -214,12 +288,22 @@ pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
         || (e is FromRenderer && (find_by_id(s.renderers, e->FromRenderer_id, 0) matches Some(i) && decode_renderer_frame(e->FromRenderer_bytes) matches Some(
         clazel_ipc::message::spec::Message::CookieSet { .. },
     ) && lock_host(s.renderers[i].lock) is Some && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, lock_host(s.renderers[i].lock)->Some_0)))
-        || fetch_stored_root(rules, fetch, s, e, c)) by {
+        || net_stored_root(rules, fetch, s, e, c)) by {
         match e {
-            Event::Fetched { tab, outcome } => {
-                crate::unwind_base::lemma_fetched_frame(rules, urls, fetch, s, tab, outcome);
-                if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-                    lemma_apply_stores_elements(rules, s.jar, run.stores, s.now, c);
+            Event::Net { conn, input } => {
+                crate::unwind_base::lemma_net_frame(rules, urls, fetch, s, conn, input);
+                if let Some((_, _, nav)) = net_target(s, conn) {
+                    let ops = net_transducer_step(fetch, s, nav, input).2;
+                    clazel_fetch::transducer::theorems::theorem_ops_name_request(fetch.http, fetch.urls, nav.fetch, input, s.jar, s.now);
+                    assert(clazel_fetch::transducer::contract::ops_at(ops, s.now)) by {
+                        assert forall|k: int| 0 <= k < ops.len() implies clazel_fetch::transducer::contract::op_now(#[trigger] ops[k]) == s.now by {
+                            match ops[k] {
+                                clazel_fetch::transducer::spec::JarOp::Retrieved { now, .. } => {},
+                                clazel_fetch::transducer::spec::JarOp::Stored { now, .. } => {},
+                            }
+                        }
+                    }
+                    lemma_apply_net_ops_elements(rules, s.jar, ops, s.now, c);
                 }
             },
             Event::Tick { time } => {

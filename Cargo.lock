@@ -116,6 +116,7 @@ name = "clazel"
 version = "0.0.0"
 dependencies = [
  "clazel-cookie",
+ "clazel-fetch",
  "clazel-ipc",
  "clazel-kernel",
  "clazel-net",
@@ -205,6 +206,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-html"
+version = "0.0.0"
+dependencies = [
+ "html5gum",
+ "vstd",
+]
+
+[[package]]
 name = "clazel-http"
 version = "0.0.0"
 dependencies = [
@@ -236,6 +245,8 @@ version = "0.0.0"
 dependencies = [
  "clazel-cookie",
  "clazel-encoding",
+ "clazel-fetch",
+ "clazel-http",
  "clazel-ipc",
  "clazel-origin",
  "clazel-psl",
@@ -664,6 +675,12 @@ dependencies = [
  "serde_json",
  "uuid",
 ]
+
+[[package]]
+name = "html5gum"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "428502d3ec1742c35e015871aef742bc4722a9acfcb616b8ff79b519922e1c36"
 
 [[package]]
 name = "httparse"

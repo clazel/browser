@@ -148,6 +148,28 @@ pub open spec fn real_urls() -> UrlFns {
     urls_with(real_domain_parser())
 }
 
+/// The fetch's parser of a navigation URL (item 3.7): the basic URL parser
+/// with no base on a scalar value string, as [`parse_absolute`]; a string
+/// with a code point that is not a scalar value does not parse (see the
+/// modelling choices).
+pub open spec fn real_parse(input: Seq<u32>) -> Option<clazel_url::url::spec::Url> {
+    if clazel_encoding::utf8::spec::all_scalar_values(input) {
+        parse_absolute(real_domain_parser(), input)
+    } else {
+        None
+    }
+}
+
+/// The transducer's parameters of the shipped kernel (item 3.7): the real
+/// response parser and URL functions of `clazel-fetch`, and [`real_parse`].
+pub open spec fn real_fetch() -> FetchFns {
+    FetchFns {
+        http: clazel_fetch::transducer::real::real_http(),
+        urls: clazel_fetch::transducer::real::real_urls(),
+        parse: |input: Seq<u32>| real_parse(input),
+    }
+}
+
 /// `resolve` returns scalar value strings, whatever the domain parser: the
 /// condition [`crate::contract::urls_resolve_scalar`] that
 /// `step_requires` puts on the URL functions. By construction of

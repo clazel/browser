@@ -13,7 +13,7 @@ Status: Phases 0 (foundations) and 1 (verified primitives) are complete:
 UTF-8 (`clazel-encoding`), percent-encoding (`clazel-percent`), forgiving
 base64 (`clazel-base64`), MIME types and sniffing (`clazel-mime`), IDNA
 (`clazel-idna`) and URLs (`clazel-url`) are at Tier 2, on macOS and on
-Linux CI. Phase 2 (kernel and IPC) is in progress; see the table below and
+Linux CI. Phase 2 (kernel and IPC) is complete; see the table below and
 [docs/phases/phase-2.md](docs/phases/phase-2.md). Phase 3 (networking) has
 HTTP field syntax, HTTP/1.1 response framing and request serialization
 (`clazel-http`), DNS (`clazel-dns`) and the request builder (`clazel-fetch`)
@@ -46,9 +46,10 @@ rows for the Phase 3 crates, which stay at tier 0.
 | clazel | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | WPT cookies/ domCookieTest, document.cookie set and get through real processes: 11 / 11<br>WPT cookies/ httpCookieTest, document.cookie read through real processes: 166 / 167 (1 expected failures) | no spec files |
 | clazel-base64 | 2 (2) | 80 verified, 0 errors | no harnesses | 0 | 0 (0) | 665 / 758 / 173 | 23 / 0 / 0 of 23 | WPT fetch/data-urls base64: 80 / 80 | 0 of 3 files current |
 | clazel-cookie | 2 (2) | 424 verified, 0 errors | no harnesses | 0 | 0 (0) | 4066 / 4061 / 1676 | 43 / 0 / 0 of 43 | WPT cookies/ httpCookieTest and domCookieTest tables: 177 / 178 (1 expected failures)<br>cookie_store differential, random set and get sequences: 3000 / 3000<br>http-state dates/: 70 / 70<br>http-state parser corpus: 195 / 222 (27 expected failures) | 0 of 9 files current |
+| clazel-der | 0 (2) | 241 verified, 0 errors | no harnesses | 0 | 0 (0) | 2321 / 1946 / 631 | 59 / 0 / 0 of 59 | DER hand-built cases (X.690, Kaliski, one per rule): 63 / 63<br>RFC 8017 9.2 DigestInfo prefixes (SHA-256, SHA-384, SHA-512): 3 / 3<br>der 0.8.2 differential, mutated bytes: 54648 / 57490 (2842 expected failures)<br>der 0.8.2 differential, random valid values (der writes, we read; we write, der reads): 5801 / 5801 | 0 of 3 files current |
 | clazel-dns | 2 (2) | 242 verified, 0 errors | no harnesses | 0 | 0 (0) | 1979 / 1668 / 869 | 163 / 0 / 0 of 163 | captured DNS responses: 12 / 12<br>hand-built DNS messages: 24 / 24<br>resolv.conf nameserver lines: 10 / 10<br>simple-dns differential: mutated messages: 58731 / 60000 (1269 expected failures)<br>simple-dns differential: our queries: 4000 / 4000<br>simple-dns differential: random messages: 8000 / 8000 | 0 of 5 files current |
 | clazel-encoding | 2 (2) | 81 verified, 0 errors | no harnesses | 0 | 0 (0) | 764 / 485 / 205 | 22 / 0 / 0 of 22 | WPT encoding/ UTF-8 decode: 57 / 57<br>WPT encoding/ UTF-8 encode (decode cases reversed): 8 / 8 | 0 of 3 files current |
-| clazel-fetch | 0 (2) | 139 verified, 0 errors | no harnesses | 0 | 0 (0) | 1319 / 881 / 578 | 52 / 0 / 0 of 52 | http-state parser corpus (through the client): 195 / 222 (27 expected failures) | 0 of 5 files current |
+| clazel-fetch | 0 (2) | 164 verified, 0 errors | no harnesses | 0 | 0 (0) | 1500 / 1108 / 595 | 64 / 0 / 0 of 64 | http-state parser corpus (through the client): 195 / 222 (27 expected failures)<br>url and cookie_store differential, random redirect chains: 1500 / 1500 | 0 of 5 files current |
 | clazel-http | 2 (2) | 407 verified, 0 errors | no harnesses | 0 | 0 (0) | 3364 / 3188 / 1734 | 150 / 0 / 0 of 150 | RFC 9112 7.1 and 11 examples: 122 / 122<br>framing by construction: random bodies: 3000 / 3000<br>httparse differential: handcrafted heads: 29 / 44 (15 expected failures)<br>httparse differential: llhttp corpus heads: 124 / 136 (12 expected failures)<br>httparse differential: mutated responses: 53915 / 60000 (6085 expected failures)<br>httparse differential: random responses: 6000 / 6000<br>llhttp test/response and framing cases: 109 / 136 (27 expected failures) | 0 of 5 files current |
 | clazel-idna | 2 (2) | 375 verified, 0 errors | no harnesses | 0 | 0 (0) | 2406 / 2887 / 17549 | 69 / 0 / 0 of 69 | RFC 3492 section 7.1 samples: 19 / 19<br>WPT url/ IdnaTestV2.json: 2675 / 2675<br>WPT url/ toascii.json: 87 / 87 | 0 of 5 files current |
 | clazel-ipc | 2 (2) | 177 verified, 0 errors | no harnesses | 0 | 0 (0) | 1240 / 1076 / 545 | 69 / 0 / 0 of 69 | RFC 8949 Appendix A (cbor/test-vectors): 82 / 82<br>minicbor differential: random and mutated bytes: 60000 / 60000<br>minicbor differential: random items: 20000 / 20000 | 0 of 7 files current |
@@ -57,11 +58,13 @@ rows for the Phase 3 crates, which stay at tier 0.
 | clazel-net | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 | clazel-origin | 2 (2) | 43 verified, 0 errors | no harnesses | 0 | 0 (0) | 495 / 209 / 284 | 31 / 0 / 0 of 31 | HTML 7.1.1 example tables (same origin, same site): 11 / 11<br>WPT url/ urltestdata.json origin: 414 / 414<br>differential vs rust-url Url::origin(): 403 / 414 (11 expected failures) | 0 of 3 files current |
 | clazel-percent | 2 (2) | 54 verified, 0 errors | no harnesses | 0 | 0 (0) | 520 / 297 / 173 | 34 / 0 / 0 of 34 | WPT url/ percent-encoding: 23 / 32 (9 expected failures) | 0 of 3 files current |
+| clazel-pkcs1 | 0 (2) | 170 verified, 0 errors | 7 successfully verified harnesses, 0 failures, 7 total | 0 | 0 (0) | 978 / 1749 / 300 | 54 / 0 / 0 of 54 | Hand-built cases (OpenSSL signatures, malformed encodings, forgeries, ranges): 35 / 35<br>Wycheproof RSASSA-PKCS1-v1_5 2048-bit SHA-256 (rsa_signature_2048_sha256_test.json): 258 / 259 (1 expected failures)<br>Wycheproof RSASSA-PKCS1-v1_5 2048-bit SHA-384 (rsa_signature_2048_sha384_test.json): 257 / 258 (1 expected failures)<br>Wycheproof RSASSA-PKCS1-v1_5 3072-bit SHA-256 (rsa_signature_3072_sha256_test.json): 258 / 259 (1 expected failures)<br>Wycheproof RSASSA-PKCS1-v1_5 4096-bit SHA-512 (rsa_signature_4096_sha512_test.json): 258 / 259 (1 expected failures) | 0 of 5 files current |
 | clazel-psl | 2 (2) | 201 verified, 0 errors | no harnesses | 0 | 0 (0) | 1063 / 1840 / 45824 | 23 / 0 / 0 of 23 | differential vs publicsuffix 2.3.0: 49685 / 49685<br>publicsuffix tests.txt checkPublicSuffix: 78 / 78 | 0 of 3 files current |
 | clazel-renderer | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 | clazel-sandbox | 1 (1) | not used | 8 successfully verified harnesses, 0 failures, 8 total | 0 | 0 (0) | — | — | none | no spec files |
 | clazel-sys | 0 (0) | not used | no harnesses | 0 | 14 (20) | — | — | none | no spec files |
 | clazel-url | 2 (2) | 565 verified, 0 errors | no harnesses | 0 | 0 (0) | 5725 / 5260 / 2026 | 144 / 0 / 0 of 144 | WPT url/ setters_tests.json: 278 / 278<br>WPT url/ toascii.json: 87 / 87<br>WPT url/ urltestdata.json: 896 / 896<br>WPT url/ urltestdata.json hosts: 359 / 359 | 0 of 7 files current |
+| clazel-x509 | 0 (2) | 227 verified, 0 errors | no harnesses | 0 | 0 (0) | 2465 / 1611 / 2009 | 33 / 0 / 0 of 33 | x509-limbo leaf checks: 927 / 9802 (8875 expected failures) | 0 of 23 files current |
 | xtask | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 
 ¹ From Verus's `line_count`; only code inside `verus!` is counted, and type definitions count as exec.
@@ -74,15 +77,13 @@ rows for the Phase 3 crates, which stay at tier 0.
 
 **Phase 2 process tests: where they have run.** The demo (`cargo run -p clazel
 -- demo`), the sandbox escape attempts, the hostile-renderer test and the WPT
-`cookies/` run through real processes (item 2.16) have been run on macOS arm64
-only, locally: macOS is not in CI. On Linux they have never run (they were
-written on a Mac), and CI on `ubuntu-24.04` cannot run them until a maintainer
-decides how to allow unprivileged user namespaces for the renderer, which
-otherwise fails closed (see item 2.16 in
-[docs/phases/phase-2.md](docs/phases/phase-2.md)). Attempts to `fork` and to
-`ptrace` a sibling are not made yet: they need a `clazel-sys` addition and its
-audit. The table has rows for `clazel` and `clazel-renderer` once CI next
-updates it.
+`cookies/` run through real processes (item 2.16) run in CI on Linux x86-64
+(`ubuntu-24.04`) and on macOS arm64. On Ubuntu the renderer needs an AppArmor
+profile that allows unprivileged user namespaces, or it fails closed; CI loads
+it, and so does the release tarball's `install.sh` (see item 2.16 in
+[docs/phases/phase-2.md](docs/phases/phase-2.md)). The escape attempts include
+`fork` and `ptrace` of a sibling. Where Yama restricts `ptrace` on Linux, the
+`ptrace` result shows less than it does on macOS.
 
 Formalizing the standards has already found one spec bug: see
 [docs/ERRATA.md](docs/ERRATA.md).
@@ -148,8 +149,8 @@ and much of it is work only a person can do.
   and independent engines (`tests/conformance*.rs`). Point us at suites we have
   not vendored, or at engines worth differential testing against.
 - **Run it where we have not.** The Phase 2 process tests (the sandbox, the
-  hostile renderer) have only run on macOS arm64, and never on Linux. The README
-  says why under the status table.
+  hostile renderer) run in CI on `ubuntu-24.04` and macOS arm64 only. Other
+  Linux distributions and kernels are untested.
 - **Read `clazel-sys`.** It is the only crate with `unsafe`: 14 blocks that
   enter the OS sandbox. Every change is audited by a second model
   ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person reading it too is

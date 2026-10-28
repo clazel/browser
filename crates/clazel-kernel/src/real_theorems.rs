@@ -6,8 +6,8 @@
 //! None of these needs a proof of its own: each theorem is proven for every
 //! `rules`, every [`UrlFns`] and every [`FetchFns`] (item 3.7), and a corollary
 //! is that theorem at `real_urls()`, for any fetch: the shipped kernel's fetch
-//! is a stand-in until item 3.6's transducer is joined (`exec::fetch`), and the
-//! corollaries need no change when it is. They exist so that the guarantee of the shipped kernel is
+//! is `clazel-fetch`'s real transducer (`urls::real_fetch()`), and the
+//! corollaries need no change for it. They exist so that the guarantee of the shipped kernel is
 //! stated, with the real parser, in one place. Each is also the guarantee
 //! of `exec::real_urls::step_real`, which is proven to equal `step(psl(),
 //! real_urls(), ..)`.
@@ -16,8 +16,8 @@
 //! URL §4.7 origin of the URL parsed from the string the kernel committed
 //! (an opaque one replaced by the renderer's id); a `Navigate` from a
 //! renderer is resolved by the basic URL parser against the committed URL,
-//! started by `begin_navigation` and committed only by `fetched` through
-//! `navigate_tab`; and document.cookie is answered for
+//! started by `begin_navigation` and committed only by a `Net` event's
+//! `Done` through `commit_navigation` and `navigate_tab`; and document.cookie is answered for
 //! the lock's scheme and host and the committed URL's path.
 
 #[allow(unused_imports)]
@@ -77,18 +77,18 @@ pub proof fn corollary_real_cookie_integrity(fetch: FetchFns, s: State, e: Event
     crate::cookie_theorems::theorem_cookie_integrity(crate::contract::psl(), crate::urls::real_urls(), fetch, s, e);
 }
 
-/// Theorems `theorem_fetched_only_to_tab` and
-/// `theorem_fetched_answers_navigation` (item 3.7) for the shipped kernel, for
-/// any fetch.
-pub proof fn corollary_real_fetched(fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+/// Item 3.7's `wire_cookies_statement` for the shipped kernel: the transducer
+/// the shipped kernel steps reads the jar with the Public Suffix List the
+/// kernel applies jar operations with (`psl()`), so the hypothesis of the
+/// statement holds, for any other fetch parameter.
+pub proof fn corollary_real_wire_cookies(fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
         real_reachable(fetch, s),
+        fetch.urls.rules == crate::contract::psl(),
     ensures
-        crate::statements::fetched_only_to_tab_statement(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome),
-        crate::statements::fetched_answers_navigation_statement(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome),
+        crate::statements::wire_cookies_statement(crate::contract::psl(), crate::urls::real_urls(), fetch, s, conn, input),
 {
-    crate::theorems::theorem_fetched_only_to_tab(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome);
-    crate::theorems::theorem_fetched_answers_navigation(crate::contract::psl(), crate::urls::real_urls(), fetch, s, tab, outcome);
+    crate::net_theorems::theorem_wire_cookies(crate::contract::psl(), crate::urls::real_urls(), fetch, s, conn, input);
 }
 
 /// Theorem `theorem_storage_same_origin` for the shipped kernel.
