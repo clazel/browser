@@ -33,6 +33,7 @@ use vstd::prelude::*;
 
 pub mod early;
 pub mod frameset;
+pub mod helpers_early;
 pub mod in_body;
 pub mod tables;
 
