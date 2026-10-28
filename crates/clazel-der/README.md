@@ -46,8 +46,7 @@ callers compose the readers.
 
 ## Verification
 
-Currently tier 0, target tier 2; promotion requires CI's full verification
-on a pull request. See the [status table](../../README.md#verification-status)
+Tier 2 (raised on CI's full verification of its pull request). See the [status table](../../README.md#verification-status)
 for current numbers. The executable code has Verus proofs against an
 executable specification transcribed from X.690, including absence of panics,
 overflow and out-of-bounds indexing.
