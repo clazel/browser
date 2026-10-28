@@ -348,7 +348,6 @@ proof fn lemma_not_template_node(doc: Document, e: Elem)
 
 /// §13.2.6.1 "appropriate place for inserting a node"
 /// ([`appropriate_place`]), with an optional override target.
-#[verifier::rlimit(60)]
 pub fn appropriate_place_exec(p: &ParserBuf, ov: Option<&ExecElem>) -> (r: Location)
     requires
         parser_inv(p@),
@@ -361,6 +360,7 @@ pub fn appropriate_place_exec(p: &ParserBuf, ov: Option<&ExecElem>) -> (r: Locat
         r == appropriate_place(p@, opt_ref_view(ov)),
         loc_ok(p@.doc, r),
 {
+    hide(parser_inv);
     proof {
         lemma_inv_iff(p@);
     }
@@ -738,7 +738,6 @@ fn form_owner_exec(p: &ParserBuf, t: &ExecTagTok, ns: &Namespace, intended_paren
 }
 
 /// §13.2.6.1 "create an element for a token" ([`create_element_for_token`]).
-#[verifier::rlimit(60)]
 pub fn create_element_for_token_exec(p: &mut ParserBuf, t: &ExecTagTok, ns: Namespace, intended_parent: usize) -> (r:
     ExecElem)
     requires
@@ -754,6 +753,7 @@ pub fn create_element_for_token_exec(p: &mut ParserBuf, t: &ExecTagTok, ns: Name
         r@.tag == t@.tag && r@.ns == ns,
         doc_extends(old(p)@.doc, final(p)@.doc),
 {
+    hide(parser_inv);
     let ghost p0 = p@;
     proof {
         lemma_inv_iff(p0);

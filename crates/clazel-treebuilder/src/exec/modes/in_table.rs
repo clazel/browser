@@ -8,7 +8,7 @@
 //! keep it rooted or stop the parser; changing the flags and the insertion
 //! mode keeps [`parser_inv`].
 
-use super::in_body::mode_in_body_exec;
+use super::in_body::{in_body_char_exec, mode_in_body_exec};
 use super::in_head::mode_in_head_exec;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -335,10 +335,52 @@ pub proof fn lemma_in_table_anything_else_char(env: EncFns, p: Parser, c: u32)
     hide(mode_in_head);
 }
 
+/// The modes are fields that "insert a character" leaves alone.
+pub open spec fn modes_kept(p: Parser, q: Parser) -> bool {
+    &&& q.mode == p.mode
+    &&& q.original_mode == p.original_mode
+    &&& q.template_modes == p.template_modes
+    &&& q.pending_table_text == p.pending_table_text
+}
+
+/// "Insert a character" keeps the modes.
+proof fn lemma_insert_char_modes(p: Parser, c: u32)
+    ensures
+        modes_kept(p, insert_char(p, c)),
+{
+    let data = seq![c];
+    let k = NodeKind::Text { data };
+    let loc = adjusted_location(p, None);
+    let (p1, n) = create(p, k);
+    assert(modes_kept(p, p1));
+    let p2 = dom_insert(p1, n, loc.parent, loc.child);
+    assert(modes_kept(p1, p2));
+}
+
+/// The "in body" rules' character cases keep the stack rooted (or stop the
+/// parser) and keep the modes.
+proof fn lemma_in_body_char_kept(p: Parser, c: u32)
+    requires
+        parser_inv(p),
+        rooted_or_stopped(p),
+    ensures
+        rooted_or_stopped(in_body_char(p, c)),
+        modes_kept(p, in_body_char(p, c)),
+{
+    hide(parser_inv);
+    if c != 0 {
+        lemma_reconstruct_rooted(p);
+        lemma_inv_modes(p);
+        crate::termination::helpers_ranking::lemma_reconstruct_formatting(p);
+        let r = reconstruct_formatting(p);
+        lemma_insert_char_rooted(r, c);
+        lemma_insert_char_modes(r, c);
+    }
+}
+
 /// [`in_table_anything_else`] for a character token (cases 1 to 3 of the
 /// "in body" insertion mode, with foster parenting enabled, then
 /// disabled): see [`lemma_in_table_anything_else_char`].
-#[verifier::rlimit(200)]
 pub fn in_table_char_exec(p: &mut ParserBuf, c: u32)
     requires
         parser_inv(old(p)@),
@@ -353,32 +395,14 @@ pub fn in_table_char_exec(p: &mut ParserBuf, c: u32)
         final(p)@.pending_table_text == old(p)@.pending_table_text,
 {
     hide(parser_inv);
-    hide(reconstruct_formatting);
-    hide(insert_char);
+    hide(in_body_char);
     let ghost p0 = p@;
     p.foster = true;
     proof {
         lemma_inv_flags(p0, p@);
+        lemma_in_body_char_kept(p@, c);
     }
-    if c != 0 {
-        proof {
-            lemma_reconstruct_rooted(p@);
-            lemma_inv_modes(p@);
-            crate::termination::helpers_ranking::lemma_reconstruct_formatting(p@);
-        }
-        reconstruct_formatting_exec(p);
-        proof {
-            lemma_insert_char_rooted(p@, c);
-        }
-        insert_char_exec(p, c);
-        if !is_ascii_whitespace_exec(c) {
-            let ghost q = p@;
-            p.frameset_ok = false;
-            proof {
-                lemma_inv_flags(q, p@);
-            }
-        }
-    }
+    in_body_char_exec(p, c);
     let ghost p2 = p@;
     p.foster = false;
     proof {
@@ -386,11 +410,26 @@ pub fn in_table_char_exec(p: &mut ParserBuf, c: u32)
     }
 }
 
+/// The "in body" outcome with foster parenting disabled
+/// ([`outcome_without_foster`]), in place.
+fn foster_off_exec(p: &mut ParserBuf, o: ExecOutcome) -> (r: ExecOutcome)
+    requires
+        parser_inv(old(p)@),
+    ensures
+        outcome_view(r, final(p)@) == outcome_without_foster(outcome_view(o, old(p)@)),
+        parser_inv(final(p)@),
+{
+    let ghost q = p@;
+    p.foster = false;
+    proof {
+        lemma_inv_flags(q, p@);
+    }
+    o
+}
+
 /// The "in table" "anything else" entry ([`in_table_anything_else`]):
 /// enable foster parenting, process the token using the "in body" rules
 /// (and the "in head" rules they send it to), disable foster parenting.
-#[verifier::spinoff_prover]
-#[verifier::rlimit(200)]
 pub fn in_table_anything_else_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t: ExecTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
@@ -404,6 +443,7 @@ pub fn in_table_anything_else_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t:
         outcome_view(o, final(p)@) == in_table_anything_else(env.enc(), old(p)@, t@),
         parser_inv(final(p)@),
 {
+    hide(tag_of);
     hide(in_body_start_tag);
     hide(in_body_end_tag);
     hide(in_body_char);
@@ -412,6 +452,7 @@ pub fn in_table_anything_else_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t:
     hide(parser_inv);
     hide(insert_comment);
     hide(insert_pi);
+    hide(outcome_without_foster);
     let ghost p0 = p@;
     let ghost t0 = t@;
     if let ExecTok::Char(c) = t {
@@ -442,21 +483,9 @@ pub fn in_table_anything_else_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t:
                 assert(t2@ == t0);
             }
             let o2 = mode_in_head_exec(env, p, t2);
-            let ghost q = p@;
-            p.foster = false;
-            proof {
-                lemma_inv_flags(q, p@);
-            }
-            o2
+            foster_off_exec(p, o2)
         },
-        _ => {
-            let ghost q = p@;
-            p.foster = false;
-            proof {
-                lemma_inv_flags(q, p@);
-            }
-            o
-        },
+        _ => foster_off_exec(p, o),
     }
 }
 
@@ -541,7 +570,6 @@ fn in_table_char_case_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, c: u32) ->
 
 /// [`mode_in_table`] for a start tag token.
 #[verifier::spinoff_prover]
-#[verifier::rlimit(200)]
 fn in_table_start_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, tt: ExecTagTok) -> (o: ExecOutcome)
     requires
         parser_inv(old(p)@),
