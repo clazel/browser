@@ -14,7 +14,7 @@
 //! 5. `h`: the order of the rules for the token, [`order`].
 //!
 //! Every edge decreases the rank (the per-mode lemmas in the submodules),
-//! and `B = L + G + 5T + 5 img` never increases, so `L` stays below the
+//! and `B = L + G + 5T + 5 img + pending_growth` never increases, so `L` stays below the
 //! starting `B`; with each component bounded, the rank is a number below
 //! `fuel_bound`, which decreases on every edge ([`lemma_run_some`]).
 //!
@@ -201,7 +201,20 @@ pub open spec fn order(r: Rules, t: Tok) -> nat {
 
 /// The bound `B = L + G + 5T + 5 img`, which no edge increases.
 pub open spec fn budget(r: Rules, p: Parser, t: Tok) -> nat {
-    p.open.len() + growth(r, t) + 5 * p.template_modes.len() + 5 * img(t)
+    p.open.len() + growth(r, t) + 5 * p.template_modes.len() + 5 * img(t) + pending_growth(r, p, t)
+}
+
+/// For the rules with the largest growth budget (foreign content, "text",
+/// and "in table text" for a token other than a character), the elements
+/// "in table text"'s anything else may push: each pending character goes
+/// through the "in body" rules, whose "reconstruct the active formatting
+/// elements" pushes at most one element per entry of the list.
+pub open spec fn pending_growth(r: Rules, p: Parser, t: Tok) -> nat {
+    if growth(r, t) == growth_max() {
+        p.formatting.len() * p.pending_table_text.len()
+    } else {
+        0
+    }
 }
 
 /// The rank of (r2, q, t2) is lexicographically below that of (r, p, t), the
@@ -230,6 +243,37 @@ pub open spec fn modes_ok(p: Parser) -> bool {
     &&& forall|i: int| 0 <= i < p.template_modes.len() ==> template_mode_ok(#[trigger] p.template_modes[i])
     &&& p.mode == Mode::InTableText ==> p.original_mode != Mode::Text && p.original_mode != Mode::InTableText
     &&& p.mode == Mode::Text ==> p.original_mode != Mode::Text && p.original_mode != Mode::InTableText
+    &&& template_count(p) <= p.template_modes.len()
+    &&& p.mode == Mode::InTemplate ==> p.template_modes.len() > 0
+}
+
+/// The number of HTML `template` elements among the first `i` entries of
+/// the stack.
+pub open spec fn templates_in(open: Seq<Elem>, i: int) -> nat
+    decreases i,
+{
+    if i <= 0 {
+        0
+    } else {
+        templates_in(open, i - 1) + if is_html(open[i - 1], Tag::Template) {
+            1nat
+        } else {
+            0nat
+        }
+    }
+}
+
+/// The `template` elements on the stack of open elements, and the
+/// fragment context if it is one: each has its entry on the stack of
+/// template insertion modes (pushed with it), so "reset the insertion mode
+/// appropriately" finds a current template insertion mode when it meets
+/// one.
+pub open spec fn template_count(p: Parser) -> nat {
+    templates_in(p.open, p.open.len() as int) + if p.context is Some && is_html(p.context->Some_0, Tag::Template) {
+        1nat
+    } else {
+        0nat
+    }
 }
 
 /// Within a token, rules other than the current mode's (reached by "using the
@@ -238,7 +282,7 @@ pub open spec fn modes_ok(p: Parser) -> bool {
 pub open spec fn rules_ok(r: Rules, p: Parser) -> bool {
     match r {
         Rules::Html(m) => (m != p.mode ==> p.mode != Mode::Text && p.mode != Mode::InTableText) && (m == Mode::Text || m
-            == Mode::InTableText ==> m == p.mode),
+            == Mode::InTableText ==> m == p.mode) && (m == Mode::InTemplate ==> p.template_modes.len() > 0),
         Rules::Foreign => true,
     }
 }
@@ -252,7 +296,7 @@ pub open spec fn edge_ok(r: Rules, p: Parser, t: Tok, o: Outcome) -> bool {
         Outcome::Reprocess(q, t2) => q.stopped || (decreases_to(r, p, t, Rules::Html(q.mode), q, t2) && modes_ok(q)),
         Outcome::Using(m, q, t2) => q.stopped || (decreases_to(r, p, t, Rules::Html(m), q, t2) && modes_ok(q) && q.mode
             == p.mode && m != Mode::Text && m != Mode::InTableText && p.mode != Mode::Text && p.mode
-            != Mode::InTableText),
+            != Mode::InTableText && (m == Mode::InTemplate ==> q.template_modes.len() > 0)),
     }
 }
 
@@ -426,15 +470,16 @@ pub proof fn theorem_dispatch_total(env: EncFns, p: Parser, t: Tok)
     let t0 = p.template_modes.len();
     let l = p.open.len();
     let b0 = budget(r, p, t);
-    assert(b0 <= l + 5 * t0 + 10);
+    let fp = p.formatting.len() * p.pending_table_text.len();
+    assert(b0 <= l + fp + 5 * t0 + 10);
     let f = fuel_bound(p);
     assert(rank(r, p, t, t0, b0) < f) by {
         let a = img(t) as int;
         let c = growth(r, t) as int;
         let e = order(r, t) as int;
-        let (ti, li, bi) = (t0 as int, l as int, b0 as int);
-        assert((((a * (ti + 1) + ti) * 6 + c) * (bi + 1) + li) * 31 + e < 372 * (ti + 1) * (li + 5 * ti + 11)) by (nonlinear_arith)
-            requires 0 <= a <= 1, 0 <= ti, 0 <= c <= 5, 0 <= li <= bi, bi <= li + 5 * ti + 10, 0 <= e <= 30;
+        let (ti, li, bi, fi) = (t0 as int, l as int, b0 as int, fp as int);
+        assert((((a * (ti + 1) + ti) * 6 + c) * (bi + 1) + li) * 31 + e < 372 * (ti + 1) * (li + fi + 5 * ti + 11)) by (nonlinear_arith)
+            requires 0 <= a <= 1, 0 <= ti, 0 <= c <= 5, 0 <= li <= bi, 0 <= fi, bi <= li + fi + 5 * ti + 10, 0 <= e <= 30;
     }
     lemma_run_some(env, p, t, r, f, t0, b0);
 }
