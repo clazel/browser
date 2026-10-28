@@ -1147,6 +1147,7 @@ proof fn lemma_chars_at(p: Parser, data: Seq<u32>)
 }
 
 /// [`chars_at`].
+#[verifier::rlimit(300)]
 fn chars_at_exec(p: &mut ParserBuf, data: &[u32], loc: Location)
     requires
         parser_inv(old(p)@),
