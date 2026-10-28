@@ -4,9 +4,8 @@
 //! is the id its socket was made for, never anything in a frame. A frame over
 //! `MAX_FRAME` (refused from its first 4 bytes) or a closed socket becomes
 //! `RendererExited`. Outputs are carried out in order, and every frame, exit
-//! and stderr (which names a failed sandbox layer) is printed.
-//!
-//! The network (item 3.7) is `clazel-net`'s `Driver`.
+//! and stderr (which names a failed sandbox layer) is printed. The network
+//! (item 3.7) is `clazel-net`'s `Driver`.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -35,9 +34,9 @@ enum Ev {
 pub struct Host {
     /// The kernel's state; nothing but `step_real` writes it (tests preload the jar).
     pub state: StateRecord,
-    /// The kernel's connections, on sockets (`clazel-net`).
     /// Test hook: every connection goes here.
     pub route: Option<std::net::SocketAddr>,
+    /// The kernel's connections, on sockets (`clazel-net`).
     net: Driver<Ev>,
     /// A fixed kernel clock (seconds since 1601) for tests; `None`: wall clock.
     pub clock: Option<u64>,
