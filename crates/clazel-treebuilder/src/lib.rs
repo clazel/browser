@@ -8,7 +8,9 @@
 //! - [`spec`]: the transcription, split by section and insertion mode.
 //! - [`invariant`]: `parser_wf`, the invariant of reachable parser states.
 //! - [`contract`]: what the executable parser is proven to satisfy.
+//! - [`termination`]: `theorem_dispatch_total`, reprocessing ends.
 
 pub mod contract;
 pub mod invariant;
 pub mod spec;
+pub mod termination;

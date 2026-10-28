@@ -148,9 +148,15 @@ pub open spec fn run(env: EncFns, p: Parser, t: Tok, r: Rules, fuel: nat) -> Opt
 }
 
 /// The number of rule applications one token is given (see the modelling
-/// choices; `theorem_dispatch_total` proves it is never exhausted).
+/// choices): 372 × (T + 1) × (L + 5T + 11), with L the length of the stack
+/// of open elements and T that of the stack of template insertion modes.
+/// `termination::theorem_dispatch_total` proves it is never exhausted: the
+/// number comes from its ranking (`termination::measure`), whose components
+/// are bounded by 2 (the `image` token), T + 1, 6 (the growth budget), L +
+/// 5T + 11 (the stack's length can grow by at most the budget), and 31 (the
+/// order of the modes).
 pub open spec fn fuel_bound(p: Parser) -> nat {
-    4 * (p.open.len() + p.template_modes.len() + 8)
+    372 * (p.template_modes.len() + 1) * (p.open.len() + 5 * p.template_modes.len() + 11)
 }
 
 /// The tree construction stage for one token: the dispatcher, then
