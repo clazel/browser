@@ -53,8 +53,7 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
    crate's `Cargo.toml` requires all of the following, and `cargo xtask check`
    rejects the claim otherwise:
    - every proof and harness passing in a full `cargo xtask verify`, which
-     for a tier change means CI's green run on the pull request, which
-     verifies every crate whenever a `tier` or `target-tier` changes (a local
+     for a tier change means CI's green run on the pull request (a local
      `--changed` run does not count);
    - Tier 1: Kani harnesses;
    - Tier 2: Verus enabled; every mutation in `mutations.json` a `killed` with
@@ -86,14 +85,9 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
   them; a change to anything shared (`Cargo.lock`, the workspace manifest,
   toolchain pins, `scripts/`, `xtask/`) makes it check every crate. It ends
   in `CHANGED CRATES PASSED`, which is not `ALL CHECKS PASSED` and must not
-  be reported as such. Work is **done** only when CI (every job of
-  `.github/workflows/ci.yml`, ending in `Full verification`) is green on its
-  pull request, and the full run on `main` after the merge is green. A pull
-  request's CI verifies only the crates it changes and their dependents, and
-  its `Full verification` then ends in `CHANGED CRATES PASSED`, which is not
-  `ALL CHECKS PASSED`; a change to anything shared, to `ci.yml` or to a
-  crate's tier verifies every crate, and `main` is always verified in full.
-  Say so if CI has not run yet. To repeat CI's run locally, use `scripts/verify.sh` or the
+  be reported as such. Work is **done** only when CI's full verification
+  (every job of `.github/workflows/ci.yml`, ending in `Full verification`)
+  is green on its pull request; say so if it has not run yet. To repeat CI's run locally, use `scripts/verify.sh` or the
   Docker command in README.md. `cargo xtask check` runs only the fast static
   checks (unsafe, the `clazel-sys` audit, lint overrides, escape hatches,
   tier declarations, pins); use it while iterating, never as the final
