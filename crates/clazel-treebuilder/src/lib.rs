@@ -11,6 +11,7 @@
 //! - [`termination`]: `theorem_dispatch_total`, reprocessing ends.
 
 pub mod contract;
+pub mod exec;
 pub mod invariant;
 pub mod spec;
 pub mod termination;
