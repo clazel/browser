@@ -13,7 +13,7 @@ Status: Phases 0 (foundations) and 1 (verified primitives) are complete:
 UTF-8 (`clazel-encoding`), percent-encoding (`clazel-percent`), forgiving
 base64 (`clazel-base64`), MIME types and sniffing (`clazel-mime`), IDNA
 (`clazel-idna`) and URLs (`clazel-url`) are at Tier 2, on macOS and on
-Linux CI. Phase 2 (kernel and IPC) is in progress; see the table below and
+Linux CI. Phase 2 (kernel and IPC) is complete; see the table below and
 [docs/phases/phase-2.md](docs/phases/phase-2.md). Phase 3 (networking) has
 HTTP field syntax, HTTP/1.1 response framing and request serialization
 (`clazel-http`), DNS (`clazel-dns`) and the request builder (`clazel-fetch`)
@@ -77,15 +77,13 @@ rows for the Phase 3 crates, which stay at tier 0.
 
 **Phase 2 process tests: where they have run.** The demo (`cargo run -p clazel
 -- demo`), the sandbox escape attempts, the hostile-renderer test and the WPT
-`cookies/` run through real processes (item 2.16) have been run on macOS arm64
-only, locally: macOS is not in CI. On Linux they have never run (they were
-written on a Mac), and CI on `ubuntu-24.04` cannot run them until a maintainer
-decides how to allow unprivileged user namespaces for the renderer, which
-otherwise fails closed (see item 2.16 in
-[docs/phases/phase-2.md](docs/phases/phase-2.md)). Attempts to `fork` and to
-`ptrace` a sibling are not made yet: they need a `clazel-sys` addition and its
-audit. The table has rows for `clazel` and `clazel-renderer` once CI next
-updates it.
+`cookies/` run through real processes (item 2.16) run in CI on Linux x86-64
+(`ubuntu-24.04`) and on macOS arm64. On Ubuntu the renderer needs an AppArmor
+profile that allows unprivileged user namespaces, or it fails closed; CI loads
+it, and so does the release tarball's `install.sh` (see item 2.16 in
+[docs/phases/phase-2.md](docs/phases/phase-2.md)). The escape attempts include
+`fork` and `ptrace` of a sibling. Where Yama restricts `ptrace` on Linux, the
+`ptrace` result shows less than it does on macOS.
 
 Formalizing the standards has already found one spec bug: see
 [docs/ERRATA.md](docs/ERRATA.md).
@@ -151,8 +149,8 @@ and much of it is work only a person can do.
   and independent engines (`tests/conformance*.rs`). Point us at suites we have
   not vendored, or at engines worth differential testing against.
 - **Run it where we have not.** The Phase 2 process tests (the sandbox, the
-  hostile renderer) have only run on macOS arm64, and never on Linux. The README
-  says why under the status table.
+  hostile renderer) run in CI on `ubuntu-24.04` and macOS arm64 only. Other
+  Linux distributions and kernels are untested.
 - **Read `clazel-sys`.** It is the only crate with `unsafe`: 14 blocks that
   enter the OS sandbox. Every change is audited by a second model
   ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person reading it too is
