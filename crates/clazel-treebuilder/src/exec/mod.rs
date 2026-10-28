@@ -11,6 +11,8 @@
 //! - [`formatting`]: the list of active formatting elements (§13.2.4.3).
 //! - [`insert`]: §13.2.6.1 to §13.2.6.3 and "reconstruct the active
 //!   formatting elements".
+//! - [`step`]: the dispatcher, the reprocessing loop and the one-token step
+//!   (§13.2.6), and the parsers' initial states (§13.2.4, §13.4).
 
 /// The spec, under the name `super::spec` that the submodules' ghost imports
 /// use (the one spelling of that import the lint check allows).
@@ -22,4 +24,5 @@ pub mod insert;
 pub mod modes;
 pub mod names;
 pub mod stack;
+pub mod step;
 pub mod types;

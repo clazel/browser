@@ -118,4 +118,60 @@ pub open spec fn stack_rooted(p: Parser) -> bool {
     p.open.len() > 0 && is_html(p.open[0], Tag::Html)
 }
 
+// ---------------------------------------------------------------------
+// What the executable step needs of the spec's run (Phase 4 item 4.10).
+// The exec insertion modes need more than `parser_inv` of the parser they
+// are applied to: most need the stack of open elements rooted at an HTML
+// `html` element ([`stack_rooted`]), and "after head" needs the head
+// element pointer to name a `head` element. Neither follows from
+// `parser_inv`, and the modes' contracts do not say they keep it; so the
+// exec step takes it as a hypothesis on the spec's run, [`dispatch_needs`],
+// not yet proven to hold for every reachable state (see `exec::step`).
+
+/// What the exec rules `r` need of the parser beyond `parser_inv`, `!stopped`,
+/// the token's tags and `termination::rules_ok`: the stack rooted at `html`
+/// (every mode whose exec function requires it), and for "after head" the
+/// head element pointer naming a `head` element.
+pub open spec fn rooted_needs(r: Rules, p: Parser) -> bool {
+    match r {
+        Rules::Foreign => stack_rooted(p),
+        Rules::Html(m) => match m {
+            Mode::Initial | Mode::BeforeHtml | Mode::InHeadNoscript | Mode::InCaption | Mode::InCell | Mode::InTemplate
+            | Mode::AfterAfterBody | Mode::AfterAfterFrameset => true,
+            Mode::AfterHead => stack_rooted(p) && crate::exec::modes::after_head::head_ok(p),
+            _ => stack_rooted(p),
+        },
+    }
+}
+
+/// Every rule application of the spec's [`run`] (with at most `fuel`
+/// applications) meets [`rooted_needs`].
+pub open spec fn run_needs(env: EncFns, p: Parser, t: Tok, r: Rules, fuel: nat) -> bool
+    decreases fuel,
+{
+    if fuel == 0 {
+        true
+    } else {
+        rooted_needs(r, p) && match apply_rules(env, r, p, t) {
+            Outcome::Done(_) => true,
+            Outcome::Reprocess(q, t2) => q.stopped || run_needs(env, q, t2, Rules::Html(q.mode), (fuel - 1) as nat),
+            Outcome::Using(m, q, t2) => q.stopped || run_needs(env, q, t2, Rules::Html(m), (fuel - 1) as nat),
+        }
+    }
+}
+
+/// [`run_needs`] of the run [`dispatch`] makes for `token`.
+pub open spec fn dispatch_needs(env: EncFns, p: Parser, token: Token) -> bool {
+    let p0 = Parser { actions: seq![], tokenizer: None, ..p };
+    if p0.stopped {
+        true
+    } else if p0.skip_lf && token == (Token::Character { c: 0x0A }) {
+        true
+    } else {
+        let p1 = Parser { skip_lf: false, ..p0 };
+        let t = classify(token);
+        run_needs(env, p1, t, dispatcher(p1, t), fuel_bound(p1))
+    }
+}
+
 } // verus!
