@@ -46,6 +46,10 @@ taken: option B.**
 ## Phase 4: HTML and DOM
 WHATWG tokenizer (proven total and panic-free), tree builder, DOM.
 *Exit:* a text-mode browser (Lynx-style) that browses real sites.
+Detailed plan: [phases/phase-4.md](phases/phase-4.md).
+**Status: planned (2026-10-28).** The decisions in item 4.0 are taken
+(tree builder and DOM at tier 2, single-byte legacy encodings in the phase,
+the body chunked to the renderer); nothing is built.
 
 ## Phase 5: CSS, layout, graphics (the Show HN milestone)
 CSS parsing and cascade, block, inline and table layout, font parsing and
