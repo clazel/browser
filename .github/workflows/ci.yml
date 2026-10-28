@@ -22,11 +22,16 @@
 #   base      `verify --part base`: static checks, rustfmt, clippy and tests
 #             over the whole workspace.
 #   miri      `verify --part miri`: the workspace's tests under Miri.
-#   base-macos the base and Miri parts on macOS arm64, one after the other:
-#             the Seatbelt sandbox, the demo, the host and escape tests, and
-#             the macOS-only code under clippy and Miri. Proofs and harnesses
-#             are not repeated there: Verus and Kani give the same answer for
-#             the same pinned versions on either platform.
+#   base-macos the base part on macOS arm64: the Seatbelt sandbox, the demo,
+#             the host and escape tests, and the macOS-only code under
+#             clippy; then `verify --part miri clazel-sys`, the one crate with
+#             macOS-only code that has tests Miri can run. The workspace is
+#             not repeated under Miri there: Miri cannot run foreign calls, so
+#             every sandbox test is ignored under it on both platforms, and
+#             the rest is portable Rust that the `miri` job already
+#             interprets with the same pinned nightly. Proofs and harnesses
+#             are not repeated either: Verus and Kani give the same answer
+#             for the same pinned versions on either platform.
 #   crate     `verify --part crate <names>`: Kani, Verus, line counts,
 #             mutations (several mutants at once, xtask/src/mutate.rs) and
 #             conformance. One job per crate with proof work; the crates
@@ -149,10 +154,14 @@ jobs:
       # unprivileged process enters without any setup.
       - name: Verify (base)
         run: cargo xtask verify --part base
-      # Miri runs here after the base part rather than in a job of its own:
-      # macOS runners are few (5 at once), and this job is not the slowest.
-      - name: Verify (Miri)
-        run: cargo xtask verify --part miri
+      # Only clazel-sys under Miri: its macOS module is the only code that
+      # compiles solely on macOS and has tests Miri can run (the checks made
+      # before a foreign call). A workspace-wide run here took 84 minutes and
+      # repeated the `miri` job, which made this the slowest job of the run;
+      # this step builds one crate and runs three tests, so it needs no job
+      # of its own (macOS runners are few, 5 at once).
+      - name: Verify (Miri, clazel-sys)
+        run: cargo xtask verify --part miri clazel-sys
 
   miri:
     name: Verify (Miri)
