@@ -3,6 +3,7 @@
 /// The spec, under the name the ghost imports use.
 pub use crate::spec;
 
+pub mod after_head;
 pub mod before_head;
 pub mod before_html;
 pub mod in_head;
