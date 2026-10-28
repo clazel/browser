@@ -145,6 +145,7 @@ pub fn initial_doctype_exec(
         final(p)@ == initial_doctype(old(p)@, opt_str_view(name), opt_str_view(public_id), opt_str_view(system_id), force_quirks),
         parser_inv(final(p)@),
 {
+    hide(parser_inv);
     hide(doctype_is_quirks);
     hide(doctype_is_limited_quirks);
     // The lists, read before the strings move into the node.
@@ -463,8 +464,23 @@ pub fn doctype_is_quirks_exec(
     if id_is_one_of_exec(system_id, &system_ids, Ghost(quirks_system_ids())) {
         return true;
     }
-    let prefixes = quirks_public_prefixes_exec();
-    if id_starts_with_one_of_exec(public_id, &prefixes, Ghost(quirks_public_prefixes())) {
+    let c0 = quirks_chunk_0_exec();
+    let c1 = quirks_chunk_1_exec();
+    let c2 = quirks_chunk_2_exec();
+    let c3 = quirks_chunk_3_exec();
+    let c4 = quirks_chunk_4_exec();
+    proof {
+        lemma_quirks_chunks(opt_str_view(*public_id));
+    }
+    if id_starts_with_one_of_exec(public_id, &c0, Ghost(quirks_chunk(0))) || id_starts_with_one_of_exec(
+        public_id,
+        &c1,
+        Ghost(quirks_chunk(1)),
+    ) || id_starts_with_one_of_exec(public_id, &c2, Ghost(quirks_chunk(2))) || id_starts_with_one_of_exec(
+        public_id,
+        &c3,
+        Ghost(quirks_chunk(3)),
+    ) || id_starts_with_one_of_exec(public_id, &c4, Ghost(quirks_chunk(4))) {
         return true;
     }
     let if_no_system = quirks_public_prefixes_if_no_system_exec();
@@ -538,13 +554,72 @@ fn quirks_system_ids_exec() -> (r: [&'static [u32]; 1])
     r
 }
 
-/// [`quirks_public_prefixes`] as exec data, in the standard's order.
-#[verifier::rlimit(400)]
-fn quirks_public_prefixes_exec() -> (r: [&'static [u32]; 55])
+/// The entries `11 * k` to `11 * k + 10` of [`quirks_public_prefixes`]: the
+/// exec list comes in five chunks of 11, each its own array, since the
+/// proof that one array of all 55 is the list is too large.
+pub open spec fn quirks_chunk(k: int) -> Seq<Seq<u32>> {
+    quirks_public_prefixes().subrange(11 * k, 11 * k + 11)
+}
+
+/// [`id_starts_with_one_of`] over a range of a list is the disjunction over
+/// its two halves.
+proof fn lemma_one_of_split(id: Option<Seq<u32>>, l: Seq<Seq<u32>>, a: int, m: int, b: int)
+    requires
+        0 <= a <= m <= b <= l.len(),
     ensures
-        strs_view(r@) == quirks_public_prefixes(),
+        id_starts_with_one_of(id, l.subrange(a, b)) == (id_starts_with_one_of(id, l.subrange(a, m))
+            || id_starts_with_one_of(id, l.subrange(m, b))),
 {
-    let r: [&'static [u32]; 55] = [
+    if id is Some {
+        let v = id->Some_0;
+        let lab = l.subrange(a, b);
+        let lam = l.subrange(a, m);
+        let lmb = l.subrange(m, b);
+        if id_starts_with_one_of(id, lab) {
+            let i = choose|i: int| 0 <= i < lab.len() && ascii_ci_starts_with(v, #[trigger] lab[i]);
+            if i < m - a {
+                assert(lam[i] == lab[i]);
+            } else {
+                assert(lmb[i - (m - a)] == lab[i]);
+            }
+        }
+        if id_starts_with_one_of(id, lam) {
+            let i = choose|i: int| 0 <= i < lam.len() && ascii_ci_starts_with(v, #[trigger] lam[i]);
+            assert(lab[i] == lam[i]);
+        }
+        if id_starts_with_one_of(id, lmb) {
+            let i = choose|i: int| 0 <= i < lmb.len() && ascii_ci_starts_with(v, #[trigger] lmb[i]);
+            assert(lab[i + (m - a)] == lmb[i]);
+        }
+    }
+}
+
+/// [`id_starts_with_one_of`] over [`quirks_public_prefixes`] is the
+/// disjunction over its [`quirks_chunk`]s.
+proof fn lemma_quirks_chunks(id: Option<Seq<u32>>)
+    requires
+        quirks_public_prefixes().len() == 55,
+    ensures
+        id_starts_with_one_of(id, quirks_public_prefixes()) == (id_starts_with_one_of(id, quirks_chunk(0))
+            || id_starts_with_one_of(id, quirks_chunk(1)) || id_starts_with_one_of(id, quirks_chunk(2))
+            || id_starts_with_one_of(id, quirks_chunk(3)) || id_starts_with_one_of(id, quirks_chunk(4))),
+{
+    hide(quirks_public_prefixes);
+    hide(id_starts_with_one_of);
+    let l = quirks_public_prefixes();
+    assert(l.subrange(0, 55) =~= l);
+    lemma_one_of_split(id, l, 0, 11, 55);
+    lemma_one_of_split(id, l, 11, 22, 55);
+    lemma_one_of_split(id, l, 22, 33, 55);
+    lemma_one_of_split(id, l, 33, 44, 55);
+}
+
+/// Entries 0 to 10 of [`quirks_public_prefixes`] ([`quirks_chunk`]).
+fn quirks_chunk_0_exec() -> (r: [&'static [u32]; 11])
+    ensures
+        strs_view(r@) == quirks_chunk(0),
+{
+    let r: [&'static [u32]; 11] = [
         // "+//Silmaril//dtd html Pro v0r11 19970101//"
         &[0x2bu32, 0x2f, 0x2f, 0x53, 0x69, 0x6c, 0x6d, 0x61, 0x72, 0x69, 0x6c, 0x2f, 0x2f, 0x64, 0x74, 0x64, 0x20, 0x68, 0x74, 0x6d, 0x6c, 0x20, 0x50, 0x72, 0x6f, 0x20, 0x76, 0x30, 0x72, 0x31, 0x31, 0x20, 0x31, 0x39, 0x39, 0x37, 0x30, 0x31, 0x30, 0x31, 0x2f, 0x2f],
         // "-//AS//DTD HTML 3.0 asWedit + extensions//"
@@ -567,6 +642,32 @@ fn quirks_public_prefixes_exec() -> (r: [&'static [u32]; 55])
         &[0x2du32, 0x2f, 0x2f, 0x49, 0x45, 0x54, 0x46, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x32, 0x2e, 0x31, 0x45, 0x2f, 0x2f],
         // "-//IETF//DTD HTML 3.0//"
         &[0x2du32, 0x2f, 0x2f, 0x49, 0x45, 0x54, 0x46, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x33, 0x2e, 0x30, 0x2f, 0x2f],
+    ];
+    proof {
+        let s = strs_view(r@);
+        let l = quirks_chunk(0);
+        assert(s[0] =~= l[0]);
+        assert(s[1] =~= l[1]);
+        assert(s[2] =~= l[2]);
+        assert(s[3] =~= l[3]);
+        assert(s[4] =~= l[4]);
+        assert(s[5] =~= l[5]);
+        assert(s[6] =~= l[6]);
+        assert(s[7] =~= l[7]);
+        assert(s[8] =~= l[8]);
+        assert(s[9] =~= l[9]);
+        assert(s[10] =~= l[10]);
+        assert(s =~= l);
+    }
+    r
+}
+
+/// Entries 11 to 21 of [`quirks_public_prefixes`] ([`quirks_chunk`]).
+fn quirks_chunk_1_exec() -> (r: [&'static [u32]; 11])
+    ensures
+        strs_view(r@) == quirks_chunk(1),
+{
+    let r: [&'static [u32]; 11] = [
         // "-//IETF//DTD HTML 3.2 Final//"
         &[0x2du32, 0x2f, 0x2f, 0x49, 0x45, 0x54, 0x46, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x33, 0x2e, 0x32, 0x20, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x2f, 0x2f],
         // "-//IETF//DTD HTML 3.2//"
@@ -589,6 +690,32 @@ fn quirks_public_prefixes_exec() -> (r: [&'static [u32]; 55])
         &[0x2du32, 0x2f, 0x2f, 0x49, 0x45, 0x54, 0x46, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x53, 0x74, 0x72, 0x69, 0x63, 0x74, 0x20, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x20, 0x32, 0x2f, 0x2f],
         // "-//IETF//DTD HTML Strict Level 3//"
         &[0x2du32, 0x2f, 0x2f, 0x49, 0x45, 0x54, 0x46, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x53, 0x74, 0x72, 0x69, 0x63, 0x74, 0x20, 0x4c, 0x65, 0x76, 0x65, 0x6c, 0x20, 0x33, 0x2f, 0x2f],
+    ];
+    proof {
+        let s = strs_view(r@);
+        let l = quirks_chunk(1);
+        assert(s[0] =~= l[0]);
+        assert(s[1] =~= l[1]);
+        assert(s[2] =~= l[2]);
+        assert(s[3] =~= l[3]);
+        assert(s[4] =~= l[4]);
+        assert(s[5] =~= l[5]);
+        assert(s[6] =~= l[6]);
+        assert(s[7] =~= l[7]);
+        assert(s[8] =~= l[8]);
+        assert(s[9] =~= l[9]);
+        assert(s[10] =~= l[10]);
+        assert(s =~= l);
+    }
+    r
+}
+
+/// Entries 22 to 32 of [`quirks_public_prefixes`] ([`quirks_chunk`]).
+fn quirks_chunk_2_exec() -> (r: [&'static [u32]; 11])
+    ensures
+        strs_view(r@) == quirks_chunk(2),
+{
+    let r: [&'static [u32]; 11] = [
         // "-//IETF//DTD HTML Strict//"
         &[0x2du32, 0x2f, 0x2f, 0x49, 0x45, 0x54, 0x46, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x53, 0x74, 0x72, 0x69, 0x63, 0x74, 0x2f, 0x2f],
         // "-//IETF//DTD HTML//"
@@ -611,6 +738,32 @@ fn quirks_public_prefixes_exec() -> (r: [&'static [u32]; 55])
         &[0x2du32, 0x2f, 0x2f, 0x4e, 0x65, 0x74, 0x73, 0x63, 0x61, 0x70, 0x65, 0x20, 0x43, 0x6f, 0x6d, 0x6d, 0x2e, 0x20, 0x43, 0x6f, 0x72, 0x70, 0x2e, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x2f, 0x2f],
         // "-//Netscape Comm. Corp.//DTD Strict HTML//"
         &[0x2du32, 0x2f, 0x2f, 0x4e, 0x65, 0x74, 0x73, 0x63, 0x61, 0x70, 0x65, 0x20, 0x43, 0x6f, 0x6d, 0x6d, 0x2e, 0x20, 0x43, 0x6f, 0x72, 0x70, 0x2e, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x53, 0x74, 0x72, 0x69, 0x63, 0x74, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x2f, 0x2f],
+    ];
+    proof {
+        let s = strs_view(r@);
+        let l = quirks_chunk(2);
+        assert(s[0] =~= l[0]);
+        assert(s[1] =~= l[1]);
+        assert(s[2] =~= l[2]);
+        assert(s[3] =~= l[3]);
+        assert(s[4] =~= l[4]);
+        assert(s[5] =~= l[5]);
+        assert(s[6] =~= l[6]);
+        assert(s[7] =~= l[7]);
+        assert(s[8] =~= l[8]);
+        assert(s[9] =~= l[9]);
+        assert(s[10] =~= l[10]);
+        assert(s =~= l);
+    }
+    r
+}
+
+/// Entries 33 to 43 of [`quirks_public_prefixes`] ([`quirks_chunk`]).
+fn quirks_chunk_3_exec() -> (r: [&'static [u32]; 11])
+    ensures
+        strs_view(r@) == quirks_chunk(3),
+{
+    let r: [&'static [u32]; 11] = [
         // "-//O'Reilly and Associates//DTD HTML 2.0//"
         &[0x2du32, 0x2f, 0x2f, 0x4f, 0x27, 0x52, 0x65, 0x69, 0x6c, 0x6c, 0x79, 0x20, 0x61, 0x6e, 0x64, 0x20, 0x41, 0x73, 0x73, 0x6f, 0x63, 0x69, 0x61, 0x74, 0x65, 0x73, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x32, 0x2e, 0x30, 0x2f, 0x2f],
         // "-//O'Reilly and Associates//DTD HTML Extended 1.0//"
@@ -633,6 +786,33 @@ fn quirks_public_prefixes_exec() -> (r: [&'static [u32]; 55])
         &[0x2du32, 0x2f, 0x2f, 0x57, 0x33, 0x43, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x33, 0x20, 0x31, 0x39, 0x39, 0x35, 0x2d, 0x30, 0x33, 0x2d, 0x32, 0x34, 0x2f, 0x2f],
         // "-//W3C//DTD HTML 3.2 Draft//"
         &[0x2du32, 0x2f, 0x2f, 0x57, 0x33, 0x43, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x33, 0x2e, 0x32, 0x20, 0x44, 0x72, 0x61, 0x66, 0x74, 0x2f, 0x2f],
+    ];
+    proof {
+        let s = strs_view(r@);
+        let l = quirks_chunk(3);
+        assert(s[0] =~= l[0]);
+        assert(s[1] =~= l[1]);
+        assert(s[2] =~= l[2]);
+        assert(s[3] =~= l[3]);
+        assert(s[4] =~= l[4]);
+        assert(s[5] =~= l[5]);
+        assert(s[6] =~= l[6]);
+        assert(s[7] =~= l[7]);
+        assert(s[8] =~= l[8]);
+        assert(s[9] =~= l[9]);
+        assert(s[10] =~= l[10]);
+        assert(s =~= l);
+    }
+    r
+}
+
+/// Entries 44 to 54 of [`quirks_public_prefixes`] ([`quirks_chunk`]).
+fn quirks_chunk_4_exec() -> (r: [&'static [u32]; 11])
+    ensures
+        strs_view(r@) == quirks_chunk(4),
+        quirks_public_prefixes().len() == 55,
+{
+    let r: [&'static [u32]; 11] = [
         // "-//W3C//DTD HTML 3.2 Final//"
         &[0x2du32, 0x2f, 0x2f, 0x57, 0x33, 0x43, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x33, 0x2e, 0x32, 0x20, 0x46, 0x69, 0x6e, 0x61, 0x6c, 0x2f, 0x2f],
         // "-//W3C//DTD HTML 3.2//"
@@ -658,7 +838,7 @@ fn quirks_public_prefixes_exec() -> (r: [&'static [u32]; 55])
     ];
     proof {
         let s = strs_view(r@);
-        let l = quirks_public_prefixes();
+        let l = quirks_chunk(4);
         assert(s[0] =~= l[0]);
         assert(s[1] =~= l[1]);
         assert(s[2] =~= l[2]);
@@ -670,50 +850,6 @@ fn quirks_public_prefixes_exec() -> (r: [&'static [u32]; 55])
         assert(s[8] =~= l[8]);
         assert(s[9] =~= l[9]);
         assert(s[10] =~= l[10]);
-        assert(s[11] =~= l[11]);
-        assert(s[12] =~= l[12]);
-        assert(s[13] =~= l[13]);
-        assert(s[14] =~= l[14]);
-        assert(s[15] =~= l[15]);
-        assert(s[16] =~= l[16]);
-        assert(s[17] =~= l[17]);
-        assert(s[18] =~= l[18]);
-        assert(s[19] =~= l[19]);
-        assert(s[20] =~= l[20]);
-        assert(s[21] =~= l[21]);
-        assert(s[22] =~= l[22]);
-        assert(s[23] =~= l[23]);
-        assert(s[24] =~= l[24]);
-        assert(s[25] =~= l[25]);
-        assert(s[26] =~= l[26]);
-        assert(s[27] =~= l[27]);
-        assert(s[28] =~= l[28]);
-        assert(s[29] =~= l[29]);
-        assert(s[30] =~= l[30]);
-        assert(s[31] =~= l[31]);
-        assert(s[32] =~= l[32]);
-        assert(s[33] =~= l[33]);
-        assert(s[34] =~= l[34]);
-        assert(s[35] =~= l[35]);
-        assert(s[36] =~= l[36]);
-        assert(s[37] =~= l[37]);
-        assert(s[38] =~= l[38]);
-        assert(s[39] =~= l[39]);
-        assert(s[40] =~= l[40]);
-        assert(s[41] =~= l[41]);
-        assert(s[42] =~= l[42]);
-        assert(s[43] =~= l[43]);
-        assert(s[44] =~= l[44]);
-        assert(s[45] =~= l[45]);
-        assert(s[46] =~= l[46]);
-        assert(s[47] =~= l[47]);
-        assert(s[48] =~= l[48]);
-        assert(s[49] =~= l[49]);
-        assert(s[50] =~= l[50]);
-        assert(s[51] =~= l[51]);
-        assert(s[52] =~= l[52]);
-        assert(s[53] =~= l[53]);
-        assert(s[54] =~= l[54]);
         assert(s =~= l);
     }
     r
