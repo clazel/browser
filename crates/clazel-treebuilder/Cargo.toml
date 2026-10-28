@@ -22,6 +22,7 @@ target-tier = 2
 # `proof fn` in this crate.
 theorems = [
     "theorem_dispatch_total",
+    "theorem_actions_ordered",
 ]
 
 [package.metadata.verus]

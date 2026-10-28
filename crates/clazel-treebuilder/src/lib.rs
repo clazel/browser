@@ -9,9 +9,11 @@
 //! - [`invariant`]: `parser_wf`, the invariant of reachable parser states.
 //! - [`contract`]: what the executable parser is proven to satisfy.
 //! - [`termination`]: `theorem_dispatch_total`, reprocessing ends.
+//! - [`theorems`]: `theorem_actions_ordered`, the order of the actions.
 
 pub mod contract;
 pub mod exec;
 pub mod invariant;
 pub mod spec;
 pub mod termination;
+pub mod theorems;
