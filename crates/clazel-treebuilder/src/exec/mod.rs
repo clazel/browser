@@ -16,6 +16,7 @@
 /// use (the one spelling of that import the lint check allows).
 pub use crate::spec;
 
+pub mod formatting;
 pub mod frame;
 pub mod names;
 pub mod stack;
