@@ -41,21 +41,35 @@ full verification is green on a run with everything below. See the
 - The spec is total: every step consumes input, emits the end-of-file
   token, or hands the current character to a state of lower rank
   (`src/tokenizer/termination.rs`, one lemma per state).
-- `theorem_step_equals_whole`: the whole-input face is the fold of the
-  one-token face.
+- `theorem_tokenizer_total`: every run ends with exactly one end-of-file
+  token, its last. `theorem_step_equals_whole`: the whole-input face is
+  the fold of the one-token face. `theorem_output_bounded`: the character
+  tokens are no more than the input's code points.
 - The named character reference table is generated from the standard's
   `entities.json` (`cargo xtask tables`); Verus proves facts about it by
   evaluating it in pieces (every name non-empty and in bounds, the
   first-character index the matcher uses), and a match consumes at least
   two code points and emits at most two.
-- 49 inputs and the standard's character reference examples are evaluated
+- 69 inputs and the standard's character reference examples are evaluated
   by Verus on the spec (`src/tokenizer/examples.rs`,
   `src/charref/examples.rs`); they are what the certified mutation kills
-  contradict (`mutations.json`).
+  contradict (`mutations.json`: 116 of 118 mutations killed with
+  certificates; the 2 that survive say why).
+- An independent transcription from W3C HTML 5.2 §8.2.4 (`independent.rs`,
+  79 states), written without reading `spec.rs`. **Not yet proven:** that
+  it agrees with the spec on every input where the texts agree. Verus
+  compares the two on 68 inputs (`agreement.rs`): 57 agree, and the 11
+  that differ do so for listed differences of the texts (processing
+  instructions; W3C's decimal character references, see
+  [docs/ERRATA.md](../../docs/ERRATA.md)). This is what keeps the crate
+  below tier 2.
 - Conformance: every html5lib-tests `tokenizer/*.test` case, once per
-  initial state, through the proven implementation; and a differential
-  test against `html5gum` on every html5lib input, each one mutated, and
-  random inputs.
+  initial state, through the proven implementation (7,050 of 7,053 pass;
+  3 expected failures, `xmlViolation.test`, which expects infoset
+  coercion); and a differential test against `html5gum` on every html5lib
+  input, each one mutated, and 20,000 random inputs (33,792 agree, none
+  differ; 86 inputs with `<?` or lone surrogates are expected
+  differences).
 
 Current proof, mutation and conformance counts are in the
 [status table](../../README.md#verification-status).
