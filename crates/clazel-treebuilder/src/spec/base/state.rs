@@ -5,8 +5,7 @@
 //! over that state. The modelling choices are listed in [`super`].
 
 #[allow(unused_imports)]
-use super::tags::*;
-use clazel_dom::spec::{Attr, Document, Namespace, NodeId};
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

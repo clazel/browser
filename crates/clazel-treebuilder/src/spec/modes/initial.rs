@@ -11,13 +11,7 @@
 //!   name is compared exactly with "html" (the tokenizer lowercases it).
 
 #[allow(unused_imports)]
-use super::super::dispatch::*;
-#[allow(unused_imports)]
-use super::super::insert::*;
-#[allow(unused_imports)]
-use super::super::state::*;
-use clazel_dom::spec as dom;
-use clazel_dom::spec::{Document, DocumentMode, NodeId, NodeKind};
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

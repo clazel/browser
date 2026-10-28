@@ -19,17 +19,7 @@
 //! - any other outcome is returned with foster parenting disabled.
 
 #[allow(unused_imports)]
-use super::super::dispatch::*;
-#[allow(unused_imports)]
-use super::super::insert::*;
-#[allow(unused_imports)]
-use super::super::state::*;
-#[allow(unused_imports)]
-use super::super::tags::*;
-#[allow(unused_imports)]
-use super::in_body::*;
-#[allow(unused_imports)]
-use super::in_head::*;
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

@@ -21,7 +21,7 @@
 //! four-valued scripting mode and template "content patching".
 //!
 //! Modules:
-//! - [`tags`]: the tag names the rules mention, as an enum.
+//! - [`base::tags`]: the tag names the rules mention, as an enum.
 //! - [`tables`]: the attribute and tag name adjustment tables.
 //! - [`state`]: §13.2.4 parse state, tokens and actions, and §13.2.4's
 //!   algorithms (scopes, "reset the insertion mode appropriately", the list
@@ -103,9 +103,13 @@
 //!   Step 22's "adopt fragment into target's node document" changes nothing
 //!   in one arena.
 
-pub mod dispatch;
-pub mod insert;
+pub mod base;
 pub mod modes;
-pub mod state;
-pub mod tables;
-pub mod tags;
+
+#[cfg(verus_only)]
+pub use crate::invariant::*;
+pub use base::*;
+#[cfg(verus_only)]
+pub use clazel_dom::spec as dom;
+pub use clazel_dom::spec::{Attr, Document, DocumentMode, Namespace, NodeId, NodeKind};
+pub use modes::*;

@@ -6,15 +6,7 @@
 //! head" rules always handle the token (`Outcome::Done`).
 
 #[allow(unused_imports)]
-use super::super::dispatch::*;
-#[allow(unused_imports)]
-use super::super::insert::*;
-#[allow(unused_imports)]
-use super::super::state::*;
-#[allow(unused_imports)]
-use super::super::tags::*;
-use super::in_head::*;
-use clazel_dom::spec::{Namespace, NodeId};
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

@@ -3,12 +3,7 @@
 //! and `ensures` are exactly these predicates, over the views of its state.
 
 #[allow(unused_imports)]
-use crate::invariant::*;
-#[allow(unused_imports)]
-use crate::spec::dispatch::*;
-#[allow(unused_imports)]
-use crate::spec::state::*;
-use clazel_dom::spec::{Document, NodeId};
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

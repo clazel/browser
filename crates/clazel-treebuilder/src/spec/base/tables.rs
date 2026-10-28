@@ -3,8 +3,9 @@
 //! row in the standard's order, each with the row in its comment.
 
 #[allow(unused_imports)]
+use super::spec::*;
+#[allow(unused_imports)]
 use vstd::prelude::*;
-use clazel_dom::spec::Namespace;
 
 verus! {
 

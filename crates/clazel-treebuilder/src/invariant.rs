@@ -3,9 +3,7 @@
 //! `theorem_doc_wf`, `theorem_open_elements_in_doc`).
 
 #[allow(unused_imports)]
-use crate::spec::state::*;
-use clazel_dom::spec as dom;
-use clazel_dom::spec::{Document, NodeId, NodeKind};
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

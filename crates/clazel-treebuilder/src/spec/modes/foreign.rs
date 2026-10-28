@@ -19,13 +19,7 @@
 //!   [`Tag::Foreignobject`]).
 
 #[allow(unused_imports)]
-use super::super::dispatch::*;
-#[allow(unused_imports)]
-use super::super::insert::*;
-#[allow(unused_imports)]
-use super::super::state::*;
-#[allow(unused_imports)]
-use super::super::tags::*;
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

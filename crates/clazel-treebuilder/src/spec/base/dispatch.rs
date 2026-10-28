@@ -5,15 +5,7 @@
 //! [`super`].
 
 #[allow(unused_imports)]
-use super::insert::*;
-#[allow(unused_imports)]
-use super::modes::*;
-#[allow(unused_imports)]
-use super::state::*;
-#[allow(unused_imports)]
-use super::tags::*;
-use clazel_dom::spec as dom;
-use clazel_dom::spec::{Attr, Document, DocumentMode, Namespace, NodeId, NodeKind};
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 

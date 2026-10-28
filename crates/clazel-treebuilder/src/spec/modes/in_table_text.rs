@@ -11,15 +11,7 @@
 //! recursive.
 
 #[allow(unused_imports)]
-use super::super::dispatch::*;
-#[allow(unused_imports)]
-use super::super::insert::*;
-#[allow(unused_imports)]
-use super::super::state::*;
-#[allow(unused_imports)]
-use super::super::tags::*;
-#[allow(unused_imports)]
-use super::in_table::*;
+use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
