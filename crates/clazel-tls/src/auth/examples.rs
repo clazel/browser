@@ -19,6 +19,12 @@ pub open spec fn crypto() -> crate::schedule::spec::Crypto {
 }
 /// One structurally valid, nonempty TLS Certificate; the DER is opaque to this fixture.
 pub open spec fn certificate() -> Seq<u8> { seq![0u8, 0u8, 0u8, 6u8, 0u8, 0u8, 1u8, 170u8, 0u8, 0u8] }
+/// certificate() whose entry carries status_request (a CertificateStatus with
+/// a one-octet OCSP response), which initial() never offered.
+pub open spec fn certificate_with_status_request() -> Seq<u8> {
+    seq![0u8, 0u8, 0u8, 15u8, 0u8, 0u8, 1u8, 170u8, 0u8, 9u8,
+        0u8, 5u8, 0u8, 5u8, 1u8, 0u8, 0u8, 1u8, 48u8]
+}
 /// Server CertificateVerify body with scheme ECDSA-P256-SHA256 and a fixture signature.
 pub open spec fn cv() -> Seq<u8> { seq![4u8, 3u8, 0u8, 1u8, 9u8] }
 /// Chain/name/time and server CertificateVerify fixture checks.
@@ -150,6 +156,14 @@ pub proof fn lemma_closed_absorbs()
     ensures step(crypto(), verifier(), State { phase: Phase::Closed, ..initial() }, Input::Application(seq![1u8])).1 == Action::None,
 {
     assert(step(crypto(), verifier(), State { phase: Phase::Closed, ..initial() }, Input::Application(seq![1u8])).1 == Action::None) by (compute_only);
+}
+
+
+/// RFC 8446 §4.4.2: an unoffered Certificate entry extension is refused.
+pub proof fn lemma_unoffered_certificate_extension()
+    ensures receive(crypto(), verifier(), after_extensions(), 11, certificate_with_status_request()).1 == Action::Fail(110u8),
+{
+    assert(receive(crypto(), verifier(), after_extensions(), 11, certificate_with_status_request()).1 == Action::Fail(110u8)) by (compute_only);
 }
 
 } // verus!

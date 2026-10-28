@@ -178,7 +178,8 @@ pub open spec fn prepare_update_ensures(c: crate::schedule::spec::Crypto,
 }
 
 /// A received KeyUpdate rotates only the peer's receive direction and queues
-/// the requested response before the next application send.
+/// the requested response before the next application send. After our
+/// close_notify is sealed it sends nothing (§6.1).
 pub open spec fn receive_update_ensures(c: crate::schedule::spec::Crypto,
     ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
     request: u8, action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool
@@ -192,6 +193,8 @@ pub open spec fn receive_update_ensures(c: crate::schedule::spec::Crypto,
             after.server_application_secret == crate::schedule::spec::next_traffic_secret(c, before.server_application_secret)
                 && after.client_application_secret == before.client_application_secret
                 && super::dispatcher_spec::action_refines(action, after)
+                && (!super::dispatcher_spec::write_open(before) ==> action is None
+                    && !after.response_due && after.pending_update_request is None)
         })
 }
 

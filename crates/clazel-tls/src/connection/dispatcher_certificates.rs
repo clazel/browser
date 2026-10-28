@@ -44,6 +44,21 @@ pub open spec fn sample_ready_state() -> super::dispatcher_spec::State {
     }
 }
 
+/// Expand returns its secret, so a 32-octet secret starts a receive epoch.
+pub open spec fn passthrough_expand(secret: Seq<u8>, _info: Seq<u8>, _length: nat) -> Seq<u8> { secret }
+
+pub open spec fn passthrough_crypto() -> crate::schedule::spec::Crypto {
+    crate::schedule::spec::Crypto {
+        expand: |secret: Seq<u8>, info: Seq<u8>, length: nat| passthrough_expand(secret, info, length),
+        ..crypto()
+    }
+}
+
+/// Ready, with our close_notify already sent.
+pub open spec fn sample_write_closed_state() -> super::dispatcher_spec::State {
+    super::dispatcher_spec::State { local_write_closed: true, ..sample_ready_state() }
+}
+
 pub open spec fn sample_bad_update_state() -> super::dispatcher_spec::State {
     super::dispatcher_spec::State {
         pending_update_secret: seq![],

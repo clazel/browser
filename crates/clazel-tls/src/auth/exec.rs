@@ -193,6 +193,27 @@ pub fn extensions_offered(es: &[Extension<'_>], offers: &[u16]) -> (out: bool)
     proof { assert(all.skip(i as int) =~= Seq::<crate::spec::Ext>::empty()); }
     true
 }
+/// RFC 8446 §4.4.2: every CertificateEntry's extensions answer an actual offer.
+pub fn certificate_extensions_offered(entries: &[crate::types::CertificateEntry<'_>], offers: &[u16]) -> (out: bool)
+    ensures out == super::spec::certificate_extensions_offered(crate::types::views(entries@), offers@),
+{
+    let mut i: usize = 0;
+    let ghost all = crate::types::views(entries@);
+    proof { assert(all.skip(0) =~= all); }
+    while i < entries.len()
+        invariant i <= entries.len(), all == crate::types::views(entries@),
+            super::spec::certificate_extensions_offered(all, offers@) == super::spec::certificate_extensions_offered(all.skip(i as int), offers@),
+        decreases entries.len() - i,
+    {
+        let entry = match entries.get(i) { Some(entry) => entry, None => { proof { assert(false); } return false; } };
+        proof { assert(all.skip(i as int)[0] == entry@); }
+        if !extensions_offered(entry.extensions.as_slice(), offers) { return false; }
+        proof { assert(all.skip(i as int).skip(1) =~= all.skip(i as int + 1)); }
+        i = i.saturating_add(1);
+    }
+    proof { assert(all.skip(i as int) =~= Seq::<crate::spec::CertificateEntry>::empty()); }
+    true
+}
 /// RFC 8446 §6.2: typed certificate-validation alert mapping.
 pub fn certificate_alert(error: CertificateError) -> (out: u8)
     ensures out == super::spec::certificate_alert(error),
@@ -269,14 +290,15 @@ impl Auth {
         self.requested = true;
         self.record(crypto, Kind::CertificateRequest, body, Phase::Certificate)
     }
-    fn on_certificate<C: Crypto, V: Verifier>(&mut self, crypto: &C, verifier: &V, body: &[u8], empty_context: bool, empty_chain: bool) -> (out: Action)
+    fn on_certificate<C: Crypto, V: Verifier>(&mut self, crypto: &C, verifier: &V, body: &[u8], empty_context: bool, empty_chain: bool, entries_offered: bool) -> (out: Action)
         requires old(self).wf(),
-        ensures (final(self)@, out@) == super::spec::on_certificate(crypto.functions(), verifier.functions(), old(self)@, body@, empty_context, empty_chain),
+        ensures (final(self)@, out@) == super::spec::on_certificate(crypto.functions(), verifier.functions(), old(self)@, body@, empty_context, empty_chain, entries_offered),
             final(self).wf(),
     {
         if !matches!(self.phase, Phase::CertificateOrRequest | Phase::Certificate) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
         if !empty_context { return self.fail(crate::spec::ILLEGAL_PARAMETER); }
         if empty_chain { return self.fail(crate::spec::DECODE_ERROR); }
+        if !entries_offered { return self.fail(crate::spec::UNSUPPORTED_EXTENSION); }
         let key = match verifier.chain(self.config.host.as_slice(), self.config.now, body) {
             Ok(key) => key,
             Err(error) => { let alert = certificate_alert(error); return self.fail(alert); },
@@ -335,8 +357,11 @@ impl Auth {
                 let present = crate::extension::has_ext(request.extensions.as_slice(), 13);
                 self.on_request(crypto, body, initial_request_context_valid(request.context), present)
             },
-            HsMsg::Certificate(certificate) => self.on_certificate(crypto, verifier, body,
-                initial_certificate_context_valid(certificate.context), certificate.entries.is_empty()),
+            HsMsg::Certificate(certificate) => {
+                let offered = certificate_extensions_offered(certificate.entries.as_slice(), self.config.extensions.as_slice());
+                self.on_certificate(crypto, verifier, body,
+                    initial_certificate_context_valid(certificate.context), certificate.entries.is_empty(), offered)
+            },
             HsMsg::CertificateVerify(cv) => self.on_verify(crypto, verifier, body, cv.algorithm, cv.signature),
             HsMsg::Finished(verify_data) => {
                 if !matches!(self.phase, Phase::Finished) { self.fail(crate::spec::UNEXPECTED_MESSAGE) }

@@ -238,6 +238,9 @@ pub open spec fn wf(s: State) -> bool {
                 }
                 && (s.pending_close_wire.len() == 0 || !s.local_write_closed)
                 && (!s.local_write_closed || s.pending_close_wire.len() == 0)
+                // §6.1: nothing is owed or queued for sending after close_notify.
+                && (s.response_due ==> write_open(s))
+                && (s.pending_update_request is Some ==> write_open(s))
                 && match s.auth { Some(a) => a.phase == crate::auth::spec::Phase::Ready,
                     None => false },
             Mode::Failed | Mode::Closed => no_live_secrets(s)
@@ -307,8 +310,17 @@ pub open spec fn prepare_key_update(c: crate::schedule::spec::Crypto,
     } }
 }
 
+/// The local write side can still send: no close_notify has been sealed or
+/// sent (§6.1: a closure alert ends what this side writes).
+pub open spec fn write_open(s: State) -> bool {
+    !s.local_write_closed && s.pending_close_wire.len() == 0
+}
+
 /// Receive a syntactically valid KeyUpdate under the old receive epoch and
 /// install the next server secret before processing another record.
+/// §4.6.3 owes the response "prior to sending its next Application Data
+/// record". Once our close_notify is sealed (§6.1) there is no next record,
+/// so a request then rotates only the receive side and owes nothing.
 pub open spec fn receive_key_update(c: crate::schedule::spec::Crypto, s: State,
     request: u8) -> State
 {
@@ -317,7 +329,7 @@ pub open spec fn receive_key_update(c: crate::schedule::spec::Crypto, s: State,
         Ok(epoch) => State {
             application_receiver: Some(epoch),
             server_application_secret: next_secret,
-            response_due: s.response_due || request == 1,
+            response_due: s.response_due || (request == 1 && write_open(s)),
             ..s
         },
         // A derived secret that cannot form a new epoch must not leave a

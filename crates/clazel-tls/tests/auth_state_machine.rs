@@ -449,6 +449,59 @@ fn typed_chain_failures_and_empty_chain_preserve_expected_alerts() -> Result<(),
 }
 
 #[test]
+fn unoffered_certificate_entry_extensions_are_refused_before_chain_validation() -> Result<(), String>
+{
+    // RFC 8446 §4.4.2: Certificate entry extensions must answer ClientHello
+    // offers; config() offers server_name and signature_algorithms only.
+    let crypto = TestCrypto;
+    let status_request: &[u8] = &[1, 0, 0, 1, 0x30];
+    let sct_list: &[u8] = &[0, 3, 0, 1, 0x30];
+    let unknown: &[u8] = b"opaque";
+    for (etype, data, on_leaf) in [
+        (5, status_request, true),
+        (18, sct_list, true),
+        (0x9999, unknown, true),
+        (5, status_request, false),
+    ] {
+        let verifier = MockVerifier::accepts_chain();
+        let mut auth = start(&crypto)?;
+        progress_to_certificate(&mut auth, &crypto, &verifier, None)?;
+        let with_extension = CertificateEntry {
+            cert_data: b"opaque certificate bytes",
+            extensions: vec![Extension { etype, data }],
+        };
+        let plain = CertificateEntry {
+            cert_data: b"opaque intermediate bytes",
+            extensions: Vec::new(),
+        };
+        let entries = if on_leaf {
+            vec![with_extension, plain]
+        } else {
+            vec![plain, with_extension]
+        };
+        let mut cert = Vec::new();
+        write_certificate(
+            &mut cert,
+            &Certificate {
+                context: &[],
+                entries,
+            },
+        );
+        let before = auth.messages().to_vec();
+        assert_eq!(
+            receive(&mut auth, &crypto, &verifier, 11, &cert),
+            Action::Fail(UNSUPPORTED_EXTENSION),
+            "extension {etype:#06x} on the {} entry",
+            if on_leaf { "leaf" } else { "second" }
+        );
+        assert_eq!(auth.messages(), before);
+        assert_eq!(auth.phase(), Phase::Failed);
+        assert!(verifier.calls.borrow().chains.is_empty());
+    }
+    Ok(())
+}
+
+#[test]
 fn certificate_verify_checks_captured_identity_and_fails_closed() -> Result<(), String> {
     let crypto = TestCrypto;
     let verifier = MockVerifier {
