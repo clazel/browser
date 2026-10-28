@@ -1774,8 +1774,11 @@ dependency, no `unsafe`, `clazel-sys` untouched.
 - **macOS in CI.** The macOS half (the demo, the escape tests, the hostile
   and WPT tests above) was first run only locally, on macOS arm64
   (Darwin 25.6), with `cargo test -p clazel -p clazel-renderer` and
-  `cargo run -p clazel -- demo`. CI's `base-macos` job now runs the base and
-  Miri parts on macOS arm64, which include all of these tests.
+  `cargo run -p clazel -- demo`. CI's `base-macos` job now runs the base
+  part on macOS arm64, which includes all of these tests (and, since
+  2026-10-28, the Miri part for `clazel-sys` only: these tests are all
+  ignored under Miri, and the rest of the workspace is portable Rust the
+  Linux Miri job covers).
 - **Closed (2026-10-28).** CI's full verification passed at `872c1e8`
   ([run 40642618793](https://github.com/clazel/browser/actions/runs/40642618793)),
   with the `Verify (base)` job on `ubuntu-24.04` (AppArmor profile loaded)

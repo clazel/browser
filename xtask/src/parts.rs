@@ -2,7 +2,11 @@
 //! separate machines (CI runs one job per part; `.github/workflows/ci.yml`).
 //!
 //! - `base`: static checks, rustfmt, clippy and tests, workspace-wide.
-//! - `miri`: static checks and the tests under Miri, workspace-wide.
+//! - `miri [<names>]`: static checks and the tests under Miri, workspace-wide
+//!   or for the named crates only (comma-separated). CI's macOS job names
+//!   `clazel-sys`: it is the one crate with code that compiles only there and
+//!   has tests Miri can run, and every other crate's tests are the same
+//!   portable Rust the Linux job runs.
 //! - `crate <names>`: static checks, then Kani, Verus, line counts,
 //!   mutations and conformance for one crate or several (comma-separated).
 //!   On success it writes what it measured to `<dir>/<name>.json` for each,
