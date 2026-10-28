@@ -22,7 +22,10 @@
 //!   has one, so a name that may match without a semicolon is the one that
 //!   has a second row without it;
 //! - a row's code points are the key's `codepoints` array, one or two of
-//!   them; a single code point has `ENTITY_CP2` 0.
+//!   them; a single code point has `ENTITY_CP2` 0;
+//! - an index by first character: the rows whose name starts with each
+//!   ASCII character (contiguous, since the rows are sorted). Nothing
+//!   relies on this being right: `charref/index.rs` proves it.
 //!
 //! It also rejects, so the tables can rely on it: a key that does not start
 //! with `&`; a name that is empty or has anything but ASCII alphanumerics
@@ -235,6 +238,27 @@ fn generate(text: &str) -> Result<String, String> {
         cp2.push(r.cps.get(1).copied().unwrap_or(0));
     }
     let semicolonless = rows.iter().filter(|r| !r.name.ends_with(';')).count();
+    // The rows whose name starts with each ASCII character c are rows
+    // FIRST_START[c] .. FIRST_END[c] (empty, 0 .. 0, for a character no
+    // name starts with); the rows are sorted, so they are contiguous.
+    let mut first_start = vec![0u32; 128];
+    let mut first_end = vec![0u32; 128];
+    for (i, r) in rows.iter().enumerate() {
+        let c = usize::from(r.name.as_bytes().first().copied().unwrap_or(0));
+        let i = u32::try_from(i).map_err(|e| e.to_string())?;
+        let (Some(start), Some(end)) = (first_start.get_mut(c), first_end.get_mut(c)) else {
+            return Err(format!("{}: first character is not ASCII", r.name));
+        };
+        if *end == 0 {
+            *start = i;
+        } else if *end != i {
+            return Err(format!(
+                "{}: rows starting with it are not contiguous",
+                r.name
+            ));
+        }
+        *end = i.saturating_add(1);
+    }
     let mut out = String::from(HEADER);
     let _ = writeln!(
         out,
@@ -289,8 +313,31 @@ fn generate(text: &str) -> Result<String, String> {
             name: "entity_chars",
             doc: "The names' characters, row after row (ASCII).",
             row_type: "u8",
-            row_bytes: 1,
+            // Overstated on purpose: 16 makes chunks of 1000 characters
+            // (emit splits at 16000 bytes), which Verus's evaluator can
+            // index within its time limit; one 16000-entry chunk it cannot.
+            row_bytes: 16,
             rows: chars.iter().map(|c| format!("0x{c:X}")).collect(),
+        },
+    );
+    emit(
+        &mut out,
+        &Table {
+            name: "entity_first_start",
+            doc: "By ASCII character: the first row whose name starts with it.",
+            row_type: "u32",
+            row_bytes: 4,
+            rows: first_start.iter().map(|s| format!("{s}")).collect(),
+        },
+    );
+    emit(
+        &mut out,
+        &Table {
+            name: "entity_first_end",
+            doc: "By ASCII character: one past the last row whose name starts with it.",
+            row_type: "u32",
+            row_bytes: 4,
+            rows: first_end.iter().map(|s| format!("{s}")).collect(),
         },
     );
     let _ = writeln!(out, "}} // verus!");
@@ -314,6 +361,9 @@ const HEADER: &str = "\
 //   ENTITY_NAME_LEN[i]]. A name that may match without a semicolon is one
 //   that also has a row without the `;`.
 // - Row i's code points are ENTITY_CP1[i], then ENTITY_CP2[i] unless it is 0.
+// - For each ASCII character c, the rows whose name starts with c are rows
+//   ENTITY_FIRST_START[c] .. ENTITY_FIRST_END[c] (both 0 if there are none).
+//   This index is not trusted: charref/index.rs proves it against the rows.
 // - Checked when generating: every name is ASCII alphanumerics with an
 //   optional final `;`, non-empty, at most 255 long, and unique; one or two
 //   code points, none 0, a surrogate or above U+10FFFF, equal to the

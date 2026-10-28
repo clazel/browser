@@ -11,5 +11,10 @@
 //! - [`examples`]: the standard's examples, evaluated on the spec.
 
 pub mod data;
+pub mod exec;
+pub mod index;
+pub mod examples;
 pub mod contract;
+pub mod lemmas;
+pub mod search;
 pub mod spec;
