@@ -33,6 +33,7 @@
 mod changed;
 mod conformance;
 mod deps;
+mod entities;
 mod mutate;
 mod parts;
 mod pins;
@@ -351,6 +352,11 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     );
     let (problems, notes) = roots::run(false);
     r.step("generated root certificate table", outcome(problems, notes));
+    let (problems, notes) = entities::run(false);
+    r.step(
+        "generated named character references table",
+        outcome(problems, notes),
+    );
     let tooling = crates
         .iter()
         .filter(|c| c.tooling)
@@ -910,6 +916,11 @@ fn generate_tables() -> ExitCode {
     );
     let (problems, notes) = roots::run(true);
     r.step("generate root certificate table", outcome(problems, notes));
+    let (problems, notes) = entities::run(true);
+    r.step(
+        "generate named character references table",
+        outcome(problems, notes),
+    );
     if r.failed {
         println!("RESULT: FAILED");
         ExitCode::from(1)
