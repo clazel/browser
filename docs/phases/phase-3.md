@@ -788,8 +788,8 @@ a differential against RustCrypto's `der` crate (a `test` row, counting its
 dependencies) on random and mutated TLVs, and the DER cases of the
 `x509-limbo` corpus (3.5b vendors it) that are pure encoding errors.
 
-**As built** (on the `phase3/tls` branch, not on `main`): `crates/clazel-der`, tier 0, target tier 2; promotion waits
-for CI's full verification on a pull request. Cursor-based DER readers and
+**As built** (on `main`): `crates/clazel-der`, tier 2 (raised on CI's full verification of the pull request
+that raised it; `main`'s run at `35160d8` measured Verus 241 verified and 59 of 59 mutations certified). Cursor-based DER readers and
 encoders cover the types listed above, with contracts, round-trip,
 canonicity, no-over-read and bounded-reservation lemmas. The independent
 transcription uses Kaliski's Guide, with its coverage limits recorded in the
@@ -855,8 +855,8 @@ Apache-2.0) and FIPS 186-3 `SigVer15_186-3.rsp`, vendored with converters;
 a differential against the `rsa` crate (RustCrypto) as a `test` row;
 a Kani harness on the limb arithmetic for small widths.
 
-**As built** (on the `phase3/tls` branch, not on `main`): `crates/clazel-pkcs1`, tier 0, target tier 2; promotion waits
-for CI's full verification on a pull request. `src/spec.rs` transcribes RFC 8017
+**As built** (on `main`): `crates/clazel-pkcs1`, tier 2 (raised on CI's full verification of the pull request
+that raised it; `main`'s run at `35160d8` measured Verus 170 verified and 54 of 54 mutations certified). `src/spec.rs` transcribes RFC 8017
 §4.1, §4.2, §5.2.2, §8.2.2 (the steps are `rsassa_pkcs1_v1_5_verify_steps`,
 under the domain restrictions of `rsassa_pkcs1_v1_5_verify`) and §9.2 with
 Note 1's three `DigestInfo` prefixes as literals; its header lists the
@@ -1095,7 +1095,7 @@ lemma). Mutations for each decision. Independent: the Fetch Standard's
 fetch", transcribed and proven to give the same request sequence on a
 stated class (no caching, GET only, no CORS).
 
-**As built** (branch `phase3/fetch-cookies`, `http://` only): `crates/clazel-fetch`, tier 0, target 2. Besides the `request`
+**As built** (on `main`, `http://` only): `crates/clazel-fetch`, tier 2 (raised on CI's full verification of the pull request that raised it; `main`'s run at `35160d8` measured Verus 164 verified and 64 of 64 mutations certified). Besides the `request`
 module, `src/transducer/`: `spec.rs` (the transducer: `start(url)` gives
 `Connect { host, port, tls }`, `step(http, urls, state, input)` maps
 `Connected`, `Bytes`, `Closed`, `Error` to `Send`, `Close`, `Done { url,
@@ -1277,14 +1277,14 @@ half does not wait on TLS.
 | 3.2 HTTP/1.1 message framing | response side and request serializer built, tier 2 (2026-10-25, CI's full verification green on 9ce4086): spec, contracts, examples evaluated by Verus, implementation proven equal to the spec; independent transcription of RFC 7230 §3 and §4.1 (`message/independent.rs`) proven equal to the spec wherever they decide, with the inputs where the RFCs differ listed and excluded (`Out`); 150 mutations, all `killed` with certificates (the five limit survivors closed with parameterised limits `read_line_with` and `close_body_pending` and examples at limit 4). `theorem_monotone` and `theorem_no_early_decision` proven (`message/lemmas.rs`); an incremental `ResponseParser` (`message/incremental.rs`) proven to `feed_ensures`; a request parser spec and `theorem_request_round_trip`, with an executable request parser proven to it (a test aid: no leading empty lines, no request body). `ResponseParser::received_bytes` (proven to `received_bytes_ensures`) lets the fetch transducer keep no second copy of the octets. `clazel-http` 379 verified, 0 errors (2026-10-25). Not yet: an incremental `close` (it re-parses once); the independent transcription covers `parse_response_at_close` and `Transfer-Encoding` with `Content-Length` (2026-10-26, not yet CI-verified) but not obs-fold, codings other than a lone `chunked`, repeated `Content-Length`, chunk-extension whitespace, or a status line with no second SP or a major version other than 1 (each `Out`, with the reason in its header); the Fetch "HTTP-network fetch" transcription the plan names is not written |
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). `clazel-http` raised to tier 2 on 2026-10-25 |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
-| 3.5a DER | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
+| 3.5a DER | on `main`; tier 2 (see As built) |
 | 3.5b X.509 and path validation | not started (after 3.5a) |
-| 3.5c RSA PKCS#1 v1.5 | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
+| 3.5c RSA PKCS#1 v1.5 | on `main`; tier 2 (see As built) |
 | 3.5d TLS record and handshake formats | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
 | 3.5e Key schedule and handshake state machine | not started (after 3.5d) |
 | 3.5f Cryptography and the join | not started |
 | 3.5g TLS conformance and trust store | not started |
-| 3.6 Client state machine | built, `http://` only (branch `phase3/fetch-cookies`): transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 0 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored), a CI run |
+| 3.6 Client state machine | built, `http://` only (branch `phase3/fetch-cookies`): transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored) |
 | 3.7 Kernel integration | built, joined to 3.6 (branch `claude/phase3-kernel-join-a-d56e97`, see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. Open: `https:` (3.5), the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel |
 | 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Not yet: TLS, the http-state and WPT server tests, the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | not started |

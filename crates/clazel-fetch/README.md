@@ -52,7 +52,7 @@ conformance suite beyond the http-state corpus (see below).
 
 ## Verification
 
-Tier 0, target 2 (the evidence below is that of tier 2; only CI's full run raises the tier). Every executable function is proven in Verus to meet its
+Tier 2 (raised on CI's full verification of its pull request). Every executable function is proven in Verus to meet its
 contract (`src/request/contract.rs`, `src/transducer/contract.rs`) against
 the spec. Proven of the transducer spec, for every HTTP and URL function
 (`src/transducer/theorems.rs`): at most 21 connections and 21 requests per
