@@ -19,8 +19,7 @@
 //!
 //! No hypothesis on the parser states is needed (in particular not
 //! `modes_ok`): the property holds for whatever `run` returns, and for
-//! `tree_construction`'s fallback. The `ChangeEncoding` half needs the
-//! parser to stop before its `n` tokens run out (see the theorem).
+//! `tree_construction`'s fallback.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -184,14 +183,9 @@ pub proof fn lemma_grows_step_ok_trans(p: Parser, q: Parser, r: Parser)
 /// - `Action::StopParsing` occurs at most once, and if it occurs it is the
 ///   last action (no hypothesis);
 /// - `Action::ChangeEncoding` occurs at most once, and never if `tentative`
-///   is false, **provided the parser stops within its `n` tokens**
-///   (`!actions::runs_out(..)`, which `parse_requires`'s bound `n` is meant
-///   to give). The hypothesis is needed: when the tokens run out,
-///   `parse_steps` appends `stop_parsing(p).actions`, which still holds the
-///   last step's actions (already appended), so a `ChangeEncoding` of the
-///   last step would occur twice.
+///   is false (no hypothesis).
 ///
-/// No other hypothesis: in particular not `modes_ok` of the states, since
+/// No hypothesis at all: in particular not `modes_ok` of the states, since
 /// every outcome of every rule (and `tree_construction`'s fallback) keeps
 /// the order.
 pub proof fn theorem_actions_ordered<S>(
@@ -207,11 +201,9 @@ pub proof fn theorem_actions_ordered<S>(
         ({
             let acts = parse(env, tf, s0, url, scripting, tentative, n).1;
             &&& forall|i: int| 0 <= i < acts.len() && (#[trigger] acts[i]) is StopParsing ==> i == acts.len() - 1
-            &&& !actions::runs_out(env, tf, s0, new_parser(url, scripting, tentative), n) ==> {
-                &&& forall|i: int, j: int|
-                    0 <= i < j < acts.len() && (#[trigger] acts[i]) is ChangeEncoding ==> !((#[trigger] acts[j]) is ChangeEncoding)
-                &&& !tentative ==> forall|i: int| 0 <= i < acts.len() ==> !((#[trigger] acts[i]) is ChangeEncoding)
-            }
+            &&& forall|i: int, j: int|
+                0 <= i < j < acts.len() && (#[trigger] acts[i]) is ChangeEncoding ==> !((#[trigger] acts[j]) is ChangeEncoding)
+            &&& !tentative ==> forall|i: int| 0 <= i < acts.len() ==> !((#[trigger] acts[i]) is ChangeEncoding)
         }),
 {
     let p = new_parser(url, scripting, tentative);

@@ -88,13 +88,11 @@ pub proof fn lemma_dispatch(env: EncFns, p: Parser, token: Token)
 
 /// The parser state `p` and the actions `acts` so far, from a confidence
 /// that started tentative if `t0`: a `StopParsing` is the last action and
-/// the parser is stopped (and the actions of the last step, `p.actions`,
-/// have one only if it is stopped); at most one `ChangeEncoding`, only if
+/// the parser is stopped; at most one `ChangeEncoding`, only if
 /// `t0`, and then the confidence is certain; the confidence is tentative
 /// only if it started so.
 pub open spec fn acts_ok(acts: Seq<Action>, p: Parser, t0: bool) -> bool {
     &&& forall|i: int| 0 <= i < acts.len() && (#[trigger] acts[i]) is StopParsing ==> i == acts.len() - 1 && p.stopped
-    &&& forall|i: int| 0 <= i < p.actions.len() && (#[trigger] p.actions[i]) is StopParsing ==> p.stopped
     &&& forall|i: int| 0 <= i < acts.len() && (#[trigger] acts[i]) is ChangeEncoding ==> t0 && !p.tentative
     &&& forall|i: int, j: int|
         0 <= i < j < acts.len() && (#[trigger] acts[i]) is ChangeEncoding ==> !((#[trigger] acts[j]) is ChangeEncoding)
@@ -112,29 +110,6 @@ pub open spec fn change_encoding_once(acts: Seq<Action>, t0: bool) -> bool {
     &&& forall|i: int, j: int|
         0 <= i < j < acts.len() && (#[trigger] acts[i]) is ChangeEncoding ==> !((#[trigger] acts[j]) is ChangeEncoding)
     &&& forall|i: int| 0 <= i < acts.len() && (#[trigger] acts[i]) is ChangeEncoding ==> t0
-}
-
-/// `parse_steps` from `p` reaches its `n == 0` case with a running parser:
-/// the tokens run out before parsing stops. (`parse_requires` gives `n` as
-/// the tokenizer's bound on the tokens it emits, end-of-file included, so
-/// this is not meant to happen.)
-pub open spec fn runs_out<S>(env: EncFns, tf: TokFns<S>, s: S, p: Parser, n: nat) -> bool
-    decreases n,
-{
-    if p.stopped {
-        false
-    } else if n == 0 {
-        true
-    } else {
-        let (s1, token) = (tf.next)(s);
-        let (p1, a) = dispatch(env, p, token);
-        let s2 = match p1.tokenizer {
-            Some(st) => (tf.set_state)(s1, st),
-            None => s1,
-        };
-        let s3 = (tf.set_foreign)(s2, in_foreign_content(p1));
-        runs_out(env, tf, s3, p1, (n - 1) as nat)
-    }
 }
 
 /// One more step keeps [`acts_ok`].
@@ -172,28 +147,39 @@ pub proof fn lemma_acts_ok_step(acts: Seq<Action>, p: Parser, p1: Parser, a: Seq
     }
 }
 
-/// `parse_steps` keeps the order of the actions: `StopParsing` last, and,
-/// unless the tokens run out, at most one `ChangeEncoding`, only from a
-/// tentative start.
+/// `parse_steps` keeps the order of the actions: `StopParsing` last, and at
+/// most one `ChangeEncoding`, only from a tentative start.
 pub proof fn lemma_parse_steps<S>(env: EncFns, tf: TokFns<S>, s: S, p: Parser, acts: Seq<Action>, n: nat, t0: bool)
     requires
         acts_ok(acts, p, t0),
     ensures
         stop_last(parse_steps(env, tf, s, p, acts, n).1),
-        !runs_out(env, tf, s, p, n) ==> change_encoding_once(parse_steps(env, tf, s, p, acts, n).1, t0),
+        change_encoding_once(parse_steps(env, tf, s, p, acts, n).1, t0),
     decreases n,
 {
     hide(dispatch);
     if p.stopped {
     } else if n == 0 {
-        let q = stop_parsing(p);
+        // `parse_steps` appends the actions of stopping a parser with no
+        // actions of its own: just `StopParsing`.
+        let q = stop_parsing(Parser { actions: seq![], ..p });
+        assert(q.actions =~= seq![Action::StopParsing]);
         let c = acts + q.actions;
         let k = acts.len() as int;
         assert forall|i: int| 0 <= i < c.len() && (#[trigger] c[i]) is StopParsing implies i == c.len() - 1 by {
             if i < k {
                 assert(acts[i] == c[i]);
-            } else if i < c.len() - 1 {
-                assert(c[i] == p.actions[i - k]);
+            }
+        }
+        assert forall|i: int| 0 <= i < c.len() && (#[trigger] c[i]) is ChangeEncoding implies t0 by {
+            if i < k {
+                assert(acts[i] == c[i]);
+            }
+        }
+        assert forall|i: int, j: int| 0 <= i < j < c.len() && (#[trigger] c[i]) is ChangeEncoding implies !((#[trigger] c[j]) is ChangeEncoding) by {
+            if j < k {
+                assert(acts[i] == c[i]);
+                assert(acts[j] == c[j]);
             }
         }
     } else {
