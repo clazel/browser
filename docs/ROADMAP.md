@@ -30,11 +30,10 @@ and storage access. Each tab is a sandboxed renderer process that can only
 send typed messages. Same-origin policy is a proven property of the kernel.
 *Exit:* two renderer processes that provably cannot read each other's cookies.
 Detailed plan: [phases/phase-2.md](phases/phase-2.md).
-**Status: in progress.** Every item is built, and the theorems are proven at
-tier 2, and the `fork` and `ptrace` escape attempts are added and audited.
-Left: the demo and escape tests passing on Linux (CI now loads the AppArmor
-profile they need; not yet seen passing), and a green CI run to fill in the
-README table.
+**Status: complete (2026-10-28).** Every item is built and the theorems are
+proven at tier 2. CI's full verification passed at `872c1e8`
+([run 40642618793](https://github.com/clazel/browser/actions/runs/40642618793)),
+running the demo and the escape tests on Linux x86-64 and macOS arm64.
 
 ## Phase 3: Networking
 Verified HTTP/1.1 parser, DNS, and our own TLS 1.3 client with verified
@@ -47,6 +46,10 @@ taken: option B.**
 ## Phase 4: HTML and DOM
 WHATWG tokenizer (proven total and panic-free), tree builder, DOM.
 *Exit:* a text-mode browser (Lynx-style) that browses real sites.
+Detailed plan: [phases/phase-4.md](phases/phase-4.md).
+**Status: planned (2026-10-28).** The decisions in item 4.0 are taken
+(tree builder and DOM at tier 2, single-byte legacy encodings in the phase,
+the body chunked to the renderer); nothing is built.
 
 ## Phase 5: CSS, layout, graphics (the Show HN milestone)
 CSS parsing and cascade, block, inline and table layout, font parsing and
