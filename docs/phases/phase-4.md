@@ -451,6 +451,29 @@ rule needs. Conformance: html5lib-tests' `namedEntities.test` covers every
 entry, through 4.7. Mutations: a dropped entry, a semicolon rule reversed,
 the attribute rule dropped, each C1 remap row.
 
+**As built (4.1, tokenizer part, and 4.5):** html5lib-tests `tokenizer/`
+is vendored at `c777c408` (2026-10-01; 6,827 cases) under
+`crates/clazel-html/tests/data/html5lib-tokenizer/` with its converter
+(`xtask/src/testdata/html5lib_tokenizer.rs`). html5lib-tests no longer
+carries `tree-construction/` (its README says those tests now live in WPT
+`html/syntax/parsing`); the tree builder's session vendors them from WPT.
+`entities.json` is vendored from whatwg/html-build `283a3531` under
+`crates/clazel-html/data/entities-283a3531/`, and `xtask/src/entities.rs`
+generates `src/charref/data.rs`: the standard's 2,231 rows (names as the
+table lists them, so the 106 names without a semicolon are their own rows)
+and a first-character index, which `charref/index.rs` proves against the
+rows. `charref/` has the spec (longest match, the attribute rule, the
+numeric end state with the C1 table), contracts, the exec matcher proven
+equal to the spec, and lemmas: every name non-empty and in bounds (Verus
+evaluates the table in pieces), a match consumes at least two code points
+and emits at most two, the match is the longest prefix, the end state
+emits a scalar value other than U+0000. The standard's examples (`&notit;`,
+`&notin;`, names with and without semicolons, two-code-point names) and
+every C1 row are evaluated by Verus (`charref/examples.rs`); the 2,231-row
+scan is beyond Verus's evaluator, so a divide-and-conquer form of the rule
+is proven equal to it and evaluated by blocks. The encoding sniffer (4.2)
+and `encoding/*.dat` are not part of this work.
+
 ### 4.6 The tokenizer: spec and contracts (L)
 
 `clazel-html`, module `tokenizer/`: HTML §13.2.3.5 "preprocessing the input
@@ -505,6 +528,27 @@ faces agree, `theorem_step_equals_whole`. Contracts (`contract.rs`): the
 exec tokenizer's `next_token` equals the spec's, its `wf` invariant, and
 that `tokenize` is the fold of `next_token`.
 
+**As built (4.6):** the standard at the pinned commit (whatwg/html
+`939677714d`, 26 October 2026) has **84 tokenizer states, not 80**: the
+decimal character reference start state is gone, and five processing
+instruction states (§13.2.5.72 to §13.2.5.76, reached from the tag open
+state on `?`) are new, with a processing instruction token (target and
+data). `tokenizer/spec.rs` transcribes all 84, one spec function per state
+(states the standard words identically call one shared function with
+their states as parameters, listed in the header), with the modelling
+choices of this item plus: the return state is an enum of the five states
+it is ever set to, and the current attribute is kept apart from the tag's
+list with whether it was removed as a duplicate. Proven: the spec is total
+(`termination.rs`: a rank over the state and the next character that
+every hand-off lowers, one lemma per state; a cycle would fail it),
+`theorem_tokenizer_total` (every run ends with exactly one end-of-file
+token, its last), `theorem_step_equals_whole` (`tokenize` is the fold of
+`next_token`), and `theorem_output_bounded` (`output.rs`: the character
+tokens are no more than the input's code points, from every start state
+the tests and the tree builder use). The contracts relate the exec
+tokenizer to the spec with the character reference code capped at
+0x110000, which loses nothing (`charref::lemmas::lemma_end_code_cap`).
+
 ### 4.7 The tokenizer: implementation, independent transcription, conformance (L)
 
 The exec tokenizer over `Vec<u32>` and `&[u32]`, one function per state as
@@ -539,6 +583,42 @@ each rule of 4.5.
 
 After 4.5 to 4.7: **raise `clazel-html` to tier 2** (4.2's sniffer is
 proven with it).
+
+**As built (4.7):** every exec state function (`states_text.rs`,
+`states_markup.rs`, `states_ref.rs`, with the shared actions in
+`actions.rs`) is proven equal to its spec function, and `next_token` and
+`tokenize` (`machine.rs`, loops only) meet the contracts; Verus verifies
+the crate with 0 errors. Conformance (`tests/conformance_tokenizer.rs`):
+html5lib-tests, every case once per initial state, 7,050 of 7,053 runs
+pass and 3 are expected failures (`xmlViolation.test`, which expects the
+infoset coercion step that follows tokenization); a differential against
+`html5gum` 0.8.4 (no default features, no dependencies) on every html5lib
+input, each mutated, and 20,000 random inputs: 33,792 agree, 0 differ, 86
+expected differences (inputs with `<?`, which html5gum predates, or lone
+surrogates). 69 inputs are evaluated by Verus on the spec
+(`examples.rs`), visiting every state. `mutations.json` has 118 mutations:
+one or more per state and per character reference rule, all 118
+`killed` with certificates: a tokenizer mutant's tokens differ from an
+evaluated example, or (for the attribute tests of the named character
+reference and ambiguous ampersand states, which no whole-input example
+Verus can evaluate reaches) contradict a state-level example
+(`state_examples.rs`; the named one proven from the evaluated match and
+its table row evaluated alone). The independent transcription
+(`independent.rs`) is W3C HTML 5.2 §8.2.4, written by a separate agent
+without reading `spec.rs`: 79 states (W3C 5.2 has 79), its own termination
+proof. `theorem_w3c_equivalent` (`equivalence.rs`) proves the two equal on
+every input with no `&`, no `<?` and no `[CDATA[`, from the html5lib start
+states, state by state (a relation between the two tokenizers, one lemma
+per shared state, and the cases where one text takes two steps for the
+other's one: W3C "switches" to the bogus DOCTYPE state where the living
+standard reconsumes there, and W3C has no `>` case in the before attribute
+value state and no EOF case in the tag open state). The excluded inputs
+are where the texts differ: character references (restructured since W3C
+5.2; W3C §8.2.4.77 multiplies decimal digits by 16, ERRATA.md), processing
+instructions (new), and `[CDATA[` in HTML content (same tokens, different
+steps). Verus also evaluates both on 68 inputs, character references
+included (`agreement.rs`): 57 agree, 11 differ for those differences. The
+crate stays `tier = 0` until CI's full verification is green.
 
 ### 4.8 The DOM: node tree as an arena (M)
 
@@ -911,13 +991,13 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | Item | State |
 |------|-------|
 | 4.0 Decisions | done (2026-10-28): A, tier 2 for the tree builder and DOM; 4.3 in phase and 4.4 may slip; byte strings and `Body` frames; the forward-design additions folded in |
-| 4.1 Test data and tables | not started |
-| 4.2 Encoding labels and sniffing | not started |
+| 4.1 Test data and tables | tokenizer suite and entity table done (`clazel-html`); tree-construction data with the tree builder; WPT legacy-encoding data and `indexes.json` not started |
+| 4.2 Encoding labels and sniffing | not started (not part of the tokenizer work) |
 | 4.3 Single-byte, UTF-16, replacement, x-user-defined | not started |
 | 4.4 Multi-byte encodings | not started |
-| 4.5 Character references | not started |
-| 4.6 Tokenizer spec and contracts | not started |
-| 4.7 Tokenizer implementation and evidence | not started |
+| 4.5 Character references | done: spec, contracts, proof, examples, mutations |
+| 4.6 Tokenizer spec and contracts | done: 84 states (the standard now has 84, not 80); total, output bounded, two faces equal |
+| 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; tier 0 until CI's full run is green |
 | 4.8 DOM | not started |
 | 4.9 Tree builder spec and contracts | not started |
 | 4.10 Tree builder implementation | not started |
