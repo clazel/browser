@@ -1,0 +1,49 @@
+//! HTML §13.2.6.4 "The rules for parsing tokens in HTML content" (one
+//! module per insertion mode) and §13.2.6.5 "The rules for parsing tokens in
+//! foreign content".
+
+pub mod initial;
+pub mod before_html;
+pub mod before_head;
+pub mod in_head;
+pub mod in_head_noscript;
+pub mod after_head;
+pub mod in_body;
+pub mod text;
+pub mod in_table;
+pub mod in_table_text;
+pub mod in_caption;
+pub mod in_column_group;
+pub mod in_table_body;
+pub mod in_row;
+pub mod in_cell;
+pub mod in_template;
+pub mod after_body;
+pub mod in_frameset;
+pub mod after_frameset;
+pub mod after_after_body;
+pub mod after_after_frameset;
+pub mod foreign;
+
+pub use initial::*;
+pub use before_html::*;
+pub use before_head::*;
+pub use in_head::*;
+pub use in_head_noscript::*;
+pub use after_head::*;
+pub use in_body::*;
+pub use text::*;
+pub use in_table::*;
+pub use in_table_text::*;
+pub use in_caption::*;
+pub use in_column_group::*;
+pub use in_table_body::*;
+pub use in_row::*;
+pub use in_cell::*;
+pub use in_template::*;
+pub use after_body::*;
+pub use in_frameset::*;
+pub use after_frameset::*;
+pub use after_after_body::*;
+pub use after_after_frameset::*;
+pub use foreign::*;

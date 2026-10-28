@@ -1,0 +1,26 @@
+[package]
+name = "clazel-treebuilder"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The HTML tree builder (HTML §13.2.4, §13.2.6, §13.2.7, §13.4): parse state, the insertion modes, foreign content and the fragment algorithm, as a one-token transducer over a `clazel-dom` arena."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+# The node tree the parser builds (Phase 4 item 4.8).
+clazel-dom = { path = "../clazel-dom" }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires (Phase 4
+# item 4.0, option A). Tier 0 until items 4.9 to 4.11 are complete and CI's
+# full verification is green.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
