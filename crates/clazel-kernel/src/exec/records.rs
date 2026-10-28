@@ -4,7 +4,9 @@
 
 #[allow(unused_imports)]
 use super::spec::*;
+use clazel_cookie::matching::exec::CanonicalHostName;
 use clazel_cookie::storage::exec::CookieRecord;
+use clazel_fetch::transducer::types::{InputBuf, StateBuf};
 use clazel_origin::exec::ParsedOrigin;
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -25,16 +27,215 @@ pub struct RendererRecord {
     pub url: Vec<u32>,
     /// The lock.
     pub lock: ParsedOrigin,
-    /// The URL its tab is navigating to, while the fetch for it is in flight.
-    pub pending: Option<Vec<u32>>,
+    /// The navigation its tab has in flight.
+    pub pending: Option<NavigationRecord>,
 }
 
 impl View for RendererRecord {
     type V = Renderer;
 
     open spec fn view(&self) -> Renderer {
-        Renderer { id: self.id as nat, tab: self.tab as nat, url: self.url@, lock: self.lock@, pending: super::urls::code_points_opt_view(self.pending) }
+        Renderer { id: self.id as nat, tab: self.tab as nat, url: self.url@, lock: self.lock@, pending: navigation_opt_view(self.pending) }
     }
+}
+
+/// A security domain, viewed as [`crate::domain::Domain`].
+pub enum DomainRecord {
+    /// The renderers locked to origins with this cookie root.
+    Root(CanonicalHostName),
+    /// One renderer whose lock is the opaque origin of this id.
+    Opaque(u64),
+}
+
+impl View for DomainRecord {
+    type V = crate::domain::Domain;
+
+    open spec fn view(&self) -> crate::domain::Domain {
+        match self {
+            DomainRecord::Root(h) => crate::domain::Domain::Root(h@),
+            DomainRecord::Opaque(id) => crate::domain::Domain::Opaque(*id as nat),
+        }
+    }
+}
+
+/// A navigation in flight, viewed as [`Navigation`]. The transducer's state
+/// is the exec `StateBuf`, whose parser is the one octets are fed into.
+pub struct NavigationRecord {
+    /// The URL the tab is navigating to.
+    pub url: Vec<u32>,
+    /// The transducer's state.
+    pub fetch: StateBuf,
+    /// The partition key.
+    pub partition: DomainRecord,
+}
+
+impl View for NavigationRecord {
+    type V = Navigation;
+
+    open spec fn view(&self) -> Navigation {
+        Navigation { url: self.url@, fetch: self.fetch@, partition: self.partition@ }
+    }
+}
+
+/// The view of an optional navigation.
+pub open spec fn navigation_opt_view(o: Option<NavigationRecord>) -> Option<Navigation> {
+    match o {
+        Some(n) => Some(n@),
+        None => None,
+    }
+}
+
+/// Where a connection goes, viewed as [`Endpoint`].
+pub struct EndpointRecord {
+    /// The host.
+    pub host: Vec<u8>,
+    /// The port.
+    pub port: u64,
+    /// Whether to speak TLS.
+    pub tls: bool,
+}
+
+impl View for EndpointRecord {
+    type V = Endpoint;
+
+    open spec fn view(&self) -> Endpoint {
+        Endpoint { host: self.host@, port: self.port as nat, tls: self.tls }
+    }
+}
+
+/// An open connection, viewed as [`Connection`].
+pub struct ConnectionRecord {
+    /// Its id.
+    pub id: u64,
+    /// The tab that owns it.
+    pub tab: u64,
+    /// Where it goes.
+    pub endpoint: EndpointRecord,
+    /// The partition key.
+    pub partition: DomainRecord,
+}
+
+impl View for ConnectionRecord {
+    type V = Connection;
+
+    open spec fn view(&self) -> Connection {
+        Connection { id: self.id as nat, tab: self.tab as nat, endpoint: self.endpoint@, partition: self.partition@ }
+    }
+}
+
+/// The view of a table of connections.
+pub open spec fn conns_view(v: Seq<ConnectionRecord>) -> Seq<Connection> {
+    v.map_values(|c: ConnectionRecord| c@)
+}
+
+/// A copy of a domain.
+pub fn clone_domain(d: &DomainRecord) -> (r: DomainRecord)
+    ensures
+        r@ == d@,
+{
+    match d {
+        DomainRecord::Root(h) => DomainRecord::Root(CanonicalHostName { name: vstd::slice::slice_to_vec(h.name.as_slice()), is_ip_address: h.is_ip_address }),
+        DomainRecord::Opaque(id) => DomainRecord::Opaque(*id),
+    }
+}
+
+/// A copy of an endpoint.
+pub fn clone_endpoint(e: &EndpointRecord) -> (r: EndpointRecord)
+    ensures
+        r@ == e@,
+{
+    EndpointRecord { host: vstd::slice::slice_to_vec(e.host.as_slice()), port: e.port, tls: e.tls }
+}
+
+/// A copy of a connection.
+pub fn clone_conn(c: &ConnectionRecord) -> (r: ConnectionRecord)
+    ensures
+        r@ == c@,
+{
+    ConnectionRecord { id: c.id, tab: c.tab, endpoint: clone_endpoint(&c.endpoint), partition: clone_domain(&c.partition) }
+}
+
+/// `conns` without the connections of `tab` ([`without_tab`]).
+pub fn without_tab_exec(conns: &[ConnectionRecord], tab: u64) -> (out: Vec<ConnectionRecord>)
+    ensures
+        conns_view(out@) == without_tab(conns_view(conns@), tab as nat),
+{
+    let ghost cv = conns_view(conns@);
+    let mut out: Vec<ConnectionRecord> = Vec::new();
+    let mut k: usize = 0;
+    proof {
+        reveal(Seq::filter);
+        assert(cv.take(0) =~= Seq::<Connection>::empty());
+    }
+    while k < conns.len()
+        invariant
+            k <= conns.len(),
+            cv == conns_view(conns@),
+            conns_view(out@) == cv.take(k as int).filter(|c: Connection| c.tab != tab as nat),
+        decreases conns.len() - k,
+    {
+        if let Some(c) = conns.get(k) {
+            proof {
+                reveal(Seq::filter);
+                assert(cv.take(k as int + 1).drop_last() =~= cv.take(k as int));
+                assert(cv.take(k as int + 1).last() == c@);
+            }
+            if c.tab != tab {
+                out.push(clone_conn(c));
+            }
+        }
+        // Never saturates: k < conns.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(cv.take(conns.len() as int) =~= cv);
+    }
+    out
+}
+
+/// `conns` without the connection `id` ([`without_conn`]).
+pub fn without_conn_exec(conns: &[ConnectionRecord], id: u64) -> (out: Vec<ConnectionRecord>)
+    ensures
+        conns_view(out@) == without_conn(conns_view(conns@), id as nat),
+{
+    let ghost cv = conns_view(conns@);
+    let mut out: Vec<ConnectionRecord> = Vec::new();
+    let mut k: usize = 0;
+    proof {
+        reveal(Seq::filter);
+        assert(cv.take(0) =~= Seq::<Connection>::empty());
+    }
+    while k < conns.len()
+        invariant
+            k <= conns.len(),
+            cv == conns_view(conns@),
+            conns_view(out@) == cv.take(k as int).filter(|c: Connection| c.id != id as nat),
+        decreases conns.len() - k,
+    {
+        if let Some(c) = conns.get(k) {
+            proof {
+                reveal(Seq::filter);
+                assert(cv.take(k as int + 1).drop_last() =~= cv.take(k as int));
+                assert(cv.take(k as int + 1).last() == c@);
+            }
+            if c.id != id {
+                out.push(clone_conn(c));
+            }
+        }
+        // Never saturates: k < conns.len().
+        k = k.saturating_add(1);
+    }
+    proof {
+        assert(cv.take(conns.len() as int) =~= cv);
+    }
+    out
+}
+
+/// Adding a connection adds it to the view.
+pub proof fn lemma_conns_view_push(v: Seq<ConnectionRecord>, c: ConnectionRecord)
+    ensures
+        conns_view(v.push(c)) =~= conns_view(v).push(c@),
+{
 }
 
 /// The view of a table of renderers.
@@ -153,6 +354,10 @@ pub struct StateRecord {
     pub storage: Vec<StorageBucket>,
     /// The next fresh id.
     pub next_id: u64,
+    /// The open connections.
+    pub conns: Vec<ConnectionRecord>,
+    /// The next fresh connection id.
+    pub next_conn: u64,
     /// The current time (seconds since 1601-01-01T00:00:00Z).
     pub now: u64,
 }
@@ -166,6 +371,8 @@ impl View for StateRecord {
             jar: clazel_cookie::storage::exec::jar_view(self.jar@),
             storage: storage_view(self.storage@),
             next_id: self.next_id as nat,
+            conns: conns_view(self.conns@),
+            next_conn: self.next_conn as nat,
             now: self.now as int,
         }
     }
@@ -174,20 +381,24 @@ impl View for StateRecord {
 impl StateRecord {
     /// What the exec state holds beyond its view: the storage buckets are
     /// distinct and non-empty (so that the view's map has one entry per
-    /// bucket). [`init_record`] has it, and `step` keeps it.
-    pub open spec fn exec_wf(&self) -> bool {
-        buckets_wf(self.storage@)
+    /// bucket), and the transducer of each navigation in flight keeps its
+    /// parser's invariant for the HTTP functions `h`. [`init_record`] has it,
+    /// and `step` keeps it.
+    pub open spec fn exec_wf<F: super::fetch::FetchFnsExec>(&self) -> bool {
+        &&& buckets_wf(self.storage@)
+        &&& super::step::renderers_ok::<F>(self.renderers@)
     }
 }
 
 /// The kernel before anything happens ([`init_state`]).
-pub fn init_record() -> (s: StateRecord)
+pub fn init_record<F: super::fetch::FetchFnsExec>() -> (s: StateRecord)
     ensures
         s@ == init_state(),
-        s.exec_wf(),
+        s.exec_wf::<F>(),
 {
-    let s = StateRecord { renderers: Vec::new(), jar: Vec::new(), storage: Vec::new(), next_id: 0, now: 0 };
+    let s = StateRecord { renderers: Vec::new(), jar: Vec::new(), storage: Vec::new(), next_id: 0, conns: Vec::new(), next_conn: 0, now: 0 };
     proof {
+        assert(conns_view(s.conns@) =~= Seq::<Connection>::empty());
         assert(renderers_view(s.renderers@) =~= Seq::<Renderer>::empty());
         assert(clazel_cookie::storage::exec::jar_view(s.jar@) =~= Seq::<clazel_cookie::storage::spec::Cookie>::empty());
         assert(storage_view(s.storage@) =~= Map::<clazel_origin::spec::Origin, Seq<StorageEntry>>::empty());
@@ -222,12 +433,12 @@ pub enum EventRecord {
         /// The URL.
         url: Vec<u32>,
     },
-    /// The network shell finished the fetch the kernel asked for the tab.
-    Fetched {
-        /// The tab.
-        tab: u64,
-        /// What the network delivered.
-        outcome: super::fetch::NetOutcomeRecord,
+    /// The network shell reports on a connection.
+    Net {
+        /// The connection.
+        conn: u64,
+        /// What happened to it.
+        input: InputBuf,
     },
     /// A renderer exited.
     RendererExited {
@@ -249,7 +460,7 @@ impl View for EventRecord {
             EventRecord::FromRenderer { id, bytes } => Event::FromRenderer { id: *id as nat, bytes: bytes@ },
             EventRecord::OpenTab { url, script } => Event::OpenTab { url: url@, script: script@ },
             EventRecord::NavigateTab { tab, url } => Event::NavigateTab { tab: *tab as nat, url: url@ },
-            EventRecord::Fetched { tab, outcome } => Event::Fetched { tab: *tab as nat, outcome: outcome@ },
+            EventRecord::Net { conn, input } => Event::Net { conn: *conn as nat, input: input@ },
             EventRecord::RendererExited { id } => Event::RendererExited { id: *id as nat },
             EventRecord::Tick { time } => Event::Tick { time: *time as int },
         }
@@ -275,12 +486,28 @@ pub enum OutputRecord {
         /// The renderer.
         id: u64,
     },
-    /// Ask the network shell to fetch the URL for the tab.
-    Fetch {
-        /// The tab.
-        tab: u64,
-        /// The URL, absolute.
-        url: Vec<u32>,
+    /// Ask the network shell to open a connection.
+    Connect {
+        /// The connection.
+        conn: u64,
+        /// The host.
+        host: Vec<u8>,
+        /// The port.
+        port: u64,
+        /// Whether to speak TLS.
+        tls: bool,
+    },
+    /// Write these octets to a connection.
+    Send {
+        /// The connection.
+        conn: u64,
+        /// The octets.
+        bytes: Vec<u8>,
+    },
+    /// Close a connection.
+    Close {
+        /// The connection.
+        conn: u64,
     },
 }
 
@@ -292,7 +519,9 @@ impl View for OutputRecord {
             OutputRecord::ToRenderer { id, bytes } => Output::ToRenderer { id: *id as nat, bytes: bytes@ },
             OutputRecord::Spawn { id } => Output::Spawn { id: *id as nat, policy: Policy::Renderer },
             OutputRecord::Kill { id } => Output::Kill { id: *id as nat },
-            OutputRecord::Fetch { tab, url } => Output::Fetch { tab: *tab as nat, url: url@ },
+            OutputRecord::Connect { conn, host, port, tls } => Output::Connect { conn: *conn as nat, host: host@, port: *port as nat, tls: *tls },
+            OutputRecord::Send { conn, bytes } => Output::Send { conn: *conn as nat, bytes: bytes@ },
+            OutputRecord::Close { conn } => Output::Close { conn: *conn as nat },
         }
     }
 }
@@ -320,6 +549,40 @@ pub fn one_output(o: OutputRecord) -> (v: Vec<OutputRecord>)
     let ghost go = o@;
     let v = vec![o];
     assert(outputs_view(v@) =~= seq![go]);
+    v
+}
+
+/// The view of a list with an output added.
+pub proof fn lemma_outputs_view_push(v: Seq<OutputRecord>, o: OutputRecord)
+    ensures
+        outputs_view(v.push(o)) =~= outputs_view(v).push(o@),
+{
+}
+
+/// `o` added to the list.
+pub fn push_output(v: &mut Vec<OutputRecord>, o: OutputRecord)
+    ensures
+        outputs_view(final(v)@) == outputs_view(old(v)@).push(o@),
+{
+    let ghost before = v@;
+    v.push(o);
+    proof {
+        lemma_outputs_view_push(before, o);
+    }
+}
+
+/// `a` followed by `b`.
+pub fn append_outputs(a: Vec<OutputRecord>, b: Vec<OutputRecord>) -> (v: Vec<OutputRecord>)
+    ensures
+        outputs_view(v@) == outputs_view(a@) + outputs_view(b@),
+{
+    let ghost (ga, gb) = (a@, b@);
+    let mut v = a;
+    let mut b = b;
+    v.append(&mut b);
+    proof {
+        assert(outputs_view(v@) =~= outputs_view(ga) + outputs_view(gb));
+    }
     v
 }
 

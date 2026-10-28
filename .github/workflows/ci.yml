@@ -1,28 +1,48 @@
-# Runs the checks in docs/VERIFICATION.md on every push to main and every
-# pull request. The full verification is split into parts (xtask/src/parts.rs)
-# so that no job comes near GitHub's six-hour limit:
+# Runs the checks in docs/VERIFICATION.md, in full, on every push to main,
+# every manual run (Actions, "Run workflow", which needs write access to the
+# repository) and every pull request. On a pull request the proofs (the
+# `crate` jobs, which take hours) wait for a person to approve them: they
+# need the `approval` job, which uses the `full-verification` environment,
+# whose required reviewers are set in the repository's settings
+# (Environments). Until one of them approves ("Review deployments" on the
+# run), the proofs do not start and `Full verification` stays pending, so
+# opening pull requests, however many, starts only the cheap jobs. Every push
+# to a pull request starts a new run, which needs a new approval. The full
+# verification is split into parts (xtask/src/parts.rs) so that no job comes
+# near GitHub's six-hour limit:
 #
 #   crates    `cargo xtask check`, the fast static checks (unsafe, lint
 #             overrides, escape hatches, tier declarations, pins, allowlist),
 #             which fail in a minute or two so obvious mistakes show up early;
 #             then the crate groups (`cargo xtask crates`) for the matrix
 #             below, so a new crate cannot be left out.
+#   approval  pull requests only, after `crates` passed: waits for a
+#             reviewer of the `full-verification` environment to approve
+#             the proof jobs, and does nothing else. It checks out no code.
 #   base      `verify --part base`: static checks, rustfmt, clippy and tests
 #             over the whole workspace.
 #   miri      `verify --part miri`: the workspace's tests under Miri.
-#   base-macos the base and Miri parts on macOS arm64, one after the other:
-#             the Seatbelt sandbox, the demo, the host and escape tests, and
-#             the macOS-only code under clippy and Miri. Proofs and harnesses
-#             are not repeated there: Verus and Kani give the same answer for
-#             the same pinned versions on either platform.
+#   base-macos the base part on macOS arm64: the Seatbelt sandbox, the demo,
+#             the host and escape tests, and the macOS-only code under
+#             clippy; then `verify --part miri clazel-sys`, the one crate with
+#             macOS-only code that has tests Miri can run. The workspace is
+#             not repeated under Miri there: Miri cannot run foreign calls, so
+#             every sandbox test is ignored under it on both platforms, and
+#             the rest is portable Rust that the `miri` job already
+#             interprets with the same pinned nightly. Proofs and harnesses
+#             are not repeated either: Verus and Kani give the same answer
+#             for the same pinned versions on either platform.
 #   crate     `verify --part crate <names>`: Kani, Verus, line counts,
 #             mutations (several mutants at once, xtask/src/mutate.rs) and
 #             conformance. One job per crate with proof work; the crates
 #             with none share one job. Each uploads what it measured, one
-#             file per crate, tagged with the commit.
-#   assemble  `verify --part assemble`: needs every job above to pass, then
-#             checks that every crate's measurements are present and from
-#             this commit, and reports whether README.md's table matches them.
+#             file per crate, tagged with the commit. On a pull request,
+#             only once `approval` passed.
+#   assemble  `verify --part assemble`, the job named `Full verification`:
+#             fails unless every job above passed (`approval` is skipped
+#             outside pull requests), then checks that every crate's
+#             measurements are present and from this commit, and reports
+#             whether README.md's table matches them.
 #   table     on pushes to main only, after `assemble` passed: writes
 #             README.md's table from the same measurements
 #             (`verify --part assemble --write`) and, if it changed, commits
@@ -134,10 +154,14 @@ jobs:
       # unprivileged process enters without any setup.
       - name: Verify (base)
         run: cargo xtask verify --part base
-      # Miri runs here after the base part rather than in a job of its own:
-      # macOS runners are few (5 at once), and this job is not the slowest.
-      - name: Verify (Miri)
-        run: cargo xtask verify --part miri
+      # Only clazel-sys under Miri: its macOS module is the only code that
+      # compiles solely on macOS and has tests Miri can run (the checks made
+      # before a foreign call). A workspace-wide run here took 84 minutes and
+      # repeated the `miri` job, which made this the slowest job of the run;
+      # this step builds one crate and runs three tests, so it needs no job
+      # of its own (macOS runners are few, 5 at once).
+      - name: Verify (Miri, clazel-sys)
+        run: cargo xtask verify --part miri clazel-sys
 
   miri:
     name: Verify (Miri)
@@ -159,10 +183,30 @@ jobs:
       - name: Verify (Miri)
         run: cargo xtask verify --part miri
 
+  approval:
+    # The proofs take hours: on a pull request a reviewer of this
+    # environment approves them first (see the header). One job holds the
+    # approval, so one review starts every proof job of the run.
+    name: Approve the proofs
+    needs: crates
+    if: github.event_name == 'pull_request'
+    environment: full-verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Approved
+        run: echo "A reviewer approved the proof jobs for this run."
+
   crate:
     # A group of crates with no proofs is one job (`cargo xtask crates`).
     name: Verify ${{ contains(matrix.crate, ',') && 'crates without proofs' || matrix.crate }}
-    needs: crates
+    needs: [crates, approval]
+    # After an approval on a pull request; `approval` is skipped, and not
+    # needed, everywhere else.
+    if: >-
+      ${{ !cancelled() && needs.crates.result == 'success' &&
+      (needs.approval.result == 'success' ||
+      (github.event_name != 'pull_request' && needs.approval.result == 'skipped')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -200,10 +244,30 @@ jobs:
 
   assemble:
     name: Full verification
-    needs: [crates, base, base-macos, miri, crate]
+    needs: [crates, approval, base, base-macos, miri, crate]
+    # Runs even when a job it needs failed or was skipped, and fails then:
+    # a skipped job is not a pass, and a skipped required check would count
+    # as one. Only a cancelled run is not judged.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          # `approval` is skipped outside pull requests, and only there.
+          bad=$(echo "$NEEDS" | jq -r --arg event "$EVENT" '
+            to_entries[]
+            | select(.value.result != "success")
+            | select(.key != "approval" or $event == "pull_request" or .value.result != "skipped")
+            | "\(.key): \(.value.result)"')
+          if [ -n "$bad" ]; then
+            echo "Not every job passed:"
+            echo "$bad"
+            exit 1
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false

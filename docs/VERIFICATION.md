@@ -83,16 +83,30 @@ installs nothing if a checksum differs.
 
 The full `cargo xtask verify` takes hours, so it runs where it is the gate:
 in CI (`.github/workflows/ci.yml`), on Linux x86-64 with the pinned
-toolchain, on every push to `main` and every pull request. Nothing is done,
-and no tier is raised, until that run is green.
+toolchain, on every push to `main`, every manual run (Actions, "Run
+workflow") and every pull request. Nothing is done, and no tier is raised,
+until that run is green.
+
+On a pull request the proofs (the `crate` parts below) wait for a person:
+they need CI's `approval` job, which uses the `full-verification`
+environment, and a reviewer set in that environment's settings approves it
+("Review deployments" on the run). Until then only the cheap jobs run and
+`Full verification` stays pending, so opening pull requests, however many,
+never starts hours of proof jobs. Every push to a pull request starts a new
+run, which needs a new approval.
 
 CI splits the run into parts, one job each, so no job comes near GitHub's
 six-hour limit (`xtask/src/parts.rs`):
 
 - `verify --part base`: static checks, rustfmt, clippy and tests over the
   whole workspace.
-- `verify --part miri`: static checks, then the workspace's tests under
-  Miri. On macOS it runs in the same job as `base`, after it.
+- `verify --part miri [<names>]`: static checks, then the tests under Miri,
+  for the whole workspace or only the named crates (comma-separated). On
+  macOS, `verify --part miri clazel-sys` runs in the same job as `base`,
+  after it: `clazel-sys` is the one crate with code that compiles only on
+  macOS and has tests Miri can run (its foreign calls are ignored under
+  Miri on both platforms), and every other crate's tests are portable Rust
+  that the Linux run interprets identically.
 - `verify --part crate <names> --metrics <dir>`, where `<names>` is one
   crate or several separated by commas: static checks, then Kani, Verus,
   line counts, mutations and conformance for those crates. CI runs one job
@@ -103,8 +117,10 @@ six-hour limit (`xtask/src/parts.rs`):
   writes what it measured to `<dir>/<name>.json` for each crate, tagged
   with the commit (with `+dirty` if tracked files have uncommitted
   changes).
-- `verify --part assemble --metrics <dir>`, which runs only after every
-  other job passed: static checks, then it requires a file for every
+- `verify --part assemble --metrics <dir>`, the `Full verification` job,
+  which fails unless every other job passed (a skipped job included, but
+  `approval`, which runs on pull requests only): static checks, then it
+  requires a file for every
   workspace crate from this commit, and reports whether README.md's table
   matches them.
 - On pushes to `main` only, the `table` job runs the same part with

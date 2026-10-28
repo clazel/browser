@@ -80,14 +80,14 @@ pub proof fn lemma_cookie_averse_equal(rules: Seq<clazel_psl::spec::Rule>, urls:
 /// **The getter.** For a renderer on a lock of ASCII scheme the independent
 /// `document.cookie` getter returns what the kernel replies, and leaves the
 /// jar as the kernel does.
-pub proof fn lemma_independent_cookie_get(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, r: Renderer)
+pub proof fn lemma_independent_cookie_get(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer)
     requires
         lock_scheme_ascii(r.lock),
         !lock_on_public_suffix(rules, r.lock),
     ensures
         ({
             let (res, jar2) = crate::independent::document_cookie_get(rules, doc_of(urls, r), s.jar, s.now);
-            res is Value && handle_message(rules, urls, s, r, clazel_ipc::message::spec::Message::CookieGet) == (State { jar: jar2, ..s }, reply(
+            res is Value && handle_message(rules, urls, fetch, s, r, clazel_ipc::message::spec::Message::CookieGet) == (State { jar: jar2, ..s }, reply(
                 r,
                 clazel_ipc::message::spec::Message::CookieValue { cookie_string: res->Value_0 },
             ))
@@ -100,14 +100,14 @@ pub proof fn lemma_independent_cookie_get(rules: Seq<clazel_psl::spec::Rule>, ur
 }
 
 /// **The setter.** The independent `document.cookie` setter leaves the jar as the kernel does.
-pub proof fn lemma_independent_cookie_set(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, r: Renderer, cs: Seq<u8>)
+pub proof fn lemma_independent_cookie_set(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, cs: Seq<u8>)
     requires
         lock_scheme_ascii(r.lock),
         !lock_on_public_suffix(rules, r.lock),
     ensures
         ({
             let (res, jar2) = crate::independent::document_cookie_set(rules, doc_of(urls, r), s.jar, cs, s.now);
-            res is Done && handle_message(rules, urls, s, r, clazel_ipc::message::spec::Message::CookieSet { cookie_string: cs }) == (
+            res is Done && handle_message(rules, urls, fetch, s, r, clazel_ipc::message::spec::Message::CookieSet { cookie_string: cs }) == (
                 State { jar: jar2, ..s },
                 Seq::<Output>::empty(),
             )

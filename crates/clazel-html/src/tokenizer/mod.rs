@@ -1,0 +1,37 @@
+//! The HTML tokenizer (HTML §13.2.3.5, §13.2.4, §13.2.5).
+//!
+//! - [`spec`]: a state-by-state transcription of the standard. This is the
+//!   part a human must check against the standard.
+//! - [`termination`]: why the spec's state machine terminates.
+//! - [`actions`]: the executable actions the states share.
+//! - [`buffer`]: the executable state and tokens, and their views.
+//! - [`contract`]: what the executable tokenizer is proven to satisfy.
+//! - [`machine`]: the executable tokenizer's step, `next_token` and
+//!   `tokenize`, and their proofs; the states are in [`states_text`],
+//!   [`states_markup`] and [`states_ref`], their shared actions in
+//!   [`actions`].
+//! - [`lemmas`]: facts proven about the spec.
+//! - [`examples`]: inputs evaluated on the spec.
+//! - [`state_examples`]: single states on concrete tokenizers.
+//! - [`output`]: the proof of `theorem_output_bounded`.
+//! - [`independent`]: a second transcription, from W3C HTML 5.2.
+//! - [`agreement`]: the two transcriptions compared on concrete inputs.
+//! - [`equivalence`]: the two transcriptions proven equal where the texts
+//!   describe the same steps.
+
+pub mod actions;
+pub mod agreement;
+pub mod buffer;
+pub mod contract;
+pub mod equivalence;
+pub mod examples;
+pub mod independent;
+pub mod lemmas;
+pub mod machine;
+pub mod output;
+pub mod spec;
+pub mod state_examples;
+pub mod states_markup;
+pub mod states_ref;
+pub mod states_text;
+pub mod termination;

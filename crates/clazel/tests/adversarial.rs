@@ -163,7 +163,7 @@ fn hostile_renderers_are_killed_and_well_behaved_ones_are_unaffected() {
     // nothing (it would, if the kernel still had the tab).
     assert_eq!(host.live(), 0);
     for id in 0..TABS {
-        host.navigate_tab(id, "https://after.test/", "");
+        host.navigate_tab(id, "http://after.test/");
         assert_eq!(host.live(), 0, "the kernel still has renderer {id}");
     }
 }
