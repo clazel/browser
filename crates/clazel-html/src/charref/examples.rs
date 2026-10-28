@@ -541,7 +541,7 @@ pub proof fn lemma_example_amp_no_semicolon()
     super::index::lemma_match_in_block(seq![0x61u32, 0x6D, 0x70, 0x78], 0);
 }
 
-proof fn lemma_example_acE_634_668()
+proof fn lemma_example_ac_e_upper_634_668()
     ensures
         super::search::best_in(seq![0x61u32, 0x63, 0x45, 0x3B], 0, 634, 668) == Some(638nat),
 {
@@ -567,7 +567,7 @@ proof fn lemma_example_acE_634_668()
     assert(super::search::best_in(seq![0x61u32, 0x63, 0x45, 0x3B], 0, 634, 668) == Some(638nat)) by (compute_only);
 }
 
-proof fn lemma_example_acE_668_703()
+proof fn lemma_example_ac_e_upper_668_703()
     ensures
         super::search::best_in(seq![0x61u32, 0x63, 0x45, 0x3B], 0, 668, 703) == None,
 {
@@ -593,7 +593,7 @@ proof fn lemma_example_acE_668_703()
     assert(super::search::best_in(seq![0x61u32, 0x63, 0x45, 0x3B], 0, 668, 703) == None) by (compute_only);
 }
 
-proof fn lemma_example_acE_634_703_pick()
+proof fn lemma_example_ac_e_upper_634_703_pick()
     ensures
         super::search::pick(Some(638nat), None) == Some(638nat),
 {
@@ -601,16 +601,16 @@ proof fn lemma_example_acE_634_703_pick()
     assert(super::search::pick(Some(638nat), None) == Some(638nat)) by (compute_only);
 }
 
-proof fn lemma_example_acE_634_703()
+proof fn lemma_example_ac_e_upper_634_703()
     ensures
         super::search::best_in(seq![0x61u32, 0x63, 0x45, 0x3B], 0, 634, 703) == Some(638nat),
 {
-    lemma_example_acE_634_668();
-    lemma_example_acE_668_703();
-    lemma_example_acE_634_703_pick();
+    lemma_example_ac_e_upper_634_668();
+    lemma_example_ac_e_upper_668_703();
+    lemma_example_ac_e_upper_634_703_pick();
 }
 
-proof fn lemma_example_acE_block()
+proof fn lemma_example_ac_e_upper_block()
     ensures
         super::index::match_block(seq![0x61u32, 0x63, 0x45, 0x3B], 0) == (634nat, 703nat),
 {
@@ -620,16 +620,16 @@ proof fn lemma_example_acE_block()
 }
 
 /// "&acE;" matches "acE;", which has two code points.
-pub proof fn lemma_example_acE()
+pub proof fn lemma_example_ac_e_upper()
     ensures
         longest_match(seq![0x61u32, 0x63, 0x45, 0x3B], 0) == Some(638nat),
 {
-    lemma_example_acE_block();
-    lemma_example_acE_634_703();
+    lemma_example_ac_e_upper_block();
+    lemma_example_ac_e_upper_634_703();
     super::index::lemma_match_in_block(seq![0x61u32, 0x63, 0x45, 0x3B], 0);
 }
 
-proof fn lemma_example_NotEqualTilde_314_350()
+proof fn lemma_example_not_equal_tilde_314_350()
     ensures
         super::search::best_in(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0, 314, 350) == Some(336nat),
 {
@@ -655,7 +655,7 @@ proof fn lemma_example_NotEqualTilde_314_350()
     assert(super::search::best_in(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0, 314, 350) == Some(336nat)) by (compute_only);
 }
 
-proof fn lemma_example_NotEqualTilde_350_386()
+proof fn lemma_example_not_equal_tilde_350_386()
     ensures
         super::search::best_in(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0, 350, 386) == None,
 {
@@ -681,7 +681,7 @@ proof fn lemma_example_NotEqualTilde_350_386()
     assert(super::search::best_in(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0, 350, 386) == None) by (compute_only);
 }
 
-proof fn lemma_example_NotEqualTilde_314_386_pick()
+proof fn lemma_example_not_equal_tilde_314_386_pick()
     ensures
         super::search::pick(Some(336nat), None) == Some(336nat),
 {
@@ -689,16 +689,16 @@ proof fn lemma_example_NotEqualTilde_314_386_pick()
     assert(super::search::pick(Some(336nat), None) == Some(336nat)) by (compute_only);
 }
 
-proof fn lemma_example_NotEqualTilde_314_386()
+proof fn lemma_example_not_equal_tilde_314_386()
     ensures
         super::search::best_in(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0, 314, 386) == Some(336nat),
 {
-    lemma_example_NotEqualTilde_314_350();
-    lemma_example_NotEqualTilde_350_386();
-    lemma_example_NotEqualTilde_314_386_pick();
+    lemma_example_not_equal_tilde_314_350();
+    lemma_example_not_equal_tilde_350_386();
+    lemma_example_not_equal_tilde_314_386_pick();
 }
 
-proof fn lemma_example_NotEqualTilde_block()
+proof fn lemma_example_not_equal_tilde_block()
     ensures
         super::index::match_block(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0) == (314nat, 386nat),
 {
@@ -708,12 +708,12 @@ proof fn lemma_example_NotEqualTilde_block()
 }
 
 /// "&NotEqualTilde;" matches "NotEqualTilde;".
-pub proof fn lemma_example_NotEqualTilde()
+pub proof fn lemma_example_not_equal_tilde()
     ensures
         longest_match(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0) == Some(336nat),
 {
-    lemma_example_NotEqualTilde_block();
-    lemma_example_NotEqualTilde_314_386();
+    lemma_example_not_equal_tilde_block();
+    lemma_example_not_equal_tilde_314_386();
     super::index::lemma_match_in_block(seq![0x4Eu32, 0x6F, 0x74, 0x45, 0x71, 0x75, 0x61, 0x6C, 0x54, 0x69, 0x6C, 0x64, 0x65, 0x3B], 0);
 }
 

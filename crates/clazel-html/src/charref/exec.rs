@@ -198,8 +198,11 @@ pub fn numeric_reference_end_code_exec(capped: u32) -> (r: u32)
 {
     let code = if capped == 0 { 0xFFFDu32 } else { capped };
     let code = if code > 0x10FFFF { 0xFFFDu32 } else { code };
-    let code = if 0xD800 <= code && code <= 0xDFFF { 0xFFFDu32 } else { code };
-    let is_control = code <= 0x1F || (0x7F <= code && code <= 0x9F);
+    let code = match code {
+        0xD800..=0xDFFF => 0xFFFDu32,
+        _ => code,
+    };
+    let is_control = matches!(code, 0..=0x1F | 0x7F..=0x9F);
     let is_ws = code == 0x09 || code == 0x0A || code == 0x0C || code == 0x0D || code == 0x20;
     if code == 0x0D || (is_control && !is_ws) {
         match c1_replacement_exec(code) {
