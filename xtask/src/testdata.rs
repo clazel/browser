@@ -27,6 +27,7 @@ mod wpt_url_percent;
 mod wpt_url_setters;
 mod wpt_urltestdata;
 mod wpt_webstorage;
+mod wycheproof_rsa;
 mod x509_limbo;
 
 use std::path::{Path, PathBuf};
@@ -93,6 +94,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         "wpt-urltestdata",
         wpt_urltestdata::convert,
         wpt_urltestdata::FILES,
+    ),
+    (
+        "wycheproof-rsa-pkcs1",
+        wycheproof_rsa::convert,
+        wycheproof_rsa::FILES,
     ),
     ("x509-limbo", x509_limbo::convert, x509_limbo::FILES),
 ];

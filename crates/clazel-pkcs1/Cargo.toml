@@ -1,0 +1,28 @@
+[package]
+name = "clazel-pkcs1"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "RSA PKCS#1 v1.5 signature verification (RFC 8017 §8.2.2) with our own multiple-precision arithmetic."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Test-only: SHA-2 computes the message digests in tests/conformance_pkcs1.rs
+# (class `test` in docs/DEPENDENCIES.md: never shipped). The verifier takes
+# the digest as input; it does not hash.
+[dev-dependencies]
+sha2 = { version = "=0.10.9", default-features = false }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
