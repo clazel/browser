@@ -481,26 +481,68 @@ proof fn lemma_pop_view(v: Seq<ExecElem>)
     assert(elems_view(v.drop_last()) =~= elems_view(v).drop_last());
 }
 
-/// Popping keeps [`parser_inv`] and [`template_modes_wf`].
+/// Popping keeps [`parser_inv`].
 pub proof fn lemma_pop_inv(p: Parser)
     requires
         parser_inv(p),
     ensures
         parser_inv(pop(p)),
-        template_modes_wf(p) ==> template_modes_wf(pop(p)),
 {
     if p.open.len() > 0 {
         lemma_inv_iff(p);
         lemma_inv_iff(pop(p));
         lemma_open_drop_last(p.doc, p.open);
-        if open_has_html(pop(p), Tag::Template) {
-            let f = |e: Elem| is_html(e, Tag::Template);
-            let k = last_index_where(p.open.drop_last(), p.open.len() - 1, f);
-            lemma_last_index_where(p.open.drop_last(), p.open.len() - 1, f);
-            assert(p.open.drop_last()[k] == p.open[k]);
-            lemma_last_index_where_found(p.open, p.open.len() as int, f, k);
-        }
+        crate::termination::helpers_ranking::lemma_pop(p);
     }
+}
+
+/// Removing entry `i` of a stack removes at most one `template` element.
+pub proof fn lemma_tcount_remove(o: Seq<Elem>, i: int)
+    requires
+        0 <= i < o.len(),
+    ensures
+        crate::termination::helpers_ranking::tcount(o.remove(i)) <= crate::termination::helpers_ranking::tcount(o),
+{
+    let r = o.remove(i);
+    crate::termination::helpers_ranking::lemma_templates_in_same(r, o, i);
+    lemma_templates_in_remove_from(o, i, o.len() as int);
+}
+
+/// Above the removed entry, the counts differ by that entry's.
+proof fn lemma_templates_in_remove_from(o: Seq<Elem>, i: int, k: int)
+    requires
+        0 <= i < k <= o.len(),
+        crate::termination::templates_in(o.remove(i), i) == crate::termination::templates_in(o, i),
+    ensures
+        crate::termination::templates_in(o.remove(i), k - 1) + (if is_html(o[i], Tag::Template) {
+            1nat
+        } else {
+            0nat
+        }) == crate::termination::templates_in(o, k),
+    decreases k,
+{
+    if k > i + 1 {
+        lemma_templates_in_remove_from(o, i, k - 1);
+        assert(o.remove(i)[k - 2] == o[k - 1]);
+    }
+}
+
+/// Pushing a record adds at most one `template` element, and none if it is
+/// not one.
+pub proof fn lemma_tcount_push(o: Seq<Elem>, e: Elem)
+    ensures
+        crate::termination::helpers_ranking::tcount(o.push(e)) == crate::termination::helpers_ranking::tcount(o) + (if is_html(
+            e,
+            Tag::Template,
+        ) {
+            1nat
+        } else {
+            0nat
+        }),
+{
+    let b = o.push(e);
+    crate::termination::helpers_ranking::lemma_templates_in_same(o, b, o.len() as int);
+    assert(b[o.len() as int] == e);
 }
 
 /// [`pop`].
@@ -510,7 +552,6 @@ pub fn pop_exec(p: &mut ParserBuf)
     ensures
         final(p)@ == pop(old(p)@),
         parser_inv(final(p)@),
-        template_modes_wf(old(p)@) ==> template_modes_wf(final(p)@),
 {
     proof {
         lemma_pop_inv(old(p)@);
@@ -530,6 +571,8 @@ pub fn push_exec(p: &mut ParserBuf, e: ExecElem)
     requires
         parser_inv(old(p)@),
         !old(p)@.stopped ==> elem_ok(old(p)@.doc, e@),
+        !old(p)@.stopped && is_html(e@, Tag::Template) ==> crate::termination::template_count(old(p)@)
+            < old(p)@.template_modes.len(),
     ensures
         final(p)@ == push(old(p)@, e@),
         parser_inv(final(p)@),
@@ -543,6 +586,7 @@ pub fn push_exec(p: &mut ParserBuf, e: ExecElem)
             lemma_inv_iff(old(p)@);
             lemma_inv_iff(p@);
             lemma_open_push(p@.doc, elems_view(v), x);
+            lemma_tcount_push(elems_view(v), x);
         }
     }
 }
@@ -603,14 +647,12 @@ pub fn pop_until_where_exec(p: &mut ParserBuf, pr: &ElemPred, Ghost(f): Ghost<sp
     ensures
         final(p)@ == pop_until_where(old(p)@, f),
         parser_inv(final(p)@),
-        template_modes_wf(old(p)@) ==> template_modes_wf(final(p)@),
 {
     loop
         invariant
             parser_inv(p@),
             pred_is(pr, f),
             pop_until_where(p@, f) == pop_until_where(old(p)@, f),
-            template_modes_wf(old(p)@) ==> template_modes_wf(p@),
         decreases p@.open.len(),
     {
         if p.open.is_empty() {
@@ -631,7 +673,6 @@ pub fn pop_until_popped_exec(p: &mut ParserBuf, tag: Tag)
     ensures
         final(p)@ == pop_until_popped(old(p)@, tag),
         parser_inv(final(p)@),
-        template_modes_wf(old(p)@) ==> template_modes_wf(final(p)@),
 {
     let ghost f = |e: Elem| is_html(e, tag);
     proof {
@@ -647,7 +688,6 @@ pub fn pop_until_heading_popped_exec(p: &mut ParserBuf)
     ensures
         final(p)@ == pop_until_heading_popped(old(p)@),
         parser_inv(final(p)@),
-        template_modes_wf(old(p)@) ==> template_modes_wf(final(p)@),
 {
     let ghost f = |e: Elem| is_heading(e);
     proof {
@@ -663,7 +703,6 @@ pub fn pop_until_node_popped_exec(p: &mut ParserBuf, id: usize)
     ensures
         final(p)@ == pop_until_node_popped(old(p)@, id),
         parser_inv(final(p)@),
-        template_modes_wf(old(p)@) ==> template_modes_wf(final(p)@),
 {
     let ghost f = |e: Elem| e.id == id;
     proof {
@@ -680,14 +719,12 @@ pub fn pop_while_exec(p: &mut ParserBuf, pr: &ElemPred, Ghost(f): Ghost<spec_fn(
     ensures
         final(p)@ == pop_while(old(p)@, f),
         parser_inv(final(p)@),
-        template_modes_wf(old(p)@) ==> template_modes_wf(final(p)@),
 {
     loop
         invariant
             parser_inv(p@),
             pred_is(pr, f),
             pop_while(p@, f) == pop_while(old(p)@, f),
-            template_modes_wf(old(p)@) ==> template_modes_wf(p@),
         decreases p@.open.len(),
     {
         if p.open.is_empty() {
@@ -716,23 +753,21 @@ pub fn remove_open_at_exec(p: &mut ParserBuf, i: usize)
         lemma_inv_iff(old(p)@);
         lemma_inv_iff(p@);
         lemma_open_remove(p@.doc, elems_view(v), i as int);
+        lemma_tcount_remove(elems_view(v), i as int);
     }
 }
 
 // ---------------------------------------------------------------------
 // §13.2.4.1 reset the insertion mode appropriately
 
-/// [`reset_insertion_mode`]. Step 10 reads the current template insertion
-/// mode, so the stack of template insertion modes must not be empty while
-/// parsing template contents ([`template_modes_wf`]).
+/// [`reset_insertion_mode`]. (Step 10 reads the current template
+/// insertion mode, which exists by `modes_ok`'s count of templates.)
 pub fn reset_insertion_mode_exec(p: &mut ParserBuf)
     requires
         parser_inv(old(p)@),
-        template_modes_wf(old(p)@),
     ensures
         final(p)@ == reset_insertion_mode(old(p)@),
         parser_inv(final(p)@),
-        template_modes_wf(final(p)@),
 {
     let m = reset_mode(p);
     p.mode = m;
@@ -741,10 +776,15 @@ pub fn reset_insertion_mode_exec(p: &mut ParserBuf)
 /// The mode [`reset_from`] gives from the last entry.
 fn reset_mode(p: &ParserBuf) -> (r: Mode)
     requires
-        template_modes_wf(p@),
+        parser_inv(p@),
     ensures
         r == reset_from(p@, p@.open.len() - 1),
+        r != Mode::Text && r != Mode::InTableText,
+        r == Mode::InTemplate ==> p@.template_modes.len() > 0,
 {
+    proof {
+        lemma_inv_iff(p@);
+    }
     let n = p.open.len();
     if n == 0 {
         return Mode::InBody;
@@ -754,7 +794,8 @@ fn reset_mode(p: &ParserBuf) -> (r: Mode)
         invariant
             n == p@.open.len(),
             i < n,
-            template_modes_wf(p@),
+            parser_inv(p@),
+            modes_core(p@),
             reset_from(p@, n - 1) == reset_from(p@, i as int),
         decreases i,
     {
@@ -793,9 +834,10 @@ fn reset_mode(p: &ParserBuf) -> (r: Mode)
             // 10.
             proof {
                 if !(last && p@.context is Some) {
-                    let f = |e: Elem| is_html(e, Tag::Template);
-                    lemma_last_index_where_found(p@.open, n as int, f, i as int);
+                    crate::termination::helpers_ranking::lemma_templates_in_pos(p@.open, n as int, i as int);
                 }
+                let k = p@.template_modes.len() - 1;
+                assert(crate::termination::template_mode_ok(p@.template_modes[k]));
             }
             let k = p.template_modes.len();
             return match p.template_modes.get(k.saturating_sub(1)) {

@@ -110,15 +110,6 @@ pub open spec fn parser_inv(p: Parser) -> bool {
     parser_wf(p) && tags_wf(p) && templates_wf(p)
 }
 
-/// The stack of template insertion modes is not empty while the parser is
-/// parsing template contents: what §13.2.4.1 "reset the insertion mode
-/// appropriately" step 10 ("the current template insertion mode") reads.
-/// (Kept by the rules that push and pop templates together with their
-/// modes; the helpers that only pop keep it.)
-pub open spec fn template_modes_wf(p: Parser) -> bool {
-    parsing_template_contents(p) ==> p.template_modes.len() > 0
-}
-
 /// The stack of open elements is rooted at an HTML `html` element: what
 /// "appropriate place for inserting a node" reads (the current node, and
 /// step 3.2's first element). It holds from "before head" on until parsing

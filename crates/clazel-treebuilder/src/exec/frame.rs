@@ -25,7 +25,8 @@ pub open spec fn open_ok(doc: Document, o: Seq<Elem>) -> bool {
 pub open spec fn fmt_ok(doc: Document, x: Fmt) -> bool {
     match x {
         Fmt::Marker => true,
-        Fmt::Entry { elem, token } => elem_in_doc(doc, elem) && elem_tagged(elem) && tok_tagged(token),
+        Fmt::Entry { elem, token } => elem_in_doc(doc, elem) && elem_tagged(elem) && tok_tagged(token) && token.tag
+            != Tag::Template,
     }
 }
 
@@ -34,9 +35,21 @@ pub open spec fn fmts_ok(doc: Document, f: Seq<Fmt>) -> bool {
     forall|i: int| 0 <= i < f.len() ==> fmt_ok(doc, #[trigger] f[i])
 }
 
-/// The rest of [`parser_inv`]: the document, the pointers, the context and
-/// the redirection map.
+/// `termination::modes_ok` without its `formatting_ok` part (which
+/// [`fmts_ok`] gives).
+pub open spec fn modes_core(p: Parser) -> bool {
+    &&& forall|i: int| 0 <= i < p.template_modes.len() ==> crate::termination::template_mode_ok(#[trigger] p.template_modes[i])
+    &&& p.mode == Mode::InTableText ==> p.original_mode != Mode::Text && p.original_mode != Mode::InTableText
+    &&& p.mode == Mode::Text ==> p.original_mode != Mode::Text && p.original_mode != Mode::InTableText
+    &&& crate::termination::template_count(p) <= p.template_modes.len()
+    &&& p.mode == Mode::InTemplate ==> p.template_modes.len() > 0
+    &&& (p.mode == Mode::Text || p.mode == Mode::InTableText) && p.original_mode == Mode::InTemplate ==> p.template_modes.len() > 0
+}
+
+/// The rest of [`parser_inv`]: the document, the pointers, the context, the
+/// redirection map and the modes.
 pub open spec fn rest_ok(p: Parser) -> bool {
+    &&& modes_core(p)
     &&& dom::wf(p.doc)
     &&& opt_valid(p.doc, p.head)
     &&& opt_valid(p.doc, p.form)
@@ -62,6 +75,12 @@ pub proof fn lemma_inv_iff(p: Parser)
         assert forall|i: int| 0 <= i < p.formatting.len() implies fmt_ok(p.doc, #[trigger] p.formatting[i]) by {
             if p.formatting[i] is Entry {
             }
+        }
+    }
+    if fmts_ok(p.doc, p.formatting) {
+        assert forall|i: int| 0 <= i < p.formatting.len() && #[trigger] p.formatting[i] is Entry implies p.formatting[i]->Entry_token.tag
+            != Tag::Template by {
+            assert(fmt_ok(p.doc, p.formatting[i]));
         }
     }
     if open_ok(p.doc, p.open) && fmts_ok(p.doc, p.formatting) && rest_ok(p) {
