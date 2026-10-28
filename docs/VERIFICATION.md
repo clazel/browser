@@ -100,8 +100,13 @@ six-hour limit (`xtask/src/parts.rs`):
 
 - `verify --part base`: static checks, rustfmt, clippy and tests over the
   whole workspace.
-- `verify --part miri`: static checks, then the workspace's tests under
-  Miri. On macOS it runs in the same job as `base`, after it.
+- `verify --part miri [<names>]`: static checks, then the tests under Miri,
+  for the whole workspace or only the named crates (comma-separated). On
+  macOS, `verify --part miri clazel-sys` runs in the same job as `base`,
+  after it: `clazel-sys` is the one crate with code that compiles only on
+  macOS and has tests Miri can run (its foreign calls are ignored under
+  Miri on both platforms), and every other crate's tests are portable Rust
+  that the Linux run interprets identically.
 - `verify --part crate <names> --metrics <dir>`, where `<names>` is one
   crate or several separated by commas: static checks, then Kani, Verus,
   line counts, mutations and conformance for those crates. CI runs one job

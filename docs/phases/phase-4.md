@@ -36,8 +36,9 @@ Phase 4 is done when all of these hold on macOS arm64 and Linux x86-64:
    2); `clazel-encoding` is at tier 2 with every decoder it ships (a decoder
    lands with its proof, or not at all); `clazel-ipc` and `clazel-kernel`
    are at tier 2 with the schema and theorems of 4.12.
-2. The html5lib-tests suites pass through the proven implementation,
-   vendored at a pinned upstream commit: every `tokenizer/*.test` file
+2. The html5lib-tests and WPT tree-construction suites pass through the
+   proven implementation, vendored at pinned upstream commits: every
+   `tokenizer/*.test` file
    (`initialStates`, `lastStartTag` and `doubleEscaped` cases included),
    every `tree-construction/*.dat` file except `scripted/` (which needs
    JavaScript), `#document-fragment` cases through the fragment parsing
@@ -306,11 +307,15 @@ Vendoring and conversion, in the pattern of items 1.0 and 3.3:
   attributes, self-closing]`, `["EndTag", name]`, `["Comment", data]`,
   `["DOCTYPE", name, public, system, correctness]`, plus `initialStates`,
   `lastStartTag`, `doubleEscaped` and `errors`),
-  `crates/clazel-treebuilder/tests/data/html5lib-tree-construction/`
-  (`tree-construction/*.dat`: `#data`, `#errors`, `#new-errors`,
-  `#document-fragment`, `#script-on`, `#script-off`, `#document` with the
-  `| ` indented tree) and `crates/clazel-html/tests/data/html5lib-encoding/`
-  (`encoding/*.dat`: `#data`, `#encoding`). `cargo xtask testdata` gains a
+  and `crates/clazel-html/tests/data/html5lib-encoding/`
+  (`encoding/*.dat`: `#data`, `#encoding`). html5lib-tests no longer
+  carries the tree-construction suite; it lives in WPT, so
+  `html/syntax/parsing/resources/*.dat` from the WPT commit the repository
+  already pins (item 3.3) is vendored under
+  `crates/clazel-treebuilder/tests/data/wpt-tree-construction/`
+  (`#data`, `#errors`, `#new-errors`, `#document-fragment`, `#script-on`,
+  `#script-off`, `#document` with the `| ` indented tree).
+  `cargo xtask testdata` gains a
   converter for each shape (`xtask/src/testdata/html5lib_*.rs`), reading
   the fixed format and failing if it changes; `errors` and `#errors` are
   read and ignored, because parse errors are not modelled (stated in the
@@ -476,8 +481,11 @@ stream" (CR LF and lone CR to LF; the character classes that are parse
 errors and change nothing), §13.2.4 the tokenizer's state (the state, the
 return state, the temporary buffer, the character reference code, the
 current token, the "appropriate end tag token" rule from the last start
-tag emitted), and §13.2.5: all 80 states, from the data state to the
-numeric character reference end state, as one spec function per state,
+tag emitted), and §13.2.5: all 84 states, from the data state to the
+numeric character reference end state (the standard added five
+processing-instruction states and a processing instruction token in
+2026, and dropped the decimal character reference start state; the
+count is the standard's, not this plan's), as one spec function per state,
 each step numbered against the standard's "Consume the next input
 character" cases; the tokens (`DOCTYPE` with name, public and system
 identifiers and the force-quirks flag; start and end tags with name,
@@ -512,7 +520,7 @@ Form, listed as modelling choices in the spec header:
 Proven about the spec, and seeded as mutations: `theorem_tokenizer_total`,
 that `tokenize` is defined for every input (every state either consumes a
 code point or reconsumes into a state of lower rank, so the pair (remaining
-input, rank) decreases; the rank is a table over the 80 states, and a cycle
+input, rank) decreases; the rank is a table over the 84 states, and a cycle
 in the reconsume graph would fail this proof, which is exactly what should
 happen); `theorem_output_bounded`, that the character data emitted is no
 longer than the input in code points (from 4.5's lemma); and that the two
