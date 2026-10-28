@@ -12,7 +12,9 @@
 //!   [`actions`].
 //! - [`lemmas`]: facts proven about the spec.
 //! - [`examples`]: inputs evaluated on the spec.
-//! - [`output`]: `theorem_output_bounded`.
+//! - [`output`]: the proof of `theorem_output_bounded`.
+//! - [`independent`]: a second transcription, from W3C HTML 5.2.
+//! - [`agreement`]: the two transcriptions compared on concrete inputs.
 
 pub mod actions;
 pub mod agreement;
