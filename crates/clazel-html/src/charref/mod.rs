@@ -11,3 +11,5 @@
 //! - [`examples`]: the standard's examples, evaluated on the spec.
 
 pub mod data;
+pub mod contract;
+pub mod spec;
