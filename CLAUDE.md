@@ -53,8 +53,10 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
    crate's `Cargo.toml` requires all of the following, and `cargo xtask check`
    rejects the claim otherwise:
    - every proof and harness passing in a full `cargo xtask verify`, which
-     for a tier change means CI's green run on the pull request (a local
-     `--changed` run does not count);
+     for a tier change means a green `Full verification` from a manual CI
+     run on the pull request's branch, at its head commit (pull request
+     runs skip the proofs, and a local `--changed` run does not count; a
+     manual run needs someone with write access, so ask for one);
    - Tier 1: Kani harnesses;
    - Tier 2: Verus enabled; every mutation in `mutations.json` a `killed` with
      a certificate that Verus checks; conformance tests
@@ -85,9 +87,13 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
   them; a change to anything shared (`Cargo.lock`, the workspace manifest,
   toolchain pins, `scripts/`, `xtask/`) makes it check every crate. It ends
   in `CHANGED CRATES PASSED`, which is not `ALL CHECKS PASSED` and must not
-  be reported as such. Work is **done** only when CI's full verification
-  (every job of `.github/workflows/ci.yml`, ending in `Full verification`)
-  is green on its pull request; say so if it has not run yet. To repeat CI's run locally, use `scripts/verify.sh` or the
+  be reported as such. A pull request's CI runs every job of
+  `.github/workflows/ci.yml` except the proofs, ending in `Pull request
+  checks`, which is not a full verification and must not be reported as
+  one. Work is **done** only when that is green on its pull request and,
+  after the merge, the `Full verification` of `main` is green (or a manual
+  run's on its branch, which a tier raise needs before merging); say so if
+  either has not run yet. To repeat CI's full run locally, use `scripts/verify.sh` or the
   Docker command in README.md. `cargo xtask check` runs only the fast static
   checks (unsafe, the `clazel-sys` audit, lint overrides, escape hatches,
   tier declarations, pins); use it while iterating, never as the final

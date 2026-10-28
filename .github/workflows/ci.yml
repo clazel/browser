@@ -1,6 +1,12 @@
-# Runs the checks in docs/VERIFICATION.md on every push to main and every
-# pull request. The full verification is split into parts (xtask/src/parts.rs)
-# so that no job comes near GitHub's six-hour limit:
+# Runs the checks in docs/VERIFICATION.md. Every push to main and every
+# manual run (Actions, "Run workflow", which needs write access to the
+# repository) is the full verification. A pull request runs every part except
+# the proofs: the `crate` jobs, which take hours, are skipped, so anyone who
+# can open a pull request can start only the cheap jobs, however many pull
+# requests they open. A pull request that needs the full verification on its
+# own commit (a tier raise, CLAUDE.md rule 7) gets it from a manual run on its
+# branch. The full verification is split into parts (xtask/src/parts.rs) so
+# that no job comes near GitHub's six-hour limit:
 #
 #   crates    `cargo xtask check`, the fast static checks (unsafe, lint
 #             overrides, escape hatches, tier declarations, pins, allowlist),
@@ -19,10 +25,14 @@
 #             mutations (several mutants at once, xtask/src/mutate.rs) and
 #             conformance. One job per crate with proof work; the crates
 #             with none share one job. Each uploads what it measured, one
-#             file per crate, tagged with the commit.
-#   assemble  `verify --part assemble`: needs every job above to pass, then
-#             checks that every crate's measurements are present and from
-#             this commit, and reports whether README.md's table matches them.
+#             file per crate, tagged with the commit. Not on pull requests.
+#   assemble  `verify --part assemble`, the job named `Full verification`:
+#             fails unless every job above passed, then checks that every
+#             crate's measurements are present and from this commit, and
+#             reports whether README.md's table matches them. On a pull
+#             request it is named `Pull request checks` instead and only
+#             requires the other jobs to have passed: no proof ran, so it
+#             never reports a full verification there.
 #   table     on pushes to main only, after `assemble` passed: writes
 #             README.md's table from the same measurements
 #             (`verify --part assemble --write`) and, if it changed, commits
@@ -40,7 +50,8 @@
 #
 # Together the parts run exactly the checks of one `scripts/verify.sh`, which
 # still runs them all on one machine. Verification has passed only when every
-# job above is green; `assemble` cannot be, unless the others were. Every
+# job above is green on a push to main or a manual run; `assemble` cannot be,
+# unless the others were. Every
 # part exits non-zero when a tool is missing and checks were skipped, so a
 # skipped check is never green.
 #
@@ -163,6 +174,8 @@ jobs:
     # A group of crates with no proofs is one job (`cargo xtask crates`).
     name: Verify ${{ contains(matrix.crate, ',') && 'crates without proofs' || matrix.crate }}
     needs: crates
+    # The proofs take hours; pull requests skip them (see the header).
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     strategy:
@@ -199,23 +212,53 @@ jobs:
           retention-days: 7
 
   assemble:
-    name: Full verification
+    # A pull request runs no proofs, so its run is never named a full
+    # verification; a manual run on its branch is (see the header).
+    name: ${{ github.event_name == 'pull_request' && 'Pull request checks' || 'Full verification' }}
     needs: [crates, base, base-macos, miri, crate]
+    # Runs even when a job it needs failed or was skipped, and fails then:
+    # a skipped job is not a pass, and a skipped required check would count
+    # as one. Only a cancelled run is not judged.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Every job passed
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          # `crate` is skipped on pull requests, and only there.
+          bad=$(echo "$NEEDS" | jq -r --arg event "$EVENT" '
+            to_entries[]
+            | select(.value.result != "success")
+            | select(.key != "crate" or $event != "pull_request" or .value.result != "skipped")
+            | "\(.key): \(.value.result)"')
+          if [ -n "$bad" ]; then
+            echo "Not every job passed:"
+            echo "$bad"
+            exit 1
+          fi
+      - name: Pull request result
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "RESULT: PULL REQUEST CHECKS PASSED (static checks, rustfmt, clippy, tests and Miri; no proofs ran: the full verification runs on main, or on this branch from Actions, Run workflow)"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name != 'pull_request'
         with:
           persist-credentials: false
       - name: Install Rust
+        if: github.event_name != 'pull_request'
         run: rustup toolchain install
       - name: Download measurements
+        if: github.event_name != 'pull_request'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: part-*
           path: parts
           merge-multiple: true
       - name: Assemble
+        if: github.event_name != 'pull_request'
         run: cargo xtask verify --part assemble --metrics parts
 
   table:
