@@ -181,6 +181,13 @@ pub enum NodeKind {
         /// "data"
         data: Seq<u32>,
     },
+    /// DOM §4.13 `ProcessingInstruction`: its target and (character) data.
+    ProcessingInstruction {
+        /// "target"
+        target: Seq<u32>,
+        /// "data"
+        data: Seq<u32>,
+    },
     /// DOM §4.7 `DocumentFragment`, with its "host".
     DocumentFragment {
         /// "host": the template whose contents this is, or null.
