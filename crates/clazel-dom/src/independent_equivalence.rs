@@ -5,11 +5,11 @@
 //! is removing it at its index, and "number of preceding siblings" is its
 //! index.
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::contract::*;
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::independent::*;
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::lemmas::*;
 #[allow(unused_imports)]
 use super::spec::*;

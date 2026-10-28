@@ -14,7 +14,7 @@
 //! mutation changes; facts that a mutation would change (a parent after
 //! `append`) come from the theorems instead.
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::lemmas::*;
 #[allow(unused_imports)]
 use super::spec::*;

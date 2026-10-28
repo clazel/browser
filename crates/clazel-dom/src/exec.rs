@@ -11,9 +11,9 @@
 //! is linear in the number of moved children; nothing recurses, and
 //! [`Arena::is_inclusive_ancestor`] walks parents in a loop.
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::contract::*;
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::lemmas::*;
 #[allow(unused_imports)]
 use super::spec::*;
