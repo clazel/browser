@@ -818,6 +818,64 @@ fn peer_key_update_rotates_receive_epoch_and_sends_unrequested_response() -> Res
 }
 
 #[test]
+fn peer_key_update_after_local_close_notify_rotates_receive_epoch_and_sends_nothing(
+) -> Result<(), String> {
+    // RFC 8446 §6.1 and §4.6.3: nothing is written after our close_notify,
+    // whether it is still awaiting its send acknowledgement or already sent.
+    for acknowledge_first in [false, true] {
+        let mut fixture = ready_fixture()?;
+        let (_, old_server_secret) = application_secrets(&fixture);
+        let updated_server_secret = updated_traffic_secret(&fixture.crypto, &old_server_secret);
+        let close = match fixture.connection.close_write() {
+            Action::Send(wire) => wire,
+            other => return Err(format!("expected protected close_notify, got {other:?}")),
+        };
+        if acknowledge_first {
+            assert_eq!(
+                fixture.connection.acknowledge_close_notify(&close),
+                Action::WriteClosed
+            );
+        }
+
+        let mut old_server_sender =
+            Encryptor::new(&fixture.crypto, &fixture.factory, &old_server_secret)
+                .map_err(|e| format!("old server epoch alert {e}"))?;
+        let request = old_server_sender
+            .seal(22, &handshake(24, &[1]), 0)
+            .map_err(|e| format!("KeyUpdate seal alert {e}"))?;
+        assert_eq!(
+            fixture.connection.feed(&request),
+            (request.len(), Action::None),
+            "acknowledge_first = {acknowledge_first}"
+        );
+        assert_eq!(fixture.connection.mode(), Mode::Ready);
+        assert_eq!(fixture.connection.request_key_update(false), Action::None);
+
+        if !acknowledge_first {
+            assert_eq!(
+                fixture.connection.acknowledge_close_notify(&close),
+                Action::WriteClosed
+            );
+        }
+
+        let mut updated_server_sender =
+            Encryptor::new(&fixture.crypto, &fixture.factory, &updated_server_secret)
+                .map_err(|e| format!("updated server epoch alert {e}"))?;
+        let peer_app = updated_server_sender
+            .seal(23, b"server new epoch", 0)
+            .map_err(|e| format!("updated server app seal alert {e}"))?;
+        assert_eq!(
+            fixture.connection.feed(&peer_app),
+            (
+                peer_app.len(),
+                Action::Deliver(b"server new epoch".to_vec())
+            )
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn fragmented_key_update_with_trailing_message_is_rejected() -> Result<(), String> {
     let mut fixture = ready_fixture()?;
     let (_, server_secret) = application_secrets(&fixture);
