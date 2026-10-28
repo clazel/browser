@@ -24,7 +24,7 @@ same files from a newer WPT commit, change the commit above and the hashes
 below, update `FILES` in the converter, and run `cargo xtask testdata`.
 
 `xtask/src/testdata/html5lib_tree.rs` converts them into
-`tests/generated/html5lib_tree_construction.rs` (1,967 cases, plus a count
+`tests/generated/wpt_tree_construction.rs` (1,967 cases, plus a count
 of the 6 scripted ones). It reads the fixed format (`#description`,
 `#data`, `#errors`, `#new-errors`, `#document-fragment`, `#script-on`,
 `#script-off`, `#document`) and fails on anything else. One deviation

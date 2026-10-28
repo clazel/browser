@@ -47,7 +47,7 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         cbor_appendix_a::FILES,
     ),
     (
-        "html5lib-tree-construction",
+        "wpt-tree-construction",
         html5lib_tree::convert,
         html5lib_tree::FILES,
     ),
