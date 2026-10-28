@@ -16,11 +16,14 @@
 //! - [`output`]: the proof of `theorem_output_bounded`.
 //! - [`independent`]: a second transcription, from W3C HTML 5.2.
 //! - [`agreement`]: the two transcriptions compared on concrete inputs.
+//! - [`equivalence`]: the two transcriptions proven equal where the texts
+//!   describe the same steps.
 
 pub mod actions;
 pub mod agreement;
 pub mod buffer;
 pub mod contract;
+pub mod equivalence;
 pub mod examples;
 pub mod independent;
 pub mod lemmas;

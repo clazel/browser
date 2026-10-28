@@ -598,13 +598,19 @@ Verus can evaluate reaches) contradict a state-level example
 its table row evaluated alone). The independent transcription
 (`independent.rs`) is W3C HTML 5.2 §8.2.4, written by a separate agent
 without reading `spec.rs`: 79 states (W3C 5.2 has 79), its own termination
-proof. **Not done:** the general theorem that the two transcriptions agree
-on every input where the texts agree. What exists instead
-(`agreement.rs`): Verus evaluates both on 68 inputs; 57 agree and 11
-differ, each for a listed difference of the texts (processing
-instructions, and W3C §8.2.4.77's decimal multiplier of 16, in
-ERRATA.md). Until that theorem is proven, `clazel-html` cannot be raised to
-tier 2, and it stays `tier = 0`.
+proof. `theorem_w3c_equivalent` (`equivalence.rs`) proves the two equal on
+every input with no `&`, no `<?` and no `[CDATA[`, from the html5lib start
+states, state by state (a relation between the two tokenizers, one lemma
+per shared state, and the cases where one text takes two steps for the
+other's one: W3C "switches" to the bogus DOCTYPE state where the living
+standard reconsumes there, and W3C has no `>` case in the before attribute
+value state and no EOF case in the tag open state). The excluded inputs
+are where the texts differ: character references (restructured since W3C
+5.2; W3C §8.2.4.77 multiplies decimal digits by 16, ERRATA.md), processing
+instructions (new), and `[CDATA[` in HTML content (same tokens, different
+steps). Verus also evaluates both on 68 inputs, character references
+included (`agreement.rs`): 57 agree, 11 differ for those differences. The
+crate stays `tier = 0` until CI's full verification is green.
 
 ### 4.8 The DOM: node tree as an arena (M)
 
@@ -983,7 +989,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.4 Multi-byte encodings | not started |
 | 4.5 Character references | done: spec, contracts, proof, examples, mutations |
 | 4.6 Tokenizer spec and contracts | done: 84 states (the standard now has 84, not 80); total, output bounded, two faces equal |
-| 4.7 Tokenizer implementation and evidence | proof, conformance, differential and mutations done; W3C transcription written, general equivalence theorem not yet proven (compared on 68 inputs); tier 0 until then and until CI is green |
+| 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; tier 0 until CI's full run is green |
 | 4.8 DOM | not started |
 | 4.9 Tree builder spec and contracts | not started |
 | 4.10 Tree builder implementation | not started |

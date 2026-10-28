@@ -56,13 +56,18 @@ full verification is green on a run with everything below. See the
   contradict (`mutations.json`: all 118 mutations killed with
   certificates).
 - An independent transcription from W3C HTML 5.2 §8.2.4 (`independent.rs`,
-  79 states), written without reading `spec.rs`. **Not yet proven:** that
-  it agrees with the spec on every input where the texts agree. Verus
-  compares the two on 68 inputs (`agreement.rs`): 57 agree, and the 11
-  that differ do so for listed differences of the texts (processing
-  instructions; W3C's decimal character references, see
-  [docs/ERRATA.md](../../docs/ERRATA.md)). This is what keeps the crate
-  below tier 2.
+  79 states), written without reading `spec.rs`, and
+  `theorem_w3c_equivalent` (`equivalence.rs`): on every input with no `&`,
+  no `<?` and no `[CDATA[`, from the start states the html5lib tests use,
+  the two give the same tokens. The theorem is proven state by state,
+  including where one text takes two steps for the other's one. The
+  excluded inputs are where the texts differ: character references
+  (restructured since W3C 5.2, whose decimal state multiplies by 16, see
+  [docs/ERRATA.md](../../docs/ERRATA.md)), processing instructions (new),
+  and `[CDATA[` in HTML content (same tokens, different steps). Verus also
+  compares the two on 68 inputs, character references included
+  (`agreement.rs`): 57 agree, and the 11 that differ do so for those
+  differences.
 - Conformance: every html5lib-tests `tokenizer/*.test` case, once per
   initial state, through the proven implementation (7,050 of 7,053 pass;
   3 expected failures, `xmlViolation.test`, which expects infoset

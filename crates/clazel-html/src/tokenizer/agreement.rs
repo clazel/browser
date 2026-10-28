@@ -12,8 +12,9 @@
 //! living standard's ambiguous ampersand state) change the steps, not the
 //! tokens, on every input compared.
 //!
-//! This is not the general equivalence theorem ("equal on every input
-//! where the texts agree"), which is not proven yet; see the crate README.
+//! The general theorem, on every input of a stated domain, is
+//! `super::equivalence::theorem_w3c_equivalent`; these comparisons also
+//! cover inputs outside that domain (character references, `[CDATA[`).
 //!
 //! One input of `examples.rs` is not compared: `& &;` (`lemma_example_amp_alone`),
 //! where W3C's character reference state looks `;` up in the named
