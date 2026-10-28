@@ -1280,16 +1280,16 @@
       "file": "src/tokenizer/spec.rs",
       "find": "            if crate::charref::spec::historical_reasons(consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {",
       "replace": "            if crate::charref::spec::historical_reasons(!consumed_as_part_of_attribute(t), name, next_char(input, n.pos)) {",
-      "expect": "survives",
-      "reason": "The attribute test is reversed. Reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine). Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row of the table, in and out of attributes) through the proven implementation, and by the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
+      "expect": "killed-incidentally",
+      "reason": "Only the exec proof breaks: the named character reference state's exec function still follows the unmutated text, so it no longer matches the mutated spec function; no theorem about the spec is contradicted, so this is not coverage. The state is reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine), so no evaluated example certifies it. Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row, in and out of attributes) through the proven implementation, and the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
     },
     {
       "id": "state-ambiguous-ampersand",
       "file": "src/tokenizer/spec.rs",
       "find": "            if consumed_as_part_of_attribute(t) {",
       "replace": "            if !consumed_as_part_of_attribute(t) {",
-      "expect": "survives",
-      "reason": "The attribute test is reversed. Reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine). Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row of the table, in and out of attributes) through the proven implementation, and by the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
+      "expect": "killed-incidentally",
+      "reason": "Only the exec proof breaks: the ambiguous ampersand state's exec function still follows the unmutated text, so it no longer matches the mutated spec function; no theorem about the spec is contradicted, so this is not coverage. The state is reached only after a named character reference lookup, which Verus cannot evaluate inside a tokenizer run (the 2231-row table exceeds its evaluator; charref/examples.rs evaluates matches by blocks, outside the state machine), so no evaluated example certifies it. Covered instead by html5lib-tests namedEntities.test (4,210 cases, every row, in and out of attributes) through the proven implementation, and the html5gum differential. Closing it needs a hand-proven example of the named state over one block of the table."
     },
     {
       "id": "state-numeric-character-reference",
