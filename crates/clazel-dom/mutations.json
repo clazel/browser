@@ -1,0 +1,74 @@
+{
+  "mutations": [
+    {
+      "id": "insert-parent-not-updated",
+      "file": "src/spec.rs",
+      "find": "Node { parent: Some(parent), ..d1.nodes[node as int] }",
+      "replace": "d1.nodes[node as int]",
+      "expect": "killed",
+      "reason": "insert puts node in parent's children but leaves its parent pointer null: theorem_append_wf (parent(append(doc, parent, node), node) == Some(parent)) and the parent/child agreement of wf are false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_append_sets_parent()",
+        "witness": "append(ml_doc3(), 0, 1).nodes[1].parent is None"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "insert-before-wrong-index",
+      "file": "src/spec.rs",
+      "find": "Some(c) => pn.children.insert(index_of(pn.children, c), node),",
+      "replace": "Some(c) => pn.children.insert(index_of(pn.children, c) + 1, node),",
+      "expect": "killed",
+      "reason": "insert before child puts node after child: theorem_insert_before_wf (node at child's old index, child's previous sibling is node) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_insert_before_index()",
+        "witness": "insert_before(ml_doc_child(), 0, 2, 1).nodes[0].children[0] == 1usize"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "remove-leaves-child",
+      "file": "src/spec.rs",
+      "find": "Node { children: pn.children.remove(i), ..pn }",
+      "replace": "Node { children: pn.children, ..pn }",
+      "expect": "killed",
+      "reason": "remove clears node's parent but leaves it in its old parent's children: theorem_remove_wf (one child fewer, node not among them) and wf's parent/child agreement are false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_remove_detaches()",
+        "witness": "remove(ml_doc_child(), 1).nodes[0].children.len() == 1"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "reparent-children-reversed",
+      "file": "src/spec.rs",
+      "find": "reparent_children_n(append(doc, to, doc.nodes[from as int].children[0]), from, to, (n - 1) as nat)",
+      "replace": "reparent_children_n(append(doc, to, doc.nodes[from as int].children.last()), from, to, (n - 1) as nat)",
+      "expect": "killed",
+      "reason": "Moving the last remaining child first reverses the children's order: theorem_reparent_children_wf (to's children are its old ones followed by from's, in order) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_reparent_keeps_order()",
+        "witness": "reparent_children(ml_doc_reparent(), 0, 3).nodes[3].children[0] == 2usize"
+      },
+      "module": "lemmas"
+    },
+    {
+      "id": "node-limit-off-by-one",
+      "file": "src/spec.rs",
+      "find": "doc.nodes.len() + k <= max_nodes()",
+      "replace": "doc.nodes.len() + k < max_nodes()",
+      "expect": "killed",
+      "reason": "The arena refuses its 4,000,000th node: lemma_limit_exact (creation is allowed exactly while the arena stays within max_nodes, the bound wf states) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_limit()",
+        "witness": "!can_create(new_document(seq![]), 3999999nat)"
+      },
+      "module": "lemmas"
+    }
+  ]
+}
