@@ -83,13 +83,17 @@ installs nothing if a checksum differs.
 
 The full `cargo xtask verify` takes hours, so it runs where it is the gate:
 in CI (`.github/workflows/ci.yml`), on Linux x86-64 with the pinned
-toolchain, on every push to `main` and on every manual run (Actions, "Run
-workflow", which needs write access to the repository). A pull request runs
-every part except the proofs (the `crate` parts below), so that opening pull
-requests, however many, never starts hours of proof jobs; its last job is
-named `Pull request checks`, not `Full verification`. Nothing is done until
-`main`'s full run after the merge is green, and no tier is raised until a
-manual run on the pull request's branch is green at its head commit.
+toolchain, on every push to `main`, every manual run (Actions, "Run
+workflow") and every pull request. Nothing is done, and no tier is raised,
+until that run is green.
+
+On a pull request the proofs (the `crate` parts below) wait for a person:
+they need CI's `approval` job, which uses the `full-verification`
+environment, and a reviewer set in that environment's settings approves it
+("Review deployments" on the run). Until then only the cheap jobs run and
+`Full verification` stays pending, so opening pull requests, however many,
+never starts hours of proof jobs. Every push to a pull request starts a new
+run, which needs a new approval.
 
 CI splits the run into parts, one job each, so no job comes near GitHub's
 six-hour limit (`xtask/src/parts.rs`):
@@ -107,13 +111,13 @@ six-hour limit (`xtask/src/parts.rs`):
   (`CLAZEL_MUTANT_JOBS`, default one per core up to 4). On success it
   writes what it measured to `<dir>/<name>.json` for each crate, tagged
   with the commit (with `+dirty` if tracked files have uncommitted
-  changes). Not on pull requests.
+  changes).
 - `verify --part assemble --metrics <dir>`, the `Full verification` job,
-  which fails unless every other job passed: static checks, then it
-  requires a file for every workspace crate from this commit, and reports
-  whether README.md's table matches them. On a pull request the job is
-  named `Pull request checks`, only requires the other jobs to have passed,
-  and ends in `RESULT: PULL REQUEST CHECKS PASSED`.
+  which fails unless every other job passed (a skipped job included, but
+  `approval`, which runs on pull requests only): static checks, then it
+  requires a file for every
+  workspace crate from this commit, and reports whether README.md's table
+  matches them.
 - On pushes to `main` only, the `table` job runs the same part with
   `--write` after `assemble` passed, and commits README.md's regenerated
   table to `main` as github-actions[bot] if it changed. So the committed
@@ -122,9 +126,8 @@ six-hour limit (`xtask/src/parts.rs`):
 
 The parts together run exactly the checks of one `cargo xtask verify`, which
 `scripts/verify.sh` and the Docker command in README.md still run on one
-machine. "CI is green" means every job passed on the same commit of a push
-to `main` or a manual run, the `Full verification` (assemble) job included.
-A pull request's green `Pull request checks` is not that.
+machine. "CI is green" means every job passed on the same commit, the
+`Full verification` (assemble) job included.
 
 Locally, `cargo xtask verify --changed [base]` runs the same checks over
 less. `base` defaults to `origin/main`, the last commit CI verified, and
@@ -158,7 +161,7 @@ files, the workspace crates it depends on, and the shared files listed
 above. Verus, Kani and the tests read nothing else, but a crate that read a
 file outside its directory (say, another crate's vendored data through
 `include_str!`) would not be re-checked when that file changed. CI's full
-run (on `main`, or a manual run) catches it; the local run may not.
+run catches it; the local run may not.
 
 ## Trusted computing base (what we do *not* prove)
 

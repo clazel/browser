@@ -160,8 +160,7 @@ and much of it is work only a person can do.
   `phase3/tls` branch until it passes CI. Contributions go through the same
   machine checks as everything else, whoever (or whatever) wrote them: read
   [CLAUDE.md](CLAUDE.md) first, and expect `cargo xtask verify --changed` and
-  CI to be the bar (on a pull request every check but the proofs; on `main`,
-  and on manual runs, the full verification).
+  CI's full verification to be the bar.
 
 ## License
 
