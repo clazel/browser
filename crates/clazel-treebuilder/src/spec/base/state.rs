@@ -590,9 +590,16 @@ pub open spec fn open_index_of(p: Parser, id: NodeId) -> int {
     last_index_where(p.open, p.open.len() as int, |e: Elem| e.id == id)
 }
 
-/// "Pop the current node off the stack of open elements."
+/// "Pop the current node off the stack of open elements." The standard
+/// never pops an empty stack (the `html` element stays on it until parsing
+/// stops); popping an empty stack is stated to change nothing, so that
+/// `pop` is defined for every parser.
 pub open spec fn pop(p: Parser) -> Parser {
-    Parser { open: p.open.drop_last(), ..p }
+    if p.open.len() == 0 {
+        p
+    } else {
+        Parser { open: p.open.drop_last(), ..p }
+    }
 }
 
 /// "Push element onto the stack of open elements so that it is the new

@@ -23,7 +23,7 @@
 //! (so "reset the insertion mode appropriately" lands on a mode whose budget
 //! is known), and in the "in table text" mode the original insertion mode
 //! is neither "text" nor "in table text" (else "in table text"'s anything
-//! else would reprocess in itself forever). They are part of the reachable
+//! else would reprocess in itself forever), and likewise in the "text" mode. They are part of the reachable
 //! state invariant; within one token they are kept by every edge.
 
 #[allow(unused_imports)]
@@ -40,7 +40,9 @@ pub mod tables;
 /// Every name of the transcription and of this module, for the ghost
 /// imports of the submodules (`use super::spec::*;`).
 mod spec {
+    #[cfg(verus_only)]
     pub use super::*;
+    #[cfg(verus_only)]
     pub use crate::spec::*;
 }
 
@@ -173,7 +175,7 @@ pub open spec fn order(r: Rules, t: Tok) -> nat {
             Mode::BeforeHtml => 23,
             Mode::BeforeHead => 22,
             Mode::InHeadNoscript => 21,
-            Mode::AfterHead => 20,
+            Mode::AfterHead => 10,
             Mode::InTemplate => if t is Eof {
                 1
             } else {
@@ -225,6 +227,7 @@ pub open spec fn template_mode_ok(m: Mode) -> bool {
 pub open spec fn modes_ok(p: Parser) -> bool {
     &&& forall|i: int| 0 <= i < p.template_modes.len() ==> template_mode_ok(#[trigger] p.template_modes[i])
     &&& p.mode == Mode::InTableText ==> p.original_mode != Mode::Text && p.original_mode != Mode::InTableText
+    &&& p.mode == Mode::Text ==> p.original_mode != Mode::Text && p.original_mode != Mode::InTableText
 }
 
 /// Within a token, rules other than the current mode's (reached by "using the
