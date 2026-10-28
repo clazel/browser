@@ -24,6 +24,12 @@
 //! builds, where html5gum allows it; release builds run the text states
 //! without one, for both.
 //!
+//! Under Miri (which `cargo xtask verify` also runs the tests in, to look
+//! for undefined behaviour), the suite runs every 97th case and the
+//! differential is skipped, as in other crates' conformance tests: Miri is
+//! orders of magnitude slower, and the counts reported are those of the
+//! normal run.
+//!
 //! Expected failures: the four cases of `xmlViolation.test`, which expect
 //! the output after "coercing an HTML DOM into an infoset", a step after
 //! tokenization that this crate does not implement; they are run, and
@@ -186,7 +192,8 @@ fn html5lib_tokenizer() {
     let mut fail = 0u64;
     let mut total = 0u64;
     let mut failures: Vec<String> = Vec::new();
-    for case in HTML5LIB {
+    let stride = if cfg!(miri) { 97 } else { 1 };
+    for case in HTML5LIB.iter().step_by(stride) {
         let input = preprocess_exec(case.input);
         let want = expected(case.output);
         for &s in case.states {
@@ -217,9 +224,11 @@ fn html5lib_tokenizer() {
             }
         }
     }
-    println!(
-        "clazel-conformance: suite=\"html5lib-tests tokenizer\" pass={pass} xfail={xfail} fail={fail} total={total}"
-    );
+    if !cfg!(miri) {
+        println!(
+            "clazel-conformance: suite=\"html5lib-tests tokenizer\" pass={pass} xfail={xfail} fail={fail} total={total}"
+        );
+    }
     assert!(
         failures.is_empty(),
         "{} failures, first ones:\n{}",
@@ -391,6 +400,7 @@ fn comparable(input: &[u32]) -> Option<String> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn html5gum_differential() {
     let mut inputs: Vec<(Vec<u32>, S, Option<String>)> = Vec::new();
     let mut rng = Rng(0x0C1A_2E10_4D5E_7A11);
