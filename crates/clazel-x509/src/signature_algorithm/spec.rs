@@ -181,7 +181,7 @@ pub open spec fn prepare_signature(
                 tbs_der, signature_bits, signature_unused_bits,
             }),
         (Some(AlgorithmClass::Ecdsa(tbs_hash)), Some(AlgorithmClass::Ecdsa(outer_hash)))
-            if tbs_hash == outer_hash && signature_unused_bits == 0 =>
+            if tbs_hash == outer_hash && 0 == signature_unused_bits =>
             Some(PreparedSignature {
                 tbs_algorithm, outer_algorithm,
                 class: AlgorithmClass::Ecdsa(tbs_hash),
