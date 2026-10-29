@@ -2117,6 +2117,426 @@
         "lemma": "super::examples::lemma_rfc5280_self_issued_intermediate_checked()",
         "witness": "names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)])"
       }
+    },
+    {
+      "id": "path-skip-certs-is-big-endian",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    clazel_der::spec::be_value(octets)\n}",
+      "replace": "    octets.len()\n}",
+      "expect": "killed",
+      "reason": "A SkipCerts or pathLenConstraint is the number its octets spell, big-endian (design §1.7); the mutant reads the octet count, so 01 00 would be 2, not 256.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_skip_certs_is_big_endian()",
+        "witness": "skip_certs_value(seq![0x01u8, 0x00u8]) == 2nat"
+      }
+    },
+    {
+      "id": "path-require-explicit-policy-is-the-first-field",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "match value.require_explicit_policy {",
+      "replace": "match value.inhibit_policy_mapping {",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.11 and §6.1.4 (i): requireExplicitPolicy is the [0] field; the mutant reads inhibitPolicyMapping.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_require_explicit_policy_is_the_first_field()",
+        "witness": "require_explicit_policy_of(Some(super::examples::policy_constraints_2_9())) == Some(9nat)"
+      }
+    },
+    {
+      "id": "path-policy-mappings-oid",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "seq![2nat, 5, 29, 33]",
+      "replace": "seq![2nat, 5, 29, 34]",
+      "expect": "killed",
+      "reason": "policyMappings is id-ce 33 (RFC 5280 §4.2.1.5); with another OID a certificate that carries it would not be flagged, and §6.1.4 (a) (design Q8) would not refuse it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_policy_mappings_is_found()",
+        "witness": "!has_extension(seq![super::examples::extension(seq![2nat, 5, 29, 33], false)], policy_mappings_oid())"
+      }
+    },
+    {
+      "id": "path-inhibit-any-policy-oid",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "seq![2nat, 5, 29, 54]",
+      "replace": "seq![2nat, 5, 29, 55]",
+      "expect": "killed",
+      "reason": "inhibitAnyPolicy is id-ce 54 (RFC 5280 §4.2.1.14); the mutant would not see it on an anchor.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_inhibit_any_policy_refuses()",
+        "witness": "anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 54], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-refuses-policy-constraints",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "    !has_extension(extensions, inhibit_any_policy_oid())",
+      "expect": "killed",
+      "reason": "(R), RFC 5937 §3.2 bullets 6 and 7: an anchor with policyConstraints would set initial-explicit-policy or initial-policy-mapping-inhibit, which the unmodelled policy tree cannot honour, so it is refused.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_policy_constraints_refuses()",
+        "witness": "anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 36], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-refuses-inhibit-any-policy",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "    !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "expect": "killed",
+      "reason": "(R), RFC 5937 §3.2 bullet 5: an anchor with inhibitAnyPolicy is refused for the same reason.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_inhibit_any_policy_refuses()",
+        "witness": "anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 54], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-allows-certificate-policies",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "    !has_extension(extensions, seq![2nat, 5, 29, 32]) && !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "expect": "killed",
+      "reason": "(I), RFC 5937 §3.2 bullet 4: certificatePolicies on an anchor is ignored, as the browsers do; four Mozilla roots carry it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_certificate_policies_is_allowed()",
+        "witness": "!anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 32], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-role-needs-ca",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    basic.ca && match key_usage {",
+      "replace": "    true && match key_usage {",
+      "expect": "killed",
+      "reason": "(R), design §1.4: the anchor needs cA TRUE; the mutant accepts a non-CA.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_role_needs_ca()",
+        "witness": "anchor_role_allowed(super::examples::basic(false, None), Some(super::examples::key_cert_sign_only()))"
+      }
+    },
+    {
+      "id": "path-anchor-role-needs-key-cert-sign",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "usage, crate::constraints::spec::KeyUsageBit::KeyCertSign),",
+      "replace": "usage, crate::constraints::spec::KeyUsageBit::DigitalSignature),",
+      "expect": "killed",
+      "reason": "(R), design §1.4: with keyUsage present the anchor needs keyCertSign; the mutant asks for digitalSignature.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_role_needs_key_cert_sign()",
+        "witness": "anchor_role_allowed(super::examples::basic(true, None), Some(super::examples::digital_signature_only()))"
+      }
+    },
+    {
+      "id": "path-anchor-role-allows-absent-key-usage",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "        None => true,\n    }\n}\n\n/// **(R)** Anchor EKU",
+      "replace": "        None => false,\n    }\n}\n\n/// **(R)** Anchor EKU",
+      "expect": "killed",
+      "reason": "Design §1.4: keyUsage is checked only if present; one Mozilla root has none.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_role_allows_absent_key_usage()",
+        "witness": "!anchor_role_allowed(super::examples::basic(true, None), None)"
+      }
+    },
+    {
+      "id": "path-anchor-eku-refuses-any-eku",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "Some(value) => crate::constraints::spec::eku_allows_server_auth(value, false),",
+      "replace": "Some(value) => crate::constraints::spec::eku_allows_server_auth(value, true),",
+      "expect": "killed",
+      "reason": "(R), design §1.4: an anchor's EKU must contain serverAuth; anyExtendedKeyUsage alone is not accepted.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_eku_any_alone_refuses()",
+        "witness": "anchor_eku_allowed(Some(super::examples::eku_any()))"
+      }
+    },
+    {
+      "id": "path-anchor-eku-absent-is-allowed",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "        Some(value) => crate::constraints::spec::eku_allows_server_auth(value, false),\n        None => true,",
+      "replace": "        Some(value) => crate::constraints::spec::eku_allows_server_auth(value, false),\n        None => false,",
+      "expect": "killed",
+      "reason": "Design §1.4: a root with no EKU, which is all 118, is fine.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_absent_eku_is_allowed()",
+        "witness": "!anchor_eku_allowed(None)"
+      }
+    },
+    {
+      "id": "path-anchor-needs-a-subject",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "subject_der != seq![0x30u8, 0x00u8]",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 1: no subject name refuses; (R) the empty Name counts as none.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_empty_subject_refuses()",
+        "witness": "anchor_has_subject(seq![0x30u8, 0x00u8])"
+      }
+    },
+    {
+      "id": "path-anchor-critical-unknown-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "(!extension.critical",
+      "replace": "(true",
+      "expect": "killed",
+      "reason": "RFC 5937 §2: an anchor with an unrecognized critical extension is refused.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_unknown_critical_extension_refuses()",
+        "witness": "anchor_critical_supported(seq![super::examples::extension(super::examples::unknown_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-noncritical-allowed",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "(!extension.critical",
+      "replace": "(false",
+      "expect": "killed",
+      "reason": "RFC 5937 §2 concerns critical extensions only; a non-critical unknown one is allowed.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_noncritical_unknown_extension_is_allowed()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(super::examples::unknown_oid(), false)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-basic-constraints-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::basic_constraints_oid()\n            || extension.oid =~= crate::leaf::spec::key_usage_oid()\n",
+      "replace": "            || extension.oid =~= crate::leaf::spec::key_usage_oid()\n",
+      "expect": "killed",
+      "reason": "The anchor reads basicConstraints, which all 118 roots mark critical (RFC 5937 §2).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_basic_constraints()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::leaf::spec::basic_constraints_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-key-usage-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::key_usage_oid()\n            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n",
+      "replace": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n",
+      "expect": "killed",
+      "reason": "The anchor reads keyUsage, which 117 Mozilla roots mark critical.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_key_usage()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::leaf::spec::key_usage_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-ext-key-usage-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n",
+      "replace": "            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n",
+      "expect": "killed",
+      "reason": "The anchor reads extKeyUsage (design §1.4 root EKU).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_extended_key_usage()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::leaf::spec::extended_key_usage_extension_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-name-constraints-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n",
+      "replace": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid())\n",
+      "expect": "killed",
+      "reason": "The anchor reads nameConstraints, which RFC 5280 §4.2.1.10 says SHOULD be critical (RFC 5937 §3.2 bullets 2 and 3).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_name_constraints()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::name_constraints::spec::name_constraints_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-subject-alt-name-unread",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n            && anchor_critical_supported",
+      "replace": "            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid()\n            || extension.oid =~= crate::extensions::spec::subject_alt_name_oid())\n            && anchor_critical_supported",
+      "expect": "killed",
+      "reason": "The anchor does not read subjectAltName, so a critical one is unrecognized (RFC 5937 §2).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_critical_subject_alt_name_refuses()",
+        "witness": "anchor_critical_supported(seq![super::examples::extension(crate::extensions::spec::subject_alt_name_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-path-len-is-the-constraint",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "pub open spec fn anchor_path_len(basic: crate::constraints::spec::BasicConstraints) -> Option<nat> {\n    match basic.path_len_constraint {\n        Some(octets) => Some(skip_certs_value(octets)),\n        None => None,\n    }\n}",
+      "replace": "pub open spec fn anchor_path_len(basic: crate::constraints::spec::BasicConstraints) -> Option<nat> {\n    None\n}",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 8: the anchor's pathLenConstraint caps max_path_length; the mutant drops it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_path_len_is_the_constraint()",
+        "witness": "anchor_path_len(super::examples::basic(true, Some(seq![3u8]))) is None"
+      }
+    },
+    {
+      "id": "path-distrust-after-absent-is-none",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    match text {\n        None => Some(None),",
+      "replace": "    match text {\n        None => None,",
+      "expect": "killed",
+      "reason": "A root without NSS distrust-after has none; it is not refused.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_no_distrust_after_text_is_none()",
+        "witness": "decode_distrust_after(None) is None"
+      }
+    },
+    {
+      "id": "path-distrust-after-text-must-decode",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            Some(time) => Some(Some(time)),\n            None => None,\n        },\n    }\n}\n\n/// Design §1.4, `anchor_from_root`",
+      "replace": "            Some(time) => Some(Some(time)),\n            None => Some(None),\n        },\n    }\n}\n\n/// Design §1.4, `anchor_from_root`",
+      "expect": "killed",
+      "reason": "(R): distrust-after text that does not decode refuses the anchor instead of being dropped, which would trust a root the table distrusts.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_empty_distrust_after_text_refuses()",
+        "witness": "match decode_distrust_after(Some(seq![])) { Some(None) => true, _ => false }"
+      }
+    },
+    {
+      "id": "path-no-extensions-field-is-empty-list",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "        None => Some(seq![]),\n        Some(encoded) =>",
+      "replace": "        None => None,\n        Some(encoded) =>",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.1.2.9: Extensions is optional (v1 and v2 have none); a certificate without them parses with an empty list.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_no_extensions_field_is_an_empty_list()",
+        "witness": "tbs_extensions(super::examples::tbs_without_extensions()) is None"
+      }
+    },
+    {
+      "id": "path-absent-subject-alt-name-is-not-an-error",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "crate::extensions::spec::subject_alt_name_oid(), 0) {\n        None => Some(None),",
+      "replace": "crate::extensions::spec::subject_alt_name_oid(), 0) {\n        None => None,",
+      "expect": "killed",
+      "reason": "An absent subject-alt-name extension is not an error; the certificate parses with the field unset.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_absent_subject_alt_name_is_none()",
+        "witness": "optional_subject_alt_name(seq![]) is None"
+      }
+    },
+    {
+      "id": "path-absent-name-constraints-is-not-an-error",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "crate::name_constraints::spec::name_constraints_oid(), 0) {\n        None => Some(None),",
+      "replace": "crate::name_constraints::spec::name_constraints_oid(), 0) {\n        None => None,",
+      "expect": "killed",
+      "reason": "An absent name-constraints extension is not an error; the certificate parses with the field unset.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_absent_name_constraints_is_none()",
+        "witness": "optional_name_constraints(seq![]) is None"
+      }
+    },
+    {
+      "id": "path-absent-policy-constraints-is-not-an-error",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "crate::policy_constraints::spec::policy_constraints_oid(), 0) {\n        None => Some(None),",
+      "replace": "crate::policy_constraints::spec::policy_constraints_oid(), 0) {\n        None => None,",
+      "expect": "killed",
+      "reason": "An absent policy-constraints extension is not an error; the certificate parses with the field unset.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_absent_policy_constraints_is_none()",
+        "witness": "optional_policy_constraints(seq![]) is None"
+      }
+    },
+    {
+      "id": "path-malformed-subject-alt-name-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "parse_subject_alt_name(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => None,",
+      "replace": "parse_subject_alt_name(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => Some(None),",
+      "expect": "killed",
+      "reason": "(R): a subject-alt-name extension that does not decode refuses the certificate; the mutant ignores it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_malformed_subject_alt_name_refuses()",
+        "witness": "match optional_subject_alt_name(seq![super::examples::extension_with(crate::extensions::spec::subject_alt_name_oid(), seq![0x30u8, 0x00])]) { Some(None) => true, _ => false }"
+      }
+    },
+    {
+      "id": "path-malformed-name-constraints-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "parse_name_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => None,",
+      "replace": "parse_name_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => Some(None),",
+      "expect": "killed",
+      "reason": "(R): a name-constraints extension that does not decode refuses the certificate; the mutant ignores it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_malformed_name_constraints_refuses()",
+        "witness": "match optional_name_constraints(seq![super::examples::extension_with(crate::name_constraints::spec::name_constraints_oid(), seq![0x30u8, 0x02, 0xa0, 0x00])]) { Some(None) => true, _ => false }"
+      }
+    },
+    {
+      "id": "path-malformed-policy-constraints-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "parse_policy_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => None,",
+      "replace": "parse_policy_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => Some(None),",
+      "expect": "killed",
+      "reason": "(R): a policy-constraints extension that does not decode refuses the certificate; the mutant ignores it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_malformed_policy_constraints_refuses()",
+        "witness": "match optional_policy_constraints(seq![super::examples::extension_with(crate::policy_constraints::spec::policy_constraints_oid(), seq![0x30u8, 0x00])]) { Some(None) => true, _ => false }"
+      }
     }
   ]
 }
