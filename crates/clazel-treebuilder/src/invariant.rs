@@ -218,6 +218,24 @@ pub open spec fn root_ids(p: Parser) -> bool {
     }
 }
 
+/// The predicate "is an HTML `td` or `th` element".
+pub open spec fn cell_pred() -> spec_fn(Elem) -> bool {
+    |e: Elem| is_html(e, Tag::Td) || is_html(e, Tag::Th)
+}
+
+/// The stack `o` holds a `td` or `th` element.
+pub open spec fn has_cell(o: Seq<Elem>) -> bool {
+    last_index_where(o, o.len() as int, cell_pred()) >= 0
+}
+
+/// In the "in cell" insertion mode the stack holds a cell (§13.2.6.4.15,
+/// "close the cell": "Assert: The stack of open elements has a td or th
+/// element in table scope"; the start tags and end tags that close the
+/// cell pop until one has been popped).
+pub open spec fn cell_ok(p: Parser) -> bool {
+    p.mode == Mode::InCell ==> has_cell(p.open)
+}
+
 /// The reachable-state facts of a running parser: the stack's [`shape`],
 /// [`root_ids`] and [`tags_wf`].
 pub open spec fn reach_core(p: Parser) -> bool {
@@ -226,9 +244,10 @@ pub open spec fn reach_core(p: Parser) -> bool {
 
 /// **The reachable-state invariant**: a stopped parser (which takes no
 /// further step), or one whose modes satisfy `termination::modes_ok` (the
-/// hypothesis of `termination::theorem_dispatch_total`) and [`reach_core`].
+/// hypothesis of `termination::theorem_dispatch_total`), [`reach_core`]
+/// and [`cell_ok`].
 pub open spec fn reachable_inv(p: Parser) -> bool {
-    p.stopped || (crate::termination::modes_ok(p) && reach_core(p))
+    p.stopped || (crate::termination::modes_ok(p) && reach_core(p) && cell_ok(p))
 }
 
 /// What a set of rules other than the current mode's needs (the rule
@@ -252,14 +271,16 @@ pub open spec fn rules_need(r: Rules, p: Parser, t: Tok) -> bool {
 }
 
 /// The invariant at every rule application of a token's run: a running
-/// parser satisfying `termination::modes_ok`, [`reach_core`] and the rules'
-/// [`rules_need`], a tagged token, and `termination::rules_ok`.
+/// parser satisfying `termination::modes_ok`, [`reach_core`], [`cell_ok`]
+/// and the rules' [`rules_need`], a tagged token, and
+/// `termination::rules_ok`.
 pub open spec fn rules_inv(r: Rules, p: Parser, t: Tok) -> bool {
     &&& !p.stopped
     &&& crate::exec::modes::initial::tok_ok(t)
     &&& crate::termination::modes_ok(p)
     &&& crate::termination::rules_ok(r, p)
     &&& reach_core(p)
+    &&& cell_ok(p)
     &&& rules_need(r, p, t)
 }
 

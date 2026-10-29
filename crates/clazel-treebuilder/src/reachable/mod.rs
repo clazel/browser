@@ -22,6 +22,7 @@ pub mod body_tags;
 pub mod early;
 pub mod helpers;
 pub mod lists;
+pub mod tables;
 
 /// Every name of the transcription and of this module, for the ghost
 /// imports of the submodules (`use super::spec::*;`).

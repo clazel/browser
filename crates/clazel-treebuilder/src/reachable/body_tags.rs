@@ -26,6 +26,29 @@ pub proof fn lemma_ib_start_block(p: Parser, t: Tok, tt: TagTok)
     ensures
         next_core(in_body_start_tag(p, t, tt)),
 {
+    hide(in_body_start_html);
+    hide(in_body_start_body);
+    hide(in_body_start_frameset);
+    hide(in_body_start_heading);
+    hide(in_body_start_form);
+    hide(in_body_start_li);
+    hide(in_body_start_dd_dt);
+    hide(in_body_start_button);
+    hide(in_body_start_a);
+    hide(in_body_start_nobr);
+    hide(doc_is_quirks);
+    hide(has_in_scope);
+    hide(in_body_start_textarea);
+    hide(generic_text_parsing);
+    hide(in_body_start_select);
+    hide(in_body_start_option);
+    hide(in_body_start_optgroup);
+    hide(generate_implied_end_tags);
+    hide(in_body_start_math);
+    hide(in_body_start_svg);
+    hide(in_body_void_start_tag);
+    hide(in_body_start_input);
+    hide(in_body_start_hr);
     hide(insert_html_element);
     hide(close_p_if_in_button_scope);
     hide(reconstruct_formatting);
@@ -59,6 +82,30 @@ pub proof fn lemma_ib_start_fmt(p: Parser, t: Tok, tt: TagTok)
     ensures
         next_core(in_body_start_tag(p, t, tt)),
 {
+    hide(in_body_start_html);
+    hide(in_body_start_body);
+    hide(in_body_start_frameset);
+    hide(in_body_start_heading);
+    hide(in_body_start_pre);
+    hide(in_body_start_form);
+    hide(in_body_start_li);
+    hide(in_body_start_dd_dt);
+    hide(in_body_start_button);
+    hide(in_body_start_a);
+    hide(in_body_start_nobr);
+    hide(doc_is_quirks);
+    hide(has_in_scope);
+    hide(in_body_start_textarea);
+    hide(generic_text_parsing);
+    hide(in_body_start_select);
+    hide(in_body_start_option);
+    hide(in_body_start_optgroup);
+    hide(generate_implied_end_tags);
+    hide(in_body_start_math);
+    hide(in_body_start_svg);
+    hide(in_body_void_start_tag);
+    hide(in_body_start_input);
+    hide(in_body_start_hr);
     hide(insert_html_element);
     hide(close_p_if_in_button_scope);
     hide(reconstruct_formatting);
@@ -94,6 +141,30 @@ pub proof fn lemma_ib_start_table(p: Parser, t: Tok, tt: TagTok)
     ensures
         next_core(in_body_start_tag(p, t, tt)),
 {
+    hide(in_body_start_html);
+    hide(in_body_start_body);
+    hide(in_body_start_frameset);
+    hide(in_body_start_heading);
+    hide(in_body_start_pre);
+    hide(in_body_start_form);
+    hide(in_body_start_li);
+    hide(in_body_start_dd_dt);
+    hide(in_body_start_button);
+    hide(in_body_start_a);
+    hide(in_body_start_nobr);
+    hide(doc_is_quirks);
+    hide(has_in_scope);
+    hide(in_body_start_textarea);
+    hide(generic_text_parsing);
+    hide(in_body_start_select);
+    hide(in_body_start_option);
+    hide(in_body_start_optgroup);
+    hide(generate_implied_end_tags);
+    hide(in_body_start_math);
+    hide(in_body_start_svg);
+    hide(in_body_void_start_tag);
+    hide(in_body_start_input);
+    hide(in_body_start_hr);
     hide(insert_html_element);
     hide(close_p_if_in_button_scope);
     hide(reconstruct_formatting);
