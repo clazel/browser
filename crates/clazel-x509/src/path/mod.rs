@@ -12,6 +12,7 @@ pub mod lemmas;
 pub mod mutation_certificates;
 pub mod parsed;
 pub mod profile;
+pub mod search;
 pub mod spec;
 pub mod theorems;
 pub mod verifier;
