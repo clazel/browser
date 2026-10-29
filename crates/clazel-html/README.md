@@ -22,8 +22,20 @@ which the tree builder drives (it switches the tokenizer's state between
 tokens and sets `in_foreign_content` for the CDATA rule). Neither recurses
 on the input's length, so the stack is bounded whatever the page.
 
-Not included: the encoding sniffing algorithm (section 13.2.3.2, Phase 4
-item 4.2, a later change to this crate), parse errors (not modelled: the
+The encoding sniffing algorithm (section 13.2.3.2) is `sniff::exec::sniff`:
+a byte order mark, then the transport layer's encoding (the `charset` of the
+response's MIME type, `transport_encoding`), then the prescan of the first
+1024 bytes (comments, `<meta>`, "get an attribute", the `content` pragma and
+"get an XML encoding"), then windows-1252, each with its confidence.
+`change_the_encoding` (13.2.3.4) says when the parser must start again with
+another encoding; the whole body is held, so that is a restart. Its
+evidence: proven equal to `src/sniff/spec.rs`, the Encoding Standard's
+"decode" proven to agree with its first steps, 27 examples proven by
+evaluation, html5lib-tests `encoding/` (seven cases need the parser's
+restart and wait for the document pipeline) and a differential against
+`encoding_rs`'s label resolution.
+
+Not included: parse errors (not modelled: the
 standard proceeds the same way with or without them), the insertion point
 and `document.write`, and the parser pause flag (never set without
 scripting).

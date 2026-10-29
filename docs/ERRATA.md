@@ -15,7 +15,9 @@ it evidently means. Each entry records what we specified instead.
   first item. "UTF-8 decode" step 2 would then test bytes 1–3 for the BOM
   instead of bytes 0–2.
 - **We specify:** the first `number` items (`ioQueue[0..number]`). See
-  `starts_with_bom` in `crates/clazel-encoding/src/utf8/spec.rs`.
+  `starts_with_bom` in `crates/clazel-encoding/src/utf8/spec.rs`, and
+  "BOM sniff" (which peeks 3 bytes too) in
+  `crates/clazel-encoding/src/hooks/spec.rs`.
 - **Reported upstream:** [whatwg/encoding#367](https://github.com/whatwg/encoding/issues/367),
   19 October 2026.
 
@@ -231,4 +233,25 @@ it evidently means. Each entry records what we specified instead.
   including the current input character (its modelling choice 15). The
   crate implements the living standard, whose named character reference
   state reconsumes that character first (§13.2.5.77, §13.2.5.78).
+- **Reported upstream:** not yet.
+
+## HTML "get an XML encoding" reads bytes that may not exist
+
+- **Spec:** HTML Standard, Living Standard (whatwg/html commit
+  `939677714df7379fee3667040113b41c91c851e7`, 26 October 2026),
+  <https://html.spec.whatwg.org/multipage/parsing.html#concept-get-xml-encoding-when-sniffing>
+- **Text:** steps 6 to 10: "While the byte at encodingPosition is less than
+  or equal to 0x20 ..., advance encodingPosition to the next byte." "If the
+  byte at encodingPosition is not 0x3D (=), then return failure." "Let
+  quoteMark be the byte at encodingPosition."
+- **Problem:** after `encoding` (step 4 only bounds where that word starts),
+  the bytes can end, and these steps then read a byte that is not there.
+  The prescan's rule for running out of bytes ("abort the prescan ...")
+  covers the prescan and "get an attribute", not this algorithm, which runs
+  after the prescan was aborted. Read literally, what happens is undefined.
+- **We specify:** a byte that is not there is not 0x3D and not a quote, so
+  steps 7 and 11 return failure (and step 6's loop stops at the end). This
+  is the evident intent: an XML declaration cut off before its encoding's
+  value names no encoding. See `get_xml_encoding` in
+  `crates/clazel-html/src/sniff/spec.rs`.
 - **Reported upstream:** not yet.
