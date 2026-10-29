@@ -35,14 +35,17 @@ verus! {
 /// `invariant::reachable_inv`: the document is well formed, every id of
 /// the parse state is a node of it, no two entries of the list of active
 /// formatting elements are for the same element, and until parsing stops
-/// the parser has `parser_wf` and its head element pointer names an HTML
-/// `head` element (`invariant::head_ok`).
+/// the parser has `parser_wf`, its head element pointer names an HTML
+/// `head` element (`invariant::head_ok`), and no two entries of the stack
+/// of open elements are for the same element
+/// (`independent::equivalence_foreign::open_distinct`).
 pub open spec fn reach_wf(p: Parser) -> bool {
     &&& reachable_inv(p)
     &&& dom::wf(p.doc)
     &&& ids_in_doc(p)
     &&& super::open_elements::fmt_unique(p)
     &&& !p.stopped ==> parser_wf(p) && head_ok(p)
+    &&& !p.stopped ==> crate::independent::equivalence_foreign::open_distinct(p.open)
 }
 
 /// A new parser has [`reach_wf`].
@@ -141,6 +144,7 @@ pub proof fn lemma_fragment_parser_wf(ctx: Context, scripting: bool)
     assert(fragment_parser(ctx, scripting).0 == p3);
     assert(ids_in_doc(p3));
     assert(super::open_elements::fmt_unique(p3));
+    assert(crate::independent::equivalence_foreign::open_distinct(p3.open));
 }
 
 /// One step keeps [`reach_wf`].
@@ -155,6 +159,7 @@ pub proof fn lemma_dispatch_wf(env: EncFns, p: Parser, token: Token)
         super::open_elements::theorem_open_elements_in_doc(env, p, token);
         super::open_elements::theorem_doc_wf(env, p, token);
         super::nodes::theorem_nodes_per_token(env, p, token);
+        super::open_elements::theorem_open_distinct(env, p, token);
         let q = dispatch(env, p, token).0;
         assert(!q.stopped ==> crate::termination::modes_ok(q));
     }
