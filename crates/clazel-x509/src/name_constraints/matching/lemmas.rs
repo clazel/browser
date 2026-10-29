@@ -224,53 +224,52 @@ pub proof fn lemma_unrestricted_type_only_excluded_applies(
 }
 
 // ---------------------------------------------------------------------------
-// One certificate: §6.1.3 (b), (c) and Q12
+// One certificate: §6.1.3 (b), (c), malformed entries and the other forms
 // ---------------------------------------------------------------------------
 
-/// `names_of_matched_forms` is the universal statement it abbreviates.
+/// `names_well_formed` is the universal statement it abbreviates.
 pub proof fn lemma_matched_forms_all(names: Seq<crate::extensions::spec::GeneralName>)
     ensures
-        names_of_matched_forms(names)
-            == forall|i: int| 0 <= i < names.len() ==> (#[trigger] constrained_name(names[i])) is Some,
+        names_well_formed(names)
+            == forall|i: int| 0 <= i < names.len() ==> #[trigger] entry_well_formed(names[i]),
     decreases names.len()
 {
     if names.len() > 0 {
         lemma_matched_forms_all(names.drop_last());
-        if names_of_matched_forms(names) {
-            assert forall|i: int| 0 <= i < names.len() implies
-                (#[trigger] constrained_name(names[i])) is Some by {
+        if names_well_formed(names) {
+            assert forall|i: int| 0 <= i < names.len() implies #[trigger] entry_well_formed(names[i]) by {
                 if i < names.len() - 1 {
                     assert(names.drop_last()[i] == names[i]);
                 }
             }
         }
-        if forall|i: int| 0 <= i < names.len() ==> (#[trigger] constrained_name(names[i])) is Some {
-            assert(constrained_name(names[names.len() - 1]) is Some);
+        if forall|i: int| 0 <= i < names.len() ==> #[trigger] entry_well_formed(names[i]) {
+            assert(entry_well_formed(names[names.len() - 1]));
             assert forall|i: int| 0 <= i < names.drop_last().len() implies
-                (#[trigger] constrained_name(names.drop_last()[i])) is Some by {
+                #[trigger] entry_well_formed(names.drop_last()[i]) by {
                 assert(names.drop_last()[i] == names[i]);
-                assert(constrained_name(names[i]) is Some);
+                assert(entry_well_formed(names[i]));
             }
         }
     }
 }
 
-/// Q12, names: under any constraint, an entry of an unmatched form
-/// (directoryName, rfc822Name, URI, otherName, a malformed dNSName) fails the
-/// certificate.
+/// (R) malformed entries: under any constraint, a malformed entry (a
+/// dNSName that is no name, an rfc822Name that is no mailbox, a
+/// directoryName that is no Name) fails the certificate.
 pub proof fn lemma_unmatched_name_refused(
     state: Seq<crate::name_constraints::spec::NameConstraints>,
     names: Seq<crate::extensions::spec::GeneralName>,
     i: int,
 )
-    requires state.len() > 0, 0 <= i < names.len(), constrained_name(names[i]) is None,
+    requires state.len() > 0, 0 <= i < names.len(), !entry_well_formed(names[i]),
     ensures !certificate_names_acceptable(state, names),
 {
     lemma_matched_forms_all(names);
 }
 
-/// Q12, constraints: an unsupported NameConstraints value refuses the path
-/// at §6.1.4 (g), whatever the state.
+/// A malformed base or an excluded directoryName: such a NameConstraints
+/// value refuses the path at §6.1.4 (g), whatever the state.
 pub proof fn lemma_unsupported_constraints_refused(
     state: Seq<crate::name_constraints::spec::NameConstraints>,
     value: crate::name_constraints::spec::NameConstraints,
@@ -328,6 +327,44 @@ pub proof fn lemma_names_not_excluded_concat(
     }
 }
 
+/// An uninterpreted form is constrained by a concatenated state iff it is by
+/// one of the parts.
+pub proof fn lemma_form_constrained_concat(
+    s1: Seq<crate::name_constraints::spec::NameConstraints>,
+    s2: Seq<crate::name_constraints::spec::NameConstraints>,
+    tag: u32,
+)
+    ensures form_constrained(s1 + s2, tag) == (form_constrained(s1, tag) || form_constrained(s2, tag)),
+    decreases s2.len()
+{
+    if s2.len() == 0 {
+        assert(s1 + s2 =~= s1);
+    } else {
+        assert((s1 + s2).last() == s2.last());
+        assert((s1 + s2).drop_last() =~= s1 + s2.drop_last());
+        lemma_form_constrained_concat(s1, s2.drop_last(), tag);
+    }
+}
+
+/// The other-forms check for a concatenated state is the check for each part.
+pub proof fn lemma_names_of_unconstrained_forms_concat(
+    s1: Seq<crate::name_constraints::spec::NameConstraints>,
+    s2: Seq<crate::name_constraints::spec::NameConstraints>,
+    names: Seq<crate::extensions::spec::GeneralName>,
+)
+    ensures
+        names_of_unconstrained_forms(s1 + s2, names)
+            == (names_of_unconstrained_forms(s1, names) && names_of_unconstrained_forms(s2, names)),
+    decreases names.len()
+{
+    if names.len() > 0 {
+        if let crate::extensions::spec::GeneralName::Other(tag, _) = names.last() {
+            lemma_form_constrained_concat(s1, s2, tag);
+        }
+        lemma_names_of_unconstrained_forms_concat(s1, s2, names.drop_last());
+    }
+}
+
 /// A certificate satisfies a concatenated state iff it satisfies each part;
 /// so the certificate check, too, is independent of the order and grouping
 /// of the constraint sets.
@@ -342,6 +379,7 @@ pub proof fn lemma_certificate_check_is_conjunction(
 {
     lemma_names_within_permitted_concat(s1, s2, names);
     lemma_names_not_excluded_concat(s1, s2, names);
+    lemma_names_of_unconstrained_forms_concat(s1, s2, names);
     if s1.len() == 0 {
         assert(s1 + s2 =~= s2);
     }
@@ -458,7 +496,7 @@ proof fn lemma_names_constrained_from_at(
     ensures
         state_before(path, i, initial) is Some,
         (path[i].self_issued && i < path.len() - 1)
-            || certificate_names_acceptable(state_before(path, i, initial).unwrap(), path[i].subject_alt_names),
+            || certificate_acceptable(state_before(path, i, initial).unwrap(), path[i]),
     decreases i - j
 {
     if j < i {
@@ -470,8 +508,9 @@ proof fn lemma_names_constrained_from_at(
 
 /// `thm_names_constrained`'s per-certificate fact: on an accepted path,
 /// every certificate except a self-issued one that is not final satisfies
-/// §6.1.3 (b) and (c) under the state built from the initial state and
-/// every earlier certificate's constraints.
+/// §6.1.3 (b) and (c), for its subjectAltName entries and its subject, under
+/// the state built from the initial state and every earlier certificate's
+/// constraints.
 pub proof fn lemma_names_constrained_at(
     path: Seq<NcCertificate>,
     initial: Seq<crate::name_constraints::spec::NameConstraints>,
@@ -481,7 +520,7 @@ pub proof fn lemma_names_constrained_at(
     ensures
         state_before(path, i, initial) == Some(initial + collected_constraints(path, i)),
         (path[i].self_issued && i < path.len() - 1)
-            || certificate_names_acceptable(initial + collected_constraints(path, i), path[i].subject_alt_names),
+            || certificate_acceptable(initial + collected_constraints(path, i), path[i]),
 {
     lemma_names_constrained_from_at(path, initial, 0, i, initial);
     lemma_state_before_is_collected(path, i, initial);
@@ -881,15 +920,544 @@ pub proof fn lemma_wildcard_meets_complete(label: Seq<u8>, suffix: Seq<u8>, base
     }
 }
 
-/// For a DNS name or an address, `meets` is `within`; only a wildcard
-/// tells them apart.
+/// For a DNS name, an address or a directory name, `meets` is `within`;
+/// only a wildcard and a mailbox (whose local part an excluded base matches
+/// ignoring case) tell them apart.
 pub proof fn lemma_meets_is_within_except_wildcards(
     name: ConstrainedName,
     base: crate::name_constraints::spec::GeneralNameConstraint,
 )
-    requires !(name is DnsWildcard),
+    requires !(name is DnsWildcard), !(name is Rfc822),
     ensures meets(name, base) == within(name, base),
 {
+}
+
+// ---------------------------------------------------------------------------
+// The whole certificate: subjectAltName entries and the subject field
+// ---------------------------------------------------------------------------
+
+/// An rfc822Name constraint is in force in a concatenated state iff it is in
+/// one of the parts.
+pub proof fn lemma_rfc822_in_force_concat(
+    s1: Seq<crate::name_constraints::spec::NameConstraints>,
+    s2: Seq<crate::name_constraints::spec::NameConstraints>,
+)
+    ensures rfc822_in_force(s1 + s2) == (rfc822_in_force(s1) || rfc822_in_force(s2)),
+    decreases s2.len()
+{
+    if s2.len() == 0 {
+        assert(s1 + s2 =~= s1);
+    } else {
+        assert((s1 + s2).last() == s2.last());
+        assert((s1 + s2).drop_last() =~= s1 + s2.drop_last());
+        lemma_rfc822_in_force_concat(s1, s2.drop_last());
+    }
+}
+
+/// The subject check for a concatenated state is the check for each part.
+pub proof fn lemma_subject_check_is_conjunction(
+    s1: Seq<crate::name_constraints::spec::NameConstraints>,
+    s2: Seq<crate::name_constraints::spec::NameConstraints>,
+    subject: Seq<u8>,
+)
+    ensures
+        subject_acceptable(s1 + s2, subject)
+            == (subject_acceptable(s1, subject) && subject_acceptable(s2, subject)),
+{
+    if s1.len() == 0 {
+        assert(s1 + s2 =~= s2);
+    } else if s2.len() == 0 {
+        assert(s1 + s2 =~= s1);
+    } else {
+        assert((s1 + s2).len() > 0);
+        if let Some(parsed) = crate::name::spec::parse_name(subject) {
+            lemma_acceptable_is_conjunction(s1, s2, ConstrainedName::Directory(parsed.rdns));
+            lemma_rfc822_in_force_concat(s1, s2);
+        }
+    }
+}
+
+/// A certificate, subject included, satisfies a concatenated state iff it
+/// satisfies each part.
+pub proof fn lemma_certificate_acceptable_is_conjunction(
+    s1: Seq<crate::name_constraints::spec::NameConstraints>,
+    s2: Seq<crate::name_constraints::spec::NameConstraints>,
+    certificate: NcCertificate,
+)
+    ensures
+        certificate_acceptable(s1 + s2, certificate)
+            == (certificate_acceptable(s1, certificate) && certificate_acceptable(s2, certificate)),
+{
+    lemma_certificate_check_is_conjunction(s1, s2, certificate.subject_alt_names);
+    lemma_subject_check_is_conjunction(s1, s2, certificate.subject);
+}
+
+/// Monotonicity for every form, the subject and the other forms included:
+/// adding a constraint set never makes a certificate acceptable that was
+/// not.
+pub proof fn lemma_certificate_acceptable_monotone(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    value: crate::name_constraints::spec::NameConstraints,
+    certificate: NcCertificate,
+)
+    ensures certificate_acceptable(state.push(value), certificate) ==> certificate_acceptable(state, certificate),
+{
+    assert(state.push(value) =~= state + seq![value]);
+    lemma_certificate_acceptable_is_conjunction(state, seq![value], certificate);
+}
+
+/// A certificate that satisfies a state satisfies each constraint set in it
+/// on its own, subject included.
+pub proof fn lemma_certificate_acceptable_each_set(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    certificate: NcCertificate,
+    k: int,
+)
+    requires certificate_acceptable(state, certificate), 0 <= k < state.len(),
+    ensures certificate_acceptable(seq![state[k]], certificate),
+{
+    let front = state.subrange(0, k);
+    let back = state.subrange(k + 1, state.len() as int);
+    assert(state =~= front + (seq![state[k]] + back));
+    lemma_certificate_acceptable_is_conjunction(front, seq![state[k]] + back, certificate);
+    lemma_certificate_acceptable_is_conjunction(seq![state[k]], back, certificate);
+}
+
+/// Adding a constraint set never unconstrains an uninterpreted form.
+pub proof fn lemma_form_constrained_monotone(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    value: crate::name_constraints::spec::NameConstraints,
+    tag: u32,
+)
+    ensures form_constrained(state, tag) ==> form_constrained(state.push(value), tag),
+{
+    assert(state.push(value).drop_last() =~= state);
+}
+
+// ---------------------------------------------------------------------------
+// Excluded beats permitted; excluded directoryName
+// ---------------------------------------------------------------------------
+
+/// §4.2.1.10 "Any name matching a restriction in the excludedSubtrees field
+/// is invalid regardless of information appearing in the permittedSubtrees",
+/// for every form.
+pub proof fn lemma_excluded_beats_permitted(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    name: ConstrainedName,
+)
+    requires within_excluded_subtrees(state, name),
+    ensures !name_acceptable(state, name),
+{
+}
+
+/// A name within a base meets it, for every form: so the same base in both
+/// lists refuses every name it holds.
+pub proof fn lemma_within_implies_meets(
+    name: ConstrainedName,
+    base: crate::name_constraints::spec::GeneralNameConstraint,
+)
+    ensures within(name, base) ==> meets(name, base),
+{
+    if let (ConstrainedName::Rfc822 { local, host }, crate::name_constraints::spec::GeneralNameConstraint::Rfc822Name(b))
+        = (name, base) {
+        lemma_rfc822_within_implies_meets(local, host, b);
+    }
+}
+
+/// (R) excluded directoryName: a NameConstraints value with a directoryName
+/// base in excludedSubtrees refuses the path, whatever the state.
+pub proof fn lemma_excluded_directory_name_refused(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    value: crate::name_constraints::spec::NameConstraints,
+)
+    requires
+        value.excluded_subtrees is Some,
+        has_directory_name_base(value.excluded_subtrees.unwrap()),
+    ensures prepare_name_constraints(state, Some(value)) is None,
+{
+}
+
+// ---------------------------------------------------------------------------
+// Unconstrained forms
+// ---------------------------------------------------------------------------
+
+/// Some set in the state has a base of `name`'s type, in either list.
+pub open spec fn type_constrained(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    name: ConstrainedName,
+) -> bool
+    decreases state.len()
+{
+    state.len() > 0 && ({
+        ||| match state.last().permitted_subtrees {
+            Some(items) => has_base_of_type(items, name),
+            None => false,
+        }
+        ||| match state.last().excluded_subtrees {
+            Some(items) => has_base_of_type(items, name),
+            None => false,
+        }
+        ||| type_constrained(state.drop_last(), name)
+    })
+}
+
+/// A name meets only bases of its own type.
+pub proof fn lemma_meets_some_needs_type(
+    items: Seq<crate::name_constraints::spec::GeneralSubtree>,
+    name: ConstrainedName,
+)
+    ensures meets_some(items, name) ==> has_base_of_type(items, name),
+    decreases items.len()
+{
+    if items.len() > 0 {
+        lemma_meets_some_needs_type(items.drop_last(), name);
+    }
+}
+
+/// A name whose type no set constrains is acceptable (§4.2.1.10
+/// "Restrictions apply only when the specified name form is present").
+pub proof fn lemma_unconstrained_type_accepted(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    name: ConstrainedName,
+)
+    requires !type_constrained(state, name),
+    ensures name_acceptable(state, name),
+    decreases state.len()
+{
+    if state.len() > 0 {
+        lemma_unconstrained_type_accepted(state.drop_last(), name);
+        if let Some(items) = state.last().excluded_subtrees {
+            lemma_meets_some_needs_type(items, name);
+        }
+    }
+}
+
+/// An entry no set constrains: of a matched form whose type no set
+/// constrains, or of an uninterpreted form no set constrains.
+pub open spec fn entry_unconstrained(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    entry: crate::extensions::spec::GeneralName,
+) -> bool {
+    match constrained_name(entry) {
+        Some(name) => !type_constrained(state, name),
+        None => match entry {
+            crate::extensions::spec::GeneralName::Other(tag, _) => !form_constrained(state, tag),
+            _ => true,
+        },
+    }
+}
+
+/// Every entry is unconstrained.
+pub open spec fn entries_unconstrained(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    names: Seq<crate::extensions::spec::GeneralName>,
+) -> bool
+    decreases names.len()
+{
+    names.len() == 0 || (entry_unconstrained(state, names.last()) && entries_unconstrained(state, names.drop_last()))
+}
+
+/// An unconstrained form is never refused except as malformed: well-formed
+/// entries of forms no set constrains always pass §6.1.3 (b) and (c).
+pub proof fn lemma_unconstrained_form_never_refused(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    names: Seq<crate::extensions::spec::GeneralName>,
+)
+    requires names_well_formed(names), entries_unconstrained(state, names),
+    ensures certificate_names_acceptable(state, names),
+    decreases names.len()
+{
+    if names.len() > 0 {
+        lemma_unconstrained_form_never_refused(state, names.drop_last());
+        if let Some(name) = constrained_name(names.last()) {
+            lemma_unconstrained_type_accepted(state, name);
+        }
+    }
+}
+
+/// The other forms: an entry of an uninterpreted form that some set
+/// constrains, in either list, fails the certificate.
+pub proof fn lemma_constrained_other_form_refused(
+    state: Seq<crate::name_constraints::spec::NameConstraints>,
+    names: Seq<crate::extensions::spec::GeneralName>,
+    i: int,
+    tag: u32,
+    der: Seq<u8>,
+)
+    requires
+        0 <= i < names.len(),
+        names[i] == crate::extensions::spec::GeneralName::Other(tag, der),
+        is_uninterpreted_form(tag),
+        form_constrained(state, tag),
+    ensures !certificate_names_acceptable(state, names),
+    decreases names.len()
+{
+    if i < names.len() - 1 {
+        assert(names.drop_last()[i] == names[i]);
+        lemma_constrained_other_form_refused(state, names.drop_last(), i, tag, der);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// rfc822Name subtrees
+// ---------------------------------------------------------------------------
+
+/// A mailbox within a base meets it: byte equality implies equality up to
+/// case.
+pub proof fn lemma_rfc822_within_implies_meets(local: Seq<u8>, host: Seq<u8>, base: Seq<u8>)
+    ensures rfc822_within(local, host, base) ==> rfc822_meets(local, host, base),
+{
+    let base_local = mailbox_local(base);
+    lemma_folded_equal_all(local, base_local, 0);
+}
+
+/// A mailbox base holds itself.
+pub proof fn lemma_rfc822_mailbox_reflexive(m: Seq<u8>)
+    requires is_mailbox(m),
+    ensures rfc822_within(mailbox_local(m), mailbox_host(m), m),
+{
+    lemma_folded_equal_all(mailbox_host(m), mailbox_host(m), 0);
+    assert(mailbox_local(m) =~= mailbox_local(m));
+}
+
+/// A host base holds exactly the mailboxes at that host, up to case
+/// (`nc-permits-email-domain-rejects-subdomain`).
+pub proof fn lemma_rfc822_host_base_is_exact(local: Seq<u8>, host: Seq<u8>, base: Seq<u8>)
+    requires first_at(base, 0) >= base.len(), base.len() == 0 || base[0] != b'.',
+    ensures
+        rfc822_within(local, host, base) == crate::spec::folded_equal_from(host, base, 0),
+        rfc822_meets(local, host, base) == rfc822_within(local, host, base),
+{
+}
+
+/// A domain base `.d` holds only hosts with one or more labels added to `d`:
+/// for a host in preferred name syntax, that is `dns_within` with a longer
+/// name (`nc-permits-email-subdomains-rejects-apex`).
+pub proof fn lemma_rfc822_domain_is_proper_subdomain(local: Seq<u8>, host: Seq<u8>, base: Seq<u8>)
+    requires
+        first_at(base, 0) >= base.len(),
+        base.len() > 0,
+        base[0] == b'.',
+        rfc822_within(local, host, base),
+    ensures ({
+        let domain = base.subrange(1, base.len() as int);
+        &&& host.len() > domain.len()
+        &&& host.len() != domain.len()
+        &&& dns_within(host, domain)
+    }),
+{
+    let domain = base.subrange(1, base.len() as int);
+    let (lh, lb) = (host.len() as int, base.len() as int);
+    let tail = host.subrange(lh - lb, lh);
+    lemma_folded_equal_all(tail, base, 0);
+    lemma_dns_within_pointwise(host, domain);
+    assert(tail[0] == host[lh - lb]);
+    assert(crate::spec::ascii_fold(tail[0]) == crate::spec::ascii_fold(base[0]));
+    lemma_fold_dot(host[lh - lb]);
+    assert(host[lh - domain.len() - 1] == b'.');
+    if domain.len() > 0 {
+        assert forall|j: int| 0 <= j < domain.len() implies #[trigger] crate::spec::ascii_fold(
+            host[host.len() - domain.len() + j]) == crate::spec::ascii_fold(domain[j]) by {
+            assert(tail[j + 1] == host[lh - lb + j + 1]);
+            assert(crate::spec::ascii_fold(tail[j + 1]) == crate::spec::ascii_fold(base[j + 1]));
+        }
+    }
+}
+
+/// So a domain base never holds its apex: `.d` does not hold mailboxes at
+/// `d`.
+pub proof fn lemma_rfc822_domain_excludes_apex(local: Seq<u8>, domain: Seq<u8>)
+    requires first_at(seq![b'.'] + domain, 0) >= domain.len() + 1,
+    ensures !rfc822_within(local, domain, seq![b'.'] + domain),
+{
+    let base = seq![b'.'] + domain;
+    assert(base[0] == b'.');
+}
+
+// ---------------------------------------------------------------------------
+// directoryName subtrees
+// ---------------------------------------------------------------------------
+
+/// Firefox's tag relaxation is symmetric.
+pub proof fn lemma_value_tags_compatible_symmetric(a: clazel_der::spec::Tag, b: clazel_der::spec::Tag)
+    ensures value_tags_compatible(a, b) == value_tags_compatible(b, a),
+{
+}
+
+/// And transitive: UTF8String and PrintableString form one class, every
+/// other tag its own.
+pub proof fn lemma_value_tags_compatible_transitive(
+    a: clazel_der::spec::Tag,
+    b: clazel_der::spec::Tag,
+    c: clazel_der::spec::Tag,
+)
+    requires value_tags_compatible(a, b), value_tags_compatible(b, c),
+    ensures value_tags_compatible(a, c),
+{
+}
+
+/// Attribute matching is symmetric: a base and a name may trade places.
+pub proof fn lemma_attribute_match_symmetric(
+    x: crate::name::spec::AttributeTypeAndValue,
+    y: crate::name::spec::AttributeTypeAndValue,
+)
+    ensures attribute_match(x, y) == attribute_match(y, x),
+{
+    lemma_value_tags_compatible_symmetric(x.value_tag, y.value_tag);
+}
+
+/// Attribute matching is transitive.
+pub proof fn lemma_attribute_match_transitive(
+    x: crate::name::spec::AttributeTypeAndValue,
+    y: crate::name::spec::AttributeTypeAndValue,
+    z: crate::name::spec::AttributeTypeAndValue,
+)
+    requires attribute_match(x, y), attribute_match(y, z),
+    ensures attribute_match(x, z),
+{
+    lemma_value_tags_compatible_transitive(x.value_tag, y.value_tag, z.value_tag);
+}
+
+/// `attributes_match` is the pointwise statement it abbreviates.
+pub proof fn lemma_attributes_match_pointwise(
+    b: Seq<crate::name::spec::AttributeTypeAndValue>,
+    n: Seq<crate::name::spec::AttributeTypeAndValue>,
+)
+    ensures
+        attributes_match(b, n) == (b.len() == n.len()
+            && forall|k: int| 0 <= k < b.len() ==> #[trigger] attribute_match(b[k], n[k])),
+    decreases b.len()
+{
+    if b.len() > 0 && b.len() == n.len() {
+        lemma_attributes_match_pointwise(b.drop_last(), n.drop_last());
+        if attributes_match(b, n) {
+            assert forall|k: int| 0 <= k < b.len() implies #[trigger] attribute_match(b[k], n[k]) by {
+                if k < b.len() - 1 {
+                    assert(b.drop_last()[k] == b[k]);
+                    assert(n.drop_last()[k] == n[k]);
+                }
+            }
+        }
+        if forall|k: int| 0 <= k < b.len() ==> #[trigger] attribute_match(b[k], n[k]) {
+            assert(attribute_match(b[b.len() - 1], n[n.len() - 1]));
+            assert forall|k: int| 0 <= k < b.drop_last().len() implies
+                #[trigger] attribute_match(b.drop_last()[k], n.drop_last()[k]) by {
+                assert(b.drop_last()[k] == b[k]);
+                assert(n.drop_last()[k] == n[k]);
+                assert(attribute_match(b[k], n[k]));
+            }
+        }
+    }
+}
+
+/// `rdns_match` is the pointwise statement it abbreviates.
+pub proof fn lemma_rdns_match_pointwise(
+    b: Seq<crate::name::spec::RelativeDistinguishedName>,
+    n: Seq<crate::name::spec::RelativeDistinguishedName>,
+)
+    ensures
+        rdns_match(b, n) == (b.len() == n.len()
+            && forall|k: int| 0 <= k < b.len() ==> #[trigger] attributes_match(b[k].attributes, n[k].attributes)),
+    decreases b.len()
+{
+    if b.len() > 0 && b.len() == n.len() {
+        lemma_rdns_match_pointwise(b.drop_last(), n.drop_last());
+        if rdns_match(b, n) {
+            assert forall|k: int| 0 <= k < b.len() implies
+                #[trigger] attributes_match(b[k].attributes, n[k].attributes) by {
+                if k < b.len() - 1 {
+                    assert(b.drop_last()[k] == b[k]);
+                    assert(n.drop_last()[k] == n[k]);
+                }
+            }
+        }
+        if forall|k: int| 0 <= k < b.len() ==> #[trigger] attributes_match(b[k].attributes, n[k].attributes) {
+            assert(attributes_match(b[b.len() - 1].attributes, n[n.len() - 1].attributes));
+            assert forall|k: int| 0 <= k < b.drop_last().len() implies
+                #[trigger] attributes_match(b.drop_last()[k].attributes, n.drop_last()[k].attributes) by {
+                assert(b.drop_last()[k] == b[k]);
+                assert(n.drop_last()[k] == n[k]);
+                assert(attributes_match(b[k].attributes, n[k].attributes));
+            }
+        }
+    }
+}
+
+/// Matching lists of attributes is transitive.
+pub proof fn lemma_attributes_match_transitive(
+    a: Seq<crate::name::spec::AttributeTypeAndValue>,
+    b: Seq<crate::name::spec::AttributeTypeAndValue>,
+    c: Seq<crate::name::spec::AttributeTypeAndValue>,
+)
+    requires attributes_match(a, b), attributes_match(b, c),
+    ensures attributes_match(a, c),
+{
+    lemma_attributes_match_pointwise(a, b);
+    lemma_attributes_match_pointwise(b, c);
+    lemma_attributes_match_pointwise(a, c);
+    assert forall|k: int| 0 <= k < a.len() implies #[trigger] attribute_match(a[k], c[k]) by {
+        assert(attribute_match(a[k], b[k]));
+        assert(attribute_match(b[k], c[k]));
+        lemma_attribute_match_transitive(a[k], b[k], c[k]);
+    }
+}
+
+/// Every attribute value of every RDN is one both browsers compare.
+pub open spec fn rdns_comparable(rdns: Seq<crate::name::spec::RelativeDistinguishedName>) -> bool {
+    forall|k: int, j: int| 0 <= k < rdns.len() && 0 <= j < rdns[k].attributes.len()
+        ==> #[trigger] value_comparable(rdns[k].attributes[j])
+}
+
+/// directoryName containment is reflexive for names both browsers can
+/// compare: every such name is within itself.
+pub proof fn lemma_directory_within_reflexive(name: Seq<crate::name::spec::RelativeDistinguishedName>)
+    requires rdns_comparable(name),
+    ensures directory_within(name, name),
+{
+    assert(name.subrange(0, name.len() as int) =~= name);
+    lemma_rdns_match_pointwise(name, name);
+    assert forall|k: int| 0 <= k < name.len() implies
+        #[trigger] attributes_match(name[k].attributes, name[k].attributes) by {
+        let attributes = name[k].attributes;
+        lemma_attributes_match_pointwise(attributes, attributes);
+        assert forall|j: int| 0 <= j < attributes.len() implies
+            #[trigger] attribute_match(attributes[j], attributes[j]) by {
+            assert(value_comparable(name[k].attributes[j]));
+            assert(attributes[j].value_der =~= attributes[j].value_der);
+        }
+    }
+}
+
+/// directoryName containment is transitive: a name within a subtree that is
+/// within another subtree is within that one.
+pub proof fn lemma_directory_within_transitive(
+    a: Seq<crate::name::spec::RelativeDistinguishedName>,
+    b: Seq<crate::name::spec::RelativeDistinguishedName>,
+    c: Seq<crate::name::spec::RelativeDistinguishedName>,
+)
+    requires directory_within(a, b), directory_within(b, c),
+    ensures directory_within(a, c),
+{
+    let ab = a.subrange(0, b.len() as int);
+    let bc = b.subrange(0, c.len() as int);
+    let ac = a.subrange(0, c.len() as int);
+    lemma_rdns_match_pointwise(b, ab);
+    lemma_rdns_match_pointwise(c, bc);
+    lemma_rdns_match_pointwise(c, ac);
+    assert forall|k: int| 0 <= k < c.len() implies #[trigger] attributes_match(c[k].attributes, ac[k].attributes) by {
+        assert(attributes_match(c[k].attributes, bc[k].attributes));
+        assert(bc[k] == b[k]);
+        assert(attributes_match(b[k].attributes, ab[k].attributes));
+        assert(ab[k] == a[k] && ac[k] == a[k]);
+        lemma_attributes_match_transitive(c[k].attributes, b[k].attributes, a[k].attributes);
+    }
+}
+
+/// An empty directoryName base holds every name.
+pub proof fn lemma_directory_empty_base_holds_all(name: Seq<crate::name::spec::RelativeDistinguishedName>)
+    ensures directory_within(name, seq![]),
+{
+    assert(name.subrange(0, 0).len() == 0);
 }
 
 } // verus!
