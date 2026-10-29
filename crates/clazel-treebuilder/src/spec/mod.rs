@@ -33,6 +33,8 @@
 //! - [`dispatch`]: the tree construction dispatcher, reprocessing, the
 //!   one-token step `dispatch`, the whole parser `parse` and §13.4
 //!   `parse_fragment`.
+//! - [`join`]: `TokFns` instantiated by `clazel-html`'s tokenizer
+//!   (`join_fns`), the tokenizer the executable driver runs.
 //!
 //! Modelling choices (each a difference in form, never in meaning, or a
 //! stated restriction of what is modelled):
