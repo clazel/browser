@@ -28,15 +28,21 @@
 //! - The parse state, the tokens and the outcome of one rule application
 //!   are [`crate::spec`]'s (`Parser`, `Tok`, `Outcome`), so that the two
 //!   transcriptions can be compared at all.
-//! - The algorithms the modes call (§8.2.4's "reset the insertion mode
-//!   appropriately", the scopes, "clear the list of active formatting
-//!   elements up to the last marker"; §8.2.5.1 "insert an HTML element",
-//!   "insert a comment", "insert a character", "create an element for the
-//!   token"; §8.2.5.2 and §8.2.5.3) are [`crate::spec::base`]'s, transcribed
-//!   from the WHATWG text. This module checks the mode rules only; where the
-//!   W3C's version of such an algorithm differs (its "reset the insertion
-//!   mode appropriately" has steps for `select`), the difference is listed
-//!   below and the reused algorithm is the WHATWG one.
+//! - [`state`] transcribes two of the algorithms the modes call from the
+//!   W3C text: §8.2.3.2 "has an element in table scope" and §8.2.3.3 "push
+//!   onto the list of active formatting elements" (with its three-element
+//!   clause). The modes use those, and [`equivalence`] proves them equal to
+//!   [`crate::spec::base`]'s.
+//! - The other algorithms the modes call (§8.2.4's "reset the insertion
+//!   mode appropriately", the other scopes, "clear the list of active
+//!   formatting elements up to the last marker"; §8.2.5.1 "insert an HTML
+//!   element", "insert a comment", "insert a character", "create an element
+//!   for the token"; §8.2.5.2 and §8.2.5.3) are [`crate::spec::base`]'s,
+//!   transcribed from the WHATWG text. This module checks the mode rules
+//!   (and [`state`]'s two algorithms) only; where the W3C's version of such
+//!   an algorithm differs (its "reset the insertion mode appropriately" has
+//!   steps for `select`), the difference is listed below and the reused
+//!   algorithm is the WHATWG one.
 //!
 //! Modelling choices (each a difference in form; the meaning is the W3C's):
 //! - "Parse error." changes nothing (parse errors are not modelled); an
@@ -114,7 +120,7 @@ pub mod early;
 pub mod equivalence;
 pub mod equivalence_body;
 pub mod initial;
-
+pub mod state;
 pub mod tables;
 pub mod template;
 pub mod text;
@@ -127,6 +133,8 @@ pub use body::*;
 pub use early::*;
 #[cfg(verus_only)]
 pub use initial::*;
+#[cfg(verus_only)]
+pub use state::*;
 #[cfg(verus_only)]
 pub use tables::*;
 #[cfg(verus_only)]

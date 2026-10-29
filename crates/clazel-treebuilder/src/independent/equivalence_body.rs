@@ -15,6 +15,8 @@ use vstd::prelude::*;
 
 verus! {
 
+broadcast use super::equivalence::group_w3c_state;
+
 // ---------------------------------------------------------------------
 // Tags and names
 
@@ -1910,6 +1912,7 @@ proof fn lemma_in_body_start_1(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -1957,6 +1960,7 @@ proof fn lemma_in_body_start_2(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2001,6 +2005,7 @@ proof fn lemma_in_body_start_3(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2066,6 +2071,7 @@ proof fn lemma_in_body_start_4a(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2106,6 +2112,7 @@ proof fn lemma_in_body_start_4b(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2167,6 +2174,7 @@ proof fn lemma_in_body_start_4c_param(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2201,6 +2209,7 @@ proof fn lemma_in_body_start_4c_source(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2235,6 +2244,7 @@ proof fn lemma_in_body_start_4c_track(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2297,6 +2307,7 @@ proof fn lemma_in_body_start_4d_area(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2333,6 +2344,7 @@ proof fn lemma_in_body_start_4d_br(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2369,6 +2381,7 @@ proof fn lemma_in_body_start_4d_embed(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2405,6 +2418,7 @@ proof fn lemma_in_body_start_4d_img(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2441,6 +2455,7 @@ proof fn lemma_in_body_start_4d_wbr(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2477,6 +2492,7 @@ proof fn lemma_in_body_start_4d_input(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
@@ -2514,6 +2530,7 @@ proof fn lemma_in_body_start_5(env: EncFns, p: Parser, tt: TagTok)
     hide(w3c_dd_dt_loop);
     hide(dd_dt_loop);
     hide(push_formatting);
+    hide(w3c_push_formatting);
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);

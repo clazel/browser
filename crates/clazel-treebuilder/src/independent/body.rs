@@ -103,7 +103,7 @@ pub open spec fn w3c_insert_and_pop(p: Parser, tt: TagTok) -> Parser {
 /// formatting elements that element."
 pub open spec fn w3c_insert_formatting(p: Parser, tt: TagTok) -> Parser {
     let (q, e) = insert_html_element(p, tt);
-    push_formatting(q, e, tt)
+    w3c_push_formatting(q, e, tt)
 }
 
 /// "For each attribute on the token, check to see if the attribute is

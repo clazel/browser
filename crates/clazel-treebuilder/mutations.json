@@ -313,9 +313,14 @@
       "file": "src/spec/modes/initial.rs",
       "find": "|| id_is_one_of(system_id, quirks_system_ids())",
       "replace": "|| false",
-      "expect": "killed-incidentally",
-      "reason": "Dropped case: the quirks list's system identifier entry is ignored, so that DOCTYPE gives no-quirks mode. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that initial_doctype equals its spec fails.",
-      "module": "exec::modes::initial"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a DOCTYPE named html with no public identifier and the IBM system identifier gives no-quirks mode; the W3C text (§8.2.5.4.1) lists that system identifier for quirks mode, and mutation_lemmas::ml_w3c_quirks_ibm (the precondition of independent::equivalence::lemma_initial_doctype, proven at that input) is false. The witness evaluates the quantifier-free rest of the test at that input (compute_only cannot evaluate the list's exists); Z3 finds the contradiction. Dropped case: the quirks list's system identifier entry is ignored.",
+      "module": "mutation_lemmas",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_quirks_ibm()",
+        "witness": "!system_missing_or_empty(Some(ml_ibm_system_id())) && ml_name_html() == seq![0x68u32, 0x74, 0x6d, 0x6c]"
+      }
     },
     {
       "id": "before-html-html-wrong-mode",
@@ -406,9 +411,14 @@
       "file": "src/spec/base/state.rs",
       "find": "let f1 = if fam.len() >= 3 {",
       "replace": "let f1 = if fam.len() >= 4 {",
-      "expect": "killed-incidentally",
-      "reason": "The Noah's Ark clause keeps four elements of a family instead of three, so one more formatting element is reconstructed. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that push_formatting equals its spec fails.",
-      "module": "exec::formatting"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: with three b entries of the same attributes in the list of active formatting elements, a fourth b start tag \"in body\" leaves four; the W3C text (§8.2.3.3, transcribed in independent::state) removes the earliest, and independent::equivalence_body::lemma_in_body (proven equal where the two texts agree, which they do here) is false at that input. The Noah's Ark clause keeps four elements of a family instead of three, so one more formatting element is reconstructed.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_body_ark()",
+        "witness": "mode_in_body(ml_env(), ml_ark_parser(), ml_named_start(ml_name_b()))->Done_0.formatting.len() == 4"
+      }
     },
     {
       "id": "adoption-outer-loop-seven",
@@ -457,9 +467,14 @@
       "file": "src/spec/modes/in_table_text.rs",
       "find": "insert_characters(p, pending)",
       "replace": "p",
-      "expect": "killed-incidentally",
-      "reason": "Pending whitespace-only table text is dropped instead of inserted. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_table_text equals its spec fails.",
-      "module": "exec::modes::in_table_text"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a pending space character \"in table text\" is dropped at the end of the run; the W3C text (§8.2.5.4.10) inserts it, and independent::equivalence_body::lemma_in_table_text (proven equal where the two texts agree, which they do here) is false at that input. The witness is the explicit one for the quantified test (the only pending character is whitespace; compute_only cannot evaluate the exists); Z3 finds the contradiction. Pending whitespace-only table text is dropped instead of inserted.",
+      "module": "independent::equivalence_body",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_table_text()",
+        "witness": "ml_table_text_parser().pending_table_text.len() == 1 && is_ascii_whitespace(ml_table_text_parser().pending_table_text[0])"
+      }
     },
     {
       "id": "in-caption-markers-kept",
@@ -633,9 +648,14 @@
       "file": "src/spec/base/state.rs",
       "find": "Scope::Table => is_html(e, Tag::Html) || is_html(e, Tag::Table) || is_html(e, Tag::Template),",
       "replace": "Scope::Table => is_html(e, Tag::Html) || is_html(e, Tag::Table) || is_html(e, Tag::Template) || is_html(e, Tag::Tbody),",
-      "expect": "killed-incidentally",
-      "reason": "A scope definition widened: tbody joins the table scope's list, so a tr end tag in a row inside a tbody no longer finds its tr in table scope. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that in_scope_list equals its spec fails.",
-      "module": "exec::stack"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a table end tag \"in cell\" in a table > tbody > tr > td is ignored, because tbody now hides the table from table scope; the W3C text (§8.2.3.2, transcribed in independent::state) finds the table, closes the cell and reprocesses the token, and independent::equivalence::lemma_in_cell (proven equal where the two texts agree, which they do here) is false at that input. A scope definition widened: tbody joins the table scope's list.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_cell_table()",
+        "witness": "mode_in_cell(ml_env(), ml_cell_parser(), ml_named_end(ml_name_table())) is Done"
+      }
     }
   ]
 }

@@ -831,12 +831,15 @@ spec function and to keep the parse state invariant; `exec::step::step`
 `dispatch` for every state with `parser_inv` and `reachable_inv`, and keeps
 both, so it is equal on every reachable state. One resource limit is
 raised (`chars_at_exec`, 300, with the reason at the attribute); the
-others were removed by splitting proofs. Mutations: 48, of which 41 are
+others were removed by splitting proofs. Mutations: 48, of which 45 are
 certified kills (through the termination ranking, the order of actions and
-the W3C equivalences of 4.11) and 7 are killed incidentally, which means
-they break only the implementation's proof. Four change base code both
-transcriptions share, one is in foreign content, and two are checks written
-as `exists`, which `compute_only` cannot evaluate.
+the W3C equivalences of 4.11) and 3 are killed incidentally, which means
+they break only the implementation's proof. Two change tables both
+transcriptions share (SVG tag names, foreign attributes) and one is in
+foreign content. The table scope and the Noah's Ark clause have their own
+W3C transcription; the two checks written as `exists`, which
+`compute_only` cannot evaluate, are certified with the quantifier-free
+part of the check as the witness and Z3 finding the contradiction.
 
 ### 4.11 The tree builder: independent transcription and conformance (L)
 
@@ -1083,7 +1086,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; tier 0 until CI's full run is green |
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
 | 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers |
-| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, 41 certified |
+| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, 45 certified |
 | 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
