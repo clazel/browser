@@ -868,13 +868,21 @@ is listed.
 
 **As built:** html5lib-tests no longer carries the tree-construction
 suite; it is vendored from WPT (`tests/data/wpt-tree-construction/`, 1,967
-cases plus 6 scripted ones counted and not run). Until the join with
-`clazel-html`, `tests/conformance_tree_construction.rs` drives the proven
-parser with a test-only stand-in tokenizer that refuses every input it
-cannot tokenize exactly: 1,381 cases pass, 582 are refused by the stand-in
-(character references, processing instructions, script data escapes,
-CDATA, U+0000, unusual DOCTYPEs and comments), and 4 are the
-`selectedcontent` restriction, each listed by name. The W3C HTML 5.2
+cases plus 6 scripted ones counted and not run).
+`tests/conformance_tree_construction.rs` runs every case through
+`clazel-html`'s proven tokenizer and the proven step, joined by
+`clazel-treebuilder`'s `exec::driver` (`parse_real`,
+`parse_fragment_real`; not test-only, the pipeline of 4.13 will call it):
+it preprocesses the input, feeds each token the tokenizer emits to `step`
+and applies the step's tokenizer switches and the foreign-content flag
+before the next token. Verus proves each call meets its precondition and
+the loop ends (the tokenizer's measure goes down on every call, and a
+switch only sets a text state, of the lowest rank); that the driver equals
+the spec's `parse` with `TokFns` instantiated by the tokenizer is not
+proven. 1,963 cases pass and 4 are the `selectedcontent` restriction
+(`webkit02.dat` 44 to 47), listed by name; no case found a bug in the tree
+builder, the tokenizer or the driver. The test-only stand-in tokenizer is
+removed. The W3C HTML 5.2
 §8.2.5 transcription (`src/independent/`, from the dated REC URL; the
 undated one now redirects to the WHATWG standard) covers 21 of its 23
 modes, "in body" with the adoption agency among them, each proven equal to
@@ -1090,7 +1098,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
 | 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers |
 | 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified |
-| 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
+| 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
 | 4.14 Text layout | not started |

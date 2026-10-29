@@ -115,19 +115,25 @@ evidence exists (see "Left" below).
   input and Z3 derives the contradiction; the spec is unchanged.
 - **Conformance** (`tests/conformance_tree_construction.rs`): the
   html5lib tree-construction suite as WPT keeps it
-  (`tests/data/wpt-tree-construction/`, pinned WPT commit), through the
-  executable parser, the tree printed in the suite's format and compared
-  byte for byte. Until the join with `clazel-html`'s tokenizer, a test-only
-  stand-in tokenizer runs the cases whose input it can tokenize exactly and
-  refuses the rest (character references, processing instructions, CDATA,
-  script data escapes, U+0000, …): 1,381 pass, 582 are refused by the
-  stand-in, 4 are the `selectedcontent` restriction above; the 6
-  `scripted_*.dat` cases need a script engine and are not run. Cases with
-  neither `#script-on` nor `#script-off` run with scripting off only.
+  (`tests/data/wpt-tree-construction/`, pinned WPT commit), through
+  `clazel-html`'s proven tokenizer and the proven step, joined by
+  `exec::driver` (`parse_real`, `parse_fragment_real`: it feeds each token
+  to `step` and applies the step's tokenizer switches and the
+  foreign-content flag before the next; Verus proves each call meets its
+  precondition and the loop ends), the tree printed in the suite's format
+  and compared byte for byte: 1,963 of 1,967 pass, and the 4 expected
+  failures are the `selectedcontent` restriction above (`webkit02.dat` 44
+  to 47); the 6 `scripted_*.dat` cases need a script engine and are not
+  run. Cases with neither `#script-on` nor `#script-off` run with
+  scripting off only.
 
 ## Left
 
-- The join with `clazel-html`'s tokenizer, and the full suite through it.
+- A proof that the driver (`exec::driver`) equals the spec's `parse` and
+  `parse_fragment` with `TokFns` instantiated by `clazel-html`'s tokenizer
+  (it is proven to terminate and to meet every precondition; the
+  tokenizer emits a list of tokens per call where `TokFns::next` gives
+  one).
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
 - Spec-level `modes_ok` of a stopped reachable parser (so `parser_wf` is
