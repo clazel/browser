@@ -43,16 +43,30 @@ evidence exists (see "Left" below).
   `theorem_dispatch_total`: reprocessing a token always ends within
   `fuel_bound(parser)` rule applications, by a lexicographic ranking over
   the image token, the stack of template modes, a growth budget, the stack
-  of open elements and an order of the rules. It holds for every parser
-  satisfying `modes_ok` (part of the invariant `parser_wf`).
+  of open elements and an order of the rules, for every parser satisfying
+  `modes_ok`.
+- **Proven, reachable states** (`src/reachable/`): `theorem_reachable`:
+  every parser reachable from `new_parser` or `fragment_parser` satisfies
+  `reachable_inv` (each mode's stack shape, `modes_ok`, the cells of "in
+  cell"), with no hypotheses; so reprocessing ends on every reachable
+  parser.
+- **Proven, the document** (`src/theorems/`): `theorem_doc_wf` and
+  `theorem_open_elements_in_doc` (a step keeps the DOM well formed and
+  every id of the parse state in the document) and
+  `theorem_nodes_per_token` (one token creates at most 44 + 6T + 2F +
+  P(F + 1) nodes), for a step from a parser with `parser_wf`, a valid head
+  pointer and `dispatch_needs` (which `reachable_inv` gives); the last
+  also assumes no element has two formatting entries. That every reachable
+  parser has `parser_wf` is proven for the executable step, not yet at the
+  spec level.
 - **Proven, actions** (`src/theorems/`): `theorem_actions_ordered`: over a
   whole parse, `StopParsing` occurs at most once and last, and
   `ChangeEncoding` at most once (never if the confidence starts certain),
   so the pipeline runs the parser at most twice. No hypotheses.
 - **Proven, implementation** (`src/exec/`): every helper and every
   insertion mode's executable function equals its spec function and keeps
-  the parse state invariant; `exec::step::step` equals `dispatch` for
-  states satisfying its precondition (see its contract). No recursion on
+  the parse state invariant; `exec::step::step` equals `dispatch` on every
+  state with `parser_inv` and `reachable_inv`, and keeps both. No recursion on
   the tree's depth or the input's length.
 - **Mutations** (`mutations.json`): 48; 22 killed by a theorem with a
   certificate Verus checks, 26 killed incidentally (they break only the
@@ -76,5 +90,7 @@ evidence exists (see "Left" below).
 - The W3C HTML 5.2 §8.2.5 independent transcription (`independent.rs`).
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
-- `theorem_open_elements_in_doc` and `theorem_nodes_per_token` of the plan.
+- Spec-level `parser_wf` of every reachable parser, which would remove the
+  hypotheses of `theorem_doc_wf`, `theorem_open_elements_in_doc` and
+  `theorem_nodes_per_token`.
 - Every mutation a certified kill (tier 2's requirement).

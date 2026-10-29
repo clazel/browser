@@ -701,9 +701,20 @@ changes to the spec (popping an empty stack changes nothing; the fuel
 bound is 372 (T + 1)(L + F·P + 5T + 11)) and an invariant on the modes,
 `modes_ok`, which the theorem assumes. `theorem_actions_ordered` is proven
 with no hypotheses (its proof found a spec bug, fixed: the bound's
-exhaustion repeated the last step's actions). `theorem_doc_wf`,
-`theorem_open_elements_in_doc` and `theorem_nodes_per_token` are not
-proven yet.
+exhaustion repeated the last step's actions). `theorem_reachable`: every
+parser reachable from `new_parser` or `fragment_parser` by `dispatch` steps
+satisfies `reachable_inv` (each mode's stack shape, `modes_ok`, the cells
+of "in cell"), with no hypotheses, so `theorem_dispatch_total` holds for
+every reachable parser. `theorem_doc_wf` and `theorem_open_elements_in_doc`
+(a step keeps `clazel_dom::spec::wf` and every id of the parse state in the
+document) and `theorem_nodes_per_token` are proven for a step from a
+parser with `parser_wf`, a valid head pointer and `dispatch_needs` (which
+`reachable_inv` gives); that every reachable parser has `parser_wf` at the
+spec level is not proven (the executable step keeps it). The true node
+bound is 44 + 6T + 2F + P(F + 1) per token (T template modes, F formatting
+entries, P pending table characters; it also assumes no element has two
+formatting entries), not the plan's 1 + F: the adoption agency alone may
+clone 32 nodes, and a `nobr` start tag reconstructs twice.
 
 ### 4.10 The tree builder: implementation and proof (L)
 
@@ -730,7 +741,8 @@ dropped, a scope definition widened), with certificates by example;
 and every shared helper has an executable function proven equal to its
 spec function and to keep the parse state invariant; `exec::step::step`
 (the reprocessing loop, iterative with a counter) is proven equal to
-`dispatch` for states satisfying its precondition. One resource limit is
+`dispatch` for every state with `parser_inv` and `reachable_inv`, and keeps
+both, so it is equal on every reachable state. One resource limit is
 raised (`chars_at_exec`, 300, with the reason at the attribute); the
 others were removed by splitting proofs. Mutations: 48, of which 22 are
 certified kills (19 through the termination ranking, every mode but "in
@@ -978,8 +990,8 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.6 Tokenizer spec and contracts | not started |
 | 4.7 Tokenizer implementation and evidence | not started |
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
-| 4.9 Tree builder spec and contracts | spec done (21 modes); `theorem_dispatch_total` (given `modes_ok`) and `theorem_actions_ordered` proven; three planned theorems open |
-| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` under its stated precondition; 48 mutations, 22 certified |
+| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable`; three of them under stated hypotheses (see As built) |
+| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, 22 certified |
 | 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; independent transcription and differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
