@@ -70,19 +70,34 @@ evidence exists (see "Left" below).
   the tree's depth or the input's length.
 - **Independent transcription** (`src/independent/`): W3C HTML 5.2
   §8.2.5 (Recommendation, 14 December 2017), written without reading
-  `src/spec/modes/`, proven equal to the spec for 18 of its 23 insertion
-  modes with every difference between the two texts stated in the lemma's
-  precondition (no processing instructions in the W3C text; "after head"
-  sets frameset-ok; "in cell" checks a cell is in scope where WHATWG
-  asserts it; the DOCTYPE lists are taken as agreeing, not proven). Not
-  transcribed: "in body" (with the adoption agency), "in table", "in table
-  text", and the W3C's "in select" modes, which the living standard
-  removed.
-- **Mutations** (`mutations.json`): 48; 38 killed by a theorem with a
+  `src/spec/modes/`, proven equal to the spec for 21 of its 23 insertion
+  modes, the adoption agency algorithm included, with every difference
+  between the two texts stated in the lemma's precondition (no processing
+  instructions in the W3C text; "after head" sets frameset-ok; "in cell"
+  checks a cell is in scope where WHATWG asserts it; "in body"'s
+  `hgroup`, `menu`, `search`, `keygen` and `select` tags and its other
+  `select` steps; "parsing template contents" in the `form` entries; "in
+  table"'s characters with a `template` current node; the adoption agency
+  algorithm's insertions where the redirection map or the WHATWG's step
+  4.21 checks make them differ; an empty pending table character list;
+  the DOCTYPE lists are taken as agreeing, not proven). The two lemmas
+  for "in body" and "in table" also assume stated facts of reachable
+  states (ids on the stack and in the list of active formatting elements
+  name nodes, records are tagged, the list holds HTML elements). Not
+  transcribed: the W3C's "in select" and "in select in table", which the
+  living standard removed.
+- **Mutations** (`mutations.json`): 48; 41 killed by a theorem with a
   certificate Verus checks (termination, the order of actions, and the
-  W3C equivalences), 10 killed incidentally (tree-shape mutations of the
-  modes the W3C transcription does not cover yet: they break only the
-  implementation's proof), 0 surviving.
+  W3C equivalences), 7 killed incidentally (they break only the
+  implementation's proof), 0 surviving. Of the 7, four change algorithms
+  both transcriptions share (`push_formatting`'s Noah's Ark clause, the
+  table scope, the SVG tag name and foreign attribute tables), so no W3C
+  equivalence can tell them apart; one is in foreign content, which is not
+  transcribed; and two cannot be evaluated by a certificate: the
+  DOCTYPE system identifier test and "in table text"'s whitespace test are
+  `exists` quantifiers in the spec, which `compute_only` does not
+  evaluate, so no witness reaching them evaluates in the mutant and on the
+  real spec.
 - **Conformance** (`tests/conformance_tree_construction.rs`): the
   html5lib tree-construction suite as WPT keeps it
   (`tests/data/wpt-tree-construction/`, pinned WPT commit), through the
@@ -98,10 +113,11 @@ evidence exists (see "Left" below).
 ## Left
 
 - The join with `clazel-html`'s tokenizer, and the full suite through it.
-- The W3C transcription of "in body", "in table" and "in table text".
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
 - Spec-level `parser_wf` of every reachable parser, which would remove the
   hypotheses of `theorem_doc_wf`, `theorem_open_elements_in_doc` and
   `theorem_nodes_per_token`.
-- Every mutation a certified kill (tier 2's requirement).
+- Every mutation a certified kill (tier 2's requirement): 7 are not
+  (see "Mutations" above); they need a second transcription of the shared
+  algorithms and tables, of foreign content, or quantifier-free tests.
