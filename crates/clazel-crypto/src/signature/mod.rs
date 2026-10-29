@@ -5,3 +5,4 @@ pub mod spec;
 pub mod certificates;
 pub mod examples;
 pub mod exec;
+pub mod lemmas;
