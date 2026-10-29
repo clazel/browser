@@ -303,7 +303,10 @@ fn last(name: &'static str) -> SpawnError {
 }
 
 /// The SID of the AppContainer called `name`, creating the profile if there
-/// is none yet (the profile is per user and stays registered).
+/// is none yet (the profile is per user and stays registered). The SID is a
+/// function of the name alone, so if the profile cannot be created (it exists,
+/// or another thread is creating it) the SID is derived instead; a process
+/// can be confined under a SID with no registered profile.
 pub fn container_sid(name: &str) -> Result<ContainerSid, SpawnError> {
     let name_w = wide(name)?;
     let mut sid: *mut c_void = std::ptr::null_mut();
@@ -313,7 +316,7 @@ pub fn container_sid(name: &str) -> Result<ContainerSid, SpawnError> {
     // SAFETY: docs CreateAppContainerProfile: `name`, `display name` and
     // `description` are NUL-terminated wide strings (here three views of the
     // live `name_w`), `capabilities` may be NULL with a count of 0, and `sid`
-    // receives a SID that the caller frees with FreeSid. `sid_slot` points to
+    // receives a SID that the caller frees with FreeSid. `slot` points to
     // the live local `sid`.
     let hr = unsafe { CreateAppContainerProfile(name_ptr, name_ptr, name_ptr, none, 0, slot) };
     if hr != 0 {
@@ -322,7 +325,7 @@ pub fn container_sid(name: &str) -> Result<ContainerSid, SpawnError> {
         // function of the name, so derive it.
         // SAFETY: docs DeriveAppContainerSidFromAppContainerName: the first
         // argument is a NUL-terminated wide string (`name_w`, live) and the
-        // second receives a SID freed with FreeSid; `sid_slot` points to the
+        // second receives a SID freed with FreeSid; `slot` points to the
         // live local `sid`.
         let hr = unsafe { DeriveAppContainerSidFromAppContainerName(name_ptr, slot) };
         if hr != 0 {
@@ -710,9 +713,16 @@ pub fn spawn(
         thread_id: 0,
     };
 
-    set_inherit(stdin, true)?;
-    set_inherit(stdout, true)?;
-    set_inherit(stderr, true)?;
+    let inheritable = set_inherit(stdin, true)
+        .and_then(|()| set_inherit(stdout, true))
+        .and_then(|()| set_inherit(stderr, true));
+    if let Err(e) = inheritable {
+        // Put back whatever was already switched on.
+        let _ = set_inherit(stdin, false);
+        let _ = set_inherit(stdout, false);
+        let _ = set_inherit(stderr, false);
+        return Err(e);
+    }
     let startup_ptr: *mut StartupInfoExW = &raw mut startup;
     let info_ptr: *mut ProcessInformation = &raw mut info;
     let env_ptr: *mut c_void = environment.as_mut_ptr().cast();

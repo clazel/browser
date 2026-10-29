@@ -14,12 +14,15 @@
 //!   the token cannot use the network, and it cannot open the user's files:
 //!   the container SID is on no file's ACL except those the host grants it
 //!   (the renderer binary).
-//! - **`ALL APPLICATION PACKAGES` is not opted out.** Every AppContainer
-//!   process can read the parts of `C:\Windows` and `Program Files` that grant
-//!   that group, and without that the process cannot load `kernel32`. A
-//!   less-private-AppContainer (LPAC) would tighten this; it needs per-DLL
-//!   ACL work and is left to a later item. This is weaker than Landlock,
-//!   which can deny the whole filesystem.
+//! - **A less-privileged AppContainer (LPAC).** The process opts out of the
+//!   `ALL APPLICATION PACKAGES` group ([`OPT_OUT_ALL_APPLICATION_PACKAGES`]).
+//!   That group is what lets an ordinary AppContainer read most of `C:Windows`
+//!   and use `DeviceAfd`; the LPAC keeps only `ALL RESTRICTED APPLICATION
+//!   PACKAGES`, which the core system files grant. It matters: with only
+//!   "no capabilities", a plain AppContainer here could still connect to a
+//!   loopback TCP port and bind a UDP socket, and an LPAC cannot even start
+//!   Winsock (`tests/escape_windows.rs` found this). What the LPAC can still
+//!   read of the system directories is not tested.
 //! - **One process.** The job limits the active process count to 1 and
 //!   `PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY` forbids children: both stop
 //!   `CreateProcess`, the analogue of the Linux filter's missing `clone`.
