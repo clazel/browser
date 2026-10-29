@@ -207,19 +207,21 @@ fn the_renderer_id_comes_from_the_socket_and_replies_go_to_the_sender() {
     host.open_tab("https://b.example/", "");
     assert_eq!(host.live(), 2);
     let got = wait_for(
-        || Some(decode_all(&fs::read(received(0)).ok()?)).filter(|m| m.len() >= 2),
+        || Some(decode_all(&fs::read(received(0)).ok()?)).filter(|m| m.len() >= 3),
         &mut host,
     );
+    // Its document (`Commit`, no `Body` for the empty script, `BodyEnd`),
+    // then the answer.
     assert!(
-        matches!(got.as_slice(), [Msg::Commit { .. }, Msg::CookieValue { cookie_string }] if cookie_string.is_empty()),
+        matches!(got.as_slice(), [Msg::Commit { .. }, Msg::BodyEnd, Msg::CookieValue { cookie_string }] if cookie_string.is_empty()),
         "{got:?}"
     );
-    // Renderer 1 sent nothing and got only its own Commit.
+    // Renderer 1 sent nothing and got only its own document.
     wait_for(|| received(1).exists().then_some(()), &mut host);
     host.pump(Duration::from_millis(200));
     let other = decode_all(&fs::read(received(1)).unwrap_or_default());
     assert!(
-        matches!(other.as_slice(), [Msg::Commit { .. }]),
+        matches!(other.as_slice(), [Msg::Commit { .. }, Msg::BodyEnd]),
         "{other:?}"
     );
 }

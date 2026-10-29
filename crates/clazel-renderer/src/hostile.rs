@@ -246,7 +246,8 @@ fn build(kind: Kind, rng: &mut Rng) -> Vec<u8> {
             let m = match rng.below(5) {
                 0 => Msg::Commit {
                     url: rng.text(12),
-                    script: rng.text(12),
+                    content_type: rng.text(12),
+                    kind: rng.next_u64(),
                 },
                 1 => Msg::CookieValue {
                     cookie_string: rng.text(12),

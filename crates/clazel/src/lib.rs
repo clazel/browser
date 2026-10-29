@@ -1,11 +1,10 @@
-//! The kernel host shell (phase-2.md item 2.15): the I/O around the proven
-//! kernel `step`. Each renderer gets a socket pair (its end is the process's
-//! stdin and stdout) and a thread that reads whole frames; the id of an event
-//! is the id its socket was made for, never anything in a frame. A frame over
-//! `MAX_FRAME` (refused from its first 4 bytes) or a closed socket becomes
-//! `RendererExited`. Outputs are carried out in order, and every frame, exit
-//! and stderr (which names a failed sandbox layer) is printed. The network
-//! (item 3.7) is `clazel-net`'s `Driver`.
+//! The kernel host shell (phase-2.md item 2.15): the I/O around the proven kernel `step`. Each
+//! renderer gets a socket pair (its end is the process's stdin and stdout) and a thread that reads
+//! whole frames; the id of an event is the id its socket was made for, never anything in a frame.
+//! A frame over `MAX_FRAME` (refused from its first 4 bytes) or a closed socket becomes
+//! `RendererExited`. Outputs are carried out in order, and every frame, exit and stderr (which
+//! names a failed sandbox layer) is printed. The network (item 3.7) is `clazel-net`'s `Driver`.
+//! A `Show` (item 4.12) waits in `shown` for the command loop.
 
 use std::collections::HashMap;
 use std::io::{Read, Write};
@@ -46,33 +45,33 @@ pub struct Host {
     command: Box<dyn FnMut(u64) -> Command>,
     /// Every line the host has printed.
     pub log: Vec<String>,
+    /// The kernel's `Show` outputs not yet taken, oldest first.
+    pub shown: Vec<OutputRecord>,
 }
 
-fn deadline(d: Duration) -> Instant {
-    Instant::now().checked_add(d).unwrap_or_else(Instant::now)
+fn code_points(s: &str) -> Vec<u32> {
+    s.chars().map(u32::from).collect()
 }
 
-/// A frame as the call or answer it carries.
+/// The first frame of one write (a document is `Commit`, `Body`s,
+/// `BodyEnd`) as the call or answer it carries.
 fn describe(frame: &[u8]) -> String {
     let q = |b: &[u8]| format!("{:?}", String::from_utf8_lossy(b));
-    match decode_framed(frame) {
+    let len = frame.get(..4).and_then(payload_length);
+    let first = len.and_then(|n| frame.get(..n.checked_add(4)?));
+    match first.and_then(decode_framed) {
         None => format!("undecodable frame of {} bytes", frame.len()),
+        Some(Msg::Commit { url, kind, .. }) => format!("commit {} (kind {kind})", q(&url)),
         Some(Msg::CookieGet) => "document.cookie".to_owned(),
-        Some(Msg::CookieSet { cookie_string }) => {
-            format!("document.cookie = {}", q(&cookie_string))
-        }
+        Some(Msg::CookieSet { cookie_string: c }) => format!("document.cookie = {}", q(&c)),
         Some(Msg::StorageGetItem { key }) => format!("localStorage.getItem({})", q(&key)),
-        Some(Msg::StorageSetItem { key, value }) => {
-            format!("localStorage.setItem({}, {})", q(&key), q(&value))
+        Some(Msg::StorageSetItem { key: k, value: v }) => {
+            format!("localStorage.setItem({}, {})", q(&k), q(&v))
         }
         Some(Msg::StorageRemoveItem { key }) => format!("localStorage.removeItem({})", q(&key)),
-        Some(Msg::Commit { url, script }) => {
-            format!("commit {} and a script of {} bytes", q(&url), script.len())
-        }
-        Some(Msg::CookieValue { cookie_string }) => format!("result {}", q(&cookie_string)),
-        Some(Msg::StorageValue { value }) => {
-            format!("result {}", value.map_or("null".to_owned(), |v| q(&v)))
-        }
+        Some(Msg::CookieValue { cookie_string: c }) => format!("result {}", q(&c)),
+        Some(Msg::StorageValue { value: Some(v) }) => format!("result {}", q(&v)),
+        Some(Msg::StorageValue { value: None }) => "result null".to_owned(),
         Some(other) => format!("{other:?}"),
     }
 }
@@ -92,6 +91,7 @@ impl Host {
             rx,
             command: Box::new(command),
             log: Vec::new(),
+            shown: Vec::new(),
         }
     }
 
@@ -107,14 +107,13 @@ impl Host {
 
     /// The kernel's step, unless its ids are used up (`step_requires`).
     fn step(&mut self, e: EventRecord) -> Vec<OutputRecord> {
-        if self.state.next_id == u64::MAX || self.state.next_conn > u64::MAX.saturating_sub(21) {
+        let s = &self.state;
+        if s.next_id.checked_add(2).is_none() || s.next_conn.checked_add(21).is_none() {
             self.say("kernel ids exhausted; event dropped".to_owned());
             return Vec::new();
         }
-        let (s, outputs) = step_real(
-            std::mem::replace(&mut self.state, init_record::<RealFetch>()),
-            &e,
-        );
+        let old = std::mem::replace(&mut self.state, init_record::<RealFetch>());
+        let (s, outputs) = step_real(old, &e);
         self.state = s;
         outputs
     }
@@ -123,8 +122,7 @@ impl Host {
     pub fn event(&mut self, e: EventRecord) {
         let time = self.clock.unwrap_or_else(clazel_net::now_1601);
         self.step(EventRecord::Tick { time });
-        let mut dead = Vec::new();
-        let mut failed = Vec::new();
+        let (mut dead, mut failed) = (Vec::new(), Vec::new());
         for output in self.step(e) {
             match output {
                 OutputRecord::Spawn { id } => {
@@ -149,6 +147,7 @@ impl Host {
                     self.net_op(conn, Op::Send(bytes), &mut failed);
                 }
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
+                show @ OutputRecord::Show { .. } => self.shown.push(show),
             }
         }
         for (id, why) in dead {
@@ -164,9 +163,7 @@ impl Host {
     fn net_op(&mut self, conn: u64, op: Op, failed: &mut Vec<u64>) {
         let (ok, line) = self.net.apply(conn, op, self.route);
         line.into_iter().for_each(|l| self.say(l));
-        if !ok {
-            failed.push(conn);
-        }
+        failed.extend((!ok).then_some(conn));
     }
 
     /// A connection reported: hand the kernel what it means, if it still
@@ -174,24 +171,29 @@ impl Host {
     fn net_report(&mut self, conn: u64, report: Report) {
         let (input, note) = self.net.accept(conn, report);
         note.into_iter().for_each(|l| self.say(l));
-        if let Some(input) = input {
-            self.event(EventRecord::Net { conn, input });
-        }
+        input
+            .into_iter()
+            .for_each(|input| self.event(EventRecord::Net { conn, input }));
     }
 
-    /// The user opens a tab at `url`; the script's format is `clazel-renderer`'s.
+    /// The user opens a tab at `url` with a script (`clazel-renderer`'s
+    /// format), committed at once as a user script.
     pub fn open_tab(&mut self, url: &str, script: &str) {
-        let (url, script) = (
-            url.chars().map(u32::from).collect(),
-            script.as_bytes().to_vec(),
-        );
+        let (url, script) = (code_points(url), Some(script.as_bytes().to_vec()));
         self.event(EventRecord::OpenTab { url, script });
     }
 
+    /// The user opens a tab at `url`, which the kernel fetches; its tab id.
+    pub fn open(&mut self, url: &str) -> u64 {
+        let (tab, url) = (self.state.next_id, code_points(url));
+        self.event(EventRecord::OpenTab { url, script: None });
+        tab
+    }
+
     /// The user navigates tab `tab` to `url`: the kernel asks for the page,
-    /// and the document is what the network serves (its body is the script).
+    /// and the document is what the network serves.
     pub fn navigate_tab(&mut self, tab: u64, url: &str) {
-        let url = url.chars().map(u32::from).collect();
+        let url = code_points(url);
         self.event(EventRecord::NavigateTab { tab, url });
     }
 
@@ -234,7 +236,9 @@ impl Host {
             return;
         };
         let _ = sock.shutdown(Shutdown::Both);
-        let end = deadline(grace);
+        let end = Instant::now()
+            .checked_add(grace)
+            .unwrap_or_else(Instant::now);
         while matches!(child.try_wait(), Ok(None)) && Instant::now() < end {
             std::thread::sleep(Duration::from_millis(10));
         }
@@ -265,24 +269,20 @@ impl Host {
             Ok(Ev::Frame(id, bytes)) if self.table.contains_key(&id) => {
                 self.say(format!("renderer {id} -> {}", describe(&bytes)));
                 self.event(EventRecord::FromRenderer { id, bytes });
-                true
             }
-            Ok(Ev::Gone(id, why)) if self.table.contains_key(&id) => {
-                self.exit(id, &why);
-                true
-            }
-            Ok(Ev::Net(conn, report)) => {
-                self.net_report(conn, report);
-                true
-            }
-            Ok(_) => true,
-            Err(_) => false,
+            Ok(Ev::Gone(id, why)) if self.table.contains_key(&id) => self.exit(id, &why),
+            Ok(Ev::Net(conn, report)) => self.net_report(conn, report),
+            Ok(_) => {}
+            Err(_) => return false,
         }
+        true
     }
 
     /// Pump until no renderer is left or `limit` passes; whether none is left.
     pub fn run(&mut self, limit: Duration) -> bool {
-        let end = deadline(limit);
+        let end = Instant::now()
+            .checked_add(limit)
+            .unwrap_or_else(Instant::now);
         while !self.table.is_empty() && Instant::now() < end {
             self.pump(Duration::from_millis(100));
         }
