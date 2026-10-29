@@ -782,4 +782,364 @@ pub proof fn ml_w3c_after_after_frameset()
     assert(!(crate::independent::w3c_mode_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes)) is Done)) by (compute_only);
     ml_w3c_eq_after_after_frameset();
 }
+
+// ---------------------------------------------------------------------
+// The W3C transcription of "in body" and "in table"
+// (`independent::equivalence_body`) at concrete parsers.
+
+/// "html"
+pub open spec fn ml_name_html() -> Seq<u32> {
+    seq![0x68u32, 0x74, 0x6d, 0x6c]
+}
+
+/// "body"
+pub open spec fn ml_name_body() -> Seq<u32> {
+    seq![0x62u32, 0x6f, 0x64, 0x79]
+}
+
+/// "table"
+pub open spec fn ml_name_table() -> Seq<u32> {
+    seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]
+}
+
+/// "b"
+pub open spec fn ml_name_b() -> Seq<u32> {
+    seq![0x62u32]
+}
+
+/// "div"
+pub open spec fn ml_name_div() -> Seq<u32> {
+    seq![0x64u32, 0x69, 0x76]
+}
+
+/// "track"
+pub open spec fn ml_name_track() -> Seq<u32> {
+    seq![0x74u32, 0x72, 0x61, 0x63, 0x6b]
+}
+
+/// An HTML element record named `name` for node `id`, tagged by its name.
+pub open spec fn ml_el(name: Seq<u32>, id: NodeId) -> Elem {
+    Elem { id, ns: Namespace::Html, tag: tag_of(name), name, annotation_html: false }
+}
+
+/// An HTML element node named `name`, with no attributes, the given
+/// parent and children.
+pub open spec fn ml_el_node(name: Seq<u32>, parent: NodeId, children: Seq<NodeId>) -> clazel_dom::spec::Node {
+    clazel_dom::spec::Node {
+        kind: NodeKind::Element {
+            namespace: Some(Namespace::Html),
+            prefix: None,
+            local_name: name,
+            attributes: seq![],
+            template_contents: None,
+            form_owner: None,
+        },
+        parent: Some(parent),
+        children,
+        wrapper: None,
+    }
+}
+
+/// The Document node, with the given children.
+pub open spec fn ml_document_node(children: Seq<NodeId>) -> clazel_dom::spec::Node {
+    clazel_dom::spec::Node {
+        kind: NodeKind::Document { mode: DocumentMode::NoQuirks, url: seq![], base_url: seq![] },
+        parent: None,
+        children,
+        wrapper: None,
+    }
+}
+
+/// A document `html` (1) > `body` (2) > `table` (3).
+pub open spec fn ml_doc_table() -> clazel_dom::spec::Document {
+    clazel_dom::spec::Document {
+        nodes: seq![
+            ml_document_node(seq![1]),
+            ml_el_node(ml_name_html(), 0, seq![2]),
+            ml_el_node(ml_name_body(), 1, seq![3]),
+            ml_el_node(ml_name_table(), 2, seq![]),
+        ],
+    }
+}
+
+/// A parser in insertion mode `mode` over [`ml_doc_table`], with the stack
+/// `html`, `body`, `table`.
+pub open spec fn ml_table_parser(mode: Mode) -> Parser {
+    Parser {
+        doc: ml_doc_table(),
+        ..ml_parser(mode, seq![ml_el(ml_name_html(), 1), ml_el(ml_name_body(), 2), ml_el(ml_name_table(), 3)], seq![])
+    }
+}
+
+/// The stack entry `j` of the adoption agency scenario: `html` (node 1),
+/// `body` (2), `b` (3), then seven `div` elements (4 to 10).
+pub open spec fn ml_aa_elem(j: int) -> Elem {
+    if j == 0 {
+        ml_el(ml_name_html(), 1)
+    } else if j == 1 {
+        ml_el(ml_name_body(), 2)
+    } else if j == 2 {
+        ml_el(ml_name_b(), 3)
+    } else {
+        ml_el(ml_name_div(), (j + 1) as NodeId)
+    }
+}
+
+/// The node `i` of the adoption agency scenario: the Document, then
+/// `html` > `body` > `b` > `div` > … > `div`, each the only child of the
+/// one before.
+pub open spec fn ml_aa_node(i: int) -> clazel_dom::spec::Node {
+    if i == 0 {
+        ml_document_node(seq![1])
+    } else {
+        let name = if i == 1 {
+            ml_name_html()
+        } else if i == 2 {
+            ml_name_body()
+        } else if i == 3 {
+            ml_name_b()
+        } else {
+            ml_name_div()
+        };
+        let children = if i < 10 {
+            seq![(i + 1) as NodeId]
+        } else {
+            seq![]
+        };
+        ml_el_node(name, (i - 1) as NodeId, children)
+    }
+}
+
+/// The token of a `b` start tag, without attributes.
+pub open spec fn ml_b_token() -> TagTok {
+    TagTok { name: ml_name_b(), tag: tag_of(ml_name_b()), attrs: seq![], self_closing: false }
+}
+
+/// "In body" with the stack `html`, `body`, `b` and seven `div` elements,
+/// each inside the one before, and `b` in the list of active formatting
+/// elements: a `b` end tag makes the adoption agency algorithm's outer loop
+/// run seven times with a furthest block, and an eighth without.
+pub open spec fn ml_aa_parser() -> Parser {
+    Parser {
+        doc: clazel_dom::spec::Document { nodes: Seq::new(11, |i: int| ml_aa_node(i)) },
+        formatting: seq![Fmt::Entry { elem: ml_el(ml_name_b(), 3), token: ml_b_token() }],
+        ..ml_parser(Mode::InBody, Seq::new(10, |j: int| ml_aa_elem(j)), seq![])
+    }
+}
+
+/// "In body" over [`ml_doc_html`] with the stack `html`.
+pub open spec fn ml_body_parser() -> Parser {
+    ml_parser_html(Mode::InBody, seq![ml_named(ml_name_html())])
+}
+
+/// The stack of [`ml_table_parser`] satisfies `equivalence::place_stable`
+/// and its records are tagged.
+proof fn ml_table_stable(mode: Mode)
+    ensures
+        crate::independent::equivalence::place_stable(ml_table_parser(mode)),
+        crate::independent::equivalence_body::aa_wf(ml_table_parser(mode)),
+{
+    let p = ml_table_parser(mode);
+    assert(tag_of(ml_name_html()) == Tag::Html) by (compute_only);
+    assert(p.open[0] == ml_el(ml_name_html(), 1));
+    assert(p.open[1] == ml_el(ml_name_body(), 2));
+    assert(p.open[2] == ml_el(ml_name_table(), 3));
+    assert(p.doc.nodes[1] == ml_el_node(ml_name_html(), 0, seq![2]));
+    assert(p.doc.nodes[2] == ml_el_node(ml_name_body(), 1, seq![3]));
+    assert(p.doc.nodes[3] == ml_el_node(ml_name_table(), 2, seq![]));
+    assert forall|i: int| 0 <= i < p.open.len() implies clazel_dom::spec::valid(p.doc, (#[trigger] p.open[i]).id) && (
+    p.doc.nodes[p.open[i].id as int].parent is None || clazel_dom::spec::valid(
+        p.doc,
+        p.doc.nodes[p.open[i].id as int].parent->Some_0,
+    )) by {
+        if i == 0 {
+        } else if i == 1 {
+        } else {
+            assert(i == 2);
+        }
+    }
+    assert forall|j: int| 0 <= j < p.open.len() implies (#[trigger] p.open[j]).id < p.doc.nodes.len() && elem_tagged(p.open[j]) by {
+        if j == 0 {
+        } else if j == 1 {
+        } else {
+            assert(j == 2);
+        }
+    }
+}
+
+/// The adoption agency scenario's parser has the facts the "in body"
+/// lemma uses (`equivalence_body::aa_wf`).
+proof fn ml_aa_wf()
+    ensures
+        crate::independent::equivalence_body::aa_wf(ml_aa_parser()),
+{
+    let p = ml_aa_parser();
+    assert forall|j: int| 0 <= j < p.open.len() implies (#[trigger] p.open[j]).id < p.doc.nodes.len() && elem_tagged(p.open[j]) by {
+        assert(p.open[j] == ml_aa_elem(j));
+    }
+    let f = p.formatting;
+    assert forall|j: int| 0 <= j < f.len() implies crate::independent::equivalence_body::fmt_entry_ok(
+        #[trigger] f[j],
+        p.doc.nodes.len(),
+    ) by {
+        assert(j == 0);
+    }
+    assert forall|j: int, k: int|
+        #![trigger f[j], f[k]]
+        0 <= j < f.len() && 0 <= k < f.len() && f[j] is Entry && f[k] is Entry && f[j]->Entry_elem.id
+            == f[k]->Entry_elem.id implies f[j]->Entry_elem.tag == f[k]->Entry_elem.tag by {
+        assert(j == 0 && k == 0);
+    }
+}
+
+/// The "in body" lemma's precondition at the adoption agency scenario, for
+/// a `b` end tag: the texts agree there, and so do the algorithm's
+/// insertions (both evaluated).
+proof fn ml_aa_agrees()
+    ensures
+        crate::independent::equivalence_body::in_body_texts_agree(ml_aa_parser(), ml_named_end(ml_name_b())),
+        crate::independent::equivalence_body::in_body_aa_agrees(ml_aa_parser(), ml_named_end(ml_name_b())),
+        tag_of(ml_name_b()) == Tag::B,
+{
+    assert(crate::independent::equivalence_body::in_body_texts_agree(ml_aa_parser(), ml_named_end(ml_name_b()))) by (compute_only);
+    assert(crate::independent::equivalence_body::in_body_aa_agrees(ml_aa_parser(), ml_named_end(ml_name_b()))) by (compute_only);
+    assert(tag_of(ml_name_b()) == Tag::B) by (compute_only);
+}
+
+/// What `independent::equivalence_body::lemma_in_body` gives at the
+/// certificate input of `adoption-outer-loop-seven`.
+proof fn ml_w3c_eq_in_body_aa()
+    ensures
+        crate::independent::w3c_mode_in_body(ml_env(), ml_aa_parser(), ml_named_end(ml_name_b())) == mode_in_body(
+            ml_env(),
+            ml_aa_parser(),
+            ml_named_end(ml_name_b()),
+        ),
+{
+    hide(tag_of);
+    ml_aa_wf();
+    ml_aa_agrees();
+    crate::independent::equivalence_body::lemma_in_body(ml_env(), ml_aa_parser(), ml_named_end(ml_name_b()));
+}
+
+pub proof fn ml_w3c_in_body_aa()
+    ensures
+        !(mode_in_body(ml_env(), ml_aa_parser(), ml_named_end(ml_name_b()))->Done_0.open.len() == 10),
+{
+    assert(!(crate::independent::w3c_mode_in_body(ml_env(), ml_aa_parser(), ml_named_end(ml_name_b()))->Done_0.open.len() == 10))
+        by (compute_only);
+    ml_w3c_eq_in_body_aa();
+}
+
+/// The "in body" lemma's precondition at [`ml_body_parser`] for a `track`
+/// start tag.
+proof fn ml_track_agrees()
+    ensures
+        crate::independent::equivalence_body::in_body_texts_agree(ml_body_parser(), ml_named_start(ml_name_track())),
+        crate::independent::equivalence_body::in_body_aa_agrees(ml_body_parser(), ml_named_start(ml_name_track())),
+        tag_of(ml_name_track()) == Tag::Track,
+{
+    assert(tag_of(ml_name_track()) == Tag::Track) by (compute_only);
+    assert(crate::independent::equivalence_body::in_body_texts_agree(ml_body_parser(), ml_named_start(ml_name_track())))
+        by (compute_only);
+    assert(crate::independent::equivalence_body::in_body_aa_agrees(ml_body_parser(), ml_named_start(ml_name_track())))
+        by (compute_only);
+}
+
+/// What `independent::equivalence_body::lemma_in_body` gives at the
+/// certificate input of `in-body-track-dropped`.
+proof fn ml_w3c_eq_in_body_track()
+    ensures
+        crate::independent::w3c_mode_in_body(ml_env(), ml_body_parser(), ml_named_start(ml_name_track())) == mode_in_body(
+            ml_env(),
+            ml_body_parser(),
+            ml_named_start(ml_name_track()),
+        ),
+{
+    hide(tag_of);
+    ml_track_agrees();
+    let p = ml_body_parser();
+    assert(p.open[0] == ml_named(ml_name_html()));
+    assert forall|j: int| 0 <= j < p.open.len() implies (#[trigger] p.open[j]).id < p.doc.nodes.len() && elem_tagged(p.open[j]) by {
+        assert(j == 0);
+    }
+    crate::independent::equivalence_body::lemma_in_body(ml_env(), ml_body_parser(), ml_named_start(ml_name_track()));
+}
+
+pub proof fn ml_w3c_in_body_track()
+    ensures
+        !(mode_in_body(ml_env(), ml_body_parser(), ml_named_start(ml_name_track()))->Done_0.open.len() == 2),
+{
+    assert(!(crate::independent::w3c_mode_in_body(ml_env(), ml_body_parser(), ml_named_start(ml_name_track()))->Done_0.open.len()
+        == 2)) by (compute_only);
+    ml_w3c_eq_in_body_track();
+}
+
+/// The "in table" lemma's precondition at [`ml_table_parser`] for a `div`
+/// start tag.
+proof fn ml_div_in_table_agrees()
+    ensures
+        crate::independent::equivalence_body::in_table_texts_agree(ml_table_parser(Mode::InTable), ml_named_start(ml_name_div())),
+        crate::independent::equivalence_body::in_body_texts_agree(
+            Parser { foster: true, ..ml_table_parser(Mode::InTable) },
+            ml_named_start(ml_name_div()),
+        ),
+        crate::independent::equivalence_body::in_body_aa_agrees(
+            Parser { foster: true, ..ml_table_parser(Mode::InTable) },
+            ml_named_start(ml_name_div()),
+        ),
+        tag_of(ml_name_div()) == Tag::Div,
+{
+    assert(tag_of(ml_name_div()) == Tag::Div) by (compute_only);
+    assert(crate::independent::equivalence_body::in_table_texts_agree(ml_table_parser(Mode::InTable), ml_named_start(ml_name_div())))
+        by (compute_only);
+    assert(crate::independent::equivalence_body::in_body_texts_agree(
+        Parser { foster: true, ..ml_table_parser(Mode::InTable) },
+        ml_named_start(ml_name_div()),
+    )) by (compute_only);
+    assert(crate::independent::equivalence_body::in_body_aa_agrees(
+        Parser { foster: true, ..ml_table_parser(Mode::InTable) },
+        ml_named_start(ml_name_div()),
+    )) by (compute_only);
+}
+
+/// What `independent::equivalence_body::lemma_in_table` gives at the
+/// certificate input of `in-table-foster-parenting-disabled`.
+proof fn ml_w3c_eq_in_table()
+    ensures
+        crate::independent::w3c_mode_in_table(ml_env(), ml_table_parser(Mode::InTable), ml_named_start(ml_name_div()))
+            == mode_in_table(ml_env(), ml_table_parser(Mode::InTable), ml_named_start(ml_name_div())),
+{
+    hide(crate::independent::w3c_mode_in_table);
+    hide(mode_in_table);
+    ml_div_in_table_ok();
+    crate::independent::equivalence_body::lemma_in_table(ml_env(), ml_table_parser(Mode::InTable), ml_named_start(ml_name_div()));
+}
+
+/// The "in table" lemma's precondition at the certificate input of
+/// `in-table-foster-parenting-disabled`.
+proof fn ml_div_in_table_ok()
+    ensures
+        crate::independent::equivalence_body::in_table_texts_agree(ml_table_parser(Mode::InTable), ml_named_start(ml_name_div())),
+        crate::independent::equivalence::place_stable(ml_table_parser(Mode::InTable)),
+        crate::independent::equivalence_body::in_table_body_ok(ml_table_parser(Mode::InTable), ml_named_start(ml_name_div())),
+{
+    hide(tag_of);
+    ml_table_stable(Mode::InTable);
+    ml_div_in_table_agrees();
+}
+
+pub proof fn ml_w3c_in_table()
+    ensures
+        !(mode_in_table(ml_env(), ml_table_parser(Mode::InTable), ml_named_start(ml_name_div()))->Done_0.doc.nodes[3].children.len()
+            == 1),
+{
+    assert(!(crate::independent::w3c_mode_in_table(
+        ml_env(),
+        ml_table_parser(Mode::InTable),
+        ml_named_start(ml_name_div()),
+    )->Done_0.doc.nodes[3].children.len() == 1)) by (compute_only);
+    ml_w3c_eq_in_table();
+}
+
 } // verus!

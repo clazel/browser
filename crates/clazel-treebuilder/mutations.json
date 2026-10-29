@@ -392,9 +392,14 @@
       "file": "src/spec/modes/in_body.rs",
       "find": "} else if g == Tag::Param || g == Tag::Source || g == Tag::Track {",
       "replace": "} else if g == Tag::Param || g == Tag::Source {",
-      "expect": "killed-incidentally",
-      "reason": "Dropped case: a track start tag falls to \"any other start tag\", so the track element is not popped and swallows its siblings. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that in_body_start_tag equals its spec fails.",
-      "module": "exec::modes::in_body_start"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a track start tag \"in body\" leaves the track element open; the W3C text (§8.2.5.4.7) inserts it and pops it at once, and independent::equivalence_body::lemma_in_body (proven equal where the two texts agree, which they do here) is false at that input. Dropped case: a track start tag falls to \"any other start tag\", so the track element is not popped and swallows its siblings.",
+      "module": "independent::equivalence_body",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_body_track()",
+        "witness": "mode_in_body(ml_env(), ml_body_parser(), ml_named_start(ml_name_track()))->Done_0.open.len() == 2"
+      }
     },
     {
       "id": "noahs-ark-off-by-one",
@@ -410,9 +415,14 @@
       "file": "src/spec/modes/adoption.rs",
       "find": "if p.stopped || counter >= 8 {",
       "replace": "if p.stopped || counter >= 7 {",
-      "expect": "killed-incidentally",
-      "reason": "The adoption agency's outer loop runs seven times instead of eight (step 4.1), so deeply misnested formatting is left unfixed. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that the adoption agency algorithm equals its spec fails.",
-      "module": "exec::modes::adoption"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: for a b end tag with a b element above seven nested div elements, the adoption agency algorithm stops after seven iterations and leaves the last b element open; the W3C text (§8.2.5.4.7, adoption agency algorithm step 4) runs an eighth, which pops it, and independent::equivalence_body::lemma_in_body (proven equal where the two texts agree, which they do here: both texts make every insertion of each iteration) is false at that input. The adoption agency's outer loop runs seven times instead of eight (step 4.1), so deeply misnested formatting is left unfixed.",
+      "module": "independent::equivalence_body",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_body_aa()",
+        "witness": "mode_in_body(ml_env(), ml_aa_parser(), ml_named_end(ml_name_b()))->Done_0.open.len() == 10"
+      }
     },
     {
       "id": "text-end-tag-not-popped",
@@ -433,9 +443,14 @@
       "file": "src/spec/modes/in_table.rs",
       "find": "let o = mode_in_body(env, Parser { foster: true, ..p }, t);",
       "replace": "let o = mode_in_body(env, Parser { foster: false, ..p }, t);",
-      "expect": "killed-incidentally",
-      "reason": "Foster parenting disabled: \"in table\"'s anything else processes the token with the \"in body\" rules without foster parenting, so misplaced content goes inside the table instead of before it. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that in_table_anything_else equals its spec fails.",
-      "module": "exec::modes::in_table"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a div start tag \"in table\" puts the div element inside the table; the W3C text (§8.2.5.4.9, \"anything else\") enables foster parenting, which puts it before the table, and independent::equivalence_body::lemma_in_table (proven equal where the two texts agree, which they do here) is false at that input. Foster parenting disabled: \"in table\"'s anything else processes the token with the \"in body\" rules without foster parenting, so misplaced content goes inside the table instead of before it.",
+      "module": "independent::equivalence_body",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_table()",
+        "witness": "mode_in_table(ml_env(), ml_table_parser(Mode::InTable), ml_named_start(ml_name_div()))->Done_0.doc.nodes[3].children.len() == 1"
+      }
     },
     {
       "id": "in-table-text-whitespace-dropped",
