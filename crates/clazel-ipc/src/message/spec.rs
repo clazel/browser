@@ -384,9 +384,12 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
     }
 }
 
-/// Every token of `ts` is a text string.
-pub open spec fn all_text(ts: Seq<Token>) -> bool {
-    forall|j: int| 0 <= j < ts.len() ==> ts[j] is Text
+/// Every token of `ts` is a text string (by recursion, so that Verus can
+/// evaluate it on a concrete message).
+pub open spec fn all_text(ts: Seq<Token>) -> bool
+    decreases ts.len(),
+{
+    ts.len() == 0 || (ts[0] is Text && all_text(ts.drop_first()))
 }
 
 /// The text strings of tokens that are all text strings.
