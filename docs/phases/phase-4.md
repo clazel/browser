@@ -744,11 +744,11 @@ spec function and to keep the parse state invariant; `exec::step::step`
 `dispatch` for every state with `parser_inv` and `reachable_inv`, and keeps
 both, so it is equal on every reachable state. One resource limit is
 raised (`chars_at_exec`, 300, with the reason at the attribute); the
-others were removed by splitting proofs. Mutations: 48, of which 22 are
-certified kills (19 through the termination ranking, every mode but "in
-table text"; 3 through the order of actions) and 26 are killed
-incidentally (tree-shape mutations that break only the implementation's
-proof).
+others were removed by splitting proofs. Mutations: 48, of which 38 are
+certified kills (through the termination ranking, the order of actions and
+the W3C equivalences of 4.11) and 10 are killed incidentally (tree-shape
+mutations of "in body", the table modes and foreign content, which break
+only the implementation's proof).
 
 ### 4.11 The tree builder: independent transcription and conformance (L)
 
@@ -786,9 +786,13 @@ parser with a test-only stand-in tokenizer that refuses every input it
 cannot tokenize exactly: 1,381 cases pass, 582 are refused by the stand-in
 (character references, processing instructions, script data escapes,
 CDATA, U+0000, unusual DOCTYPEs and comments), and 4 are the
-`selectedcontent` restriction, each listed by name. The W3C independent
-transcription and the `html5ever` differential (22 packages with
-`markup5ever_rcdom`) are not done.
+`selectedcontent` restriction, each listed by name. The W3C HTML 5.2
+§8.2.5 transcription (`src/independent/`, from the dated REC URL; the
+undated one now redirects to the WHATWG standard) covers 18 of its 23
+modes, each proven equal to the spec with the texts' differences stated;
+"in body", "in table" and "in table text" are not transcribed yet, and the
+W3C's two "in select" modes have no counterpart. The `html5ever`
+differential (22 packages with `markup5ever_rcdom`) is not done.
 
 After 4.9 to 4.11: **raise `clazel-treebuilder` to tier 2.**
 
@@ -991,8 +995,8 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.7 Tokenizer implementation and evidence | not started |
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
 | 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable`; three of them under stated hypotheses (see As built) |
-| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, 22 certified |
-| 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; independent transcription and differential not started |
+| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, 38 certified |
+| 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; W3C transcription proven equal for 18 of 23 modes; differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
 | 4.14 Text layout | not started |

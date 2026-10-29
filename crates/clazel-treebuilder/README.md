@@ -68,10 +68,21 @@ evidence exists (see "Left" below).
   the parse state invariant; `exec::step::step` equals `dispatch` on every
   state with `parser_inv` and `reachable_inv`, and keeps both. No recursion on
   the tree's depth or the input's length.
-- **Mutations** (`mutations.json`): 48; 22 killed by a theorem with a
-  certificate Verus checks, 26 killed incidentally (they break only the
-  implementation's proof: no theorem states the tree's shape, so the
-  evidence for those is the conformance suite), 0 surviving.
+- **Independent transcription** (`src/independent/`): W3C HTML 5.2
+  §8.2.5 (Recommendation, 14 December 2017), written without reading
+  `src/spec/modes/`, proven equal to the spec for 18 of its 23 insertion
+  modes with every difference between the two texts stated in the lemma's
+  precondition (no processing instructions in the W3C text; "after head"
+  sets frameset-ok; "in cell" checks a cell is in scope where WHATWG
+  asserts it; the DOCTYPE lists are taken as agreeing, not proven). Not
+  transcribed: "in body" (with the adoption agency), "in table", "in table
+  text", and the W3C's "in select" modes, which the living standard
+  removed.
+- **Mutations** (`mutations.json`): 48; 38 killed by a theorem with a
+  certificate Verus checks (termination, the order of actions, and the
+  W3C equivalences), 10 killed incidentally (tree-shape mutations of the
+  modes the W3C transcription does not cover yet: they break only the
+  implementation's proof), 0 surviving.
 - **Conformance** (`tests/conformance_tree_construction.rs`): the
   html5lib tree-construction suite as WPT keeps it
   (`tests/data/wpt-tree-construction/`, pinned WPT commit), through the
@@ -87,7 +98,7 @@ evidence exists (see "Left" below).
 ## Left
 
 - The join with `clazel-html`'s tokenizer, and the full suite through it.
-- The W3C HTML 5.2 §8.2.5 independent transcription (`independent.rs`).
+- The W3C transcription of "in body", "in table" and "in table text".
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
 - Spec-level `parser_wf` of every reachable parser, which would remove the
