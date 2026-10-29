@@ -200,6 +200,11 @@ jobs:
           $out = & cargo run -q -p clazel -- demo 2>&1
           Say 'demo' ($out | Select-Object -First 12)
           Say 'acl-exe-after' (icacls $exe)
+          foreach ($run in 1..2) {
+            $t = & cargo test -p clazel --test conformance_wpt_cookies -- --nocapture 2>&1 | Out-String
+            $lines = $t -split "`r?`n"
+            Say "wpt-run-$run" (($lines | Select-String 'clazel-conformance:') + ($lines | Select-String 'FAIL ' | Select-Object -First 6) + ($lines | Select-String 'cannot start' | Select-Object -First 3) + ($lines | Select-String 'panicked|test result' | Select-Object -First 4))
+          }
       # No AppArmor step and no setup.sh. The renderer's sandbox is an
       # AppContainer that the host creates the process in; an unprivileged
       # user can do that. The tests grant the container read and execute on
