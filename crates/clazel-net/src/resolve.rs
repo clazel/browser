@@ -264,12 +264,27 @@ fn deadline_after(d: Duration) -> Instant {
 
 /// A random 16-bit query ID from `/dev/urandom` (RFC 5452 §9.2 wants it
 /// unpredictable).
+#[cfg(unix)]
 fn random_id() -> Result<u16, NetError> {
     let mut b = [0u8; 2];
     std::fs::File::open("/dev/urandom")
         .and_then(|mut f| f.read_exact(&mut b))
         .map_err(|e| NetError::Resolve(ResolveError::Random(e.kind())))?;
     Ok(u16::from_be_bytes(b))
+}
+
+/// Windows: `std` has no safe OS random source, and `BCryptGenRandom` needs
+/// `unsafe`, which only `clazel-sys` may hold (CLAUDE.md rule 1). Until it has
+/// that call (it needs an audit), take the ID from `std`'s per-process random
+/// hasher key, which the standard library seeds from the OS. It is
+/// unpredictable to an off-path attacker, but it is not a CSPRNG.
+#[cfg(not(unix))]
+fn random_id() -> Result<u16, NetError> {
+    use std::hash::{BuildHasher, Hasher, RandomState};
+    let mut h = RandomState::new().build_hasher();
+    h.write_u64(0);
+    let [a, b, ..] = h.finish().to_be_bytes();
+    Ok(u16::from_be_bytes([a, b]))
 }
 
 #[cfg(test)]

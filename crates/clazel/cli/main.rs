@@ -25,7 +25,7 @@ fn renderer() -> Result<PathBuf, String> {
         return Ok(path.into());
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let path = exe.with_file_name("clazel-renderer");
+    let path = exe.with_file_name(format!("clazel-renderer{}", std::env::consts::EXE_SUFFIX));
     if !path.exists() {
         eprintln!("clazel: building clazel-renderer ...");
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());

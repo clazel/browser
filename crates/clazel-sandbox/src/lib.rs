@@ -11,11 +11,13 @@
 //! - [`interp`]: a small classic-BPF validator and interpreter. It models the
 //!   kernel, so it is part of the trusted computing base; the harnesses in
 //!   `proofs.rs` run every generated program through it.
-//! - [`landlock`], [`namespaces`], [`seatbelt`]: the other policies.
+//! - [`landlock`], [`namespaces`], [`seatbelt`], [`appcontainer`]: the other
+//!   policies.
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod appcontainer;
 pub mod bpf;
 pub mod interp;
 pub mod landlock;

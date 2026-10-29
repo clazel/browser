@@ -6,13 +6,28 @@
 //! container may refuse a layer, and then `enter` names it and the probe
 //! exits, which is also a pass of this test (the renderer would not run
 //! either). A seccomp kill (SIGSYS) on a forbidden call is a pass. On macOS
-//! only a working sandbox passes.
+//! only a working sandbox passes. On Windows the host starts the probe inside
+//! the AppContainer (`launch::spawn`) and `enter` only checks that it is there:
+//! run by hand, outside it, `enter` must refuse; run through `launch`, the
+//! probe must find a file and the network closed to it.
 
+#[cfg(windows)]
+#[path = "sandbox_windows/mod.rs"]
+mod windows;
+#[cfg(windows)]
+fn main() -> std::process::ExitCode {
+    windows::main()
+}
+
+#[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
+#[cfg(unix)]
 use std::process::{Command, ExitCode};
 
+#[cfg(unix)]
 const PROBE: &str = "CLAZEL_SANDBOX_PROBE";
 
+#[cfg(unix)]
 fn probe() {
     if let Err(failure) = clazel_renderer::sandbox::enter() {
         eprintln!("FAILED-CLOSED {failure}");
@@ -27,6 +42,7 @@ fn probe() {
     }
 }
 
+#[cfg(unix)]
 fn main() -> ExitCode {
     if std::env::var_os(PROBE).is_some() {
         probe();
@@ -49,6 +65,7 @@ fn main() -> ExitCode {
 }
 
 /// Run the probe in a child process and judge how it ended.
+#[cfg(unix)]
 fn check() -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     let out = Command::new(exe)

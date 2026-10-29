@@ -1266,13 +1266,13 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
 
 #[cfg(test)]
 mod tests {
-    use std::process::Command;
-
     /// A streamed run keeps both pipes' output and reports failure.
     #[cfg(unix)]
     #[test]
     #[cfg_attr(miri, ignore = "spawns processes")]
     fn a_streamed_run_keeps_its_output() {
+        use std::process::Command;
+
         let ok = super::run_streamed("t", Command::new("sh").args(["-c", "echo a; echo b >&2"]));
         assert_eq!(ok.as_deref(), Ok("a\nb\n"));
         let failed = super::run_streamed("t", Command::new("sh").args(["-c", "exit 3"]));
