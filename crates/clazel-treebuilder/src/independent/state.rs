@@ -8,8 +8,9 @@
 //!
 //! Modelling choices (as in [`crate::spec`], whose `Parser`, `Elem` and
 //! `Fmt` these read):
-//! - The stack of open elements is `Seq<Elem>`, the bottommost (the `html`
-//!   element) first; "the current node" is the last entry.
+//! - The stack of open elements is `Seq<Elem>`, from the W3C's "top of the
+//!   stack" (the `html` element) at index 0 to "the current node (the
+//!   bottommost node of the stack)", the last entry.
 //! - An element's "tag name" is its `name`, and its attributes "as they
 //!   were when the element was created by the parser" are those of the
 //!   token it was created for, kept with it in the list (`Fmt::Entry`).
@@ -36,13 +37,15 @@ pub open spec fn w3c_table_scope_type(e: Elem) -> bool {
     e.ns == Namespace::Html && (e.tag == Tag::Html || e.tag == Tag::Table || e.tag == Tag::Template)
 }
 
-/// "The stack of open elements is said to have a particular element in a
-/// specific scope when the following algorithm terminates in a match
-/// state", with the list of [`w3c_table_scope_type`], the target given by
-/// `target`, and `node` the `i`th entry from the bottom (step 1 starts with
-/// `i` the length of the stack: "Initialize node to be the current node").
-/// The stack always has an `html` element at the bottom, which is in the
-/// list, so the algorithm never runs off it; if it does, it fails.
+/// "The stack of open elements is said to have an element target node in
+/// a specific scope consisting of a list of element types list when the
+/// following algorithm terminates in a match state", with the list of
+/// [`w3c_table_scope_type`] and the target node given by `target`; `node`
+/// is the entry at index `i - 1` (step 1, "Initialize node to be the
+/// current node", is `i` the length of the stack). Step 4 "will never
+/// fail, since the loop will always terminate in the previous step if the
+/// top of the stack — an html element — is reached"; running off the stack
+/// anyway is a failure.
 pub open spec fn w3c_in_table_scope(open: Seq<Elem>, i: int, target: spec_fn(Elem) -> bool) -> bool
     decreases i,
 {
