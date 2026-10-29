@@ -1,17 +1,14 @@
 //! The kernel host shell (phase-2.md item 2.15): the I/O around the proven
-//! kernel `step`. Each renderer gets a socket pair (its end is the process's
-//! stdin and stdout) and a thread that reads whole frames; the id of an event
-//! is the id its socket was made for, never anything in a frame. A frame over
-//! `MAX_FRAME` (refused from its first 4 bytes) or a closed socket becomes
+//! kernel `step`. Each renderer gets a channel (a socket pair on Unix, pipes
+//! on Windows; `clazel_renderer::launch`) and a thread that reads whole
+//! frames; the id of an event is the id its socket was made for, never
+//! anything in a frame. A frame over `MAX_FRAME` (refused from its first 4 bytes) or a closed socket becomes
 //! `RendererExited`. Outputs are carried out in order, and every frame, exit
 //! and stderr (which names a failed sandbox layer) is printed. The network
 //! (item 3.7) is `clazel-net`'s `Driver`.
 
 use std::collections::HashMap;
-use std::io::{Read, Write};
-use std::net::Shutdown;
-use std::os::{fd::OwnedFd, unix::net::UnixStream};
-use std::process::{Child, Command, Stdio};
+use std::process::Command;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 
@@ -22,6 +19,7 @@ use clazel_ipc::{
 use clazel_kernel::exec::real_urls::{RealFetch, step_real};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
 use clazel_net::{Driver, Op, Report, read_frames};
+use clazel_renderer::launch::{self, Link};
 
 /// What a socket's reader thread reports; the id is the socket's.
 enum Ev {
@@ -40,7 +38,7 @@ pub struct Host {
     net: Driver<Ev>,
     /// A fixed kernel clock (seconds since 1601) for tests; `None`: wall clock.
     pub clock: Option<u64>,
-    table: HashMap<u64, (UnixStream, Child)>,
+    table: HashMap<u64, Link>,
     tx: Sender<Ev>,
     rx: Receiver<Ev>,
     command: Box<dyn FnMut(u64) -> Command>,
@@ -196,16 +194,7 @@ impl Host {
     }
 
     fn spawn(&mut self, id: u64) -> std::io::Result<()> {
-        let (host_end, child_end) = UnixStream::pair()?;
-        host_end.set_write_timeout(Some(Duration::from_secs(5)))?;
-        let reader = host_end.try_clone()?;
-        let stdin: OwnedFd = child_end.into();
-        let stdout = stdin.try_clone()?;
-        let child = (self.command)(id)
-            .stdin(stdin)
-            .stdout(stdout)
-            .stderr(Stdio::piped())
-            .spawn()?;
+        let (link, reader) = launch::spawn((self.command)(id))?;
         let tx = self.tx.clone();
         std::thread::spawn(move || {
             let on = |frame| tx.send(Ev::Frame(id, frame)).is_ok();
@@ -213,16 +202,16 @@ impl Host {
                 let _ = tx.send(Ev::Gone(id, why));
             }
         });
-        self.table.insert(id, (host_end, child));
+        self.table.insert(id, link);
         Ok(())
     }
 
     /// Write a frame to a renderer; false if its socket failed.
     fn send(&mut self, id: u64, frame: &[u8]) -> bool {
-        let Some((sock, _)) = self.table.get_mut(&id) else {
+        let Some(link) = self.table.get_mut(&id) else {
             return true;
         };
-        let ok = sock.write_all(frame).is_ok();
+        let ok = link.send(frame);
         self.say(format!("renderer {id} <- {}", describe(frame)));
         ok
     }
@@ -230,22 +219,10 @@ impl Host {
     /// Close the socket, wait up to `grace` for the process to exit on its
     /// own, then kill it; report how it ended and what it wrote to stderr.
     fn reap(&mut self, id: u64, why: &str, grace: Duration) {
-        let Some((sock, mut child)) = self.table.remove(&id) else {
+        let Some(link) = self.table.remove(&id) else {
             return;
         };
-        let _ = sock.shutdown(Shutdown::Both);
-        let end = deadline(grace);
-        while matches!(child.try_wait(), Ok(None)) && Instant::now() < end {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        let _ = child.kill();
-        let status = child
-            .wait()
-            .map_or_else(|e| e.to_string(), |s| s.to_string());
-        let mut stderr = String::new();
-        if let Some(mut e) = child.stderr.take() {
-            let _ = e.read_to_string(&mut stderr);
-        }
+        let (status, stderr) = link.finish(grace);
         let note = Some(stderr.trim())
             .filter(|s| !s.is_empty())
             .map_or(String::new(), |s| format!("; stderr: {s}"));

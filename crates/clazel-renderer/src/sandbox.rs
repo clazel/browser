@@ -13,7 +13,7 @@ use std::fmt;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure {
     /// The layer: `no_new_privs`, `namespaces`, `landlock`, `seccomp`,
-    /// `seatbelt` or `platform`.
+    /// `seatbelt`, `appcontainer` or `platform`.
     pub layer: &'static str,
     /// What the OS or `clazel-sys` reported.
     pub detail: String,
@@ -118,8 +118,23 @@ fn seccomp() -> Result<(), String> {
     clazel_sys::linux::seccomp_set_mode_filter(&program).map_err(|e| e.to_string())
 }
 
+/// Windows cannot confine a running process: the host starts the renderer
+/// inside the AppContainer and job (`launch`), and this only checks that it
+/// did. A renderer started any other way (for example by hand) is refused.
+#[cfg(windows)]
+pub fn enter() -> Result<(), Failure> {
+    match clazel_sys::windows::is_appcontainer() {
+        Ok(true) => Ok(()),
+        Ok(false) => layer::<(), &str>(
+            "appcontainer",
+            Err("not started inside the renderer AppContainer by the host"),
+        ),
+        Err(e) => layer::<(), _>("appcontainer", Err(e)),
+    }
+}
+
 /// Other targets have no sandbox (`clazel-sys` is empty there): refuse.
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 pub fn enter() -> Result<(), Failure> {
     layer::<(), &str>("platform", Err("no sandbox for this operating system"))
 }
