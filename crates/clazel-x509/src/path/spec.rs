@@ -115,9 +115,9 @@
 //!   basicConstraints, keyUsage, extKeyUsage). Any other critical extension
 //!   refuses the path, as §6.1 requires ("clients MUST reject the certificate
 //!   if it contains an unsupported critical extension"). That includes a
-//!   critical nameConstraints on the target **(R as to its reason**: RFC
-//!   5280 §4.2.1.10 allows it only in a CA certificate). extKeyUsage is
-//!   processed on intermediates by `profile.rs`.
+//!   critical nameConstraints on the target, which RFC 5280 §4.2.1.10 allows
+//!   only in a CA certificate (`profile.rs` refuses a non-critical one too,
+//!   **(R)**). extKeyUsage on intermediates is processed by `profile.rs`.
 //! - **The order of failure.** Each of §6.1.3, §6.1.4 and §6.1.5 returns the
 //!   error of the first failing check in step-letter order. The RFC returns
 //!   "a failure indication and an appropriate reason" without ordering them;
