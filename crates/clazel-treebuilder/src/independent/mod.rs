@@ -18,6 +18,7 @@
 //!   module per group of sections ([`initial`]: §8.2.5.4.1; [`early`]:
 //!   §8.2.5.4.2 to §8.2.5.4.6;
 //!   [`text`]: §8.2.5.4.8; [`tables`]: §8.2.5.4.9 to §8.2.5.4.15;
+//!   [`template`]: §8.2.5.4.18;
 //!   [`after`]: §8.2.5.4.19 to §8.2.5.4.23). Each entry ("A start tag whose
 //!   tag name is …") is one branch, in the W3C's order, with the W3C's
 //!   wording quoted. Entries listed together (two `dt` lines over one `dd`)
@@ -85,6 +86,7 @@ pub mod initial;
 pub mod probe;
 
 pub mod tables;
+pub mod template;
 pub mod text;
 
 #[cfg(verus_only)]
@@ -95,6 +97,8 @@ pub use early::*;
 pub use initial::*;
 #[cfg(verus_only)]
 pub use tables::*;
+#[cfg(verus_only)]
+pub use template::*;
 #[cfg(verus_only)]
 pub use text::*;
 

@@ -121,4 +121,255 @@ pub open spec fn w3c_mode_in_column_group(env: EncFns, p: Parser, t: Tok) -> Out
     }
 }
 
+/// "Clear the stack back to a table body context": "while the current node
+/// is not a tbody, tfoot, thead, template, or html element, pop elements
+/// from the stack of open elements."
+pub open spec fn w3c_clear_to_table_body_context(p: Parser) -> Parser {
+    pop_while(
+        p,
+        |e: Elem|
+            !(is_html(e, Tag::Tbody) || is_html(e, Tag::Tfoot) || is_html(e, Tag::Thead) || is_html(e, Tag::Template) || is_html(
+                e,
+                Tag::Html,
+            )),
+    )
+}
+
+/// "Clear the stack back to a table row context": "while the current node
+/// is not a tr, template, or html element, pop elements from the stack of
+/// open elements."
+pub open spec fn w3c_clear_to_table_row_context(p: Parser) -> Parser {
+    pop_while(p, |e: Elem| !(is_html(e, Tag::Tr) || is_html(e, Tag::Template) || is_html(e, Tag::Html)))
+}
+
+/// "The stack of open elements has a tbody, thead, or tfoot element in
+/// table scope."
+pub open spec fn w3c_has_table_section_in_table_scope(p: Parser) -> bool {
+    in_scope_from(
+        p.open,
+        p.open.len() as int,
+        |e: Elem| is_html(e, Tag::Tbody) || is_html(e, Tag::Thead) || is_html(e, Tag::Tfoot),
+        Scope::Table,
+    )
+}
+
+/// "tr"
+pub open spec fn w3c_name_tr() -> Seq<u32> {
+    seq![0x74u32, 0x72]
+}
+
+/// W3C HTML 5.2 §8.2.5.4.13 the "in table body" insertion mode
+/// (<https://www.w3.org/TR/2017/REC-html52-20171214/syntax.html#the-in-table-body-insertion-mode>).
+pub open spec fn w3c_mode_in_table_body(env: EncFns, p: Parser, t: Tok) -> Outcome {
+    let tag = w3c_tag(t);
+    if w3c_start(t, Tag::Tr) {
+        // "A start tag whose tag name is "tr"": "Clear the stack back to a
+        // table body context. Insert an HTML element for the token, then
+        // switch the insertion mode to "in row"."
+        let q = insert_html_element(w3c_clear_to_table_body_context(p), t->Start_0).0;
+        Outcome::Done(Parser { mode: Mode::InRow, ..q })
+    } else if w3c_start(t, Tag::Th) || w3c_start(t, Tag::Td) {
+        // "A start tag whose tag name is one of: "th", "td"": "Parse error.
+        // Clear the stack back to a table body context. Insert an HTML
+        // element for a "tr" start tag token with no attributes, then switch
+        // the insertion mode to "in row". Reprocess the current token."
+        let q = insert_html_element(w3c_clear_to_table_body_context(p), start_tag_named(w3c_name_tr())).0;
+        Outcome::Reprocess(Parser { mode: Mode::InRow, ..q }, t)
+    } else if t is End && (tag == Tag::Tbody || tag == Tag::Tfoot || tag == Tag::Thead) {
+        // "An end tag whose tag name is one of: "tbody", "tfoot", "thead"":
+        if !has_in_scope(p, tag, Scope::Table) {
+            // "If the stack of open elements does not have an element in
+            // table scope that is an HTML element with the same tag name as
+            // the token, this is a parse error; ignore the token."
+            Outcome::Done(p)
+        } else {
+            // "Otherwise: Clear the stack back to a table body context. Pop
+            // the current node from the stack of open elements. Switch the
+            // insertion mode to "in table"."
+            Outcome::Done(Parser { mode: Mode::InTable, ..pop(w3c_clear_to_table_body_context(p)) })
+        }
+    } else if (t is Start && (tag == Tag::Caption || tag == Tag::Col || tag == Tag::Colgroup || tag == Tag::Tbody || tag
+        == Tag::Tfoot || tag == Tag::Thead)) || w3c_end(t, Tag::Table) {
+        // "A start tag whose tag name is one of: "caption", "col",
+        // "colgroup", "tbody", "tfoot", "thead"", "An end tag whose tag name
+        // is "table"":
+        if !w3c_has_table_section_in_table_scope(p) {
+            // "If the stack of open elements does not have a tbody, thead, or
+            // tfoot element in table scope, this is a parse error; ignore the
+            // token."
+            Outcome::Done(p)
+        } else {
+            // "Otherwise: Clear the stack back to a table body context. Pop
+            // the current node from the stack of open elements. Switch the
+            // insertion mode to "in table". Reprocess the token."
+            Outcome::Reprocess(Parser { mode: Mode::InTable, ..pop(w3c_clear_to_table_body_context(p)) }, t)
+        }
+    } else if t is End && (tag == Tag::Body || tag == Tag::Caption || tag == Tag::Col || tag == Tag::Colgroup || tag
+        == Tag::Html || tag == Tag::Td || tag == Tag::Th || tag == Tag::Tr) {
+        // "An end tag whose tag name is one of: "body", "caption", "col",
+        // "colgroup", "html", "td", "th", "tr"": "Parse error."
+        Outcome::Done(p)
+    } else {
+        // "Anything else": "Process the token using the rules for the "in
+        // table" insertion mode."
+        Outcome::Using(Mode::InTable, p, t)
+    }
+}
+
+/// W3C HTML 5.2 §8.2.5.4.14 the "in row" insertion mode
+/// (<https://www.w3.org/TR/2017/REC-html52-20171214/syntax.html#the-in-row-insertion-mode>).
+pub open spec fn w3c_mode_in_row(env: EncFns, p: Parser, t: Tok) -> Outcome {
+    let tag = w3c_tag(t);
+    if w3c_start(t, Tag::Th) || w3c_start(t, Tag::Td) {
+        // "A start tag whose tag name is one of: "th", "td"": "Clear the
+        // stack back to a table row context. Insert an HTML element for the
+        // token, then switch the insertion mode to "in cell". Insert a marker
+        // at the end of the list of active formatting elements."
+        let q = insert_html_element(w3c_clear_to_table_row_context(p), t->Start_0).0;
+        Outcome::Done(push_marker(Parser { mode: Mode::InCell, ..q }))
+    } else if w3c_end(t, Tag::Tr) {
+        // "An end tag whose tag name is "tr"":
+        if !has_in_scope(p, Tag::Tr, Scope::Table) {
+            // "If the stack of open elements does not have a tr element in
+            // table scope, this is a parse error; ignore the token."
+            Outcome::Done(p)
+        } else {
+            // "Otherwise: Clear the stack back to a table row context. Pop the
+            // current node (which will be a tr element) from the stack of
+            // open elements. Switch the insertion mode to "in table body"."
+            Outcome::Done(Parser { mode: Mode::InTableBody, ..pop(w3c_clear_to_table_row_context(p)) })
+        }
+    } else if (t is Start && (tag == Tag::Caption || tag == Tag::Col || tag == Tag::Colgroup || tag == Tag::Tbody || tag
+        == Tag::Tfoot || tag == Tag::Thead || tag == Tag::Tr)) || w3c_end(t, Tag::Table) {
+        // "A start tag whose tag name is one of: "caption", "col",
+        // "colgroup", "tbody", "tfoot", "thead", "tr"", "An end tag whose tag
+        // name is "table"":
+        if !has_in_scope(p, Tag::Tr, Scope::Table) {
+            // "If the stack of open elements does not have a tr element in
+            // table scope, this is a parse error; ignore the token."
+            Outcome::Done(p)
+        } else {
+            // "Otherwise: Clear the stack back to a table row context. Pop the
+            // current node (which will be a tr element) from the stack of
+            // open elements. Switch the insertion mode to "in table body".
+            // Reprocess the token."
+            Outcome::Reprocess(Parser { mode: Mode::InTableBody, ..pop(w3c_clear_to_table_row_context(p)) }, t)
+        }
+    } else if t is End && (tag == Tag::Tbody || tag == Tag::Tfoot || tag == Tag::Thead) {
+        // "An end tag whose tag name is one of: "tbody", "tfoot", "thead"":
+        if !has_in_scope(p, tag, Scope::Table) {
+            // "If the stack of open elements does not have an element in table
+            // scope that is an HTML element with the same tag name as the
+            // token, this is a parse error; ignore the token."
+            Outcome::Done(p)
+        } else if !has_in_scope(p, Tag::Tr, Scope::Table) {
+            // "If the stack of open elements does not have a tr element in
+            // table scope, ignore the token."
+            Outcome::Done(p)
+        } else {
+            // "Otherwise: Clear the stack back to a table row context. Pop the
+            // current node (which will be a tr element) from the stack of
+            // open elements. Switch the insertion mode to "in table body".
+            // Reprocess the token."
+            Outcome::Reprocess(Parser { mode: Mode::InTableBody, ..pop(w3c_clear_to_table_row_context(p)) }, t)
+        }
+    } else if t is End && (tag == Tag::Body || tag == Tag::Caption || tag == Tag::Col || tag == Tag::Colgroup || tag
+        == Tag::Html || tag == Tag::Td || tag == Tag::Th) {
+        // "An end tag whose tag name is one of: "body", "caption", "col",
+        // "colgroup", "html", "td", "th"": "Parse error."
+        Outcome::Done(p)
+    } else {
+        // "Anything else": "Process the token using the rules for the "in
+        // table" insertion mode."
+        Outcome::Using(Mode::InTable, p, t)
+    }
+}
+
+/// "Pop elements from the stack of open elements stack until a td element
+/// or a th element has been popped from the stack."
+pub open spec fn w3c_pop_until_cell_popped(p: Parser) -> Parser
+    decreases p.open.len(),
+{
+    if p.open.len() == 0 {
+        p
+    } else if is_html(current_node(p), Tag::Td) || is_html(current_node(p), Tag::Th) {
+        pop(p)
+    } else {
+        w3c_pop_until_cell_popped(pop(p))
+    }
+}
+
+/// "Close the cell": "Generate implied end tags. If the current node is not
+/// now a td element or a th element, then this is a parse error. Pop
+/// elements from the stack of open elements stack until a td element or a
+/// th element has been popped from the stack. Clear the list of active
+/// formatting elements up to the last marker. Switch the insertion mode to
+/// "in row"."
+pub open spec fn w3c_close_the_cell(p: Parser) -> Parser {
+    let q = clear_to_last_marker(w3c_pop_until_cell_popped(generate_implied_end_tags(p, None)));
+    Parser { mode: Mode::InRow, ..q }
+}
+
+/// W3C HTML 5.2 §8.2.5.4.15 the "in cell" insertion mode
+/// (<https://www.w3.org/TR/2017/REC-html52-20171214/syntax.html#the-in-cell-insertion-mode>).
+pub open spec fn w3c_mode_in_cell(env: EncFns, p: Parser, t: Tok) -> Outcome {
+    let tag = w3c_tag(t);
+    if t is End && (tag == Tag::Td || tag == Tag::Th) {
+        // "An end tag whose tag name is one of: "td", "th"":
+        if !has_in_scope(p, tag, Scope::Table) {
+            // "If the stack of open elements does not have an element in table
+            // scope that is an HTML element with the same tag name as that of
+            // the token, then this is a parse error; ignore the token."
+            Outcome::Done(p)
+        } else {
+            // "Otherwise: Generate implied end tags. Now, if the current node
+            // is not an HTML element with the same tag name as the token, then
+            // this is a parse error. Pop elements from the stack of open
+            // elements stack until an HTML element with the same tag name as
+            // the token has been popped from the stack. Clear the list of
+            // active formatting elements up to the last marker. Switch the
+            // insertion mode to "in row"."
+            let q = clear_to_last_marker(pop_until_popped(generate_implied_end_tags(p, None), tag));
+            Outcome::Done(Parser { mode: Mode::InRow, ..q })
+        }
+    } else if t is Start && (tag == Tag::Caption || tag == Tag::Col || tag == Tag::Colgroup || tag == Tag::Tbody || tag
+        == Tag::Td || tag == Tag::Tfoot || tag == Tag::Th || tag == Tag::Thead || tag == Tag::Tr) {
+        // "A start tag whose tag name is one of: "caption", "col",
+        // "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr"":
+        if !in_scope_from(p.open, p.open.len() as int, |e: Elem| is_html(e, Tag::Td) || is_html(e, Tag::Th), Scope::Table) {
+            // "If the stack of open elements does not have a td or th element
+            // in table scope, then this is a parse error; ignore the token.
+            // (fragment case)"
+            Outcome::Done(p)
+        } else {
+            // "Otherwise, close the cell (see below) and reprocess the
+            // token."
+            Outcome::Reprocess(w3c_close_the_cell(p), t)
+        }
+    } else if t is End && (tag == Tag::Body || tag == Tag::Caption || tag == Tag::Col || tag == Tag::Colgroup || tag
+        == Tag::Html) {
+        // "An end tag whose tag name is one of: "body", "caption", "col",
+        // "colgroup", "html"": "Parse error."
+        Outcome::Done(p)
+    } else if t is End && (tag == Tag::Table || tag == Tag::Tbody || tag == Tag::Tfoot || tag == Tag::Thead || tag
+        == Tag::Tr) {
+        // "An end tag whose tag name is one of: "table", "tbody", "tfoot",
+        // "thead", "tr"":
+        if !has_in_scope(p, tag, Scope::Table) {
+            // "If the stack of open elements does not have an element in table
+            // scope that is an HTML element with the same tag name as that of
+            // the token, then this is a parse error; ignore the token."
+            Outcome::Done(p)
+        } else {
+            // "Otherwise, close the cell (see below) and reprocess the
+            // token."
+            Outcome::Reprocess(w3c_close_the_cell(p), t)
+        }
+    } else {
+        // "Anything else": "Process the token using the rules for the "in
+        // body" insertion mode."
+        Outcome::Using(Mode::InBody, p, t)
+    }
+}
+
 } // verus!
