@@ -182,6 +182,8 @@ pub proof fn lemma_new_parser_reach(url: Seq<u32>, scripting: bool, tentative: b
 {
     let p = new_parser(url, scripting, tentative);
     assert(crate::termination::templates_in(p.open, 0) == 0);
+    clazel_dom::lemmas::theorem_new_document_wf(url);
+    super::doc::lemma_dinv_intro(p);
 }
 
 /// The fragment parser satisfies [`reachable_inv`].
@@ -218,6 +220,13 @@ pub proof fn lemma_fragment_parser_reach(ctx: Context, scripting: bool)
     };
     let p1 = Parser { doc: d4, ..p0 };
     assert(crate::termination::templates_in(p1.open, 1) == crate::termination::templates_in(p1.open, 0));
+    crate::theorems::reachable::lemma_fragment_doc_ok(ctx);
+    assert(crate::exec::frame::kind_kept(crate::exec::step::root_kind(), d4.nodes[root as int].kind));
+    assert(crate::exec::frame::elem_ok(d4, root_el));
+    assert forall|i: int| 0 <= i < p1.open.len() implies crate::exec::frame::elem_ok(d4, #[trigger] p1.open[i]) by {
+        assert(p1.open[i] == root_el);
+    }
+    super::doc::lemma_dinv_intro(p1);
     assert(good(p1));
     assert(crate::termination::helpers_ranking::count_ok(p1));
     lemma_reset_keeps(p1);

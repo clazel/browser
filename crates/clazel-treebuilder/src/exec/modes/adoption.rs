@@ -392,7 +392,7 @@ proof fn lemma_last_index_where_same(a: Seq<Elem>, b: Seq<Elem>, i: int, f: spec
 
 /// Moving the children of `from` to `to` extends the document when `to` is
 /// no `template` without template contents.
-proof fn lemma_reparent_extends(doc: Document, from: NodeId, to: NodeId)
+pub proof fn lemma_reparent_extends(doc: Document, from: NodeId, to: NodeId)
     requires
         dom::reparent_children_requires(doc, from, to),
         node_is_template(doc, to) ==> has_template_contents(doc, to),
