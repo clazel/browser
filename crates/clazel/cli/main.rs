@@ -7,11 +7,14 @@
 //! - `clazel demo`: the exit demo of phase-2.md item 2.16 (`demo.rs`).
 //! - `clazel fetch URL`: one `http://` GET, printing the response
 //!   (`fetch.rs`, Phase 3 item 3.8; no renderer involved).
+//! - `clazel browse URL`: the text-mode browser of phase-4.md item 4.15
+//!   (`browse.rs`). The host's log of frames goes to standard error.
 //!
 //! The renderer is `$CLAZEL_RENDERER`, or `clazel-renderer` next to this
 //! binary, built with `cargo build -p clazel-renderer` if it is not there
 //! (`cargo run -p clazel` builds only this package).
 
+mod browse;
 mod demo;
 mod fetch;
 
@@ -42,6 +45,24 @@ fn renderer() -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// `clazel browse URL` on standard input and output, `$COLUMNS` (or 80)
+/// wide.
+fn browse_stdio(mut host: clazel::Host, url: &str) -> ExitCode {
+    let width = std::env::var("COLUMNS")
+        .ok()
+        .and_then(|c| c.trim().parse::<usize>().ok())
+        .filter(|w| *w > 0)
+        .unwrap_or(80);
+    let mut out = std::io::stdout().lock();
+    match browse::browse(&mut host, url, std::io::stdin().lock(), &mut out, width) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("clazel: browse: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     if let (Some("fetch"), Some(url), None) =
@@ -59,6 +80,7 @@ fn main() -> ExitCode {
     let mut host = clazel::Host::new(move |_| Command::new(&renderer));
     match (args.get(1).map(String::as_str), args.get(2)) {
         (Some("demo"), None) => demo::run(host),
+        (Some("browse"), Some(url)) => browse_stdio(host, url),
         (Some(url), Some(script)) => {
             host.open_tab(url, script);
             if host.live() > 0 && host.run(Duration::from_secs(30)) {
@@ -68,7 +90,9 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
         _ => {
-            eprintln!("usage: clazel URL SCRIPT | clazel demo | clazel fetch URL");
+            eprintln!(
+                "usage: clazel URL SCRIPT | clazel demo | clazel fetch URL | clazel browse URL"
+            );
             ExitCode::from(2)
         }
     }

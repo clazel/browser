@@ -3,7 +3,7 @@
 //! whole frames; the id of an event is the id its socket was made for, never anything in a frame.
 //! A frame over `MAX_FRAME` (refused from its first 4 bytes) or a closed socket becomes
 //! `RendererExited`. Outputs are carried out in order, and every frame, exit and stderr (which
-//! names a failed sandbox layer) is printed. The network (item 3.7) is `clazel-net`'s `Driver`.
+//! names a failed sandbox layer) goes to stderr. The network (item 3.7) is `clazel-net`'s Driver.
 //! A `Show` (item 4.12) waits in `shown` for the command loop.
 
 use std::collections::HashMap;
@@ -101,7 +101,7 @@ impl Host {
     }
 
     fn say(&mut self, line: String) {
-        println!("{line}");
+        eprintln!("{line}");
         self.log.push(line);
     }
 
