@@ -126,7 +126,9 @@ pub fn convert(dir: &Path) -> Result<String, String> {
         )
         .map_err(|e| e.to_string())?;
     }
-    out.push_str("];\n\n/// textdecoder-labels.any.js: `var whitespace`.\nconst WHITESPACE: &[u8] = &[");
+    out.push_str(
+        "];\n\n/// textdecoder-labels.any.js: `var whitespace`.\nconst WHITESPACE: &[u8] = &[",
+    );
     let ws: Vec<String> = ws
         .array()?
         .iter()
@@ -170,7 +172,11 @@ pub fn convert(dir: &Path) -> Result<String, String> {
     for (name, entries) in index_fields {
         let entries = entries.array()?;
         if entries.len() != 128 {
-            return Err(format!("{}: index {name} has {} entries", r.file, entries.len()));
+            return Err(format!(
+                "{}: index {name} has {} entries",
+                r.file,
+                entries.len()
+            ));
         }
         let rows: Vec<String> = entries
             .iter()
@@ -251,7 +257,9 @@ pub fn convert(dir: &Path) -> Result<String, String> {
     // textdecoder-utf16-surrogates.any.js: `var bad = [{encoding, input,
     // expected, name}]`; replacement decoding gives `expected`, fatal fails.
     let s = get("textdecoder-utf16-surrogates.any.js")?;
-    s.require("assert_equals(new TextDecoder(t.encoding).decode(new Uint8Array(t.input)), t.expected);")?;
+    s.require(
+        "assert_equals(new TextDecoder(t.encoding).decode(new Uint8Array(t.input)), t.expected);",
+    )?;
     s.require("new TextDecoder(t.encoding, {fatal: true}).decode(new Uint8Array(t.input))")?;
     out.push_str(
         "/// textdecoder-utf16-surrogates.any.js: decoding `input` gives `expected`,\n\

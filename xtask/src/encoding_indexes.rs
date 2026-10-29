@@ -29,6 +29,14 @@
 //!   of length 128), entry `p` the code point for pointer `p`, or
 //!   [`NULL`] where the index has none.
 //!
+//! The single-byte indexes are also checked against a second body's
+//! tables: the Unicode Consortium's mapping files for the ISO 8859,
+//! Microsoft and KOI8 encodings, vendored under
+//! `crates/clazel-encoding/data/unicode-mappings/` ([`check_mappings`]).
+//! Every difference is listed in [`DIFFERENCES`] or follows the one stated
+//! rule for Microsoft's undefined bytes, and each listed difference must
+//! occur. A swapped or missing entry in `indexes.json` fails here.
+//!
 //! It also rejects, so the tables can rely on it: a label that is empty,
 //! longer than 255, or has a byte that is not lowercase ASCII, a digit or
 //! one of `-_.:`; a duplicate label; an encoding whose ASCII-lowercased name
@@ -55,6 +63,67 @@ const LABELS_OUTPUT: &str = "crates/clazel-encoding/src/labels/data.rs";
 const INDEXES_OUTPUT: &str = "crates/clazel-encoding/src/single_byte/data.rs";
 /// The files `SOURCE.md` must list, besides itself and LICENSE.
 const FILES: &[&str] = &["encodings.json", "indexes.json"];
+/// The vendored Unicode mapping files, relative to the repository root.
+const MAPPINGS_DIR: &str = "crates/clazel-encoding/data/unicode-mappings";
+/// Each mapping file and the single-byte index it describes.
+const MAPPINGS: &[(&str, &str)] = &[
+    ("ibm866", "CP866.TXT"),
+    ("iso-8859-2", "8859-2.TXT"),
+    ("iso-8859-3", "8859-3.TXT"),
+    ("iso-8859-4", "8859-4.TXT"),
+    ("iso-8859-5", "8859-5.TXT"),
+    ("iso-8859-6", "8859-6.TXT"),
+    ("iso-8859-7", "8859-7.TXT"),
+    ("iso-8859-8", "8859-8.TXT"),
+    ("iso-8859-10", "8859-10.TXT"),
+    ("iso-8859-13", "8859-13.TXT"),
+    ("iso-8859-14", "8859-14.TXT"),
+    ("iso-8859-15", "8859-15.TXT"),
+    ("iso-8859-16", "8859-16.TXT"),
+    ("koi8-r", "KOI8-R.TXT"),
+    ("koi8-u", "KOI8-U.TXT"),
+    ("windows-874", "CP874.TXT"),
+    ("windows-1250", "CP1250.TXT"),
+    ("windows-1251", "CP1251.TXT"),
+    ("windows-1252", "CP1252.TXT"),
+    ("windows-1253", "CP1253.TXT"),
+    ("windows-1254", "CP1254.TXT"),
+    ("windows-1255", "CP1255.TXT"),
+    ("windows-1256", "CP1256.TXT"),
+    ("windows-1257", "CP1257.TXT"),
+    ("windows-1258", "CP1258.TXT"),
+];
+/// The single-byte indexes with no second body's file vendored (Apple's
+/// files grant no permission to redistribute; see that directory's
+/// `SOURCE.md`).
+const NO_MAPPING: &[&str] = &["macintosh", "x-mac-cyrillic"];
+/// Differences between the Encoding Standard's index and the mapping file,
+/// besides the rule for Microsoft's undefined bytes: (index, byte, the
+/// standard's code point, the file's code point or `None` if undefined,
+/// why).
+const DIFFERENCES: &[(&str, u8, u32, Option<u32>, &str)] = &[
+    (
+        "windows-1255",
+        0xCA,
+        0x05BA,
+        None,
+        "HEBREW POINT HOLAM HASER FOR VAV, added after Microsoft's file",
+    ),
+    (
+        "koi8-u",
+        0xAE,
+        0x045E,
+        Some(0x255D),
+        "Belarusian short u (KOI8-RU) where RFC 2319 has box drawing",
+    ),
+    (
+        "koi8-u",
+        0xBE,
+        0x040E,
+        Some(0x256C),
+        "Belarusian short U (KOI8-RU) where RFC 2319 has box drawing",
+    ),
+];
 
 /// The encodings in the order of `encodings.json` (and of the standard's
 /// table in §4.2), which is the order of `spec::Encoding`'s variants.
@@ -141,10 +210,19 @@ pub const NULL: u32 = 0xFFFF_FFFF;
 /// (problems, notes).
 pub fn run(write: bool) -> (Vec<String>, Vec<String>) {
     let dir = PathBuf::from(DATA_DIR);
-    let mut problems = check_sources(&dir);
+    let mut problems = check_sources(&dir, FILES);
+    let mapping_files: Vec<&str> = MAPPINGS.iter().map(|(_, f)| *f).collect();
+    problems.extend(check_sources(&PathBuf::from(MAPPINGS_DIR), &mapping_files));
     let mut notes = Vec::new();
     if !problems.is_empty() {
         return (problems, notes);
+    }
+    match std::fs::read_to_string(dir.join("indexes.json"))
+        .map_err(|e| format!("indexes.json: {e}"))
+        .and_then(|t| check_mappings(&t))
+    {
+        Ok(note) => notes.push(note),
+        Err(e) => problems.push(format!("{MAPPINGS_DIR}: {e}")),
     }
     let read = |f: &str| std::fs::read_to_string(dir.join(f)).map_err(|e| format!("{f}: {e}"));
     let labels = read("encodings.json").and_then(|t| generate_labels(&t));
@@ -179,14 +257,14 @@ pub fn run(write: bool) -> (Vec<String>, Vec<String>) {
 
 /// Every vendored file is listed in `SOURCE.md` with its SHA-256, and
 /// matches it; nothing else is in the directory.
-fn check_sources(dir: &Path) -> Vec<String> {
+fn check_sources(dir: &Path, files: &[&str]) -> Vec<String> {
     let rel = workspace::relative(dir);
     let source = match std::fs::read_to_string(dir.join("SOURCE.md")) {
         Ok(s) => s,
         Err(e) => return vec![format!("{rel}/SOURCE.md: {e}")],
     };
     let mut problems = Vec::new();
-    for file in FILES {
+    for file in files {
         let listed = source.lines().find_map(|l| {
             let rest = l.trim().strip_prefix("SHA-256:")?.trim();
             let (hash, name) = rest.split_once(char::is_whitespace)?;
@@ -216,7 +294,7 @@ fn check_sources(dir: &Path) -> Vec<String> {
         Ok(entries) => {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if !FILES.contains(&name.as_str()) && name != "SOURCE.md" && name != "LICENSE" {
+                if !files.contains(&name.as_str()) && name != "SOURCE.md" && name != "LICENSE" {
                     problems.push(format!(
                         "{rel}/{name}: not an input of xtask/src/encoding_indexes.rs"
                     ));
@@ -459,6 +537,122 @@ fn generate_indexes(text: &str) -> Result<String, String> {
     }
     let _ = writeln!(out, "}} // verus!");
     Ok(out)
+}
+
+/// Read a Unicode mapping file (format A: lines of `0xBB<TAB>0xCCCC<TAB>#
+/// name`, `#` comments, an undefined byte with no second column; a final
+/// DOS end-of-file byte 0x1A, which `CP866.TXT` has, ends the file): the
+/// code point for each byte it defines.
+fn read_mapping(file: &str, text: &str) -> Result<Vec<Option<u32>>, String> {
+    let mut table = vec![None; 256];
+    for (n, line) in text.lines().enumerate() {
+        let data = line.split('#').next().unwrap_or_default().trim();
+        if data == "\u{1a}" {
+            break;
+        }
+        if data.is_empty() {
+            continue;
+        }
+        let mut cols = data.split_whitespace();
+        let hex = |s: &str| {
+            s.strip_prefix("0x")
+                .and_then(|h| u32::from_str_radix(h, 16).ok())
+                .ok_or_else(|| format!("{file}:{}: bad number {s:?}", n.saturating_add(1)))
+        };
+        let byte = cols.next().map(hex).transpose()?.unwrap_or(0);
+        let cp = cols.next().map(hex).transpose()?;
+        if cols.next().is_some() {
+            return Err(format!(
+                "{file}:{}: more than two columns",
+                n.saturating_add(1)
+            ));
+        }
+        let slot = usize::try_from(byte)
+            .ok()
+            .and_then(|b| table.get_mut(b))
+            .ok_or_else(|| {
+                format!(
+                    "{file}:{}: byte {byte:#X} out of range",
+                    n.saturating_add(1)
+                )
+            })?;
+        if slot.is_some() {
+            return Err(format!(
+                "{file}:{}: byte {byte:#X} listed twice",
+                n.saturating_add(1)
+            ));
+        }
+        *slot = cp;
+    }
+    Ok(table)
+}
+
+/// Check each single-byte index against its Unicode mapping file. Returns
+/// a note with the counts.
+fn check_mappings(indexes_json: &str) -> Result<String, String> {
+    let indexes = single_byte_indexes(indexes_json)?;
+    let mut problems = Vec::new();
+    let (mut same, mut c1, mut listed) = (0usize, 0usize, 0usize);
+    for (key, index) in &indexes {
+        let Some((_, file)) = MAPPINGS.iter().find(|(k, _)| k == key) else {
+            if !NO_MAPPING.contains(key) {
+                problems.push(format!("{key}: no mapping file and not in NO_MAPPING"));
+            }
+            continue;
+        };
+        let text = std::fs::read_to_string(PathBuf::from(MAPPINGS_DIR).join(file))
+            .map_err(|e| format!("{file}: {e}"))?;
+        let theirs = read_mapping(file, &text)?;
+        for (byte, cp) in theirs.iter().enumerate().take(0x80) {
+            if cp.is_some_and(|c| usize::try_from(c).ok() != Some(byte)) {
+                problems.push(format!("{file}: byte {byte:#04X} is not ASCII"));
+            }
+        }
+        for (pointer, ours) in index.iter().enumerate() {
+            let byte = pointer.saturating_add(0x80);
+            let ours = (*ours != NULL).then_some(*ours);
+            let theirs = theirs.get(byte).copied().flatten();
+            let b = u8::try_from(byte).map_err(|e| e.to_string())?;
+            if ours == theirs {
+                same = same.saturating_add(1);
+            } else if key.starts_with("windows-")
+                && theirs.is_none()
+                && ours.and_then(|c| usize::try_from(c).ok()) == Some(byte)
+                && (0x80..=0x9F).contains(&byte)
+            {
+                // Microsoft leaves the byte undefined; the Encoding
+                // Standard maps it to the C1 control of the same value.
+                c1 = c1.saturating_add(1);
+            } else if DIFFERENCES
+                .iter()
+                .any(|(k, db, o, t, _)| k == key && *db == b && Some(*o) == ours && *t == theirs)
+            {
+                listed = listed.saturating_add(1);
+            } else {
+                problems.push(format!(
+                    "{key} byte {byte:#04X}: indexes.json has {ours:X?}, {file} has {theirs:X?}, \
+                     and DIFFERENCES does not list it"
+                ));
+            }
+        }
+    }
+    if listed != DIFFERENCES.len() {
+        problems.push(format!(
+            "{} of the {} listed DIFFERENCES occur; remove the ones that no longer do",
+            listed,
+            DIFFERENCES.len()
+        ));
+    }
+    if problems.is_empty() {
+        Ok(format!(
+            "single-byte indexes against the Unicode mapping files: {same} entries agree, \
+             {c1} undefined in Microsoft's files are C1 controls, {listed} listed differences; \
+             no second body's file for {}",
+            NO_MAPPING.join(", ")
+        ))
+    } else {
+        Err(problems.join("; "))
+    }
 }
 
 const LABELS_HEADER: &str = "\
