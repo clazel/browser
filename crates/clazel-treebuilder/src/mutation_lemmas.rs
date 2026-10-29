@@ -388,4 +388,106 @@ pub proof fn ml_script_ready_running_only()
     crate::theorems::frame_modes::lemma_text_script_end(ml_stopped_text());
 }
 
+// ---------------------------------------------------------------------
+// The W3C transcription (`independent`): its equivalence lemmas at
+// concrete parsers, for the modes whose rules a mutation changes. The
+// certificates of these kills evaluate the mutated spec at the parser
+// below and contradict `independent::equivalence::lemma_<mode>` there (the
+// W3C text says otherwise on that input, and the lemma's precondition
+// holds).
+
+/// A document whose node 1 is an `html` element, the Document's child
+/// (inserting into an element, unlike into the Document, checks no
+/// quantified condition, so `compute_only` evaluates it).
+pub open spec fn ml_doc_html() -> clazel_dom::spec::Document {
+    clazel_dom::spec::Document {
+        nodes: seq![
+            clazel_dom::spec::Node {
+                kind: NodeKind::Document { mode: DocumentMode::NoQuirks, url: seq![], base_url: seq![] },
+                parent: None,
+                children: seq![1],
+                wrapper: None,
+            },
+            clazel_dom::spec::Node {
+                kind: NodeKind::Element {
+                    namespace: Some(Namespace::Html),
+                    prefix: None,
+                    local_name: seq![0x68u32, 0x74, 0x6d, 0x6c],
+                    attributes: seq![],
+                    template_contents: None,
+                    form_owner: None,
+                },
+                parent: Some(0),
+                children: seq![],
+                wrapper: None,
+            },
+        ],
+    }
+}
+
+/// [`ml_parser`] over [`ml_doc_html`].
+pub open spec fn ml_parser_html(mode: Mode, open: Seq<Elem>) -> Parser {
+    Parser { doc: ml_doc_html(), ..ml_parser(mode, open, seq![]) }
+}
+
+/// An HTML element named `name`, tagged by its name (the lemmas for the
+/// table modes compare "the same tag name" and need tagged records); its
+/// node is [`ml_doc_html`]'s element.
+pub open spec fn ml_named(name: Seq<u32>) -> Elem {
+    Elem { id: 1, ns: Namespace::Html, tag: tag_of(name), name, annotation_html: false }
+}
+
+/// A start tag token named `name`, tagged by its name, without attributes.
+pub open spec fn ml_named_start(name: Seq<u32>) -> Tok {
+    Tok::Start(TagTok { name, tag: tag_of(name), attrs: seq![], self_closing: false })
+}
+
+/// An end tag token named `name`, tagged by its name.
+pub open spec fn ml_named_end(name: Seq<u32>) -> Tok {
+    Tok::End(TagTok { name, tag: tag_of(name), attrs: seq![], self_closing: false })
+}
+
+/// The stack `html`, `table`, `tbody`, `tr` of named elements, with
+/// `rest` after it.
+pub open spec fn ml_named_row(rest: Seq<Elem>) -> Seq<Elem> {
+    seq![
+        ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]),
+        ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]),
+        ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79]),
+        ml_named(seq![0x74u32, 0x72]),
+    ] + rest
+}
+
+/// `independent::equivalence::lemma_in_table_body` at the parser and token of the
+/// certificate of `in-table-body-tr-wrong-mode` (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+pub proof fn ml_w3c_in_table_body()
+    ensures
+        crate::independent::w3c_mode_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72])) == mode_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72])),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72]));
+}
+
+/// `independent::equivalence::lemma_in_row` at the parser and token of the
+/// certificate of `in-row-cell-no-marker` (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+pub proof fn ml_w3c_in_row()
+    ensures
+        crate::independent::w3c_mode_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64])) == mode_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64])),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64]));
+}
+
+/// `independent::equivalence::lemma_in_cell` at the parser and token of the
+/// certificate of `in-cell-end-not-popped` (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+pub proof fn ml_w3c_in_cell()
+    ensures
+        crate::independent::w3c_mode_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64])) == mode_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64])),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64]));
+}
 } // verus!

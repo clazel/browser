@@ -322,45 +322,70 @@
       "file": "src/spec/modes/before_html.rs",
       "find": "Outcome::Done(Parser { mode: Mode::BeforeHead, ..p3 })",
       "replace": "Outcome::Done(Parser { mode: Mode::BeforeHtml, ..p3 })",
-      "expect": "killed-incidentally",
-      "reason": "Wrong mode: after an html start tag the parser stays in \"before html\" and a second root is attempted. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_before_html equals its spec fails.",
-      "module": "exec::modes::before_html"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: an html start tag in \"before html\" leaves the mode at \"before html\"; the W3C text (§8.2.5.4.2) switches to \"before head\", and independent::equivalence::lemma_before_html (proven equal where the two texts agree, which they do here) is false at that input. Wrong mode: after an html start tag the parser stays in \"before html\" and a second root is attempted. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_before_html equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html))",
+        "witness": "mode_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html))->Done_0.mode == Mode::BeforeHtml"
+      }
     },
     {
       "id": "before-head-pointer-not-set",
       "file": "src/spec/modes/before_head.rs",
       "find": "Outcome::Done(Parser { head: Some(e.id), mode: Mode::InHead, ..p1 })",
       "replace": "Outcome::Done(Parser { mode: Mode::InHead, ..p1 })",
-      "expect": "killed-incidentally",
-      "reason": "A head start tag does not set the head element pointer, so \"after head\"'s in-head tags are dropped instead of going into the head. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_before_head equals its spec fails.",
-      "module": "exec::modes::before_head"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a head start tag does not set the head element pointer; the W3C text (§8.2.5.4.3) sets it, and independent::equivalence::lemma_before_head (proven equal where the two texts agree, which they do here) is false at that input. A head start tag does not set the head element pointer, so \"after head\"'s in-head tags are dropped instead of going into the head. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_before_head equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_before_head(ml_env(), ml_parser(Mode::BeforeHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Head))",
+        "witness": "mode_before_head(ml_env(), ml_parser(Mode::BeforeHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Head))->Done_0.head is None"
+      }
     },
     {
       "id": "in-head-head-not-popped",
       "file": "src/spec/modes/in_head.rs",
       "find": "Outcome::Reprocess(Parser { mode: Mode::AfterHead, ..pop(p) }, t)",
       "replace": "Outcome::Reprocess(Parser { mode: Mode::AfterHead, ..p }, t)",
-      "expect": "killed-incidentally",
-      "reason": "Element popped not at all: \"in head\"'s anything else leaves the head element open, so the body goes inside the head (the rank still decreases: the order falls from \"in head\" to \"after head\"). No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_head equals its spec fails.",
-      "module": "exec::modes::in_head"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: \"in head\"'s anything else leaves the head element open; the W3C text (§8.2.5.4.4) pops it, and independent::equivalence::lemma_in_head (proven equal where the two texts agree, which they do here) is false at that input. Element popped not at all: \"in head\"'s anything else leaves the head element open, so the body goes inside the head (the rank still decreases: the order falls from \"in head\" to \"after head\"). No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_head equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x())",
+        "witness": "mode_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x())->Reprocess_0.open.len() == 2"
+      }
     },
     {
       "id": "in-head-noscript-end-not-popped",
       "file": "src/spec/modes/in_head_noscript.rs",
       "find": "Outcome::Done(Parser { mode: Mode::InHead, ..pop(p) })",
       "replace": "Outcome::Done(Parser { mode: Mode::InHead, ..p })",
-      "expect": "killed-incidentally",
-      "reason": "A noscript end tag in \"in head noscript\" does not pop the noscript element. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_head_noscript equals its spec fails.",
-      "module": "exec::modes::in_head_noscript"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a noscript end tag leaves the noscript element open; the W3C text (§8.2.5.4.5) pops it, and independent::equivalence::lemma_in_head_noscript (proven equal where the two texts agree, which they do here) is false at that input. A noscript end tag in \"in head noscript\" does not pop the noscript element. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_head_noscript equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript))",
+        "witness": "mode_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript))->Done_0.open.len() == 3"
+      }
     },
     {
       "id": "after-head-body-frameset-ok",
       "file": "src/spec/modes/after_head.rs",
       "find": "Outcome::Done(Parser { frameset_ok: false, mode: Mode::InBody, ..p1 })",
       "replace": "Outcome::Done(Parser { frameset_ok: true, mode: Mode::InBody, ..p1 })",
-      "expect": "killed-incidentally",
-      "reason": "An explicit body start tag leaves frameset-ok \"ok\", so a later frameset start tag replaces the body. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_head equals its spec fails.",
-      "module": "exec::modes::after_head"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a body start tag \"after head\" leaves the frameset-ok flag \"ok\"; the W3C text (§8.2.5.4.6) sets it to \"not ok\", and independent::equivalence::lemma_after_head (proven equal where the two texts agree, which they do here) is false at that input. An explicit body start tag leaves frameset-ok \"ok\", so a later frameset start tag replaces the body. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_head equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body))",
+        "witness": "mode_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body))->Done_0.frameset_ok"
+      }
     },
     {
       "id": "in-body-track-dropped",
@@ -394,9 +419,14 @@
       "file": "src/spec/modes/text.rs",
       "find": "Outcome::Done(Parser { mode: q.original_mode, ..q })",
       "replace": "Outcome::Done(Parser { mode: q.original_mode, ..p })",
-      "expect": "killed-incidentally",
-      "reason": "Element popped not at all: an end tag in \"text\" returns to the original insertion mode but leaves the raw text element (style, title, textarea) open. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_text equals its spec fails.",
-      "module": "exec::modes::text"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: an end tag in \"text\" leaves the raw text element open; the W3C text (§8.2.5.4.8) pops it, and independent::equivalence::lemma_text (proven equal where the two texts agree, which they do here) is false at that input. Element popped not at all: an end tag in \"text\" returns to the original insertion mode but leaves the raw text element (style, title, textarea) open. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_text equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style))",
+        "witness": "mode_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style))->Done_0.open.len() == 3"
+      }
     },
     {
       "id": "in-table-foster-parenting-disabled",
@@ -421,90 +451,140 @@
       "file": "src/spec/modes/in_caption.rs",
       "find": "Outcome::Done(Parser { mode: Mode::InTable, ..p3 })",
       "replace": "Outcome::Done(Parser { mode: Mode::InTable, ..p2 })",
-      "expect": "killed-incidentally",
-      "reason": "A caption end tag does not clear the list of active formatting elements up to the last marker, so formatting from inside the caption is reconstructed after it. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_caption equals its spec fails.",
-      "module": "exec::modes::in_caption"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a caption end tag keeps the marker in the list of active formatting elements; the W3C text (§8.2.5.4.11) clears the list up to it, and independent::equivalence::lemma_in_caption (proven equal where the two texts agree, which they do here) is false at that input. A caption end tag does not clear the list of active formatting elements up to the last marker, so formatting from inside the caption is reconstructed after it. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_caption equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption))",
+        "witness": "mode_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption))->Done_0.formatting.len() == 1"
+      }
     },
     {
       "id": "in-column-group-end-not-popped",
       "file": "src/spec/modes/in_column_group.rs",
       "find": "Outcome::Done(Parser { mode: Mode::InTable, ..pop(p) })",
       "replace": "Outcome::Done(Parser { mode: Mode::InTable, ..p })",
-      "expect": "killed-incidentally",
-      "reason": "Element popped not at all: a colgroup end tag switches to \"in table\" but leaves the colgroup open. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_column_group equals its spec fails.",
-      "module": "exec::modes::in_column_group"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a colgroup end tag leaves the colgroup element open; the W3C text (§8.2.5.4.12) pops it, and independent::equivalence::lemma_in_column_group (proven equal where the two texts agree, which they do here) is false at that input. Element popped not at all: a colgroup end tag switches to \"in table\" but leaves the colgroup open. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_column_group equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup))",
+        "witness": "mode_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup))->Done_0.open.len() == 3"
+      }
     },
     {
       "id": "in-table-body-tr-wrong-mode",
       "file": "src/spec/modes/in_table_body.rs",
       "find": "Outcome::Done(Parser { mode: Mode::InRow, ..p2 })",
       "replace": "Outcome::Done(Parser { mode: Mode::InTableBody, ..p2 })",
-      "expect": "killed-incidentally",
-      "reason": "Wrong mode: after a tr start tag the parser stays in \"in table body\", so a td start tag inserts a second, implied tr. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_table_body equals its spec fails.",
-      "module": "exec::modes::in_table_body"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a tr start tag \"in table body\" stays in \"in table body\"; the W3C text (§8.2.5.4.13) switches to \"in row\", and independent::equivalence::lemma_in_table_body (proven equal where the two texts agree, which they do here) is false at that input. Wrong mode: after a tr start tag the parser stays in \"in table body\", so a td start tag inserts a second, implied tr. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_table_body equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_table_body()",
+        "witness": "mode_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72]))->Done_0.mode == Mode::InTableBody"
+      }
     },
     {
       "id": "in-row-cell-no-marker",
       "file": "src/spec/modes/in_row.rs",
       "find": "Outcome::Done(push_marker(p3))",
       "replace": "Outcome::Done(p3)",
-      "expect": "killed-incidentally",
-      "reason": "A td or th start tag inserts no marker, so formatting elements from before the table leak into the cell. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_row equals its spec fails.",
-      "module": "exec::modes::in_row"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a td start tag \"in row\" inserts no marker; the W3C text (§8.2.5.4.14) inserts one, and independent::equivalence::lemma_in_row (proven equal where the two texts agree, which they do here) is false at that input. A td or th start tag inserts no marker, so formatting elements from before the table leak into the cell. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_row equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_row()",
+        "witness": "mode_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64]))->Done_0.formatting.len() == 0"
+      }
     },
     {
       "id": "in-cell-end-not-popped",
       "file": "src/spec/modes/in_cell.rs",
       "find": "let p2 = pop_until_popped(p1, t->End_0.tag);",
       "replace": "let p2 = p1;",
-      "expect": "killed-incidentally",
-      "reason": "Element popped not at all: a td or th end tag leaves the cell open while switching to \"in row\". No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_cell equals its spec fails.",
-      "module": "exec::modes::in_cell"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a td end tag \"in cell\" leaves the cell open; the W3C text (§8.2.5.4.15) pops it, and independent::equivalence::lemma_in_cell (proven equal where the two texts agree, which they do here) is false at that input. Element popped not at all: a td or th end tag leaves the cell open while switching to \"in row\". No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_cell equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_in_cell()",
+        "witness": "mode_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64]))->Done_0.open.len() == 5"
+      }
     },
     {
       "id": "in-template-col-wrong-mode",
       "file": "src/spec/modes/in_template.rs",
       "find": "in_template_switch(p, t, Mode::InColumnGroup)",
       "replace": "in_template_switch(p, t, Mode::InTable)",
-      "expect": "killed-incidentally",
-      "reason": "Wrong mode after reprocessing: a col start tag in \"in template\" goes to \"in table\", which wraps it in an implied colgroup (the rank still decreases: same growth, lower order). No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_template equals its spec fails.",
-      "module": "exec::modes::in_template"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a col start tag \"in template\" switches to \"in table\"; the W3C text (§8.2.5.4.18) switches to \"in column group\", and independent::equivalence::lemma_in_template (proven equal where the two texts agree, which they do here) is false at that input. Wrong mode after reprocessing: a col start tag in \"in template\" goes to \"in table\", which wraps it in an implied colgroup (the rank still decreases: same growth, lower order). No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_template equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col))",
+        "witness": "mode_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col))->Reprocess_0.mode == Mode::InTable"
+      }
     },
     {
       "id": "after-body-html-end-wrong-mode",
       "file": "src/spec/modes/after_body.rs",
       "find": "Outcome::Done(Parser { mode: Mode::AfterAfterBody, ..p })",
       "replace": "Outcome::Done(Parser { mode: Mode::AfterBody, ..p })",
-      "expect": "killed-incidentally",
-      "reason": "Wrong mode: an html end tag leaves the parser in \"after body\", so a later comment goes into the html element instead of the document. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_body equals its spec fails.",
-      "module": "exec::modes::after_body"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: an html end tag \"after body\" stays in \"after body\"; the W3C text (§8.2.5.4.19) switches to \"after after body\", and independent::equivalence::lemma_after_body (proven equal where the two texts agree, which they do here) is false at that input. Wrong mode: an html end tag leaves the parser in \"after body\", so a later comment goes into the html element instead of the document. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_body equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html))",
+        "witness": "mode_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterBody"
+      }
     },
     {
       "id": "in-frameset-root-popped",
       "file": "src/spec/modes/in_frameset.rs",
       "find": "if p.open.len() <= 1 {",
       "replace": "if p.open.len() < 1 {",
-      "expect": "killed-incidentally",
-      "reason": "A frameset end tag with only the root open pops the html element (the fragment-case guard is off by one). No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_frameset equals its spec fails.",
-      "module": "exec::modes::in_frameset"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a frameset end tag pops the root html element; the W3C text (§8.2.5.4.20) ignores it there, and independent::equivalence::lemma_in_frameset (proven equal where the two texts agree, which they do here) is false at that input. A frameset end tag with only the root open pops the html element (the fragment-case guard is off by one). No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_in_frameset equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_in_frameset(ml_env(), ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Frameset))",
+        "witness": "mode_in_frameset(ml_env(), ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Frameset))->Done_0.open.len() == 0"
+      }
     },
     {
       "id": "after-frameset-html-end-wrong-mode",
       "file": "src/spec/modes/after_frameset.rs",
       "find": "Outcome::Done(Parser { mode: Mode::AfterAfterFrameset, ..p })",
       "replace": "Outcome::Done(Parser { mode: Mode::AfterFrameset, ..p })",
-      "expect": "killed-incidentally",
-      "reason": "Wrong mode: an html end tag leaves the parser in \"after frameset\". No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_frameset equals its spec fails.",
-      "module": "exec::modes::after_frameset"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: an html end tag \"after frameset\" stays in \"after frameset\"; the W3C text (§8.2.5.4.21) switches to \"after after frameset\", and independent::equivalence::lemma_after_frameset (proven equal where the two texts agree, which they do here) is false at that input. Wrong mode: an html end tag leaves the parser in \"after frameset\". No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_frameset equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html))",
+        "witness": "mode_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterFrameset"
+      }
     },
     {
       "id": "after-after-frameset-noframes-dropped",
       "file": "src/spec/modes/after_after_frameset.rs",
       "find": "Outcome::Using(Mode::InHead, p, t)",
       "replace": "Outcome::Done(p)",
-      "expect": "killed-incidentally",
-      "reason": "Dropped case: a noframes start tag after the frameset is ignored instead of processed by the \"in head\" rules. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_after_frameset equals its spec fails.",
-      "module": "exec::modes::after_after_frameset"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a noframes start tag \"after after frameset\" is dropped; the W3C text (§8.2.5.4.23) processes it with the \"in head\" rules, and independent::equivalence::lemma_after_after_frameset (proven equal where the two texts agree, which they do here) is false at that input. Dropped case: a noframes start tag after the frameset is ignored instead of processed by the \"in head\" rules. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that mode_after_after_frameset equals its spec fails.",
+      "module": "independent::equivalence",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::independent::equivalence::lemma_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes))",
+        "witness": "mode_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes)) is Done"
+      }
     },
     {
       "id": "foreign-breakout-no-pop",
