@@ -42,6 +42,7 @@ pub mod stop_body;
 pub mod stop_early;
 pub mod stop_frame;
 pub mod stop_in_body;
+pub mod stop_tables;
 pub mod tables;
 
 /// Every name of the transcription and of this module, for the ghost

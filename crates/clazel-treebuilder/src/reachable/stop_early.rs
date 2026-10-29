@@ -60,12 +60,13 @@ pub proof fn lemma_stop_from(p: Parser, q: Parser)
         modes_ok(p),
         !p.stopped,
         mk(p, Parser { mode: p.mode, original_mode: p.original_mode, template_modes: p.template_modes, ..q }),
-        q.template_modes.len() >= p.template_modes.len(),
-        forall|i: int| 0 <= i < q.template_modes.len() ==> template_mode_ok(#[trigger] q.template_modes[i]),
-        q.mode == Mode::InTableText ==> q.original_mode != Mode::Text && q.original_mode != Mode::InTableText,
-        q.mode == Mode::Text ==> q.original_mode != Mode::Text && q.original_mode != Mode::InTableText,
-        q.mode == Mode::InTemplate ==> q.template_modes.len() > 0,
-        (q.mode == Mode::Text || q.mode == Mode::InTableText) && q.original_mode == Mode::InTemplate ==> q.template_modes.len() > 0,
+        q.stopped ==> q.template_modes.len() >= p.template_modes.len(),
+        q.stopped ==> forall|i: int| 0 <= i < q.template_modes.len() ==> template_mode_ok(#[trigger] q.template_modes[i]),
+        q.stopped && q.mode == Mode::InTableText ==> q.original_mode != Mode::Text && q.original_mode != Mode::InTableText,
+        q.stopped && q.mode == Mode::Text ==> q.original_mode != Mode::Text && q.original_mode != Mode::InTableText,
+        q.stopped && q.mode == Mode::InTemplate ==> q.template_modes.len() > 0,
+        q.stopped && (q.mode == Mode::Text || q.mode == Mode::InTableText) && q.original_mode == Mode::InTemplate
+            ==> q.template_modes.len() > 0,
     ensures
         stop_ok(q),
 {
