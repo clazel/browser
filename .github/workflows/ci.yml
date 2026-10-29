@@ -310,7 +310,14 @@ jobs:
   table:
     name: Update README table
     needs: assemble
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # On a push to main, after a passing full verification. Spelled with a
+    # status function: without one GitHub also requires every job upstream
+    # of `assemble` to have succeeded, and `approval` is skipped on every
+    # push, so the table was never written after the approval gate was
+    # added (last written for 872c1e8).
+    if: >-
+      ${{ !cancelled() && needs.assemble.result == 'success' &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
