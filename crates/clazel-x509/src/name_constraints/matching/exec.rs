@@ -1582,7 +1582,7 @@ proof fn lemma_mul_at_least(a: nat, c: nat)
 
 /// The comparisons spent after one more certificate, or `None` if that is
 /// beyond the bound: `spent` plus `super::contract::comparisons(entries, subtrees)`.
-fn charge(state: &[&nc::NameConstraints<'_>], entries: usize, spent: usize) -> (result: Option<usize>)
+pub(crate) fn charge(state: &[&nc::NameConstraints<'_>], entries: usize, spent: usize) -> (result: Option<usize>)
     requires super::contract::within_comparison_bound(spent as nat),
     ensures
         match result {

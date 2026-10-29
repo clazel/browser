@@ -1,7 +1,8 @@
 //! Contracts for the executable path validation P8 and P9 write: one
 //! predicate per executable function, in terms of `spec.rs`, `profile.rs`
-//! and `verifier.rs`, and the two parameters' executable traits. Nothing
-//! here is implemented yet.
+//! and `verifier.rs`, and the two parameters' executable traits. P8's
+//! functions (§6.1 down to `candidate_verdict`, and `chain_inputs`) are in
+//! `exec.rs`; P9's verifier is not written yet.
 //!
 //! - **The parameters.** `LinkVerifier` is design §3.3's trait: its
 //!   executable `verify` returns exactly what its spec function `link` says
@@ -12,10 +13,13 @@
 //!   invariant is `state_before`: the state §6.1.3 finds for certificate i+1
 //!   (`certs[i]`), defined here as the prefix of the spec's fold. P8 proves
 //!   that the spec's `process_from` from that state is `process`
-//!   (`process_from_state_before` states it).
+//!   (`process_from_state_before` states it; `lemmas::lemma_process_from_state_before`
+//!   proves it).
 //! - **The bound.** The name-constraint comparison bound is part of the spec
 //!   (`verifier::candidate_verdict`), so the executable candidate verdict
-//!   equals the spec's exactly; nothing here is weaker than the spec.
+//!   equals the spec's exactly. The one predicate weaker than its spec
+//!   function is `initialization_ensures`, which holds `max_path_length` at
+//!   most `n` (see there); `process_ensures` is exact.
 
 #[allow(unused_imports)]
 use super::spec::*;
