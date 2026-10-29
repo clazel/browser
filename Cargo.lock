@@ -111,6 +111,7 @@ version = "0.0.0"
 dependencies = [
  "clazel-encoding",
  "clazel-mime",
+ "encoding_rs",
  "html5gum",
  "vstd",
 ]

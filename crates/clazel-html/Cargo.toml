@@ -16,6 +16,9 @@ clazel-mime = { path = "../clazel-mime" }
 # never shipped). Without default features it has no dependencies.
 [dev-dependencies]
 html5gum = { version = "=0.8.4", default-features = false }
+# Firefox's label resolution, the oracle for the labels the sniffer reads in
+# tests/conformance_sniff.rs.
+encoding_rs = "=0.8.35"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (the
