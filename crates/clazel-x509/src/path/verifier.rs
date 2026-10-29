@@ -94,9 +94,10 @@
 //!     it. Even before P9, exhaustion means more than 200,000 distinct
 //!     name-chained steps exist and the first 200,000 completed none valid.
 //!   - **Name constraints.** At most 4,096 name-constraint comparisons per
-//!     path, counted as P5's contract counts them (`within_budget`, below)
-//!     (`TooManyNameComparisons`). Both browsers bound name-constraint work
-//!     (design §1.12); this is P5's bound, kept.
+//!     path, counted as P5's contract counts them
+//!     (`name_constraints::matching::contract::within_budget`, used here
+//!     directly) (`TooManyNameComparisons`). Both browsers bound
+//!     name-constraint work (design §1.12); this is P5's bound, kept.
 //!
 //! For P16, the intended `clazel-tls` join (not changed here). `auth::spec`'s
 //! `ChainValidation` becomes
@@ -167,62 +168,6 @@ pub open spec fn default_max_intermediates() -> nat { 6 }
 /// `buildForwardCallBudget`.
 pub open spec fn build_budget() -> nat { 200000 }
 
-/// At most this many subjectAltName-entry by subtree comparisons per path.
-/// The definitions down to `within_budget` are those of P5's contract
-/// (`name_constraints/matching/contract.rs` on PR #40, not yet on this
-/// branch), restated so the bound is part of the spec; once #40 is merged
-/// they should be replaced by P5's, which are the same text.
-pub open spec fn comparison_bound() -> nat { 4096 }
-
-/// The subtrees one NameConstraints value holds, in both lists.
-pub open spec fn subtrees_in(value: crate::name_constraints::spec::NameConstraints) -> nat {
-    (match value.permitted_subtrees { Some(items) => items.len(), None => 0 })
-        + (match value.excluded_subtrees { Some(items) => items.len(), None => 0 })
-}
-
-/// The subtrees of every set in the state.
-pub open spec fn subtree_count(state: Seq<crate::name_constraints::spec::NameConstraints>) -> nat
-    decreases state.len()
-{
-    if state.len() == 0 { 0 } else { subtrees_in(state.last()) + subtree_count(state.drop_last()) }
-}
-
-/// The comparisons one certificate costs: every subjectAltName entry, and the
-/// subject, against every subtree of the state.
-pub open spec fn comparisons(entries: nat, subtrees: nat) -> nat {
-    (entries + 1) * subtrees
-}
-
-/// Every certificate of `path[i..]` stays within the bound, `spent` being the
-/// comparisons of `path[..i]`, with the state evolution of P4's
-/// `names_constrained_from`.
-pub open spec fn within_budget_from(
-    path: Seq<crate::name_constraints::matching::spec::NcCertificate>, i: int,
-    state: Seq<crate::name_constraints::spec::NameConstraints>, spent: nat,
-) -> bool
-    decreases path.len() - i
-{
-    if i < 0 || i >= path.len() { true }
-    else {
-        let certificate = path[i];
-        let total = spent + comparisons(certificate.subject_alt_names.len(), subtree_count(state));
-        &&& total <= comparison_bound()
-        &&& i == path.len() - 1 || match crate::name_constraints::matching::spec::prepare_name_constraints(
-            state, certificate.name_constraints) {
-            Some(next) => within_budget_from(path, i + 1, next, total),
-            None => true,
-        }
-    }
-}
-
-/// The whole path within the bound, from `initial`.
-pub open spec fn within_budget(
-    path: Seq<crate::name_constraints::matching::spec::NcCertificate>,
-    initial: Seq<crate::name_constraints::spec::NameConstraints>,
-) -> bool {
-    within_budget_from(path, 0, initial, 0)
-}
-
 /// What P4 reads from each certificate of a path, in order.
 pub open spec fn nc_path(certs: Seq<super::parsed::spec::PathCert>)
     -> Seq<crate::name_constraints::matching::spec::NcCertificate>
@@ -246,7 +191,7 @@ pub open spec fn anchor_subtrees(anchor: super::parsed::spec::Anchor)
 /// are unsupported, which `spec::process` refuses anyway).
 pub open spec fn path_within_budget(anchor: super::parsed::spec::Anchor, certs: Seq<super::parsed::spec::PathCert>) -> bool {
     match anchor_subtrees(anchor) {
-        Some(initial) => within_budget(nc_path(certs), initial),
+        Some(initial) => crate::name_constraints::matching::contract::within_budget(nc_path(certs), initial),
         None => true,
     }
 }
