@@ -34,6 +34,7 @@
 mod changed;
 mod conformance;
 mod deps;
+mod encoding_indexes;
 mod entities;
 mod mutate;
 mod parts;
@@ -356,6 +357,11 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     let (problems, notes) = entities::run(false);
     r.step(
         "generated named character references table",
+        outcome(problems, notes),
+    );
+    let (problems, notes) = encoding_indexes::run(false);
+    r.step(
+        "generated encoding labels and indexes",
         outcome(problems, notes),
     );
     let tooling = crates
@@ -920,6 +926,11 @@ fn generate_tables() -> ExitCode {
     let (problems, notes) = entities::run(true);
     r.step(
         "generate named character references table",
+        outcome(problems, notes),
+    );
+    let (problems, notes) = encoding_indexes::run(true);
+    r.step(
+        "generate encoding labels and indexes",
         outcome(problems, notes),
     );
     if r.failed {
