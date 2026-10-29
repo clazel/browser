@@ -247,6 +247,7 @@ name = "clazel-treebuilder"
 version = "0.0.0"
 dependencies = [
  "clazel-dom",
+ "clazel-html",
  "vstd",
 ]
 

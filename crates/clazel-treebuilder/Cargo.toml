@@ -10,6 +10,9 @@ description = "The HTML tree builder (HTML §13.2.4, §13.2.6, §13.2.7, §13.4)
 vstd = "=0.0.0-2026-10-04-0306"
 # The node tree the parser builds (Phase 4 item 4.8).
 clazel-dom = { path = "../clazel-dom" }
+# The tokenizer the driver (`src/exec/driver.rs`) feeds the step from
+# (Phase 4 item 4.7).
+clazel-html = { path = "../clazel-html" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (Phase 4

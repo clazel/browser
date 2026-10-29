@@ -11,6 +11,8 @@
 //! - [`formatting`]: the list of active formatting elements (§13.2.4.3).
 //! - [`insert`]: §13.2.6.1 to §13.2.6.3 and "reconstruct the active
 //!   formatting elements".
+//! - [`driver`]: the join with `clazel-html`'s tokenizer ([`driver::parse_real`],
+//!   [`driver::parse_fragment_real`]).
 //! - [`step`]: the dispatcher, the reprocessing loop and the one-token step
 //!   (§13.2.6), and the parsers' initial states (§13.2.4, §13.4).
 
@@ -18,6 +20,7 @@
 /// use (the one spelling of that import the lint check allows).
 pub use crate::spec;
 
+pub mod driver;
 pub mod formatting;
 pub mod frame;
 pub mod insert;
