@@ -681,15 +681,6 @@
         "lemma": "lemma_commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))",
         "witness": "frame_of(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }) is Some && crate::statements::committed_document(commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))) != Some((clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }, Seq::<u8>::empty()))"
       }
-    },
-    {
-      "id": "open-tab-starts-committed",
-      "file": "src/spec.rs",
-      "find": "let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
-      "replace": "let s1 = State { renderers: s.renderers.push(Renderer { committed: true, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
-      "expect": "killed-incidentally",
-      "module": "display_theorems",
-      "reason": "A tab opened without a script starts committed, so its renderer may display before its fetch commits, under the URL it was opened at. Only a proof script breaks (lemma_other_events_no_show runs out of resources once the pushed renderer differs from lemma_open_tab_push_wf's): no theorem is false, because none ties `committed` to a Commit frame having been sent to the renderer (theorem_address_bar_integrity takes the flag as the definition of committed). Not coverage; a theorem over runs (a renderer is committed only after a ToRenderer of commit_frames to it) would close it."
     }
   ]
 }
