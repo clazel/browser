@@ -39,6 +39,7 @@ pub mod lists;
 pub mod rest;
 pub mod run;
 pub mod stop_body;
+pub mod stop_early;
 pub mod stop_frame;
 pub mod tables;
 
@@ -51,7 +52,7 @@ mod spec {
     pub use crate::spec::*;
     #[cfg(verus_only)]
     pub use crate::termination::{
-        formatting_ok, headish, is_end, is_start, modes_ok, rules_ok, template_count, templates_in,
+        formatting_ok, headish, is_end, is_start, modes_ok, rules_ok, template_count, template_mode_ok, templates_in,
     };
 }
 
