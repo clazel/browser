@@ -40,6 +40,7 @@ theorems = [
     "theorem_reachable_w3c_facts",
     "theorem_reachable_foreign_content",
     "theorem_reachable_frameset_cell",
+    "theorem_reachable_in_body_table",
 ]
 
 [package.metadata.verus]

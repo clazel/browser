@@ -305,6 +305,21 @@ pub open spec fn cells_wf(p: Parser) -> bool {
     &&& forall|j: int| 0 <= j < p.open.len() && cell_pred()(#[trigger] p.open[j]) ==> cell_fresh(p, p.open[j].id)
 }
 
+/// A start tag's attributes have no namespace and no prefix
+/// (`independent::equivalence_body::attrs_plain`), as the tokenizer's
+/// attributes do (`classify`).
+pub open spec fn tok_plain(t: Tok) -> bool {
+    t is Start ==> crate::independent::equivalence_body::attrs_plain(t->Start_0.attrs)
+}
+
+/// Every entry of the list of active formatting elements is for a token
+/// whose attributes have no namespace and no prefix.
+pub open spec fn fmt_plain(p: Parser) -> bool {
+    forall|i: int|
+        0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry
+            ==> crate::independent::equivalence_body::attrs_plain(p.formatting[i]->Entry_token.attrs)
+}
+
 /// The reachable-state facts of a running parser: the stack's [`shape`],
 /// [`root_ids`], [`tags_wf`], [`cells_wf`], [`cell_ok`], [`html_once`],
 /// and the document facts `reachable::doc::dinv` (among them

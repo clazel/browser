@@ -37,6 +37,19 @@ pub open spec fn dinv_of(doc: Document, open: Seq<Elem>, head: Option<NodeId>, r
             ==> has_template_contents(doc, n)
 }
 
+/// Every HTML element of the document but the context element `ctx` (the
+/// fragment case's, whose attributes are the caller's) has attributes with
+/// no namespace and no prefix
+/// (`independent::equivalence_body::attrs_plain`): the parser creates HTML
+/// elements only for tokens, whose attributes are plain, and appends only
+/// a token's attributes to an element.
+pub open spec fn html_plain(doc: Document, ctx: Option<Elem>) -> bool {
+    forall|i: int|
+        0 <= i < doc.nodes.len() && (ctx is None || i != ctx->Some_0.id) && (#[trigger] doc.nodes[i]).kind is Element
+            && doc.nodes[i].kind->Element_namespace == Some(Namespace::Html)
+            ==> crate::independent::equivalence_body::attrs_plain(doc.nodes[i].kind->Element_attributes)
+}
+
 /// Node `n` may receive a child: it is a node, and no `template` element
 /// without template contents.
 pub open spec fn pok(doc: Document, n: NodeId) -> bool {

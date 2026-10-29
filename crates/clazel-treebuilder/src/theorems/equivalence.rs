@@ -427,4 +427,82 @@ pub proof fn theorem_reachable_frameset_cell(
     }
 }
 
+/// The inputs where the W3C and WHATWG "in body" rules differ
+/// (`independent::equivalence_body::lemma_in_body`): the texts
+/// (`in_body_texts_agree`) and the adoption agency algorithm's insertions
+/// (`in_body_aa_agrees`).
+pub open spec fn in_body_agree(p: Parser, t: Tok) -> bool {
+    &&& crate::independent::equivalence_body::in_body_texts_agree(p, t)
+    &&& crate::independent::equivalence_body::in_body_aa_agrees(p, t)
+}
+
+/// The inputs where the W3C and WHATWG "in table" rules differ
+/// (`independent::equivalence_body::lemma_in_table`): the texts
+/// (`in_table_texts_agree`), and those of "in body", which "anything else"
+/// runs with foster parenting enabled ([`in_body_agree`]).
+pub open spec fn in_table_agree(p: Parser, t: Tok) -> bool {
+    &&& crate::independent::equivalence_body::in_table_texts_agree(p, t)
+    &&& in_body_agree(Parser { foster: true, ..p }, t)
+}
+
+/// The input where the W3C and WHATWG "in table text" rules differ
+/// (`independent::equivalence_body::lemma_in_table_text`): a token other
+/// than a character with an empty pending table character tokens list.
+pub open spec fn in_table_text_agree(p: Parser, t: Tok) -> bool {
+    !(t is Char) ==> p.pending_table_text.len() > 0
+}
+
+/// **"In body", "in table" and "in table text", from every reachable
+/// parser**: the corollaries of `independent::equivalence_body::lemma_in_body`,
+/// `lemma_in_table` and `lemma_in_table_text` for every parser `p` reached
+/// from `new_parser` or `fragment_parser` by `dispatch` steps, in a mode
+/// after "before html" (once the `html` element exists), and every token
+/// the tokenizer emits (other than a processing instruction, which the W3C
+/// does not have): the W3C and WHATWG rules give the same outcome, except
+/// on the inputs where the texts differ ([`in_body_agree`],
+/// [`in_table_agree`], [`in_table_text_agree`]). Their state preconditions
+/// are discharged: `in_body_facts` (a stack, node 0 is the Document,
+/// `aa_wf`, a tagged token with plain attributes, and `element_plain` of the
+/// `html` element and of the `body` element, from
+/// `reachable::doc::html_plain`) and `place_stable`
+/// ([`theorem_reachable_w3c_facts`]).
+pub proof fn theorem_reachable_in_body_table(
+    env: EncFns,
+    url: Seq<u32>,
+    ctx: Context,
+    scripting: bool,
+    tentative: bool,
+    tokens: Seq<Token>,
+    token: Token,
+)
+    ensures
+        ({
+            let p = crate::reachable::run::dispatch_steps(env, new_parser(url, scripting, tentative), tokens);
+            let t = classify(token);
+            let running = !(token is ProcessingInstruction) && !p.stopped && p.mode != Mode::Initial && p.mode != Mode::BeforeHtml;
+            &&& running && in_body_agree(p, t) ==> crate::independent::body::w3c_mode_in_body(env, p, t) == mode_in_body(env, p, t)
+            &&& running && in_table_agree(p, t) ==> crate::independent::tables::w3c_mode_in_table(env, p, t) == mode_in_table(
+                env,
+                p,
+                t,
+            )
+            &&& running && in_table_text_agree(p, t) ==> crate::independent::tables::w3c_mode_in_table_text(env, p, t)
+                == mode_in_table_text(env, p, t)
+        }),
+        ({
+            let p = crate::reachable::run::dispatch_steps(env, fragment_parser(ctx, scripting).0, tokens);
+            let t = classify(token);
+            let running = !(token is ProcessingInstruction) && !p.stopped && p.mode != Mode::Initial && p.mode != Mode::BeforeHtml;
+            &&& running && in_body_agree(p, t) ==> crate::independent::body::w3c_mode_in_body(env, p, t) == mode_in_body(env, p, t)
+            &&& running && in_table_agree(p, t) ==> crate::independent::tables::w3c_mode_in_table(env, p, t) == mode_in_table(
+                env,
+                p,
+                t,
+            )
+            &&& running && in_table_text_agree(p, t) ==> crate::independent::tables::w3c_mode_in_table_text(env, p, t)
+                == mode_in_table_text(env, p, t)
+        }),
+{
+}
+
 } // verus!
