@@ -180,31 +180,6 @@ jobs:
       # rustup reads rust-toolchain.toml and installs the pinned toolchain.
       - name: Install Rust
         run: rustup toolchain install
-      # TEMPORARY diagnosis of CreateProcessW failing with "file not found" on
-      # the runner (reported as annotations, which are readable without a
-      # token). Remove once fixed.
-      - name: Diagnose AppContainer start
-        continue-on-error: true
-        shell: pwsh
-        run: |
-          function Say($t, $m) { $m = ($m | Out-String).Trim() -replace "`r?`n", '%0A'; Write-Host "::error title=$t::$m" }
-          Say 'os' ("$([Environment]::OSVersion.VersionString) user=$(whoami) localappdata=$env:LOCALAPPDATA exists=$(Test-Path $env:LOCALAPPDATA) temp=$env:TEMP")
-          Say 'whoami' (whoami /groups | Select-String 'Mandatory Label|Administrators|Everyone')
-          cargo build -q -p clazel-renderer -p clazel
-          $exe = (Resolve-Path target\debug\clazel-renderer.exe).Path
-          Say 'exe' $exe
-          Say 'acl-exe' (icacls $exe)
-          Say 'acl-debug' (icacls (Split-Path $exe))
-          Say 'acl-root' (icacls (Split-Path (Split-Path (Split-Path $exe))))
-          Say 'acl-drive' (icacls (Split-Path (Split-Path (Split-Path (Split-Path (Split-Path $exe))))))
-          $out = & cargo run -q -p clazel -- demo 2>&1
-          Say 'demo' ($out | Select-Object -First 12)
-          Say 'acl-exe-after' (icacls $exe)
-          foreach ($run in 1..2) {
-            $t = & cargo test -p clazel --test conformance_wpt_cookies -- --nocapture 2>&1 | Out-String
-            $lines = $t -split "`r?`n"
-            Say "wpt-run-$run" (($lines | Select-String 'clazel-conformance:') + ($lines | Select-String 'FAIL ' | Select-Object -First 6) + ($lines | Select-String 'cannot start' | Select-Object -First 3) + ($lines | Select-String 'panicked|test result' | Select-Object -First 4))
-          }
       # No AppArmor step and no setup.sh. The renderer's sandbox is an
       # AppContainer that the host creates the process in; an unprivileged
       # user can do that. The tests grant the container read and execute on
