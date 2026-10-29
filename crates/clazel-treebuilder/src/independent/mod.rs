@@ -1,12 +1,16 @@
-//! An independent transcription of the insertion modes (Phase 4 item 4.11),
-//! from a different document than [`crate::spec::modes`], written without
-//! reading those files (docs/VERIFICATION.md, "Trust without reviewers",
-//! item 2), and the lemmas proving the two equal where the documents agree.
+//! An independent transcription of the insertion modes and of the rules for
+//! foreign content (Phase 4 item 4.11), from a different document than
+//! [`crate::spec::modes`], written without reading those files
+//! (docs/VERIFICATION.md, "Trust without reviewers", item 2), and the lemmas
+//! proving the two equal where the documents agree.
 //!
 //! Source (pinned): W3C, *HTML 5.2*, W3C Recommendation, 14 December 2017,
 //! <https://www.w3.org/TR/2017/REC-html52-20171214/syntax.html> (document
 //! revision `ceb65ae94cd46c47d9c5d9badc337703e7c09832`), §8.2.5 "Tree
-//! construction", §8.2.5.4.1 to §8.2.5.4.23 (the 23 insertion modes). The
+//! construction", §8.2.5.4.1 to §8.2.5.4.23 (the 23 insertion modes) and
+//! §8.2.5.5 "The rules for parsing tokens in foreign content", with the
+//! tables of §8.2.5.2 it uses (written without reading
+//! `spec/modes/foreign.rs` or `spec/base/tables.rs`). The
 //! undated URL <https://www.w3.org/TR/html52/> now redirects to the WHATWG
 //! standard, so the dated Recommendation is the text used. The W3C forked
 //! this text from the WHATWG standard in 2016 and edited it separately; it
@@ -19,7 +23,10 @@
 //!   §8.2.5.4.2 to §8.2.5.4.6; [`body`]: §8.2.5.4.7, with the adoption
 //!   agency algorithm; [`text`]: §8.2.5.4.8; [`tables`]: §8.2.5.4.9 to
 //!   §8.2.5.4.15; [`template`]: §8.2.5.4.18; [`after`]: §8.2.5.4.19 to
-//!   §8.2.5.4.23). Each entry ("A start tag whose tag name is …") is one
+//!   §8.2.5.4.23). [`foreign`]: §8.2.5.5 as `w3c_foreign_content`, with
+//!   "adjust MathML attributes", "adjust SVG attributes", "adjust foreign
+//!   attributes" and the SVG tag name table transcribed there (one branch
+//!   per row). Each entry ("A start tag whose tag name is …") is one
 //!   branch, in the W3C's order, with the W3C's wording quoted. Entries
 //!   listed together (two `dt` lines over one `dd`) are one branch.
 //! - **Not transcribed:** §8.2.5.4.16 "in select" and §8.2.5.4.17 "in
@@ -71,7 +78,8 @@
 //!
 //! How the W3C text differs from the WHATWG text [`crate::spec`]
 //! transcribes, as far as the modes go (each equivalence lemma in
-//! [`equivalence`] and [`equivalence_body`] excludes the inputs where they
+//! [`equivalence`], [`equivalence_body`] and [`equivalence_foreign`]
+//! excludes the inputs where they
 //! differ, in its precondition, and says why):
 //! - The WHATWG tokenizer emits processing instruction tokens, which the
 //!   modes insert; the W3C has no such token. Every lemma excludes
@@ -99,6 +107,17 @@
 //!   empty pending table character list inserts nothing in the WHATWG
 //!   transcription (docs/ERRATA.md) but, read literally, an empty `Text`
 //!   node in the W3C text.
+//! - Found by the foreign content proofs ([`equivalence_foreign`]): the
+//!   WHATWG adds `menu` to the breakout start tags and has a breakout entry
+//!   for the end tags `br` and `p`; the W3C's breakout entries have a
+//!   fragment case (with a fragment context, the token is handled as "any
+//!   other start tag"), which the WHATWG text has dropped; and the WHATWG's
+//!   attribute adjustments only change attributes with no namespace (a
+//!   token's attributes have none, so they agree on tokens). The tables (the
+//!   SVG tag names, "adjust SVG attributes", "adjust foreign attributes")
+//!   have the same rows in both. The foreign content lemma also assumes the
+//!   stack of open elements holds distinct elements, a fact of the parser
+//!   not proven here.
 //! - Not proven: that the W3C's and the WHATWG transcription's lists of
 //!   DOCTYPE identifiers ("initial") classify every token alike
 //!   ([`equivalence::lemma_initial_doctype`] takes it as a precondition).

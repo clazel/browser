@@ -606,27 +606,42 @@
       "file": "src/spec/modes/foreign.rs",
       "find": "Outcome::Reprocess(q, t)",
       "replace": "Outcome::Reprocess(p, t)",
-      "expect": "killed-incidentally",
-      "reason": "Element popped not at all: a breakout tag in foreign content (b, p, table, ...) is reprocessed by the HTML rules without popping the svg or math elements, so it lands inside them (the rank still decreases: foreign content has the largest growth budget). No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that foreign_content equals its spec fails.",
-      "module": "exec::modes::foreign"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: a b start tag in foreign content with the stack html, svg reprocesses the token with the svg element still open; the W3C text (§8.2.5.5, the breakout entry) pops it first, and independent::equivalence_foreign::lemma_foreign_content (proven equal where the two texts agree, which they do here: b is a breakout tag in both, and the parser is not a fragment parser) is false at that input. Element popped not at all: a breakout tag in foreign content (b, p, table, ...) is reprocessed by the HTML rules without popping the svg or math elements, so it lands inside them.",
+      "module": "independent::equivalence_foreign",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_foreign_breakout()",
+        "witness": "foreign_content(ml_env(), ml_svg_parser(), ml_named_start(ml_name_b()))->Reprocess_0.open.len() == 2"
+      }
     },
     {
       "id": "svg-tag-name-row-dropped",
       "file": "src/spec/base/tables.rs",
       "find": "if name == seq![0x61u32, 0x6cu32, 0x74u32, 0x67u32, 0x6cu32, 0x79u32, 0x70u32, 0x68u32] {",
       "replace": "if false {",
-      "expect": "killed-incidentally",
-      "reason": "An adjustment table row dropped: the SVG tag name table loses | altglyph | altGlyph |. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that svg_tag_name (the exec names table) equals its spec fails.",
-      "module": "exec::names"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: the SVG tag name table leaves altglyph as it is; the W3C table (§8.2.5.5, \"any other start tag\") has the row | altglyph | altGlyph |, and independent::equivalence_foreign::lemma_svg_element_name (proven equal on every name: the two tables have the same rows) is false at that input. An adjustment table row dropped: the SVG tag name table loses | altglyph | altGlyph |.",
+      "module": "independent::equivalence_foreign",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_svg_tag_name()",
+        "witness": "svg_tag_name(ml_name_altglyph()) == ml_name_altglyph()"
+      }
     },
     {
       "id": "foreign-attribute-row-dropped",
       "file": "src/spec/base/tables.rs",
       "find": "} else if name == seq![0x78u32, 0x6cu32, 0x69u32, 0x6eu32, 0x6bu32, 0x3au32, 0x68u32, 0x72u32, 0x65u32, 0x66u32] {",
       "replace": "} else if false {",
-      "expect": "killed-incidentally",
-      "reason": "An adjustment table row dropped: \"adjust foreign attributes\" loses | xlink:href | xlink | href | XLink namespace |. No theorem states the tree's shape (the theorems are about termination and the order of the actions; the evidence for the tree is the conformance suite, item 4.11), and every edge still decreases the ranking; only the exec proof that foreign_attribute (the exec names table) equals its spec fails.",
-      "module": "exec::names"
+      "expect": "killed",
+      "reason": "The mutant contradicts the independent W3C HTML 5.2 transcription: \"adjust foreign attributes\" leaves xlink:href without a namespace; the W3C table (§8.2.5.2) has the row | xlink:href | xlink | href | XLink namespace |, and independent::equivalence_foreign::lemma_foreign_attribute (proven equal on every name: the two tables have the same rows) is false at that input. An adjustment table row dropped: \"adjust foreign attributes\" loses | xlink:href | xlink | href | XLink namespace |.",
+      "module": "independent::equivalence_foreign",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_w3c_foreign_attribute()",
+        "witness": "foreign_attribute(ml_name_xlink_href()) is None"
+      }
     },
     {
       "id": "table-scope-widened",
