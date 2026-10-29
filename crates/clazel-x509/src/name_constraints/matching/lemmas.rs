@@ -495,8 +495,7 @@ proof fn lemma_names_constrained_from_at(
         names_constrained_from(path, j, state),
     ensures
         state_before(path, i, initial) is Some,
-        (path[i].self_issued && i < path.len() - 1)
-            || certificate_acceptable(state_before(path, i, initial).unwrap(), path[i]),
+        certificate_acceptable(state_before(path, i, initial).unwrap(), path[i]),
     decreases i - j
 {
     if j < i {
@@ -507,8 +506,8 @@ proof fn lemma_names_constrained_from_at(
 }
 
 /// `thm_names_constrained`'s per-certificate fact: on an accepted path,
-/// every certificate except a self-issued one that is not final satisfies
-/// §6.1.3 (b) and (c), for its subjectAltName entries and its subject, under
+/// every certificate, self-issued ones included, satisfies §6.1.3 (b) and
+/// (c), for its subjectAltName entries and its subject, under
 /// the state built from the initial state and every earlier certificate's
 /// constraints.
 pub proof fn lemma_names_constrained_at(
@@ -519,8 +518,7 @@ pub proof fn lemma_names_constrained_at(
     requires names_constrained(path, initial), 0 <= i < path.len(),
     ensures
         state_before(path, i, initial) == Some(initial + collected_constraints(path, i)),
-        (path[i].self_issued && i < path.len() - 1)
-            || certificate_acceptable(initial + collected_constraints(path, i), path[i]),
+        certificate_acceptable(initial + collected_constraints(path, i), path[i]),
 {
     lemma_names_constrained_from_at(path, initial, 0, i, initial);
     lemma_state_before_is_collected(path, i, initial);
