@@ -23,6 +23,13 @@
 //! cell", the `template` end tag, "in template"'s end of file, the
 //! `frameset` start tag); they are proven on the parser put in another mode
 //! (`cells::mode_as`).
+//!
+//! Stopped parsers. [`keeps`] and the per-mode lemmas say nothing of a
+//! parser a rule stops; [`stopped`] proves that it has an empty stack and
+//! satisfies `termination::modes_ok`, by frame lemmas of its own
+//! ([`stop_frame`], [`stop_body`]: every helper keeps the modes, stopped or
+//! not) and per-mode lemmas ([`stop_early`], [`stop_in_body`],
+//! [`stop_tables`]).
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -38,6 +45,12 @@ pub mod helpers;
 pub mod lists;
 pub mod rest;
 pub mod run;
+pub mod stop_body;
+pub mod stop_early;
+pub mod stop_frame;
+pub mod stop_in_body;
+pub mod stop_tables;
+pub mod stopped;
 pub mod tables;
 
 /// Every name of the transcription and of this module, for the ghost
@@ -49,7 +62,8 @@ mod spec {
     pub use crate::spec::*;
     #[cfg(verus_only)]
     pub use crate::termination::{
-        formatting_ok, headish, is_end, is_start, modes_ok, rules_ok, template_count, templates_in,
+        formatting_ok, headish, is_end, is_start, modes_ok, rules_ok, template_count,
+        template_mode_ok, templates_in,
     };
 }
 

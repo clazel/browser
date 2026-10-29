@@ -50,7 +50,10 @@ evidence exists (see "Left" below).
   every parser reachable from `new_parser` or `fragment_parser` satisfies
   `reachable_inv` (each mode's stack shape, `modes_ok`, the cells of "in
   cell"), with no hypotheses; so reprocessing ends on every reachable
-  parser.
+  parser. `theorem_reachable_stopped`: every reachable parser that has
+  stopped has an empty stack and satisfies `modes_ok` too (a rule that
+  stops part-way has popped the stack, and the helpers after the stop
+  keep the modes), so every reachable parser satisfies `modes_ok`.
 - **Proven, the document** (`src/theorems/`): `theorem_doc_wf` and
   `theorem_open_elements_in_doc` (a step keeps the DOM well formed and
   every id of the parse state in the document) and
@@ -63,12 +66,14 @@ evidence exists (see "Left" below).
   is new; "after head" pushes the `head` element back and removes that
   last entry again).
   `theorem_reachable_wf` discharges these hypotheses: every parser
-  reachable from `new_parser` or `fragment_parser` has a well-formed
-  document, every id of its parse state in the document, no element
-  with two formatting entries, only HTML elements in the list of active
-  formatting elements, the fragment case's redirection map (or none),
-  and, until it stops, `parser_wf`, a valid head pointer and distinct
-  elements on the stack. So `theorem_reachable_doc_wf`,
+  reachable from `new_parser` or `fragment_parser`, stopped or not, has
+  `parser_wf` (a well-formed document, every id of its parse state in the
+  document, `modes_ok`), no element with two formatting entries, distinct
+  elements on the stack (an empty one once stopped), only HTML elements
+  in the list of active formatting elements, the fragment case's
+  redirection map (or none), and, until it stops, a valid head pointer (a
+  `head` start tag the node limit stops leaves the pointer at the
+  Document). So `theorem_reachable_doc_wf`,
   `theorem_reachable_open_elements_in_doc` and
   `theorem_reachable_nodes_per_token` state the three for a step from
   every reachable parser, with no hypotheses. `theorem_reachable_w3c_facts`
@@ -160,18 +165,13 @@ evidence exists (see "Left" below).
 
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
-- Spec-level `modes_ok` of a stopped reachable parser (so `parser_wf` is
-  proven of reachable parsers only until they stop; a stopped parser
-  takes no further step), and spec-level `templates_wf` of reachable
-  parsers (the rest of `parser_inv`). Both hold: `exec::step::step`
-  proves `parser_inv` of `dispatch`'s result, stopped or not, but an exec
-  function's contract cannot be used in a proof. At the spec level the
-  per-mode lemmas prove `modes_ok` only of results that have not stopped,
-  and a rule that stops part-way has already changed the modes; a proof
-  needs every mode lemma (and the ranking edges) extended to stopped
-  results. `templates_wf` needs the tokens' tags at every element
-  creation (a `template` element gets contents by the token's tag, and
-  is one by its name's), which the document theorems do not carry.
+- Spec-level `templates_wf` of reachable parsers (the rest of
+  `parser_inv`). It holds: `exec::step::step` proves `parser_inv` of
+  `dispatch`'s result, stopped or not, but an exec function's contract
+  cannot be used in a proof. `templates_wf` needs the tokens' tags at
+  every element creation (a `template` element gets contents by the
+  token's tag, and is one by its name's), which the document theorems do
+  not carry.
 - Whether reachable parsers need the 6T term of the nodes-per-token bound.
   The term pays for "in template"'s end of file, which pops a template,
   resets the mode and reprocesses, once per template: the generic proof

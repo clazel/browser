@@ -1,9 +1,11 @@
 //! The document theorems for every reachable parser (Phase 4 item 4.9):
 //! [`theorem_reachable_wf`] (every parser reachable from `new_parser` or
-//! `fragment_parser` has a well-formed document, every id of its parse
-//! state in the document, and, until it stops, `parser_wf` and the head
-//! element pointer's fact; and no element has two entries in its list of
-//! active formatting elements), and the corollaries of
+//! `fragment_parser`, stopped or not, has `parser_wf`: a well-formed
+//! document, every id of its parse state in the document and
+//! `termination::modes_ok`; no element has two entries in its stack of open
+//! elements nor in its list of active formatting elements; a stopped one
+//! has an empty stack; and until it stops the head element pointer's
+//! fact), and the corollaries of
 //! `theorem_doc_wf`, `theorem_open_elements_in_doc` and
 //! `theorem_nodes_per_token` for a step from every reachable parser, with
 //! no hypotheses.
@@ -15,11 +17,13 @@
 //! hypotheses of the three step theorems: `parser_wf` is the document's
 //! facts and `termination::modes_ok`, which `reachable_inv` gives;
 //! `dispatch_needs` comes from `reachable::run::lemma_dispatch_reach`;
-//! and `theorem_nodes_per_token` keeps `open_elements::fmt_unique`.
+//! and `theorem_nodes_per_token` keeps `open_elements::fmt_unique`. A step
+//! that stops ends with an empty stack and `termination::modes_ok`
+//! (`reachable::stopped::lemma_dispatch_stop`).
 //!
-//! Not stated: `termination::modes_ok` of a stopped parser (the rule that
-//! stops parsing may have changed the modes half way; a stopped parser
-//! takes no further step, so nothing needs it), and the rest of
+//! Not stated: the head element pointer's fact of a stopped parser (a
+//! `head` start tag the node limit stops points the pointer at node 0, the
+//! Document, which is no `head` element), and the rest of
 //! `invariant::parser_inv` (`tags_wf` holds of running reachable parsers by
 //! `reachable_inv`; `templates_wf` has no spec-level proof, only the
 //! executable step's).
@@ -34,21 +38,24 @@ verus! {
 /// The document facts of a reachable parser, with
 /// `invariant::reachable_inv`: the document is well formed, every id of
 /// the parse state is a node of it, no two entries of the list of active
-/// formatting elements are for the same element, and until parsing stops
-/// the parser has `parser_wf`, its head element pointer names an HTML
-/// `head` element (`invariant::head_ok`), and no two entries of the stack
-/// of open elements are for the same element
-/// (`independent::equivalence_foreign::open_distinct`); every entry of the
-/// list is for an HTML element (`open_elements::fh`); and the insertion
-/// target redirection map maps neither the Document nor a node to itself
+/// formatting elements are for the same element, the parser has
+/// `parser_wf` (stopped or not), no two entries of the stack of open
+/// elements are for the same element
+/// (`independent::equivalence_foreign::open_distinct`), a stopped parser's
+/// stack is empty, and until parsing stops its head element pointer names
+/// an HTML `head` element (`invariant::head_ok`); every entry of the list
+/// is for an HTML element (`open_elements::fh`); and the insertion target
+/// redirection map maps neither the Document nor a node to itself
 /// ([`redirect_ok`]).
 pub open spec fn reach_wf(p: Parser) -> bool {
     &&& reachable_inv(p)
     &&& dom::wf(p.doc)
     &&& ids_in_doc(p)
     &&& super::open_elements::fmt_unique(p)
-    &&& !p.stopped ==> parser_wf(p) && head_ok(p)
-    &&& !p.stopped ==> crate::independent::equivalence_foreign::open_distinct(p.open)
+    &&& parser_wf(p)
+    &&& !p.stopped ==> head_ok(p)
+    &&& crate::independent::equivalence_foreign::open_distinct(p.open)
+    &&& crate::reachable::stop_early::stop_ok(p)
     &&& super::open_elements::fh(p)
     &&& redirect_ok(p)
 }
@@ -167,7 +174,11 @@ pub proof fn lemma_dispatch_wf(env: EncFns, p: Parser, token: Token)
         reach_wf(dispatch(env, p, token).0),
 {
     crate::reachable::run::lemma_dispatch_reach(env, p, token);
-    if !p.stopped {
+    crate::reachable::stopped::lemma_dispatch_stop(env, p, token);
+    if p.stopped {
+        let q = dispatch(env, p, token).0;
+        assert(crate::termination::template_count(q) == crate::termination::template_count(p));
+    } else {
         super::open_elements::lemma_dispatch(env, p, token);
         super::open_elements::lemma_kpu(p, dispatch(env, p, token).0);
         super::open_elements::theorem_open_elements_in_doc(env, p, token);
@@ -196,11 +207,13 @@ pub proof fn lemma_steps_wf(env: EncFns, p: Parser, tokens: Seq<Token>)
 /// **Every reachable parser has a well-formed document** (Phase 4 item
 /// 4.9): for every parser reached from `new_parser` or from
 /// `fragment_parser` by `dispatch` steps (any tokens, any encoding
-/// functions), [`reach_wf`] holds: `clazel_dom::spec::wf` of the document,
-/// `invariant::ids_in_doc`, no element with two entries in the list of
-/// active formatting elements (`open_elements::fmt_unique`), and until
-/// parsing stops `invariant::parser_wf` and `invariant::head_ok`, with
-/// `invariant::reachable_inv`. No hypotheses.
+/// functions), stopped or not, [`reach_wf`] holds: `invariant::parser_wf`
+/// (`clazel_dom::spec::wf` of the document, `invariant::ids_in_doc` and
+/// `termination::modes_ok`), no element with two entries in the list of
+/// active formatting elements (`open_elements::fmt_unique`) nor on the
+/// stack of open elements, an empty stack once stopped, and until parsing
+/// stops `invariant::head_ok`, with `invariant::reachable_inv`. No
+/// hypotheses.
 pub proof fn theorem_reachable_wf(
     env: EncFns,
     url: Seq<u32>,
