@@ -105,7 +105,7 @@ fn copy_time(value: &CertificateTime) -> (result: CertificateTime)
 }
 
 /// Byte equality of two DER encodings.
-fn bytes_equal(a: &[u8], b: &[u8]) -> (result: bool)
+pub(crate) fn bytes_equal(a: &[u8], b: &[u8]) -> (result: bool)
     ensures result == (a@ == b@)
 {
     if a.len() != b.len() { return false; }
@@ -734,7 +734,7 @@ pub open spec fn view_candidate(candidate: &Candidate<'_>) -> super::verifier::C
     super::verifier::Candidate { anchor: candidate.anchor as nat, path: view_indices(candidate.path@) }
 }
 
-proof fn lemma_index_absent(path: Seq<nat>, index: nat, from: int)
+pub(crate) proof fn lemma_index_absent(path: Seq<nat>, index: nat, from: int)
     requires 0 <= from, forall|k: int| from <= k < path.len() ==> path[k] != index,
     ensures super::verifier::index_absent_from(path, index, from),
     decreases path.len() - from,
@@ -742,7 +742,7 @@ proof fn lemma_index_absent(path: Seq<nat>, index: nat, from: int)
     if from < path.len() { lemma_index_absent(path, index, from + 1); }
 }
 
-proof fn lemma_index_present(path: Seq<nat>, index: nat, from: int, k: int)
+pub(crate) proof fn lemma_index_present(path: Seq<nat>, index: nat, from: int, k: int)
     requires 0 <= from <= k < path.len(), path[k] == index,
     ensures !super::verifier::index_absent_from(path, index, from),
     decreases k - from,
@@ -751,7 +751,7 @@ proof fn lemma_index_present(path: Seq<nat>, index: nat, from: int, k: int)
 }
 
 /// `verifier::index_absent_from(path, index, from)`.
-fn index_absent_from(path: &[usize], index: usize, from: usize) -> (result: bool)
+pub(crate) fn index_absent_from(path: &[usize], index: usize, from: usize) -> (result: bool)
     requires from <= path.len(),
     ensures result == super::verifier::index_absent_from(view_indices(path@), index as nat, from as int),
 {
@@ -815,7 +815,7 @@ fn indices_usable(pool: &[Option<PathCert<'_>>], path: &[usize]) -> (result: boo
     true
 }
 
-proof fn lemma_intermediates_of(pool: Seq<Option<super::parsed::spec::PathCert>>, path: Seq<nat>)
+pub(crate) proof fn lemma_intermediates_of(pool: Seq<Option<super::parsed::spec::PathCert>>, path: Seq<nat>)
     requires forall|k: int| 0 <= k < path.len() ==> path[k] < pool.len() && (#[trigger] pool[path[k] as int]) is Some,
     ensures
         super::verifier::intermediates_of(pool, path).len() == path.len(),
@@ -838,7 +838,7 @@ proof fn lemma_intermediates_of(pool: Seq<Option<super::parsed::spec::PathCert>>
     }
 }
 
-proof fn lemma_indices_usable(pool: Seq<Option<super::parsed::spec::PathCert>>, path: Seq<nat>, from: int)
+pub(crate) proof fn lemma_indices_usable(pool: Seq<Option<super::parsed::spec::PathCert>>, path: Seq<nat>, from: int)
     requires super::verifier::indices_usable_from(pool, path, from), 0 <= from,
     ensures forall|k: int| from <= k < path.len() ==> path[k] < pool.len() && (#[trigger] pool[path[k] as int]) is Some,
     decreases path.len() - from,
