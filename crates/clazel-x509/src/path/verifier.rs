@@ -20,7 +20,7 @@
 //!   (`some_candidate_valid`). Which candidate the verifier returns, the
 //!   bounded depth-first search that finds it (design §2.6: anchors first,
 //!   then pool certificates in message order) and the theorems about that
-//!   search are P9's (`build.rs`, `chain.rs`). `verify_server_chain_ensures`
+//!   search are P9's (`search::spec`, `search::theorems`). `verify_server_chain_ensures`
 //!   is the contract P9's executable verifier must meet: an `Ok` is a valid
 //!   candidate; `BuildBudgetExhausted` means the search's first 200,000
 //!   candidate-issuer steps held no valid path; any other error means no

@@ -6,9 +6,11 @@
 //! - `theorems`: what is claimed of them (completeness, first valid, the
 //!   order is one `verifier::verify_server_chain_ensures` accepts), stated;
 //! - `contract`: what the executable search is proven to meet;
-//! - `lemmas`: the proofs of `theorems`, and the facts `exec` uses.
+//! - `lemmas`: the proofs of `theorems`, and the facts `exec` uses;
+//! - `exec`: the executable search and `verify_server_chain`.
 
 pub mod contract;
+pub mod exec;
 pub mod lemmas;
 pub mod spec;
 pub mod theorems;

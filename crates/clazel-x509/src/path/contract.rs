@@ -2,7 +2,7 @@
 //! predicate per executable function, in terms of `spec.rs`, `profile.rs`
 //! and `verifier.rs`, and the two parameters' executable traits. P8's
 //! functions (§6.1 down to `candidate_verdict`, and `chain_inputs`) are in
-//! `exec.rs`; P9's verifier is not written yet.
+//! `exec.rs`; P9's search and verifier are in `search/` (`search::contract`).
 //!
 //! - **The parameters.** `LinkVerifier` is design §3.3's trait: its
 //!   executable `verify` returns exactly what its spec function `link` says

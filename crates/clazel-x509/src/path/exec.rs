@@ -23,7 +23,7 @@
 //! - **Work.** `candidate_verdict` decides the comparison bound before §6.1
 //!   (`verifier::candidate_verdict`), so §6.1's name-constraint checks never
 //!   run on a path beyond it.
-//! - The candidate search (design §2.6) is not here: P9.
+//! - The candidate search (design §2.6) is P9's, in `search::exec`.
 
 use super::contract::{LinkVerifier, RevocationOracle};
 use super::parsed::exec::{Anchor, PathCert};
