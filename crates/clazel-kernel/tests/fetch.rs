@@ -17,10 +17,14 @@ fn response(body: &[u8]) -> Vec<u8> {
     response_with("X-Test: 1", body)
 }
 
-fn commit(url: &str, script: &[u8]) -> Msg {
-    Msg::Commit {
+/// The document a fetch of `url` commits: kind 0, the responses here carry
+/// no `Content-Type`, and `body`.
+fn commit(url: &str, body: &[u8]) -> support::Doc {
+    support::Doc {
         url: url.as_bytes().to_vec(),
-        script: script.to_vec(),
+        content_type: Vec::new(),
+        kind: 0,
+        body: body.to_vec(),
     }
 }
 
@@ -89,7 +93,7 @@ fn a_navigation_opens_a_connection_and_the_response_commits_its_body() {
         out,
         vec![
             Out::Close(0),
-            Out::To(id, commit("http://example.test/next", b"page body"))
+            Out::Commit(id, commit("http://example.test/next", b"page body"))
         ]
     );
 }
@@ -119,7 +123,7 @@ fn a_net_event_is_ignored_unless_it_names_an_open_connection_of_a_navigating_tab
         out,
         vec![
             Out::Close(1),
-            Out::To(id, commit("http://example.test/second", b"new"))
+            Out::Commit(id, commit("http://example.test/second", b"new"))
         ]
     );
     // The navigation is over: its connection is gone, and its answer, again,
@@ -196,12 +200,12 @@ fn a_redirect_to_another_origin_replaces_the_renderer_with_the_final_url() {
             Out::Close(1),
             Out::Kill(old),
             Out::Spawn(new),
-            Out::To(to, Msg::Commit { url, script }),
+            Out::Commit(to, support::Doc { url, body, kind: 0, .. }),
         ] if *old == id
             && new == to
             && *new != id
             && url.as_slice() == b"http://other.test/landed"
-            && script.as_slice() == b"landing page"
+            && body.as_slice() == b"landing page"
     );
     assert!(ok, "{out:?}");
 }
@@ -299,7 +303,7 @@ fn each_connection_belongs_to_the_tab_that_opened_it() {
         out,
         vec![
             Out::Close(1),
-            Out::To(b, commit("http://b.test/y", b"for b"))
+            Out::Commit(b, commit("http://b.test/y", b"for b"))
         ]
     );
     let out = k.net(0, InputBuf::Bytes(response(b"for a")));
@@ -307,7 +311,125 @@ fn each_connection_belongs_to_the_tab_that_opened_it() {
         out,
         vec![
             Out::Close(0),
-            Out::To(a, commit("http://a.test/x", b"for a"))
+            Out::Commit(a, commit("http://a.test/x", b"for a"))
         ]
     );
+}
+
+// ---------------------------------------------------------------------
+// Phase 4 item 4.12: a new tab fetches, a document's body arrives in
+// `Body` frames with its content type, and a `Display` is shown under the
+// kernel's URL.
+// ---------------------------------------------------------------------
+
+/// The user opens a tab at `url` without a script: the outputs.
+fn open_fetching(k: &mut Kernel, url: &str) -> Vec<Out> {
+    k.event(&EventRecord::OpenTab {
+        url: code_points(url),
+        script: None,
+    })
+}
+
+#[test]
+fn a_tab_opened_without_a_script_fetches_and_commits_the_document() {
+    let mut k = Kernel::new();
+    let out = open_fetching(&mut k, "http://example.test/page");
+    assert_eq!(out, vec![Out::Spawn(0), connect(0, "example.test")]);
+    k.net(0, InputBuf::Connected);
+    let body = b"<!DOCTYPE html><title>T</title><p>Hi".to_vec();
+    let out = k.net(
+        0,
+        InputBuf::Bytes(response_with("Content-Type: text/html; charset=utf-8", &body)),
+    );
+    assert_eq!(
+        out,
+        vec![
+            Out::Close(0),
+            Out::Commit(
+                0,
+                support::Doc {
+                    url: b"http://example.test/page".to_vec(),
+                    content_type: b"text/html; charset=utf-8".to_vec(),
+                    kind: 0,
+                    body,
+                }
+            )
+        ]
+    );
+}
+
+#[test]
+fn an_uncommitted_renderer_that_displays_is_killed() {
+    let mut k = Kernel::new();
+    open_fetching(&mut k, "http://example.test/");
+    let display = Msg::Display {
+        title: b"Bank".to_vec(),
+        text: Vec::new(),
+        links: Vec::new(),
+    };
+    let out = k.send(0, &display);
+    assert_eq!(out, vec![Out::Kill(0), Out::Close(0)]);
+}
+
+#[test]
+fn a_display_is_shown_for_the_senders_tab_under_the_kernels_url() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/a");
+    // The title claims another address; the address line is the kernel's.
+    let out = k.send(
+        id,
+        &Msg::Display {
+            title: b"https://bank.test/".to_vec(),
+            text: b"text".to_vec(),
+            links: vec![b"http://example.test/b".to_vec()],
+        },
+    );
+    assert_eq!(
+        out,
+        vec![Out::Show(
+            id,
+            code_points("http://example.test/a"),
+            b"https://bank.test/".to_vec(),
+            b"text".to_vec(),
+            vec![b"http://example.test/b".to_vec()],
+        )]
+    );
+}
+
+#[test]
+fn a_large_body_is_split_into_body_frames_and_read_back_whole() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    k.navigate(id, "http://example.test/big");
+    k.net(0, InputBuf::Connected);
+    // Three pieces: two of MAX_BODY_CHUNK octets and a short one.
+    let chunk = clazel_ipc::message::codec::MAX_BODY_CHUNK;
+    let body: Vec<u8> = (0..2 * chunk + 17).map(|i| (i % 251) as u8).collect();
+    let mut raw = Vec::new();
+    // The raw write, to count the frames in it.
+    let out = {
+        let Some(s) = k.state.take() else {
+            panic!("no state");
+        };
+        let (next, outputs) = clazel_kernel::exec::real_urls::step_real(
+            s,
+            &EventRecord::Net {
+                conn: 0,
+                input: InputBuf::Bytes(response_with("X-Test: 1", &body)),
+            },
+        );
+        k.state = Some(next);
+        for o in &outputs {
+            if let clazel_kernel::exec::records::OutputRecord::ToRenderer { bytes, .. } = o {
+                raw = bytes.clone();
+            }
+        }
+        support::split_frames(&raw)
+    };
+    let msgs = out.unwrap_or_default();
+    assert_eq!(msgs.len(), 5, "Commit, three Body frames, BodyEnd");
+    assert!(matches!(msgs.get(1), Some(Msg::Body { bytes }) if bytes.len() == chunk));
+    assert!(matches!(msgs.get(3), Some(Msg::Body { bytes }) if bytes.len() == 17));
+    let doc = support::read_doc(msgs);
+    assert_eq!(doc.map(|d| d.body), Some(body));
 }

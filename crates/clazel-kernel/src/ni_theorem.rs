@@ -287,6 +287,7 @@ pub open spec fn rename_output(f: spec_fn(nat) -> nat, o: Output) -> Output {
         Output::Connect { conn, host, port, tls } => Output::Connect { conn, host, port, tls },
         Output::Send { conn, bytes } => Output::Send { conn, bytes },
         Output::Close { conn } => Output::Close { conn },
+        Output::Show { tab, url, title, text, links } => Output::Show { tab: f(tab), url, title, text, links },
     }
 }
 
@@ -329,6 +330,7 @@ pub proof fn theorem_cookie_noninterference_up_to_ids(rules: Seq<clazel_psl::spe
             Output::Connect { conn, host, port, tls } => {},
             Output::Send { conn, bytes } => {},
             Output::Close { conn } => {},
+            Output::Show { .. } => {},
         }
     }
     assert(outs.map_values(|o: Output| rename_output(f, o)) =~= outs);

@@ -83,7 +83,7 @@ pub open spec fn ce_trace() -> Seq<Event> {
 
 /// The user opens a tab.
 pub open spec fn ce_ev0() -> Event {
-    Event::OpenTab { url: Seq::<u32>::empty(), script: Seq::<u8>::empty() }
+    Event::OpenTab { url: Seq::<u32>::empty(), script: Some(Seq::<u8>::empty()) }
 }
 
 /// The user navigates it.
@@ -279,15 +279,15 @@ pub proof fn lemma_co_close_done(urls: UrlFns, s: State, tab: nat, partition: cr
     ensures
         carry_out(urls, s, tab, partition, Some(c), seq![NetAction::Close, NetAction::Done { url, response }])
             == (
-            commit_navigation(urls, State { conns: without_conn(s.conns, c), ..s }, tab, clazel_url::url::spec::url_serializer(url, false), response.body).0,
-            seq![Output::Close { conn: c }] + commit_navigation(urls, State { conns: without_conn(s.conns, c), ..s }, tab, clazel_url::url::spec::url_serializer(url, false), response.body).1,
+            commit_navigation(urls, State { conns: without_conn(s.conns, c), ..s }, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response)).0,
+            seq![Output::Close { conn: c }] + commit_navigation(urls, State { conns: without_conn(s.conns, c), ..s }, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response)).1,
         ),
 {
     let acts = seq![NetAction::Close, NetAction::Done { url, response }];
     let rest = acts.drop_first();
     assert(rest =~= seq![NetAction::Done { url, response }]);
     let sa = State { conns: without_conn(s.conns, c), ..s };
-    assert(carry_out(urls, sa, tab, partition, None, rest) == commit_navigation(urls, sa, tab, clazel_url::url::spec::url_serializer(url, false), response.body));
+    assert(carry_out(urls, sa, tab, partition, None, rest) == commit_navigation(urls, sa, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response)));
 }
 
 /// `begin_navigation` for a tab that is open, with a URL that has a lock and
@@ -347,7 +347,7 @@ pub proof fn lemma_co_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
 
 /// The renderer the first event opens.
 pub open spec fn ce_r0() -> Renderer {
-    Renderer { id: 0, tab: 0, url: Seq::<u32>::empty(), lock: clazel_origin::spec::Origin::Opaque(0nat), pending: None }
+    Renderer { committed: true, id: 0, tab: 0, url: Seq::<u32>::empty(), lock: clazel_origin::spec::Origin::Opaque(0nat), pending: None }
 }
 
 /// The navigation the second event starts.
@@ -395,7 +395,7 @@ pub proof fn lemma_filter_one<A>(x: A, p: spec_fn(A) -> bool)
 
 /// A commit to another origin, with no connection to close, spawns a
 /// renderer.
-pub proof fn lemma_co_commit_spawn(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn lemma_co_commit_spawn(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         s.conns =~= Seq::<Connection>::empty(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
@@ -407,11 +407,11 @@ pub proof fn lemma_co_commit_spawn(urls: UrlFns, s: State, tab: nat, href: Seq<u
             let old = s.renderers[i];
             commit_navigation(urls, s, tab, href, body)
                 == (
-                State { renderers: s.renderers.update(i, Renderer { id: s.next_id, tab, url: href, lock: l, pending: None }), next_id: s.next_id + 1, ..s },
+                State { renderers: s.renderers.update(i, Renderer { committed: true, id: s.next_id, tab, url: href, lock: l, pending: None }), next_id: s.next_id + 1, ..s },
                 seq![
                     Output::Kill { id: old.id },
                     Output::Spawn { id: s.next_id, policy: Policy::Renderer },
-                    Output::ToRenderer { id: s.next_id, bytes: commit_frame(href, body) },
+                    Output::ToRenderer { id: s.next_id, bytes: commit_frames(href, body) },
                 ],
             )
         }),
@@ -550,7 +550,7 @@ pub proof fn lemma_ce_e4(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
         ce_fetch_ok(fetch),
     ensures
         step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).0.renderers
-            == seq![Renderer { id: 1, tab: 0, url: ce_href(), lock: clazel_origin::spec::Origin::Opaque(1nat), pending: None }],
+            == seq![Renderer { committed: true, id: 1, tab: 0, url: ce_href(), lock: clazel_origin::spec::Origin::Opaque(1nat), pending: None }],
         step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1.len() == 4,
         step(rules, ce_urls(), fetch, ce_state(seq![Renderer { pending: Some(ce_nav1()), ..ce_r0() }], seq![ce_c0()], 1, 1), ce_ev4()).1[2] == (Output::Spawn { id: 1, policy: Policy::Renderer }),
 {
@@ -576,8 +576,8 @@ pub proof fn lemma_ce_e4(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns)
     assert(m2.conns =~= Seq::<Connection>::empty());
     assert(lock_of_url(urls, ce_href(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)));
     assert(find_by_tab(m2.renderers, 0, 0) == Some(0int));
-    lemma_co_commit_spawn(urls, m2, 0, ce_href(), Seq::<u8>::empty(), 0, clazel_origin::spec::Origin::Opaque(1nat));
-    let out = commit_navigation(urls, m2, 0, ce_href(), Seq::<u8>::empty()).1;
+    lemma_co_commit_spawn(urls, m2, 0, ce_href(), response_document(a2[1]->Done_response), 0, clazel_origin::spec::Origin::Opaque(1nat));
+    let out = commit_navigation(urls, m2, 0, ce_href(), response_document(a2[1]->Done_response)).1;
     assert(out.len() == 3 && out[1] == (Output::Spawn { id: 1, policy: Policy::Renderer }));
 }
 
@@ -963,7 +963,7 @@ pub proof fn lemma_ce_purged(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns
     assert(step(rules, urls, fetch, s1, e1).0 == s2);
     assert(step(rules, urls, fetch, s2, e3).0 == u3);
     let (u4, q4) = step(rules, urls, fetch, u3, e4);
-    assert(u4.renderers[0] == (Renderer { id: 1, tab: 0, url: ce_href(), lock: clazel_origin::spec::Origin::Opaque(1nat), pending: None }));
+    assert(u4.renderers[0] == (Renderer { committed: true, id: 1, tab: 0, url: ce_href(), lock: clazel_origin::spec::Origin::Opaque(1nat), pending: None }));
     assert(crate::domain::domain_of_renderer(rules, u4.renderers[0]) == d);
     assert(crate::noninterference::addressed_to(rules, d, u3, u4, q4[2])) by {
         assert(u4.renderers.contains(u4.renderers[0]));

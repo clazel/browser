@@ -19,6 +19,8 @@ verus! {
 
 /// A renderer process, viewed as [`Renderer`].
 pub struct RendererRecord {
+    /// Whether a document has been committed in it.
+    pub committed: bool,
     /// The id.
     pub id: u64,
     /// The tab.
@@ -35,7 +37,14 @@ impl View for RendererRecord {
     type V = Renderer;
 
     open spec fn view(&self) -> Renderer {
-        Renderer { id: self.id as nat, tab: self.tab as nat, url: self.url@, lock: self.lock@, pending: navigation_opt_view(self.pending) }
+        Renderer {
+            committed: self.committed,
+            id: self.id as nat,
+            tab: self.tab as nat,
+            url: self.url@,
+            lock: self.lock@,
+            pending: navigation_opt_view(self.pending),
+        }
     }
 }
 
@@ -423,8 +432,8 @@ pub enum EventRecord {
     OpenTab {
         /// The URL.
         url: Vec<u32>,
-        /// The script (UTF-8 text).
-        script: Vec<u8>,
+        /// A user script to commit instead of a fetch.
+        script: Option<Vec<u8>>,
     },
     /// The user navigates a tab.
     NavigateTab {
@@ -458,7 +467,13 @@ impl View for EventRecord {
     open spec fn view(&self) -> Event {
         match self {
             EventRecord::FromRenderer { id, bytes } => Event::FromRenderer { id: *id as nat, bytes: bytes@ },
-            EventRecord::OpenTab { url, script } => Event::OpenTab { url: url@, script: script@ },
+            EventRecord::OpenTab { url, script } => Event::OpenTab {
+                url: url@,
+                script: match script {
+                    Some(v) => Some(v@),
+                    None => None,
+                },
+            },
             EventRecord::NavigateTab { tab, url } => Event::NavigateTab { tab: *tab as nat, url: url@ },
             EventRecord::Net { conn, input } => Event::Net { conn: *conn as nat, input: input@ },
             EventRecord::RendererExited { id } => Event::RendererExited { id: *id as nat },
@@ -509,6 +524,19 @@ pub enum OutputRecord {
         /// The connection.
         conn: u64,
     },
+    /// Show the user what a tab's renderer displays.
+    Show {
+        /// The tab.
+        tab: u64,
+        /// Its renderer's committed URL.
+        url: Vec<u32>,
+        /// The title.
+        title: Vec<u8>,
+        /// The text.
+        text: Vec<u8>,
+        /// The links.
+        links: Vec<Vec<u8>>,
+    },
 }
 
 impl View for OutputRecord {
@@ -522,6 +550,13 @@ impl View for OutputRecord {
             OutputRecord::Connect { conn, host, port, tls } => Output::Connect { conn: *conn as nat, host: host@, port: *port as nat, tls: *tls },
             OutputRecord::Send { conn, bytes } => Output::Send { conn: *conn as nat, bytes: bytes@ },
             OutputRecord::Close { conn } => Output::Close { conn: *conn as nat },
+            OutputRecord::Show { tab, url, title, text, links } => Output::Show {
+                tab: *tab as nat,
+                url: url@,
+                title: title@,
+                text: text@,
+                links: clazel_ipc::message::codec::strings_view(links@),
+            },
         }
     }
 }

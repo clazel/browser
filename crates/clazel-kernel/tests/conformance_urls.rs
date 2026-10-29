@@ -291,7 +291,7 @@ fn string(v: &[u32]) -> String {
 fn committed(out: &[Out]) -> Option<&[u8]> {
     let mut found = None;
     for o in out {
-        if let Out::To(_, Msg::Commit { url, .. }) = o {
+        if let Out::Commit(_, support::Doc { url, .. }) = o {
             if found.is_some() {
                 return None;
             }

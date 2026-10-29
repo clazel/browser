@@ -12,7 +12,7 @@ verus! {
 
 /// A renderer with the given id and lock, committed to the URL `a`.
 pub open spec fn ml_renderer(id: nat, lock: clazel_origin::spec::Origin) -> Renderer {
-    Renderer { id, tab: id, url: seq![0x61u32], lock, pending: None }
+    Renderer { committed: true, id, tab: id, url: seq![0x61u32], lock, pending: None }
 }
 
 /// A tuple origin of host `a` with the given scheme.
@@ -83,7 +83,7 @@ pub proof fn ml_public_suffix_is_cookie_averse(lock: clazel_origin::spec::Origin
 }
 
 /// Navigating to a different lock gives the new renderer that lock.
-pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
@@ -95,14 +95,14 @@ pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32
 }
 
 /// The `Commit` to a spawned renderer is for the URL and script given.
-pub proof fn ml_navigate_commit(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_navigate_commit(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
         lock_of_url(urls, url, s.next_id) == Some(l),
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
-        navigate_tab(urls, s, tab, url, script).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frame(url, script) }),
+        navigate_tab(urls, s, tab, url, script).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(url, script) }),
 {
 }
 
@@ -186,7 +186,7 @@ pub proof fn ml_fail_clears_pending(s: State, i: int, code: u64)
 }
 
 /// A commit to another origin gives a new renderer that is not navigating.
-pub proof fn ml_commit_clears_pending(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_commit_clears_pending(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
@@ -354,9 +354,9 @@ pub proof fn ml_carry_out_done(
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
         carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1[2]
-            == (Output::ToRenderer { id: s.next_id, bytes: commit_frame(clazel_url::url::spec::url_serializer(url, false), response.body) }),
+            == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(clazel_url::url::spec::url_serializer(url, false), response_document(response)) }),
 {
-    crate::counterexamples::lemma_co_commit_spawn(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response.body, i, l);
+    crate::counterexamples::lemma_co_commit_spawn(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response), i, l);
     reveal_with_fuel(carry_out, 2);
 }
 
@@ -396,7 +396,7 @@ pub proof fn ml_begin_closes(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
 
 /// A commit closes the connections of its tab: its outputs start with their
 /// `Close`s.
-pub proof fn ml_commit_closes(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
+pub proof fn ml_commit_closes(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Document)
     requires
         closes_of_tab(s.conns, tab).len() > 0,
     ensures
