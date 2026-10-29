@@ -591,6 +591,20 @@ Mutations: a parent pointer not updated, a child inserted at the wrong
 index, `remove` leaving the parent's list, `reparent_children` losing order,
 the limit off by one.
 
+**As built:** `crates/clazel-dom` on branch
+`claude/phase4-dom-treebuilder-279901`. The arena, `wf` (with each node's
+chain of inclusive ancestors as the acyclicity witness, so a node's depth
+is one more than its parent's) and the operations as planned, plus a
+`ProcessingInstruction` leaf (the pinned HTML standard inserts processing
+instructions). The node limit is checked on node creation, where the arena
+grows, rather than in `append` and `insert_before`. All thirteen theorems
+are proven, the executable arena (`Vec<Node>`, ids `usize`, children edited
+in place, no recursion) is proven equal to the spec, and the five planned
+mutations are killed with certificates. `independent.rs` is a same-text
+transcription of insert and remove (DOM §4.2.3 has no second body's text),
+proven equal on the parser's calls. The crate stays at tier 0 until CI's
+full verification is green; its conformance evidence is 4.11's suite.
+
 ### 4.9 The tree builder: spec and contracts (L)
 
 `crates/clazel-treebuilder`, module `spec.rs` split by section, as
@@ -670,6 +684,27 @@ code points, scripting) -> Seq<nat>`; `theorem_actions_ordered`, that
 `StopParsing` is the last action and `ChangeEncoding` occurs at most once,
 is what lets the pipeline run the parser at most twice.
 
+**As built:** the pinned standard (HTML `939677714d`, 26 October 2026)
+has 21 insertion modes, not 23 ("in select" and "in select in table" are
+gone; `select` content is parsed by "in body"), a processing instruction
+token, a sanitizer configuration, an insertion target redirection map and
+template content patching; the spec follows the standard and lists the
+last three, declarative shadow roots, custom elements, scripting and the
+`selectedcontent` update of HTML §4.10.10 as stated restrictions
+(`src/spec/mod.rs`). The DOM is called directly (`clazel-dom`'s spec), not
+through a `DomFns` parameter, because both crates were built together; the
+tokenizer is the `TokFns` parameter. `theorem_dispatch_total` is proven
+with a lexicographic ranking (image token, template modes, a growth budget
+for the implicit `html`, `head`, `body`, `colgroup`, `tbody` and `tr`
+elements, stack length, an order of the rules); finding it took two
+changes to the spec (popping an empty stack changes nothing; the fuel
+bound is 372 (T + 1)(L + F·P + 5T + 11)) and an invariant on the modes,
+`modes_ok`, which the theorem assumes. `theorem_actions_ordered` is proven
+with no hypotheses (its proof found a spec bug, fixed: the bound's
+exhaustion repeated the last step's actions). `theorem_doc_wf`,
+`theorem_open_elements_in_doc` and `theorem_nodes_per_token` are not
+proven yet.
+
 ### 4.10 The tree builder: implementation and proof (L)
 
 The exec parser: `step(&mut ParserBuf, Token)` proven equal to `dispatch`
@@ -690,6 +725,18 @@ reprocessing, an element popped too early or not at all, the Noah's Ark
 count off by one, foster parenting disabled, an adjustment table row
 dropped, a scope definition widened), with certificates by example;
 `theorem_dispatch_total` and `theorem_doc_wf` kill the structural ones.
+
+**As built:** every insertion mode, foreign content, the adoption agency
+and every shared helper has an executable function proven equal to its
+spec function and to keep the parse state invariant; `exec::step::step`
+(the reprocessing loop, iterative with a counter) is proven equal to
+`dispatch` for states satisfying its precondition. One resource limit is
+raised (`chars_at_exec`, 300, with the reason at the attribute); the
+others were removed by splitting proofs. Mutations: 48, of which 22 are
+certified kills (19 through the termination ranking, every mode but "in
+table text"; 3 through the order of actions) and 26 are killed
+incidentally (tree-shape mutations that break only the implementation's
+proof).
 
 ### 4.11 The tree builder: independent transcription and conformance (L)
 
@@ -718,6 +765,18 @@ the differential runs against `html5ever` through a pinned binary built
 outside the workspace, as a test fixture, and the row count stays small.
 Where html5lib-tests and `html5ever` disagree, the suite wins and the case
 is listed.
+
+**As built:** html5lib-tests no longer carries the tree-construction
+suite; it is vendored from WPT (`tests/data/wpt-tree-construction/`, 1,967
+cases plus 6 scripted ones counted and not run). Until the join with
+`clazel-html`, `tests/conformance_tree_construction.rs` drives the proven
+parser with a test-only stand-in tokenizer that refuses every input it
+cannot tokenize exactly: 1,381 cases pass, 582 are refused by the stand-in
+(character references, processing instructions, script data escapes,
+CDATA, U+0000, unusual DOCTYPEs and comments), and 4 are the
+`selectedcontent` restriction, each listed by name. The W3C independent
+transcription and the `html5ever` differential (22 packages with
+`markup5ever_rcdom`) are not done.
 
 After 4.9 to 4.11: **raise `clazel-treebuilder` to tier 2.**
 
@@ -911,17 +970,17 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | Item | State |
 |------|-------|
 | 4.0 Decisions | done (2026-10-28): A, tier 2 for the tree builder and DOM; 4.3 in phase and 4.4 may slip; byte strings and `Body` frames; the forward-design additions folded in |
-| 4.1 Test data and tables | not started |
+| 4.1 Test data and tables | in progress: WPT tree-construction suite vendored with its converter (branch `claude/phase4-dom-treebuilder-279901`); tokenizer and encoding data in the tokenizer session |
 | 4.2 Encoding labels and sniffing | not started |
 | 4.3 Single-byte, UTF-16, replacement, x-user-defined | not started |
 | 4.4 Multi-byte encodings | not started |
 | 4.5 Character references | not started |
 | 4.6 Tokenizer spec and contracts | not started |
 | 4.7 Tokenizer implementation and evidence | not started |
-| 4.8 DOM | not started |
-| 4.9 Tree builder spec and contracts | not started |
-| 4.10 Tree builder implementation | not started |
-| 4.11 Tree builder evidence | not started |
+| 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
+| 4.9 Tree builder spec and contracts | spec done (21 modes); `theorem_dispatch_total` (given `modes_ok`) and `theorem_actions_ordered` proven; three planned theorems open |
+| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` under its stated precondition; 48 mutations, 22 certified |
+| 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; independent transcription and differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
 | 4.14 Text layout | not started |
