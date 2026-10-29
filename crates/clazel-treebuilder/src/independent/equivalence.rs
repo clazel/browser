@@ -469,6 +469,7 @@ pub proof fn lemma_after_head(env: EncFns, p: Parser, t: Tok)
 }
 
 /// [`lemma_after_head`] for the head-element entry (`base`, …, `title`).
+#[verifier::spinoff_prover]
 proof fn lemma_after_head_in_head_tag(env: EncFns, p: Parser, t: Tok)
     requires
         !p.stopped,
@@ -478,6 +479,8 @@ proof fn lemma_after_head_in_head_tag(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_after_head(env, p, t) == mode_after_head(env, p, t),
 {
+    // The two transcriptions push the same record for the head element.
+    assert(w3c_head_elem(p) == head_elem(p.head->Some_0));
     lemma_in_head(env, push(p, w3c_head_elem(p)), t);
 }
 
