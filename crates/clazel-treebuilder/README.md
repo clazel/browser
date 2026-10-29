@@ -57,14 +57,28 @@ evidence exists (see "Left" below).
   P(F + 1) nodes), for a step from a parser with `parser_wf`, a valid head
   pointer and `dispatch_needs` (which `reachable_inv` gives); the last
   also assumes no element has two formatting entries, and keeps that.
+  `theorem_open_distinct`: under the same hypotheses, a step keeps the
+  elements of the stack of open elements distinct (every element pushed
+  is new; "after head" pushes the `head` element back and removes that
+  last entry again).
   `theorem_reachable_wf` discharges these hypotheses: every parser
   reachable from `new_parser` or `fragment_parser` has a well-formed
-  document, every id of its parse state in the document and no element
-  with two formatting entries, and, until it stops, `parser_wf` and a
-  valid head pointer. So `theorem_reachable_doc_wf`,
+  document, every id of its parse state in the document, no element
+  with two formatting entries, only HTML elements in the list of active
+  formatting elements, the fragment case's redirection map (or none),
+  and, until it stops, `parser_wf`, a valid head pointer and distinct
+  elements on the stack. So `theorem_reachable_doc_wf`,
   `theorem_reachable_open_elements_in_doc` and
   `theorem_reachable_nodes_per_token` state the three for a step from
-  every reachable parser, with no hypotheses.
+  every reachable parser, with no hypotheses. `theorem_reachable_w3c_facts`
+  proves of every reachable parser the state preconditions of the W3C
+  equivalence lemmas that are facts of reachable states
+  (`document_rooted`, `no_document_redirect`, and until it stops
+  `aa_wf`, `tags_wf`, distinct elements on the stack and, after "before
+  html", `place_stable`, also with the `head` element pushed), and
+  `theorem_reachable_foreign_content` states the foreign content
+  equivalence for every reachable parser and every token the tokenizer
+  emits, with only the inputs where the two texts differ excluded.
 - **Proven, actions** (`src/theorems/`): `theorem_actions_ordered`: over a
   whole parse, `StopParsing` occurs at most once and last, and
   `ChangeEncoding` at most once (never if the confidence starts certain),
@@ -133,7 +147,24 @@ evidence exists (see "Left" below).
 - Spec-level `modes_ok` of a stopped reachable parser (so `parser_wf` is
   proven of reachable parsers only until they stop; a stopped parser
   takes no further step), and spec-level `templates_wf` of reachable
-  parsers (the rest of `parser_inv`, which the executable step keeps).
+  parsers (the rest of `parser_inv`). Both hold: `exec::step::step`
+  proves `parser_inv` of `dispatch`'s result, stopped or not, but an exec
+  function's contract cannot be used in a proof. At the spec level the
+  per-mode lemmas prove `modes_ok` only of results that have not stopped,
+  and a rule that stops part-way has already changed the modes; a proof
+  needs every mode lemma (and the ranking edges) extended to stopped
+  results. `templates_wf` needs the tokens' tags at every element
+  creation (a `template` element gets contents by the token's tag, and
+  is one by its name's), which the document theorems do not carry.
 - Whether reachable parsers need the 6T term of the nodes-per-token bound.
-- A proof that the stack of open elements holds distinct elements on
-  every reachable parser, which the foreign content equivalence assumes.
+  The term pays for "in template"'s end of file, which pops a template,
+  resets the mode and reprocesses, once per template: the generic proof
+  cannot exclude that each reset lands in a mode whose end of file
+  creates implicit elements. On reachable parsers it does not seem to
+  (the `body` element "after head" inserts is found by every later
+  reset), but proving it needs invariants on the elements below each
+  `template` on the stack, which nothing proves yet.
+- The W3C equivalence preconditions that are facts of reachable states
+  but not yet proven: `html_only_at_root` ("in frameset"), `element_plain`
+  of the `html` and `body` elements ("in body"), and a cell in table
+  scope in "in cell".

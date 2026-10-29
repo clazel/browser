@@ -17,11 +17,11 @@
 //! ([`lemma_classify_plain`]).
 //!
 //! Not discharged: the preconditions that exclude the inputs where the two
-//! texts differ (they are not facts of states), and `html_only_at_root`,
-//! `element_plain` of the `html` and `body` elements, the "in cell" table
-//! scope fact, `w3c_aa_agrees` and the pending-characters fact of "in
-//! table text", which need invariants of the parse state no proof here
-//! carries.
+//! texts differ (they are not facts of states; `w3c_aa_agrees` and "in
+//! table text"'s nonempty pending list among them), and
+//! `html_only_at_root`, `element_plain` of the `html` and `body` elements
+//! and the "in cell" table scope fact, which need invariants of the parse
+//! state no proof here carries.
 
 #[allow(unused_imports)]
 use super::spec::*;
