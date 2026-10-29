@@ -1413,4 +1413,88 @@ proof fn ml_w3c_in_table_text_inserts()
     assert(ml_table_text_parser().doc.nodes.len() == 2) by (compute_only);
 }
 
+// ---------------------------------------------------------------------
+// Foreign content and its tables (`independent::equivalence_foreign`)
+
+/// An SVG `svg` element, node 1.
+pub open spec fn ml_svg_elem() -> Elem {
+    Elem { id: 1, ns: Namespace::Svg, tag: Tag::Svg, name: seq![0x73u32, 0x76, 0x67], annotation_html: false }
+}
+
+/// A parser "in body" whose stack is `html`, `svg`: the `svg` element is
+/// the current node, so the dispatcher sends tags to the rules for foreign
+/// content.
+pub open spec fn ml_svg_parser() -> Parser {
+    ml_parser(Mode::InBody, seq![ml_elem(Tag::Html), ml_svg_elem()], seq![])
+}
+
+/// "altglyph"
+pub open spec fn ml_name_altglyph() -> Seq<u32> {
+    seq![0x61u32, 0x6c, 0x74, 0x67, 0x6c, 0x79, 0x70, 0x68]
+}
+
+/// "xlink:href"
+pub open spec fn ml_name_xlink_href() -> Seq<u32> {
+    seq![0x78u32, 0x6c, 0x69, 0x6e, 0x6b, 0x3a, 0x68, 0x72, 0x65, 0x66]
+}
+
+/// "b" is a `b` start tag's name.
+proof fn ml_tag_b()
+    ensures
+        tag_of(ml_name_b()) == Tag::B,
+{
+    assert(tag_of(ml_name_b()) == Tag::B) by (compute_only);
+}
+
+/// What `independent::equivalence_foreign::lemma_foreign_content` gives at
+/// the certificate input of `foreign-breakout-not-popped`: a `b` start tag
+/// with the stack `html`, `svg` (outside the fragment case, and a breakout
+/// tag in both texts).
+proof fn ml_w3c_eq_foreign()
+    ensures
+        crate::independent::w3c_foreign_content(ml_env(), ml_svg_parser(), ml_named_start(ml_name_b())) == foreign_content(
+            ml_env(),
+            ml_svg_parser(),
+            ml_named_start(ml_name_b()),
+        ),
+{
+    hide(tag_of);
+    hide(crate::independent::w3c_foreign_content);
+    hide(foreign_content);
+    ml_tag_b();
+    let p = ml_svg_parser();
+    assert(crate::independent::equivalence_foreign::open_distinct(p.open));
+    assert(crate::independent::equivalence_body::attrs_plain(seq![]));
+    crate::independent::equivalence_foreign::lemma_foreign_content(ml_env(), p, ml_named_start(ml_name_b()));
+}
+
+pub proof fn ml_w3c_foreign_breakout()
+    ensures
+        !(foreign_content(ml_env(), ml_svg_parser(), ml_named_start(ml_name_b()))->Reprocess_0.open.len() == 2),
+{
+    assert(!(crate::independent::w3c_foreign_content(ml_env(), ml_svg_parser(), ml_named_start(ml_name_b()))->Reprocess_0.open.len()
+        == 2)) by (compute_only);
+    ml_w3c_eq_foreign();
+}
+
+/// `independent::equivalence_foreign::lemma_svg_element_name` at
+/// "altglyph" (the certificate input of `svg-tag-name-row-dropped`).
+pub proof fn ml_w3c_svg_tag_name()
+    ensures
+        !(svg_tag_name(ml_name_altglyph()) == ml_name_altglyph()),
+{
+    assert(!(crate::independent::w3c_svg_element_name(ml_name_altglyph()) == ml_name_altglyph())) by (compute_only);
+    crate::independent::equivalence_foreign::lemma_svg_element_name(ml_name_altglyph());
+}
+
+/// `independent::equivalence_foreign::lemma_foreign_attribute` at
+/// "xlink:href" (the certificate input of `foreign-attribute-row-dropped`).
+pub proof fn ml_w3c_foreign_attribute()
+    ensures
+        !(foreign_attribute(ml_name_xlink_href()) is None),
+{
+    assert(!(crate::independent::w3c_foreign_attribute(ml_name_xlink_href()) is None)) by (compute_only);
+    crate::independent::equivalence_foreign::lemma_foreign_attribute(ml_name_xlink_href());
+}
+
 } // verus!

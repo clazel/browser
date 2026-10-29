@@ -831,15 +831,12 @@ spec function and to keep the parse state invariant; `exec::step::step`
 `dispatch` for every state with `parser_inv` and `reachable_inv`, and keeps
 both, so it is equal on every reachable state. One resource limit is
 raised (`chars_at_exec`, 300, with the reason at the attribute); the
-others were removed by splitting proofs. Mutations: 48, of which 45 are
-certified kills (through the termination ranking, the order of actions and
-the W3C equivalences of 4.11) and 3 are killed incidentally, which means
-they break only the implementation's proof. Two change tables both
-transcriptions share (SVG tag names, foreign attributes) and one is in
-foreign content. The table scope and the Noah's Ark clause have their own
-W3C transcription; the two checks written as `exists`, which
-`compute_only` cannot evaluate, are certified with the quantifier-free
-part of the check as the witness and Z3 finding the contradiction.
+others were removed by splitting proofs. Mutations: 48, all certified
+kills (through the termination ranking, the order of actions and the W3C
+equivalences of 4.11, foreign content and its tables included). The two
+checks written as `exists`, which `compute_only` cannot evaluate, are
+certified with the quantifier-free part of the check as the witness and
+Z3 finding the contradiction.
 
 ### 4.11 The tree builder: independent transcription and conformance (L)
 
@@ -882,7 +879,13 @@ CDATA, U+0000, unusual DOCTYPEs and comments), and 4 are the
 undated one now redirects to the WHATWG standard) covers 21 of its 23
 modes, "in body" with the adoption agency among them, each proven equal to
 the spec with the texts' differences stated; the W3C's two "in select"
-modes have no counterpart. The `html5ever`
+modes have no counterpart. Its §8.2.5.5 foreign content rules, with the
+three attribute adjustments and the SVG tag name table (transcribed from
+the W3C text without reading the spec's tables), are proven equal too: the
+tables on every name (same rows), the rules on every token the dispatcher
+sends there, except the living standard's `menu` breakout start tag, its
+`br` and `p` breakout end tags and the W3C's fragment case of the breakout
+entries, and assuming distinct elements on the stack. The `html5ever`
 differential (22 packages with `markup5ever_rcdom`) is not done.
 
 After 4.9 to 4.11: **raise `clazel-treebuilder` to tier 2.**
@@ -1086,7 +1089,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; tier 0 until CI's full run is green |
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
 | 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers |
-| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, 45 certified |
+| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified |
 | 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
