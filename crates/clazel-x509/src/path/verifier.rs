@@ -18,11 +18,13 @@
 //!   and the name-constraint comparison bound.
 //! - **The chain** is accepted when *some* candidate is valid
 //!   (`some_candidate_valid`). Which candidate the verifier returns, the
-//!   bounded depth-first enumeration that finds it (anchors first, K = 16
-//!   candidates) and the theorems about that enumeration are P9's (`build.rs`,
-//!   `chain.rs`). `verify_server_chain_ensures` is the contract P9's executable
-//!   verifier must meet whatever enumeration it uses: an `Ok` is a valid
-//!   candidate, and any error but `TooManyCandidates` means none is valid.
+//!   bounded depth-first search that finds it (design §2.6: anchors first,
+//!   then pool certificates in message order) and the theorems about that
+//!   search are P9's (`build.rs`, `chain.rs`). `verify_server_chain_ensures`
+//!   is the contract P9's executable verifier must meet: an `Ok` is a valid
+//!   candidate; `BuildBudgetExhausted` means the search's first 200,000
+//!   candidate-issuer steps held no valid path; any other error means no
+//!   candidate is valid.
 //!
 //! Modelling choices:
 //! - **The reference identity is typed** (design Q2, decided 2026-10-29): a
@@ -46,15 +48,55 @@
 //! - **Revocation and signatures** are the parameters of `spec.rs`, in
 //!   `Environment`. **(I)** Certificate Transparency is not checked (design
 //!   Q4: Phase 8).
-//! - **Bounds** (design §1.12, Q13). Each refuses beyond, with its own error:
-//!   - at most 16 presented certificates (`TooManyCertificates`);
-//!   - at most `max_intermediates` intermediates in a candidate, 6 in
-//!     production (webpki's `MAX_SUB_CA_COUNT`; limbo's `max_chain_depth`
-//!     sets it per test case). A longer candidate is not a candidate;
-//!   - at most 4,096 name-constraint comparisons per path, counted as P5's
-//!     contract counts them (`within_budget`, below) (`TooManyNameComparisons`);
-//!   - at most K = 16 candidates examined (`TooManyCandidates`): P9's
-//!     enumeration bound. Here it appears only in what that error may mean.
+//! - **Bounds** (design §1.12, Q13, decided 2026-10-29 by Alex: "Drop the
+//!   cap. Follow one of the other browser's approaches"; Firefox's is
+//!   followed). The source is mozilla::pkix `lib/mozpkix/lib/pkixbuild.cpp`
+//!   (NSS `master`, read 2026-10-29):
+//!   - **No cap on the certificates supplied (=).** Neither browser caps
+//!     the number of certificates a server sends; the search's work is
+//!     bounded by the budget below instead. (A Certificate message is in any
+//!     case at most 2^24 - 1 bytes, RFC 8446 §4.)
+//!   - **Depth (=).** At most `max_intermediates` intermediates in a
+//!     candidate, 6 in production: `BuildForward`'s "static const unsigned
+//!     int MAX_SUBCA_COUNT = 6;" and "if (subCACount >= MAX_SUBCA_COUNT) {
+//!     return Result::ERROR_UNKNOWN_ISSUER; }", which runs for every CA
+//!     certificate that is not a trust anchor (after the trust-anchor
+//!     return, before `FindIssuer`) and has no exception for self-issued
+//!     ones. So self-issued intermediates count here too. A longer candidate
+//!     is not a candidate (limbo's `max_chain_depth` sets the parameter per
+//!     test case; it does not count self-issued certificates, a listed
+//!     difference of the harness).
+//!   - **Work budget.** At most `build_budget()` = 200,000 candidate-issuer
+//!     steps: `BuildCertChain`'s "unsigned int buildForwardCallBudget =
+//!     200000;", checked in `PathBuildingStep::Check` ("if
+//!     (buildForwardCallBudget == 0)", recording `ERROR_UNKNOWN_ISSUER` and
+//!     stopping) and decremented ("buildForwardCallBudget--;") once per
+//!     potential issuer that passes the subject-name, loop, name-constraint
+//!     and TLS-feature checks, before the recursive `BuildForward` and
+//!     before `VerifySignedData`. Here a step (`IssuerStep`) is one
+//!     name-chained, loop-free candidate issuer (an anchor or a pool
+//!     certificate) examined by the search, and the error is
+//!     `BuildBudgetExhausted`. **(R)** A step is counted on names alone, so
+//!     a candidate issuer whose name constraints Firefox would refuse before
+//!     counting is counted here: for the same order, this exhausts no later.
+//!     The order is design §2.6's (anchors in table order, then pool
+//!     certificates in message order, depth first), not Firefox's trust
+//!     domain's `FindIssuer` order, so which chains exhaust differs in detail.
+//!     **(=)** Firefox counts trust-anchor candidates as steps (they reach
+//!     `Check` as potential issuers), and so does this.
+//!   - **Why the budget is a parameterised predicate.** Whether the budget
+//!     runs out depends on the search's order and on where it stops (at the
+//!     first valid candidate), which is P9's enumeration. So
+//!     `verify_server_chain_ensures` takes that order as `order`, the
+//!     sequence of steps the search examines, and constrains it only by
+//!     `search_order_well_formed` (every step name-chained, none twice).
+//!     P9 defines the order and proves its executable search examines exactly
+//!     it. Even before P9, exhaustion means more than 200,000 distinct
+//!     name-chained steps exist and the first 200,000 completed none valid.
+//!   - **Name constraints.** At most 4,096 name-constraint comparisons per
+//!     path, counted as P5's contract counts them (`within_budget`, below)
+//!     (`TooManyNameComparisons`). Both browsers bound name-constraint work
+//!     (design §1.12); this is P5's bound, kept.
 //!
 //! For P16, the intended `clazel-tls` join (not changed here). `auth::spec`'s
 //! `ChainValidation` becomes
@@ -70,7 +112,8 @@
 //! alerts: `Expired` and `AnchorExpired` to `Expired` (45);
 //! `UnsupportedAlgorithm` to `Unsupported` (43); `UnknownIssuer`,
 //! `BadSignature`, `NameChaining`, `Distrusted`, `Revoked` and
-//! `TooManyCandidates` to `UnknownCa` (48); every other error to
+//! `BuildBudgetExhausted` (Firefox: `ERROR_UNKNOWN_ISSUER`) to `UnknownCa`
+//! (48); every other error to
 //! `BadCertificate` (42).
 
 #[allow(unused_imports)]
@@ -117,14 +160,12 @@ pub struct Validated {
 // Bounds (design §1.12)
 // ---------------------------------------------------------------------------
 
-/// At most this many certificates in one Certificate message.
-pub open spec fn max_presented_certificates() -> nat { 16 }
-
-/// The production `max_intermediates` (webpki `MAX_SUB_CA_COUNT`).
+/// The production `max_intermediates`: mozilla::pkix `MAX_SUBCA_COUNT`.
 pub open spec fn default_max_intermediates() -> nat { 6 }
 
-/// At most this many candidate paths are examined (P9's K).
-pub open spec fn max_candidates() -> nat { 16 }
+/// At most this many candidate-issuer steps are examined: mozilla::pkix
+/// `buildForwardCallBudget`.
+pub open spec fn build_budget() -> nat { 200000 }
 
 /// At most this many subjectAltName-entry by subtree comparisons per path.
 /// The definitions down to `within_budget` are those of P5's contract
@@ -320,8 +361,7 @@ pub open spec fn parsed_pool(presented: Seq<Seq<u8>>) -> Seq<Option<super::parse
     else { parsed_pool(presented.drop_last()).push(super::parsed::spec::parse_path_cert(presented.last())) }
 }
 
-/// What the verdict starts from: the bound on presented certificates, the
-/// leaf, the pool and the time.
+/// What the verdict starts from: the leaf, the pool and the time.
 pub struct ChainInputs {
     /// `presented[0]`, parsed.
     pub leaf: super::parsed::spec::PathCert,
@@ -333,12 +373,11 @@ pub struct ChainInputs {
 
 /// The inputs, or the error that refuses the chain before any path is tried.
 pub open spec fn chain_inputs(presented: Seq<Seq<u8>>, now: u64) -> Result<ChainInputs, super::spec::PathError> {
-    // 1. Design §1.12: at most 16 presented certificates.
-    if presented.len() > max_presented_certificates() { Err(super::spec::PathError::TooManyCertificates) }
-    // 2. RFC 8446 §4.4.2: the server's own certificate comes first.
-    else if presented.len() == 0 { Err(super::spec::PathError::Malformed) }
+    // 1. RFC 8446 §4.4.2: the server's own certificate comes first. (No cap
+    //    on how many follow: design §1.12, as Firefox.)
+    if presented.len() == 0 { Err(super::spec::PathError::Malformed) }
     else { match (super::parsed::spec::parse_path_cert(presented[0]), crate::time::spec::from_unix_seconds(now as nat)) {
-        // 3. The leaf parses, and the time is one a certificate can name.
+        // 2. The leaf parses, and the time is one a certificate can name.
         (Some(leaf), Some(time)) => Ok(ChainInputs { leaf, pool: parsed_pool(presented), now: time }),
         _ => Err(super::spec::PathError::Malformed),
     }}
@@ -356,56 +395,151 @@ pub open spec fn some_candidate_valid(
     }
 }
 
-/// The issuer and subject names of a candidate chain, as the builder follows
-/// them (design §2.6: names only, no other check): certificate 1's issuer is
-/// the anchor's subject, and each certificate's issuer is the previous one's
-/// subject (§6.1 conditions (a) and (b)).
-pub open spec fn names_chain_from(
-    anchor: super::parsed::spec::Anchor, certs: Seq<super::parsed::spec::PathCert>, i: int,
-) -> bool
-    decreases certs.len() - i
-{
-    if i < 0 || i >= certs.len() { true }
-    else {
-        let expected = if i == 0 { anchor.subject_der } else { certs[i - 1].tbs.subject_der };
-        certs[i].tbs.issuer_der == expected && names_chain_from(anchor, certs, i + 1)
+// ---------------------------------------------------------------------------
+// The search budget (design §1.12; mozilla::pkix buildForwardCallBudget)
+// ---------------------------------------------------------------------------
+
+/// A candidate issuer the search examines: an anchor or a pool certificate.
+pub enum Issuer {
+    /// `anchors[i]`.
+    Anchor(nat),
+    /// `pool[j]`.
+    Pool(nat),
+}
+
+/// One step of the search: the issuer examined for the top of `path` (the
+/// leaf when `path` is empty, else `pool[path[0]]`), `path` being the pool
+/// indices chosen so far, the anchor's child first (as in `Candidate`).
+pub struct IssuerStep {
+    /// The partial path whose top certificate's issuer is sought.
+    pub path: Seq<nat>,
+    /// The candidate issuer examined.
+    pub issuer: Issuer,
+}
+
+/// The issuer name the search looks for above `path`.
+pub open spec fn sought_issuer(
+    pool: Seq<Option<super::parsed::spec::PathCert>>, leaf: super::parsed::spec::PathCert, path: Seq<nat>,
+) -> Seq<u8> {
+    if path.len() == 0 { leaf.tbs.issuer_der }
+    else if path[0] < pool.len() { match pool[path[0] as int] { Some(c) => c.tbs.issuer_der, None => leaf.tbs.issuer_der } }
+    else { leaf.tbs.issuer_der }
+}
+
+/// A step Firefox would count (after its name and loop checks): the issuer
+/// exists and its subject is the sought name; a pool issuer is usable, not
+/// already on the path, and the path stays within `max_intermediates`.
+pub open spec fn step_name_chained(
+    environment: Environment, anchors: Seq<super::parsed::spec::Anchor>,
+    pool: Seq<Option<super::parsed::spec::PathCert>>, leaf: super::parsed::spec::PathCert, step: IssuerStep,
+) -> bool {
+    &&& step.path.len() <= environment.max_intermediates
+    &&& indices_usable_from(pool, step.path, 0)
+    &&& indices_distinct_from(step.path, 0)
+    &&& match step.issuer {
+        Issuer::Anchor(a) => a < anchors.len()
+            && anchors[a as int].subject_der == sought_issuer(pool, leaf, step.path),
+        Issuer::Pool(j) => j < pool.len() && step.path.len() < environment.max_intermediates
+            && index_absent_from(step.path, j, 0)
+            && match pool[j as int] {
+                Some(c) => c.tbs.subject_der == sought_issuer(pool, leaf, step.path),
+                None => false,
+            },
     }
 }
 
-/// A well-formed candidate whose names chain: what P9's enumeration lists.
-pub open spec fn candidate_name_chained(
-    environment: Environment, anchors: Seq<super::parsed::spec::Anchor>,
-    pool: Seq<Option<super::parsed::spec::PathCert>>, leaf: super::parsed::spec::PathCert, candidate: Candidate,
-) -> bool {
-    &&& candidate_well_formed(anchors, pool, candidate, environment.max_intermediates)
-    &&& names_chain_from(anchors[candidate.anchor as int], candidate_certificates(pool, leaf, candidate), 0)
+/// `step` is not among `order[from..]`.
+pub open spec fn step_absent_from(order: Seq<IssuerStep>, step: IssuerStep, from: int) -> bool
+    decreases order.len() - from
+{
+    if from < 0 || from >= order.len() { true }
+    else { order[from] != step && step_absent_from(order, step, from + 1) }
 }
 
-/// `TooManyCandidates` is justified: more than K distinct name-chained
-/// candidates exist.
-pub open spec fn too_many_candidates(
-    environment: Environment, anchors: Seq<super::parsed::spec::Anchor>, presented: Seq<Seq<u8>>, now: u64,
+/// `order` is a sequence of distinct name-chained steps, for `order[from..]`.
+pub open spec fn search_order_well_formed_from(
+    environment: Environment, anchors: Seq<super::parsed::spec::Anchor>,
+    pool: Seq<Option<super::parsed::spec::PathCert>>, leaf: super::parsed::spec::PathCert,
+    order: Seq<IssuerStep>, from: int,
+) -> bool
+    decreases order.len() - from
+{
+    if from < 0 || from >= order.len() { true }
+    else {
+        &&& step_name_chained(environment, anchors, pool, leaf, order[from])
+        &&& step_absent_from(order, order[from], from + 1)
+        &&& search_order_well_formed_from(environment, anchors, pool, leaf, order, from + 1)
+    }
+}
+
+/// The candidate an anchor step completes; a pool step completes none.
+pub open spec fn step_candidate(step: IssuerStep) -> Option<Candidate> {
+    match step.issuer {
+        Issuer::Anchor(a) => Some(Candidate { anchor: a, path: step.path }),
+        Issuer::Pool(_) => None,
+    }
+}
+
+/// No step of `order[from..to]` completes a valid candidate.
+pub open spec fn no_valid_step_between(
+    environment: Environment, anchors: Seq<super::parsed::spec::Anchor>,
+    pool: Seq<Option<super::parsed::spec::PathCert>>, leaf: super::parsed::spec::PathCert,
+    order: Seq<IssuerStep>, from: int, to: int,
+    reference: crate::spec::ReferenceIdentity, now: crate::time::spec::CertificateTime,
+) -> bool
+    decreases to - from
+{
+    if from < 0 || from >= to || from >= order.len() { true }
+    else {
+        &&& match step_candidate(order[from]) {
+            Some(candidate) => !candidate_valid(environment, anchors, pool, leaf, candidate, reference, now),
+            None => true,
+        }
+        &&& no_valid_step_between(environment, anchors, pool, leaf, order, from + 1, to, reference, now)
+    }
+}
+
+/// The budget `budget` runs out on `order`: the search would examine more
+/// than `budget` steps, and none of the first `budget` completes a valid
+/// candidate ("if (buildForwardCallBudget == 0)" is reached on step
+/// `budget` + 1).
+pub open spec fn budget_exhausted_at(
+    environment: Environment, anchors: Seq<super::parsed::spec::Anchor>,
+    pool: Seq<Option<super::parsed::spec::PathCert>>, leaf: super::parsed::spec::PathCert,
+    order: Seq<IssuerStep>, budget: nat,
+    reference: crate::spec::ReferenceIdentity, now: crate::time::spec::CertificateTime,
+) -> bool {
+    order.len() > budget
+        && no_valid_step_between(environment, anchors, pool, leaf, order, 0, budget as int, reference, now)
+}
+
+/// The production budget runs out on `order`, for the presented chain.
+pub open spec fn budget_exhausted(
+    environment: Environment, anchors: Seq<super::parsed::spec::Anchor>, presented: Seq<Seq<u8>>,
+    order: Seq<IssuerStep>, reference: crate::spec::ReferenceIdentity, now: u64,
 ) -> bool {
     match chain_inputs(presented, now) {
         Err(_) => false,
-        Ok(inputs) => exists|listed: Seq<Candidate>| {
-            &&& listed.len() > max_candidates()
-            &&& forall|a: int, b: int| 0 <= a < b < listed.len() ==> listed[a] != listed[b]
-            &&& forall|a: int| 0 <= a < listed.len() ==>
-                candidate_name_chained(environment, anchors, inputs.pool, inputs.leaf, #[trigger] listed[a])
+        Ok(inputs) => {
+            &&& search_order_well_formed_from(environment, anchors, inputs.pool, inputs.leaf, order, 0)
+            &&& budget_exhausted_at(environment, anchors, inputs.pool, inputs.leaf, order, build_budget(), reference, inputs.now)
         },
     }
 }
 
 /// The top-level verifier's contract (design §2.6, §3.5), for P9's
-/// executable `verify_server_chain` whatever its enumeration:
+/// executable `verify_server_chain`. `order` is the sequence of steps P9's
+/// search examines on these inputs (see the header: the budget depends on
+/// it, so it is a parameter here and P9's definition fixes it).
 /// - `Ok(v)`: the chain's inputs are acceptable, and the candidate
 ///   `(v.anchor, v.path)` is valid with `v.leaf_spki` its key (soundness);
-/// - `Err(TooManyCandidates)`: more than K name-chained candidates exist;
-/// - any other `Err`: no candidate is valid (completeness, within the bounds).
+/// - `Err(BuildBudgetExhausted)`: `order` is well formed and the budget runs
+///   out on it;
+/// - any other `Err`: no candidate is valid (completeness, within the depth).
 pub open spec fn verify_server_chain_ensures(
     environment: Environment, anchors: Seq<super::parsed::spec::Anchor>, presented: Seq<Seq<u8>>,
-    reference: crate::spec::ReferenceIdentity, now: u64, out: Result<Validated, super::spec::PathError>,
+    reference: crate::spec::ReferenceIdentity, now: u64, order: Seq<IssuerStep>,
+    out: Result<Validated, super::spec::PathError>,
 ) -> bool {
     match out {
         Ok(v) => match chain_inputs(presented, now) {
@@ -413,7 +547,8 @@ pub open spec fn verify_server_chain_ensures(
             Ok(inputs) => candidate_verdict(environment, anchors, inputs.pool, inputs.leaf,
                 Candidate { anchor: v.anchor, path: v.path }, reference, inputs.now) == Ok::<Seq<u8>, super::spec::PathError>(v.leaf_spki),
         },
-        Err(super::spec::PathError::TooManyCandidates) => too_many_candidates(environment, anchors, presented, now),
+        Err(super::spec::PathError::BuildBudgetExhausted) =>
+            budget_exhausted(environment, anchors, presented, order, reference, now),
         Err(_) => !some_candidate_valid(environment, anchors, presented, reference, now),
     }
 }

@@ -807,14 +807,15 @@ pub open spec fn seventeen() -> Seq<Seq<u8>> {
         seq![], seq![], seq![], seq![], seq![], seq![], seq![], seq![]]
 }
 
-/// Design §1.12: more than 16 presented certificates refuse the chain
-/// before anything is parsed; none refuse as malformed.
-pub proof fn lemma_presented_bound()
+/// Design §1.12 (Firefox): the number of presented certificates is not
+/// capped, so seventeen are refused only because the first does not parse;
+/// none at all is malformed.
+pub proof fn lemma_presented_not_capped()
     ensures
-        super::verifier::chain_inputs(seventeen(), 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::TooManyCertificates),
+        super::verifier::chain_inputs(seventeen(), 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed),
         super::verifier::chain_inputs(seq![], 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed),
 {
-    assert(super::verifier::chain_inputs(seventeen(), 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::TooManyCertificates)) by (compute_only);
+    assert(super::verifier::chain_inputs(seventeen(), 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed)) by (compute_only);
     assert(super::verifier::chain_inputs(seq![], 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed)) by (compute_only);
 }
 

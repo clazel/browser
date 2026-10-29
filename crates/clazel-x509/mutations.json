@@ -3197,20 +3197,6 @@
       }
     },
     {
-      "id": "verifier-presented-bound-16",
-      "file": "src/path/verifier.rs",
-      "module": "path::examples",
-      "find": "pub open spec fn max_presented_certificates() -> nat { 16 }",
-      "replace": "pub open spec fn max_presented_certificates() -> nat { 17 }",
-      "expect": "killed",
-      "reason": "Design §1.12: at most 16 presented certificates.",
-      "certificate": {
-        "file": "src/path/mutation_certificates.rs",
-        "lemma": "super::examples::lemma_presented_bound()",
-        "witness": "super::verifier::chain_inputs(super::examples::seventeen(), 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed)"
-      }
-    },
-    {
       "id": "verifier-intermediates-bounded",
       "file": "src/path/verifier.rs",
       "module": "path::examples",

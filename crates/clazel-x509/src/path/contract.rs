@@ -171,13 +171,14 @@ pub open spec fn chain_inputs_ensures(
 }
 
 /// The top-level verifier: `verifier::verify_server_chain_ensures`, which
-/// fixes soundness and completeness and leaves the enumeration order to P9.
+/// fixes soundness and completeness; `order` is the step sequence P9's
+/// search examines, on which the 200,000-step budget is judged.
 pub open spec fn verify_server_chain_contract(
     environment: super::verifier::Environment, anchors: Seq<super::parsed::spec::Anchor>,
     presented: Seq<Seq<u8>>, reference: crate::spec::ReferenceIdentity, now: u64,
-    out: Result<super::verifier::Validated, PathError>,
+    order: Seq<super::verifier::IssuerStep>, out: Result<super::verifier::Validated, PathError>,
 ) -> bool {
-    super::verifier::verify_server_chain_ensures(environment, anchors, presented, reference, now, out)
+    super::verifier::verify_server_chain_ensures(environment, anchors, presented, reference, now, order, out)
 }
 
 } // verus!

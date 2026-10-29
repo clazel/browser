@@ -210,16 +210,15 @@ pub enum PathError {
     /// `verifier.rs`: the presented chain is empty, its first certificate
     /// does not parse, or `now` has no `CertificateTime`.
     Malformed,
-    /// `verifier.rs`, design §1.12: more than 16 presented certificates.
-    TooManyCertificates,
     /// `verifier.rs`, design §1.12: more intermediates than allowed.
     TooManyIntermediates,
     /// `verifier.rs`, design §1.12: more name-constraint comparisons than allowed.
     TooManyNameComparisons,
     /// `verifier.rs`: no candidate path reaches a trust anchor.
     UnknownIssuer,
-    /// `verifier.rs`, design §1.12 and §2.6: more candidate paths than allowed.
-    TooManyCandidates,
+    /// `verifier.rs`, design §1.12: the path search examined more candidate
+    /// issuers than its budget allows (mozilla::pkix `buildForwardCallBudget`).
+    BuildBudgetExhausted,
 }
 
 // ---------------------------------------------------------------------------
