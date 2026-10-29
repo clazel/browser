@@ -31,6 +31,8 @@ pub mod frame_base;
 pub mod frame_body;
 pub mod frame_in_body;
 pub mod frame_modes;
+pub mod nodes;
+pub mod open_elements;
 
 /// Every name of the transcription and of this module, for the ghost
 /// imports of the submodules (`use super::spec::*;`).

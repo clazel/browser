@@ -24,6 +24,9 @@ theorems = [
     "theorem_dispatch_total",
     "theorem_actions_ordered",
     "theorem_reachable",
+    "theorem_open_elements_in_doc",
+    "theorem_doc_wf",
+    "theorem_nodes_per_token",
 ]
 
 [package.metadata.verus]
