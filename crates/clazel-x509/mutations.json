@@ -1674,28 +1674,28 @@
       "id": "nc-q12-unmatched-name-refused",
       "file": "src/name_constraints/matching/spec.rs",
       "module": "name_constraints::matching::examples",
-      "find": "&&& state.len() == 0 || names_of_matched_forms(names)",
+      "find": "&&& state.len() == 0 || names_well_formed(names)",
       "replace": "&&& true",
       "expect": "killed",
-      "reason": "Design Q12: under any constraint, an entry of an unmatched form (here a URI) is refused.",
+      "reason": "Q12 as revised, (R) malformed entries: under any constraint, a malformed dNSName entry (http://test.localhost, BetterTLS tc8785) is refused. Repointed from the withdrawn 'every entry of a matched form' rule.",
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
-        "lemma": "super::examples::lemma_bettertls_tc8839_uri_entry_refused()",
-        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::uri_entry()])"
+        "lemma": "super::examples::lemma_bettertls_tc8785_malformed_dns_entry()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::dns_entry(super::examples::http_test_localhost())])"
       }
     },
     {
       "id": "nc-q12-unsupported-base-refused",
       "file": "src/name_constraints/matching/spec.rs",
       "module": "name_constraints::matching::examples",
-      "find": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => false,",
-      "replace": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => true,",
+      "find": "Some(items) => !has_directory_name_base(items),",
+      "replace": "Some(items) => true,",
       "expect": "killed",
-      "reason": "Design Q12: a directoryName (or any other unmatched) base makes the NameConstraints unsupported.",
+      "reason": "Q12 as revised, (R) excluded directoryName: a directoryName base in excludedSubtrees makes the NameConstraints unsupported (rfc5280::nc::excluded-dn-match). Repointed from the withdrawn 'any non-dNSName/iPAddress base is unsupported' rule.",
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_q12_unsupported_base_refuses_path()",
-        "witness": "constraints_supported(super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None))"
+        "witness": "constraints_supported(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()])))"
       }
     },
     {
@@ -1705,11 +1705,11 @@
       "find": "if constraints_supported(value) { Some(state.push(value)) } else { None }",
       "replace": "Some(state.push(value))",
       "expect": "killed",
-      "reason": "Design Q12: §6.1.4 (g) refuses the path at an unsupported NameConstraints instead of ignoring the base.",
+      "reason": "Q12 as revised: §6.1.4 (g) refuses the path at a NameConstraints it cannot apply (here an excluded directoryName) instead of ignoring the base.",
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_q12_unsupported_base_refuses_path()",
-        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, None)], initial_state())"
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, None)], initial_state())"
       }
     },
     {
@@ -1835,7 +1835,301 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_final_certificate_constraints_not_processed()",
-        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, Some(super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)))], initial_state())"
+        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()]))))], initial_state())"
+      }
+    },
+    {
+      "id": "nc-dn-prefix",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "base.len() <= name.len() && rdns_match(base, name.subrange(0, base.len() as int))",
+      "replace": "rdns_match(base, name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 subtrees and Firefox's prefix rule: O=Example holds O=Example, CN=foo.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_prefix_rule()",
+        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag()) + super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag())))]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-subject-checked",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "        && subject_acceptable(state, certificate.subject)",
+      "replace": "",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: directoryName restrictions MUST be applied to the subject field (rfc5280::nc::permitted-dn-match-subject-san-mismatch).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dn_subject_checked()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![super::examples::dn_entry(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())))], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-tag-relaxation",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "a == b || (is_utf8_or_printable(a) && is_utf8_or_printable(b))",
+      "replace": "a == b",
+      "expect": "killed",
+      "reason": "Firefox relaxes UTF8String/PrintableString tags in permitted directoryName attributes, both directions; Chrome normalizes both.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_utf8_printable_relaxation()",
+        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::printable_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-attribute-type",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& base.oid =~= name.oid",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §7.1 / both browsers: attributes match only with equal types; O=foo is not within CN=foo.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_attribute_type_matters()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::foo(), super::examples::utf8_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-attribute-value",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& value_contents(base.value_der) =~= value_contents(name.value_der)",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §7.1 / both browsers: attribute values must match; CN=not-foo is not within CN=foo (rfc5280::nc::permitted-dn-mismatch).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dn_mismatch()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-no-bmp-universal",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "attribute.value_tag != string_tag(28) && attribute.value_tag != string_tag(30)",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "(R): BMPString and UniversalString values, which Chrome must convert and may fail to, never match.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_values_chrome_cannot_compare()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())))]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-printable-charset",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "printable_from(contents, 0)",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "Chrome's ENFORCE_PRINTABLE_STRING refuses a PrintableString with '*', so such a value never matches.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_values_chrome_cannot_compare()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())))]), None)])"
+      }
+    },
+    {
+      "id": "nc-email-permitted-local-exact",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "local =~= mailbox_local(base)",
+      "replace": "crate::spec::folded_equal_from(local, mailbox_local(base), 0)",
+      "expect": "killed",
+      "reason": "Chrome compares a permitted mailbox's local part case-sensitively; the stricter rule (R against Firefox) keeps it byte-exact.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_email_local_part_case()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::at_example_com(super::examples::foo_upper()))]), None)], seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-excluded-local-folded",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::spec::folded_equal_from(local, mailbox_local(base), 0)",
+      "replace": "local =~= mailbox_local(base)",
+      "expect": "killed",
+      "reason": "Firefox compares an excluded mailbox ignoring ASCII case; an excluded Foo@example.com must catch foo@example.com.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_email_local_part_case()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::email_subtree(super::examples::at_example_com(super::examples::foo_upper()))]))], seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-domain-not-apex",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "host.len() > base.len()\n            && crate::spec::folded_equal_from(host.subrange(host.len() - base.len(), host.len() as int), base, 0)",
+      "replace": "dns_within(host, base.subrange(1, base.len() as int))",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: .example.com covers the domain's hosts but not the host example.com (nc-permits-email-subdomains-rejects-apex).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_email_domain()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::dot_example_com())]), None)], seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-host-exact",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "        crate::spec::folded_equal_from(host, base, 0)\n",
+      "replace": "        dns_within(host, base)\n",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: a host base holds mailboxes at exactly that host (nc-permits-email-domain-rejects-subdomain).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_email_host()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)], seq![super::examples::email_entry(super::examples::foo_at_sub_example_com())])"
+      }
+    },
+    {
+      "id": "nc-email-base-shape",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::name_constraints::spec::GeneralNameConstraint::Rfc822Name(b) => rfc822_base_shape(b),",
+      "replace": "crate::name_constraints::spec::GeneralNameConstraint::Rfc822Name(b) => true,",
+      "expect": "killed",
+      "reason": "(R) malformed bases: invalid@invalid@example.com is no mailbox, host or domain (rfc5280::nc::invalid-email-address).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_invalid_email_base_refused()",
+        "witness": "constraints_supported(super::examples::constraints(Some(seq![super::examples::email_subtree(seq![b'i', b'@'] + super::examples::at_example_com(seq![b'i']))]), None))"
+      }
+    },
+    {
+      "id": "nc-email-entry-mailbox",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(mailbox) => if is_mailbox(mailbox) {",
+      "replace": "Some(mailbox) => if true {",
+      "expect": "killed",
+      "reason": "(R) malformed entries: .foo@example.com is no mailbox and must not be matched as one.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_email_malformed_local_refused()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)], seq![super::examples::email_entry(super::examples::at_example_com(seq![b'.'] + super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-subject-address",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& !(rfc822_in_force(state) && rdns_have_email(parsed.rdns))",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "(R) emailAddress: a subject emailAddress attribute fails a certificate while an rfc822Name constraint is in force.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_subject_email_address_refused()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_email(super::examples::at_example_com(super::examples::foo()))), seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))], false, None)], seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)])"
+      }
+    },
+    {
+      "id": "nc-other-form-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "!is_uninterpreted_form(tag) || !form_constrained(state, tag),",
+      "replace": "true,",
+      "expect": "killed",
+      "reason": "Firefox's rule: an otherName entry under an otherName constraint fails (rfc5280::nc::nc-forbids-othername).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_othername()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::other_name_subtree()]))], seq![super::examples::dns_entry(super::examples::example_com()), super::examples::other_name_entry()])"
+      }
+    },
+    {
+      "id": "nc-other-form-excluded-counts",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    ||| match value.excluded_subtrees {\n        Some(items) => has_base_of_form(items, tag),",
+      "replace": "    ||| match value.excluded_subtrees {\n        Some(items) => false,",
+      "expect": "killed",
+      "reason": "An excluded otherName constrains the otherName form (rfc5280::nc::nc-forbids-othername).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_othername()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::other_name_subtree()]))], seq![super::examples::dns_entry(super::examples::example_com()), super::examples::other_name_entry()])"
+      }
+    },
+    {
+      "id": "nc-other-form-permitted-counts",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    ||| match value.permitted_subtrees {\n        Some(items) => has_base_of_form(items, tag),",
+      "replace": "    ||| match value.permitted_subtrees {\n        Some(items) => false,",
+      "expect": "killed",
+      "reason": "A permitted URI constrains the URI form, and URI subtrees have no meaning here (nc-permits-uri-host-rejects-subdomain).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_uri_constrained()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::uri_subtree()]), None)], seq![super::examples::dns_entry(super::examples::example_com()), super::examples::uri_entry()])"
+      }
+    },
+    {
+      "id": "nc-other-form-constraint-not-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => true,",
+      "replace": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => false,",
+      "expect": "killed",
+      "reason": "Q12 as revised: a constraint of another form no longer refuses the path by itself (rfc5280::nc::nc-forbids-othername-noop passes).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_othername()",
+        "witness": "!constraints_supported(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::other_name_subtree()])))"
+      }
+    },
+    {
+      "id": "name-constraints-zero-length-dns-base",
+      "file": "src/name_constraints/spec.rs",
+      "module": "name_constraints::certificates",
+      "find": "                if crate::extensions::spec::ia5_bytes(value, 0) {\n                    Some((GeneralNameConstraint::DnsName(value), tlv.cend))",
+      "replace": "                if value.len() > 0 && crate::extensions::spec::ia5_bytes(value, 0) {\n                    Some((GeneralNameConstraint::DnsName(value), tlv.cend))",
+      "expect": "killed",
+      "reason": "CA/B BR §7.1.2.5.2's zero-length dNSName (exclude every DNS name) is a valid base; both browsers accept it.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_zero_length_dns_base_is_accepted()",
+        "witness": "parse_name_constraints(seq![0x30u8, 0x06, 0xa1, 0x04, 0x30, 0x02, 0x82, 0x00]) is None"
+      }
+    },
+    {
+      "id": "name-constraints-rfc822-base-decoded",
+      "file": "src/name_constraints/spec.rs",
+      "module": "name_constraints::certificates",
+      "find": "Some((GeneralNameConstraint::Rfc822Name(value), tlv.cend))",
+      "replace": "Some((GeneralNameConstraint::Unsupported { tag: 1, der: value }, tlv.cend))",
+      "expect": "killed",
+      "reason": "rfc822Name bases are decoded for matching, not kept uninterpreted.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_rfc822_base_is_decoded()",
+        "witness": "match parse_name_constraints(seq![0x30u8, 0x07, 0xa0, 0x05, 0x30, 0x03, 0x81, 0x01, b'a']) { Some(value) => match value.permitted_subtrees { Some(items) => items.len() == 1 && !(items[0].base is Rfc822Name), None => false }, None => false }"
+      }
+    },
+    {
+      "id": "name-constraints-directory-name-contents",
+      "file": "src/name_constraints/spec.rs",
+      "module": "name_constraints::certificates",
+      "find": "Some((GeneralNameConstraint::DirectoryName(value), tlv.cend))",
+      "replace": "Some((GeneralNameConstraint::DirectoryName(input.subrange(pos as int, tlv.cend as int)), tlv.cend))",
+      "expect": "killed",
+      "reason": "directoryName is [4] EXPLICIT Name: the base is the Name TLV inside the tag, not the [4] TLV.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_directory_name_base_keeps_name_tlv()",
+        "witness": "match parse_name_constraints(seq![0x30u8, 0x08, 0xa0, 0x06, 0x30, 0x04, 0xa4, 0x02, 0x30, 0x00]) { Some(value) => match value.permitted_subtrees { Some(items) => items.len() == 1 && match items[0].base { GeneralNameConstraint::DirectoryName(name) => name.len() == 4, _ => false }, None => false }, None => false }"
       }
     }
   ]
