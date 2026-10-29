@@ -299,7 +299,6 @@ pub open spec fn after_head_in_head_tag(t: Tok) -> bool {
 ///   WHATWG transcription ignores the token if it is: the pointer is
 ///   required to be set, and to point at an element of the arena whose
 ///   parent is one ([`place_stable`] of the stack with it pushed).
-#[verifier::spinoff_prover]
 pub proof fn lemma_after_head(env: EncFns, p: Parser, t: Tok)
     requires
         !(t is Pi),
