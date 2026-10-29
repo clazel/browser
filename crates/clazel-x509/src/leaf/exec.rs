@@ -105,7 +105,7 @@ pub open spec fn view_leaf_result(result: Option<PartialLeafChecks<'_>>)
     match result { Some(value) => Some(value@), None => None }
 }
 
-fn oid_arcs_equal(left: &[u64], right: &[u64]) -> (result: bool)
+pub(crate) fn oid_arcs_equal(left: &[u64], right: &[u64]) -> (result: bool)
     ensures result == (clazel_der::decode::nats(left@) =~= clazel_der::decode::nats(right@))
 {
     if left.len() != right.len() { return false; }
@@ -134,7 +134,7 @@ fn oid_arcs_equal(left: &[u64], right: &[u64]) -> (result: bool)
 }
 
 /// Decode the fixed subjectAltName OID through the same DER reader used for input values.
-fn san_oid() -> (result: Vec<u64>)
+pub(crate) fn san_oid() -> (result: Vec<u64>)
     ensures clazel_der::decode::nats(result@) =~= crate::extensions::spec::subject_alt_name_oid()
 {
     let arcs = vec![2u64, 5, 29, 17];
@@ -147,7 +147,7 @@ fn san_oid() -> (result: Vec<u64>)
     arcs
 }
 
-fn basic_constraints_oid() -> (result: Vec<u64>)
+pub(crate) fn basic_constraints_oid() -> (result: Vec<u64>)
     ensures clazel_der::decode::nats(result@) =~= super::spec::basic_constraints_oid()
 {
     let arcs = vec![2u64, 5, 29, 19];
@@ -160,7 +160,7 @@ fn basic_constraints_oid() -> (result: Vec<u64>)
     arcs
 }
 
-fn key_usage_oid() -> (result: Vec<u64>)
+pub(crate) fn key_usage_oid() -> (result: Vec<u64>)
     ensures clazel_der::decode::nats(result@) =~= super::spec::key_usage_oid()
 {
     let arcs = vec![2u64, 5, 29, 15];
@@ -173,7 +173,7 @@ fn key_usage_oid() -> (result: Vec<u64>)
     arcs
 }
 
-fn extended_key_usage_oid() -> (result: Vec<u64>)
+pub(crate) fn extended_key_usage_oid() -> (result: Vec<u64>)
     ensures clazel_der::decode::nats(result@) =~= super::spec::extended_key_usage_extension_oid()
 {
     let arcs = vec![2u64, 5, 29, 37];
@@ -187,7 +187,7 @@ fn extended_key_usage_oid() -> (result: Vec<u64>)
 }
 
 /// First occurrence of an extension OID; extension decoding guarantees uniqueness.
-fn find_extension_index(input: &[extensions::Extension<'_>], oid: &[u64]) -> (result: Option<usize>)
+pub(crate) fn find_extension_index(input: &[extensions::Extension<'_>], oid: &[u64]) -> (result: Option<usize>)
     ensures match result {
         Some(index) => index < input.len()
             && clazel_der::decode::nats(input@[index as int].oid@) =~= clazel_der::decode::nats(oid@)
@@ -253,7 +253,7 @@ pub open spec fn view_optional_basic_result(
     }
 }
 
-fn parse_optional_basic_constraints<'b>(
+pub(crate) fn parse_optional_basic_constraints<'b>(
     input: &[extensions::Extension<'b>], oid: &[u64],
 ) -> (result: Option<Option<constraints::BasicConstraints<'b>>>)
     requires clazel_der::decode::nats(oid@) =~= super::spec::basic_constraints_oid()
@@ -296,7 +296,7 @@ pub open spec fn view_optional_key_usage_result(
     }
 }
 
-fn parse_optional_key_usage<'b>(
+pub(crate) fn parse_optional_key_usage<'b>(
     input: &[extensions::Extension<'b>], oid: &[u64],
 ) -> (result: Option<Option<constraints::KeyUsage<'b>>>)
     requires clazel_der::decode::nats(oid@) =~= super::spec::key_usage_oid()
@@ -339,7 +339,7 @@ pub open spec fn view_optional_eku_result(
     }
 }
 
-fn parse_optional_eku(
+pub(crate) fn parse_optional_eku(
     input: &[extensions::Extension<'_>], oid: &[u64],
 ) -> (result: Option<Option<constraints::ExtendedKeyUsage>>)
     requires clazel_der::decode::nats(oid@) =~= super::spec::extended_key_usage_extension_oid()
