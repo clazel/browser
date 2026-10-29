@@ -11,8 +11,9 @@
 //! callers check (an element in scope above `html`, a fresh element); the
 //! per-mode lemmas compose them and check each mode's [`shape`].
 //!
-//! The cells. In the "in cell" mode the stack holds a cell ([`cell_ok`]),
-//! and [`keeps`] keeps its last cell ([`cell_kept`]): every pop a rule
+//! The cells. In the "in cell" mode the stack holds a cell with no `table`
+//! or `template` element above it ([`cell_ok`], [`cell_scoped`]), and
+//! [`keeps`] keeps its last cell ([`cell_kept`]): every pop a rule
 //! applied in that mode makes stops above the last cell (a scope search
 //! whose list holds `td` and `th` finds its target above it, "any other
 //! end tag" and foreign content stop at special or HTML elements, the
@@ -22,7 +23,16 @@
 //! cell's id). The rules that do pop the cell switch the mode ("close the
 //! cell", the `template` end tag, "in template"'s end of file, the
 //! `frameset` start tag); they are proven on the parser put in another mode
-//! (`cells::mode_as`).
+//! (`cells::mode_as`). The elements pushed in the "in cell" mode are not
+//! `table` or `template` elements, but for the `table` and `template` start
+//! tags, which switch the mode (the `table` one is proven on the parser put
+//! in the "in table" mode); "reset the insertion mode appropriately"
+//! chooses "in cell" only below every such element (`walls`).
+//!
+//! The `html` element. No element above the root is an `html` element
+//! ([`html_once`]): the parser never inserts one for an `html` start tag
+//! after "before html", and the list of active formatting elements holds
+//! no entry for one ([`cells_wf`]).
 //!
 //! Stopped parsers. [`keeps`] and the per-mode lemmas say nothing of a
 //! parser a rule stops; [`stopped`] proves that it has an empty stack and
@@ -64,6 +74,7 @@ pub mod stop_in_body;
 pub mod stop_tables;
 pub mod stopped;
 pub mod tables;
+pub mod walls;
 
 /// Every name of the transcription and of this module, for the ghost
 /// imports of the submodules (`use super::spec::*;`).
@@ -84,8 +95,9 @@ verus! {
 /// A running parser's stack is rooted, the `html` element's id is fresh,
 /// its records are tagged, no entry of the list of active formatting
 /// elements is for a `template` start tag, the cells' ids are fresh
-/// ([`cells_wf`]), in the "in cell" mode the stack holds a cell, and the
-/// document facts [`doc::dinv`] hold.
+/// ([`cells_wf`]), in the "in cell" mode the stack holds a cell in table
+/// scope, the root is the stack's only `html` element, and the document
+/// facts [`doc::dinv`] hold.
 pub open spec fn good(p: Parser) -> bool {
     &&& rooted_seq(p.open)
     &&& root_ids(p)
@@ -94,6 +106,7 @@ pub open spec fn good(p: Parser) -> bool {
     &&& cells_wf(p)
     &&& in_cell_ok(p)
     &&& doc::dinv(p)
+    &&& html_once(p.open)
 }
 
 /// In the "in cell" mode, `q`'s stack holds a cell, its last cell `p`'s
@@ -213,7 +226,7 @@ pub proof fn lemma_finish(p: Parser, q1: Parser, q: Parser)
         q.redirect == q1.redirect,
         rooted_mode(q.mode),
         q.mode == Mode::InTemplate ==> q.template_modes.len() > 0,
-        q.mode == Mode::InCell && q.mode != q1.mode ==> has_cell(q.open),
+        q.mode == Mode::InCell && q.mode != q1.mode ==> cell_scoped(q.open),
     ensures
         !q.stopped ==> reach_core(q) && crate::termination::modes_ok(q),
 {

@@ -233,21 +233,43 @@ pub open spec fn last_cell(o: Seq<Elem>) -> int {
     last_index_where(o, o.len() as int, cell_pred())
 }
 
-/// In the "in cell" insertion mode the stack holds a cell (§13.2.6.4.15,
-/// "close the cell": "Assert: The stack of open elements has a td or th
-/// element in table scope"; the start tags and end tags that close the
-/// cell pop until one has been popped).
+/// An HTML `table` or `template` element: with the `html` element, what
+/// ends a search in table scope (§13.2.4.2).
+pub open spec fn table_wall(e: Elem) -> bool {
+    is_html(e, Tag::Table) || is_html(e, Tag::Template)
+}
+
+/// The stack `o` holds a cell, and no `table` or `template` element is
+/// above its last cell: with [`html_once`], the last cell is in table
+/// scope.
+pub open spec fn cell_scoped(o: Seq<Elem>) -> bool {
+    &&& has_cell(o)
+    &&& forall|j: int| last_cell(o) < j < o.len() ==> !table_wall(#[trigger] o[j])
+}
+
+/// The stack's only `html` element is its first entry (the parser creates
+/// one `html` element, in "before html" or as the fragment case's root,
+/// and an `html` start tag elsewhere only adds attributes to it).
+pub open spec fn html_once(o: Seq<Elem>) -> bool {
+    forall|i: int| 0 < i < o.len() ==> !is_html(#[trigger] o[i], Tag::Html)
+}
+
+/// In the "in cell" insertion mode the stack holds a cell in table scope
+/// ([`cell_scoped`]; §13.2.6.4.15, "close the cell": "Assert: The stack of
+/// open elements has a td or th element in table scope"; the start tags
+/// and end tags that close the cell pop until one has been popped).
 pub open spec fn in_cell_ok(p: Parser) -> bool {
-    p.mode == Mode::InCell ==> has_cell(p.open)
+    p.mode == Mode::InCell ==> cell_scoped(p.open)
 }
 
 /// [`in_cell_ok`], also for the "in cell" mode a parser returns to: in
-/// "text" over "in cell" the stack below the current node holds a cell,
+/// "text" over "in cell" the stack below the current node holds a cell in
+/// table scope,
 /// and "in table text" never returns to "in cell" (the "in table" rules,
 /// which switch to it, are never applied in the "in cell" mode).
 pub open spec fn cell_ok(p: Parser) -> bool {
     &&& in_cell_ok(p)
-    &&& p.mode == Mode::Text && p.original_mode == Mode::InCell ==> has_cell(p.open.drop_last())
+    &&& p.mode == Mode::Text && p.original_mode == Mode::InCell ==> cell_scoped(p.open.drop_last())
     &&& p.mode == Mode::InTableText ==> p.original_mode != Mode::InCell
 }
 
@@ -262,9 +284,11 @@ pub open spec fn cell_fresh(p: Parser, id: NodeId) -> bool {
 }
 
 /// Facts about cells and ids: every entry of the list of active formatting
-/// elements is for a node of the arena, and neither its element nor its
-/// token is a cell (the parser pushes entries only for the formatting
-/// tags); the form element pointer names a node of the arena; every cell
+/// elements is for a node of the arena, neither its element nor its token
+/// is a cell, and its token is not `html` nor `table` (the parser pushes
+/// entries only for the formatting tags, and the elements "reconstruct the
+/// active formatting elements" and the adoption agency algorithm put on
+/// the stack are created for these tokens); the form element pointer names a node of the arena; every cell
 /// on the stack is [`cell_fresh`]. (So the elements the parser creates,
 /// whose ids are new, are never in the list, the form pointer, or the
 /// stack's cells.)
@@ -272,7 +296,8 @@ pub open spec fn cells_wf(p: Parser) -> bool {
     &&& forall|i: int|
         0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry ==> p.formatting[i]->Entry_elem.id
             < p.doc.nodes.len() && !cell_pred()(p.formatting[i]->Entry_elem) && p.formatting[i]->Entry_token.tag != Tag::Td
-            && p.formatting[i]->Entry_token.tag != Tag::Th
+            && p.formatting[i]->Entry_token.tag != Tag::Th && p.formatting[i]->Entry_token.tag != Tag::Html
+            && p.formatting[i]->Entry_token.tag != Tag::Table
     &&& match p.form {
         Some(f) => f < p.doc.nodes.len(),
         None => true,
@@ -281,10 +306,12 @@ pub open spec fn cells_wf(p: Parser) -> bool {
 }
 
 /// The reachable-state facts of a running parser: the stack's [`shape`],
-/// [`root_ids`], [`tags_wf`], [`cells_wf`], [`cell_ok`], and the document
-/// facts `reachable::doc::dinv` (among them [`templates_wf`]'s).
+/// [`root_ids`], [`tags_wf`], [`cells_wf`], [`cell_ok`], [`html_once`],
+/// and the document facts `reachable::doc::dinv` (among them
+/// [`templates_wf`]'s).
 pub open spec fn reach_core(p: Parser) -> bool {
-    shape(p) && root_ids(p) && tags_wf(p) && cells_wf(p) && cell_ok(p) && crate::reachable::doc::dinv(p)
+    shape(p) && root_ids(p) && tags_wf(p) && cells_wf(p) && cell_ok(p) && html_once(p.open)
+        && crate::reachable::doc::dinv(p)
 }
 
 /// **The reachable-state invariant**: a stopped parser (which takes no

@@ -181,9 +181,22 @@ pub proof fn lemma_ib_start_table(p: Parser, t: Tok, tt: TagTok)
     if !doc_is_quirks(p) && has_in_scope(p, Tag::P, Scope::Button) {
         lemma_close_p_keeps(p);
     }
-    lemma_then_insert(p, q, tt);
-    let q1 = insert_html_element(q, tt).0;
-    lemma_finish(p, q1, Parser { frameset_ok: false, mode: Mode::InTable, ..q1 });
+    lemma_keeps_live(p, q);
+    // The `table` is inserted on the parser put in the "in table" mode, the
+    // mode it ends in: in the "in cell" mode it is a `table` above the cell.
+    if !q.stopped {
+        let q0 = cells::mode_as(q, Mode::InTable);
+        assert(crate::termination::template_count(q0) == crate::termination::template_count(q));
+        assert(modes_ok(q0));
+        lemma_insert_html_keeps(q0, tt);
+        lemma_insert_html_mode(q, tt, Mode::InTable);
+        let q1 = insert_html_element(q, tt).0;
+        let q01 = insert_html_element(q0, tt).0;
+        assert(Parser { frameset_ok: false, mode: Mode::InTable, ..q1 } == Parser { frameset_ok: false, ..q01 });
+        lemma_finish(q0, q01, Parser { frameset_ok: false, ..q01 });
+    } else {
+        lemma_insert_html_keeps(q, tt);
+    }
 }
 
 /// Case 37: void elements.

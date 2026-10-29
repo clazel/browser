@@ -7,6 +7,8 @@ use super::cells::*;
 use super::doc::*;
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use super::walls::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -41,7 +43,9 @@ pub proof fn lemma_prefix_keeps(p: Parser, q: Parser)
         lemma_cells_wf_open(p, q);
         if in_cell(p) {
             lemma_cell_prefix(p.open, q.open);
+            lemma_scoped_prefix(p.open, q.open);
         }
+        lemma_once_prefix(p.open, q.open);
         assert(q.open[0] == p.open[0]);
         assert forall|i: int| 0 <= i < q.open.len() implies elem_tagged(#[trigger] q.open[i]) by {
             assert(q.open[i] == p.open[i]);
@@ -256,7 +260,9 @@ pub proof fn lemma_remove_open_keeps(p: Parser, i: int)
         lemma_cells_wf_open(p, q);
         if in_cell(p) {
             lemma_cell_remove(p.open, i);
+            lemma_scoped_remove(p.open, i);
         }
+        lemma_once_remove(p.open, i);
         assert(q.open[0] == p.open[0]);
         assert forall|j: int| 0 <= j < q.open.len() implies elem_tagged(#[trigger] q.open[j]) by {
             if j < i {
@@ -308,15 +314,18 @@ pub proof fn lemma_templates_in_remove(o: Seq<Elem>, i: int, j: int)
     }
 }
 
-/// Push a tagged element that is not a `template`, nor a cell unless the
-/// mode is not "in cell" and its id is fresh.
+/// Push a tagged element that is not a `template` nor `html`, nor a cell
+/// unless the mode is not "in cell" and its id is fresh, nor a `table` in
+/// the "in cell" mode.
 pub proof fn lemma_push_keeps(p: Parser, e: Elem)
     requires
         live(p),
         elem_tagged(e),
         !is_html(e, Tag::Template),
+        !is_html(e, Tag::Html),
         !p.stopped && cell_pred()(e) ==> p.mode != Mode::InCell && cell_fresh(p, e.id),
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
+        !p.stopped && is_html(e, Tag::Table) ==> p.mode != Mode::InCell,
     ensures
         keeps(p, push(p, e)),
         !p.stopped ==> push(p, e).open == p.open.push(e),
@@ -336,8 +345,10 @@ pub proof fn lemma_push_keeps(p: Parser, e: Elem)
             }
         }
         assert(cells_wf(q));
+        lemma_once_push(p.open, e);
         if in_cell(p) {
             lemma_cell_push(p.open, e);
+            lemma_scoped_push(p.open, e);
             lemma_cell_top(p.open);
             assert(q.open[last_cell(p.open)] == p.open[last_cell(p.open)]);
             assert(q.open[last_cell(q.open)] == p.open[last_cell(p.open)]);
@@ -635,14 +646,16 @@ pub proof fn lemma_insert_element_at_keeps(p: Parser, el: NodeId, loc: Option<Lo
 }
 
 /// "Insert a foreign element" for a tagged token, not an HTML `template`
-/// (nor a cell in the "in cell" mode): the stack gains the new, fresh,
-/// tagged element.
+/// nor `html` (nor a cell or a `table` in the "in cell" mode): the stack
+/// gains the new, fresh, tagged element.
 pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
     requires
         live(p),
         tok_tagged(t),
         !(ns == Namespace::Html && t.tag == Tag::Template),
-        !p.stopped && ns == Namespace::Html && (t.tag == Tag::Td || t.tag == Tag::Th) ==> p.mode != Mode::InCell,
+        !(ns == Namespace::Html && t.tag == Tag::Html),
+        !p.stopped && ns == Namespace::Html && (t.tag == Tag::Td || t.tag == Tag::Th || t.tag == Tag::Table) ==> p.mode
+            != Mode::InCell,
     ensures
         keeps(p, insert_foreign_element(p, t, ns).0),
         !insert_foreign_element(p, t, ns).0.stopped ==> {
@@ -689,14 +702,15 @@ pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
     }
 }
 
-/// "Insert an HTML element" for a tagged token other than `template` (nor
-/// a cell in the "in cell" mode).
+/// "Insert an HTML element" for a tagged token other than `template` and
+/// `html` (nor a cell or a `table` in the "in cell" mode).
 pub proof fn lemma_insert_html_keeps(p: Parser, t: TagTok)
     requires
         live(p),
         tok_tagged(t),
         t.tag != Tag::Template,
-        !p.stopped && (t.tag == Tag::Td || t.tag == Tag::Th) ==> p.mode != Mode::InCell,
+        t.tag != Tag::Html,
+        !p.stopped && (t.tag == Tag::Td || t.tag == Tag::Th || t.tag == Tag::Table) ==> p.mode != Mode::InCell,
     ensures
         keeps(p, insert_html_element(p, t).0),
         !insert_html_element(p, t).0.stopped ==> {

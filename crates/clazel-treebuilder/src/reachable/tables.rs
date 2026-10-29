@@ -48,7 +48,7 @@ pub proof fn lemma_to_mode(p: Parser, q1: Parser, m: Mode)
         keeps(p, q1),
         rooted_mode(m),
         m == Mode::InTemplate ==> p.template_modes.len() > 0,
-        m == Mode::InCell && p.mode != Mode::InCell && !q1.stopped ==> has_cell(q1.open),
+        m == Mode::InCell && p.mode != Mode::InCell && !q1.stopped ==> cell_scoped(q1.open),
     ensures
         next_core(Outcome::Done(Parser { mode: m, ..q1 })),
         next_core(Outcome::Reprocess(Parser { mode: m, ..q1 }, Tok::Eof)),

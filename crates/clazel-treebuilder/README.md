@@ -87,10 +87,17 @@ evidence exists (see "Left" below).
   equivalence lemmas that are facts of reachable states
   (`document_rooted`, `no_document_redirect`, and until it stops
   `aa_wf`, `tags_wf`, distinct elements on the stack and, after "before
-  html", `place_stable`, also with the `head` element pushed), and
-  `theorem_reachable_foreign_content` states the foreign content
-  equivalence for every reachable parser and every token the tokenizer
-  emits, with only the inputs where the two texts differ excluded.
+  html", `place_stable`, also with the `head` element pushed, and
+  `html_only_at_root`; in "in cell", a `td` or `th` element in table
+  scope), and `theorem_reachable_foreign_content` states the foreign
+  content equivalence for every reachable parser and every token the
+  tokenizer emits, with only the inputs where the two texts differ
+  excluded. `theorem_reachable_frameset_cell` states the "in frameset"
+  and "in cell" equivalences for every reachable parser and every token
+  the tokenizer emits, with no hypothesis (the texts differ on no input a
+  reachable parser meets). The facts behind them are part of
+  `reachable_inv`: the root is the stack's only `html` element, and in
+  "in cell" no `table` or `template` element is above the last cell.
 - **Proven, actions** (`src/theorems/`): `theorem_actions_ordered`: over a
   whole parse, `StopParsing` occurs at most once and last, and
   `ChangeEncoding` at most once (never if the confidence starts certain),
@@ -179,7 +186,9 @@ evidence exists (see "Left" below).
   (the `body` element "after head" inserts is found by every later
   reset), but proving it needs invariants on the elements below each
   `template` on the stack, which nothing proves yet.
-- The W3C equivalence preconditions that are facts of reachable states
-  but not yet proven: `html_only_at_root` ("in frameset"), `element_plain`
-  of the `html` and `body` elements ("in body"), and a cell in table
-  scope in "in cell".
+- The W3C "in body" equivalence's precondition `element_plain` of the
+  `html` and `body` elements (their attributes have no namespace or
+  prefix), a fact of reachable states not yet proven: it needs the
+  attributes of document nodes tracked through every helper (the
+  document theorems keep only namespaces and local names) and the
+  tokens' attributes being plain carried through every rule application.

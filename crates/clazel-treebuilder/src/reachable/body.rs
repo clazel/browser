@@ -42,14 +42,15 @@ pub proof fn lemma_flags_keeps(p: Parser, q: Parser)
     assert(crate::termination::template_count(q) == crate::termination::template_count(p));
 }
 
-/// Then "insert an HTML element" (not `template`, nor a cell in the "in
-/// cell" mode).
+/// Then "insert an HTML element" (not `template` nor `html`, nor a cell or
+/// a `table` in the "in cell" mode).
 pub proof fn lemma_then_insert(p: Parser, q: Parser, tt: TagTok)
     requires
         keeps(p, q),
         tok_tagged(tt),
         tt.tag != Tag::Template,
-        tt.tag == Tag::Td || tt.tag == Tag::Th ==> p.mode != Mode::InCell,
+        tt.tag != Tag::Html,
+        tt.tag == Tag::Td || tt.tag == Tag::Th || tt.tag == Tag::Table ==> p.mode != Mode::InCell,
     ensures
         keeps(p, insert_html_element(q, tt).0),
 {
@@ -65,6 +66,7 @@ pub proof fn lemma_then_insert_pop(p: Parser, q: Parser, tt: TagTok)
         tok_tagged(tt),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
+        tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         keeps(p, insert_and_pop(q, tt)),
 {
@@ -163,6 +165,7 @@ pub proof fn lemma_ib_text(p: Parser, q: Parser, tt: TagTok, rawtext: bool)
         tok_tagged(tt),
         tt.tag != Tag::Td && tt.tag != Tag::Th,
         tt.tag != Tag::Template,
+        tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         next_core(Outcome::Done(generic_text_parsing(q, tt, rawtext))),
 {
@@ -501,6 +504,7 @@ pub proof fn lemma_then_push_formatting(p: Parser, q: Parser, tt: TagTok)
         tok_tagged(tt),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
+        tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         keeps(p, push_formatting(insert_html_element(q, tt).0, insert_html_element(q, tt).1, tt)),
 {
@@ -834,6 +838,7 @@ pub proof fn lemma_ib_ruby(p: Parser, tt: TagTok, except: Option<Tag>)
         ib_pre(p, tt),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
+        tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         next_core(Outcome::Done(insert_html_element(if has_in_scope(p, Tag::Ruby, Scope::Default) {
             generate_implied_end_tags(p, except)
