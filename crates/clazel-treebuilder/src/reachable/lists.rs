@@ -16,12 +16,13 @@ verus! {
 /// An entry that may join the list of a [`good`] parser: a marker, or an
 /// element other than `html`'s, tagged, not a cell, with an id of the
 /// arena that no cell on the stack has ([`id_new`]), for a tagged token
-/// other than `template`, `td` and `th`.
+/// other than `template`, `td`, `th`, `html` and `table`.
 pub open spec fn fmt_fresh(p: Parser, x: Fmt) -> bool {
     match x {
         Fmt::Marker => true,
         Fmt::Entry { elem, token } => elem.id != p.open[0].id && elem_tagged(elem) && tok_tagged(token) && token.tag
-            != Tag::Template && !cell_pred()(elem) && token.tag != Tag::Td && token.tag != Tag::Th && id_new(p, elem.id),
+            != Tag::Template && !cell_pred()(elem) && token.tag != Tag::Td && token.tag != Tag::Th && token.tag != Tag::Html
+            && token.tag != Tag::Table && id_new(p, elem.id),
     }
 }
 
@@ -67,7 +68,8 @@ pub proof fn lemma_fmt_list_keeps(p: Parser, q: Parser)
         }
         assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.id
             < q.doc.nodes.len() && !cell_pred()(q.formatting[i]->Entry_elem) && q.formatting[i]->Entry_token.tag != Tag::Td
-            && q.formatting[i]->Entry_token.tag != Tag::Th by {
+            && q.formatting[i]->Entry_token.tag != Tag::Th && q.formatting[i]->Entry_token.tag != Tag::Html
+            && q.formatting[i]->Entry_token.tag != Tag::Table by {
             assert(fmt_fresh(p, q.formatting[i]));
         }
         assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies cell_fresh(q, q.open[j].id) by {
@@ -182,12 +184,13 @@ pub proof fn lemma_family_range(f: Seq<Fmt>, from: int, i: int, e: Elem, t: TagT
 }
 
 /// "Push onto the list of active formatting elements" a fresh, tagged
-/// element created for a tagged token other than `template`.
+/// element created for a tagged token other than `template`, `td`, `th`,
+/// `html` and `table`.
 pub proof fn lemma_push_formatting_keeps(p: Parser, e: Elem, t: TagTok)
     requires
         live(p),
         !p.stopped ==> e.id != p.open[0].id && elem_tagged(e) && tok_tagged(t) && t.tag != Tag::Template && !cell_pred()(e)
-            && t.tag != Tag::Td && t.tag != Tag::Th && id_new(p, e.id),
+            && t.tag != Tag::Td && t.tag != Tag::Th && t.tag != Tag::Html && t.tag != Tag::Table && id_new(p, e.id),
     ensures
         keeps(p, push_formatting(p, e, t)),
 {
@@ -368,10 +371,11 @@ pub proof fn lemma_reset_keeps(p: Parser)
         reset_insertion_mode(p).mode != Mode::InHeadNoscript,
         reset_insertion_mode(p).mode == Mode::InTemplate ==> p.template_modes.len() > 0,
         reset_insertion_mode(p) == (Parser { mode: reset_insertion_mode(p).mode, ..p }),
-        reset_insertion_mode(p).mode == Mode::InCell ==> has_cell(p.open),
+        reset_insertion_mode(p).mode == Mode::InCell ==> cell_scoped(p.open),
 {
     lemma_reset_shape(p, p.open.len() - 1);
     lemma_reset_cell(p, p.open.len() - 1);
+    super::walls::lemma_reset_scoped(p);
 }
 
 // ---------------------------------------------------------------------

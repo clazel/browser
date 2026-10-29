@@ -261,6 +261,7 @@ pub proof fn lemma_generic_text_reach(p: Parser, tt: TagTok, rawtext: bool)
         tok_tagged(tt),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
+        tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         next_core(Outcome::Done(generic_text_parsing(p, tt, rawtext))),
 {
@@ -468,6 +469,7 @@ pub proof fn lemma_insert_pop_frame(p: Parser, tt: TagTok)
         tok_tagged(tt),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
+        tt.tag != Tag::Html && tt.tag != Tag::Table,
     ensures
         ({
             let q = pop(insert_html_element(p, tt).0);

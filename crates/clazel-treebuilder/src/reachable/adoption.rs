@@ -9,6 +9,8 @@ use super::cells::*;
 use super::helpers::*;
 #[cfg(verus_only)]
 use super::lists::*;
+#[cfg(verus_only)]
+use super::walls::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[cfg(verus_only)]
@@ -31,13 +33,16 @@ pub open spec fn on_stack_from(o: Seq<Elem>, from: int, id: NodeId) -> bool {
 }
 
 /// Replace entry `i >= 1` of the stack (above the last cell in the "in
-/// cell" mode) with a tagged element that is not a `template` nor a cell.
+/// cell" mode) with a tagged element that is not a `template`, `html`,
+/// `table` nor a cell.
 pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
     requires
         live(p),
         !p.stopped ==> 1 <= i < p.open.len(),
         elem_tagged(e),
         !is_html(e, Tag::Template),
+        !is_html(e, Tag::Html),
+        !is_html(e, Tag::Table),
         !cell_pred()(e),
         in_cell(p) ==> i > last_cell(p.open),
     ensures
@@ -53,7 +58,9 @@ pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
         lemma_cells_wf_open(p, q);
         if in_cell(p) {
             lemma_cell_update(p.open, i, e);
+            lemma_scoped_update(p.open, i, e);
         }
+        lemma_once_update(p.open, i, e);
         assert(q.open[0] == p.open[0]);
         assert forall|j: int| 0 <= j < q.open.len() implies elem_tagged(#[trigger] q.open[j]) by {
             if j != i {
@@ -66,14 +73,17 @@ pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
     }
 }
 
-/// Insert a tagged element that is not a `template` nor a cell at index
-/// `i >= 1` of the stack (above the last cell in the "in cell" mode).
+/// Insert a tagged element that is not a `template`, `html`, `table` nor a
+/// cell at index `i >= 1` of the stack (above the last cell in the "in
+/// cell" mode).
 pub proof fn lemma_open_insert_keeps(p: Parser, i: int, e: Elem)
     requires
         live(p),
         !p.stopped ==> 1 <= i <= p.open.len(),
         elem_tagged(e),
         !is_html(e, Tag::Template),
+        !is_html(e, Tag::Html),
+        !is_html(e, Tag::Table),
         !cell_pred()(e),
         in_cell(p) ==> i > last_cell(p.open),
     ensures
@@ -93,7 +103,9 @@ pub proof fn lemma_open_insert_keeps(p: Parser, i: int, e: Elem)
         lemma_cells_wf_open(p, q);
         if in_cell(p) {
             lemma_cell_insert(p.open, i, e);
+            lemma_scoped_insert(p.open, i, e);
         }
+        lemma_once_insert(p.open, i, e);
         assert(q.open[0] == p.open[0]);
         assert forall|j: int| 0 <= j < q.open.len() implies elem_tagged(#[trigger] q.open[j]) by {
             if j < i {
@@ -390,6 +402,8 @@ pub proof fn lemma_mid_stack_keeps(p: Parser, fe_id: NodeId, fb_id: NodeId, ne: 
         live(p),
         elem_tagged(ne),
         !is_html(ne, Tag::Template),
+        !is_html(ne, Tag::Html),
+        !is_html(ne, Tag::Table),
         !cell_pred()(ne),
         !p.stopped ==> {
             &&& 1 <= fe_idx < p.open.len()
