@@ -47,28 +47,32 @@
 
 mod support;
 
-use clazel_kernel::exec::fetch::NetOutcomeRecord;
-
+use clazel_fetch::transducer::types::InputBuf;
 use clazel_ipc::message::codec::Msg;
 use clazel_kernel::exec::records::EventRecord;
 use cookie_store::CookieStore;
 use support::{Kernel, Out, code_points};
 
-/// Answer every `Fetch` among `out` as a shell with no network would: the
-/// kernel's stand-in fetch makes the delivered bytes (none) the document's
-/// script. The outputs, with each `Fetch` replaced by what answering it gave.
+/// Answer the network outputs among `out` as a server with an empty page
+/// would: `Connected` for a `Connect`, a whole response for a `Send`, nothing
+/// for a `Close`. The outputs for renderers, in order, with those that
+/// answering gave after them (the document's script is the empty body).
 fn settled(kernel: &mut Kernel, out: Vec<Out>) -> Vec<Out> {
+    let response = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
     let mut all = Vec::new();
-    for o in out {
-        match o {
-            Out::Fetch(tab, url) => {
-                let outcome = NetOutcomeRecord {
-                    url,
-                    net: Vec::new(),
-                };
-                all.extend(kernel.event(&EventRecord::Fetched { tab, outcome }));
+    let mut queue: std::collections::VecDeque<Out> = out.into();
+    while let Some(o) = queue.pop_front() {
+        let answer = match o {
+            Out::Connect(conn, ..) => Some((conn, InputBuf::Connected)),
+            Out::Send(conn, _) => Some((conn, InputBuf::Bytes(response.clone()))),
+            Out::Close(_) => None,
+            other => {
+                all.push(other);
+                None
             }
-            other => all.push(other),
+        };
+        if let Some((conn, input)) = answer {
+            queue.extend(kernel.event(&EventRecord::Net { conn, input }));
         }
     }
     all
@@ -262,6 +266,16 @@ fn trace(seed: u64, now: u64) -> Option<String> {
                     })
                 };
                 let out = settled(&mut kernel, out);
+                // Only `http:` URLs are fetched (TLS is not carried out): a
+                // navigation to an `https:` one fails and the renderer stays.
+                if target.starts_with("https:") {
+                    match out.as_slice() {
+                        [Out::To(to, Msg::Error { code: 5 })] if *to == tab.renderer => {
+                            continue;
+                        }
+                        _ => return fail(&format!("https navigation outputs {out:?}"), &log),
+                    }
+                }
                 if same_origin {
                     match out.as_slice() {
                         [Out::To(to, Msg::Commit { url: committed, .. })]

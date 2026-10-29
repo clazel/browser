@@ -11,6 +11,7 @@ use clazel_origin::exec::{ParsedOrigin, url_origin_exec};
 use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::serialize::url_path_serializer;
 
+use super::fetch::FetchFnsExec;
 use super::records::{EventRecord, StateRecord};
 use super::step::step_exec;
 use super::urls::UrlFnsExec;
@@ -130,24 +131,67 @@ impl UrlFnsExec for RealUrls {
     }
 }
 
+/// The transducer's parameters of the shipped kernel ([`crate::urls::real_fetch`]):
+/// `clazel-fetch`'s real response parser and URL functions, and the basic
+/// URL parser on a navigation URL.
+pub struct RealFetch {
+    /// `clazel-fetch`'s response parser.
+    pub http: clazel_fetch::transducer::real::RealHttp,
+    /// `clazel-fetch`'s URL functions.
+    pub urls: clazel_fetch::transducer::real::RealUrls,
+}
+
+impl FetchFnsExec for RealFetch {
+    type H = clazel_fetch::transducer::real::RealHttp;
+    type U = clazel_fetch::transducer::real::RealUrls;
+
+    open spec fn fetch(&self) -> crate::spec::FetchFns {
+        crate::urls::real_fetch()
+    }
+
+    open spec fn nav_ok(s: &clazel_fetch::transducer::types::StateBuf) -> bool {
+        clazel_fetch::transducer::contract::state_ok(&clazel_fetch::transducer::real::RealHttp, s)
+    }
+
+    proof fn nav_ok_idle(s: &clazel_fetch::transducer::types::StateBuf) {
+    }
+
+    fn http_fns(&self) -> (r: &clazel_fetch::transducer::real::RealHttp) {
+        &self.http
+    }
+
+    fn url_fns(&self) -> (r: &clazel_fetch::transducer::real::RealUrls) {
+        &self.urls
+    }
+
+    fn parse(&self, url: &[u32]) -> (r: Option<clazel_url::url::record::ParsedUrl>) {
+        if !all_scalar_values_exec(url) {
+            return None;
+        }
+        basic_url_parser(url, None)
+    }
+}
+
 /// The kernel's `step` with the real URL functions ([`RealUrls`]) and the
-/// stand-in fetch ([`super::fetch::StubFetch`], until item 3.6's transducer is
-/// joined): the function the host shell calls. It meets [`crate::contract::step_ensures`]
-/// for [`crate::urls::real_urls`] under [`crate::contract::step_requires`],
+/// real transducer ([`RealFetch`]): the function the host shell calls. It
+/// meets [`crate::contract::step_ensures`] for [`crate::urls::real_urls`] and
+/// [`crate::urls::real_fetch`] under [`crate::contract::step_requires`],
 /// whose URL condition `urls_resolve_scalar` is
 /// [`crate::urls::lemma_real_urls_resolve_scalar`]'s.
 pub fn step_real(s: StateRecord, e: &EventRecord) -> (out: (StateRecord, Vec<super::records::OutputRecord>))
     requires
-        crate::contract::step_requires(crate::urls::real_urls(), s@, e@),
-        s.exec_wf(),
+        crate::contract::step_requires(crate::urls::real_urls(), crate::urls::real_fetch(), s@, e@),
+        s.exec_wf::<RealFetch>(),
     ensures
-        crate::contract::step_ensures(crate::urls::real_urls(), crate::fetch::stub_fetch(), s@, e@, super::step::result_view(out)),
-        out.0.exec_wf(),
+        crate::contract::step_ensures(crate::urls::real_urls(), crate::urls::real_fetch(), s@, e@, super::step::result_view(out)),
+        out.0.exec_wf::<RealFetch>(),
         clazel_cookie::storage::contract::jar_in_range(out.0@.jar),
         clazel_cookie::set_cookie::contract::now_in_range(out.0@.now),
         out.0@.next_id <= s@.next_id + 1,
+        out.0@.next_conn <= s@.next_conn + 21,
 {
-    step_exec(&RealUrls, &super::fetch::StubFetch, s, e)
+    let fetch = RealFetch { http: clazel_fetch::transducer::real::RealHttp, urls: clazel_fetch::transducer::real::RealUrls };
+    step_exec(&RealUrls, &fetch, s, e)
 }
 
 } // verus!

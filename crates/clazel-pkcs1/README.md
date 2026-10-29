@@ -56,8 +56,8 @@ cases.
 
 ## Verification
 
-Currently tier 0, target tier 2. Promotion requires CI's full verification
-on a pull request; the current numbers are in the
+Tier 2 (raised on CI's full verification of its pull request; see the
+[phase 3 plan](../../docs/phases/phase-3.md)). The current numbers are in the
 [status table](../../README.md#verification-status).
 
 - **Proven (Verus):** `verify`, `encode_message` and every arithmetic

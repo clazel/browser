@@ -12,6 +12,7 @@
 //! (a full 40-hex commit) and `License:` lines.
 
 mod cbor_appendix_a;
+mod html5lib_tokenizer;
 mod html5lib_tree;
 mod http_state_dates;
 mod http_state_parser;
@@ -60,6 +61,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         "http-state-parser",
         http_state_parser::convert,
         http_state_parser::FILES,
+    ),
+    (
+        "html5lib-tokenizer",
+        html5lib_tokenizer::convert,
+        html5lib_tokenizer::FILES,
     ),
     ("llhttp", llhttp::convert, llhttp::FILES),
     ("wpt-base64", wpt_base64::convert, wpt_base64::FILES),

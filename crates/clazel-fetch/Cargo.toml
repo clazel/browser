@@ -31,11 +31,11 @@ time = { version = "=0.3.17", default-features = false }
 url = { version = "=2.5.8", default-features = false }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
-# the shipped code today; `target-tier` is what the policy requires. Tier 0
-# until 3.6 is complete (redirects, cookies, theorem_wire_cookies, the
-# independent transcription, mutations and conformance).
+# the shipped code today; `target-tier` is what the policy requires. Tier 2:
+# every proof passes, every mutation is a certified kill, and the conformance
+# tests and the independent transcription pass (CLAUDE.md rule 7).
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 # The transducer's theorems (src/transducer/theorems.rs). `cargo xtask
 # check` fails if one is not defined as a `proof fn` in this crate.

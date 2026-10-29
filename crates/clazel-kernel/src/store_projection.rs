@@ -568,14 +568,16 @@ pub proof fn lemma_store_one_agree(
     }
 }
 
-/// The `Set-Cookie` lines of a fetch, in order, keep two jars that agree on
-/// a root's unexpired cookies agreeing.
-pub proof fn lemma_apply_stores_agree(
+/// The jar operations of a transducer step, in order ([`apply_net_ops`]), all
+/// at time `t`, keep two jars that agree on a root's unexpired cookies
+/// agreeing: a retrieval or a storage for a request of another root leaves the
+/// root alone, and for the root changes the same cookies the same way in both.
+pub proof fn lemma_apply_net_ops_agree(
     rules: Seq<clazel_psl::spec::Rule>,
     ja: Seq<clazel_cookie::storage::spec::Cookie>,
     jb: Seq<clazel_cookie::storage::spec::Cookie>,
-    stores: Seq<HttpStore>,
-    now: int,
+    ops: Seq<clazel_fetch::transducer::spec::JarOp>,
+    t: int,
     root: clazel_cookie::matching::spec::CanonicalHost,
 )
     requires
@@ -583,16 +585,41 @@ pub proof fn lemma_apply_stores_agree(
         crate::invariant::jar_wf(rules, jb),
         crate::invariant::jar_no_public_suffix(rules, ja),
         crate::invariant::jar_no_public_suffix(rules, jb),
-        crate::projection::live_root(rules, ja, now, root) == crate::projection::live_root(rules, jb, now, root),
+        clazel_fetch::transducer::contract::ops_at(ops, t),
+        crate::projection::live_root(rules, ja, t, root) == crate::projection::live_root(rules, jb, t, root),
     ensures
-        crate::projection::live_root(rules, apply_stores(rules, ja, stores, now), now, root) == crate::projection::live_root(rules, apply_stores(rules, jb, stores, now), now, root),
-    decreases stores.len(),
+        crate::projection::live_root(rules, apply_net_ops(rules, ja, ops), t, root) == crate::projection::live_root(rules, apply_net_ops(rules, jb, ops), t, root),
+    decreases ops.len(),
 {
-    if stores.len() > 0 {
-        lemma_store_one_agree(rules, ja, jb, stores[0], now, root);
-        crate::invariant::lemma_store_one_wf(rules, ja, stores[0], now);
-        crate::invariant::lemma_store_one_wf(rules, jb, stores[0], now);
-        lemma_apply_stores_agree(rules, store_one(rules, ja, stores[0], now), store_one(rules, jb, stores[0], now), stores.drop_first(), now, root);
+    if ops.len() > 0 {
+        let rest = ops.drop_first();
+        assert(clazel_fetch::transducer::contract::op_now(ops[0]) == t);
+        assert(clazel_fetch::transducer::contract::ops_at(rest, t)) by {
+            assert forall|k: int| 0 <= k < rest.len() implies clazel_fetch::transducer::contract::op_now(#[trigger] rest[k]) == t by {
+                assert(rest[k] == ops[k + 1]);
+            }
+        }
+        let ja1 = apply_net_op(rules, ja, ops[0]);
+        let jb1 = apply_net_op(rules, jb, ops[0]);
+        crate::net_wf::lemma_apply_net_op_wf(rules, ja, ops[0]);
+        crate::net_wf::lemma_apply_net_op_wf(rules, jb, ops[0]);
+        match ops[0] {
+            clazel_fetch::transducer::spec::JarOp::Retrieved { url, ctx, now } => {
+                match url.host {
+                    Some(h) => {
+                        crate::retrieval_projection::lemma_retrieval_jar_agree(rules, ja, jb, url, ctx, now, h, root);
+                    },
+                    None => {
+                        crate::projection::lemma_live_root_evict(rules, ja, now, root);
+                        crate::projection::lemma_live_root_evict(rules, jb, now, root);
+                    },
+                }
+            },
+            clazel_fetch::transducer::spec::JarOp::Stored { line, url, ctx, now } => {
+                lemma_store_one_agree(rules, ja, jb, HttpStore { line, url, ctx }, now, root);
+            },
+        }
+        lemma_apply_net_ops_agree(rules, ja1, jb1, rest, t, root);
     }
 }
 

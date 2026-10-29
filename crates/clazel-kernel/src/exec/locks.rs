@@ -122,6 +122,21 @@ pub fn lock_host_exec(lock: &ParsedOrigin) -> (r: Option<CanonicalHostName>)
     }
 }
 
+/// [`crate::domain::domain_of_lock`], over the generated Public Suffix List:
+/// the partition key of a navigation started by a renderer locked to `lock`.
+pub fn domain_of_lock_exec(lock: &ParsedOrigin) -> (r: DomainRecord)
+    ensures
+        r@ == crate::domain::domain_of_lock(clazel_psl::table::psl_rules(), lock@),
+{
+    match lock {
+        ParsedOrigin::Opaque(id) => DomainRecord::Opaque(*id),
+        ParsedOrigin::Tuple { .. } => match lock_host_exec(lock) {
+            Some(h) => DomainRecord::Root(clazel_cookie::storage::exec::cookie_root_exec(&h)),
+            None => DomainRecord::Root(CanonicalHostName { name: Vec::new(), is_ip_address: false }),
+        },
+    }
+}
+
 /// [`valid_tuple_origin`].
 pub fn valid_tuple_origin_exec(o: &ParsedOrigin) -> (r: bool)
     ensures
