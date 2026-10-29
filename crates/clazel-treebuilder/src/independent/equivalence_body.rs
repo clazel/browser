@@ -1711,4 +1711,954 @@ pub proof fn lemma_adoption(p: Parser, tt: TagTok)
     lemma_aa_outer(p, tt, 0);
 }
 
+// ---------------------------------------------------------------------
+// §8.2.5.4.7 "in body"
+
+/// "Pop elements … until an HTML element whose name is `tag` has been
+/// popped" changes only the stack.
+proof fn lemma_pop_until_frame(p: Parser, tag: Tag)
+    ensures
+        pop_until_popped(p, tag) == (Parser { open: pop_until_popped(p, tag).open, ..p }),
+    decreases p.open.len(),
+{
+    if p.open.len() > 0 && !is_html(current_node(p), tag) {
+        lemma_pop_until_frame(pop(p), tag);
+    }
+}
+
+/// A parser that stopped has an empty stack ([`stop_parsing`] empties it):
+/// so the WHATWG transcription's "no pop if the insertion stopped parsing"
+/// and the W3C's pop agree.
+pub open spec fn stopped_empty(p: Parser) -> bool {
+    p.stopped ==> p.open.len() == 0
+}
+
+/// Inserting an element keeps [`stopped_empty`].
+proof fn lemma_insert_stopped_empty(p: Parser, tt: TagTok, ns: Namespace)
+    requires
+        stopped_empty(p),
+    ensures
+        stopped_empty(insert_foreign_element(p, tt, ns).0),
+        ns == Namespace::Html ==> stopped_empty(insert_html_element(p, tt).0),
+{
+}
+
+/// Steps 7 to 10 of "reconstruct the active formatting elements" keep
+/// [`stopped_empty`].
+proof fn lemma_reconstruct_create_stopped_empty(p: Parser, i: int)
+    requires
+        stopped_empty(p),
+    ensures
+        stopped_empty(reconstruct_create(p, i)),
+    decreases p.formatting.len() - i,
+{
+    if !(i < 0 || i >= p.formatting.len() || p.stopped || !(p.formatting[i] is Entry)) {
+        let token = p.formatting[i]->Entry_token;
+        lemma_insert_stopped_empty(p, token, Namespace::Html);
+        let (p1, new_element) = insert_html_element(p, token);
+        let p2 = if p1.stopped {
+            p1
+        } else {
+            Parser { formatting: p1.formatting.update(i, Fmt::Entry { elem: new_element, token }), ..p1 }
+        };
+        if i + 1 < p2.formatting.len() && p2.formatting.len() == p.formatting.len() {
+            lemma_reconstruct_create_stopped_empty(p2, i + 1);
+        }
+    }
+}
+
+/// "Reconstruct the active formatting elements" keeps [`stopped_empty`].
+proof fn lemma_reconstruct_stopped_empty(p: Parser)
+    requires
+        stopped_empty(p),
+    ensures
+        stopped_empty(reconstruct_formatting(p)),
+{
+    let n = p.formatting.len();
+    if n > 0 {
+        lemma_reconstruct_create_stopped_empty(p, reconstruct_rewind(p, n - 1));
+    }
+}
+
+/// Inserting an element for two tokens that differ only in their
+/// self-closing flag gives the same parser.
+proof fn lemma_insert_same_token(p: Parser, a: TagTok, b: TagTok)
+    requires
+        a.name == b.name,
+        a.tag == b.tag,
+        a.attrs == b.attrs,
+    ensures
+        insert_html_element(p, a).0 == insert_html_element(p, b).0,
+{
+    assert(a == TagTok { self_closing: a.self_closing, ..b });
+}
+
+/// Where the W3C "in body" text differs from the WHATWG one (each
+/// excluded):
+/// - The WHATWG adds `hgroup`, `menu` and `search` to the block start
+///   tags (closing a `p` element) and end tags, and `select` to the block
+///   end tags; for the W3C they are "any other" start or end tags.
+/// - The WHATWG's `area`, … entry also lists `keygen`; for the W3C it is
+///   "any other start tag".
+/// - `select`: the W3C switches to "in select" or "in select in table"
+///   (not WHATWG modes); the WHATWG parses its content "in body". The
+///   WHATWG's `input`, `hr`, `option` and `optgroup` entries have steps
+///   for a `select` element in scope (or a `select` fragment context) the
+///   W3C does not: excluded when there is one.
+/// - `form` start and end tags: the WHATWG tests "parsing template
+///   contents", which is also true when the fragment context is a
+///   `template`; the W3C tests for a `template` element on the stack:
+///   excluded for a `template` context.
+pub open spec fn in_body_texts_agree(p: Parser, t: Tok) -> bool {
+    let g = w3c_tag(t);
+    let select_context = p.context is Some && is_html(p.context->Some_0, Tag::Select);
+    &&& !(t is Pi)
+    &&& !(t is Start && (g == Tag::Hgroup || g == Tag::Menu || g == Tag::Search || g == Tag::Keygen || g == Tag::Select))
+    &&& !(t is End && (g == Tag::Hgroup || g == Tag::Menu || g == Tag::Search || g == Tag::Select))
+    &&& (t is Start && g == Tag::Input) ==> !select_context && !has_in_scope(p, Tag::Select, Scope::Default)
+    &&& (t is Start && g == Tag::Hr) ==> !has_in_scope(w3c_close_p_in_button_scope(p), Tag::Select, Scope::Default)
+    &&& (t is Start && (g == Tag::Option || g == Tag::Optgroup)) ==> !has_in_scope(p, Tag::Select, Scope::Default)
+    &&& ((t is Start || t is End) && g == Tag::Form) ==> !(p.context is Some && is_html(p.context->Some_0, Tag::Template))
+}
+
+/// Where the token runs the adoption agency algorithm, its insertions are
+/// ones both texts make ([`w3c_aa_agrees`]) on the parser it runs on,
+/// which has the facts [`aa_wf`] (the `nobr` start tag runs it after
+/// reconstructing the active formatting elements).
+pub open spec fn in_body_aa_agrees(p: Parser, t: Tok) -> bool {
+    let g = w3c_tag(t);
+    &&& (t is End && w3c_formatting_end_tag(g)) ==> w3c_aa_agrees(p, t->End_0, 0)
+    &&& (t is Start && g == Tag::A && w3c_aa_find(p.formatting, p.formatting.len() as int, Tag::A) >= 0) ==> w3c_aa_agrees(
+        p,
+        t->Start_0,
+        0,
+    )
+    &&& (t is Start && g == Tag::Nobr && has_in_scope(reconstruct_formatting(p), Tag::Nobr, Scope::Default)) ==> {
+        let q = reconstruct_formatting(p);
+        aa_wf(q) && q.open.len() > 0 && w3c_aa_agrees(q, t->Start_0, 0)
+    }
+}
+
+/// The facts of reachable states the "in body" lemma uses: a stack (with
+/// the `html` element), node 0 is the Document, [`aa_wf`], a tagged token;
+/// and the `html` element (for an `html` start tag) and the `body`
+/// element (for a `body` start tag) are elements whose attributes, like
+/// the token's, have no namespace or prefix (they are HTML elements the
+/// parser created for tokens).
+pub open spec fn in_body_facts(p: Parser, t: Tok) -> bool {
+    &&& p.open.len() > 0
+    &&& p.doc.nodes.len() > 0
+    &&& p.doc.nodes[0].kind is Document
+    &&& aa_wf(p)
+    &&& super::equivalence::token_tagged(t)
+    &&& w3c_start(t, Tag::Html) ==> element_plain(p.doc, p.open[0].id) && attrs_plain(t->Start_0.attrs)
+    &&& (w3c_start(t, Tag::Body) && p.open.len() >= 2 && is_html(p.open[1], Tag::Body)) ==> element_plain(p.doc, p.open[1].id)
+        && attrs_plain(t->Start_0.attrs)
+}
+
+/// "In body"'s start tags.
+proof fn lemma_in_body_start(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    let g = tt.tag;
+    if g == Tag::Html || g == Tag::Body || g == Tag::Frameset {
+        lemma_in_body_start_1(env, p, tt);
+    } else if g == Tag::Form || g == Tag::Li || g == Tag::Dd || g == Tag::Dt {
+        lemma_in_body_start_2(env, p, tt);
+    } else if g == Tag::A || g == Tag::Nobr {
+        lemma_in_body_start_3(env, p, tt);
+    } else if g == Tag::Area || g == Tag::Br || g == Tag::Embed || g == Tag::Img || g == Tag::Wbr || g == Tag::Input || g
+        == Tag::Math || g == Tag::Svg || g == Tag::Param || g == Tag::Source || g == Tag::Track || g == Tag::Hr {
+        lemma_in_body_start_4(env, p, tt);
+    } else {
+        lemma_in_body_start_5(env, p, tt);
+    }
+}
+
+/// "In body"'s start tags: `html`, `body`, `frameset`.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_1(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Html || tt.tag == Tag::Body || tt.tag == Tag::Frameset,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    if g == Tag::Html {
+        if !open_has_html(p, Tag::Template) {
+            lemma_add_missing(p, p.open[0].id, tt.attrs, 0);
+        }
+    } else if g == Tag::Body {
+        if !(p.open.len() < 2 || !is_html(p.open[1], Tag::Body) || open_has_html(p, Tag::Template)) {
+            lemma_add_missing(w3c_frameset_not_ok(p), p.open[1].id, tt.attrs, 0);
+        }
+    } else {
+        if p.open.len() >= 2 {
+            reveal(dom_remove);
+            lemma_pop_to_root(dom_remove(p, p.open[1].id));
+        }
+    }
+}
+
+/// "In body"'s start tags: `form`, `li`, `dd`, `dt`.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_2(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Form || tt.tag == Tag::Li || tt.tag == Tag::Dd || tt.tag == Tag::Dt,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    if g == Tag::Form {
+        if has_in_scope(p, Tag::P, Scope::Button) {
+            reveal(generate_implied_end_tags);
+            lemma_implied_tagged(p, Some(Tag::P));
+            lemma_pop_until_frame(generate_implied_end_tags(p, Some(Tag::P)), Tag::P);
+        }
+    } else if g == Tag::Li {
+        lemma_li_loop(w3c_frameset_not_ok(p), p.open.len() - 1);
+    } else {
+        lemma_dd_dt_loop(w3c_frameset_not_ok(p), p.open.len() - 1);
+    }
+}
+
+/// "In body"'s start tags: `a`, `nobr`.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_3(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::A || tt.tag == Tag::Nobr,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    if g == Tag::A {
+        reveal(in_body_start_a);
+        lemma_in_body_start_a(p, tt);
+    } else {
+        let q = reconstruct_formatting(p);
+        if has_in_scope(q, Tag::Nobr, Scope::Default) {
+            lemma_adoption(q, tt);
+        }
+    }
+}
+
+/// "In body"'s start tags: the void elements, `input`, `math`, `svg`, `hr`.
+proof fn lemma_in_body_start_4(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Area || tt.tag == Tag::Br || tt.tag == Tag::Embed || tt.tag == Tag::Img || tt.tag == Tag::Wbr || tt.tag == Tag::Input || tt.tag == Tag::Math || tt.tag == Tag::Svg || tt.tag == Tag::Param || tt.tag == Tag::Source || tt.tag == Tag::Track || tt.tag == Tag::Hr,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    let g = tt.tag;
+    if g == Tag::Hr {
+        lemma_in_body_start_4a(env, p, tt);
+    } else if g == Tag::Math || g == Tag::Svg {
+        lemma_in_body_start_4b(env, p, tt);
+    } else if g == Tag::Param || g == Tag::Source || g == Tag::Track {
+        lemma_in_body_start_4c(env, p, tt);
+    } else {
+        lemma_in_body_start_4d(env, p, tt);
+    }
+}
+
+/// "In body"'s start tags: `hr`.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4a(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Hr,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    let q2 = w3c_close_p_in_button_scope(p);
+    if has_in_scope(p, Tag::P, Scope::Button) {
+        reveal(generate_implied_end_tags);
+        lemma_implied_tagged(p, Some(Tag::P));
+        lemma_pop_until_frame(generate_implied_end_tags(p, Some(Tag::P)), Tag::P);
+    }
+    lemma_insert_stopped_empty(q2, tt, Namespace::Html);
+}
+
+/// "In body"'s start tags: `math`, `svg`.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4b(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Math || tt.tag == Tag::Svg,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    if g == Tag::Math {
+        lemma_insert_stopped_empty(q, adjust_foreign_attributes(adjust_mathml_attributes(tt)), Namespace::MathMl);
+    } else {
+        lemma_insert_stopped_empty(q, adjust_foreign_attributes(adjust_svg_attributes(tt)), Namespace::Svg);
+    }
+}
+
+/// "In body"'s start tags: `param`, `source`, `track`.
+proof fn lemma_in_body_start_4c(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Param || tt.tag == Tag::Source || tt.tag == Tag::Track,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    let g = tt.tag;
+    if g == Tag::Param {
+        lemma_in_body_start_4c_param(env, p, tt);
+    } else if g == Tag::Source {
+        lemma_in_body_start_4c_source(env, p, tt);
+    } else {
+        lemma_in_body_start_4c_track(env, p, tt);
+    }
+}
+
+/// "In body"'s `param` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4c_param(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Param,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_insert_stopped_empty(p, tt, Namespace::Html);
+}
+
+/// "In body"'s `source` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4c_source(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Source,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_insert_stopped_empty(p, tt, Namespace::Html);
+}
+
+/// "In body"'s `track` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4c_track(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Track,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_insert_stopped_empty(p, tt, Namespace::Html);
+}
+
+
+/// "In body"'s start tags: `area`, `br`, `embed`, `img`, `wbr`, `input`.
+proof fn lemma_in_body_start_4d(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Area || tt.tag == Tag::Br || tt.tag == Tag::Embed || tt.tag == Tag::Img || tt.tag == Tag::Wbr || tt.tag == Tag::Input,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    let g = tt.tag;
+    if g == Tag::Area {
+        lemma_in_body_start_4d_area(env, p, tt);
+    } else if g == Tag::Br {
+        lemma_in_body_start_4d_br(env, p, tt);
+    } else if g == Tag::Embed {
+        lemma_in_body_start_4d_embed(env, p, tt);
+    } else if g == Tag::Img {
+        lemma_in_body_start_4d_img(env, p, tt);
+    } else if g == Tag::Wbr {
+        lemma_in_body_start_4d_wbr(env, p, tt);
+    } else {
+        lemma_in_body_start_4d_input(env, p, tt);
+    }
+}
+
+/// "In body"'s `area` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4d_area(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Area,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    lemma_insert_stopped_empty(q, tt, Namespace::Html);
+}
+
+/// "In body"'s `br` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4d_br(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Br,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    lemma_insert_stopped_empty(q, tt, Namespace::Html);
+}
+
+/// "In body"'s `embed` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4d_embed(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Embed,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    lemma_insert_stopped_empty(q, tt, Namespace::Html);
+}
+
+/// "In body"'s `img` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4d_img(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Img,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    lemma_insert_stopped_empty(q, tt, Namespace::Html);
+}
+
+/// "In body"'s `wbr` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4d_wbr(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Wbr,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    lemma_insert_stopped_empty(q, tt, Namespace::Html);
+}
+
+/// "In body"'s `input` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_4d_input(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Input,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    lemma_insert_stopped_empty(q, tt, Namespace::Html);
+}
+
+
+/// "In body"'s start tags: the others.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_5(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        !(tt.tag == Tag::Html || tt.tag == Tag::Body || tt.tag == Tag::Frameset || tt.tag == Tag::Form || tt.tag == Tag::Li || tt.tag == Tag::Dd || tt.tag == Tag::Dt || tt.tag == Tag::A || tt.tag == Tag::Nobr || tt.tag == Tag::Area || tt.tag == Tag::Br || tt.tag == Tag::Embed || tt.tag == Tag::Img || tt.tag == Tag::Wbr || tt.tag == Tag::Input || tt.tag == Tag::Math || tt.tag == Tag::Svg || tt.tag == Tag::Param || tt.tag == Tag::Source || tt.tag == Tag::Track || tt.tag == Tag::Hr),
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    let g = tt.tag;
+    if g == Tag::Image {
+        assert(tag_of(w3c_name_img()) == Tag::Img) by (compute_only);
+    }
+}
+
+/// "In body"'s `a` start tag.
+proof fn lemma_in_body_start_a(p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        tt.tag == Tag::A,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+    ensures
+        ({
+            let k = w3c_aa_find(p.formatting, p.formatting.len() as int, Tag::A);
+            let p1 = if k >= 0 {
+                let a = p.formatting[k]->Entry_elem;
+                let q = w3c_adoption_agency(p, tt);
+                if q.stopped {
+                    q
+                } else {
+                    let kq = w3c_fmt_index(q, a.id);
+                    let q1 = if kq >= 0 {
+                        w3c_fmt_remove(q, kq)
+                    } else {
+                        q
+                    };
+                    let iq = open_index_of(q1, a.id);
+                    if iq >= 0 {
+                        remove_open_at(q1, iq)
+                    } else {
+                        q1
+                    }
+                }
+            } else {
+                p
+            };
+            w3c_insert_formatting(reconstruct_formatting(p1), tt) == in_body_start_a(p, tt)
+        }),
+{
+    let f = p.formatting;
+    let n = f.len() as int;
+    lemma_after_last_marker(f, n);
+    assert forall|j: int| after_last_marker(f, n) <= j < f.len() && #[trigger] f[j] is Entry implies is_html(
+        f[j]->Entry_elem,
+        Tag::A,
+    ) == (f[j]->Entry_elem.tag == Tag::A) by {
+        assert(fmt_entry_ok(f[j], p.doc.nodes.len()));
+    }
+    lemma_aa_find_eq_all(f, Tag::A);
+    assert(fmt_last_where(f, after_last_marker(f, n), n, |e: Elem| is_html(e, Tag::A)) == w3c_aa_find(f, n, Tag::A));
+    if w3c_aa_find(f, n, Tag::A) >= 0 {
+        lemma_adoption(p, tt);
+    }
+}
+
+/// "In body"'s end tags.
+proof fn lemma_in_body_end(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::End(tt)),
+        in_body_texts_agree(p, Tok::End(tt)),
+        in_body_aa_agrees(p, Tok::End(tt)),
+    ensures
+        w3c_in_body_end(env, p, tt) == in_body_end_tag(p, Tok::End(tt), tt),
+{
+    hide(insert_html_element);
+    hide(reconstruct_formatting);
+    hide(pop_until_popped);
+    hide(pop_until_named_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_any_other_end_tag);
+    hide(in_body_any_other_end_tag);
+    hide(clear_to_last_marker);
+    hide(w3c_in_body_start);
+    let g = tt.tag;
+    assert(tag_of(name_sarcasm()) == Tag::Other) by (compute_only);
+    assert(all_tagged(p.open));
+    if w3c_block_end_tag(g) || g == Tag::Applet || g == Tag::Marquee || g == Tag::Object {
+        lemma_same_name_in_scope(p, tt);
+        lemma_implied_tagged(p, None);
+        lemma_pop_until_named(generate_implied_end_tags(p, None), tt);
+    } else if g == Tag::Dd || g == Tag::Dt {
+        lemma_same_name_in_scope(p, tt);
+        lemma_implied_tagged(p, Some(g));
+        lemma_pop_until_named(generate_implied_end_tags(p, Some(g)), tt);
+    } else if w3c_formatting_end_tag(g) {
+        lemma_adoption(p, tt);
+    } else if g == Tag::Br {
+        lemma_named_tag_names(tt.name, w3c_name_br());
+        assert(tag_of(w3c_name_br()) == Tag::Br) by (compute_only);
+        lemma_in_body_br_end(env, p, tt);
+    }
+    lemma_any_other_end_tag(p, tt);
+}
+
+/// "In body"'s `br` end tag: as a `br` start tag with no attributes.
+proof fn lemma_in_body_br_end(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        tt.tag == Tag::Br,
+        tt.name == w3c_name_br(),
+        tag_of(w3c_name_br()) == Tag::Br,
+        aa_wf(p),
+    ensures
+        w3c_in_body_start(env, p, start_tag_named(w3c_name_br())) == Outcome::Done(
+            in_body_void_start_tag(p, TagTok { attrs: seq![], ..tt }),
+        ),
+{
+    hide(reconstruct_formatting);
+    hide(insert_foreign_element);
+    lemma_reconstruct_stopped_empty(p);
+    let q = reconstruct_formatting(p);
+    lemma_insert_stopped_empty(q, start_tag_named(w3c_name_br()), Namespace::Html);
+    lemma_insert_same_token(q, start_tag_named(w3c_name_br()), TagTok { attrs: seq![], ..tt });
+}
+
+/// "in body" (W3C §8.2.5.4.7, WHATWG §13.2.6.4.7): the same rules but where
+/// the texts differ ([`in_body_texts_agree`]) and where the adoption
+/// agency algorithm's insertions differ ([`in_body_aa_agrees`]), given the
+/// facts of reachable states [`in_body_facts`]. ("An HTML element with the
+/// same tag name as the token" is read as the same [`Tag`] for the entries
+/// listing their tags, as in [`super::equivalence::lemma_in_table_body`].)
+pub proof fn lemma_in_body(env: EncFns, p: Parser, t: Tok)
+    requires
+        !p.stopped,
+        in_body_facts(p, t),
+        in_body_texts_agree(p, t),
+        in_body_aa_agrees(p, t),
+    ensures
+        w3c_mode_in_body(env, p, t) == mode_in_body(env, p, t),
+{
+    hide(w3c_in_body_start);
+    hide(in_body_start_tag);
+    hide(w3c_in_body_end);
+    hide(in_body_end_tag);
+    match t {
+        Tok::Start(tt) => lemma_in_body_start(env, p, tt),
+        Tok::End(tt) => lemma_in_body_end(env, p, tt),
+        _ => {},
+    }
+}
+
 } // verus!
