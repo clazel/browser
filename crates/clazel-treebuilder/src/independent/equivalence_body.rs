@@ -10,6 +10,8 @@
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
+#[cfg(verus_only)]
+use super::equivalence::{lemma_in_head, place_stable};
 
 verus! {
 
@@ -2659,6 +2661,227 @@ pub proof fn lemma_in_body(env: EncFns, p: Parser, t: Tok)
         Tok::End(tt) => lemma_in_body_end(env, p, tt),
         _ => {},
     }
+}
+
+// ---------------------------------------------------------------------
+// §8.2.5.4.9 "in table", §8.2.5.4.10 "in table text"
+
+/// "In body" for a character token: the same rules (no precondition).
+pub proof fn lemma_in_body_char(env: EncFns, p: Parser, c: u32)
+    ensures
+        w3c_mode_in_body(env, p, Tok::Char(c)) == mode_in_body(env, p, Tok::Char(c)),
+{
+}
+
+/// The stack after inserting an element for a token other than `template`
+/// has a `template` element only if it had one.
+proof fn lemma_insert_no_template(p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        tt.tag != Tag::Template,
+        !open_has_html(p, Tag::Template),
+    ensures
+        !open_has_html(insert_html_element(p, tt).0, Tag::Template),
+        insert_html_element(p, tt).0.context == p.context,
+{
+    let q = insert_html_element(p, tt).0;
+    let f = |e: Elem| is_html(e, Tag::Template);
+    if !q.stopped {
+        let (p1, e) = create_element_for_token(p, tt, Namespace::Html, appropriate_place(p, None).parent);
+        assert(q.open == p.open.push(e));
+        lemma_liw(q.open, q.open.len() as int, f);
+        lemma_liw(p.open, p.open.len() as int, f);
+        let r = last_index_where(q.open, q.open.len() as int, f);
+        if r >= 0 {
+            assert(r != p.open.len());
+            assert(q.open[r] == p.open[r]);
+            assert(f(p.open[r]));
+        }
+    } else {
+        assert(q.open.len() == 0);
+    }
+}
+
+/// The "in body" lemma's precondition for a parser with foster parenting
+/// enabled: what "in table"'s "anything else" entry needs.
+pub open spec fn in_table_body_ok(p: Parser, t: Tok) -> bool {
+    let pf = Parser { foster: true, ..p };
+    &&& in_body_facts(pf, t)
+    &&& in_body_texts_agree(pf, t)
+    &&& in_body_aa_agrees(pf, t)
+}
+
+/// "In table"'s "anything else" entry (and "in table text"'s use of it).
+proof fn lemma_in_table_anything_else(env: EncFns, p: Parser, t: Tok)
+    requires
+        !p.stopped,
+        !(t is Pi),
+        in_table_body_ok(p, t),
+        place_stable(p),
+    ensures
+        w3c_in_table_anything_else(env, p, t) == in_table_anything_else(env, p, t),
+{
+    let pf = Parser { foster: true, ..p };
+    lemma_in_body(env, pf, t);
+    match mode_in_body(env, pf, t) {
+        Outcome::Using(m, q, t2) => {
+            if m == Mode::InHead && !q.stopped && !(t2 is Pi) && place_stable(q) {
+                lemma_in_head(env, q, t2);
+            }
+        },
+        _ => {},
+    }
+    lemma_in_table_anything_else_using(env, p, t);
+}
+
+/// "In body" hands the "in head" rules the token unchanged, on the parser
+/// it was given (its `base`, …, `title` entry).
+proof fn lemma_in_table_anything_else_using(env: EncFns, p: Parser, t: Tok)
+    requires
+        !p.stopped,
+        !(t is Pi),
+        place_stable(p),
+    ensures
+        match mode_in_body(env, Parser { foster: true, ..p }, t) {
+            Outcome::Using(m, q, t2) => m == Mode::InHead ==> q == (Parser { foster: true, ..p }) && t2 == t && !(t2 is Pi)
+                && place_stable(q),
+            _ => true,
+        },
+{
+    hide(in_body_end_tag);
+    hide(in_body_char);
+    hide(in_body_eof);
+    hide(in_body_start_html);
+    hide(in_body_start_body);
+    hide(in_body_start_frameset);
+    hide(in_body_start_heading);
+    hide(in_body_start_pre);
+    hide(in_body_start_form);
+    hide(in_body_start_li);
+    hide(in_body_start_dd_dt);
+    hide(in_body_start_button);
+    hide(in_body_start_a);
+    hide(in_body_start_nobr);
+    hide(in_body_void_start_tag);
+    hide(in_body_start_input);
+    hide(in_body_start_hr);
+    hide(in_body_start_textarea);
+    hide(in_body_start_select);
+    hide(in_body_start_option);
+    hide(in_body_start_optgroup);
+    hide(in_body_start_math);
+    hide(in_body_start_svg);
+    hide(insert_html_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    if t is End {
+        reveal(in_body_end_tag);
+    } else if t is Eof {
+        reveal(in_body_eof);
+    }
+}
+
+/// The current node is not a `template` element (the WHATWG "in table"
+/// also sends characters to "in table text" when it is; the W3C does not).
+pub open spec fn in_table_texts_agree(p: Parser, t: Tok) -> bool {
+    &&& !(t is Pi)
+    &&& t is Char ==> !is_html(current_node(p), Tag::Template)
+    &&& w3c_start(t, Tag::Form) ==> !parsing_template_contents(p)
+}
+
+/// "in table" (W3C §8.2.5.4.9, WHATWG §13.2.6.4.9): the same rules, but
+/// for two differences ([`in_table_texts_agree`]):
+/// - The WHATWG sends a character token to "in table text" also when the
+///   current node is a `template` element; the W3C applies "anything
+///   else". Excluded.
+/// - For a `form` start tag, the WHATWG ignores the token when the form
+///   element pointer is set and the parser is not parsing template
+///   contents, and otherwise inserts the form; the W3C ignores it when
+///   there is a `template` element on the stack or the pointer is set.
+///   They agree when the parser is not parsing template contents:
+///   excluded otherwise.
+/// "Anything else" runs the "in body" rules with foster parenting enabled,
+/// so their lemma's precondition is required for that parser
+/// ([`in_table_body_ok`]), with [`place_stable`] for the "in head" rules
+/// they hand some tokens to.
+pub proof fn lemma_in_table(env: EncFns, p: Parser, t: Tok)
+    requires
+        !p.stopped,
+        in_table_texts_agree(p, t),
+        place_stable(p),
+        in_table_body_ok(p, t),
+    ensures
+        w3c_mode_in_table(env, p, t) == mode_in_table(env, p, t),
+{
+    hide(w3c_in_table_anything_else);
+    hide(in_table_anything_else);
+    hide(insert_html_element);
+    hide(pop_until_popped);
+    hide(reset_insertion_mode);
+    hide(pop_while);
+    lemma_in_table_anything_else(env, p, t);
+    super::equivalence::lemma_closure_ext();
+    if w3c_start(t, Tag::Input) {
+        lemma_insert_stopped_empty(p, t->Start_0, Namespace::Html);
+    }
+    if w3c_start(t, Tag::Form) && p.form is None {
+        lemma_insert_no_template(p, t->Start_0);
+    }
+}
+
+/// The WHATWG transcription's test for a non-whitespace character and
+/// the W3C's (not all space characters) agree.
+proof fn lemma_all_space(s: Seq<u32>, i: int)
+    requires
+        0 <= i <= s.len(),
+    ensures
+        w3c_all_space(s, i) == !(exists|j: int| i <= j < s.len() && !is_ascii_whitespace(#[trigger] s[j])),
+    decreases s.len() - i,
+{
+    if i < s.len() {
+        lemma_all_space(s, i + 1);
+        if exists|j: int| i <= j < s.len() && !is_ascii_whitespace(#[trigger] s[j]) {
+            let j = choose|j: int| i <= j < s.len() && !is_ascii_whitespace(#[trigger] s[j]);
+            if j > i {
+                assert(i + 1 <= j);
+            }
+        }
+    }
+}
+
+/// "Reprocess the character tokens in the pending table character tokens
+/// list using the rules given in the "anything else" entry in the "in
+/// table" insertion mode": the same in both.
+proof fn lemma_reprocess_table_text(env: EncFns, p: Parser, s: Seq<u32>, i: int)
+    ensures
+        w3c_reprocess_table_text(env, p, s, i) == reprocess_pending(env, p, s, i),
+    decreases s.len() - i,
+{
+    if 0 <= i < s.len() {
+        let pf = Parser { foster: true, ..p };
+        lemma_in_body_char(env, pf, s[i]);
+        let q = outcome_parser(in_table_anything_else(env, p, Tok::Char(s[i])));
+        lemma_reprocess_table_text(env, q, s, i + 1);
+    }
+}
+
+/// "in table text" (W3C §8.2.5.4.10, WHATWG §13.2.6.4.10): the same rules,
+/// but for one difference: when the pending table character tokens list
+/// is empty (every character since "in table" was U+0000), "insert the
+/// characters" of the empty list, read literally, creates an empty `Text`
+/// node; the WHATWG transcription inserts nothing (docs/ERRATA.md). The
+/// W3C text is taken literally here: excluded.
+pub proof fn lemma_in_table_text(env: EncFns, p: Parser, t: Tok)
+    requires
+        !(t is Pi),
+        !p.stopped,
+        !(t is Char) ==> p.pending_table_text.len() > 0,
+    ensures
+        w3c_mode_in_table_text(env, p, t) == mode_in_table_text(env, p, t),
+{
+    let s = p.pending_table_text;
+    lemma_all_space(s, 0);
+    lemma_reprocess_table_text(env, p, s, 0);
 }
 
 } // verus!
