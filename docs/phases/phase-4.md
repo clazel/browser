@@ -1002,10 +1002,10 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.9 Tree builder spec and contracts | not started |
 | 4.10 Tree builder implementation | not started |
 | 4.11 Tree builder evidence | not started |
-| 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
+| 4.12 IPC schema and kernel | done locally: schema (Commit, Body, BodyEnd, Display), kernel commit protocol and Show, `theorem_show_only_own_tab`, `theorem_address_bar_integrity`, `theorem_body_is_the_response` proven, Phase 2 and 3 theorems restated; both crates tier 2; until CI's full run is green |
 | 4.13 Renderer pipeline | not started |
 | 4.14 Text layout | not started |
-| 4.15 `clazel browse` | not started |
+| 4.15 `clazel browse` | done locally: the loop, tested against an in-process server through real renderers; pages show the 4.13 stub until the pipeline lands |
 | 4.16 Demo and hostile pages | not started |
 | 4.17 Status and README | not started |
 
