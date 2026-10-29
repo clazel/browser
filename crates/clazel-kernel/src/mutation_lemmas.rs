@@ -453,4 +453,52 @@ pub proof fn ml_uncommitted_display(r: Renderer, bytes: Seq<u8>)
 {
 }
 
+/// A tab opened without a script, whose fetch cannot start, is not
+/// committed after its `OpenTab`: the step writes to its renderer only the
+/// `Error`, which is no commit (`theorem_committed_only_after_commit` over
+/// the one-event run, and `lemma_error_is_not_a_commit`).
+pub proof fn ml_open_tab_uncommitted(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, url: Seq<u32>)
+    requires
+        lock_of_url(urls, url, 0) is Some,
+        (fetch.parse)(url) is None,
+    ensures
+        step(rules, urls, fetch, init_state(), Event::OpenTab { url, script: None }).0.renderers.len() > 0,
+        !step(rules, urls, fetch, init_state(), Event::OpenTab { url, script: None }).0.renderers[0].committed,
+{
+    let e = Event::OpenTab { url, script: None };
+    let t = seq![e];
+    let s = init_state();
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    crate::commit_theorems::theorem_committed_only_after_commit(rules, urls, fetch, t);
+    assert(t[0] == e);
+    assert(t.drop_first() =~= Seq::<Event>::empty());
+    assert(run_state(rules, urls, fetch, s1, Seq::<Event>::empty()) == s1);
+    assert(run_outputs(rules, urls, fetch, s1, Seq::<Event>::empty()) =~= Seq::<Output>::empty());
+    assert(run_state(rules, urls, fetch, s, t) == s1);
+    assert(run_outputs(rules, urls, fetch, s, t) =~= out);
+    // The step: `Spawn`, the tab's `Close`s, and the `Error` of the failed
+    // navigation.
+    let lock = lock_of_url(urls, url, 0)->Some_0;
+    let rn = Renderer { committed: false, id: 0, tab: 0, url, lock, pending: None };
+    let sp = State { renderers: s.renderers.push(rn), next_id: 1, ..s };
+    assert(sp.renderers =~= seq![rn]);
+    assert(find_by_tab(sp.renderers, 0, 0) == Some(0int));
+    let (s0, closes) = close_tab_conns(sp, 0);
+    crate::net_theorems::lemma_closes_of_tab(sp.conns, 0);
+    let error = reply(rn, clazel_ipc::message::spec::Message::Error { code: error_bad_url() });
+    assert(out =~= seq![Output::Spawn { id: 0, policy: Policy::Renderer }] + (closes + error));
+    assert(s1.renderers =~= seq![Renderer { pending: None, ..rn }]);
+    if s1.renderers[0].committed {
+        let r = s1.renderers[0];
+        assert(crate::statements::commit_sent(out, r.id, r.url));
+        let (k, doc) = choose|k: int, doc: Document|
+            #![trigger out[k], commit_frames(r.url, doc)]
+            0 <= k < out.len() && out[k] == Output::ToRenderer { id: r.id, bytes: commit_frames(r.url, doc) };
+        crate::commit_theorems::lemma_error_is_not_a_commit(error_bad_url(), r.url, doc);
+        if 1 <= k < 1 + closes.len() {
+            assert(out[k] == closes[k - 1]);
+        }
+    }
+}
+
 } // verus!

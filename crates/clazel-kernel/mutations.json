@@ -681,6 +681,20 @@
         "lemma": "lemma_commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))",
         "witness": "frame_of(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }) is Some && crate::statements::committed_document(commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))) != Some((clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }, Seq::<u8>::empty()))"
       }
+    },
+    {
+      "id": "open-tab-starts-committed",
+      "file": "src/spec.rs",
+      "find": "let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
+      "replace": "let s1 = State { renderers: s.renderers.push(Renderer { committed: true, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
+      "expect": "killed",
+      "module": "commit_theorems",
+      "reason": "A tab opened without a script starts committed, so its renderer may display before any document is committed in it, under the URL it was opened at: theorem_committed_only_after_commit is false (ml_open_tab_uncommitted: after an OpenTab whose fetch cannot start, the renderer was sent only an Error, never a Commit).",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_tab_uncommitted(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), Seq::<u32>::empty())",
+        "witness": "lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 0) is Some && (ml_fetch_unparsed().parse)(Seq::<u32>::empty()) is None"
+      }
     }
   ]
 }
