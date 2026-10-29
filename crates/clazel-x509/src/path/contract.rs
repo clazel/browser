@@ -61,9 +61,21 @@ pub trait RevocationOracle {
 // §6.1, step by step (P8)
 // ---------------------------------------------------------------------------
 
-/// §6.1.2 `initialization`.
+/// §6.1.2 `initialization`, except that `max_path_length` is held at most
+/// `n`. The anchor's pathLenConstraint (RFC 5937 §3.2 bullet 8) is an
+/// unbounded number and no fixed-width counter holds every value; a value of
+/// at least `n` cannot reach 0 in §6.1.4 (l) on a path of `n` certificates,
+/// so the fold's outcome is the same (P8's `path::lemmas`
+/// `lemma_process_from_agree`). Every other field is the spec's.
 pub open spec fn initialization_ensures(anchor: super::parsed::spec::Anchor, n: nat, out: Result<State, PathError>) -> bool {
-    out == initialization(anchor, n)
+    match (out, initialization(anchor, n)) {
+        (Ok(state), Ok(expected)) => state == State {
+            max_path_length: if expected.max_path_length < n { expected.max_path_length } else { n },
+            ..expected
+        },
+        (Err(e), Err(expected)) => e == expected,
+        _ => false,
+    }
 }
 
 /// §6.1.3 `basic_certificate_processing`.
