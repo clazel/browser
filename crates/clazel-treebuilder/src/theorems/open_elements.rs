@@ -93,9 +93,17 @@ pub open spec fn od(p: Parser) -> bool {
     p.stopped || crate::independent::equivalence_foreign::open_distinct(p.open)
 }
 
+/// Every entry of the list of active formatting elements is for an HTML
+/// element (the parser pushes only elements it creates for formatting
+/// tags in the HTML namespace).
+pub open spec fn fh(p: Parser) -> bool {
+    forall|i: int| 0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry ==> p.formatting[i]->Entry_elem.ns
+        == Namespace::Html
+}
+
 /// `q` comes from `p` keeping [`st`], extending the document by at most `c`
-/// nodes, keeping [`fx`] and [`od`], and keeping the insertion target
-/// redirection map (no rule changes it).
+/// nodes, keeping [`fx`], [`od`] and [`fh`], and keeping the insertion
+/// target redirection map (no rule changes it).
 #[verifier::opaque]
 pub open spec fn kp(p: Parser, q: Parser, c: nat) -> bool {
     &&& st(q)
@@ -103,6 +111,7 @@ pub open spec fn kp(p: Parser, q: Parser, c: nat) -> bool {
     &&& q.doc.nodes.len() <= p.doc.nodes.len() + c
     &&& fx(p) ==> fx(q)
     &&& od(p) ==> od(q)
+    &&& fh(p) ==> fh(q)
     &&& q.redirect == p.redirect
 }
 
@@ -162,6 +171,7 @@ pub proof fn lemma_kp(p: Parser, q: Parser, c: nat)
         q.doc.nodes.len() <= p.doc.nodes.len() + c,
         fx(p) ==> fx(q),
         od(p) ==> od(q),
+        fh(p) ==> fh(q),
         q.redirect == p.redirect,
 {
     reveal(kp);
@@ -295,7 +305,7 @@ pub proof fn lemma_st_lists(p: Parser, q: Parser)
             0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry ==> elem_in_doc(q.doc, q.formatting[i]->Entry_elem),
     ensures
         st(q),
-        kp(p, q, 0) <==> ((fx(p) ==> fx(q)) && (od(p) ==> od(q))),
+        kp(p, q, 0) <==> ((fx(p) ==> fx(q)) && (od(p) ==> od(q)) && (fh(p) ==> fh(q))),
 {
     reveal(st);
     reveal(kp);
@@ -884,6 +894,29 @@ pub proof fn lemma_distinct_update(o: Seq<Elem>, i: int, e: Elem)
     }
 }
 
+/// Removing an entry of a stack of distinct elements and inserting an
+/// element that was not on it.
+pub proof fn lemma_distinct_remove_insert(o: Seq<Elem>, j: int, k: int, e: Elem)
+    requires
+        crate::independent::equivalence_foreign::open_distinct(o),
+        not_on(o, e.id),
+        0 <= j < o.len(),
+        0 <= k <= o.len() - 1,
+    ensures
+        crate::independent::equivalence_foreign::open_distinct(o.remove(j).insert(k, e)),
+{
+    let o1 = o.remove(j);
+    lemma_distinct_remove(o, j);
+    assert forall|m: int| 0 <= m < o1.len() implies (#[trigger] o1[m]).id != e.id by {
+        if m < j {
+            assert(o1[m] == o[m]);
+        } else {
+            assert(o1[m] == o[m + 1]);
+        }
+    }
+    lemma_distinct_insert(o1, k, e);
+}
+
 /// Inserting an element that is not on a stack of distinct elements.
 pub proof fn lemma_distinct_insert(o: Seq<Elem>, k: int, e: Elem)
     requires
@@ -1158,6 +1191,12 @@ pub proof fn lemma_push_marker(p: Parser)
             assert(q.formatting[i] == p.formatting[i]);
         }
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            assert(q.formatting[i] == p.formatting[i]);
+        }
+    }
     lemma_st_lists(p, q);
 }
 
@@ -1193,6 +1232,12 @@ pub proof fn lemma_fmt_prefix_kp(p: Parser, q: Parser)
             #[trigger] q.formatting[j]) is Entry implies q.formatting[i]->Entry_elem.id != q.formatting[j]->Entry_elem.id by {
             assert(q.formatting[i] == p.formatting[i]);
             assert(q.formatting[j] == p.formatting[j]);
+        }
+    }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            assert(q.formatting[i] == p.formatting[i]);
         }
     }
     lemma_st_lists(p, q);
@@ -1288,6 +1333,16 @@ pub proof fn lemma_fmt_remove(p: Parser, k: int)
     if fx(p) {
         lemma_fx_seq_remove(p.formatting, k);
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            if i < k {
+                assert(q.formatting[i] == p.formatting[i]);
+            } else {
+                assert(q.formatting[i] == p.formatting[i + 1]);
+            }
+        }
+    }
     lemma_st_lists(p, q);
 }
 
@@ -1302,6 +1357,7 @@ pub open spec fn kpu(p: Parser, q: Parser) -> bool {
     &&& dext(p.doc, q.doc)
     &&& fx(p) ==> fx(q)
     &&& od(p) ==> od(q)
+    &&& fh(p) ==> fh(q)
     &&& q.redirect == p.redirect
 }
 
@@ -1314,6 +1370,7 @@ pub proof fn lemma_kpu(p: Parser, q: Parser)
         dext(p.doc, q.doc),
         fx(p) ==> fx(q),
         od(p) ==> od(q),
+        fh(p) ==> fh(q),
         q.redirect == p.redirect,
 {
     reveal(kpu);
@@ -1326,6 +1383,7 @@ pub proof fn lemma_kpu_intro(p: Parser, q: Parser)
         dext(p.doc, q.doc),
         fx(p) ==> fx(q),
         od(p) ==> od(q),
+        fh(p) ==> fh(q),
         q.redirect == p.redirect,
     ensures
         kpu(p, q),
@@ -1528,6 +1586,7 @@ pub proof fn lemma_fresh(p: Parser, id: NodeId)
 pub open spec fn fmt_entry_ok(p: Parser, x: Fmt, skip: int) -> bool {
     &&& x is Entry
     &&& elem_in_doc(p.doc, x->Entry_elem)
+    &&& x->Entry_elem.ns == Namespace::Html
     &&& forall|j: int|
         0 <= j < p.formatting.len() && j != skip && (#[trigger] p.formatting[j]) is Entry ==> p.formatting[j]->Entry_elem.id
             != x->Entry_elem.id
@@ -1541,6 +1600,7 @@ pub proof fn lemma_kp_same_doc(p: Parser, q: Parser)
         q.doc == p.doc,
         fx(p) ==> fx(q),
         od(p) ==> od(q),
+        fh(p) ==> fh(q),
         q.redirect == p.redirect,
     ensures
         kp(p, q, 0),
@@ -1557,6 +1617,7 @@ pub proof fn lemma_fmt_update(p: Parser, k: int, x: Fmt)
     ensures
         st(Parser { formatting: p.formatting.update(k, x), ..p }),
         fx(p) && x->Entry_token.tag != Tag::Template ==> fx(Parser { formatting: p.formatting.update(k, x), ..p }),
+        fh(p) ==> fh(Parser { formatting: p.formatting.update(k, x), ..p }),
 {
     lemma_st(p);
     let q = Parser { formatting: p.formatting.update(k, x), ..p };
@@ -1586,6 +1647,14 @@ pub proof fn lemma_fmt_update(p: Parser, k: int, x: Fmt)
             }
         }
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            if i != k {
+                assert(q.formatting[i] == p.formatting[i]);
+            }
+        }
+    }
     lemma_st_lists(p, q);
     reveal(kp);
 }
@@ -1600,6 +1669,7 @@ pub proof fn lemma_fmt_insert(p: Parser, k: int, x: Fmt)
     ensures
         st(Parser { formatting: p.formatting.insert(k, x), ..p }),
         fx(p) && x->Entry_token.tag != Tag::Template ==> fx(Parser { formatting: p.formatting.insert(k, x), ..p }),
+        fh(p) ==> fh(Parser { formatting: p.formatting.insert(k, x), ..p }),
 {
     lemma_st(p);
     let q = Parser { formatting: p.formatting.insert(k, x), ..p };
@@ -1642,6 +1712,16 @@ pub proof fn lemma_fmt_insert(p: Parser, k: int, x: Fmt)
             }
         }
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            if i < k {
+                assert(q.formatting[i] == p.formatting[i]);
+            } else if i > k {
+                assert(q.formatting[i] == p.formatting[i - 1]);
+            }
+        }
+    }
     lemma_st_lists(p, q);
     reveal(kp);
 }
@@ -1655,6 +1735,7 @@ pub proof fn lemma_push_formatting(p: Parser, e: Elem, t: TagTok)
         !p.stopped ==> forall|j: int|
             0 <= j < p.formatting.len() && (#[trigger] p.formatting[j]) is Entry ==> p.formatting[j]->Entry_elem.id != e.id,
         t.tag != Tag::Template,
+        e.ns == Namespace::Html,
     ensures
         kp(p, push_formatting(p, e, t), 0),
         push_formatting(p, e, t) == (Parser { formatting: push_formatting(p, e, t).formatting, ..p }),
@@ -1912,15 +1993,7 @@ pub proof fn lemma_open_remove_insert(p: Parser, j: int, k: int, e: Elem)
         }
     }
     if od(p) && !p.stopped {
-        lemma_distinct_remove(p.open, j);
-        assert forall|m: int| 0 <= m < o1.len() implies (#[trigger] o1[m]).id != e.id by {
-            if m < j {
-                assert(o1[m] == p.open[m]);
-            } else {
-                assert(o1[m] == p.open[m + 1]);
-            }
-        }
-        lemma_distinct_insert(o1, k, e);
+        lemma_distinct_remove_insert(p.open, j, k, e);
     }
     lemma_st_lists(p, q);
 }
@@ -1935,6 +2008,7 @@ pub proof fn lemma_fmt_remove_insert(p: Parser, fi: int, k: int, x: Fmt)
     ensures
         st(Parser { formatting: p.formatting.remove(fi).insert(k, x), ..p }),
         fx(p) && x->Entry_token.tag != Tag::Template ==> fx(Parser { formatting: p.formatting.remove(fi).insert(k, x), ..p }),
+        fh(p) ==> fh(Parser { formatting: p.formatting.remove(fi).insert(k, x), ..p }),
 {
     lemma_fmt_remove(p, fi);
     let pa = Parser { formatting: p.formatting.remove(fi), ..p };
@@ -4240,13 +4314,22 @@ pub proof fn lemma_in_body_foreign(p: Parser, t2: TagTok, ns: Namespace, self_cl
     lemma_kp_weaken(p, pop(q1), 2 * p.formatting.len() + 1, 2 * p.formatting.len() + 2);
 }
 
-/// "in body"'s start tags (on a stack with the `html` element).
+/// The start tags [`lemma_in_body_start_tag_a`] covers: those up to `nobr`
+/// in the order of the rules (the rest, [`lemma_in_body_start_tag_b`]).
+pub open spec fn in_body_start_first(g: Tag) -> bool {
+    g == Tag::Html || is_in_head_start_tag(g) || g == Tag::Body || g == Tag::Frameset || is_block_start_tag(g) || g
+        == Tag::Plaintext || is_heading_tag(g) || g == Tag::Pre || g == Tag::Listing || g == Tag::Form || g == Tag::Li || g
+        == Tag::Dd || g == Tag::Dt || g == Tag::Button || g == Tag::A || is_formatting_start_tag(g) || g == Tag::Nobr
+}
+
+/// "in body"'s start tags up to `nobr`.
 #[verifier::spinoff_prover]
-pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
+pub proof fn lemma_in_body_start_tag_a(p: Parser, t: Tok, tt: TagTok)
     requires
         st(p),
         p.open.len() > 0,
         t == Tok::Start(tt),
+        in_body_start_first(tt.tag),
     ensures
         app_quiet(p, t, in_body_start_tag(p, t, tt)),
 {
@@ -4281,7 +4364,6 @@ pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
     hide(in_body_start_svg);
     hide(insert_foreign_element);
     let g = tt.tag;
-    let o = in_body_start_tag(p, t, tt);
     if g == Tag::Html {
         lemma_in_body_start_html(p, tt);
         lemma_done_b(p, t, in_body_start_html(p, tt));
@@ -4330,7 +4412,52 @@ pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
     } else if g == Tag::Nobr {
         lemma_in_body_start_nobr(p, tt);
         lemma_done_u(p, t, in_body_start_nobr(p, tt));
-    } else if is_applet_like(g) {
+    }
+}
+
+/// "in body"'s start tags after `nobr`.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_body_start_tag_b(p: Parser, t: Tok, tt: TagTok)
+    requires
+        st(p),
+        p.open.len() > 0,
+        t == Tok::Start(tt),
+        !in_body_start_first(tt.tag),
+    ensures
+        app_quiet(p, t, in_body_start_tag(p, t, tt)),
+{
+    hide(in_body_start_html);
+    hide(in_body_start_body);
+    hide(in_body_start_frameset);
+    hide(insert_html_element);
+    hide(close_p_if_in_button_scope);
+    hide(in_body_start_heading);
+    hide(in_body_start_pre);
+    hide(in_body_start_form);
+    hide(in_body_start_li);
+    hide(in_body_start_dd_dt);
+    hide(in_body_start_button);
+    hide(in_body_start_a);
+    hide(reconstruct_formatting);
+    hide(push_formatting);
+    hide(in_body_start_nobr);
+    hide(push_marker);
+    hide(close_p_element);
+    hide(in_body_void_start_tag);
+    hide(in_body_start_input);
+    hide(insert_and_pop);
+    hide(in_body_start_hr);
+    hide(in_body_start_textarea);
+    hide(generic_text_parsing);
+    hide(in_body_start_select);
+    hide(in_body_start_option);
+    hide(in_body_start_optgroup);
+    hide(generate_implied_end_tags);
+    hide(in_body_start_math);
+    hide(in_body_start_svg);
+    hide(insert_foreign_element);
+    let g = tt.tag;
+    if is_applet_like(g) {
         lemma_reconstruct_kp(p);
         let q0 = reconstruct_formatting(p);
         let q = insert_html_element(q0, tt).0;
@@ -4446,6 +4573,23 @@ pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
         lemma_reconstruct_kp(p);
         lemma_then_insert(p, reconstruct_formatting(p), 2 * p.formatting.len(), tt, false, insert_html_element(reconstruct_formatting(p), tt).0);
         lemma_done_b(p, t, insert_html_element(reconstruct_formatting(p), tt).0);
+    }
+}
+
+
+/// "in body"'s start tags (on a stack with the `html` element).
+pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
+    requires
+        st(p),
+        p.open.len() > 0,
+        t == Tok::Start(tt),
+    ensures
+        app_quiet(p, t, in_body_start_tag(p, t, tt)),
+{
+    if in_body_start_first(tt.tag) {
+        lemma_in_body_start_tag_a(p, t, tt);
+    } else {
+        lemma_in_body_start_tag_b(p, t, tt);
     }
 }
 

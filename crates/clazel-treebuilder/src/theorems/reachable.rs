@@ -38,7 +38,10 @@ verus! {
 /// the parser has `parser_wf`, its head element pointer names an HTML
 /// `head` element (`invariant::head_ok`), and no two entries of the stack
 /// of open elements are for the same element
-/// (`independent::equivalence_foreign::open_distinct`).
+/// (`independent::equivalence_foreign::open_distinct`); every entry of the
+/// list is for an HTML element (`open_elements::fh`); and the insertion
+/// target redirection map maps neither the Document nor a node to itself
+/// ([`redirect_ok`]).
 pub open spec fn reach_wf(p: Parser) -> bool {
     &&& reachable_inv(p)
     &&& dom::wf(p.doc)
@@ -46,6 +49,15 @@ pub open spec fn reach_wf(p: Parser) -> bool {
     &&& super::open_elements::fmt_unique(p)
     &&& !p.stopped ==> parser_wf(p) && head_ok(p)
     &&& !p.stopped ==> crate::independent::equivalence_foreign::open_distinct(p.open)
+    &&& super::open_elements::fh(p)
+    &&& redirect_ok(p)
+}
+
+/// The insertion target redirection map has no entry for the Document
+/// (node 0) and does not map a node to itself: it is empty, or the
+/// fragment case's entry from the root `html` element to the fragment.
+pub open spec fn redirect_ok(p: Parser) -> bool {
+    p.redirect is None || (p.redirect->Some_0.0 != 0 && p.redirect->Some_0.0 != p.redirect->Some_0.1)
 }
 
 /// A new parser has [`reach_wf`].
@@ -156,6 +168,8 @@ pub proof fn lemma_dispatch_wf(env: EncFns, p: Parser, token: Token)
 {
     crate::reachable::run::lemma_dispatch_reach(env, p, token);
     if !p.stopped {
+        super::open_elements::lemma_dispatch(env, p, token);
+        super::open_elements::lemma_kpu(p, dispatch(env, p, token).0);
         super::open_elements::theorem_open_elements_in_doc(env, p, token);
         super::open_elements::theorem_doc_wf(env, p, token);
         super::nodes::theorem_nodes_per_token(env, p, token);
