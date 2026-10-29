@@ -98,6 +98,18 @@ evidence exists (see "Left" below).
   reachable parser meets). The facts behind them are part of
   `reachable_inv`: the root is the stack's only `html` element, and in
   "in cell" no `table` or `template` element is above the last cell.
+  `theorem_reachable_in_body_table` states the "in body", "in table" and
+  "in table text" equivalences for every reachable parser after "before
+  html" and every token the tokenizer emits, with only the inputs where
+  the two texts differ excluded (`in_body_agree`, `in_table_agree`,
+  `in_table_text_agree`). Their state precondition `element_plain` of
+  the `html` and `body` elements is discharged: `reachable_inv` carries
+  that every HTML element of the document but the fragment case's
+  context element has attributes with no namespace or prefix
+  (`reachable::doc::html_plain`), that the context element is older than
+  every stack record (`ctx_below`), and that the formatting entries'
+  tokens have plain attributes (`fmt_plain`); every rule application
+  gets a token with plain attributes (`tok_plain`, from `classify`).
 - **Proven, actions** (`src/theorems/`): `theorem_actions_ordered`: over a
   whole parse, `StopParsing` occurs at most once and last, and
   `ChangeEncoding` at most once (never if the confidence starts certain),
@@ -186,9 +198,3 @@ evidence exists (see "Left" below).
   (the `body` element "after head" inserts is found by every later
   reset), but proving it needs invariants on the elements below each
   `template` on the stack, which nothing proves yet.
-- The W3C "in body" equivalence's precondition `element_plain` of the
-  `html` and `body` elements (their attributes have no namespace or
-  prefix), a fact of reachable states not yet proven: it needs the
-  attributes of document nodes tracked through every helper (the
-  document theorems keep only namespaces and local names) and the
-  tokens' attributes being plain carried through every rule application.

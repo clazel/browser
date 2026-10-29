@@ -5,7 +5,9 @@
 //! equivalence for reachable parsers without its stack hypothesis
 //! ([`theorem_reachable_foreign_content`]); and the "in frameset" and "in
 //! cell" equivalences for reachable parsers with no hypothesis
-//! ([`theorem_reachable_frameset_cell`]).
+//! ([`theorem_reachable_frameset_cell`]); and the "in body", "in table" and
+//! "in table text" equivalences for reachable parsers with only the
+//! text-difference hypotheses ([`theorem_reachable_in_body_table`]).
 //!
 //! Discharged here, for every parser reached from `new_parser` or
 //! `fragment_parser` by `dispatch` steps ([`theorem_reachable_w3c_facts`]):
@@ -21,11 +23,13 @@
 //! (`classify`), `token_tagged`, `tok_tagged` and `attrs_plain` of its
 //! attributes ([`lemma_classify_plain`]).
 //!
+//! `element_plain` of the `html` and `body` elements ("in body"), from
+//! `reachable::doc::html_plain` (part of `invariant::reachable_inv`)
+//! ([`lemma_core_html_body_plain`]).
+//!
 //! Not discharged: the preconditions that exclude the inputs where the two
 //! texts differ (they are not facts of states; `w3c_aa_agrees` and "in
-//! table text"'s nonempty pending list among them), and `element_plain` of
-//! the `html` and `body` elements ("in body"), which needs a fact about the
-//! attributes of document nodes that no proof here carries.
+//! table text"'s nonempty pending list among them).
 
 #[allow(unused_imports)]
 use super::spec::*;
