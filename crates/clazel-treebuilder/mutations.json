@@ -327,7 +327,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html))",
+        "lemma": "ml_w3c_before_html()",
         "witness": "mode_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html))->Done_0.mode == Mode::BeforeHtml"
       }
     },
@@ -341,8 +341,8 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_before_head(ml_env(), ml_parser(Mode::BeforeHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Head))",
-        "witness": "mode_before_head(ml_env(), ml_parser(Mode::BeforeHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Head))->Done_0.head is None"
+        "lemma": "ml_w3c_before_head()",
+        "witness": "mode_before_head(ml_env(), ml_parser_html(Mode::BeforeHead, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c])]), ml_start(Tag::Head))->Done_0.head is None"
       }
     },
     {
@@ -355,7 +355,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x())",
+        "lemma": "ml_w3c_in_head()",
         "witness": "mode_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x())->Reprocess_0.open.len() == 2"
       }
     },
@@ -369,7 +369,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript))",
+        "lemma": "ml_w3c_in_head_noscript()",
         "witness": "mode_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript))->Done_0.open.len() == 3"
       }
     },
@@ -383,7 +383,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body))",
+        "lemma": "ml_w3c_after_head()",
         "witness": "mode_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body))->Done_0.frameset_ok"
       }
     },
@@ -424,7 +424,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style))",
+        "lemma": "ml_w3c_text()",
         "witness": "mode_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style))->Done_0.open.len() == 3"
       }
     },
@@ -456,7 +456,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption))",
+        "lemma": "ml_w3c_in_caption()",
         "witness": "mode_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption))->Done_0.formatting.len() == 1"
       }
     },
@@ -470,7 +470,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup))",
+        "lemma": "ml_w3c_in_column_group()",
         "witness": "mode_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup))->Done_0.open.len() == 3"
       }
     },
@@ -526,7 +526,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col))",
+        "lemma": "ml_w3c_in_template()",
         "witness": "mode_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col))->Reprocess_0.mode == Mode::InTable"
       }
     },
@@ -540,7 +540,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html))",
+        "lemma": "ml_w3c_after_body()",
         "witness": "mode_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterBody"
       }
     },
@@ -554,8 +554,8 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_in_frameset(ml_env(), ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Frameset))",
-        "witness": "mode_in_frameset(ml_env(), ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Frameset))->Done_0.open.len() == 0"
+        "lemma": "ml_w3c_in_frameset()",
+        "witness": "mode_in_frameset(ml_env(), Parser { context: Some(ml_elem(Tag::Html)), ..ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]) }, ml_end(Tag::Frameset))->Done_0.open.len() == 0"
       }
     },
     {
@@ -568,7 +568,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html))",
+        "lemma": "ml_w3c_after_frameset()",
         "witness": "mode_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterFrameset"
       }
     },
@@ -582,7 +582,7 @@
       "module": "independent::equivalence",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "crate::independent::equivalence::lemma_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes))",
+        "lemma": "ml_w3c_after_after_frameset()",
         "witness": "mode_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes)) is Done"
       }
     },

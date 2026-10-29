@@ -458,10 +458,176 @@ pub open spec fn ml_named_row(rest: Seq<Elem>) -> Seq<Elem> {
     ] + rest
 }
 
-/// `independent::equivalence::lemma_in_table_body` at the parser and token of the
-/// certificate of `in-table-body-tr-wrong-mode` (`tag_of` hidden: the records and
+// ---------------------------------------------------------------------
+// The certificates' facts: for each mode, the W3C transcription evaluated
+// at the parser and token (`compute_only`), carried over to the spec by
+// the equivalence lemma. A mutant that computes otherwise contradicts it.
+
+/// What `independent::equivalence::lemma_before_html` gives at the certificate
+/// input of `before-html-html-wrong-mode`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
 /// tokens are tagged by construction).
-pub proof fn ml_w3c_in_table_body()
+proof fn ml_w3c_eq_before_html()
+    ensures
+        crate::independent::w3c_mode_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html)) == mode_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html));
+}
+
+pub proof fn ml_w3c_before_html()
+    ensures
+        !(mode_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html))->Done_0.mode == Mode::BeforeHtml),
+{
+    assert(!(crate::independent::w3c_mode_before_html(ml_env(), ml_parser(Mode::BeforeHtml, seq![], seq![]), ml_start(Tag::Html))->Done_0.mode == Mode::BeforeHtml)) by (compute_only);
+    ml_w3c_eq_before_html();
+}
+
+/// What `independent::equivalence::lemma_before_head` gives at the certificate
+/// input of `before-head-pointer-not-set`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_before_head()
+    ensures
+        crate::independent::w3c_mode_before_head(ml_env(), ml_parser_html(Mode::BeforeHead, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c])]), ml_start(Tag::Head)) == mode_before_head(ml_env(), ml_parser_html(Mode::BeforeHead, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c])]), ml_start(Tag::Head)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_before_head(ml_env(), ml_parser_html(Mode::BeforeHead, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c])]), ml_start(Tag::Head));
+}
+
+pub proof fn ml_w3c_before_head()
+    ensures
+        !(mode_before_head(ml_env(), ml_parser_html(Mode::BeforeHead, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c])]), ml_start(Tag::Head))->Done_0.head is None),
+{
+    assert(!(crate::independent::w3c_mode_before_head(ml_env(), ml_parser_html(Mode::BeforeHead, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c])]), ml_start(Tag::Head))->Done_0.head is None)) by (compute_only);
+    ml_w3c_eq_before_head();
+}
+
+/// What `independent::equivalence::lemma_in_head` gives at the certificate
+/// input of `in-head-head-not-popped`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_in_head()
+    ensures
+        crate::independent::w3c_mode_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x()) == mode_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x()),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x());
+}
+
+pub proof fn ml_w3c_in_head()
+    ensures
+        !(mode_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x())->Reprocess_0.open.len() == 2),
+{
+    assert(!(crate::independent::w3c_mode_in_head(ml_env(), ml_parser(Mode::InHead, seq![ml_elem(Tag::Html), ml_elem(Tag::Head)], seq![]), ml_x())->Reprocess_0.open.len() == 2)) by (compute_only);
+    ml_w3c_eq_in_head();
+}
+
+/// What `independent::equivalence::lemma_in_head_noscript` gives at the certificate
+/// input of `in-head-noscript-end-not-popped`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_in_head_noscript()
+    ensures
+        crate::independent::w3c_mode_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript)) == mode_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript));
+}
+
+pub proof fn ml_w3c_in_head_noscript()
+    ensures
+        !(mode_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript))->Done_0.open.len() == 3),
+{
+    assert(!(crate::independent::w3c_mode_in_head_noscript(ml_env(), ml_parser(Mode::InHeadNoscript, seq![ml_elem(Tag::Html), ml_elem(Tag::Head), ml_elem(Tag::Noscript)], seq![]), ml_end(Tag::Noscript))->Done_0.open.len() == 3)) by (compute_only);
+    ml_w3c_eq_in_head_noscript();
+}
+
+/// What `independent::equivalence::lemma_after_head` gives at the certificate
+/// input of `after-head-body-frameset-ok`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_after_head()
+    ensures
+        crate::independent::w3c_mode_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body)) == mode_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body));
+}
+
+pub proof fn ml_w3c_after_head()
+    ensures
+        !(mode_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body))->Done_0.frameset_ok),
+{
+    assert(!(crate::independent::w3c_mode_after_head(ml_env(), ml_parser(Mode::AfterHead, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Body))->Done_0.frameset_ok)) by (compute_only);
+    ml_w3c_eq_after_head();
+}
+
+/// What `independent::equivalence::lemma_text` gives at the certificate
+/// input of `text-end-tag-not-popped`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_text()
+    ensures
+        crate::independent::w3c_mode_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style)) == mode_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style));
+}
+
+pub proof fn ml_w3c_text()
+    ensures
+        !(mode_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style))->Done_0.open.len() == 3),
+{
+    assert(!(crate::independent::w3c_mode_text(ml_env(), ml_parser(Mode::Text, seq![ml_elem(Tag::Html), ml_elem(Tag::Body), ml_elem(Tag::Style)], seq![]), ml_end(Tag::Style))->Done_0.open.len() == 3)) by (compute_only);
+    ml_w3c_eq_text();
+}
+
+/// What `independent::equivalence::lemma_in_caption` gives at the certificate
+/// input of `in-caption-markers-kept`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_in_caption()
+    ensures
+        crate::independent::w3c_mode_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption)) == mode_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption));
+}
+
+pub proof fn ml_w3c_in_caption()
+    ensures
+        !(mode_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption))->Done_0.formatting.len() == 1),
+{
+    assert(!(crate::independent::w3c_mode_in_caption(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser(Mode::InCaption, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Caption)], seq![]) }, ml_end(Tag::Caption))->Done_0.formatting.len() == 1)) by (compute_only);
+    ml_w3c_eq_in_caption();
+}
+
+/// What `independent::equivalence::lemma_in_column_group` gives at the certificate
+/// input of `in-column-group-end-not-popped`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_in_column_group()
+    ensures
+        crate::independent::w3c_mode_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup)) == mode_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup));
+}
+
+pub proof fn ml_w3c_in_column_group()
+    ensures
+        !(mode_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup))->Done_0.open.len() == 3),
+{
+    assert(!(crate::independent::w3c_mode_in_column_group(ml_env(), ml_parser(Mode::InColumnGroup, seq![ml_elem(Tag::Html), ml_elem(Tag::Table), ml_elem(Tag::Colgroup)], seq![]), ml_end(Tag::Colgroup))->Done_0.open.len() == 3)) by (compute_only);
+    ml_w3c_eq_in_column_group();
+}
+
+/// What `independent::equivalence::lemma_in_table_body` gives at the certificate
+/// input of `in-table-body-tr-wrong-mode`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_in_table_body()
     ensures
         crate::independent::w3c_mode_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72])) == mode_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72])),
 {
@@ -469,10 +635,19 @@ pub proof fn ml_w3c_in_table_body()
     crate::independent::equivalence::lemma_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72]));
 }
 
-/// `independent::equivalence::lemma_in_row` at the parser and token of the
-/// certificate of `in-row-cell-no-marker` (`tag_of` hidden: the records and
+pub proof fn ml_w3c_in_table_body()
+    ensures
+        !(mode_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72]))->Done_0.mode == Mode::InTableBody),
+{
+    assert(!(crate::independent::w3c_mode_in_table_body(ml_env(), ml_parser_html(Mode::InTableBody, seq![ml_named(seq![0x68u32, 0x74, 0x6d, 0x6c]), ml_named(seq![0x74u32, 0x61, 0x62, 0x6c, 0x65]), ml_named(seq![0x74u32, 0x62, 0x6f, 0x64, 0x79])]), ml_named_start(seq![0x74u32, 0x72]))->Done_0.mode == Mode::InTableBody)) by (compute_only);
+    ml_w3c_eq_in_table_body();
+}
+
+/// What `independent::equivalence::lemma_in_row` gives at the certificate
+/// input of `in-row-cell-no-marker`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
 /// tokens are tagged by construction).
-pub proof fn ml_w3c_in_row()
+proof fn ml_w3c_eq_in_row()
     ensures
         crate::independent::w3c_mode_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64])) == mode_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64])),
 {
@@ -480,14 +655,131 @@ pub proof fn ml_w3c_in_row()
     crate::independent::equivalence::lemma_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64]));
 }
 
-/// `independent::equivalence::lemma_in_cell` at the parser and token of the
-/// certificate of `in-cell-end-not-popped` (`tag_of` hidden: the records and
+pub proof fn ml_w3c_in_row()
+    ensures
+        !(mode_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64]))->Done_0.formatting.len() == 0),
+{
+    assert(!(crate::independent::w3c_mode_in_row(ml_env(), ml_parser_html(Mode::InRow, ml_named_row(seq![])), ml_named_start(seq![0x74u32, 0x64]))->Done_0.formatting.len() == 0)) by (compute_only);
+    ml_w3c_eq_in_row();
+}
+
+/// What `independent::equivalence::lemma_in_cell` gives at the certificate
+/// input of `in-cell-end-not-popped`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
 /// tokens are tagged by construction).
-pub proof fn ml_w3c_in_cell()
+proof fn ml_w3c_eq_in_cell()
     ensures
         crate::independent::w3c_mode_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64])) == mode_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64])),
 {
     hide(tag_of);
     crate::independent::equivalence::lemma_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64]));
+}
+
+pub proof fn ml_w3c_in_cell()
+    ensures
+        !(mode_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64]))->Done_0.open.len() == 5),
+{
+    assert(!(crate::independent::w3c_mode_in_cell(ml_env(), Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(seq![0x74u32, 0x64])])) }, ml_named_end(seq![0x74u32, 0x64]))->Done_0.open.len() == 5)) by (compute_only);
+    ml_w3c_eq_in_cell();
+}
+
+/// What `independent::equivalence::lemma_in_template` gives at the certificate
+/// input of `in-template-col-wrong-mode`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_in_template()
+    ensures
+        crate::independent::w3c_mode_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col)) == mode_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col));
+}
+
+pub proof fn ml_w3c_in_template()
+    ensures
+        !(mode_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col))->Reprocess_0.mode == Mode::InTable),
+{
+    assert(!(crate::independent::w3c_mode_in_template(ml_env(), ml_template_parser(), ml_start(Tag::Col))->Reprocess_0.mode == Mode::InTable)) by (compute_only);
+    ml_w3c_eq_in_template();
+}
+
+/// What `independent::equivalence::lemma_after_body` gives at the certificate
+/// input of `after-body-html-end-wrong-mode`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_after_body()
+    ensures
+        crate::independent::w3c_mode_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html)) == mode_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html));
+}
+
+pub proof fn ml_w3c_after_body()
+    ensures
+        !(mode_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterBody),
+{
+    assert(!(crate::independent::w3c_mode_after_body(ml_env(), ml_parser(Mode::AfterBody, ml_open_body(), seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterBody)) by (compute_only);
+    ml_w3c_eq_after_body();
+}
+
+/// What `independent::equivalence::lemma_in_frameset` gives at the certificate
+/// input of `in-frameset-root-popped`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_in_frameset()
+    ensures
+        crate::independent::w3c_mode_in_frameset(ml_env(), Parser { context: Some(ml_elem(Tag::Html)), ..ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]) }, ml_end(Tag::Frameset)) == mode_in_frameset(ml_env(), Parser { context: Some(ml_elem(Tag::Html)), ..ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]) }, ml_end(Tag::Frameset)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_frameset(ml_env(), Parser { context: Some(ml_elem(Tag::Html)), ..ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]) }, ml_end(Tag::Frameset));
+}
+
+pub proof fn ml_w3c_in_frameset()
+    ensures
+        !(mode_in_frameset(ml_env(), Parser { context: Some(ml_elem(Tag::Html)), ..ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]) }, ml_end(Tag::Frameset))->Done_0.open.len() == 0),
+{
+    assert(!(crate::independent::w3c_mode_in_frameset(ml_env(), Parser { context: Some(ml_elem(Tag::Html)), ..ml_parser(Mode::InFrameset, seq![ml_elem(Tag::Html)], seq![]) }, ml_end(Tag::Frameset))->Done_0.open.len() == 0)) by (compute_only);
+    ml_w3c_eq_in_frameset();
+}
+
+/// What `independent::equivalence::lemma_after_frameset` gives at the certificate
+/// input of `after-frameset-html-end-wrong-mode`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_after_frameset()
+    ensures
+        crate::independent::w3c_mode_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html)) == mode_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html));
+}
+
+pub proof fn ml_w3c_after_frameset()
+    ensures
+        !(mode_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterFrameset),
+{
+    assert(!(crate::independent::w3c_mode_after_frameset(ml_env(), ml_parser(Mode::AfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_end(Tag::Html))->Done_0.mode == Mode::AfterFrameset)) by (compute_only);
+    ml_w3c_eq_after_frameset();
+}
+
+/// What `independent::equivalence::lemma_after_after_frameset` gives at the certificate
+/// input of `after-after-frameset-noframes-dropped`.
+/// The equivalence lemma at that input (`tag_of` hidden: the records and
+/// tokens are tagged by construction).
+proof fn ml_w3c_eq_after_after_frameset()
+    ensures
+        crate::independent::w3c_mode_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes)) == mode_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes)),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes));
+}
+
+pub proof fn ml_w3c_after_after_frameset()
+    ensures
+        !(mode_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes)) is Done),
+{
+    assert(!(crate::independent::w3c_mode_after_after_frameset(ml_env(), ml_parser(Mode::AfterAfterFrameset, seq![ml_elem(Tag::Html)], seq![]), ml_start(Tag::Noframes)) is Done)) by (compute_only);
+    ml_w3c_eq_after_after_frameset();
 }
 } // verus!
