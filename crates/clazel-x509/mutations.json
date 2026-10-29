@@ -2857,7 +2857,7 @@
       "certificate": {
         "file": "src/path/mutation_certificates.rs",
         "lemma": "super::examples::lemma_two_certificate_path()",
-        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Ok::<Seq<u8>, PathError>(super::examples::key(2))"
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) != super::examples::leaf_key()"
       }
     },
     {
@@ -3249,7 +3249,7 @@
       "certificate": {
         "file": "src/path/mutation_certificates.rs",
         "lemma": "super::examples::lemma_candidate_valid()",
-        "witness": "super::examples::verdict(6, seq![0nat]) == Ok::<Seq<u8>, PathError>(super::examples::leaf().der)"
+        "witness": "super::examples::verdict(6, seq![0nat]) != super::examples::leaf_key()"
       }
     }
   ]
