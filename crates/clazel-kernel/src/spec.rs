@@ -63,17 +63,45 @@
 //!   `Commit` to the same renderer and updates its committed URL. A
 //!   navigation to an opaque-origin URL always spawns (each opaque origin is
 //!   new).
+//! - **A committed document (phase-4.md item 4.12).** A document reaches its
+//!   renderer as one `ToRenderer` whose bytes are several whole frames, in
+//!   order: `Commit { url, content type, kind }`, zero or more `Body` frames
+//!   whose bytes concatenate to the document's body, and `BodyEnd`
+//!   ([`commit_frames`]; each `Body` holds at most `max_body_chunk` octets,
+//!   so every frame is within `MAX_FRAME`). A stream socket carries the same
+//!   octets whether they are one write or several, so this is the plan's
+//!   "`Commit`, zero or more `Body` frames, `BodyEnd`" as one output, which
+//!   keeps every statement about whom an output is for unchanged.
+//!   [`Document`] is what is committed: the body of a fetch is a document of
+//!   kind 0 whose content type is the response's combined `Content-Type`
+//!   field value (RFC 9110 §5.2, through `clazel-http`; the kernel does not
+//!   parse the type, the renderer does), or empty if it has none.
 //! - **Where a script comes from.** Phase 2 renderers run scripted
-//!   operations, not pages (the plan's "Commit { url, script }" does not say
-//!   where the script is from). `OpenTab` carries it, since it is what the
-//!   user does (the demo of item 2.16 types in a URL and a script; `OpenTab`
-//!   is not yet a fetch, see below). Every other document is the body of a
-//!   fetch (item 3.7, below): `Commit { url, script }` is sent with the
-//!   fetch's body as the script, "for now; Phase 4 gives it a document".
-//!   Nothing a renderer or the user sends reaches the script of a navigation:
-//!   that is what keeps a navigation from another domain from carrying
-//!   anything into the new renderer except the resolved URL (item 2.11's
-//!   declassification allows only that).
+//!   operations (the demo of item 2.16 and the WPT `cookies/` rows), which
+//!   stay until Phase 7 replaces them with JavaScript. `OpenTab` carries the
+//!   script, since it is what the user does: `OpenTab(url, Some(script))`
+//!   commits the URL at once with the script as a document of kind 1 (a user
+//!   script, with no content type). `OpenTab(url, None)` is the browser's
+//!   ordinary new tab: it spawns the tab's renderer, not yet committed, and
+//!   starts the fetch of the URL ([`begin_navigation`]), whose body is then
+//!   committed as a document of kind 0. Every other document is the body of
+//!   a fetch (item 3.7, below). Nothing a renderer or the user sends reaches
+//!   the body of a navigation: that is what keeps a navigation from another
+//!   domain from carrying anything into the new renderer except the resolved
+//!   URL (item 2.11's declassification allows only that).
+//! - **A renderer is committed once its first document is.** Its record
+//!   holds whether it is ([`Renderer::committed`]); until then its `url` is
+//!   the URL it is navigating to, not one it committed. Only a committed
+//!   renderer may send `Display`.
+//! - **What the user sees (phase-4.md item 4.12).** A committed renderer's
+//!   `Display { title, text, links }` becomes the output `Show { tab, url,
+//!   title, text, links }`, where `tab` is the sender's tab and `url` the
+//!   sender's committed URL, both from the kernel's state, never from the
+//!   message: the address line is the kernel's. It has no other effect. A
+//!   `Display` from a renderer that is not committed is a message the
+//!   renderer may not send, and is treated as every such frame is (below):
+//!   the sender is killed. A `Display` over `MAX_FRAME` never reaches `step`
+//!   (the host shell turns it into `RendererExited`).
 //! - **A renderer's `Navigate` is a `NavigateTab`.** The kernel decodes the
 //!   URL as UTF-8, resolves it against the renderer's committed URL (the
 //!   `resolve` function) and then does exactly `NavigateTab(its tab,
@@ -228,18 +256,21 @@
 //!   then one CBOR item), decoded by `clazel_ipc::message::spec::decode_framed`;
 //!   a frame over `MAX_FRAME` never reaches `step` (the host shell turns it
 //!   into `RendererExited`, item 2.15), and if one did, it would not decode.
-//!   Every output is a whole frame ([`reply_frame`]). A message that cannot
-//!   be sent (a `Commit` whose script is not UTF-8, or one over the frame
-//!   limit) is replaced by [`error_encode`]; the fallback is itself always
-//!   encodable.
+//!   Every `ToRenderer` is whole frames ([`reply_frame`], or the frames of a
+//!   committed document). A message that cannot be sent (a reply whose text
+//!   is not UTF-8, or one over the frame limit) is replaced by
+//!   [`error_encode`]; the fallback is itself always encodable, and the
+//!   frames of a document never need it (`theorem_body_is_the_response`).
 //! - **Malformed input.** Every defined result depends only on the sender's
 //!   own record, the sender's domain's state and the message:
 //!   - an id that names no renderer: no state change, no output;
 //!   - a frame that does not decode to a message, or that decodes to a
-//!     message a renderer may not send (`Commit`, `CookieValue`,
-//!     `StorageValue`, `StorageLengthValue`, `Error`): the sender is
-//!     killed, `Kill(id)` and its record is removed (a protocol violation is
-//!     not recoverable; the host kills the process). The tab is closed;
+//!     message a renderer may not send (`Commit`, `Body`, `BodyEnd`,
+//!     `CookieValue`, `StorageValue`, `StorageLengthValue`, `Error`, and
+//!     `Display` before the renderer is committed, [`accepted_message`]):
+//!     the sender is killed, `Kill(id)` and its record is removed (a
+//!     protocol violation is not recoverable; the host kills the process).
+//!     The tab is closed;
 //!   - a message that decodes but cannot be served (a `Navigate` URL that
 //!     fails, a quota, an opaque `localStorage`): an `Error` reply to the
 //!     sender with a code.
@@ -254,11 +285,12 @@
 //!   ([`clazel_cookie::storage::spec::evict_expired`], which depends on
 //!   time only). Every cookie call takes the current time from the state.
 //! - **Renderer ids never appear in a byte sent to a renderer.** The
-//!   messages built here (`Commit`, `CookieValue`, `StorageValue`,
-//!   `StorageLengthValue`, `Error`) have no id field (the schema rule of item
-//!   2.3), and their fields are the committed URL and script (inputs of the
-//!   user or of the sender's own navigation), cookie strings and storage
-//!   values (of the sender's own domain) and constant codes.
+//!   messages built here (`Commit`, `Body`, `BodyEnd`, `CookieValue`,
+//!   `StorageValue`, `StorageLengthValue`, `Error`) have no id field (the
+//!   schema rule of item 2.3), and their fields are the committed URL, the
+//!   document's content type and body (inputs of the user or of the sender's
+//!   own navigation), cookie strings and storage values (of the sender's own
+//!   domain) and constant codes.
 //! - **A spawn names a policy.** `Spawn(id, policy)` carries [`Policy`], of
 //!   which there is one value (the renderer sandbox of item 2.14); the host
 //!   maps it to the platform's policy.
@@ -352,11 +384,15 @@ pub struct StorageEntry {
 
 /// A renderer process, from the kernel's side.
 pub struct Renderer {
+    /// Whether a document has been committed in it: false only from an
+    /// `OpenTab` without a script until the first commit of its tab's fetch.
+    pub committed: bool,
     /// The renderer's id (never sent to any renderer).
     pub id: nat,
     /// The tab it renders (the id of the first renderer of the tab).
     pub tab: nat,
-    /// The URL it committed, absolute.
+    /// The URL it committed, absolute (before its first commit, the URL its
+    /// tab was opened at).
     pub url: Seq<u32>,
     /// Its lock: the origin of `url`, chosen by the kernel
     /// ([`lock_of_url`]). The one origin this renderer ever serves.
@@ -437,12 +473,13 @@ pub enum Event {
         /// The raw frame bytes.
         bytes: Seq<u8>,
     },
-    /// The user typed an absolute URL into a new tab.
+    /// The user typed an absolute URL into a new tab: the page is fetched,
+    /// or, with a script (the Phase 2 path), committed at once with it.
     OpenTab {
         /// The URL.
         url: Seq<u32>,
-        /// The script the document runs (UTF-8 text).
-        script: Seq<u8>,
+        /// A user script the document runs instead of a fetch.
+        script: Option<Seq<u8>>,
     },
     /// The user typed an absolute URL into an existing tab.
     NavigateTab {
@@ -525,6 +562,32 @@ pub enum Output {
         /// The connection.
         conn: nat,
     },
+    /// Show the user what the renderer of `tab` displays (phase-4.md item
+    /// 4.12), under the address line `url`. Addressed to the user, not to a
+    /// renderer; `tab` and `url` come from the kernel's state.
+    Show {
+        /// The tab.
+        tab: nat,
+        /// Its renderer's committed URL.
+        url: Seq<u32>,
+        /// The title the renderer displays.
+        title: Seq<u8>,
+        /// The text it displays.
+        text: Seq<u8>,
+        /// The links it displays.
+        links: Seq<Seq<u8>>,
+    },
+}
+
+/// A document to commit (phase-4.md item 4.12): its content type, its kind
+/// and its body.
+pub struct Document {
+    /// The response's combined `Content-Type` field value, or empty.
+    pub content_type: Seq<u8>,
+    /// [`kind_document`] or [`kind_script`].
+    pub kind: u64,
+    /// The body.
+    pub body: Seq<u8>,
 }
 
 /// The kernel before anything happens.
@@ -584,10 +647,62 @@ pub open spec fn reply_frame(m: clazel_ipc::message::spec::Message) -> Seq<u8> {
     }
 }
 
-/// The frame of a `Commit` of `url` running `script`. The URL is sent as
-/// UTF-8 (the Encoding Standard's encoder).
-pub open spec fn commit_frame(url: Seq<u32>, script: Seq<u8>) -> Seq<u8> {
-    reply_frame(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(url), script })
+/// `Commit`'s kind for a document the renderer parses.
+pub open spec fn kind_document() -> u64 {
+    0
+}
+
+/// `Commit`'s kind for a user script (the Phase 2 script path).
+pub open spec fn kind_script() -> u64 {
+    1
+}
+
+/// The `Body` frames of `body`, in order: consecutive pieces of at most
+/// `max_body_chunk` octets, none for an empty body.
+pub open spec fn body_frames(body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_body_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::Body { bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::Body { bytes: body.take(clazel_ipc::message::spec::max_body_chunk() as int) })
+            + body_frames(body.skip(clazel_ipc::message::spec::max_body_chunk() as int))
+    }
+}
+
+/// The frames that commit `doc` at `url`: `Commit`, the `Body` frames and
+/// `BodyEnd`, as the octets of one write. The URL is sent as UTF-8 (the
+/// Encoding Standard's encoder).
+pub open spec fn commit_frames(url: Seq<u32>, doc: Document) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(url), content_type: doc.content_type, kind: doc.kind })
+        + body_frames(doc.body) + reply_frame(clazel_ipc::message::spec::Message::BodyEnd)
+}
+
+/// The field name `content-type`.
+pub open spec fn content_type_name() -> Seq<u8> {
+    seq![0x63u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x74, 0x79, 0x70, 0x65]
+}
+
+/// The document a fetch's response commits: kind 0, the combined value of
+/// its `Content-Type` field lines (RFC 9110 §5.2 and §5.3, through
+/// `clazel-http`'s `combined_field_value`), or empty if it has none, and its
+/// body.
+pub open spec fn response_document(response: clazel_http::message::spec::Response) -> Document {
+    Document {
+        content_type: match clazel_http::field::spec::combined_field_value(response.fields, content_type_name()) {
+            Some(v) => v,
+            None => seq![],
+        },
+        kind: kind_document(),
+        body: response.body,
+    }
+}
+
+/// The document of a user script: kind 1, no content type.
+pub open spec fn script_document(script: Seq<u8>) -> Document {
+    Document { content_type: seq![], kind: kind_script(), body: script }
 }
 
 /// A single `ToRenderer` of `m` to renderer `r`.
@@ -854,11 +969,11 @@ pub open spec fn storage_call(s: State, r: Renderer, m: clazel_ipc::message::spe
 // The events.
 // ---------------------------------------------------------------------
 
-/// The renderer `old` of tab `tab`, at index `i`, commits the document at
-/// `url` running `script`: the shared body of a successful navigation
-/// ([`commit_navigation`]: the final URL and the body) and, as item 2.11 states it, what a navigation
-/// does to the renderers. The renderer is no longer navigating.
-pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>) -> (State, Seq<Output>) {
+/// The renderer `old` of tab `tab`, at index `i`, commits the document `doc`
+/// at `url`: the shared body of a successful navigation
+/// ([`commit_navigation`]: the final URL and the response) and, as item 2.11 states it, what a navigation
+/// does to the renderers. The renderer is committed and no longer navigating.
+pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, doc: Document) -> (State, Seq<Output>) {
     match find_by_tab(s.renderers, tab, 0) {
         // No such tab (or its renderer has exited): nothing to navigate.
         None => (s, seq![]),
@@ -869,19 +984,19 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, s
                 None => (s, seq![]),
                 Some(lock) => if lock is Tuple && lock == old.lock {
                     // The same origin: the renderer stays and commits again.
-                    let r = Renderer { url, pending: None, ..old };
+                    let r = Renderer { url, pending: None, committed: true, ..old };
                     (State { renderers: s.renderers.update(i, r), ..s }, seq![
-                        Output::ToRenderer { id: old.id, bytes: commit_frame(url, script) },
+                        Output::ToRenderer { id: old.id, bytes: commit_frames(url, doc) },
                     ])
                 } else {
                     // A different origin: one renderer, one origin. A new
                     // renderer in the tab, the old one killed.
                     let id = s.next_id;
-                    let r = Renderer { id, tab, url, lock, pending: None };
+                    let r = Renderer { committed: true, id, tab, url, lock, pending: None };
                     (State { renderers: s.renderers.update(i, r), next_id: id + 1, ..s }, seq![
                         Output::Kill { id: old.id },
                         Output::Spawn { id, policy: Policy::Renderer },
-                        Output::ToRenderer { id, bytes: commit_frame(url, script) },
+                        Output::ToRenderer { id, bytes: commit_frames(url, doc) },
                     ])
                 },
             }
@@ -934,15 +1049,33 @@ pub open spec fn begin_navigation(
     }
 }
 
-/// `OpenTab(url)`: a new tab with a new renderer.
-pub open spec fn open_tab(urls: UrlFns, s: State, url: Seq<u32>, script: Seq<u8>) -> (State, Seq<Output>) {
+/// `OpenTab(url, script)`: a new tab with a new renderer, locked to the
+/// URL's origin. With a script, the renderer commits the URL at once with
+/// the script (kind 1); without one, it starts uncommitted and its tab starts
+/// the fetch of the URL ([`begin_navigation`]), which commits it when it
+/// completes.
+pub open spec fn open_tab(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    url: Seq<u32>,
+    script: Option<Seq<u8>>,
+) -> (State, Seq<Output>) {
     let id = s.next_id;
     match lock_of_url(urls, url, id) {
         None => (s, seq![]),
-        Some(lock) => (
-            State { renderers: s.renderers.push(Renderer { id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s },
-            seq![Output::Spawn { id, policy: Policy::Renderer }, Output::ToRenderer { id, bytes: commit_frame(url, script) }],
-        ),
+        Some(lock) => match script {
+            Some(script) => (
+                State { renderers: s.renderers.push(Renderer { committed: true, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s },
+                seq![Output::Spawn { id, policy: Policy::Renderer }, Output::ToRenderer { id, bytes: commit_frames(url, script_document(script)) }],
+            ),
+            None => {
+                let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };
+                let (s2, out) = begin_navigation(rules, urls, fetch, s1, id, url);
+                (s2, seq![Output::Spawn { id, policy: Policy::Renderer }] + out)
+            },
+        },
     }
 }
 
@@ -1088,18 +1221,17 @@ pub open spec fn open_connection(s: State, tab: nat, partition: crate::domain::D
     }
 }
 
-/// The navigation of `tab` ends with the document at the final URL `href`
-/// and the response's `body`: its connections are closed, then, if `href`
-/// is a string of Unicode scalar values with a lock, the tab's renderer
-/// commits it ([`navigate_tab`]); otherwise the navigation fails with
-/// [`error_bad_url`].
-pub open spec fn commit_navigation(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>) -> (State, Seq<Output>) {
+/// The navigation of `tab` ends with the document `doc` at the final URL
+/// `href`: its connections are closed, then, if `href` is a string of
+/// Unicode scalar values with a lock, the tab's renderer commits it
+/// ([`navigate_tab`]); otherwise the navigation fails with [`error_bad_url`].
+pub open spec fn commit_navigation(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, doc: Document) -> (State, Seq<Output>) {
     let (s1, closes) = close_tab_conns(s, tab);
     match find_by_tab(s1.renderers, tab, 0) {
         None => (s1, closes),
         Some(i) => {
             let (s2, out) = if scalar_url(href) && lock_of_url(urls, href, s1.next_id) is Some {
-                navigate_tab(urls, s1, tab, href, body)
+                navigate_tab(urls, s1, tab, href, doc)
             } else {
                 fail_navigation(s1, i, s1.renderers[i], error_bad_url())
             };
@@ -1133,7 +1265,7 @@ pub open spec fn abort_navigation(s: State, tab: nat, code: u64) -> (State, Seq<
 /// - `Close`: `Close { conn: cur }`, and `cur` leaves the table;
 /// - `Done { url, response }`: the navigation commits ([`commit_navigation`])
 ///   `url` serialized by the URL Standard's URL serializer (§4.5, exclude
-///   fragment false) with the response's body as the script;
+///   fragment false) with the response's document ([`response_document`]);
 /// - `Fail(_)`: the navigation fails with [`error_fetch`]
 ///   ([`abort_navigation`]).
 ///
@@ -1171,7 +1303,7 @@ pub open spec fn carry_out(urls: UrlFns, s: State, tab: nat, partition: crate::d
                 s,
                 tab,
                 clazel_url::url::spec::url_serializer(url, false),
-                response.body,
+                response_document(response),
             ),
             clazel_fetch::transducer::spec::Action::Fail(_) => abort_navigation(s, tab, error_fetch()),
         }
@@ -1257,6 +1389,15 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
     }
 }
 
+/// The message in a frame renderer `r` sent, if `r` may send it: a message
+/// a renderer may send, and `Display` only once `r` is committed.
+pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
+    match decode_renderer_frame(bytes) {
+        Some(m) => if m is Display && !r.committed { None } else { Some(m) },
+        None => None,
+    }
+}
+
 /// A message that decoded, from the renderer `r`.
 pub open spec fn handle_message(
     rules: Seq<clazel_psl::spec::Rule>,
@@ -1317,6 +1458,9 @@ pub open spec fn handle_message(
                 },
             },
         },
+        // `Display` (phase-4.md item 4.12): shown for the sender's tab, under
+        // its committed URL; neither comes from the message.
+        clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),
@@ -1335,9 +1479,9 @@ pub open spec fn from_renderer(
     match find_by_id(s.renderers, id, 0) {
         // An id that names no renderer: ignored.
         None => (s, seq![]),
-        Some(i) => match decode_renderer_frame(bytes) {
-            // A frame that is not a message a renderer may send: the sender
-            // is killed.
+        Some(i) => match accepted_message(s.renderers[i], bytes) {
+            // A frame that is not a message this renderer may send: the
+            // sender is killed.
             None => {
                 let (s0, closes) = close_tab_conns(s, s.renderers[i].tab);
                 (State { renderers: s.renderers.remove(i), ..s0 }, seq![Output::Kill { id }] + closes)
@@ -1351,7 +1495,7 @@ pub open spec fn from_renderer(
 pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> (State, Seq<Output>) {
     match e {
         Event::FromRenderer { id, bytes } => from_renderer(rules, urls, fetch, s, id, bytes),
-        Event::OpenTab { url, script } => open_tab(urls, s, url, script),
+        Event::OpenTab { url, script } => open_tab(rules, urls, fetch, s, url, script),
         Event::NavigateTab { tab, url } => begin_navigation(rules, urls, fetch, s, tab, url),
         Event::Net { conn, input } => net(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => renderer_exited(s, id),

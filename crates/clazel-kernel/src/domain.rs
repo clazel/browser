@@ -226,7 +226,8 @@ pub open spec fn purge(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: 
 /// `Kill`; stating that is item 2.11's.) `Connect`, `Send` and `Close` are
 /// addressed to the network shell, not to a renderer
 /// (`noninterference::addressed_to` is false for them); their connection is
-/// returned only to make the function total.
+/// returned only to make the function total. A `Show` is addressed by its tab
+/// (`noninterference::addressed_to`), which is returned here.
 pub open spec fn output_id(o: Output) -> nat {
     match o {
         Output::ToRenderer { id, .. } => id,
@@ -235,6 +236,7 @@ pub open spec fn output_id(o: Output) -> nat {
         Output::Connect { conn, .. } => conn,
         Output::Send { conn, .. } => conn,
         Output::Close { conn } => conn,
+        Output::Show { tab, .. } => tab,
     }
 }
 

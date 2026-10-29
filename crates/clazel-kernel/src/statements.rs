@@ -34,7 +34,8 @@ verus! {
 /// connection opened in this step (an id from `next_conn` on, below the new
 /// counter); and a `Close` is for a connection of the sender's own tab (a
 /// navigation it starts replaces its tab's in-flight one, or it is killed and
-/// takes its tab's connections with it).
+/// takes its tab's connections with it). Item 4.12: a `Show` is for the
+/// sender's own tab.
 pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
     let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
     forall|k: int|
@@ -46,7 +47,139 @@ pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rul
             Output::Send { .. } => false,
             Output::Close { conn: x } => exists|i: int, j: int|
                 0 <= i < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i].tab,
+            Output::Show { tab: x, .. } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == x,
         }
+}
+
+// ---------------------------------------------------------------------
+// What the user sees, and what a renderer is given (phase-4.md item 4.12).
+// ---------------------------------------------------------------------
+
+/// `theorem_show_only_own_tab`: a step outputs a `Show` only for a
+/// `FromRenderer(id, _)` event of a live renderer `r` (it is `r`'s
+/// `Display`), and then the `Show` is the step's only output, it is for
+/// `r`'s tab, and the state is unchanged. No other event (a fetch, the user,
+/// a timer, an exit) shows anything.
+pub open spec fn show_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    (exists|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is Show) ==> match e {
+        Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => s1 == s && out.len() == 1 && out[0] is Show && out[0]->Show_tab == s.renderers[i].tab,
+            None => false,
+        },
+        _ => false,
+    }
+}
+
+/// `theorem_address_bar_integrity`: whatever frame `bytes` renderer `id`
+/// sends, every `Show` it gives is labelled with the tab and the URL the
+/// kernel holds for `id`, and `id` is committed, so the URL is the one the
+/// kernel committed there: nothing in the message reaches the address line.
+pub open spec fn address_bar_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
+    forall|k: int|
+        0 <= k < out.len() && (#[trigger] out[k]) is Show ==> exists|i: int|
+            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Show_url == s.renderers[i].url
+                && out[k]->Show_tab == s.renderers[i].tab
+}
+
+/// The messages a renderer reads from `b`, the octets of one write: whole
+/// frames, one after another, each decoding to a message (item 2.3's
+/// `decode_framed`), with nothing left over. `None` if `b` is not that.
+pub open spec fn decode_frames(b: Seq<u8>) -> Option<Seq<clazel_ipc::message::spec::Message>>
+    decreases b.len(),
+{
+    if b.len() == 0 {
+        Some(seq![])
+    } else if b.len() < 4 {
+        None
+    } else {
+        match clazel_ipc::frame::spec::payload_length(b.take(4)) {
+            None => None,
+            Some(n) => if b.len() < 4 + n {
+                None
+            } else {
+                match clazel_ipc::message::spec::decode_framed(b.take((4 + n) as int)) {
+                    None => None,
+                    Some(m) => match decode_frames(b.skip((4 + n) as int)) {
+                        Some(ms) => Some(seq![m] + ms),
+                        None => None,
+                    },
+                }
+            },
+        }
+    }
+}
+
+/// The body of `Body` messages up to a final `BodyEnd`: their bytes,
+/// concatenated in order. `None` unless `ms` is zero or more `Body`, then
+/// `BodyEnd`, and nothing after it.
+pub open spec fn body_of(ms: Seq<clazel_ipc::message::spec::Message>) -> Option<Seq<u8>>
+    decreases ms.len(),
+{
+    if ms.len() == 0 {
+        None
+    } else {
+        match ms[0] {
+            clazel_ipc::message::spec::Message::Body { bytes } => match body_of(ms.drop_first()) {
+                Some(rest) => Some(bytes + rest),
+                None => None,
+            },
+            clazel_ipc::message::spec::Message::BodyEnd => if ms.len() == 1 {
+                Some(seq![])
+            } else {
+                None
+            },
+            _ => None,
+        }
+    }
+}
+
+/// What a renderer reads as a committed document from the octets `b` of one
+/// write: its `Commit` and the body its `Body` frames carry, if `b` is the
+/// frames of `Commit`, `Body`..., `BodyEnd`.
+pub open spec fn committed_document(b: Seq<u8>) -> Option<(clazel_ipc::message::spec::Message, Seq<u8>)> {
+    match decode_frames(b) {
+        Some(ms) => if ms.len() > 0 && ms[0] is Commit {
+            match body_of(ms.drop_first()) {
+                Some(body) => Some((ms[0], body)),
+                None => None,
+            }
+        } else {
+            None
+        },
+        None => None,
+    }
+}
+
+/// `theorem_body_is_the_response`: on a `Net` event, every `ToRenderer`
+/// whose octets start with a `Commit` frame is the whole document of a
+/// response the tab's fetch finished with at that step (a `Done { url,
+/// response }` of the transducer): the frames are exactly `Commit`, `Body`
+/// frames and `BodyEnd`; the `Commit` carries the final URL (`url`
+/// serialized), the response's combined `Content-Type` value and kind 0; and
+/// the `Body` frames concatenate to the response's body, whole and in order.
+pub open spec fn body_is_the_response_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
+    let out = step(rules, urls, fetch, s, Event::Net { conn, input }).1;
+    forall|k: int|
+        0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer && (decode_frames(out[k]->ToRenderer_bytes) matches Some(ms) && ms.len() > 0
+            && ms[0] is Commit) ==> exists|url: clazel_url::url::spec::Url, response: clazel_http::message::spec::Response|
+            #![trigger response_document(response), clazel_url::url::spec::url_serializer(url, false)]
+            {
+                &&& net_target(s, conn) matches Some((_, _, nav)) && net_transducer_step(fetch, s, nav, input).1.contains(
+                    clazel_fetch::transducer::spec::Action::Done { url, response },
+                )
+                &&& committed_document(out[k]->ToRenderer_bytes) == Some(
+                    (
+                        clazel_ipc::message::spec::Message::Commit {
+                            url: clazel_encoding::utf8::spec::utf8_encode(clazel_url::url::spec::url_serializer(url, false)),
+                            content_type: response_document(response).content_type,
+                            kind: kind_document(),
+                        },
+                        response.body,
+                    ),
+                )
+            }
 }
 
 /// `theorem_net_only_to_tab` (item 3.7; replaces `theorem_fetched_only_to_tab`):
@@ -70,6 +203,7 @@ pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, u
                 Output::Connect { .. } => true,
                 Output::Send { .. } => true,
                 Output::Close { .. } => true,
+                Output::Show { .. } => false,
             },
     }
 }
@@ -169,8 +303,9 @@ pub open spec fn net_jar_frame_statement(rules: Seq<clazel_psl::spec::Rule>, url
 
 /// The tab an event is about, for connections: the sender's tab for a
 /// `FromRenderer` of a renderer that exists, the tab of a `NavigateTab`, the
-/// tab of the renderer that exits, and the owner of the connection of a `Net`
-/// (when it is open). Other events are about no tab.
+/// tab an `OpenTab` without a script opens (whose fetch it starts, item
+/// 4.12), the tab of the renderer that exits, and the owner of the
+/// connection of a `Net` (when it is open). Other events are about no tab.
 pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
     match e {
         Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
@@ -178,6 +313,11 @@ pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
             None => None,
         },
         Event::NavigateTab { tab, .. } => Some(tab),
+        Event::OpenTab { script, .. } => if script is None {
+            Some(s.next_id)
+        } else {
+            None
+        },
         Event::RendererExited { id } => match find_by_id(s.renderers, id, 0) {
             Some(i) => Some(s.renderers[i].tab),
             None => None,
