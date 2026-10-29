@@ -14,7 +14,11 @@
 //! `clazel_dom::lemmas` gives `wf` and the kinds of the old nodes. The
 //! helpers also keep [`fx`] (no entry of the list is for a `template` start
 //! tag, and no two entries are for the same element), which
-//! [`super::nodes`] needs to count the nodes the adoption agency creates.
+//! [`super::nodes`] needs to count the nodes the adoption agency creates,
+//! [`od`] (until parsing stops, no two entries of the stack of open
+//! elements are for the same element: every element pushed is new, but the
+//! `head` element "after head" pushes back and then removes; see
+//! [`theorem_open_distinct`]), and the insertion target redirection map.
 //!
 //! The hypotheses. A few rules read an entry of the stack of open
 //! elements without checking that the stack has one ("in body"'s `html` and
@@ -83,14 +87,32 @@ pub open spec fn fx(p: Parser) -> bool {
     crate::termination::formatting_ok(p) && fmt_unique(p)
 }
 
+/// Until parsing stops, the stack of open elements holds distinct elements
+/// (`independent::equivalence_foreign::open_distinct`).
+pub open spec fn od(p: Parser) -> bool {
+    p.stopped || crate::independent::equivalence_foreign::open_distinct(p.open)
+}
+
+/// Every entry of the list of active formatting elements is for an HTML
+/// element (the parser pushes only elements it creates for formatting
+/// tags in the HTML namespace).
+pub open spec fn fh(p: Parser) -> bool {
+    forall|i: int| 0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry ==> p.formatting[i]->Entry_elem.ns
+        == Namespace::Html
+}
+
 /// `q` comes from `p` keeping [`st`], extending the document by at most `c`
-/// nodes, and keeping [`fx`].
+/// nodes, keeping [`fx`], [`od`] and [`fh`], and keeping the insertion
+/// target redirection map (no rule changes it).
 #[verifier::opaque]
 pub open spec fn kp(p: Parser, q: Parser, c: nat) -> bool {
     &&& st(q)
     &&& dext(p.doc, q.doc)
     &&& q.doc.nodes.len() <= p.doc.nodes.len() + c
     &&& fx(p) ==> fx(q)
+    &&& od(p) ==> od(q)
+    &&& fh(p) ==> fh(q)
+    &&& q.redirect == p.redirect
 }
 
 /// The nodes an element created for a token takes: two for an HTML
@@ -148,6 +170,9 @@ pub proof fn lemma_kp(p: Parser, q: Parser, c: nat)
         dext(p.doc, q.doc),
         q.doc.nodes.len() <= p.doc.nodes.len() + c,
         fx(p) ==> fx(q),
+        od(p) ==> od(q),
+        fh(p) ==> fh(q),
+        q.redirect == p.redirect,
 {
     reveal(kp);
 }
@@ -280,7 +305,7 @@ pub proof fn lemma_st_lists(p: Parser, q: Parser)
             0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry ==> elem_in_doc(q.doc, q.formatting[i]->Entry_elem),
     ensures
         st(q),
-        kp(p, q, 0) <==> (fx(p) ==> fx(q)),
+        kp(p, q, 0) <==> ((fx(p) ==> fx(q)) && (od(p) ==> od(q)) && (fh(p) ==> fh(q))),
 {
     reveal(st);
     reveal(kp);
@@ -628,6 +653,10 @@ pub proof fn lemma_insert_foreign_element(p: Parser, t: TagTok, ns: Namespace)
                 assert(q.open[i] == p2.open[i]);
             }
         }
+        lemma_fresh(p, e.id);
+        if od(p2) {
+            lemma_distinct_push(p2.open, e);
+        }
         lemma_st_lists(p2, q);
         lemma_kp_trans(p, p2, q, elem_cost(ns, t.tag), 0);
     }
@@ -766,6 +795,153 @@ pub proof fn lemma_generic_text_parsing(p: Parser, t: TagTok, rawtext: bool)
 }
 
 // ---------------------------------------------------------------------
+// Distinct stacks ([`od`])
+
+/// No entry of the stack `o` is for the element `id`.
+pub open spec fn not_on(o: Seq<Elem>, id: NodeId) -> bool {
+    forall|j: int| 0 <= j < o.len() ==> (#[trigger] o[j]).id != id
+}
+
+/// A prefix of a stack of distinct elements holds distinct elements.
+pub proof fn lemma_distinct_prefix(o: Seq<Elem>, q: Seq<Elem>)
+    requires
+        crate::independent::equivalence_foreign::open_distinct(o),
+        q.len() <= o.len(),
+        forall|i: int| 0 <= i < q.len() ==> #[trigger] q[i] == o[i],
+    ensures
+        crate::independent::equivalence_foreign::open_distinct(q),
+{
+    assert forall|j: int, k: int| 0 <= j < k < q.len() implies #[trigger] q[j].id != #[trigger] q[k].id by {
+        assert(q[j] == o[j]);
+        assert(q[k] == o[k]);
+    }
+}
+
+/// Pushing an element that is not on a stack of distinct elements.
+pub proof fn lemma_distinct_push(o: Seq<Elem>, e: Elem)
+    requires
+        crate::independent::equivalence_foreign::open_distinct(o),
+        not_on(o, e.id),
+    ensures
+        crate::independent::equivalence_foreign::open_distinct(o.push(e)),
+{
+    let q = o.push(e);
+    assert forall|j: int, k: int| 0 <= j < k < q.len() implies #[trigger] q[j].id != #[trigger] q[k].id by {
+        assert(q[j] == o[j]);
+        if k < o.len() {
+            assert(q[k] == o[k]);
+        }
+    }
+}
+
+/// Removing an entry of a stack of distinct elements: the rest are
+/// distinct, and none is for the removed element.
+pub proof fn lemma_distinct_remove(o: Seq<Elem>, i: int)
+    requires
+        crate::independent::equivalence_foreign::open_distinct(o),
+        0 <= i < o.len(),
+    ensures
+        crate::independent::equivalence_foreign::open_distinct(o.remove(i)),
+        not_on(o.remove(i), o[i].id),
+{
+    let q = o.remove(i);
+    assert forall|j: int| 0 <= j < q.len() implies #[trigger] q[j] == o[if j < i {
+        j
+    } else {
+        j + 1
+    }] by {}
+    assert forall|j: int, k: int| 0 <= j < k < q.len() implies #[trigger] q[j].id != #[trigger] q[k].id by {
+        let j0 = if j < i {
+            j
+        } else {
+            j + 1
+        };
+        let k0 = if k < i {
+            k
+        } else {
+            k + 1
+        };
+        assert(q[j] == o[j0]);
+        assert(q[k] == o[k0]);
+    }
+    assert forall|j: int| 0 <= j < q.len() implies (#[trigger] q[j]).id != o[i].id by {
+        if j < i {
+            assert(q[j] == o[j]);
+        } else {
+            assert(q[j] == o[j + 1]);
+        }
+    }
+}
+
+/// Replacing an entry of a stack of distinct elements by an element no
+/// other entry is for.
+pub proof fn lemma_distinct_update(o: Seq<Elem>, i: int, e: Elem)
+    requires
+        crate::independent::equivalence_foreign::open_distinct(o),
+        0 <= i < o.len(),
+        forall|j: int| 0 <= j < o.len() && j != i ==> (#[trigger] o[j]).id != e.id,
+    ensures
+        crate::independent::equivalence_foreign::open_distinct(o.update(i, e)),
+{
+    let q = o.update(i, e);
+    assert forall|j: int, k: int| 0 <= j < k < q.len() implies #[trigger] q[j].id != #[trigger] q[k].id by {
+        if j != i {
+            assert(q[j] == o[j]);
+        }
+        if k != i {
+            assert(q[k] == o[k]);
+        }
+    }
+}
+
+/// Removing an entry of a stack of distinct elements and inserting an
+/// element that was not on it.
+pub proof fn lemma_distinct_remove_insert(o: Seq<Elem>, j: int, k: int, e: Elem)
+    requires
+        crate::independent::equivalence_foreign::open_distinct(o),
+        not_on(o, e.id),
+        0 <= j < o.len(),
+        0 <= k <= o.len() - 1,
+    ensures
+        crate::independent::equivalence_foreign::open_distinct(o.remove(j).insert(k, e)),
+{
+    let o1 = o.remove(j);
+    lemma_distinct_remove(o, j);
+    assert forall|m: int| 0 <= m < o1.len() implies (#[trigger] o1[m]).id != e.id by {
+        if m < j {
+            assert(o1[m] == o[m]);
+        } else {
+            assert(o1[m] == o[m + 1]);
+        }
+    }
+    lemma_distinct_insert(o1, k, e);
+}
+
+/// Inserting an element that is not on a stack of distinct elements.
+pub proof fn lemma_distinct_insert(o: Seq<Elem>, k: int, e: Elem)
+    requires
+        crate::independent::equivalence_foreign::open_distinct(o),
+        not_on(o, e.id),
+        0 <= k <= o.len(),
+    ensures
+        crate::independent::equivalence_foreign::open_distinct(o.insert(k, e)),
+{
+    let q = o.insert(k, e);
+    assert forall|a: int, b: int| 0 <= a < b < q.len() implies #[trigger] q[a].id != #[trigger] q[b].id by {
+        if a < k {
+            assert(q[a] == o[a]);
+        } else if a > k {
+            assert(q[a] == o[a - 1]);
+        }
+        if b < k {
+            assert(q[b] == o[b]);
+        } else if b > k {
+            assert(q[b] == o[b - 1]);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
 // The stack of open elements and the list of active formatting elements
 
 /// `q` is `p` with a prefix of its stack.
@@ -786,6 +962,9 @@ pub proof fn lemma_pops_kp(p: Parser, q: Parser)
     lemma_st(p);
     assert forall|i: int| 0 <= i < q.open.len() implies elem_in_doc(q.doc, #[trigger] q.open[i]) by {
         assert(q.open[i] == p.open[i]);
+    }
+    if od(p) && !p.stopped {
+        lemma_distinct_prefix(p.open, q.open);
     }
     lemma_st_lists(p, q);
 }
@@ -965,6 +1144,9 @@ pub proof fn lemma_remove_open_at(p: Parser, i: int)
             assert(q.open[j] == p.open[j + 1]);
         }
     }
+    if od(p) && !p.stopped {
+        lemma_distinct_remove(p.open, i);
+    }
     lemma_st_lists(p, q);
 }
 
@@ -1009,6 +1191,12 @@ pub proof fn lemma_push_marker(p: Parser)
             assert(q.formatting[i] == p.formatting[i]);
         }
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            assert(q.formatting[i] == p.formatting[i]);
+        }
+    }
     lemma_st_lists(p, q);
 }
 
@@ -1044,6 +1232,12 @@ pub proof fn lemma_fmt_prefix_kp(p: Parser, q: Parser)
             #[trigger] q.formatting[j]) is Entry implies q.formatting[i]->Entry_elem.id != q.formatting[j]->Entry_elem.id by {
             assert(q.formatting[i] == p.formatting[i]);
             assert(q.formatting[j] == p.formatting[j]);
+        }
+    }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            assert(q.formatting[i] == p.formatting[i]);
         }
     }
     lemma_st_lists(p, q);
@@ -1139,6 +1333,16 @@ pub proof fn lemma_fmt_remove(p: Parser, k: int)
     if fx(p) {
         lemma_fx_seq_remove(p.formatting, k);
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            if i < k {
+                assert(q.formatting[i] == p.formatting[i]);
+            } else {
+                assert(q.formatting[i] == p.formatting[i + 1]);
+            }
+        }
+    }
     lemma_st_lists(p, q);
 }
 
@@ -1152,6 +1356,9 @@ pub open spec fn kpu(p: Parser, q: Parser) -> bool {
     &&& st(q)
     &&& dext(p.doc, q.doc)
     &&& fx(p) ==> fx(q)
+    &&& od(p) ==> od(q)
+    &&& fh(p) ==> fh(q)
+    &&& q.redirect == p.redirect
 }
 
 /// What [`kpu`] says.
@@ -1162,6 +1369,24 @@ pub proof fn lemma_kpu(p: Parser, q: Parser)
         st(q),
         dext(p.doc, q.doc),
         fx(p) ==> fx(q),
+        od(p) ==> od(q),
+        fh(p) ==> fh(q),
+        q.redirect == p.redirect,
+{
+    reveal(kpu);
+}
+
+/// [`kpu`] from its parts.
+pub proof fn lemma_kpu_intro(p: Parser, q: Parser)
+    requires
+        st(q),
+        dext(p.doc, q.doc),
+        fx(p) ==> fx(q),
+        od(p) ==> od(q),
+        fh(p) ==> fh(q),
+        q.redirect == p.redirect,
+    ensures
+        kpu(p, q),
 {
     reveal(kpu);
 }
@@ -1361,6 +1586,7 @@ pub proof fn lemma_fresh(p: Parser, id: NodeId)
 pub open spec fn fmt_entry_ok(p: Parser, x: Fmt, skip: int) -> bool {
     &&& x is Entry
     &&& elem_in_doc(p.doc, x->Entry_elem)
+    &&& x->Entry_elem.ns == Namespace::Html
     &&& forall|j: int|
         0 <= j < p.formatting.len() && j != skip && (#[trigger] p.formatting[j]) is Entry ==> p.formatting[j]->Entry_elem.id
             != x->Entry_elem.id
@@ -1373,6 +1599,9 @@ pub proof fn lemma_kp_same_doc(p: Parser, q: Parser)
         st(q),
         q.doc == p.doc,
         fx(p) ==> fx(q),
+        od(p) ==> od(q),
+        fh(p) ==> fh(q),
+        q.redirect == p.redirect,
     ensures
         kp(p, q, 0),
 {
@@ -1388,6 +1617,7 @@ pub proof fn lemma_fmt_update(p: Parser, k: int, x: Fmt)
     ensures
         st(Parser { formatting: p.formatting.update(k, x), ..p }),
         fx(p) && x->Entry_token.tag != Tag::Template ==> fx(Parser { formatting: p.formatting.update(k, x), ..p }),
+        fh(p) ==> fh(Parser { formatting: p.formatting.update(k, x), ..p }),
 {
     lemma_st(p);
     let q = Parser { formatting: p.formatting.update(k, x), ..p };
@@ -1417,6 +1647,14 @@ pub proof fn lemma_fmt_update(p: Parser, k: int, x: Fmt)
             }
         }
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            if i != k {
+                assert(q.formatting[i] == p.formatting[i]);
+            }
+        }
+    }
     lemma_st_lists(p, q);
     reveal(kp);
 }
@@ -1431,6 +1669,7 @@ pub proof fn lemma_fmt_insert(p: Parser, k: int, x: Fmt)
     ensures
         st(Parser { formatting: p.formatting.insert(k, x), ..p }),
         fx(p) && x->Entry_token.tag != Tag::Template ==> fx(Parser { formatting: p.formatting.insert(k, x), ..p }),
+        fh(p) ==> fh(Parser { formatting: p.formatting.insert(k, x), ..p }),
 {
     lemma_st(p);
     let q = Parser { formatting: p.formatting.insert(k, x), ..p };
@@ -1473,6 +1712,16 @@ pub proof fn lemma_fmt_insert(p: Parser, k: int, x: Fmt)
             }
         }
     }
+    if fh(p) {
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.ns
+            == Namespace::Html by {
+            if i < k {
+                assert(q.formatting[i] == p.formatting[i]);
+            } else if i > k {
+                assert(q.formatting[i] == p.formatting[i - 1]);
+            }
+        }
+    }
     lemma_st_lists(p, q);
     reveal(kp);
 }
@@ -1486,6 +1735,7 @@ pub proof fn lemma_push_formatting(p: Parser, e: Elem, t: TagTok)
         !p.stopped ==> forall|j: int|
             0 <= j < p.formatting.len() && (#[trigger] p.formatting[j]) is Entry ==> p.formatting[j]->Entry_elem.id != e.id,
         t.tag != Tag::Template,
+        e.ns == Namespace::Html,
     ensures
         kp(p, push_formatting(p, e, t), 0),
         push_formatting(p, e, t) == (Parser { formatting: push_formatting(p, e, t).formatting, ..p }),
@@ -1696,6 +1946,7 @@ pub proof fn lemma_open_update(p: Parser, i: int, e: Elem)
         st(p),
         0 <= i < p.open.len(),
         elem_in_doc(p.doc, e),
+        not_on(p.open, e.id),
     ensures
         kp(p, Parser { open: p.open.update(i, e), ..p }, 0),
 {
@@ -1705,6 +1956,9 @@ pub proof fn lemma_open_update(p: Parser, i: int, e: Elem)
         if j != i {
             assert(q.open[j] == p.open[j]);
         }
+    }
+    if od(p) && !p.stopped {
+        lemma_distinct_update(p.open, i, e);
     }
     lemma_st_lists(p, q);
 }
@@ -1717,6 +1971,7 @@ pub proof fn lemma_open_remove_insert(p: Parser, j: int, k: int, e: Elem)
         0 <= j < p.open.len(),
         0 <= k <= p.open.len() - 1,
         elem_in_doc(p.doc, e),
+        not_on(p.open, e.id),
     ensures
         kp(p, Parser { open: p.open.remove(j).insert(k, e), ..p }, 0),
 {
@@ -1737,6 +1992,9 @@ pub proof fn lemma_open_remove_insert(p: Parser, j: int, k: int, e: Elem)
             assert(q.open[m] == o1[m - 1]);
         }
     }
+    if od(p) && !p.stopped {
+        lemma_distinct_remove_insert(p.open, j, k, e);
+    }
     lemma_st_lists(p, q);
 }
 
@@ -1750,6 +2008,7 @@ pub proof fn lemma_fmt_remove_insert(p: Parser, fi: int, k: int, x: Fmt)
     ensures
         st(Parser { formatting: p.formatting.remove(fi).insert(k, x), ..p }),
         fx(p) && x->Entry_token.tag != Tag::Template ==> fx(Parser { formatting: p.formatting.remove(fi).insert(k, x), ..p }),
+        fh(p) ==> fh(Parser { formatting: p.formatting.remove(fi).insert(k, x), ..p }),
 {
     lemma_fmt_remove(p, fi);
     let pa = Parser { formatting: p.formatting.remove(fi), ..p };
@@ -2524,6 +2783,10 @@ pub proof fn lemma_mode_before_html(env: EncFns, p: Parser, t: Tok)
                     assert(p3.open[i] == p2.open[i]);
                 }
             }
+            lemma_fresh(p, e.id);
+            if od(p2) {
+                lemma_distinct_push(p2.open, e);
+            }
             lemma_st_lists(p2, p3);
         } else {
             lemma_kp_refl(p2);
@@ -2654,6 +2917,7 @@ pub proof fn lemma_push_elem(p: Parser, e: Elem)
     requires
         st(p),
         !p.stopped ==> elem_in_doc(p.doc, e),
+        !p.stopped ==> not_on(p.open, e.id),
     ensures
         kp(p, push(p, e), 0),
 {
@@ -2666,6 +2930,9 @@ pub proof fn lemma_push_elem(p: Parser, e: Elem)
             if i < p.open.len() {
                 assert(q.open[i] == p.open[i]);
             }
+        }
+        if od(p) {
+            lemma_distinct_push(p.open, e);
         }
         lemma_st_lists(p, q);
     }
@@ -2837,6 +3104,9 @@ pub proof fn lemma_in_head_template_start(p: Parser, tt: TagTok)
     lemma_kp_weaken(p2, p3, elem_cost(Namespace::Html, tt.tag), 2);
     lemma_kp(p2, p3, 2);
     let loc = appropriate_place(p3, None);
+    if !p3.stopped {
+        lemma_fresh(p2, template.id);
+    }
     lemma_push_elem(p3, template);
     let p4 = push(p3, template);
     lemma_kp(p3, p4, 0);
@@ -2996,12 +3266,139 @@ pub proof fn lemma_mode_text(env: EncFns, p: Parser, t: Tok)
     }
 }
 
+/// A new element pushed onto `p`'s stack: its id is the arena's length.
+pub open spec fn pushed_new(p: Parser, q: Parser) -> bool {
+    q.stopped || (q.open.len() == p.open.len() + 1 && q.open.drop_last() == p.open && q.open.last().id
+        == p.doc.nodes.len())
+}
+
+/// "Insert an HTML element" pushes a new element.
+pub proof fn lemma_insert_html_pushed(p: Parser, tt: TagTok)
+    requires
+        st(p),
+    ensures
+        pushed_new(p, insert_html_element(p, tt).0),
+        insert_html_element(p, tt).0.stopped || pop(insert_html_element(p, tt).0).open == p.open,
+{
+    hide(insert_foreign_element);
+    lemma_insert_html_element(p, tt);
+    let q = insert_html_element(p, tt).0;
+    if !q.stopped {
+        assert(q.open.drop_last() =~= p.open);
+    }
+}
+
+/// The "in head" `template` start tag pushes a new element.
+pub proof fn lemma_template_start_pushed(p: Parser, tt: TagTok)
+    requires
+        st(p),
+        !p.stopped,
+    ensures
+        pushed_new(p, in_head_template_start(p, tt)),
+{
+    hide(create_element_for_token);
+    hide(insert_element_at);
+    lemma_push_marker(p);
+    let p1 = push_marker(p);
+    let p2 = Parser { frameset_ok: false, mode: Mode::InTemplate, template_modes: p1.template_modes.push(Mode::InTemplate), ..p1 };
+    lemma_kp_fields(p, p1, p2, 0);
+    lemma_kp(p, p2, 0);
+    let ip = appropriate_place(p2, None).parent;
+    lemma_create_element_for_token(p2, tt, Namespace::Html, ip);
+    let (p3, template) = create_element_for_token(p2, tt, Namespace::Html, ip);
+    lemma_kp(p2, p3, elem_cost(Namespace::Html, tt.tag));
+    let loc = appropriate_place(p3, None);
+    let p4 = push(p3, template);
+    if !p3.stopped {
+        lemma_fresh(p2, template.id);
+    }
+    lemma_push_elem(p3, template);
+    lemma_kp(p3, p4, 0);
+    lemma_insert_element_at(p4, template.id, Some(loc));
+    let q = insert_element_at(p4, template.id, Some(loc));
+    assert(in_head_template_start(p, tt) == q);
+    if !q.stopped {
+        assert(q.open == p4.open);
+        assert(q.open.drop_last() =~= p.open);
+    }
+}
+
+/// The "in head" `script` start tag pushes a new element.
+pub proof fn lemma_script_pushed(p: Parser, tt: TagTok)
+    requires
+        st(p),
+    ensures
+        pushed_new(p, in_head_script(p, tt)),
+{
+    lemma_insert_html_pushed(p, tt);
+    assert(in_head_script(p, tt) == Parser {
+        tokenizer: Some(TokenizerState::ScriptData),
+        original_mode: insert_html_element(p, tt).0.mode,
+        mode: Mode::Text,
+        ..insert_html_element(p, tt).0
+    });
+}
+
+/// The "in head" `meta` start tag keeps the stack.
+pub proof fn lemma_meta_open(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        st(p),
+    ensures
+        in_head_meta(env, p, tt).stopped || in_head_meta(env, p, tt).open == p.open,
+{
+    hide(insert_html_element);
+    lemma_insert_html_pushed(p, tt);
+}
+
+/// The stack after the "in head" rules for the start tags of "after head"
+/// case 8: kept, or one new element pushed (its id is the arena's length).
+pub proof fn lemma_in_head_case8_open(env: EncFns, p: Parser, t: Tok)
+    requires
+        st(p),
+        !p.stopped,
+        t is Start && after_head_in_head_tag(t->Start_0.tag),
+    ensures
+        mode_in_head(env, p, t) is Done,
+        mode_in_head(env, p, t)->Done_0.open == p.open || pushed_new(p, mode_in_head(env, p, t)->Done_0),
+{
+    hide(insert_html_element);
+    hide(in_head_meta);
+    hide(generic_text_parsing);
+    hide(in_head_script);
+    hide(in_head_template_start);
+    hide(in_head_template_end);
+    hide(insert_char);
+    hide(insert_comment);
+    hide(insert_pi);
+    hide(pushed_new);
+    crate::termination::helpers_early::lemma_in_head_start_done(env, p, t);
+    let tt = t->Start_0;
+    if tt.tag == Tag::Template {
+        lemma_template_start_pushed(p, tt);
+    } else if tt.tag == Tag::Script {
+        lemma_script_pushed(p, tt);
+    } else if tt.tag == Tag::Meta {
+        lemma_meta_open(env, p, tt);
+        reveal(pushed_new);
+    } else if tt.tag == Tag::Title || tt.tag == Tag::Noframes || tt.tag == Tag::Style {
+        lemma_insert_html_pushed(p, tt);
+        reveal(pushed_new);
+        reveal(generic_text_parsing);
+    } else {
+        lemma_insert_html_pushed(p, tt);
+        reveal(pushed_new);
+    }
+}
+
 /// "after head"'s rules for the "in head" start tags: the head element is
-/// pushed, the "in head" rules run, and it is removed.
+/// pushed, the "in head" rules run, and it is removed. The stack in
+/// between may hold the head element twice; the one removed is the one
+/// pushed (the last), so the stack's elements stay distinct ([`od`]).
 pub proof fn lemma_after_head_using_in_head(env: EncFns, p: Parser, t: Tok)
     requires
         st(p),
         !p.stopped,
+        t is Start && after_head_in_head_tag(t->Start_0.tag),
     ensures
         app_quiet(p, t, after_head_using_in_head(env, p, t)),
 {
@@ -3012,27 +3409,50 @@ pub proof fn lemma_after_head_using_in_head(env: EncFns, p: Parser, t: Tok)
             lemma_done_same(p, t, p);
         },
         Some(h) => {
-            lemma_push_elem(p, head_elem(h));
-            let p1 = push(p, head_elem(h));
-            lemma_kp(p, p1, 0);
+            let he = head_elem(h);
+            let p1 = push(p, he);
+            assert forall|i: int| 0 <= i < p1.open.len() implies elem_in_doc(p1.doc, #[trigger] p1.open[i]) by {
+                if i < p.open.len() {
+                    assert(p1.open[i] == p.open[i]);
+                }
+            }
+            lemma_st_lists(p, p1);
+            lemma_dext_refl(p.doc);
             lemma_mode_in_head(env, p1, t);
-            let o = mode_in_head(env, p1, t);
-            match o {
-                Outcome::Done(p2) => {
-                    lemma_quiet_compose(p, p1, t, o);
-                    let i = open_index_of(p2, h);
-                    lemma_kpu(p, p2);
-                    if !(p2.stopped || i < 0) {
-                        lemma_last_index_where_range(p2.open, p2.open.len() as int, |e: Elem| e.id == h);
-                        lemma_remove_open_at(p2, i);
-                        lemma_kp_kpu(p2, remove_open_at(p2, i), 0);
-                        lemma_kp(p2, remove_open_at(p2, i), 0);
-                        lemma_kpu_trans(p, p2, remove_open_at(p2, i));
+            lemma_in_head_case8_open(env, p1, t);
+            let p2 = mode_in_head(env, p1, t)->Done_0;
+            lemma_kpu(p1, p2);
+            assert(fx(p1) == fx(p));
+            let n = p.open.len() as int;
+            let f = |e: Elem| e.id == h;
+            let i = open_index_of(p2, h);
+            if p2.stopped {
+                lemma_kpu_intro(p, p2);
+            } else {
+                lemma_last_index_where_range(p2.open, p2.open.len() as int, f);
+                lemma_last_index_where_last(p2.open, p2.open.len() as int, f);
+                assert(p2.open[n] == p1.open[n]);
+                assert(f(p2.open[n]));
+                if p2.open.len() == n + 2 {
+                    assert(p2.open[n + 1] == p2.open.last());
+                    assert(h < p.doc.nodes.len());
+                }
+                assert(i == n);
+                let q = remove_open_at(p2, i);
+                lemma_remove_open_at(p2, i);
+                lemma_kp(p2, q, 0);
+                lemma_dext_trans(p.doc, p2.doc, q.doc);
+                if p2.open.len() == n + 1 {
+                    assert(q.open =~= p.open);
+                } else {
+                    let x = p2.open.last();
+                    assert(q.open =~= p.open.push(x));
+                    lemma_fresh(p, x.id);
+                    if od(p) {
+                        lemma_distinct_push(p.open, x);
                     }
-                },
-                _ => {
-                    lemma_quiet_compose(p, p1, t, o);
-                },
+                }
+                lemma_kpu_intro(p, q);
             }
         },
     }
@@ -3262,6 +3682,9 @@ pub proof fn lemma_prefix_kp(p: Parser, r: Parser)
     lemma_st(p);
     assert forall|i: int| 0 <= i < r.open.len() implies elem_in_doc(r.doc, #[trigger] r.open[i]) by {
         assert(r.open[i] == p.open[i]);
+    }
+    if od(p) && !p.stopped {
+        lemma_distinct_prefix(p.open, r.open);
     }
     lemma_st_lists(p, r);
 }
@@ -3891,13 +4314,22 @@ pub proof fn lemma_in_body_foreign(p: Parser, t2: TagTok, ns: Namespace, self_cl
     lemma_kp_weaken(p, pop(q1), 2 * p.formatting.len() + 1, 2 * p.formatting.len() + 2);
 }
 
-/// "in body"'s start tags (on a stack with the `html` element).
+/// The start tags [`lemma_in_body_start_tag_a`] covers: those up to `nobr`
+/// in the order of the rules (the rest, [`lemma_in_body_start_tag_b`]).
+pub open spec fn in_body_start_first(g: Tag) -> bool {
+    g == Tag::Html || is_in_head_start_tag(g) || g == Tag::Body || g == Tag::Frameset || is_block_start_tag(g) || g
+        == Tag::Plaintext || is_heading_tag(g) || g == Tag::Pre || g == Tag::Listing || g == Tag::Form || g == Tag::Li || g
+        == Tag::Dd || g == Tag::Dt || g == Tag::Button || g == Tag::A || is_formatting_start_tag(g) || g == Tag::Nobr
+}
+
+/// "in body"'s start tags up to `nobr`.
 #[verifier::spinoff_prover]
-pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
+pub proof fn lemma_in_body_start_tag_a(p: Parser, t: Tok, tt: TagTok)
     requires
         st(p),
         p.open.len() > 0,
         t == Tok::Start(tt),
+        in_body_start_first(tt.tag),
     ensures
         app_quiet(p, t, in_body_start_tag(p, t, tt)),
 {
@@ -3932,7 +4364,6 @@ pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
     hide(in_body_start_svg);
     hide(insert_foreign_element);
     let g = tt.tag;
-    let o = in_body_start_tag(p, t, tt);
     if g == Tag::Html {
         lemma_in_body_start_html(p, tt);
         lemma_done_b(p, t, in_body_start_html(p, tt));
@@ -3981,7 +4412,52 @@ pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
     } else if g == Tag::Nobr {
         lemma_in_body_start_nobr(p, tt);
         lemma_done_u(p, t, in_body_start_nobr(p, tt));
-    } else if is_applet_like(g) {
+    }
+}
+
+/// "in body"'s start tags after `nobr`.
+#[verifier::spinoff_prover]
+pub proof fn lemma_in_body_start_tag_b(p: Parser, t: Tok, tt: TagTok)
+    requires
+        st(p),
+        p.open.len() > 0,
+        t == Tok::Start(tt),
+        !in_body_start_first(tt.tag),
+    ensures
+        app_quiet(p, t, in_body_start_tag(p, t, tt)),
+{
+    hide(in_body_start_html);
+    hide(in_body_start_body);
+    hide(in_body_start_frameset);
+    hide(insert_html_element);
+    hide(close_p_if_in_button_scope);
+    hide(in_body_start_heading);
+    hide(in_body_start_pre);
+    hide(in_body_start_form);
+    hide(in_body_start_li);
+    hide(in_body_start_dd_dt);
+    hide(in_body_start_button);
+    hide(in_body_start_a);
+    hide(reconstruct_formatting);
+    hide(push_formatting);
+    hide(in_body_start_nobr);
+    hide(push_marker);
+    hide(close_p_element);
+    hide(in_body_void_start_tag);
+    hide(in_body_start_input);
+    hide(insert_and_pop);
+    hide(in_body_start_hr);
+    hide(in_body_start_textarea);
+    hide(generic_text_parsing);
+    hide(in_body_start_select);
+    hide(in_body_start_option);
+    hide(in_body_start_optgroup);
+    hide(generate_implied_end_tags);
+    hide(in_body_start_math);
+    hide(in_body_start_svg);
+    hide(insert_foreign_element);
+    let g = tt.tag;
+    if is_applet_like(g) {
         lemma_reconstruct_kp(p);
         let q0 = reconstruct_formatting(p);
         let q = insert_html_element(q0, tt).0;
@@ -4097,6 +4573,23 @@ pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
         lemma_reconstruct_kp(p);
         lemma_then_insert(p, reconstruct_formatting(p), 2 * p.formatting.len(), tt, false, insert_html_element(reconstruct_formatting(p), tt).0);
         lemma_done_b(p, t, insert_html_element(reconstruct_formatting(p), tt).0);
+    }
+}
+
+
+/// "in body"'s start tags (on a stack with the `html` element).
+pub proof fn lemma_in_body_start_tag(p: Parser, t: Tok, tt: TagTok)
+    requires
+        st(p),
+        p.open.len() > 0,
+        t == Tok::Start(tt),
+    ensures
+        app_quiet(p, t, in_body_start_tag(p, t, tt)),
+{
+    if in_body_start_first(tt.tag) {
+        lemma_in_body_start_tag_a(p, t, tt);
+    } else {
+        lemma_in_body_start_tag_b(p, t, tt);
     }
 }
 
@@ -5140,10 +5633,18 @@ pub proof fn lemma_foreign_content(env: EncFns, p: Parser, t: Tok)
 // ---------------------------------------------------------------------
 // Every rule application, the run, the step
 
-/// Every rule application of a running parser (with `termination::modes_ok`
-/// and `termination::rules_ok`, `invariant::rooted_needs`, and a tagged
-/// token) satisfies [`app_ok`].
-pub proof fn lemma_apply_rules(env: EncFns, r: Rules, p: Parser, t: Tok)
+/// The modes [`lemma_apply_early`] covers (the rest, [`lemma_apply_late`]).
+pub open spec fn early_mode(m: Mode) -> bool {
+    match m {
+        Mode::Initial | Mode::BeforeHtml | Mode::BeforeHead | Mode::InHead | Mode::InHeadNoscript | Mode::AfterHead
+        | Mode::InBody | Mode::Text | Mode::InTable | Mode::InTableText => true,
+        _ => false,
+    }
+}
+
+/// [`lemma_apply_rules`] for foreign content and the [`early_mode`]s.
+#[verifier::spinoff_prover]
+pub proof fn lemma_apply_early(env: EncFns, r: Rules, p: Parser, t: Tok)
     requires
         st(p),
         !p.stopped,
@@ -5151,6 +5652,7 @@ pub proof fn lemma_apply_rules(env: EncFns, r: Rules, p: Parser, t: Tok)
         crate::termination::rules_ok(r, p),
         rooted_needs(r, p),
         crate::exec::modes::initial::tok_ok(t),
+        r is Foreign || early_mode(r->Html_0),
     ensures
         app_ok(r, p, t, apply_rules(env, r, p, t)),
 {
@@ -5208,44 +5710,109 @@ pub proof fn lemma_apply_rules(env: EncFns, r: Rules, p: Parser, t: Tok)
             },
             Mode::InTable => lemma_mode_in_table(env, p, t),
             Mode::InTableText => lemma_mode_in_table_text(env, p, t),
-            Mode::InCaption => {
-                lemma_mode_in_caption(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::InColumnGroup => {
-                lemma_mode_in_column_group(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::InTableBody => lemma_mode_in_table_body(env, p, t),
-            Mode::InRow => {
-                lemma_mode_in_row(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::InCell => {
-                lemma_mode_in_cell(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::InTemplate => {
-                lemma_mode_in_template(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::AfterBody => {
-                lemma_mode_after_body(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::InFrameset => {
-                lemma_mode_in_frameset(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::AfterFrameset => {
-                lemma_mode_after_frameset(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
-            Mode::AfterAfterBody | Mode::AfterAfterFrameset => {
-                lemma_mode_after_after(env, p, t);
-                lemma_quiet_ok(r, p, t, o);
-            },
+            _ => {},
         },
+    }
+}
+
+/// [`lemma_apply_rules`] for the modes other than the [`early_mode`]s.
+#[verifier::spinoff_prover]
+pub proof fn lemma_apply_late(env: EncFns, r: Rules, p: Parser, t: Tok)
+    requires
+        st(p),
+        !p.stopped,
+        crate::termination::modes_ok(p),
+        crate::termination::rules_ok(r, p),
+        rooted_needs(r, p),
+        crate::exec::modes::initial::tok_ok(t),
+        r is Html && !early_mode(r->Html_0),
+    ensures
+        app_ok(r, p, t, apply_rules(env, r, p, t)),
+{
+    hide(mode_initial);
+    hide(mode_before_html);
+    hide(mode_before_head);
+    hide(mode_in_head);
+    hide(mode_in_head_noscript);
+    hide(mode_after_head);
+    hide(mode_in_body);
+    hide(mode_text);
+    hide(mode_in_table);
+    hide(mode_in_table_text);
+    hide(mode_in_caption);
+    hide(mode_in_column_group);
+    hide(mode_in_table_body);
+    hide(mode_in_row);
+    hide(mode_in_cell);
+    hide(mode_in_template);
+    hide(mode_after_body);
+    hide(mode_in_frameset);
+    hide(mode_after_frameset);
+    hide(mode_after_after_body);
+    hide(mode_after_after_frameset);
+    hide(foreign_content);
+    let o = apply_rules(env, r, p, t);
+    let m = r->Html_0;
+    match m {
+        Mode::InCaption => {
+            lemma_mode_in_caption(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::InColumnGroup => {
+            lemma_mode_in_column_group(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::InTableBody => lemma_mode_in_table_body(env, p, t),
+        Mode::InRow => {
+            lemma_mode_in_row(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::InCell => {
+            lemma_mode_in_cell(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::InTemplate => {
+            lemma_mode_in_template(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::AfterBody => {
+            lemma_mode_after_body(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::InFrameset => {
+            lemma_mode_in_frameset(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::AfterFrameset => {
+            lemma_mode_after_frameset(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        Mode::AfterAfterBody | Mode::AfterAfterFrameset => {
+            lemma_mode_after_after(env, p, t);
+            lemma_quiet_ok(r, p, t, o);
+        },
+        _ => {},
+    }
+}
+
+/// Every rule application of a running parser (with `termination::modes_ok`
+/// and `termination::rules_ok`, `invariant::rooted_needs`, and a tagged
+/// token) satisfies [`app_ok`].
+pub proof fn lemma_apply_rules(env: EncFns, r: Rules, p: Parser, t: Tok)
+    requires
+        st(p),
+        !p.stopped,
+        crate::termination::modes_ok(p),
+        crate::termination::rules_ok(r, p),
+        rooted_needs(r, p),
+        crate::exec::modes::initial::tok_ok(t),
+    ensures
+        app_ok(r, p, t, apply_rules(env, r, p, t)),
+{
+    if r is Foreign || early_mode(r->Html_0) {
+        lemma_apply_early(env, r, p, t);
+    } else {
+        lemma_apply_late(env, r, p, t);
     }
 }
 
@@ -5440,6 +6007,28 @@ pub proof fn theorem_doc_wf(env: EncFns, p: Parser, token: Token)
     lemma_dispatch(env, p, token);
     lemma_kpu(p, dispatch(env, p, token).0);
     lemma_st(dispatch(env, p, token).0);
+}
+
+/// **The stack of open elements holds distinct elements** (Phase 4 item
+/// 4.9), under the hypotheses of [`theorem_open_elements_in_doc`]: if,
+/// until parsing stops, no element has two entries on the stack, the step
+/// keeps that (`independent::equivalence_foreign::open_distinct`). Every
+/// element pushed is one the step created, whose id is new, except the
+/// `head` element "after head" pushes back for the "in head" rules; it then
+/// removes the last entry for it, the one it pushed.
+pub proof fn theorem_open_distinct(env: EncFns, p: Parser, token: Token)
+    requires
+        parser_wf(p),
+        p.stopped || head_ok(p),
+        dispatch_needs(env, p, token),
+        !p.stopped ==> crate::independent::equivalence_foreign::open_distinct(p.open),
+    ensures
+        !dispatch(env, p, token).0.stopped ==> crate::independent::equivalence_foreign::open_distinct(
+            dispatch(env, p, token).0.open,
+        ),
+{
+    lemma_dispatch(env, p, token);
+    lemma_kpu(p, dispatch(env, p, token).0);
 }
 
 } // verus!

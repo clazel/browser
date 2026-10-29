@@ -27,6 +27,7 @@ use super::spec::*;
 use vstd::prelude::*;
 
 pub mod actions;
+pub mod equivalence;
 pub mod frame_base;
 pub mod frame_body;
 pub mod frame_in_body;

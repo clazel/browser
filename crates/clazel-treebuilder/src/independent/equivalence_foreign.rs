@@ -550,7 +550,9 @@ pub proof fn lemma_adjust_start_tag(a: Elem, tt: TagTok)
 // The stack
 
 /// The elements on the stack `o` are distinct (each element is pushed
-/// once: a fact of every reachable state, not proven here).
+/// once: a fact of every running reachable state, proven by
+/// `theorems::open_elements::theorem_open_distinct` and
+/// `theorems::reachable::theorem_reachable_wf`).
 pub open spec fn open_distinct(o: Seq<Elem>) -> bool {
     forall|j: int, k: int| 0 <= j < k < o.len() ==> #[trigger] o[j].id != #[trigger] o[k].id
 }
