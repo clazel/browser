@@ -14,8 +14,8 @@
 //! What is here and what is not:
 //! - **One candidate path** is an anchor index and a sequence of pool
 //!   indices (`Candidate`, design §2.6). `candidate_verdict` is the whole
-//!   verdict on it: well-formedness, `profile::path_profile`, `spec::process`
-//!   and the name-constraint comparison bound.
+//!   verdict on it: well-formedness, `profile::path_profile`, the
+//!   name-constraint comparison bound and `spec::process`, in that order.
 //! - **The chain** is accepted when *some* candidate is valid
 //!   (`some_candidate_valid`). Which candidate the verifier returns, the
 //!   bounded depth-first search that finds it (design §2.6: anchors first,
@@ -97,7 +97,12 @@
 //!     path, counted as P5's contract counts them
 //!     (`name_constraints::matching::contract::within_budget`, used here
 //!     directly) (`TooManyNameComparisons`). Both browsers bound
-//!     name-constraint work (design §1.12); this is P5's bound, kept.
+//!     name-constraint work (design §1.12); this is P5's bound, kept. It is
+//!     judged before `spec::process`, not after, so that the executable
+//!     verdict, which equals this one, never makes more comparisons than the
+//!     bound allows: deciding the bound costs no comparison. Only the
+//!     reported error depends on the order (a path both beyond the bound and
+//!     refused by §6.1 reports `TooManyNameComparisons`).
 //!
 //! For P16, the intended `clazel-tls` join (not changed here). `auth::spec`'s
 //! `ChainValidation` becomes
@@ -258,8 +263,8 @@ pub open spec fn candidate_certificates(
     intermediates_of(pool, candidate.path).push(leaf)
 }
 
-/// The verdict on one candidate: well-formed, then the profile, then §6.1,
-/// then the comparison bound. `Ok` carries the target's key.
+/// The verdict on one candidate: well-formed, then the profile, then the
+/// comparison bound, then §6.1. `Ok` carries the target's key.
 pub open spec fn candidate_verdict(
     environment: Environment, anchors: Seq<super::parsed::spec::Anchor>,
     pool: Seq<Option<super::parsed::spec::PathCert>>, leaf: super::parsed::spec::PathCert,
@@ -275,10 +280,14 @@ pub open spec fn candidate_verdict(
         let certs = candidate_certificates(pool, leaf, candidate);
         match super::profile::path_profile(anchor, certs, reference, now) {
             Err(e) => Err(e),
+            // Design §1.12: the bound is judged before §6.1, so that §6.1's
+            // name-constraint checks (§6.1.3 (b), (c)) never run on a path
+            // beyond it. Judging it needs only the subtree counts and
+            // §6.1.4 (g)'s state, not a single comparison.
+            Ok(()) if !path_within_budget(anchor, certs) => Err(super::spec::PathError::TooManyNameComparisons),
             Ok(()) => match super::spec::process(environment.link, environment.revoked, anchor, certs, now) {
                 Err(e) => Err(e),
-                Ok(key) => if !path_within_budget(anchor, certs) { Err(super::spec::PathError::TooManyNameComparisons) }
-                    else { Ok(key) },
+                Ok(key) => Ok(key),
             },
         }
     }
