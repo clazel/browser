@@ -421,4 +421,186 @@ pub proof fn lemma_after_after_frameset(env: EncFns, p: Parser, t: Tok)
 {
 }
 
+// ---------------------------------------------------------------------
+// §8.2.5.4.13 to §8.2.5.4.15, §8.2.5.4.18
+
+/// `pop_while` depends only on the values of its predicate on the stack.
+proof fn lemma_pop_while_ext(p: Parser, f: spec_fn(Elem) -> bool, g: spec_fn(Elem) -> bool)
+    requires
+        forall|j: int| 0 <= j < p.open.len() ==> #[trigger] f(p.open[j]) == g(p.open[j]),
+    ensures
+        pop_while(p, f) == pop_while(p, g),
+    decreases p.open.len(),
+{
+    if p.open.len() > 0 {
+        assert(f(p.open[p.open.len() - 1]) == g(p.open[p.open.len() - 1]));
+        if f(current_node(p)) {
+            let q = pop(p);
+            assert forall|j: int| 0 <= j < q.open.len() implies #[trigger] f(q.open[j]) == g(q.open[j]) by {
+                assert(q.open[j] == p.open[j]);
+            }
+            lemma_pop_while_ext(q, f, g);
+        }
+    }
+}
+
+/// `in_scope_from` depends only on the values of its target predicate on
+/// the stack.
+proof fn lemma_in_scope_ext(open: Seq<Elem>, i: int, f: spec_fn(Elem) -> bool, g: spec_fn(Elem) -> bool, s: Scope)
+    requires
+        i <= open.len(),
+        forall|j: int| 0 <= j < i ==> #[trigger] f(open[j]) == g(open[j]),
+    ensures
+        in_scope_from(open, i, f, s) == in_scope_from(open, i, g, s),
+    decreases i,
+{
+    if i > 0 {
+        assert(f(open[i - 1]) == g(open[i - 1]));
+        lemma_in_scope_ext(open, i - 1, f, g, s);
+    }
+}
+
+/// [`lemma_pop_while_ext`] and [`lemma_in_scope_ext`] for every predicate
+/// pair, so that the transcriptions' own predicates (closures written
+/// separately in each) can be matched.
+pub proof fn lemma_closure_ext()
+    ensures
+        forall|p: Parser, f: spec_fn(Elem) -> bool, g: spec_fn(Elem) -> bool|
+            (forall|j: int| 0 <= j < p.open.len() ==> #[trigger] f(p.open[j]) == g(p.open[j])) ==> #[trigger] pop_while(p, f)
+                == #[trigger] pop_while(p, g),
+        forall|open: Seq<Elem>, i: int, f: spec_fn(Elem) -> bool, g: spec_fn(Elem) -> bool, s: Scope|
+            i <= open.len() && (forall|j: int| 0 <= j < i ==> #[trigger] f(open[j]) == g(open[j])) ==> #[trigger] in_scope_from(
+                open,
+                i,
+                f,
+                s,
+            ) == #[trigger] in_scope_from(open, i, g, s),
+{
+    assert forall|p: Parser, f: spec_fn(Elem) -> bool, g: spec_fn(Elem) -> bool|
+        (forall|j: int| 0 <= j < p.open.len() ==> #[trigger] f(p.open[j]) == g(p.open[j])) implies #[trigger] pop_while(p, f)
+        == #[trigger] pop_while(p, g) by {
+        lemma_pop_while_ext(p, f, g);
+    }
+    assert forall|open: Seq<Elem>, i: int, f: spec_fn(Elem) -> bool, g: spec_fn(Elem) -> bool, s: Scope|
+        i <= open.len() && (forall|j: int| 0 <= j < i ==> #[trigger] f(open[j]) == g(open[j])) implies #[trigger] in_scope_from(
+        open,
+        i,
+        f,
+        s,
+    ) == #[trigger] in_scope_from(open, i, g, s) by {
+        lemma_in_scope_ext(open, i, f, g, s);
+    }
+}
+
+/// Only the name "tbody" is the tag `tbody`, and so on for the table tags:
+/// "an HTML element with the same tag name as the token" is one with the
+/// same [`Tag`], for tagged records ([`crate::invariant::tags_wf`]).
+pub proof fn lemma_table_tags_injective()
+    ensures
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Tbody ==> n == seq![0x74u32, 0x62, 0x6f, 0x64, 0x79],
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Tfoot ==> n == seq![0x74u32, 0x66, 0x6f, 0x6f, 0x74],
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Thead ==> n == seq![0x74u32, 0x68, 0x65, 0x61, 0x64],
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Td ==> n == seq![0x74u32, 0x64],
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Th ==> n == seq![0x74u32, 0x68],
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Tr ==> n == seq![0x74u32, 0x72],
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Table ==> n == seq![0x74u32, 0x61, 0x62, 0x6c, 0x65],
+        forall|n: Seq<u32>| #[trigger] tag_of(n) == Tag::Caption ==> n == seq![0x63u32, 0x61, 0x70, 0x74, 0x69, 0x6f, 0x6e],
+{
+}
+
+/// The token's tag is the classification of its name (as
+/// [`crate::spec::classify`] makes every tag token).
+pub open spec fn token_tagged(t: Tok) -> bool {
+    (t is Start || t is End) ==> tok_tagged(w3c_tag_tok(t))
+}
+
+/// "in table body" (W3C §8.2.5.4.13, WHATWG §13.2.6.4.13): the same rules.
+/// ("An HTML element with the same tag name as the token" is read as the
+/// same [`Tag`] here and as the same name in the WHATWG transcription; the
+/// two agree for tagged records and tokens.)
+pub proof fn lemma_in_table_body(env: EncFns, p: Parser, t: Tok)
+    requires
+        !(t is Pi),
+        !p.stopped,
+        tags_wf(p),
+        token_tagged(t),
+    ensures
+        w3c_mode_in_table_body(env, p, t) == mode_in_table_body(env, p, t),
+{
+    lemma_closure_ext();
+    lemma_table_tags_injective();
+}
+
+/// "in row" (W3C §8.2.5.4.14, WHATWG §13.2.6.4.14): the same rules (with
+/// the reading of "the same tag name" of [`lemma_in_table_body`]).
+pub proof fn lemma_in_row(env: EncFns, p: Parser, t: Tok)
+    requires
+        !(t is Pi),
+        !p.stopped,
+        tags_wf(p),
+        token_tagged(t),
+    ensures
+        w3c_mode_in_row(env, p, t) == mode_in_row(env, p, t),
+{
+    lemma_closure_ext();
+    lemma_table_tags_injective();
+}
+
+/// "Pop elements … until a td element or a th element has been popped":
+/// the two transcriptions' loops are equal.
+proof fn lemma_pop_until_cell_popped(p: Parser)
+    ensures
+        w3c_pop_until_cell_popped(p) == pop_until_cell_popped(p),
+    decreases p.open.len(),
+{
+    if p.open.len() > 0 {
+        lemma_pop_until_cell_popped(pop(p));
+    }
+}
+
+/// A start tag "in cell" closes the cell for: "caption", "col", "colgroup",
+/// "tbody", "td", "tfoot", "th", "thead", "tr".
+pub open spec fn in_cell_closing_start(t: Tok) -> bool {
+    let tag = w3c_tag(t);
+    t is Start && (tag == Tag::Caption || tag == Tag::Col || tag == Tag::Colgroup || tag == Tag::Tbody || tag == Tag::Td || tag
+        == Tag::Tfoot || tag == Tag::Th || tag == Tag::Thead || tag == Tag::Tr)
+}
+
+/// "in cell" (W3C §8.2.5.4.15, WHATWG §13.2.6.4.15): the same rules (with
+/// the reading of "the same tag name" of [`lemma_in_table_body`]), but for
+/// one difference: for a start tag `caption`, …, `tr` the W3C checks that
+/// the stack has a `td` or `th` element in table scope and ignores the
+/// token if not ("fragment case"); the WHATWG text *asserts* it ("Assert:
+/// the stack of open elements has a td or th element in table scope") and
+/// closes the cell. Excluded when the stack has none.
+pub proof fn lemma_in_cell(env: EncFns, p: Parser, t: Tok)
+    requires
+        !(t is Pi),
+        !p.stopped,
+        tags_wf(p),
+        token_tagged(t),
+        in_cell_closing_start(t) ==> in_scope_from(
+            p.open,
+            p.open.len() as int,
+            |e: Elem| is_html(e, Tag::Td) || is_html(e, Tag::Th),
+            Scope::Table,
+        ),
+    ensures
+        w3c_mode_in_cell(env, p, t) == mode_in_cell(env, p, t),
+{
+    lemma_closure_ext();
+    lemma_table_tags_injective();
+    lemma_pop_until_cell_popped(generate_implied_end_tags(p, None));
+}
+
+/// "in template" (W3C §8.2.5.4.18, WHATWG §13.2.6.4.16): the same rules.
+pub proof fn lemma_in_template(env: EncFns, p: Parser, t: Tok)
+    requires
+        !(t is Pi),
+        !p.stopped,
+    ensures
+        w3c_mode_in_template(env, p, t) == mode_in_template(env, p, t),
+{
+}
+
 } // verus!
