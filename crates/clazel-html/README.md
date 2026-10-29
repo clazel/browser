@@ -30,7 +30,11 @@ response's MIME type, `transport_encoding`), then the prescan of the first
 `change_the_encoding` (13.2.3.4) says when the parser must start again with
 another encoding; the whole body is held, so that is a restart. Its
 evidence: proven equal to `src/sniff/spec.rs`, the Encoding Standard's
-"decode" proven to agree with its first steps, 27 examples proven by
+"decode" proven to agree with its first steps, a second transcription of
+the prescan, "get an attribute" and the `<meta>` extraction, written
+separately from the same text and proven equal on every input
+(`src/sniff/independent_prescan.rs`, `src/sniff/prescan_agrees.rs`), 27
+examples proven by
 evaluation, html5lib-tests `encoding/` (seven cases need the parser's
 restart and wait for the document pipeline) and a differential against
 `encoding_rs`'s label resolution.
