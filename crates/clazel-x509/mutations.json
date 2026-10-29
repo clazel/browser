@@ -1473,6 +1473,370 @@
         "lemma": "super::certificates::lemma_policy_constraints_oid()",
         "witness": "policy_constraints_oid() =~= seq![2nat, 5nat, 29nat, 37nat]"
       }
+    },
+    {
+      "id": "nc-dns-label-boundary",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "name[name.len() - base.len() - 1] == b'.'",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 adds whole labels: without the dot, not-example.com would be within example.com.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dns_mismatch_label_boundary()",
+        "witness": "dns_within(super::examples::not_example_com(), super::examples::example_com())"
+      }
+    },
+    {
+      "id": "nc-dns-zero-labels-added",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::spec::folded_equal_from(name, base, 0)",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 \"zero or more labels\": a name equal to the base is within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dns_match()",
+        "witness": "!dns_within(super::examples::example_com(), super::examples::example_com())"
+      }
+    },
+    {
+      "id": "nc-dns-case-insensitive",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::spec::folded_equal_from(name.subrange(name.len() - base.len(), name.len() as int), base, 0)",
+      "replace": "name.subrange(name.len() - base.len(), name.len() as int) =~= base",
+      "expect": "killed",
+      "reason": "RFC 9549 §2.3 compares labels case-insensitively: WWW.Example.COM is within example.com.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dns_case_insensitive_example()",
+        "witness": "!dns_within(super::examples::www_example_com_mixed_case(), super::examples::example_com())"
+      }
+    },
+    {
+      "id": "nc-dns-empty-base-holds-all",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    if base.len() == 0 {\n        true\n",
+      "replace": "    if base.len() == 0 {\n        false\n",
+      "expect": "killed",
+      "reason": "An empty dNSName base (BR §7.1.2.5.2 zero-length dNSName) holds every DNS name; excluding it excludes all.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_br_zero_length_dns_excludes_all()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::dns_subtree(seq![])]))], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-wildcard-within-every-expansion",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "pub open spec fn dns_wildcard_within(suffix: Seq<u8>, base: Seq<u8>) -> bool {\n    dns_within(suffix, base)",
+      "replace": "pub open spec fn dns_wildcard_within(suffix: Seq<u8>, base: Seq<u8>) -> bool {\n    dns_wildcard_meets(suffix, base)",
+      "expect": "killed",
+      "reason": "A permitted subtree must hold every name *.example.com stands for, not just one (cve-2025-61727-nc-permits-variant).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_cve_2025_61727_wildcard_wider_than_permitted()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com())]), None)], seq![super::examples::dns_entry(super::examples::wildcard_example_com())])"
+      }
+    },
+    {
+      "id": "nc-wildcard-meets-one-label-base",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "dot < base.len() && crate::spec::folded_equal_from(base.subrange(dot + 1, base.len() as int), suffix, 0)",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "An excluded bar.example.com must catch *.example.com, which stands for it (CVE-2025-61727).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_cve_2025_61727_wildcard_meets_excluded()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]))], seq![super::examples::dns_entry(super::examples::wildcard_example_com())])"
+      }
+    },
+    {
+      "id": "nc-ip-mask-applied",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "address[i] & mask[i] == base[i] & mask[i]",
+      "replace": "address[i] == base[i]",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 CIDR range: 127.0.0.1 is in 127.0.0.0/24 (BetterTLS tc340).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc340_inside_permitted_ip()",
+        "witness": "!certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::loopback_24()]), None)], seq![super::examples::dns_entry(super::examples::test_localhost()), super::examples::ip_entry(seq![127u8, 0, 0, 1])])"
+      }
+    },
+    {
+      "id": "nc-ip-lengths-equal",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    address.len() == base.len() && base.len() == mask.len()\n        && ip_masked_equal_from",
+      "replace": "    ip_masked_equal_from",
+      "expect": "killed",
+      "reason": "An IPv4 address is never within an IPv6 range: the lengths must agree.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_ipv4_not_within_ipv6_range()",
+        "witness": "ip_within(seq![127u8, 0, 0, 1], super::examples::sixteen(0), super::examples::sixteen(0))"
+      }
+    },
+    {
+      "id": "nc-ip-mask-contiguous",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&& mask_contiguous_from(mask, 0)",
+      "replace": "",
+      "expect": "killed",
+      "reason": "Modelling choice: a non-contiguous mask is not a CIDR range (RFC 4632) and is refused.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_noncontiguous_mask_example()",
+        "witness": "constraints_supported(super::examples::constraints(None, Some(seq![super::examples::ip_subtree(seq![10u8, 0, 10, 0], seq![255u8, 0, 255, 0])])))"
+      }
+    },
+    {
+      "id": "nc-permitted-other-type-unchanged",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "!has_base_of_type(items, name) || within_some(items, name)",
+      "replace": "within_some(items, name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g)(1): a permittedSubtrees without a dNSName base leaves DNS names unconstrained (BetterTLS tc259).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc259_permitted_ip_leaves_dns_alone()",
+        "witness": "!certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::loopback_24()]), None)], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-permitted-applies",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(items) => !has_base_of_type(items, name) || within_some(items, name),",
+      "replace": "Some(items) => true,",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (b): a name outside every permitted dNSName subtree fails (BetterTLS tc304).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc304_outside_permitted_dns()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-excluded-applies",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(items) => meets_some(items, name),",
+      "replace": "Some(items) => false,",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (c): a name within an excluded subtree fails (BetterTLS tc253).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc253_excluded_dns()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::localhost())]))], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-permitted-intersects-all-sets",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "(permitted_by(state.last(), name) && within_permitted_subtrees(state.drop_last(), name))",
+      "replace": "permitted_by(state.last(), name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g)(1) intersects: a later certificate cannot widen what an earlier one permitted.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permits_cannot_widen()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], false, None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-excluded-unions-all-sets",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "(excluded_by(state.last(), name) || within_excluded_subtrees(state.drop_last(), name))",
+      "replace": "excluded_by(state.last(), name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g)(2) unions: an earlier exclusion stays in force after later constraints.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_excluded_subtrees_accumulate()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::bad_example_com())])))), super::examples::certificate(seq![], false, Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::localhost())])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::bad_example_com())], false, None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-q12-unmatched-name-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& state.len() == 0 || names_of_matched_forms(names)",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "Design Q12: under any constraint, an entry of an unmatched form (here a URI) is refused.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc8839_uri_entry_refused()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::uri_entry()])"
+      }
+    },
+    {
+      "id": "nc-q12-unsupported-base-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => false,",
+      "replace": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => true,",
+      "expect": "killed",
+      "reason": "Design Q12: a directoryName (or any other unmatched) base makes the NameConstraints unsupported.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_q12_unsupported_base_refuses_path()",
+        "witness": "constraints_supported(super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None))"
+      }
+    },
+    {
+      "id": "nc-q12-unsupported-refuses-path",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "if constraints_supported(value) { Some(state.push(value)) } else { None }",
+      "replace": "Some(state.push(value))",
+      "expect": "killed",
+      "reason": "Design Q12: §6.1.4 (g) refuses the path at an unsupported NameConstraints instead of ignoring the base.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_q12_unsupported_base_refuses_path()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-one-field-present",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& (value.permitted_subtrees is Some || value.excluded_subtrees is Some)",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: either permittedSubtrees or excludedSubtrees MUST be present.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_webpki_both_fields_absent_refused()",
+        "witness": "constraints_supported(super::examples::constraints(None, None))"
+      }
+    },
+    {
+      "id": "nc-dns-base-syntax",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::name_constraints::spec::GeneralNameConstraint::DnsName(b) => b.len() == 0 || crate::spec::dns_name_shape(b),",
+      "replace": "crate::name_constraints::spec::GeneralNameConstraint::DnsName(b) => true,",
+      "expect": "killed",
+      "reason": "Erratum 5997: a dNSName base uses preferred name syntax, so .example.com is refused (rfc5280::nc::invalid-dnsname-leading-period).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_malformed_dns_bases_refused()",
+        "witness": "constraints_supported(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::dot_example_com())]), None))"
+      }
+    },
+    {
+      "id": "nc-malformed-dns-entry-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "if crate::spec::dns_name_shape(name) {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "A dNSName entry that is not a DNS name (.example.com) must not be matched as one (rfc5280::nc::nc-permits-invalid-dns-san).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_nc_permits_invalid_dns_san()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::dot_example_com()), super::examples::dns_entry(super::examples::foo_example_com())])"
+      }
+    },
+    {
+      "id": "nc-excluded-every-entry",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& names_not_excluded(state, names.drop_last())",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (c) checks each alternative name, wherever it stands.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_every_entry_checked_in_any_position()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::bad_example_com())]))], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::dns_entry(super::examples::example_com())])"
+      }
+    },
+    {
+      "id": "nc-permitted-every-entry",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& names_within_permitted(state, names.drop_last())",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (b) checks each alternative name, wherever it stands.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_every_entry_checked_in_any_position()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::localhost())]), None)], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-self-issued-final-checked",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& (certificate.self_issued && !last)",
+      "replace": "&&& certificate.self_issued",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (b), (c): a self-issued certificate is skipped only when it is not final (rfc5280::nc::excluded-self-issued-leaf).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_self_issued_final_checked()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], true, None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)])"
+      }
+    },
+    {
+      "id": "nc-self-issued-intermediate-skipped",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "(certificate.self_issued && !last)",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (b), (c) skip a self-issued intermediate (rfc5280::nc::permitted-self-issued).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_self_issued_intermediate_skipped()",
+        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], true, None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)])"
+      }
+    },
+    {
+      "id": "nc-g-adds-not-replaces",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(state.push(value))",
+      "replace": "Some(seq![value])",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g) intersects and unions with the previous state; replacing it would let a later certificate widen.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permits_cannot_widen()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], false, None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-final-extension-not-processed",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& last || match prepare_name_constraints(state, certificate.name_constraints) {",
+      "replace": "&&& match prepare_name_constraints(state, certificate.name_constraints) {",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 prepares for certificate i+1 and is not applied to the final certificate.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_final_certificate_constraints_not_processed()",
+        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, Some(super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)))], initial_state())"
+      }
     }
   ]
 }
