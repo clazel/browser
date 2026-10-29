@@ -1901,6 +1901,566 @@
         "lemma": "lemma_table_size()",
         "witness": "entity_count() == 2230"
       }
+    },
+    {
+      "id": "sniff-bom-tentative",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::independent",
+      "find": "        Some(e) => (e, Confidence::Certain),\n        // 2.",
+      "replace": "        Some(e) => (e, Confidence::Tentative),\n        // 2.",
+      "expect": "killed",
+      "reason": "Step 1 returns the byte order mark's encoding with confidence tentative, so the confidence is no longer certain exactly when the Encoding Standard's second reading finds a byte order mark: lemma_decode_agrees is false.",
+      "certificate": {
+        "file": "src/sniff/independent.rs",
+        "lemma": "lemma_decode_agrees(seq![0xEFu8, 0xBBu8, 0xBFu8], None)",
+        "witness": "sniff(seq![0xEFu8, 0xBBu8, 0xBFu8], None).1 == Confidence::Tentative && clazel_encoding::hooks::independent::byte_order_mark(seq![0xEFu8, 0xBBu8, 0xBFu8]) is Some"
+      }
+    },
+    {
+      "id": "sniff-transport-ignored",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::independent",
+      "find": "        None => match transport {",
+      "replace": "        None => match Option::<clazel_encoding::labels::spec::Encoding>::None {",
+      "expect": "killed",
+      "reason": "Step 4 ignores the transport layer's encoding: with one given and no byte order mark the confidence is tentative, so lemma_decode_agrees is false.",
+      "certificate": {
+        "file": "src/sniff/independent.rs",
+        "lemma": "lemma_decode_agrees(seq![0x41u8], Some(clazel_encoding::labels::spec::Encoding::Ibm866))",
+        "witness": "sniff(seq![0x41u8], Some(clazel_encoding::labels::spec::Encoding::Ibm866)).1 == Confidence::Tentative && clazel_encoding::hooks::independent::byte_order_mark(seq![0x41u8]) is None"
+      }
+    },
+    {
+      "id": "sniff-transport-tentative",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::independent",
+      "find": "            Some(e) => (e, Confidence::Certain),\n            // 5.",
+      "replace": "            Some(e) => (e, Confidence::Tentative),\n            // 5.",
+      "expect": "killed",
+      "reason": "Step 4 returns the transport layer's encoding with confidence tentative, so lemma_decode_agrees is false.",
+      "certificate": {
+        "file": "src/sniff/independent.rs",
+        "lemma": "lemma_decode_agrees(seq![0x41u8], Some(clazel_encoding::labels::spec::Encoding::Ibm866))",
+        "witness": "sniff(seq![0x41u8], Some(clazel_encoding::labels::spec::Encoding::Ibm866)).1 == Confidence::Tentative && clazel_encoding::hooks::independent::byte_order_mark(seq![0x41u8]) is None"
+      }
+    },
+    {
+      "id": "sniff-default-utf8",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "None => (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative),",
+      "replace": "None => (clazel_encoding::labels::spec::Encoding::Utf8, Confidence::Tentative),",
+      "expect": "killed",
+      "reason": "Step 9's default is UTF-8 instead of windows-1252. lemma_example_default is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_default()",
+        "witness": "sniff(seq![0x3Cu8, 0x70u8, 0x3Eu8, 0x78u8], None) == (clazel_encoding::labels::spec::Encoding::Utf8, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-limit",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::lemmas",
+      "find": "pub open spec fn prescan_limit() -> nat {\n    1024",
+      "replace": "pub open spec fn prescan_limit() -> nat {\n    2048",
+      "expect": "killed",
+      "reason": "The prescan's end condition is 2048 bytes: it reads 2000 bytes of a 2000-byte body, so lemma_prescan_input_bounded is false.",
+      "certificate": {
+        "file": "src/sniff/lemmas.rs",
+        "lemma": "lemma_prescan_input_bounded(Seq::new(2000, |i: int| 0u8))",
+        "witness": "prescan_input(Seq::new(2000, |i: int| 0u8)).len() == 2000"
+      }
+    },
+    {
+      "id": "prescan-utf16le-declaration",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "if starts_at(b, 0, seq![0x3Cu8, 0x00u8, 0x3Fu8, 0x00u8, 0x78u8, 0x00u8]) {",
+      "replace": "if starts_at(b, 0, seq![0x3Cu8, 0x00u8, 0x3Fu8, 0x00u8, 0x79u8, 0x00u8]) {",
+      "expect": "killed",
+      "reason": "Prescan step 2 looks for UTF-16LE <?y instead of <?x. lemma_example_utf16le_declaration is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_utf16le_declaration()",
+        "witness": "sniff(seq![0x3Cu8, 0x00u8, 0x3Fu8, 0x00u8, 0x78u8, 0x00u8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-utf16be-declaration",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "} else if starts_at(b, 0, seq![0x00u8, 0x3Cu8, 0x00u8, 0x3Fu8, 0x00u8, 0x78u8]) {",
+      "replace": "} else if starts_at(b, 0, seq![0x00u8, 0x3Cu8, 0x00u8, 0x3Fu8, 0x00u8, 0x79u8]) {",
+      "expect": "killed",
+      "reason": "Prescan step 2 looks for UTF-16BE <?y instead of <?x. lemma_example_utf16be_declaration is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_utf16be_declaration()",
+        "witness": "sniff(seq![0x00u8, 0x3Cu8, 0x00u8, 0x3Fu8, 0x00u8, 0x78u8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-comment-start",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "match find_comment_end(b, position + 4) {",
+      "replace": "match find_comment_end(b, position + 5) {",
+      "expect": "killed",
+      "reason": "A comment's end is searched for from the fifth byte, so <!--> does not end it (the dashes of <!-- no longer count). lemma_example_comment_short is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_comment_short()",
+        "witness": "sniff(seq![0x3Cu8, 0x21u8, 0x2Du8, 0x2Du8, 0x3Eu8, 0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-comment-one-dash",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "} else if q >= 2 && b[q as int] == 0x3E && b[q - 1] == 0x2D && b[q - 2] == 0x2D {",
+      "replace": "} else if q >= 2 && b[q as int] == 0x3E && b[q - 1] == 0x2D {",
+      "expect": "killed",
+      "reason": "A comment ends at ->, not -->, so a <meta> inside a comment is read. lemma_example_comment_dash is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_comment_dash()",
+        "witness": "sniff(seq![0x3Cu8, 0x21u8, 0x2Du8, 0x2Du8, 0x20u8, 0x2Du8, 0x3Eu8, 0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8, 0x20u8, 0x2Du8, 0x2Du8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-meta-needs-space",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "b[p + 5] == 0x2F)",
+      "replace": "b[p + 5] == 0x2F || true)",
+      "expect": "killed",
+      "reason": "<meta need not be followed by a space or slash, so <metacharset=...> is read as a <meta> (html5lib tests1.dat says it is not). lemma_example_metacharset is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_metacharset()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-meta-case",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "(b[p + 1] == 0x4D || b[p + 1] == 0x6D)",
+      "replace": "(b[p + 1] == 0x6D)",
+      "expect": "killed",
+      "reason": "<META is not recognized: only a lowercase m starts a <meta>. lemma_example_meta_upper is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_meta_upper()",
+        "witness": "sniff(seq![0x3Cu8, 0x4Du8, 0x45u8, 0x54u8, 0x41u8, 0x20u8, 0x43u8, 0x48u8, 0x41u8, 0x52u8, 0x53u8, 0x45u8, 0x54u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "meta-need-pragma",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "} else if m.need_pragma == Some(true) && !m.got_pragma {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "reason": "Processing step 12 is skipped: content without http-equiv=content-type is used. lemma_example_pragma_missing is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_pragma_missing()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x3Du8, 0x22u8, 0x74u8, 0x65u8, 0x78u8, 0x74u8, 0x2Fu8, 0x68u8, 0x74u8, 0x6Du8, 0x6Cu8, 0x3Bu8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x22u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "meta-got-pragma",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "if value == content_type() {",
+      "replace": "if value == http_equiv() {",
+      "expect": "killed",
+      "reason": "http-equiv=content-type no longer sets got pragma, so the pragma is ignored. lemma_example_pragma is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_pragma()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x68u8, 0x74u8, 0x74u8, 0x70u8, 0x2Du8, 0x65u8, 0x71u8, 0x75u8, 0x69u8, 0x76u8, 0x3Du8, 0x22u8, 0x43u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x2Du8, 0x54u8, 0x79u8, 0x70u8, 0x65u8, 0x22u8, 0x20u8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x3Du8, 0x22u8, 0x74u8, 0x65u8, 0x78u8, 0x74u8, 0x2Fu8, 0x68u8, 0x74u8, 0x6Du8, 0x6Cu8, 0x3Bu8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x22u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "meta-content-only-if-null",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "Some(e) => if m.charset is Null {",
+      "replace": "Some(e) => if true {",
+      "expect": "killed",
+      "reason": "content replaces an encoding charset already set (step 9 sets it only while charset is null). lemma_example_charset_before_content is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_charset_before_content()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x20u8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x3Du8, 0x22u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x61u8, 0x73u8, 0x63u8, 0x69u8, 0x69u8, 0x22u8, 0x20u8, 0x68u8, 0x74u8, 0x74u8, 0x70u8, 0x2Du8, 0x65u8, 0x71u8, 0x75u8, 0x69u8, 0x76u8, 0x3Du8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x2Du8, 0x74u8, 0x79u8, 0x70u8, 0x65u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "meta-duplicate-attribute",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "} else if in_list(m.attribute_list, name, 0) {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "reason": "Step 7 is skipped: a repeated charset attribute replaces the first. lemma_example_duplicate_attribute is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_duplicate_attribute()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x61u8, 0x73u8, 0x63u8, 0x69u8, 0x69u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "attribute-name-lowercase",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "attr_name(b, pos + 1, name.push(lower(c)))",
+      "replace": "attr_name(b, pos + 1, name.push(c))",
+      "expect": "killed",
+      "reason": "Get an attribute keeps the name's case, so CHARSET is not charset. lemma_example_meta_upper is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_meta_upper()",
+        "witness": "sniff(seq![0x3Cu8, 0x4Du8, 0x45u8, 0x54u8, 0x41u8, 0x20u8, 0x43u8, 0x48u8, 0x41u8, 0x52u8, 0x53u8, 0x45u8, 0x54u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "attribute-skip-slash",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "    } else if is_space(b[pos as int]) || b[pos as int] == 0x2F {",
+      "replace": "    } else if is_space(b[pos as int]) {",
+      "expect": "killed",
+      "reason": "Get an attribute step 1 does not skip /, so <meta/charset=...> finds no attribute. lemma_example_meta_slash is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_meta_slash()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x2Fu8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "attribute-single-quote",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "        } else if c == 0x22 || c == 0x27 {\n            // 10.",
+      "replace": "        } else if c == 0x22 {\n            // 10.",
+      "expect": "killed",
+      "reason": "Get an attribute step 10 does not treat ' as a quote, so the > inside x='>' ends the tag. lemma_example_quoted_gt is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_quoted_gt()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x27u8, 0x3Eu8, 0x27u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "attribute-unquoted-end",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "        if is_space(c) || c == 0x3E {\n            // 0x09",
+      "replace": "        if c == 0x3E {\n            // 0x09",
+      "expect": "killed",
+      "reason": "An unquoted value runs on past a space, swallowing the next attribute. lemma_example_unquoted_value_end is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_unquoted_value_end()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "meta-utf16-to-utf8",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::lemmas",
+      "find": "                let e = if e == clazel_encoding::labels::spec::Encoding::Utf16Be || e",
+      "replace": "                let e = if e == clazel_encoding::labels::spec::Encoding::Big5 || e",
+      "expect": "killed",
+      "reason": "Processing step 14 no longer turns UTF-16BE into UTF-8, so a <meta> yields UTF-16BE and lemma_meta_never_utf16 is false.",
+      "certificate": {
+        "file": "src/sniff/lemmas.rs",
+        "lemma": "lemma_meta_never_utf16(Meta { attribute_list: seq![], got_pragma: false, need_pragma: Some(false), charset: Charset::Encoding(clazel_encoding::labels::spec::Encoding::Utf16Be) }, 0)",
+        "witness": "meta_processing(Meta { attribute_list: seq![], got_pragma: false, need_pragma: Some(false), charset: Charset::Encoding(clazel_encoding::labels::spec::Encoding::Utf16Be) }, 0) == MetaResult::Return(clazel_encoding::labels::spec::Encoding::Utf16Be)"
+      }
+    },
+    {
+      "id": "meta-x-user-defined",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::lemmas",
+      "find": "                let e = if e == clazel_encoding::labels::spec::Encoding::XUserDefined {",
+      "replace": "                let e = if e == clazel_encoding::labels::spec::Encoding::Big5 {",
+      "expect": "killed",
+      "reason": "Processing step 15 no longer turns x-user-defined into windows-1252, so lemma_meta_never_utf16 is false.",
+      "certificate": {
+        "file": "src/sniff/lemmas.rs",
+        "lemma": "lemma_meta_never_utf16(Meta { attribute_list: seq![], got_pragma: false, need_pragma: Some(false), charset: Charset::Encoding(clazel_encoding::labels::spec::Encoding::XUserDefined) }, 0)",
+        "witness": "meta_processing(Meta { attribute_list: seq![], got_pragma: false, need_pragma: Some(false), charset: Charset::Encoding(clazel_encoding::labels::spec::Encoding::XUserDefined) }, 0) == MetaResult::Return(clazel_encoding::labels::spec::Encoding::XUserDefined)"
+      }
+    },
+    {
+      "id": "xml-needs-equals",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "if p >= b.len() || b[p as int] != 0x3D {",
+      "replace": "if p >= b.len() {",
+      "expect": "killed",
+      "reason": "Get an XML encoding step 7 does not check for =, so encoding x\"...\" is read. lemma_example_xml_needs_equals is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_xml_needs_equals()",
+        "witness": "sniff(seq![0x3Cu8, 0x3Fu8, 0x78u8, 0x6Du8, 0x6Cu8, 0x20u8, 0x65u8, 0x6Eu8, 0x63u8, 0x6Fu8, 0x64u8, 0x69u8, 0x6Eu8, 0x67u8, 0x20u8, 0x78u8, 0x22u8, 0x38u8, 0x36u8, 0x36u8, 0x22u8, 0x3Fu8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "xml-utf16-to-utf8",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "                                                        Some(clazel_encoding::labels::spec::Encoding::Utf8)",
+      "replace": "                                                        Some(enc)",
+      "expect": "killed",
+      "reason": "Get an XML encoding step 17 keeps UTF-16. lemma_example_xml_utf16 is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_xml_utf16()",
+        "witness": "sniff(seq![0x3Cu8, 0x3Fu8, 0x78u8, 0x6Du8, 0x6Cu8, 0x20u8, 0x65u8, 0x6Eu8, 0x63u8, 0x6Fu8, 0x64u8, 0x69u8, 0x6Eu8, 0x67u8, 0x3Du8, 0x22u8, 0x63u8, 0x73u8, 0x75u8, 0x6Eu8, 0x69u8, 0x63u8, 0x6Fu8, 0x64u8, 0x65u8, 0x22u8, 0x3Fu8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Utf16Le, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-tag-attributes",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "            Some(q) => match skip_attributes(b, q) {",
+      "replace": "            Some(q) => match Option::<nat>::Some(q) {",
+      "expect": "killed",
+      "reason": "A tag's attributes are not skipped, so a <meta> inside an attribute value is read. lemma_example_tag_attributes is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_tag_attributes()",
+        "witness": "sniff(seq![0x3Cu8, 0x70u8, 0x20u8, 0x74u8, 0x69u8, 0x74u8, 0x6Cu8, 0x65u8, 0x3Du8, 0x22u8, 0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8, 0x22u8, 0x3Eu8, 0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x61u8, 0x73u8, 0x63u8, 0x69u8, 0x69u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "prescan-end-tag",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "|| starts_at(b, position, seq![0x3Cu8, 0x2Fu8])",
+      "replace": "|| false",
+      "expect": "killed",
+      "reason": "</ followed by a non-letter is not skipped to >, so a <meta> inside it is read. lemma_example_end_tag is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_end_tag()",
+        "witness": "sniff(seq![0x3Cu8, 0x2Fu8, 0x20u8, 0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8, 0x3Eu8, 0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x61u8, 0x73u8, 0x63u8, 0x69u8, 0x69u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "extract-loop",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "                if position < j <= s.len() {\n                    extract_label_from(s, j)",
+      "replace": "                if false {\n                    extract_label_from(s, j)",
+      "expect": "killed",
+      "reason": "Extracting from content gives up at a charset not followed by =, instead of looking for the next. lemma_example_pragma_second_charset is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_pragma_second_charset()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x68u8, 0x74u8, 0x74u8, 0x70u8, 0x2Du8, 0x65u8, 0x71u8, 0x75u8, 0x69u8, 0x76u8, 0x3Du8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x2Du8, 0x74u8, 0x79u8, 0x70u8, 0x65u8, 0x20u8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x3Du8, 0x22u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x78u8, 0x3Bu8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x22u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "extract-quoted",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::examples",
+      "find": "Some(e) => Some(s.subrange((v + 1) as int, e as int)),",
+      "replace": "Some(e) => None,",
+      "expect": "killed",
+      "reason": "Extracting from content returns nothing for a quoted label. lemma_example_pragma_quoted is false for the mutant.",
+      "certificate": {
+        "file": "src/sniff/examples.rs",
+        "lemma": "lemma_example_pragma_quoted()",
+        "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x68u8, 0x74u8, 0x74u8, 0x70u8, 0x2Du8, 0x65u8, 0x71u8, 0x75u8, 0x69u8, 0x76u8, 0x3Du8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x2Du8, 0x74u8, 0x79u8, 0x70u8, 0x65u8, 0x20u8, 0x63u8, 0x6Fu8, 0x6Eu8, 0x74u8, 0x65u8, 0x6Eu8, 0x74u8, 0x3Du8, 0x22u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x27u8, 0x38u8, 0x36u8, 0x36u8, 0x27u8, 0x22u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "change-from-utf16",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::lemmas",
+      "find": "    if current == clazel_encoding::labels::spec::Encoding::Utf16Be || current\n        == clazel_encoding::labels::spec::Encoding::Utf16Le {",
+      "replace": "    if false {",
+      "expect": "killed",
+      "reason": "Change the encoding step 1 is skipped: a UTF-16 document restarts as UTF-8, so lemma_change_the_encoding is false.",
+      "certificate": {
+        "file": "src/sniff/lemmas.rs",
+        "lemma": "lemma_change_the_encoding(clazel_encoding::labels::spec::Encoding::Utf16Le, clazel_encoding::labels::spec::Encoding::Utf8)",
+        "witness": "change_the_encoding(clazel_encoding::labels::spec::Encoding::Utf16Le, clazel_encoding::labels::spec::Encoding::Utf8) == Some(clazel_encoding::labels::spec::Encoding::Utf8)"
+      }
+    },
+    {
+      "id": "change-utf16-target",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::lemmas",
+      "find": "        let new = if new == clazel_encoding::labels::spec::Encoding::Utf16Be || new\n            == clazel_encoding::labels::spec::Encoding::Utf16Le {",
+      "replace": "        let new = if false {",
+      "expect": "killed",
+      "reason": "Change the encoding step 2 is skipped: a restart into UTF-16BE, so lemma_change_the_encoding is false.",
+      "certificate": {
+        "file": "src/sniff/lemmas.rs",
+        "lemma": "lemma_change_the_encoding(clazel_encoding::labels::spec::Encoding::Windows1252, clazel_encoding::labels::spec::Encoding::Utf16Be)",
+        "witness": "change_the_encoding(clazel_encoding::labels::spec::Encoding::Windows1252, clazel_encoding::labels::spec::Encoding::Utf16Be) == Some(clazel_encoding::labels::spec::Encoding::Utf16Be)"
+      }
+    },
+    {
+      "id": "change-x-user-defined",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::lemmas",
+      "find": "        let new = if new == clazel_encoding::labels::spec::Encoding::XUserDefined {",
+      "replace": "        let new = if false {",
+      "expect": "killed",
+      "reason": "Change the encoding step 3 is skipped: a restart into x-user-defined, so lemma_change_the_encoding is false.",
+      "certificate": {
+        "file": "src/sniff/lemmas.rs",
+        "lemma": "lemma_change_the_encoding(clazel_encoding::labels::spec::Encoding::Windows1252, clazel_encoding::labels::spec::Encoding::XUserDefined)",
+        "witness": "change_the_encoding(clazel_encoding::labels::spec::Encoding::Windows1252, clazel_encoding::labels::spec::Encoding::XUserDefined) == Some(clazel_encoding::labels::spec::Encoding::XUserDefined)"
+      }
+    },
+    {
+      "id": "change-same-encoding",
+      "file": "src/sniff/spec.rs",
+      "module": "sniff::lemmas",
+      "find": "        if new == current {",
+      "replace": "        if false {",
+      "expect": "killed",
+      "reason": "Change the encoding step 4 is skipped: the same encoding restarts the parse, so a second change could follow and lemma_change_the_encoding is false.",
+      "certificate": {
+        "file": "src/sniff/lemmas.rs",
+        "lemma": "lemma_change_the_encoding(clazel_encoding::labels::spec::Encoding::Windows1252, clazel_encoding::labels::spec::Encoding::Windows1252)",
+        "witness": "change_the_encoding(clazel_encoding::labels::spec::Encoding::Windows1252, clazel_encoding::labels::spec::Encoding::Windows1252) == Some(clazel_encoding::labels::spec::Encoding::Windows1252)"
+      }
     }
   ]
 }

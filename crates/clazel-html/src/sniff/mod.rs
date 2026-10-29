@@ -4,7 +4,14 @@
 //! - [`spec`]: a step-by-step transcription of the standard.
 //! - [`contract`]: what the executable functions are proven to satisfy.
 //! - [`exec`]: the executable functions, and their proofs.
+//! - [`lemmas`]: facts proven about the spec.
+//! - [`examples`]: the spec on concrete inputs, proven by evaluation.
+//! - [`independent`]: the Encoding Standard's "decode" as a second text for
+//!   the first steps, proven to agree.
 
 pub mod contract;
+pub mod examples;
 pub mod exec;
+pub mod independent;
+pub mod lemmas;
 pub mod spec;
