@@ -65,6 +65,22 @@ pub proof fn lemma_dinv(p: Parser)
     reveal(dinv_of);
 }
 
+/// [`dinv`] gives `invariant::templates_wf`.
+pub proof fn lemma_dinv_templates_wf(p: Parser)
+    requires
+        dinv(p),
+    ensures
+        templates_wf(p),
+{
+    lemma_dinv(p);
+    assert forall|i: int| 0 <= i < p.open.len() && is_html(#[trigger] p.open[i], Tag::Template) implies has_template_contents(
+        p.doc,
+        p.open[i].id,
+    ) by {
+        assert(crate::exec::frame::elem_ok(p.doc, p.open[i]));
+    }
+}
+
 /// What [`dinv`] says of one record of the stack.
 pub proof fn lemma_dinv_at(p: Parser, i: int)
     requires
