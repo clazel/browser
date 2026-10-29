@@ -14,7 +14,9 @@ use clazel_dom::exec::{Arena, ExecKind};
 use clazel_dom::spec::Namespace;
 
 fn s(v: &[u32]) -> String {
-    v.iter().map(|&c| char::from_u32(c).unwrap_or('\u{FFFD}')).collect()
+    v.iter()
+        .map(|&c| char::from_u32(c).unwrap_or('\u{FFFD}'))
+        .collect()
 }
 
 fn line(out: &mut String, depth: usize, text: &str) {
@@ -34,25 +36,49 @@ pub fn dump_children(arena: &Arena, root: usize) -> String {
         Node(usize, usize),
         Content(usize, usize),
     }
-    let mut stack: Vec<Item> = arena.children(root).iter().rev().map(|&c| Item::Node(c, 0)).collect();
+    let mut stack: Vec<Item> = arena
+        .children(root)
+        .iter()
+        .rev()
+        .map(|&c| Item::Node(c, 0))
+        .collect();
     while let Some(item) = stack.pop() {
         match item {
             Item::Content(frag, depth) => {
                 line(&mut out, depth, "content");
                 for &c in arena.children(frag).iter().rev() {
-                    stack.push(Item::Node(c, depth + 1));
+                    stack.push(Item::Node(c, depth.saturating_add(1)));
                 }
             }
             Item::Node(n, depth) => {
                 match arena.kind(n) {
-                    ExecKind::DocumentType { name, public_id, system_id } => {
+                    ExecKind::DocumentType {
+                        name,
+                        public_id,
+                        system_id,
+                    } => {
                         if public_id.is_empty() && system_id.is_empty() {
                             line(&mut out, depth, &format!("<!DOCTYPE {}>", s(name)));
                         } else {
-                            line(&mut out, depth, &format!("<!DOCTYPE {} \"{}\" \"{}\">", s(name), s(public_id), s(system_id)));
+                            line(
+                                &mut out,
+                                depth,
+                                &format!(
+                                    "<!DOCTYPE {} \"{}\" \"{}\">",
+                                    s(name),
+                                    s(public_id),
+                                    s(system_id)
+                                ),
+                            );
                         }
                     }
-                    ExecKind::Element { namespace, local_name, attributes, template_contents, .. } => {
+                    ExecKind::Element {
+                        namespace,
+                        local_name,
+                        attributes,
+                        template_contents,
+                        ..
+                    } => {
                         let prefix = match namespace {
                             Some(Namespace::Svg) => "svg ",
                             Some(Namespace::MathMl) => "math ",
@@ -63,9 +89,15 @@ pub fn dump_children(arena: &Arena, root: usize) -> String {
                             .iter()
                             .map(|a| {
                                 let name = match (&a.namespace, &a.prefix) {
-                                    (Some(Namespace::XLink), _) => format!("xlink {}", s(&a.local_name)),
-                                    (Some(Namespace::Xml), _) => format!("xml {}", s(&a.local_name)),
-                                    (Some(Namespace::Xmlns), _) => format!("xmlns {}", s(&a.local_name)),
+                                    (Some(Namespace::XLink), _) => {
+                                        format!("xlink {}", s(&a.local_name))
+                                    }
+                                    (Some(Namespace::Xml), _) => {
+                                        format!("xml {}", s(&a.local_name))
+                                    }
+                                    (Some(Namespace::Xmlns), _) => {
+                                        format!("xmlns {}", s(&a.local_name))
+                                    }
                                     _ => s(&a.local_name),
                                 };
                                 (name, s(&a.value))
@@ -73,19 +105,21 @@ pub fn dump_children(arena: &Arena, root: usize) -> String {
                             .collect();
                         attrs.sort();
                         for (k, v) in attrs {
-                            line(&mut out, depth + 1, &format!("{k}=\"{v}\""));
+                            line(&mut out, depth.saturating_add(1), &format!("{k}=\"{v}\""));
                         }
                         // Children are pushed first so the template contents
                         // come out before them (a template has none).
                         for &c in arena.children(n).iter().rev() {
-                            stack.push(Item::Node(c, depth + 1));
+                            stack.push(Item::Node(c, depth.saturating_add(1)));
                         }
                         if let (Some(f), Some(Namespace::Html)) = (template_contents, namespace) {
-                            stack.push(Item::Content(*f, depth + 1));
+                            stack.push(Item::Content(*f, depth.saturating_add(1)));
                         }
                     }
                     ExecKind::Text { data } => line(&mut out, depth, &format!("\"{}\"", s(data))),
-                    ExecKind::Comment { data } => line(&mut out, depth, &format!("<!-- {} -->", s(data))),
+                    ExecKind::Comment { data } => {
+                        line(&mut out, depth, &format!("<!-- {} -->", s(data)))
+                    }
                     ExecKind::ProcessingInstruction { target, data } => {
                         line(&mut out, depth, &format!("<?{} {}?>", s(target), s(data)))
                     }
