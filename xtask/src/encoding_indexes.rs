@@ -234,15 +234,18 @@ fn label_byte(b: u8) -> bool {
     b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_' | b'.' | b':')
 }
 
-/// Read and check `encodings.json`: (label, encoding number) rows sorted by
-/// label, and the encodings' names.
-fn label_rows(text: &str) -> Result<(Vec<(String, u8)>, Vec<String>), String> {
+/// A label and the number of its encoding.
+type LabelRow = (String, u8);
+
+/// Read and check `encodings.json`: label rows sorted by label, and the
+/// encodings' names.
+fn label_rows(text: &str) -> Result<(Vec<LabelRow>, Vec<String>), String> {
     let json: Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let groups = json
         .as_array()
         .ok_or("encodings.json: expected a JSON array")?;
     let mut names = Vec::new();
-    let mut rows: Vec<(String, u8)> = Vec::new();
+    let mut rows: Vec<LabelRow> = Vec::new();
     for group in groups {
         let encodings = group
             .get("encodings")
