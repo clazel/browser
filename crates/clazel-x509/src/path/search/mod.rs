@@ -7,9 +7,11 @@
 //!   order is one `verifier::verify_server_chain_ensures` accepts), stated;
 //! - `contract`: what the executable search is proven to meet;
 //! - `lemmas`: the proofs of `theorems`, and the facts `exec` uses;
-//! - `exec`: the executable search and `verify_server_chain`.
+//! - `exec`: the executable search and `verify_server_chain`;
+//! - `examples`: known answers.
 
 pub mod contract;
+pub mod examples;
 pub mod exec;
 pub mod lemmas;
 pub mod spec;
