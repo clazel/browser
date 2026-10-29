@@ -80,24 +80,28 @@ evidence exists (see "Left" below).
   table"'s characters with a `template` current node; the adoption agency
   algorithm's insertions where the redirection map or the WHATWG's step
   4.21 checks make them differ; an empty pending table character list;
-  the DOCTYPE lists are taken as agreeing, not proven). The two lemmas
+  the DOCTYPE lists are taken as agreeing, not proven, except at the
+  certificate's input). The table scope and the push onto the list of
+  active formatting elements (§8.2.3.2, §8.2.3.3) are transcribed too and
+  proven equal to the spec's. The two lemmas
   for "in body" and "in table" also assume stated facts of reachable
   states (ids on the stack and in the list of active formatting elements
   name nodes, records are tagged, the list holds HTML elements). Not
   transcribed: the W3C's "in select" and "in select in table", which the
   living standard removed.
-- **Mutations** (`mutations.json`): 48; 41 killed by a theorem with a
+- **Mutations** (`mutations.json`): 48; 45 killed by a theorem with a
   certificate Verus checks (termination, the order of actions, and the
-  W3C equivalences), 7 killed incidentally (they break only the
-  implementation's proof), 0 surviving. Of the 7, four change algorithms
-  both transcriptions share (`push_formatting`'s Noah's Ark clause, the
-  table scope, the SVG tag name and foreign attribute tables), so no W3C
-  equivalence can tell them apart; one is in foreign content, which is not
-  transcribed; and two cannot be evaluated by a certificate: the
-  DOCTYPE system identifier test and "in table text"'s whitespace test are
-  `exists` quantifiers in the spec, which `compute_only` does not
-  evaluate, so no witness reaching them evaluates in the mutant and on the
-  real spec.
+  W3C equivalences), 3 killed incidentally (they break only the
+  implementation's proof), 0 surviving. Of the 3, two change tables both
+  transcriptions share (the SVG tag name and foreign attribute tables), so
+  no W3C equivalence can tell them apart, and one is in foreign content,
+  which is not transcribed. The table scope and `push_formatting`'s Noah's
+  Ark clause have their own W3C transcription (`src/independent/state.rs`,
+  proven equal to the spec's), which kills their mutations. Where a
+  mutated rule tests an `exists` (the DOCTYPE system identifier list, "in
+  table text"'s whitespace test), which `compute_only` does not evaluate,
+  the certificate's witness is the quantifier-free part of the test at the
+  input and Z3 derives the contradiction; the spec is unchanged.
 - **Conformance** (`tests/conformance_tree_construction.rs`): the
   html5lib tree-construction suite as WPT keeps it
   (`tests/data/wpt-tree-construction/`, pinned WPT commit), through the
@@ -118,6 +122,6 @@ evidence exists (see "Left" below).
 - Spec-level `parser_wf` of every reachable parser, which would remove the
   hypotheses of `theorem_doc_wf`, `theorem_open_elements_in_doc` and
   `theorem_nodes_per_token`.
-- Every mutation a certified kill (tier 2's requirement): 7 are not
+- Every mutation a certified kill (tier 2's requirement): 3 are not
   (see "Mutations" above); they need a second transcription of the shared
-  algorithms and tables, of foreign content, or quantifier-free tests.
+  tables and of foreign content.
