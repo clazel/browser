@@ -806,9 +806,13 @@ proves the state preconditions of the W3C equivalence lemmas that are
 facts of reachable states (`document_rooted`, `no_document_redirect`,
 `aa_wf`, `tags_wf`, distinct stack, `place_stable`), and
 `theorem_reachable_foreign_content` states the foreign content
-equivalence on every reachable parser without its stack hypothesis. Not
-proven at the spec level: `templates_wf` (the executable step keeps it,
-but its contract cannot be used in a proof); whether reachable parsers need the
+equivalence on every reachable parser without its stack hypothesis.
+`theorem_reachable_parser_inv`: every reachable parser satisfies
+`parser_inv` until it stops, `templates_wf` included (the reachable-state
+invariant carries the document facts: every `template` record on the
+stack has template contents, and no `template` element without them has
+a child, since every insertion's parent comes from the stack's records,
+tagged by their names). Not proven at the spec level: whether reachable parsers need the
 6T term of the node bound (it pays for "in template"'s end of file
 resetting the mode once per template); and the equivalence preconditions
 `html_only_at_root`, `element_plain` of `html` and `body`, the cell in
@@ -1115,7 +1119,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.6 Tokenizer spec and contracts | done: 84 states (the standard now has 84, not 80); total, output bounded, two faces equal |
 | 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; tier 0 until CI's full run is green |
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
-| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers, `theorem_open_distinct` (distinct elements on the stack of every running reachable parser), and `theorem_reachable_w3c_facts` and `theorem_reachable_foreign_content`, which discharge the W3C equivalences' state preconditions that are facts of reachable states |
+| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers, `theorem_reachable_parser_inv` (`parser_inv` of every reachable parser until it stops), `theorem_open_distinct` (distinct elements on the stack of every running reachable parser), and `theorem_reachable_w3c_facts` and `theorem_reachable_foreign_content`, which discharge the W3C equivalences' state preconditions that are facts of reachable states |
 | 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified |
 | 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |

@@ -258,29 +258,21 @@ pub proof fn lemma_reconstruct_keeps(p: Parser)
     }
 }
 
-/// "Add attribute … to element" for the missing attributes.
+/// "Add attribute … to element" for the missing attributes, of an element
+/// of the document.
 pub proof fn lemma_add_missing_keeps(p: Parser, el: NodeId, attrs: Seq<Attr>, i: int)
     requires
         live(p),
+        !p.stopped ==> dom::valid(p.doc, el) && p.doc.nodes[el as int].kind is Element,
     ensures
         keeps(p, add_missing_attributes(p, el, attrs, i)),
         add_missing_attributes(p, el, attrs, i) == (Parser { doc: add_missing_attributes(p, el, attrs, i).doc, ..p }),
-    decreases attrs.len() - i,
 {
-    if i < 0 || i >= attrs.len() {
-        lemma_keeps_refl(p);
-    } else {
-        let a = attrs[i];
-        let q = if !p.stopped && !element_has_attribute_named(p.doc, el, a.local_name) {
-            Parser { doc: dom::append_attribute(p.doc, el, a), ..p }
-        } else {
-            p
-        };
-        assert(q.doc.nodes.len() == p.doc.nodes.len());
-        lemma_doc_keeps(p, q);
-        lemma_add_missing_keeps(q, el, attrs, i + 1);
-        lemma_keeps_trans(p, q, add_missing_attributes(q, el, attrs, i + 1));
+    super::body::lemma_add_missing_frame(p, el, attrs, i);
+    if !p.stopped {
+        super::doc::lemma_dinv(p);
     }
+    lemma_doc_keeps(p, add_missing_attributes(p, el, attrs, i));
 }
 
 // ---------------------------------------------------------------------

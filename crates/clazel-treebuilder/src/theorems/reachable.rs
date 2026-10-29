@@ -23,10 +23,10 @@
 //!
 //! Not stated: the head element pointer's fact of a stopped parser (a
 //! `head` start tag the node limit stops points the pointer at node 0, the
-//! Document, which is no `head` element), and the rest of
-//! `invariant::parser_inv` (`tags_wf` holds of running reachable parsers by
-//! `reachable_inv`; `templates_wf` has no spec-level proof, only the
-//! executable step's).
+//! Document, which is no `head` element). The rest of
+//! `invariant::parser_inv` for running reachable parsers (`tags_wf` and
+//! `templates_wf`, which `reachable_inv` carries) is
+//! `super::parser_inv::theorem_reachable_parser_inv`.
 
 #[allow(unused_imports)]
 use super::spec::*;

@@ -34,6 +34,8 @@ pub proof fn lemma_flags_keeps(p: Parser, q: Parser)
         q.original_mode == p.original_mode,
         q.template_modes == p.template_modes,
         q.stopped == p.stopped,
+        q.head == p.head,
+        q.redirect == p.redirect,
     ensures
         keeps(p, q),
 {
@@ -177,27 +179,37 @@ pub proof fn lemma_ib_text(p: Parser, q: Parser, tt: TagTok, rawtext: bool)
 // Start tags
 
 /// Case 7, `html`.
-pub proof fn lemma_ib_html(p: Parser, tt: TagTok)
+pub proof fn lemma_ib_html(p: Parser, t: Tok, tt: TagTok)
     requires
-        reach_core(p),
-        modes_ok(p),
-        !p.stopped,
+        rules_inv(Rules::Html(Mode::InBody), p, t),
+        t == Tok::Start(tt),
     ensures
         next_core(Outcome::Done(in_body_start_html(p, tt))),
 {
+    super::run::lemma_rules_inv_rooted(Rules::Html(Mode::InBody), p, t);
     if !open_has_html(p, Tag::Template) {
         lemma_add_missing_frame(p, p.open[0].id, tt.attrs, 0);
+        super::doc::lemma_dinv_at(p, 0);
         lemma_core_frame(p, in_body_start_html(p, tt));
     }
 }
 
-/// [`add_missing_attributes`] changes only the document (keeping its size).
+/// [`add_missing_attributes`] changes only the document (keeping its size,
+/// and extending it when the element is an element of a well-formed
+/// document).
 pub proof fn lemma_add_missing_frame(p: Parser, el: NodeId, attrs: Seq<Attr>, i: int)
     ensures
         add_missing_attributes(p, el, attrs, i) == (Parser { doc: add_missing_attributes(p, el, attrs, i).doc, ..p }),
         add_missing_attributes(p, el, attrs, i).doc.nodes.len() == p.doc.nodes.len(),
+        clazel_dom::contract::append_attribute_requires(p.doc, el) ==> crate::exec::frame::doc_extends(
+            p.doc,
+            add_missing_attributes(p, el, attrs, i).doc,
+        ),
     decreases attrs.len() - i,
 {
+    if clazel_dom::contract::append_attribute_requires(p.doc, el) {
+        crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p.doc);
+    }
     if !(i < 0 || i >= attrs.len()) {
         let a = attrs[i];
         let q = if !p.stopped && !element_has_attribute_named(p.doc, el, a.local_name) {
@@ -206,6 +218,13 @@ pub proof fn lemma_add_missing_frame(p: Parser, el: NodeId, attrs: Seq<Attr>, i:
             p
         };
         lemma_add_missing_frame(q, el, attrs, i + 1);
+        if clazel_dom::contract::append_attribute_requires(p.doc, el) {
+            if q != p {
+                crate::exec::modes::in_body_start_lemmas::lemma_append_attribute_extends(p.doc, el, a);
+                assert(crate::exec::frame::kind_kept(p.doc.nodes[el as int].kind, q.doc.nodes[el as int].kind));
+            }
+            crate::exec::frame::lemma_doc_extends_trans(p.doc, q.doc, add_missing_attributes(q, el, attrs, i + 1).doc);
+        }
     }
 }
 
@@ -219,6 +238,7 @@ pub proof fn lemma_ib_body(p: Parser, tt: TagTok)
     if !(p.open.len() == 1 || !is_html(p.open[1], Tag::Body) || open_has_html(p, Tag::Template)) {
         let q = frameset_not_ok(p);
         lemma_flags_keeps(p, q);
+        super::doc::lemma_dinv_at(p, 1);
         lemma_add_missing_keeps(q, q.open[1].id, tt.attrs, 0);
         lemma_keeps_trans(p, q, add_missing_attributes(q, q.open[1].id, tt.attrs, 0));
         lemma_ib_done(p, in_body_start_body(p, tt));

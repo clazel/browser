@@ -40,6 +40,7 @@ pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
         !is_html(e, Tag::Template),
         !cell_pred()(e),
         in_cell(p) ==> i > last_cell(p.open),
+        !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
     ensures
         keeps(p, Parser { open: p.open.update(i, e), ..p }),
         in_cell(p) ==> last_cell(p.open.update(i, e)) == last_cell(p.open),
@@ -60,6 +61,12 @@ pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
                 assert(q.open[j] == p.open[j]);
             }
         }
+        assert forall|j: int| 0 <= j < q.open.len() implies #[trigger] q.open[j] == e || p.open.contains(q.open[j]) by {
+            if j != i {
+                assert(p.open[j] == q.open[j]);
+            }
+        }
+        super::doc::lemma_dinv_with(p, q.open, e);
         crate::exec::modes::adoption::lemma_templates_in_update(p.open, i, e, p.open.len() as int);
         crate::termination::helpers_ranking::lemma_template_count(p);
         crate::termination::helpers_ranking::lemma_template_count(q);
@@ -76,6 +83,7 @@ pub proof fn lemma_open_insert_keeps(p: Parser, i: int, e: Elem)
         !is_html(e, Tag::Template),
         !cell_pred()(e),
         in_cell(p) ==> i > last_cell(p.open),
+        !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
     ensures
         keeps(p, Parser { open: p.open.insert(i, e), ..p }),
 {
@@ -102,6 +110,14 @@ pub proof fn lemma_open_insert_keeps(p: Parser, i: int, e: Elem)
                 assert(q.open[j] == p.open[j - 1]);
             }
         }
+        assert forall|j: int| 0 <= j < q.open.len() implies #[trigger] q.open[j] == e || p.open.contains(q.open[j]) by {
+            if j < i {
+                assert(p.open[j] == q.open[j]);
+            } else if j > i {
+                assert(p.open[j - 1] == q.open[j]);
+            }
+        }
+        super::doc::lemma_dinv_with(p, q.open, e);
         crate::exec::modes::adoption::lemma_templates_in_insert(p.open, i, e, p.open.len() as int);
         crate::termination::helpers_ranking::lemma_template_count(p);
         crate::termination::helpers_ranking::lemma_template_count(q);
@@ -230,6 +246,7 @@ pub proof fn lemma_inner_replace_keeps(
             &&& node_id != fe.id
             &&& fe_idx < i
             &&& inner_pre(p1, fe, fb_id, fe_idx, i + 1)
+            &&& p1.open[fe_idx - 1] == ca
         },
     ensures
         keeps(p1, inner_replace(p1, ca, i, node_id, last, bm).0),
@@ -240,6 +257,8 @@ pub proof fn lemma_inner_replace_keeps(
             fe_idx,
             i,
         ),
+        !inner_replace(p1, ca, i, node_id, last, bm).0.stopped ==> inner_replace(p1, ca, i, node_id, last, bm).0.open[fe_idx
+            - 1] == ca,
 {
     hide(create_element_for_token);
     hide(dom_insert);
@@ -265,10 +284,12 @@ pub proof fn lemma_inner_replace_keeps(
     lemma_keeps_trans(p1, p2, p3);
     lemma_in_formatting_update(p2.formatting, k, x, fe.id);
     let p4 = dom_insert(p3, last.id, new_element.id, None);
+    super::doc::lemma_elem_pok(p3.doc, new_element);
     lemma_dom_insert_keeps(p3, last.id, new_element.id, None);
     lemma_keeps_trans(p1, p3, p4);
     let jb = choose|jb: int| i + 1 <= jb < p1.open.len() && (#[trigger] p1.open[jb]).id == fb_id;
     assert(p4.open[fe_idx] == p1.open[fe_idx]);
+    assert(p4.open[fe_idx - 1] == p1.open[fe_idx - 1]);
     assert(p4.open[jb] == p1.open[jb]);
     assert(inner_pre(p4, fe, fb_id, fe_idx, i));
 }
@@ -287,7 +308,7 @@ pub proof fn lemma_ai_keeps(
 )
     requires
         live(p),
-        !p.stopped ==> inner_pre(p, fe, fb_id, fe_idx, node_idx),
+        !p.stopped ==> inner_pre(p, fe, fb_id, fe_idx, node_idx) && p.open[fe_idx - 1] == ca,
     ensures
         keeps(p, ai(p, fe, ca, node_idx, last, counter, bm).0),
         !ai(p, fe, ca, node_idx, last, counter, bm).0.stopped ==> inner_pre(
@@ -297,6 +318,8 @@ pub proof fn lemma_ai_keeps(
             fe_idx,
             fe_idx + 1,
         ),
+        !ai(p, fe, ca, node_idx, last, counter, bm).0.stopped ==> ai(p, fe, ca, node_idx, last, counter, bm).0.open[fe_idx
+            - 1] == ca,
     decreases node_idx,
 {
     hide(keeps);
@@ -326,6 +349,7 @@ pub proof fn lemma_ai_keeps(
         lemma_keeps_live(p1, p2);
         let jb = choose|jb: int| node_idx <= jb < p1.open.len() && (#[trigger] p1.open[jb]).id == fb_id;
         assert(p2.open[fe_idx] == p1.open[fe_idx]);
+        assert(p2.open[fe_idx - 1] == p1.open[fe_idx - 1]);
         assert(p2.open[jb - 1] == p1.open[jb]);
         assert(inner_pre(p2, fe, fb_id, fe_idx, i));
         lemma_ai_keeps(p2, fe, ca, i, last, c, bm, fe_idx, fb_id);
@@ -346,6 +370,7 @@ pub proof fn lemma_ai_keeps(
 pub proof fn lemma_place_last_keeps(p: Parser, ca: Elem, last_id: NodeId)
     requires
         live(p),
+        !p.stopped ==> p.open.contains(ca),
     ensures
         keeps(p, place_last(p, ca, last_id)),
         place_last(p, ca, last_id) == (Parser { doc: place_last(p, ca, last_id).doc, ..p }),
@@ -356,6 +381,14 @@ pub proof fn lemma_place_last_keeps(p: Parser, ca: Elem, last_id: NodeId)
     let l = adjusted_location(p, Some(appropriate_place(p, Some(ca))));
     let p1 = dom_remove(p, last_id);
     lemma_dom_remove_keeps(p, last_id);
+    if !p.stopped {
+        super::doc::lemma_dinv(p);
+        let k = choose|k: int| 0 <= k < p.open.len() && p.open[k] == ca;
+        assert(crate::exec::frame::elem_ok(p.doc, p.open[k]));
+        super::doc::lemma_place_pok(p, Some(ca));
+        super::doc::lemma_adjusted_pok(p, Some(appropriate_place(p, Some(ca))));
+        super::doc::lemma_pok_extends(p.doc, p1.doc, l.parent);
+    }
     lemma_dom_insert_keeps(p1, last_id, l.parent, l.child);
     lemma_keeps_trans(p, p1, dom_insert(p1, last_id, l.parent, l.child));
 }
@@ -391,6 +424,7 @@ pub proof fn lemma_mid_stack_keeps(p: Parser, fe_id: NodeId, fb_id: NodeId, ne: 
         elem_tagged(ne),
         !is_html(ne, Tag::Template),
         !cell_pred()(ne),
+        !p.stopped ==> crate::exec::frame::elem_ok(p.doc, ne),
         !p.stopped ==> {
             &&& 1 <= fe_idx < p.open.len()
             &&& p.open[fe_idx].id == fe_id
@@ -437,6 +471,8 @@ pub proof fn lemma_finish_mid_keeps(p2: Parser, fe: Elem, fb_id: NodeId, bm: Boo
         !p2.stopped ==> inner_pre(p2, fe, fb_id, fe_idx, fe_idx + 1) && fb_id != fe.id,
     ensures
         keeps(p2, finish_mid(p2, fe, fb_id, bm).0),
+        !finish_mid(p2, fe, fb_id, bm).0.stopped ==> super::doc::pok(finish_mid(p2, fe, fb_id, bm).0.doc, fb_id)
+            && super::doc::pok(finish_mid(p2, fe, fb_id, bm).0.doc, finish_mid(p2, fe, fb_id, bm).1.id),
 {
     hide(create_element_for_token);
     hide(crate::exec::modes::adoption::mid_list);
@@ -453,6 +489,13 @@ pub proof fn lemma_finish_mid_keeps(p2: Parser, fe: Elem, fb_id: NodeId, bm: Boo
     lemma_fmt_entries_fresh(p2, fi);
     let entry = Fmt::Entry { elem: new_element, token };
     assert(fmt_fresh(p3, entry));
+    super::doc::lemma_dinv(p2);
+    let jb = choose|jb: int| fe_idx + 1 <= jb < p2.open.len() && (#[trigger] p2.open[jb]).id == fb_id;
+    assert(crate::exec::frame::elem_ok(p2.doc, p2.open[jb]));
+    super::doc::lemma_elem_pok(p2.doc, p2.open[jb]);
+    super::doc::lemma_pok_extends(p2.doc, p3.doc, fb_id);
+    assert(crate::exec::frame::elem_ok(p3.doc, new_element));
+    super::doc::lemma_elem_pok(p3.doc, new_element);
     let f2 = crate::exec::modes::adoption::mid_list(p3.formatting, fi, entry, bm);
     let pb = Parser { formatting: f2, ..p3 };
     lemma_mid_list_keeps(p3, fi, entry, bm);
@@ -478,6 +521,7 @@ pub proof fn lemma_finish_mid_keeps(p2: Parser, fe: Elem, fb_id: NodeId, bm: Boo
 pub proof fn lemma_finish_end_keeps(p4: Parser, fb_id: NodeId, ne_id: NodeId)
     requires
         live(p4),
+        !p4.stopped ==> super::doc::pok(p4.doc, fb_id) && super::doc::pok(p4.doc, ne_id),
     ensures
         keeps(p4, finish_end(p4, fb_id, ne_id)),
 {
@@ -485,8 +529,21 @@ pub proof fn lemma_finish_end_keeps(p4: Parser, fb_id: NodeId, ne_id: NodeId)
     reveal(finish_end);
     let p5 = dom_reparent_children(p4, fb_id, ne_id);
     lemma_reparent_len(p4.doc, fb_id, ne_id, p4.doc.nodes[fb_id as int].children.len());
+    if !p4.stopped {
+        super::doc::lemma_dinv(p4);
+        if p5 != p4 {
+            crate::exec::modes::adoption::lemma_reparent_extends(p4.doc, fb_id, ne_id);
+        } else {
+            crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p4.doc);
+        }
+    }
     lemma_doc_keeps(p4, p5);
     let l2 = adjusted_location(p5, Some(Location { parent: fb_id, child: None }));
+    if !p4.stopped {
+        super::doc::lemma_pok_extends(p4.doc, p5.doc, fb_id);
+        super::doc::lemma_dinv(p5);
+        super::doc::lemma_adjusted_pok(p5, Some(Location { parent: fb_id, child: None }));
+    }
     lemma_dom_insert_keeps(p5, ne_id, l2.parent, l2.child);
     lemma_keeps_trans(p4, p5, dom_insert(p5, ne_id, l2.parent, l2.child));
 }
@@ -496,6 +553,7 @@ pub proof fn lemma_af_keeps(p: Parser, fe: Elem, fb: Elem, ca: Elem, last: Elem,
     requires
         live(p),
         !p.stopped ==> inner_pre(p, fe, fb.id, fe_idx, fe_idx + 1) && fb.id != fe.id,
+        !p.stopped ==> p.open.contains(ca),
     ensures
         keeps(p, af(p, fe, fb, ca, last, bm)),
 {
@@ -585,6 +643,10 @@ pub proof fn lemma_ao_keeps(p: Parser, tt: TagTok, counter: nat)
     assert(inner_pre(p, fe, fb.id, fe_idx, fb_idx));
     lemma_ai_keeps(p, fe, ca, fb_idx, fb, 0, Bookmark::FormattingElement, fe_idx, fb.id);
     let r = ai(p, fe, ca, fb_idx, fb, 0, Bookmark::FormattingElement);
+    if !r.0.stopped {
+        assert(r.0.open[fe_idx - 1] == ca);
+        assert(r.0.open.contains(ca));
+    }
     lemma_af_keeps(r.0, fe, fb, ca, r.1, r.2, fe_idx);
     let p2 = af(r.0, fe, fb, ca, r.1, r.2);
     lemma_keeps_trans(p, r.0, p2);

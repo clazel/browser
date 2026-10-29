@@ -30,6 +30,17 @@
 //! ([`stop_frame`], [`stop_body`]: every helper keeps the modes, stopped or
 //! not) and per-mode lemmas ([`stop_early`], [`stop_in_body`],
 //! [`stop_tables`]).
+//!
+//! The document. A running parser also keeps [`doc::dinv`]: the document is
+//! well formed, every record of the stack is an element of it (with
+//! template contents if it is a `template`), and no `template` element
+//! without template contents has a child. Every DOM call of the rules
+//! extends the document (`exec::frame::doc_extends`), and the parent of
+//! every insertion may receive a child ([`doc::pok`]): the appropriate
+//! place for inserting a node is computed from the rooted stack, whose
+//! records are tagged by their names, so a parent that is a `template`
+//! element is one by its record's tag, and the rules insert into its
+//! template contents instead ([`doc::lemma_place_pok`]).
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -40,6 +51,7 @@ pub mod adoption;
 pub mod body;
 pub mod body_tags;
 pub mod cells;
+pub mod doc;
 pub mod early;
 pub mod helpers;
 pub mod lists;
@@ -72,7 +84,8 @@ verus! {
 /// A running parser's stack is rooted, the `html` element's id is fresh,
 /// its records are tagged, no entry of the list of active formatting
 /// elements is for a `template` start tag, the cells' ids are fresh
-/// ([`cells_wf`]), and in the "in cell" mode the stack holds a cell.
+/// ([`cells_wf`]), in the "in cell" mode the stack holds a cell, and the
+/// document facts [`doc::dinv`] hold.
 pub open spec fn good(p: Parser) -> bool {
     &&& rooted_seq(p.open)
     &&& root_ids(p)
@@ -80,6 +93,7 @@ pub open spec fn good(p: Parser) -> bool {
     &&& crate::termination::formatting_ok(p)
     &&& cells_wf(p)
     &&& in_cell_ok(p)
+    &&& doc::dinv(p)
 }
 
 /// In the "in cell" mode, `q`'s stack holds a cell, its last cell `p`'s
@@ -156,7 +170,8 @@ pub open spec fn next_core(o: Outcome) -> bool {
 }
 
 /// A parser with the stack, list, pointers, modes and context of one with
-/// [`reach_core`] and `modes_ok`, and an arena at least as large, has them.
+/// [`reach_core`] and `modes_ok`, and its document or one that extends it
+/// (`exec::frame::doc_extends`), has them.
 pub proof fn lemma_core_frame(p: Parser, q: Parser)
     requires
         reach_core(p),
@@ -169,10 +184,16 @@ pub proof fn lemma_core_frame(p: Parser, q: Parser)
         q.original_mode == p.original_mode,
         q.template_modes == p.template_modes,
         q.doc.nodes.len() >= p.doc.nodes.len(),
+        q.head == p.head,
+        q.redirect == p.redirect,
+        q.doc == p.doc || crate::exec::frame::doc_extends(p.doc, q.doc),
     ensures
         reach_core(q),
         crate::termination::modes_ok(q),
 {
+    if q.doc != p.doc {
+        doc::lemma_dinv_doc(p, q.doc);
+    }
 }
 
 /// A parser [`keeps`] made, put in a [`rooted_mode`] (one other than "in
@@ -188,6 +209,8 @@ pub proof fn lemma_finish(p: Parser, q1: Parser, q: Parser)
         q.context == q1.context,
         q.template_modes == q1.template_modes,
         q.stopped == q1.stopped,
+        q.head == q1.head,
+        q.redirect == q1.redirect,
         rooted_mode(q.mode),
         q.mode == Mode::InTemplate ==> q.template_modes.len() > 0,
         q.mode == Mode::InCell && q.mode != q1.mode ==> has_cell(q.open),

@@ -32,6 +32,7 @@ theorems = [
     "theorem_doc_wf",
     "theorem_nodes_per_token",
     "theorem_reachable_wf",
+    "theorem_reachable_parser_inv",
     "theorem_reachable_doc_wf",
     "theorem_reachable_open_elements_in_doc",
     "theorem_reachable_nodes_per_token",

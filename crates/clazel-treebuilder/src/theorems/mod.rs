@@ -35,6 +35,7 @@ pub mod frame_in_body;
 pub mod frame_modes;
 pub mod nodes;
 pub mod open_elements;
+pub mod parser_inv;
 pub mod reachable;
 
 /// Every name of the transcription and of this module, for the ghost

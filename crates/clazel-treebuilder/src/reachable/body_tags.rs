@@ -291,6 +291,7 @@ pub proof fn lemma_ib_start_reach(p: Parser, t: Tok, tt: TagTok)
     ensures
         next_core(in_body_start_tag(p, t, tt)),
 {
+    hide(super::doc::dinv);
     hide(in_body_start_html);
     hide(in_body_start_body);
     hide(in_body_start_frameset);
@@ -325,7 +326,7 @@ pub proof fn lemma_ib_start_reach(p: Parser, t: Tok, tt: TagTok)
     hide(in_body_start_svg);
     let g = tt.tag;
     if g == Tag::Html {
-        lemma_ib_html(p, tt);
+        lemma_ib_html(p, t, tt);
         return;
     }
     assert(rooted_mode(p.mode));

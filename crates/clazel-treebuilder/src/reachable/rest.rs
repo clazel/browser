@@ -253,11 +253,15 @@ pub proof fn lemma_insert_tok(p: Parser, t: Tok, loc: Option<Location>)
         modes_ok(p),
         good(p),
         !p.stopped,
+        loc is None || loc == Some(document_location()) || loc == Some(Location { parent: p.open[0].id, child: None }),
     ensures
         t is Char ==> next_core(Outcome::Done(insert_char(p, t->Char_0))),
         t is Comment ==> next_core(Outcome::Done(insert_comment(p, t->Comment_0, loc))),
         t is Pi ==> next_core(Outcome::Done(insert_pi(p, t->Pi_0, t->Pi_1, loc))),
 {
+    super::doc::lemma_dinv_at(p, 0);
+    super::doc::lemma_document_pok(p.doc);
+    assert(loc_pok(p, loc));
     if t is Char {
         lemma_insert_char_keeps(p, t->Char_0);
         let q = insert_char(p, t->Char_0);

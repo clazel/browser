@@ -281,9 +281,10 @@ pub open spec fn cells_wf(p: Parser) -> bool {
 }
 
 /// The reachable-state facts of a running parser: the stack's [`shape`],
-/// [`root_ids`], [`tags_wf`], [`cells_wf`] and [`cell_ok`].
+/// [`root_ids`], [`tags_wf`], [`cells_wf`], [`cell_ok`], and the document
+/// facts `reachable::doc::dinv` (among them [`templates_wf`]'s).
 pub open spec fn reach_core(p: Parser) -> bool {
-    shape(p) && root_ids(p) && tags_wf(p) && cells_wf(p) && cell_ok(p)
+    shape(p) && root_ids(p) && tags_wf(p) && cells_wf(p) && cell_ok(p) && crate::reachable::doc::dinv(p)
 }
 
 /// **The reachable-state invariant**: a stopped parser (which takes no
