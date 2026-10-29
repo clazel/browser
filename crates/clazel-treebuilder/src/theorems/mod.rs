@@ -33,6 +33,7 @@ pub mod frame_in_body;
 pub mod frame_modes;
 pub mod nodes;
 pub mod open_elements;
+pub mod reachable;
 
 /// Every name of the transcription and of this module, for the ghost
 /// imports of the submodules (`use super::spec::*;`).
