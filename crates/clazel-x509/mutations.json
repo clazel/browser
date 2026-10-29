@@ -2537,6 +2537,720 @@
         "lemma": "super::examples::lemma_malformed_policy_constraints_refuses()",
         "witness": "match optional_policy_constraints(seq![super::examples::extension_with(crate::policy_constraints::spec::policy_constraints_oid(), seq![0x30u8, 0x00])]) { Some(None) => true, _ => false }"
       }
+    },
+    {
+      "id": "path-a1-link-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !link(signed_data(state.working_public_key, cert)) { Err(PathError::BadSignature) }",
+      "replace": "else if false { Err(PathError::BadSignature) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(1): the signature on every certificate must verify; the mutant never asks the link function.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bad_signature()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(7))]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a1-link-under-working-key",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !link(signed_data(state.working_public_key, cert)) { Err(PathError::BadSignature) }",
+      "replace": "else if !link(signed_data(cert.tbs.subject_public_key_info_der, cert)) { Err(PathError::BadSignature) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(1): the signature is verified with working_public_key, the issuer's key, not the certificate's own.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Err::<Seq<u8>, PathError>(PathError::BadSignature)"
+      }
+    },
+    {
+      "id": "path-a1-unsupported-algorithm-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if cert.signature.class is Unsupported { Err(PathError::UnsupportedAlgorithm) }",
+      "replace": "if false { Err(PathError::UnsupportedAlgorithm) }",
+      "expect": "killed",
+      "reason": "(R) design §1.11: an unsupported signature algorithm refuses whatever the link instance says.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_unsupported_algorithm()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::unsupported_leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a2-validity-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !crate::time::spec::validity_contains(validity(cert), now) { Err(PathError::Expired) }",
+      "replace": "else if false { Err(PathError::Expired) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(2): the validity period must include the current time.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_expired()",
+        "witness": "process(super::examples::link(), super::examples::not_revoked(), super::examples::anchor(), seq![super::examples::leaf_under_root()], crate::time::spec::CertificateTime { year: 2040, month: 1, day: 1, hour: 0, minute: 0, second: 1 }) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a2-validity-is-not-before-to-not-after",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "crate::time::spec::Validity { not_before: cert.tbs.not_before, not_after: cert.tbs.not_after }",
+      "replace": "crate::time::spec::Validity { not_before: cert.tbs.not_before, not_after: cert.tbs.not_before }",
+      "expect": "killed",
+      "reason": "§4.1.2.5: the period runs from notBefore through notAfter; the mutant ends it at notBefore.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_under_anchor()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::leaf_under_root()]) == Err::<Seq<u8>, PathError>(PathError::Expired)"
+      }
+    },
+    {
+      "id": "path-a3-revocation-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if revoked(cert) { Err(PathError::Revoked) }",
+      "replace": "else if false { Err(PathError::Revoked) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(3): a revoked certificate fails.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_revoked()",
+        "witness": "process(super::examples::link(), super::examples::all_revoked(), super::examples::anchor(), seq![super::examples::leaf_under_root()], super::examples::now()) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a4-issuer-is-working-issuer-name",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if cert.tbs.issuer_der != state.working_issuer_name { Err(PathError::NameChaining) }",
+      "replace": "else if false { Err(PathError::NameChaining) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(4): the issuer name must be working_issuer_name.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_name_chaining()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(1))]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-bc-names-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !crate::name_constraints::matching::spec::certificate_acceptable(state.subtrees, nc_certificate(cert)) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "§6.1.3 (b), (c): every certificate's names are checked against the subtrees in force.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(Some(super::examples::other_com()), None)), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-bc-subject-alt-names-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "subject_alt_names: match cert.san { Some(san) => san.names, None => seq![] },",
+      "replace": "subject_alt_names: seq![],",
+      "expect": "killed",
+      "reason": "§6.1.3 (b), (c): \"each of the alternative names in the subjectAltName extension\" is checked; the mutant checks only the subject.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(Some(super::examples::other_com()), None)), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-bc-self-issued-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !crate::name_constraints::matching::spec::certificate_acceptable(state.subtrees, nc_certificate(cert)) {",
+      "replace": "else if !self_issued(cert) && !crate::name_constraints::matching::spec::certificate_acceptable(state.subtrees, nc_certificate(cert)) {",
+      "expect": "killed",
+      "reason": "(R) self-issued intermediates are checked (Firefox); the mutant restores RFC 5280's skip.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_self_issued_intermediate_checked()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(None, Some(super::examples::other_com()))), seq![super::examples::int(), super::examples::int_self_with_san(), super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(2))]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-g-intermediate-constraints-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else { match crate::name_constraints::matching::spec::prepare_name_constraints(state.subtrees, cert.name_constraints) {",
+      "replace": "else { match crate::name_constraints::matching::spec::prepare_name_constraints(state.subtrees, None) {",
+      "expect": "killed",
+      "reason": "§6.1.4 (g): an intermediate's nameConstraints modifies permitted_subtrees and excluded_subtrees for what follows.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_constrained(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-anchor-constraints-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "crate::name_constraints::matching::spec::initial_state(), anchor.name_constraints,\n    ) {",
+      "replace": "crate::name_constraints::matching::spec::initial_state(), None,\n    ) {",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullets 2 and 3: the anchor's nameConstraints initialize permitted_subtrees and excluded_subtrees.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(Some(super::examples::other_com()), None)), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-d-explicit-policy-starts-at-n-plus-1",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "explicit_policy: n + 1,",
+      "replace": "explicit_policy: n,",
+      "expect": "killed",
+      "reason": "§6.1.2 (d): with initial-explicit-policy unset the initial value is n+1; with n, a one-certificate path would need a policy.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_under_anchor()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::leaf_under_root()]) == Err::<Seq<u8>, PathError>(PathError::PolicyRequired)"
+      }
+    },
+    {
+      "id": "path-f-explicit-policy-checked-per-certificate",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if state.explicit_policy == 0 { Err(PathError::PolicyRequired) }",
+      "replace": "else if false { Err(PathError::PolicyRequired) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (f) is checked for each certificate, before §6.1.4 runs on it; without it a later check reports instead.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_policy_check_runs_before_preparation()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(0), super::parsed::spec::PathCert { basic: Some(super::examples::basic(false, None)), ..super::examples::in2() }, super::examples::leaf_under_in2()]) == Err::<Seq<u8>, PathError>(PathError::NotCa)"
+      }
+    },
+    {
+      "id": "path-wrap-up-g-explicit-policy-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if explicit_policy == 0 { Err(PathError::PolicyRequired) }",
+      "replace": "else if false { Err(PathError::PolicyRequired) }",
+      "expect": "killed",
+      "reason": "§6.1.5: success needs explicit_policy greater than zero (R: the tree is not modelled).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_require_explicit_policy_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { require_explicit_policy: Some(0), ..super::examples::leaf_under_root() }]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-wrap-up-b-require-zero",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if cert.require_explicit_policy == Some(0nat) { 0 } else { explicit_policy }",
+      "replace": "if false { 0 } else { explicit_policy }",
+      "expect": "killed",
+      "reason": "§6.1.5 (b): requireExplicitPolicy 0 on the target sets explicit_policy to 0.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_require_explicit_policy_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { require_explicit_policy: Some(0), ..super::examples::leaf_under_root() }]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-wrap-up-a-decrement",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let explicit_policy = if state.explicit_policy != 0 { (state.explicit_policy - 1) as nat }",
+      "replace": "let explicit_policy = if state.explicit_policy != 0 { state.explicit_policy }",
+      "expect": "killed",
+      "reason": "§6.1.5 (a): the wrap-up decrements explicit_policy, so requireExplicitPolicy 1 on the intermediate counts the leaf.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_require_explicit_policy_counts_the_leaf()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(1), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-h1-self-issued-not-counted",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !self_issued(cert) && state.explicit_policy != 0 { (state.explicit_policy - 1) as nat }",
+      "replace": "if state.explicit_policy != 0 { (state.explicit_policy - 1) as nat }",
+      "expect": "killed",
+      "reason": "§6.1.4 (h): only a certificate that is not self-issued decrements explicit_policy.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_self_issued_keeps_explicit_policy()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(2), super::examples::int_self(), super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(2))]) == Err::<Seq<u8>, PathError>(PathError::PolicyRequired)"
+      }
+    },
+    {
+      "id": "path-i1-require-explicit-policy-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "Some(r) => if r < explicit_policy { r } else { explicit_policy },\n        None => explicit_policy,",
+      "replace": "Some(r) => explicit_policy,\n        None => explicit_policy,",
+      "expect": "killed",
+      "reason": "§6.1.4 (i)(1): requireExplicitPolicy lowers explicit_policy.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_require_explicit_policy_counts_the_leaf()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(1), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a-policy-mappings-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if cert.has_policy_mappings { Err(PathError::PolicyMappings) }",
+      "replace": "if false { Err(PathError::PolicyMappings) }",
+      "expect": "killed",
+      "reason": "(R) §6.1.4 (a), design Q8: an intermediate with policyMappings is refused.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_policy_mappings_refused()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { has_policy_mappings: true, ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-c-working-issuer-name-advances",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let working_issuer_name = cert.tbs.subject_der;",
+      "replace": "let working_issuer_name = state.working_issuer_name;",
+      "expect": "killed",
+      "reason": "§6.1.4 (c): working_issuer_name becomes the certificate's subject.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Err::<Seq<u8>, PathError>(PathError::NameChaining)"
+      }
+    },
+    {
+      "id": "path-d-working-public-key-advances",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let working_public_key = cert.tbs.subject_public_key_info_der;\n            // (h)",
+      "replace": "let working_public_key = state.working_public_key;\n            // (h)",
+      "expect": "killed",
+      "reason": "§6.1.4 (d): working_public_key becomes the certificate's key.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Err::<Seq<u8>, PathError>(PathError::BadSignature)"
+      }
+    },
+    {
+      "id": "path-wrap-up-c-output-is-target-key",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let working_public_key = cert.tbs.subject_public_key_info_der;\n    // (f)",
+      "replace": "let working_public_key = state.working_public_key;\n    // (f)",
+      "expect": "killed",
+      "reason": "§6.1.5 (c), §6.1.6: the output is the target's key, not its issuer's.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Ok::<Seq<u8>, PathError>(super::examples::key(2))"
+      }
+    },
+    {
+      "id": "path-k-ca-required",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !(cert.tbs.version == 2 && match cert.basic { Some(basic) => basic.ca, None => false }) {",
+      "replace": "if !(cert.tbs.version == 2 && match cert.basic { Some(basic) => true, None => false }) {",
+      "expect": "killed",
+      "reason": "§6.1.4 (k): basicConstraints must have cA TRUE.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_not_ca()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { basic: Some(super::examples::basic(false, None)), ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-k-v3-required",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !(cert.tbs.version == 2 && match cert.basic {",
+      "replace": "if !(true && match cert.basic {",
+      "expect": "killed",
+      "reason": "§6.1.4 (k): version 1 and 2 intermediates are rejected (the RFC's allowed choice).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_not_ca()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { tbs: crate::tbs::spec::TbsCertificate { version: 0, ..super::examples::int().tbs }, ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-l-self-issued-not-counted",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let max_path_length = if !self_issued(cert) { (state.max_path_length - 1) as nat }",
+      "replace": "let max_path_length = if true { (state.max_path_length - 1) as nat }",
+      "expect": "killed",
+      "reason": "§6.1.4 (l): only a certificate that is not self-issued decrements max_path_length.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_skips_self_issued()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(1), super::examples::int_self(), super::examples::in2(), super::examples::leaf_under_in2()]) == Err::<Seq<u8>, PathError>(PathError::PathLen)"
+      }
+    },
+    {
+      "id": "path-self-issued-is-name-equality",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "    cert.tbs.issuer_der == cert.tbs.subject_der\n}",
+      "replace": "    false\n}",
+      "expect": "killed",
+      "reason": "§6.1: a certificate whose issuer and subject are the same name is self-issued.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_skips_self_issued()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(1), super::examples::int_self(), super::examples::in2(), super::examples::leaf_under_in2()]) == Err::<Seq<u8>, PathError>(PathError::PathLen)"
+      }
+    },
+    {
+      "id": "path-m-path-len-caps-exactly",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if p < max_path_length { p } else { max_path_length }",
+      "replace": "if p < max_path_length { p + 1 } else { max_path_length }",
+      "expect": "killed",
+      "reason": "§6.1.4 (m): max_path_length becomes pathLenConstraint itself, not one more.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(0), super::examples::in2(), super::examples::leaf_under_in2()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-m-path-len-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if p < max_path_length { p } else { max_path_length }",
+      "replace": "if false { p } else { max_path_length }",
+      "expect": "killed",
+      "reason": "§6.1.4 (m): a pathLenConstraint lowers max_path_length.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(0), super::examples::in2(), super::examples::leaf_under_in2()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-anchor-path-len-is-p",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "max_path_length: match anchor.path_len { Some(p) => p, None => n },",
+      "replace": "max_path_length: match anchor.path_len { Some(p) => p + 1, None => n },",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 8: max_path_length is set equal to the anchor's pathLenConstraint (the design's min(n, p + 1) would allow one more).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_path_len()",
+        "witness": "super::examples::run(super::examples::anchor_path_len(0), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-anchor-path-len-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "max_path_length: match anchor.path_len { Some(p) => p, None => n },",
+      "replace": "max_path_length: match anchor.path_len { Some(p) => n, None => n },",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 8: the anchor's pathLenConstraint applies.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_path_len()",
+        "witness": "super::examples::run(super::examples::anchor_path_len(0), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-n-key-cert-sign-required",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "Some(usage) => !crate::constraints::spec::key_usage_has(\n                        usage, crate::constraints::spec::KeyUsageBit::KeyCertSign),",
+      "replace": "Some(usage) => false,",
+      "expect": "killed",
+      "reason": "§6.1.4 (n): a present keyUsage must have keyCertSign.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_key_usage_without_key_cert_sign()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { key_usage: Some(super::examples::digital_signature()), ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-o-unknown-critical-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !intermediate_critical_supported(cert.extensions, 0) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "§6.1.4 (o): an unrecognized critical extension on an intermediate refuses.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_critical_extensions()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(super::examples::unknown_oid(), true, seq![])], ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-o-certificate-policies-not-recognized",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "|| extension.oid =~= crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "|| extension.oid =~= crate::policy_constraints::spec::policy_constraints_oid()\n            || extension.oid =~= seq![2nat, 5, 29, 32])",
+      "expect": "killed",
+      "reason": "Design §1.6: certificatePolicies is not processed, so a critical one is unrecognized; the mutant widens the set.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_critical_extensions()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(super::examples::certificate_policies_oid(), true, seq![])], ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-wrap-up-f-unknown-critical-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !crate::leaf::spec::supported_critical_extensions(cert.extensions, 0) {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "§6.1.5 (f): an unrecognized critical extension on the target refuses.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_critical_extensions()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: super::examples::leaf_under_root().extensions.push(super::examples::extension(super::examples::unknown_oid(), true, seq![])), ..super::examples::leaf_under_root() }]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-certificate-appears-once",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !certificates_distinct_from(certs, 0) { Err(PathError::RepeatedCertificate) }",
+      "replace": "else if false { Err(PathError::RepeatedCertificate) }",
+      "expect": "killed",
+      "reason": "§6.1: \"A certificate MUST NOT appear more than once in a prospective certification path.\"",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_repeated_certificate()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::int_self(), super::examples::int_self(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "profile-leaf-checks",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "if crate::leaf::spec::check_extensions(leaf.extensions, leaf.tbs, reference, now, leaf_policy()) is None {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "The target's identity and usage checks (leaf::spec::check_extensions) apply.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_checks()",
+        "witness": "super::profile::path_profile(super::examples::anchor(), seq![super::examples::leaf_under_root()], crate::spec::ReferenceIdentity::Dns(super::examples::other_com()), super::examples::now()) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-leaf-any-eku-not-server-auth",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "crate::leaf::spec::LeafPolicy { allow_any_extended_key_usage: false }",
+      "replace": "crate::leaf::spec::LeafPolicy { allow_any_extended_key_usage: true }",
+      "expect": "killed",
+      "reason": "BR §7.1.2.7.10: anyExtendedKeyUsage MUST NOT appear and is not serverAuth.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_checks()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(crate::extensions::spec::subject_alt_name_oid(), false, super::examples::san_example_com_der()), super::examples::extension(crate::leaf::spec::extended_key_usage_extension_oid(), false, super::examples::eku_any_der())], eku: Some(super::examples::eku_any()), ..super::examples::leaf_under_root() }]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-leaf-eku-required",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "else if leaf.eku is None { Err(super::spec::PathError::ExtendedKeyUsage) }",
+      "replace": "else if false { Err(super::spec::PathError::ExtendedKeyUsage) }",
+      "expect": "killed",
+      "reason": "(R) design Q7, BR §7.1.2.7.6: the target must carry extKeyUsage.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_without_eku()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(crate::extensions::spec::subject_alt_name_oid(), false, super::examples::san_example_com_der())], eku: None, ..super::examples::leaf_under_root() }]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-leaf-name-constraints-refused",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "else if leaf.name_constraints is Some { Err(super::spec::PathError::LeafNameConstraints) }",
+      "replace": "else if false { Err(super::spec::PathError::LeafNameConstraints) }",
+      "expect": "killed",
+      "reason": "(R) RFC 5280 §4.2.1.10, BR §7.1.2.7.6: nameConstraints MUST NOT appear in the target.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_name_constraints()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { name_constraints: Some(super::examples::dns_constraints(Some(super::examples::example_com()), None)), ..super::examples::leaf_under_root() }]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-intermediate-key-usage-required",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "if cert.key_usage is None { Err(super::spec::PathError::KeyUsage) }",
+      "replace": "if false { Err(super::spec::PathError::KeyUsage) }",
+      "expect": "killed",
+      "reason": "(R) design Q6, BR §7.1.2.6.1: an intermediate must carry keyUsage.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_without_key_usage()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { key_usage: None, ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-intermediate-any-eku-refused",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(eku) => !crate::constraints::spec::eku_allows_server_auth(eku, false),",
+      "replace": "Some(eku) => !crate::constraints::spec::eku_allows_server_auth(eku, true),",
+      "expect": "killed",
+      "reason": "(R) design §1.8, BR §7.1.2.10.6: anyExtendedKeyUsage does not stand for serverAuth on an intermediate.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_eku()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { eku: Some(super::examples::eku_any()), ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-intermediate-eku-checked",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(eku) => !crate::constraints::spec::eku_allows_server_auth(eku, false),",
+      "replace": "Some(eku) => false,",
+      "expect": "killed",
+      "reason": "(R) design §1.8: a present intermediate extKeyUsage must contain serverAuth.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_eku()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { eku: Some(super::examples::eku_client_auth()), ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-every-intermediate-checked",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "if i < 0 || i >= certs.len() - 1 { Ok(()) }",
+      "replace": "if true { Ok(()) }",
+      "expect": "killed",
+      "reason": "The intermediate profile applies to every intermediate.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_without_key_usage()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { key_usage: None, ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-anchor-validity-checked",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "        Err(super::spec::PathError::AnchorExpired)",
+      "replace": "        Ok(())",
+      "expect": "killed",
+      "reason": "(R) design Q9: the anchor certificate must be valid at now.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_expired()",
+        "witness": "super::examples::profile_of(super::parsed::spec::Anchor { not_after: super::examples::day(2026, 1, 1), ..super::examples::anchor() }, seq![super::examples::int(), super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-distrust-after-uses-not-before",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(after) => !crate::time::spec::time_le(leaf.tbs.not_before, after),",
+      "replace": "Some(after) => !crate::time::spec::time_le(leaf.tbs.not_after, after),",
+      "expect": "killed",
+      "reason": "NSS CKA_NSS_SERVER_DISTRUST_AFTER compares the end entity's notBefore (its issuance), not its notAfter.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_distrust_after()",
+        "witness": "super::examples::profile_of(super::examples::anchor_distrust(super::examples::day(2026, 1, 1)), seq![super::examples::leaf_2025()]) == Err::<(), PathError>(PathError::Distrusted)"
+      }
+    },
+    {
+      "id": "profile-distrust-after-applied",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(after) => !crate::time::spec::time_le(leaf.tbs.not_before, after),",
+      "replace": "Some(after) => false,",
+      "expect": "killed",
+      "reason": "(R) NSS CKA_NSS_SERVER_DISTRUST_AFTER: a target issued after the date is refused.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_distrust_after()",
+        "witness": "super::examples::profile_of(super::examples::anchor_distrust(super::examples::day(2024, 1, 1)), seq![super::examples::leaf_2025()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "verifier-presented-bound-16",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "pub open spec fn max_presented_certificates() -> nat { 16 }",
+      "replace": "pub open spec fn max_presented_certificates() -> nat { 17 }",
+      "expect": "killed",
+      "reason": "Design §1.12: at most 16 presented certificates.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_presented_bound()",
+        "witness": "super::verifier::chain_inputs(super::examples::seventeen(), 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed)"
+      }
+    },
+    {
+      "id": "verifier-intermediates-bounded",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "    &&& candidate.path.len() <= max_intermediates\n",
+      "replace": "    &&& true\n",
+      "expect": "killed",
+      "reason": "Design §1.12: a candidate has at most max_intermediates intermediates.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_candidate_too_long()",
+        "witness": "super::examples::verdict(0, seq![0nat]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "verifier-candidate-indices-distinct",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "    &&& indices_distinct_from(candidate.path, 0)\n",
+      "replace": "    &&& true\n",
+      "expect": "killed",
+      "reason": "Design §2.6: a candidate never repeats a pool index.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_candidate_repeats_index()",
+        "witness": "super::examples::verdict(6, seq![0nat, 1, 1]) == Err::<Seq<u8>, PathError>(PathError::RepeatedCertificate)"
+      }
+    },
+    {
+      "id": "verifier-candidate-runs-process",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Ok(()) => match super::spec::process(environment.link, environment.revoked, anchor, certs, now) {",
+      "replace": "            Ok(()) => match Ok::<Seq<u8>, super::spec::PathError>(leaf.der) {",
+      "expect": "killed",
+      "reason": "The candidate verdict includes §6.1 and returns its key.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_candidate_valid()",
+        "witness": "super::examples::verdict(6, seq![0nat]) == Ok::<Seq<u8>, PathError>(super::examples::leaf().der)"
+      }
     }
   ]
 }
