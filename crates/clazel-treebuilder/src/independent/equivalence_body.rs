@@ -15,7 +15,11 @@ use vstd::prelude::*;
 
 verus! {
 
-broadcast use super::equivalence::group_w3c_state;
+broadcast use {
+    super::equivalence::lemma_w3c_in_table_scope,
+    super::equivalence::lemma_w3c_has_in_table_scope,
+    super::equivalence::lemma_w3c_push_formatting,
+};
 
 // ---------------------------------------------------------------------
 // Tags and names
@@ -1933,8 +1937,8 @@ proof fn lemma_in_body_start_1(env: EncFns, p: Parser, tt: TagTok)
     }
 }
 
-/// "In body"'s start tags: `form`, `li`, `dd`, `dt`.
-#[verifier::spinoff_prover]
+/// "In body"'s start tags: `form`, `li`, `dd`, `dt` (split in two: one
+/// proof of the four exceeds the resource limit).
 proof fn lemma_in_body_start_2(env: EncFns, p: Parser, tt: TagTok)
     requires
         !p.stopped,
@@ -1942,6 +1946,25 @@ proof fn lemma_in_body_start_2(env: EncFns, p: Parser, tt: TagTok)
         in_body_texts_agree(p, Tok::Start(tt)),
         in_body_aa_agrees(p, Tok::Start(tt)),
         tt.tag == Tag::Form || tt.tag == Tag::Li || tt.tag == Tag::Dd || tt.tag == Tag::Dt,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    if tt.tag == Tag::Form {
+        lemma_in_body_start_form(env, p, tt);
+    } else {
+        lemma_in_body_start_list_item(env, p, tt);
+    }
+}
+
+/// "In body"'s `form` start tag.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_form(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Form,
     ensures
         w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
 {
@@ -1964,14 +1987,45 @@ proof fn lemma_in_body_start_2(env: EncFns, p: Parser, tt: TagTok)
     hide(dom_remove);
     hide(w3c_pop_to_root);
     hide(in_body_start_a);
-    let g = tt.tag;
-    if g == Tag::Form {
-        if has_in_scope(p, Tag::P, Scope::Button) {
-            reveal(generate_implied_end_tags);
-            lemma_implied_tagged(p, Some(Tag::P));
-            lemma_pop_until_frame(generate_implied_end_tags(p, Some(Tag::P)), Tag::P);
-        }
-    } else if g == Tag::Li {
+    if has_in_scope(p, Tag::P, Scope::Button) {
+        reveal(generate_implied_end_tags);
+        lemma_implied_tagged(p, Some(Tag::P));
+        lemma_pop_until_frame(generate_implied_end_tags(p, Some(Tag::P)), Tag::P);
+    }
+}
+
+/// "In body"'s start tags: `li`, `dd`, `dt`.
+#[verifier::spinoff_prover]
+proof fn lemma_in_body_start_list_item(env: EncFns, p: Parser, tt: TagTok)
+    requires
+        !p.stopped,
+        in_body_facts(p, Tok::Start(tt)),
+        in_body_texts_agree(p, Tok::Start(tt)),
+        in_body_aa_agrees(p, Tok::Start(tt)),
+        tt.tag == Tag::Li || tt.tag == Tag::Dd || tt.tag == Tag::Dt,
+    ensures
+        w3c_in_body_start(env, p, tt) == in_body_start_tag(p, Tok::Start(tt), tt),
+{
+    hide(insert_html_element);
+    hide(insert_foreign_element);
+    hide(reconstruct_formatting);
+    hide(generic_text_parsing);
+    hide(pop_until_popped);
+    hide(generate_implied_end_tags);
+    hide(w3c_adoption_agency);
+    hide(in_body_adoption);
+    hide(w3c_add_missing_attributes);
+    hide(add_missing_attributes);
+    hide(w3c_li_loop);
+    hide(li_loop);
+    hide(w3c_dd_dt_loop);
+    hide(dd_dt_loop);
+    hide(push_formatting);
+    hide(w3c_push_formatting);
+    hide(dom_remove);
+    hide(w3c_pop_to_root);
+    hide(in_body_start_a);
+    if tt.tag == Tag::Li {
         lemma_li_loop(w3c_frameset_not_ok(p), p.open.len() - 1);
     } else {
         lemma_dd_dt_loop(w3c_frameset_not_ok(p), p.open.len() - 1);

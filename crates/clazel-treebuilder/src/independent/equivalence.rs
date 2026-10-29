@@ -157,12 +157,6 @@ pub broadcast proof fn lemma_w3c_push_formatting(p: Parser, e: Elem, t: TagTok)
     lemma_w3c_family(f, after_last_marker(f, f.len() as int), f.len() as int, e, t);
 }
 
-pub broadcast group group_w3c_state {
-    lemma_w3c_in_table_scope,
-    lemma_w3c_has_in_table_scope,
-    lemma_w3c_push_formatting,
-}
-
 // ---------------------------------------------------------------------
 // §8.2.5.4.1 to §8.2.5.4.3, §8.2.5.4.5
 
@@ -536,7 +530,7 @@ pub proof fn lemma_in_caption(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_caption(env, p, t) == mode_in_caption(env, p, t),
 {
-    broadcast use group_w3c_state;
+    broadcast use {lemma_w3c_in_table_scope, lemma_w3c_has_in_table_scope, lemma_w3c_push_formatting};
 }
 
 /// "in column group" (W3C §8.2.5.4.12, WHATWG §13.2.6.4.12): the same
@@ -725,7 +719,7 @@ pub proof fn lemma_in_table_body(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_table_body(env, p, t) == mode_in_table_body(env, p, t),
 {
-    broadcast use group_w3c_state;
+    broadcast use {lemma_w3c_in_table_scope, lemma_w3c_has_in_table_scope, lemma_w3c_push_formatting};
     lemma_closure_ext();
     lemma_table_tags_injective();
 }
@@ -741,7 +735,7 @@ pub proof fn lemma_in_row(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_row(env, p, t) == mode_in_row(env, p, t),
 {
-    broadcast use group_w3c_state;
+    broadcast use {lemma_w3c_in_table_scope, lemma_w3c_has_in_table_scope, lemma_w3c_push_formatting};
     lemma_closure_ext();
     lemma_table_tags_injective();
 }
@@ -788,7 +782,7 @@ pub proof fn lemma_in_cell(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_cell(env, p, t) == mode_in_cell(env, p, t),
 {
-    broadcast use group_w3c_state;
+    broadcast use {lemma_w3c_in_table_scope, lemma_w3c_has_in_table_scope, lemma_w3c_push_formatting};
     lemma_closure_ext();
     lemma_table_tags_injective();
     lemma_pop_until_cell_popped(generate_implied_end_tags(p, None));
