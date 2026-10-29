@@ -819,4 +819,99 @@ pub proof fn lemma_presented_not_capped()
     assert(super::verifier::chain_inputs(seq![], 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed)) by (compute_only);
 }
 
+// ---------------------------------------------------------------------------
+// The search budget (`verifier.rs`, design §1.12; mozilla::pkix)
+// ---------------------------------------------------------------------------
+
+/// The production bounds are Firefox's: `MAX_SUBCA_COUNT = 6` and
+/// `buildForwardCallBudget = 200000`.
+pub proof fn lemma_firefox_bounds()
+    ensures
+        super::verifier::default_max_intermediates() == 6nat,
+        super::verifier::build_budget() == 200000nat,
+{
+    assert(super::verifier::default_max_intermediates() == 6nat) by (compute_only);
+    assert(super::verifier::build_budget() == 200000nat) by (compute_only);
+}
+
+/// A step of the search.
+pub open spec fn step(path: Seq<nat>, issuer: super::verifier::Issuer) -> super::verifier::IssuerStep {
+    super::verifier::IssuerStep { path, issuer }
+}
+
+/// Whether a step counts, over the pool `[int, int_self]` and `leaf()`.
+pub open spec fn counts(m: nat, s: super::verifier::IssuerStep) -> bool {
+    super::verifier::step_name_chained(environment(m), seq![anchor()], seq![Some(int()), Some(int_self())], leaf(), s)
+}
+
+/// Name-chained steps: `int` and the self-issued `int` can issue the leaf;
+/// the anchor can issue `int`.
+pub proof fn lemma_steps_that_count()
+    ensures
+        counts(6, step(seq![], super::verifier::Issuer::Pool(0))),
+        counts(6, step(seq![], super::verifier::Issuer::Pool(1))),
+        counts(6, step(seq![0nat], super::verifier::Issuer::Anchor(0))),
+{
+    assert(counts(6, step(seq![], super::verifier::Issuer::Pool(0)))) by (compute_only);
+    assert(counts(6, step(seq![], super::verifier::Issuer::Pool(1)))) by (compute_only);
+    assert(counts(6, step(seq![0nat], super::verifier::Issuer::Anchor(0)))) by (compute_only);
+}
+
+/// Steps that do not count: the anchor's name is not the leaf's issuer; the
+/// self-issued `int` is not the issuer of `int`; a certificate already on
+/// the path (Firefox's loop check); and a pool step past the depth.
+pub proof fn lemma_steps_that_do_not_count()
+    ensures
+        !counts(6, step(seq![], super::verifier::Issuer::Anchor(0))),
+        !counts(6, step(seq![0nat], super::verifier::Issuer::Pool(1))),
+        !counts(6, step(seq![1nat], super::verifier::Issuer::Pool(1))),
+        !counts(0, step(seq![], super::verifier::Issuer::Pool(0))),
+{
+    assert(!counts(6, step(seq![], super::verifier::Issuer::Anchor(0)))) by (compute_only);
+    assert(!counts(6, step(seq![0nat], super::verifier::Issuer::Pool(1)))) by (compute_only);
+    assert(!counts(6, step(seq![1nat], super::verifier::Issuer::Pool(1)))) by (compute_only);
+    assert(!counts(0, step(seq![], super::verifier::Issuer::Pool(0)))) by (compute_only);
+}
+
+/// The order: `int` for the leaf, the anchor for `int` (a valid path), then
+/// the self-issued `int` for the leaf.
+pub open spec fn order3() -> Seq<super::verifier::IssuerStep> {
+    seq![step(seq![], super::verifier::Issuer::Pool(0)), step(seq![0nat], super::verifier::Issuer::Anchor(0)),
+        step(seq![], super::verifier::Issuer::Pool(1))]
+}
+
+/// Whether a budget runs out on an order.
+pub open spec fn exhausted(order: Seq<super::verifier::IssuerStep>, budget: nat) -> bool {
+    super::verifier::budget_exhausted_at(environment(6), seq![anchor()], seq![Some(int()), Some(int_self())], leaf(),
+        order, budget, reference(), now())
+}
+
+/// A budget of 1 runs out before the anchor step; a budget of 2 reaches it
+/// and it completes a valid path; a budget equal to the number of steps
+/// the search would examine is not exhausted, even with no valid path.
+pub proof fn lemma_budget()
+    ensures
+        exhausted(order3(), 1),
+        !exhausted(order3(), 2),
+        !exhausted(order3().take(1), 1),
+{
+    assert(exhausted(order3(), 1)) by (compute_only);
+    assert(!exhausted(order3(), 2)) by (compute_only);
+    assert(!exhausted(order3().take(1), 1)) by (compute_only);
+}
+
+/// An order is well formed only with distinct, name-chained steps.
+pub proof fn lemma_order_well_formed()
+    ensures
+        super::verifier::search_order_well_formed_from(environment(6), seq![anchor()],
+            seq![Some(int()), Some(int_self())], leaf(), order3(), 0),
+        !super::verifier::search_order_well_formed_from(environment(6), seq![anchor()],
+            seq![Some(int()), Some(int_self())], leaf(), order3().push(order3()[0]), 0),
+{
+    assert(super::verifier::search_order_well_formed_from(environment(6), seq![anchor()],
+        seq![Some(int()), Some(int_self())], leaf(), order3(), 0)) by (compute_only);
+    assert(!super::verifier::search_order_well_formed_from(environment(6), seq![anchor()],
+        seq![Some(int()), Some(int_self())], leaf(), order3().push(order3()[0]), 0)) by (compute_only);
+}
+
 } // verus!

@@ -3237,6 +3237,146 @@
         "lemma": "super::examples::lemma_candidate_valid()",
         "witness": "super::examples::verdict(6, seq![0nat]) != super::examples::leaf_key()"
       }
+    },
+    {
+      "id": "verifier-build-budget-is-firefox",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "pub open spec fn build_budget() -> nat { 200000 }",
+      "replace": "pub open spec fn build_budget() -> nat { 199999 }",
+      "expect": "killed",
+      "reason": "mozilla::pkix BuildCertChain: \"unsigned int buildForwardCallBudget = 200000;\".",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_firefox_bounds()",
+        "witness": "super::verifier::build_budget() != 200000nat"
+      }
+    },
+    {
+      "id": "verifier-depth-is-firefox",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "pub open spec fn default_max_intermediates() -> nat { 6 }",
+      "replace": "pub open spec fn default_max_intermediates() -> nat { 7 }",
+      "expect": "killed",
+      "reason": "mozilla::pkix BuildForward: \"static const unsigned int MAX_SUBCA_COUNT = 6;\".",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_firefox_bounds()",
+        "witness": "super::verifier::default_max_intermediates() != 6nat"
+      }
+    },
+    {
+      "id": "verifier-budget-strictly-exceeded",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "    order.len() > budget\n",
+      "replace": "    order.len() >= budget\n",
+      "expect": "killed",
+      "reason": "The budget runs out only when a step beyond it would be examined (\"if (buildForwardCallBudget == 0)\" is reached on step budget + 1).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_budget()",
+        "witness": "super::examples::exhausted(super::examples::order3().take(1), 1)"
+      }
+    },
+    {
+      "id": "verifier-budget-stops-at-first-valid",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Some(candidate) => !candidate_valid(environment, anchors, pool, leaf, candidate, reference, now),",
+      "replace": "            Some(candidate) => true,",
+      "expect": "killed",
+      "reason": "The search stops at the first valid path within the budget, so a valid candidate there means the budget did not run out.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_budget()",
+        "witness": "super::examples::exhausted(super::examples::order3(), 2)"
+      }
+    },
+    {
+      "id": "verifier-anchor-step-name-chained",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        Issuer::Anchor(a) => a < anchors.len()\n            && anchors[a as int].subject_der == sought_issuer(pool, leaf, step.path),",
+      "replace": "        Issuer::Anchor(a) => a < anchors.len(),",
+      "expect": "killed",
+      "reason": "Firefox counts a potential issuer only after its subject-name check; an anchor whose subject is not the sought issuer is no step.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(6, super::examples::step(seq![], super::verifier::Issuer::Anchor(0)))"
+      }
+    },
+    {
+      "id": "verifier-pool-step-name-chained",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "                Some(c) => c.tbs.subject_der == sought_issuer(pool, leaf, step.path),",
+      "replace": "                Some(c) => true,",
+      "expect": "killed",
+      "reason": "Firefox counts a potential issuer only after its subject-name check.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(6, super::examples::step(seq![0nat], super::verifier::Issuer::Pool(1)))"
+      }
+    },
+    {
+      "id": "verifier-pool-step-loop-free",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            && index_absent_from(step.path, j, 0)\n",
+      "replace": "\n",
+      "expect": "killed",
+      "reason": "Firefox's loop prevention: a certificate already on the path is not a potential issuer again.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(6, super::examples::step(seq![1nat], super::verifier::Issuer::Pool(1)))"
+      }
+    },
+    {
+      "id": "verifier-pool-step-within-depth",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        Issuer::Pool(j) => j < pool.len() && step.path.len() < environment.max_intermediates",
+      "replace": "        Issuer::Pool(j) => j < pool.len() && true",
+      "expect": "killed",
+      "reason": "Design §1.12: a pool issuer that would exceed max_intermediates is not searched.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(0, super::examples::step(seq![], super::verifier::Issuer::Pool(0)))"
+      }
+    },
+    {
+      "id": "verifier-sought-issuer-is-top-issuer",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "Some(c) => c.tbs.issuer_der, None => leaf.tbs.issuer_der } }",
+      "replace": "Some(c) => c.tbs.subject_der, None => leaf.tbs.issuer_der } }",
+      "expect": "killed",
+      "reason": "The search seeks the issuer of the top certificate of the partial path, not its subject.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_count()",
+        "witness": "!super::examples::counts(6, super::examples::step(seq![0nat], super::verifier::Issuer::Anchor(0)))"
+      }
+    },
+    {
+      "id": "verifier-order-steps-distinct",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        &&& step_absent_from(order, order[from], from + 1)\n",
+      "replace": "        &&& true\n",
+      "expect": "killed",
+      "reason": "A well-formed search order examines no step twice.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_order_well_formed()",
+        "witness": "super::verifier::search_order_well_formed_from(super::examples::environment(6), seq![super::examples::anchor()], seq![Some(super::examples::int()), Some(super::examples::int_self())], super::examples::leaf(), super::examples::order3().push(super::examples::order3()[0]), 0)"
+      }
     }
   ]
 }

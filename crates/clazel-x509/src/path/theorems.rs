@@ -14,7 +14,9 @@
 //! The theorems about the enumeration (`thm_anchored`'s "every element is a
 //! pool element, no pool index repeats" part for the builder,
 //! `lemma_candidates_complete`, `thm_first_valid`) are P9's, with the
-//! enumeration. The set laws of name constraints
+//! enumeration, and so is the theorem that P9's search examines exactly the
+//! `order` on which `verifier::verify_server_chain_ensures` judges the
+//! 200,000-step build budget. The set laws of name constraints
 //! (`lemma_permitted_is_intersection`, `lemma_excluded_is_union`) are P4's,
 //! and `lemma_from_unix_monotone` is P1's.
 
