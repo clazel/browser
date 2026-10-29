@@ -8,23 +8,20 @@
 //! `run` ends within `fuel_bound` applications, so the exec loop needs no
 //! fuel of its own and is proven to return `run`'s result.
 //!
-//! What is not proven. The exec insertion modes require, beyond
-//! [`parser_inv`], that the stack of open elements is rooted at `html`
-//! (most modes) and that the head element pointer names a `head` element
-//! ("after head"); their contracts do not say that they keep either, and
-//! the spec has no theorem that reachable states have them. [`step`] takes
-//! that as a hypothesis on the spec's run, [`dispatch_needs`]: every rule
-//! application of `dispatch(env, p, token)` meets
-//! [`crate::invariant::rooted_needs`]. (Proving it needs more than the
-//! modes' contracts: "in head", "in head noscript" and "text" pop the
-//! current node without checking it is not `html`, so a reachable-state
-//! invariant relating the insertion mode to the stack's shape is needed,
-//! e.g. that in those modes the stack holds more than `html`; and the head
-//! element pointer's element survives every mode.) Everything else the
-//! modes require is
-//! proven here: `parser_inv` (their contracts keep it), `!stopped` (the loop
-//! ends when parsing stops), the tags of the reprocessed tokens
-//! ([`lemma_rules_tok`]), `termination::rules_ok` (from
+//! What the step needs beyond [`parser_inv`]. The exec insertion modes
+//! require that the stack of open elements is rooted at `html` (most modes;
+//! `crate::invariant::rooted_needs`), at every rule application of the
+//! run. That follows from the reachable-state invariant
+//! [`crate::invariant::reachable_inv`] of the parser the step starts from:
+//! `reachable::lemma_dispatch_reach` proves that it gives
+//! [`dispatch_needs`] and that `dispatch` keeps it, so [`step`] requires and
+//! ensures it, and [`new_parser_exec`] and [`fragment_parser_exec`] return
+//! parsers satisfying it. That proof has one hypothesis not yet proven,
+//! [`crate::invariant::cells_kept`] (the "in cell" mode always has a cell
+//! on the stack), which [`step`] requires explicitly. Everything else the
+//! modes require is proven here: `parser_inv` (their contracts keep it),
+//! `!stopped` (the loop ends when parsing stops), the tags of the
+//! reprocessed tokens ([`lemma_rules_tok`]), `termination::rules_ok` (from
 //! `termination::lemma_rules_edges`), the mode of "text", and
 //! `in_foreign_content` for the rules of foreign content (the dispatcher).
 
@@ -805,16 +802,25 @@ proof fn lemma_inv_bookkeeping(p: Parser, q: Parser)
 /// tokenizer state switch the step asks for, if any.
 ///
 /// Requires, beyond `contract::step_requires` (`parser_wf`), the rest of
-/// [`parser_inv`] (which it keeps) and the hypothesis [`dispatch_needs`]
-/// (not yet proven for reachable states; see the module comment).
+/// [`parser_inv`] and the reachable-state invariant
+/// [`crate::invariant::reachable_inv`], both of which it keeps (so every
+/// parser [`new_parser_exec`] or [`fragment_parser_exec`] returns can be
+/// stepped any number of times), and the hypothesis
+/// [`crate::invariant::cells_kept`] (a closed statement about the spec's
+/// rules, not yet proven; see the module comment).
 pub fn step<E: EncFnsExec>(p: &mut ParserBuf, env: &E, token: ExecToken) -> (actions: Vec<ExecAction>)
     requires
         parser_inv(old(p)@),
-        dispatch_needs(env.enc(), old(p)@, token@),
+        reachable_inv(old(p)@),
+        cells_kept(),
     ensures
         (final(p)@, actions_view(actions@)) == dispatch(env.enc(), old(p)@, token@),
         parser_inv(final(p)@),
+        reachable_inv(final(p)@),
 {
+    proof {
+        crate::reachable::run::lemma_dispatch_reach(env.enc(), p@, token@);
+    }
     let ghost p_in = p@;
     p.actions = Vec::new();
     p.tokenizer = None;
@@ -858,7 +864,7 @@ pub fn step<E: EncFnsExec>(p: &mut ParserBuf, env: &E, token: ExecToken) -> (act
 // The parsers' initial states
 
 /// Setting a new document's mode extends it.
-proof fn lemma_new_doc_extends(url: Seq<u32>, mode: DocumentMode)
+pub proof fn lemma_new_doc_extends(url: Seq<u32>, mode: DocumentMode)
     ensures
         doc_extends(dom::new_document(url), dom::set_mode(dom::new_document(url), mode)),
         dom::wf(dom::new_document(url)),
@@ -869,7 +875,7 @@ proof fn lemma_new_doc_extends(url: Seq<u32>, mode: DocumentMode)
 
 /// A document extending a new document has no template element with a
 /// child that lacks template contents ([`templates_wf`]'s second part).
-proof fn lemma_templates_from_new(url: Seq<u32>, d: Document)
+pub proof fn lemma_templates_from_new(url: Seq<u32>, d: Document)
     requires
         doc_extends(dom::new_document(url), d),
     ensures
@@ -889,6 +895,7 @@ pub fn new_parser_exec(url: Vec<u32>, scripting: bool, tentative: bool) -> (p: P
     ensures
         p@ == new_parser(url@, scripting, tentative),
         parser_inv(p@),
+        reachable_inv(p@),
 {
     let ghost u = url@;
     let arena = Arena::new(url);
@@ -914,6 +921,7 @@ pub fn new_parser_exec(url: Vec<u32>, scripting: bool, tentative: bool) -> (p: P
         actions: Vec::new(),
     };
     proof {
+        crate::reachable::run::lemma_new_parser_reach(u, scripting, tentative);
         clazel_dom::lemmas::theorem_new_document_wf(u);
         assert(elems_view(p.open@) =~= Seq::<Elem>::empty());
         assert(fmts_view(p.formatting@) =~= Seq::<Fmt>::empty());
@@ -966,7 +974,7 @@ fn name_html_exec() -> (r: Vec<u32>)
 }
 
 /// "html" is the tag `html`.
-proof fn lemma_tag_of_html()
+pub proof fn lemma_tag_of_html()
     ensures
         tag_of(seq![0x68u32, 0x74, 0x6d, 0x6c]) == Tag::Html,
 {
@@ -1173,7 +1181,7 @@ pub open spec fn root_elem(root: NodeId) -> Elem {
 
 /// The fragment parser's state before "reset the insertion mode
 /// appropriately" satisfies [`parser_inv`].
-proof fn lemma_fragment_start_inv(ctx: Context, p: Parser, ctx_id: NodeId, root: NodeId, fragment: NodeId)
+pub proof fn lemma_fragment_start_inv(ctx: Context, p: Parser, ctx_id: NodeId, root: NodeId, fragment: NodeId)
     requires
         fragment_doc_ok(ctx, p.doc, ctx_id, root, fragment),
         p.open == seq![root_elem(root)],
@@ -1209,7 +1217,7 @@ proof fn lemma_fragment_start_inv(ctx: Context, p: Parser, ctx_id: NodeId, root:
 
 /// Setting the form element pointer to a node of the document keeps
 /// [`parser_inv`].
-proof fn lemma_inv_form(p: Parser, id: NodeId)
+pub proof fn lemma_inv_form(p: Parser, id: NodeId)
     requires
         parser_inv(p),
         dom::valid(p.doc, id),
@@ -1230,6 +1238,7 @@ pub fn fragment_parser_exec(ctx: ExecContext, scripting: bool) -> (r: (ParserBuf
     ensures
         (r.0@, r.1, r.2) == fragment_parser(ctx@, scripting),
         parser_inv(r.0@),
+        reachable_inv(r.0@),
 {
     hide(reset_from);
     hide(dom::insert);
@@ -1238,6 +1247,9 @@ pub fn fragment_parser_exec(ctx: ExecContext, scripting: bool) -> (r: (ParserBuf
     hide(tag_of);
     hide(parser_inv);
     let ghost cv = ctx@;
+    proof {
+        crate::reachable::run::lemma_fragment_parser_reach(cv, scripting);
+    }
     let ns = ctx.ns;
     let name = ctx.name;
     let attrs = ctx.attrs;

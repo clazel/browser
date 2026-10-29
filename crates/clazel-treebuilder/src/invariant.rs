@@ -138,8 +138,7 @@ pub open spec fn stack_rooted(p: Parser) -> bool {
 // looking at it ("in head", "in head noscript", "text") never pop the
 // `html` element, and records the facts about node ids that keep the
 // adoption agency algorithm and the `form` end tag from removing it.
-// `termination::reachable` proves `dispatch` keeps it
-// (`theorem_reachable`).
+// `reachable` proves `dispatch` keeps it (`reachable::run::theorem_reachable`).
 
 /// The stack `o` is rooted at an HTML `html` element tagged by its name
 /// ([`stack_rooted`], plus the tag).
@@ -284,20 +283,37 @@ pub open spec fn rules_inv(r: Rules, p: Parser, t: Tok) -> bool {
     &&& rules_need(r, p, t)
 }
 
+/// **Not yet proven** (an explicit hypothesis of `exec::step::step` and
+/// `reachable::theorem_reachable`): every rule application other than the
+/// "in row" and "in cell" rules keeps [`cell_ok`]. It holds in the
+/// standard (§13.2.6.4.15's assertion), but the proof needs, for the "in
+/// body" rules and foreign content applied in the "in cell" mode, that the
+/// cell is never popped (every pop they make is to an element in a scope
+/// whose boundary list holds `td` and `th`), and for "reset the insertion
+/// mode appropriately" that "in cell" is chosen only on a cell; the
+/// reachable-state proofs track the stack's root, not its other boundary
+/// elements. The "in row" and "in cell" rules themselves are proven to keep
+/// it (`reachable::lemma_rules_cell`).
+pub open spec fn cells_kept() -> bool {
+    forall|env: EncFns, r: Rules, p: Parser, t: Tok|
+        rules_inv(r, p, t) && r != Rules::Html(Mode::InCell) && r != Rules::Html(Mode::InRow) ==> {
+            let q = outcome_parser(#[trigger] apply_rules(env, r, p, t));
+            q.stopped || cell_ok(q)
+        }
+}
+
 // ---------------------------------------------------------------------
 // What the executable step needs of the spec's run (Phase 4 item 4.10).
 // The exec insertion modes need more than `parser_inv` of the parser they
 // are applied to: most need the stack of open elements rooted at an HTML
-// `html` element ([`stack_rooted`]), and "after head" needs the head
-// element pointer to name a `head` element. Neither follows from
-// `parser_inv`, and the modes' contracts do not say they keep it; so the
-// exec step takes it as a hypothesis on the spec's run, [`dispatch_needs`],
-// not yet proven to hold for every reachable state (see `exec::step`).
+// `html` element ([`stack_rooted`]). That does not follow from
+// `parser_inv`, and the modes' contracts do not say they keep it; it
+// follows from [`reachable_inv`] (`reachable::run::lemma_dispatch_reach`
+// proves [`dispatch_needs`] from it).
 
 /// What the exec rules `r` need of the parser beyond `parser_inv`, `!stopped`,
 /// the token's tags and `termination::rules_ok`: the stack rooted at `html`
-/// (every mode whose exec function requires it), and for "after head" the
-/// head element pointer naming a `head` element.
+/// (every mode whose exec function requires it).
 pub open spec fn rooted_needs(r: Rules, p: Parser) -> bool {
     match r {
         Rules::Foreign => stack_rooted(p),

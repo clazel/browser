@@ -23,6 +23,7 @@ target-tier = 2
 theorems = [
     "theorem_dispatch_total",
     "theorem_actions_ordered",
+    "theorem_reachable",
 ]
 
 [package.metadata.verus]

@@ -23,6 +23,7 @@ pub mod early;
 pub mod helpers;
 pub mod lists;
 pub mod rest;
+pub mod run;
 pub mod tables;
 
 /// Every name of the transcription and of this module, for the ghost
