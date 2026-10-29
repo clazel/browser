@@ -31,6 +31,7 @@ pub mod independent;
 pub mod independent_equivalence;
 pub mod invariant;
 pub mod lock;
+pub mod mutation_examples;
 pub mod mutation_lemmas;
 pub mod net_rel;
 pub mod net_theorems;

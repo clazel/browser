@@ -453,23 +453,4 @@ pub proof fn ml_uncommitted_display(r: Renderer, bytes: Seq<u8>)
 {
 }
 
-/// The `Content-Type` a commit carries is the response's (evaluated on a
-/// response with one `Content-Type` line, its name in another case).
-pub proof fn ml_response_content_type()
-    ensures
-        response_document(
-            clazel_http::message::spec::Response {
-                fields: seq![clazel_http::field::spec::FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65], value: seq![0x74u8, 0x2F, 0x68] }],
-                ..ml_response(Seq::<u8>::empty())
-            },
-        ).content_type == seq![0x74u8, 0x2F, 0x68],
-{
-    assert(response_document(
-        clazel_http::message::spec::Response {
-            fields: seq![clazel_http::field::spec::FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65], value: seq![0x74u8, 0x2F, 0x68] }],
-            ..ml_response(Seq::<u8>::empty())
-        },
-    ).content_type == seq![0x74u8, 0x2F, 0x68]) by (compute_only);
-}
-
 } // verus!

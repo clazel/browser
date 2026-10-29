@@ -94,7 +94,7 @@
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_navigate_commit(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty()), 0, clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).1[2]->ToRenderer_bytes != commit_frame(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))"
+        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).1[2]->ToRenderer_bytes != commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))"
       },
       "module": "mutation_lemmas"
     },
@@ -646,12 +646,12 @@
       "find": "            Some(v) => v,\n            None => seq![],\n        },\n        kind: kind_document(),",
       "replace": "            Some(v) => seq![],\n            None => seq![],\n        },\n        kind: kind_document(),",
       "expect": "killed",
-      "module": "mutation_lemmas",
+      "module": "mutation_examples",
       "reason": "A commit never carries the response's Content-Type: ml_response_content_type (and so the content type theorem_body_is_the_response states) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_response_content_type()",
-        "witness": "response_document(clazel_http::message::spec::Response { fields: seq![clazel_http::field::spec::FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65], value: seq![0x74u8, 0x2F, 0x68] }], ..ml_response(Seq::<u8>::empty()) }).content_type != seq![0x74u8, 0x2F, 0x68]"
+        "lemma": "crate::mutation_examples::ml_response_content_type()",
+        "witness": "response_document(clazel_http::message::spec::Response { fields: seq![clazel_http::field::spec::FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65], value: seq![0x74u8, 0x2F, 0x68] }], ..ml_response(Seq::<u8>::empty()) }).content_type.len() == 0"
       }
     },
     {
@@ -681,6 +681,15 @@
         "lemma": "lemma_commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))",
         "witness": "frame_of(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }) is Some && crate::statements::committed_document(commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))) != Some((clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }, Seq::<u8>::empty()))"
       }
+    },
+    {
+      "id": "open-tab-starts-committed",
+      "file": "src/spec.rs",
+      "find": "let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
+      "replace": "let s1 = State { renderers: s.renderers.push(Renderer { committed: true, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
+      "expect": "killed-incidentally",
+      "module": "display_theorems",
+      "reason": "A tab opened without a script starts committed, so its renderer may display before its fetch commits, under the URL it was opened at. Only a proof script breaks (lemma_other_events_no_show runs out of resources once the pushed renderer differs from lemma_open_tab_push_wf's): no theorem is false, because none ties `committed` to a Commit frame having been sent to the renderer (theorem_address_bar_integrity takes the flag as the definition of committed). Not coverage; a theorem over runs (a renderer is committed only after a ToRenderer of commit_frames to it) would close it."
     }
   ]
 }
