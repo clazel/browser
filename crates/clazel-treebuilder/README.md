@@ -89,6 +89,19 @@ evidence exists (see "Left" below).
   the parse state invariant; `exec::step::step` equals `dispatch` on every
   state with `parser_inv` and `reachable_inv`, and keeps both. No recursion on
   the tree's depth or the input's length.
+- **Proven, the driver** (`src/exec/driver.rs`): `parse_real` and
+  `parse_fragment_real` equal the spec's `parse` and `parse_fragment`
+  with `TokFns` instantiated by `clazel-html`'s tokenizer
+  (`spec::base::join::join_fns`, from `join_start`, over the preprocessed
+  input): for some `n`, every bound `m >= n` on the tokens gives the
+  driver's document (fragment) and actions
+  (`contract::parse_real_ensures`, `contract::parse_fragment_real_ensures`),
+  and the parser has stopped. `join_fns` queues the tokens one tokenizer
+  step emits and hands them out one at a time, applying the step's switch
+  and the foreign-content flag after each, as the driver does; after the
+  tokenizer stops it gives end-of-file. `theorem_eof_stops`: the step on
+  an end-of-file token stops the parser, from every parser (no
+  hypotheses), so the driver's loop ends.
 - **Independent transcription** (`src/independent/`): W3C HTML 5.2
   §8.2.5 (Recommendation, 14 December 2017), written without reading
   `src/spec/modes/`, proven equal to the spec for 21 of its 23 insertion
@@ -134,8 +147,9 @@ evidence exists (see "Left" below).
   `clazel-html`'s proven tokenizer and the proven step, joined by
   `exec::driver` (`parse_real`, `parse_fragment_real`: it feeds each token
   to `step` and applies the step's tokenizer switches and the
-  foreign-content flag before the next; Verus proves each call meets its
-  precondition and the loop ends), the tree printed in the suite's format
+  foreign-content flag before the next; proven equal to the spec's
+  `parse` and `parse_fragment` with that tokenizer, so these are results
+  of the spec), the tree printed in the suite's format
   and compared byte for byte: 1,963 of 1,967 pass, and the 4 expected
   failures are the `selectedcontent` restriction above (`webkit02.dat` 44
   to 47); the 6 `scripted_*.dat` cases need a script engine and are not
@@ -144,11 +158,6 @@ evidence exists (see "Left" below).
 
 ## Left
 
-- A proof that the driver (`exec::driver`) equals the spec's `parse` and
-  `parse_fragment` with `TokFns` instantiated by `clazel-html`'s tokenizer
-  (it is proven to terminate and to meet every precondition; the
-  tokenizer emits a list of tokens per call where `TokFns::next` gives
-  one).
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
 - Spec-level `modes_ok` of a stopped reachable parser (so `parser_wf` is

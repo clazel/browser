@@ -890,11 +890,16 @@ cases plus 6 scripted ones counted and not run).
 `parse_fragment_real`; not test-only, the pipeline of 4.13 will call it):
 it preprocesses the input, feeds each token the tokenizer emits to `step`
 and applies the step's tokenizer switches and the foreign-content flag
-before the next token. Verus proves each call meets its precondition and
-the loop ends (the tokenizer's measure goes down on every call, and a
-switch only sets a text state, of the lowest rank); that the driver equals
-the spec's `parse` with `TokFns` instantiated by the tokenizer is not
-proven. 1,963 cases pass and 4 are the `selectedcontent` restriction
+before the next token. Verus proves each call meets its precondition, the
+loop ends (the tokenizer's measure goes down on every call, a switch only
+sets a text state, of the lowest rank, and after the tokenizer stops the
+end-of-file token stops the parser, `theorem_eof_stops`), and the driver
+equals the spec's `parse` and `parse_fragment` with `TokFns` instantiated
+by the tokenizer (`spec::base::join::join_fns`: the tokens of one
+tokenizer step are queued and handed out one at a time), for every bound
+on the tokens from some bound on (`contract::parse_real_ensures`,
+`contract::parse_fragment_real_ensures`); so the conformance results are
+results of the spec. 1,963 cases pass and 4 are the `selectedcontent` restriction
 (`webkit02.dat` 44 to 47), listed by name; no case found a bug in the tree
 builder, the tokenizer or the driver. The test-only stand-in tokenizer is
 removed. The W3C HTML 5.2
@@ -1113,7 +1118,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
 | 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers, `theorem_open_distinct` (distinct elements on the stack of every running reachable parser), and `theorem_reachable_w3c_facts` and `theorem_reachable_foreign_content`, which discharge the W3C equivalences' state preconditions that are facts of reachable states |
 | 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified |
-| 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
+| 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
 | 4.14 Text layout | not started |
