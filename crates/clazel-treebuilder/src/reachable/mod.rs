@@ -17,6 +17,8 @@ use super::spec::*;
 use vstd::prelude::*;
 
 pub mod adoption;
+pub mod body;
+pub mod body_tags;
 pub mod early;
 pub mod helpers;
 pub mod lists;
