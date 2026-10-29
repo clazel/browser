@@ -1239,6 +1239,240 @@
         "lemma": "super::certificates::lemma_parse_p256_spki()",
         "witness": "parse_subject_public_key_info(super::certificates::ex_p256_spki()).unwrap().public_key == PublicKey::Unsupported"
       }
+    },
+    {
+      "id": "pc-empty-sequence-refused",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "after_inhibit == end && (require is Some || inhibit is Some)",
+      "replace": "after_inhibit == end",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.11: an empty PolicyConstraints must not be issued; this decoder refuses it.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_empty_policy_constraints_is_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-negative-refused",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "integer_contents_ok(contents) && contents[0] < 128",
+      "replace": "integer_contents_ok(contents)",
+      "expect": "killed",
+      "reason": "SkipCerts is INTEGER (0..MAX): a negative value (bit 8 set) must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_negative_skip_certs_is_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x80, 0x01, 0x80]) is Some"
+      }
+    },
+    {
+      "id": "pc-minimal-integer",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "clazel_der::spec::integer_contents_ok(contents) && contents[0] < 128",
+      "replace": "contents.len() >= 1 && contents[0] < 128",
+      "expect": "killed",
+      "reason": "X.690 §8.3.2: INTEGER contents must be minimal; a redundant leading 0x00 must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_integer_contents_are_minimal()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x04, 0x80, 0x02, 0x00, 0x05]) is Some"
+      }
+    },
+    {
+      "id": "pc-sign-pad-dropped",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "if contents.len() >= 2 && contents[0] == 0 {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "A leading 0x00 that only keeps the value non-negative is not part of the magnitude.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_integer_contents_are_minimal()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x04, 0x80, 0x02, 0x00, 0x80]).unwrap().require_explicit_policy.unwrap().len() == 2"
+      }
+    },
+    {
+      "id": "pc-bound-widened",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "pub open spec fn max_skip_certs_octets() -> nat { 4 }",
+      "replace": "pub open spec fn max_skip_certs_octets() -> nat { 5 }",
+      "expect": "killed",
+      "reason": "The accepted SkipCerts stops below 2^32 (four magnitude octets); five octets must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_skip_certs_below_2_pow_32()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x07, 0x80, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-bound-narrowed",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "pub open spec fn max_skip_certs_octets() -> nat { 4 }",
+      "replace": "pub open spec fn max_skip_certs_octets() -> nat { 3 }",
+      "expect": "killed",
+      "reason": "2^32 - 1 has four magnitude octets and must be accepted.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_skip_certs_below_2_pow_32()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x07, 0x80, 0x05, 0x00, 0xFF, 0xFF, 0xFF, 0xFF]) is None"
+      }
+    },
+    {
+      "id": "pc-primitive-form",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "if !constructed && clazel_der::spec::integer_contents_ok",
+      "replace": "if clazel_der::spec::integer_contents_ok",
+      "expect": "killed",
+      "reason": "X.690 §8.14.4: an implicit INTEGER keeps the primitive form; a constructed [0] must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_wrong_tags_are_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x05, 0xA0, 0x03, 0x02, 0x01, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-require-tag",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "parse_skip_certs(input, pos, end, 0)",
+      "replace": "parse_skip_certs(input, pos, end, 1)",
+      "expect": "killed",
+      "reason": "requireExplicitPolicy is [0], not [1].",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_both_fields_are_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x06, 0x80, 0x01, 0x02, 0x81, 0x01, 0x03]) is None"
+      }
+    },
+    {
+      "id": "pc-inhibit-tag",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "parse_skip_certs(input, after_require, end, 1)",
+      "replace": "parse_skip_certs(input, after_require, end, 0)",
+      "expect": "killed",
+      "reason": "inhibitPolicyMapping is [1], not [0].",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_each_field_alone_is_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x81, 0x01, 0x05]) is None"
+      }
+    },
+    {
+      "id": "pc-trailing-inside-sequence",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "after_inhibit == end &&",
+      "replace": "after_inhibit <= end &&",
+      "expect": "killed",
+      "reason": "Bytes after the fields inside the SEQUENCE must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_trailing_bytes_are_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x05, 0x80, 0x01, 0x00, 0x05, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-fields-in-order",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "after_inhibit == end &&",
+      "replace": "after_inhibit <= end &&",
+      "expect": "killed",
+      "reason": "[1] before [0] violates the ASN.1 order and must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_fields_are_ordered_and_unique()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x06, 0x81, 0x01, 0x03, 0x80, 0x01, 0x02]) is Some"
+      }
+    },
+    {
+      "id": "pc-outer-exact",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "outer.cend == end && end == input.len()",
+      "replace": "outer.cend == end",
+      "expect": "killed",
+      "reason": "A second value after the outer SEQUENCE must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_trailing_bytes_are_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x80, 0x01, 0x00, 0x05, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-fields-swapped",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "require_explicit_policy: match require { Some((value, _)) => Some(value), None => None },",
+      "replace": "require_explicit_policy: match inhibit { Some((value, _)) => Some(value), None => None },",
+      "expect": "killed",
+      "reason": "requireExplicitPolicy must hold the [0] value, not the [1] one.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_both_fields_are_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x06, 0x80, 0x01, 0x02, 0x81, 0x01, 0x03]).unwrap().require_explicit_policy.unwrap()[0] == 0x03u8"
+      }
+    },
+    {
+      "id": "pc-absent-require-position",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "Some((_, next)) => next, None => pos }",
+      "replace": "Some((_, next)) => next, None => end }",
+      "expect": "killed",
+      "reason": "When [0] is absent [1] is read where [0] would have been.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_each_field_alone_is_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x81, 0x01, 0x05]) is None"
+      }
+    },
+    {
+      "id": "pc-oid-arc-0",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![3nat, 5, 29, 36]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 0 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![3nat, 5nat, 29nat, 36nat]"
+      }
+    },
+    {
+      "id": "pc-oid-arc-1",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![2nat, 6, 29, 36]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 1 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![2nat, 6nat, 29nat, 36nat]"
+      }
+    },
+    {
+      "id": "pc-oid-arc-2",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![2nat, 5, 30, 36]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 2 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![2nat, 5nat, 30nat, 36nat]"
+      }
+    },
+    {
+      "id": "pc-oid-arc-3",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![2nat, 5, 29, 37]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 3 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![2nat, 5nat, 29nat, 37nat]"
+      }
     }
   ]
 }

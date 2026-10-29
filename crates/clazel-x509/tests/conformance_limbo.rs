@@ -9,9 +9,9 @@
 //!
 //! 1. Runs the decoders on every distinct certificate of the corpus
 //!    (leaves, intermediates and trust anchors): envelope, TBS, SPKI,
-//!    extensions, and the SAN, BasicConstraints, KeyUsage, ExtendedKeyUsage
-//!    and NameConstraints extension decoders, plus signature-algorithm
-//!    classification. None may panic, and the number of certificates each
+//!    extensions, and the SAN, BasicConstraints, KeyUsage, ExtendedKeyUsage,
+//!    NameConstraints and PolicyConstraints extension decoders, plus
+//!    signature-algorithm classification. None may panic, and the number of certificates each
 //!    stage accepts is pinned in `DECODE_COUNTS`, so a decoder change that
 //!    moves it is noticed.
 //! 2. Pins the one outcome limbo's expectations decide for a decoder: a
@@ -36,6 +36,7 @@ use clazel_x509::{
     leaf::exec::{LeafPolicy, check_leaf_certificate},
     matcher::ReferenceIdentity,
     name_constraints::exec::parse_name_constraints,
+    policy_constraints::exec::parse_policy_constraints,
     signature_algorithm::exec::classify,
     spki::exec::parse_subject_public_key_info,
     tbs::exec::parse_tbs_certificate,
@@ -96,6 +97,7 @@ const KEY_USAGE: &[u64] = &[2, 5, 29, 15];
 const BASIC_CONSTRAINTS: &[u64] = &[2, 5, 29, 19];
 const NAME_CONSTRAINTS: &[u64] = &[2, 5, 29, 30];
 const EXTENDED_KEY_USAGE: &[u64] = &[2, 5, 29, 37];
+const POLICY_CONSTRAINTS: &[u64] = &[2, 5, 29, 36];
 
 /// For each decoder stage of `STAGES`, how many corpus certificates it applied
 /// to and how many it accepted, as of this commit's decoders.
@@ -110,6 +112,7 @@ const DECODE_COUNTS: &[(usize, usize)] = &[
     (30369, 30368),
     (9818, 9817),
     (9458, 9453),
+    (1, 1),
 ];
 
 /// Decoder stages, in the order of `DECODE_COUNTS`. Each counts how many
@@ -125,6 +128,7 @@ const STAGES: &[&str] = &[
     "keyUsage",
     "extKeyUsage",
     "nameConstraints",
+    "policyConstraints",
 ];
 
 /// Run every decoder on one certificate. Entry `i` is `None` when stage `i`
@@ -172,6 +176,8 @@ fn decode(der: &[u8]) -> Vec<Option<bool>> {
             set(8, parse_extended_key_usage(e.value).is_some());
         } else if oid == NAME_CONSTRAINTS {
             set(9, parse_name_constraints(e.value).is_some());
+        } else if oid == POLICY_CONSTRAINTS {
+            set(10, parse_policy_constraints(e.value).is_some());
         }
     }
     out
