@@ -95,7 +95,14 @@
 //!   not modelled. The scripting mode is reduced to the scripting flag the
 //!   rules read (Normal, Fragment and Inert are "not Disabled"). The
 //!   document is never an `iframe` `srcdoc` document, and the parser can
-//!   always change the document's mode.
+//!   always change the document's mode. Hooks defined outside §13.2 that
+//!   run when the parser pops an element are not modelled either; the one
+//!   the tree-construction suite exercises is HTML §4.10.10's: when an
+//!   `option` is popped off the stack of open elements, "update descendant
+//!   selectedcontent elements" clones the selected option into its
+//!   `select`'s `selectedcontent` (a form control's rendering, Phase 6).
+//!   Its four cases (`webkit02.dat` 44 to 47) are listed as expected
+//!   failures in `tests/conformance_tree_construction.rs`.
 //! - **The fragment case** (§13.4) builds its own arena: the document node,
 //!   the context element (no parent, so step 19 finds a form only if the
 //!   context is one), the `html` root appended to the document, and the
