@@ -26,9 +26,17 @@
 //!   [`super`]).
 //! - The SVG `script` end tag: the insertion point, the script nesting level
 //!   and the parser pause flag are not modelled (see [`super`]), and
-//!   "process the SVG script element according to the SVG rules" is handed
-//!   to the driver as `Action::ScriptReady(node)`, as "prepare the script"
-//!   is.
+//!   "process the SVG script element according to the SVG rules, if the user
+//!   agent supports SVG" is not run and hands the driver no action: SVG
+//!   scripts are Phase 7's, and this is [`crate::spec`]'s modelling of the
+//!   same step. (The first draft of this file handed the driver
+//!   `Action::ScriptReady(node)`, as for an HTML `script`; it was changed to
+//!   the crate's modelling choice when the two were compared, since it is a
+//!   choice of what to model, not a difference between the documents.)
+//! - After "insert a foreign element", a parser the insertion stopped (the
+//!   node limit) changes nothing more (see [`super`]), so the self-closing
+//!   steps are skipped. (Added when the two were compared: the first draft
+//!   did not check it.)
 //! - The end-of-file token has no entry (the dispatcher never sends it here):
 //!   ignored, as [`super`] says for a token without an entry.
 
@@ -501,7 +509,6 @@ pub open spec fn w3c_breakout_stop(e: Elem) -> bool {
 /// "An end tag whose tag name is "script", if the current node is an SVG
 /// script element", from its first step.
 pub open spec fn w3c_svg_script_end(p: Parser) -> Parser {
-    let script = current_node(p);
     // "Pop the current node off the stack of open elements."
     let q = pop(p);
     // "Let the old insertion point have the same value as the current
@@ -509,11 +516,11 @@ pub open spec fn w3c_svg_script_end(p: Parser) -> Parser {
     // character. Increment the parser's script nesting level by one. Set the
     // parser pause flag to true." (Not modelled.)
     // "Process the SVG script element according to the SVG rules, if the user
-    // agent supports SVG." (The driver's action: see the module comment.)
+    // agent supports SVG." (Not run: see the module comment.)
     // "Decrement the parser's script nesting level by one. … Let the
     // insertion point have the value of the old insertion point." (Not
     // modelled.)
-    Parser { actions: q.actions.push(Action::ScriptReady(script.id)), ..q }
+    q
 }
 
 /// "Any other start tag", for the start tag `tt`.
@@ -549,7 +556,11 @@ pub open spec fn w3c_foreign_other_start(p: Parser, tt: TagTok) -> Outcome {
     let p1 = insert_foreign_element(p, t4, a.ns).0;
     // "If the token has its self-closing flag set, then run the appropriate
     // steps from the following list:"
-    if tt.self_closing {
+    if p1.stopped {
+        // The insertion stopped the parser: nothing more changes (see the
+        // module comment).
+        Outcome::Done(p1)
+    } else if tt.self_closing {
         if tt.tag == Tag::Script && current_node(p1).ns == Namespace::Svg {
             // "If the token's tag name is "script", and the new current node
             // is in the SVG namespace": "Acknowledge the token's

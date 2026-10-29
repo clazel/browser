@@ -113,6 +113,7 @@ pub mod body;
 pub mod early;
 pub mod equivalence;
 pub mod equivalence_body;
+pub mod equivalence_foreign;
 pub mod foreign;
 pub mod initial;
 
