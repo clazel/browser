@@ -6,4 +6,5 @@
 pub mod parsed;
 pub mod profile;
 pub mod spec;
+pub mod theorems;
 pub mod verifier;
