@@ -14,6 +14,15 @@
 //!   [`ml_script_ready_running_only`]: the per-step lemmas of
 //!   `theorem_actions_ordered` (`theorems::frame_modes`,
 //!   `theorems::frame_base`) at a concrete parser.
+//! - The `ml_w3c_*` lemmas: the independent W3C transcription
+//!   (`independent`) evaluated at a concrete parser and token, carried
+//!   over to the spec by its equivalence lemma.
+//! - Where the rule a mutation changes tests a quantifier (an `exists`
+//!   over a list), which `compute_only` does not evaluate on the real spec
+//!   ([`ml_w3c_quirks_ibm`], [`ml_w3c_in_table_text`]), the certificate's
+//!   witness is the quantifier-free part of the test at the input, and Z3
+//!   derives the contradiction with the lemma from the mutant's
+//!   definitions.
 //!
 //! The parsers ([`ml_parser`]): a new document (no nodes are inserted, so
 //! the element ids are placeholders), the given insertion mode, stack of
@@ -21,8 +30,10 @@
 //! active formatting elements, the original insertion mode "in body", a
 //! tentative confidence, running.
 //!
-//! No `by (compute_only)` here: the facts that a mutation changes come from
-//! the theorems, and only the certificates evaluate the (mutated) spec.
+//! `by (compute_only)` here evaluates the W3C transcription and the
+//! concrete inputs, never the spec's insertion mode rules: the facts that a
+//! mutation changes come from the theorems, and only the certificates
+//! evaluate the (mutated) spec.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -1140,6 +1151,266 @@ pub proof fn ml_w3c_in_table()
         ml_named_start(ml_name_div()),
     )->Done_0.doc.nodes[3].children.len() == 1)) by (compute_only);
     ml_w3c_eq_in_table();
+}
+
+// ---------------------------------------------------------------------
+// The W3C transcription's own table scope and formatting push
+// (`independent::state`), at concrete parsers.
+
+/// "td"
+pub open spec fn ml_name_td() -> Seq<u32> {
+    seq![0x74u32, 0x64]
+}
+
+/// "In cell" over [`ml_doc_html`] with the stack `html`, `table`, `tbody`,
+/// `tr`, `td` and a marker in the list of active formatting elements: the
+/// `table` element is in table scope only if `tbody` and `tr` are not in
+/// the scope's list.
+pub open spec fn ml_cell_parser() -> Parser {
+    Parser { formatting: seq![Fmt::Marker], ..ml_parser_html(Mode::InCell, ml_named_row(seq![ml_named(ml_name_td())])) }
+}
+
+/// The equivalence lemma at the certificate input of `table-scope-widened`
+/// (`tag_of` hidden: the records and tokens are tagged by construction).
+proof fn ml_w3c_eq_in_cell_table()
+    ensures
+        crate::independent::w3c_mode_in_cell(ml_env(), ml_cell_parser(), ml_named_end(ml_name_table())) == mode_in_cell(
+            ml_env(),
+            ml_cell_parser(),
+            ml_named_end(ml_name_table()),
+        ),
+{
+    hide(tag_of);
+    crate::independent::equivalence::lemma_in_cell(ml_env(), ml_cell_parser(), ml_named_end(ml_name_table()));
+}
+
+/// A `table` end tag "in cell", with a `table` element in table scope,
+/// closes the cell and is reprocessed (W3C §8.2.5.4.15, with the W3C's
+/// table scope, `independent::state`), so it is not ignored.
+pub proof fn ml_w3c_in_cell_table()
+    ensures
+        !(mode_in_cell(ml_env(), ml_cell_parser(), ml_named_end(ml_name_table())) is Done),
+{
+    assert(!(crate::independent::w3c_mode_in_cell(ml_env(), ml_cell_parser(), ml_named_end(ml_name_table())) is Done))
+        by (compute_only);
+    ml_w3c_eq_in_cell_table();
+}
+
+/// The stack entry `j` of the formatting scenario: `html` (node 1),
+/// `body` (2), then three `b` elements (3 to 5).
+pub open spec fn ml_ark_elem(j: int) -> Elem {
+    if j == 0 {
+        ml_el(ml_name_html(), 1)
+    } else if j == 1 {
+        ml_el(ml_name_body(), 2)
+    } else {
+        ml_el(ml_name_b(), (j + 1) as NodeId)
+    }
+}
+
+/// The node `i` of the formatting scenario: the Document, then `html` >
+/// `body` > `b` > `b` > `b`, each the only child of the one before.
+pub open spec fn ml_ark_node(i: int) -> clazel_dom::spec::Node {
+    if i == 0 {
+        ml_document_node(seq![1])
+    } else {
+        let name = if i == 1 {
+            ml_name_html()
+        } else if i == 2 {
+            ml_name_body()
+        } else {
+            ml_name_b()
+        };
+        let children = if i < 5 {
+            seq![(i + 1) as NodeId]
+        } else {
+            seq![]
+        };
+        ml_el_node(name, (i - 1) as NodeId, children)
+    }
+}
+
+/// The list entry for the `b` element of node `id`, created for a `b`
+/// start tag without attributes.
+pub open spec fn ml_ark_entry(id: NodeId) -> Fmt {
+    Fmt::Entry { elem: ml_el(ml_name_b(), id), token: ml_b_token() }
+}
+
+/// "In body" with the stack `html`, `body`, `b`, `b`, `b`, each inside the
+/// one before, and the three `b` elements in the list of active formatting
+/// elements: a fourth `b` start tag pushes a fourth entry with the same tag
+/// name, namespace and attributes, so the earliest is removed.
+pub open spec fn ml_ark_parser() -> Parser {
+    Parser {
+        doc: clazel_dom::spec::Document { nodes: Seq::new(6, |i: int| ml_ark_node(i)) },
+        formatting: seq![ml_ark_entry(3), ml_ark_entry(4), ml_ark_entry(5)],
+        ..ml_parser(Mode::InBody, Seq::new(5, |j: int| ml_ark_elem(j)), seq![])
+    }
+}
+
+/// The formatting scenario's parser has the facts the "in body" lemma
+/// uses (`equivalence_body::aa_wf`).
+proof fn ml_ark_wf()
+    ensures
+        crate::independent::equivalence_body::aa_wf(ml_ark_parser()),
+{
+    let p = ml_ark_parser();
+    assert forall|j: int| 0 <= j < p.open.len() implies (#[trigger] p.open[j]).id < p.doc.nodes.len() && elem_tagged(p.open[j]) by {
+        assert(p.open[j] == ml_ark_elem(j));
+    }
+    let f = p.formatting;
+    assert forall|j: int| 0 <= j < f.len() implies crate::independent::equivalence_body::fmt_entry_ok(
+        #[trigger] f[j],
+        p.doc.nodes.len(),
+    ) by {
+        assert(f[j] == ml_ark_entry(3) || f[j] == ml_ark_entry(4) || f[j] == ml_ark_entry(5));
+    }
+    assert forall|j: int, k: int|
+        #![trigger f[j], f[k]]
+        0 <= j < f.len() && 0 <= k < f.len() && f[j] is Entry && f[k] is Entry && f[j]->Entry_elem.id
+            == f[k]->Entry_elem.id implies f[j]->Entry_elem.tag == f[k]->Entry_elem.tag by {
+        assert(f[j] == ml_ark_entry(3) || f[j] == ml_ark_entry(4) || f[j] == ml_ark_entry(5));
+        assert(f[k] == ml_ark_entry(3) || f[k] == ml_ark_entry(4) || f[k] == ml_ark_entry(5));
+    }
+}
+
+/// The "in body" lemma's precondition at the formatting scenario, for a
+/// `b` start tag.
+proof fn ml_ark_agrees()
+    ensures
+        crate::independent::equivalence_body::in_body_texts_agree(ml_ark_parser(), ml_named_start(ml_name_b())),
+        crate::independent::equivalence_body::in_body_aa_agrees(ml_ark_parser(), ml_named_start(ml_name_b())),
+        tag_of(ml_name_b()) == Tag::B,
+{
+    assert(crate::independent::equivalence_body::in_body_texts_agree(ml_ark_parser(), ml_named_start(ml_name_b())))
+        by (compute_only);
+    assert(crate::independent::equivalence_body::in_body_aa_agrees(ml_ark_parser(), ml_named_start(ml_name_b())))
+        by (compute_only);
+    assert(tag_of(ml_name_b()) == Tag::B) by (compute_only);
+}
+
+/// What `independent::equivalence_body::lemma_in_body` gives at the
+/// certificate input of `noahs-ark-off-by-one`.
+proof fn ml_w3c_eq_in_body_ark()
+    ensures
+        crate::independent::w3c_mode_in_body(ml_env(), ml_ark_parser(), ml_named_start(ml_name_b())) == mode_in_body(
+            ml_env(),
+            ml_ark_parser(),
+            ml_named_start(ml_name_b()),
+        ),
+{
+    hide(tag_of);
+    ml_ark_wf();
+    ml_ark_agrees();
+    crate::independent::equivalence_body::lemma_in_body(ml_env(), ml_ark_parser(), ml_named_start(ml_name_b()));
+}
+
+/// A fourth `b` start tag "in body", with three `b` entries with the same
+/// attributes in the list of active formatting elements, removes the
+/// earliest, so the list keeps three entries (W3C §8.2.5.4.7 and §8.2.3.3,
+/// `independent::state`).
+pub proof fn ml_w3c_in_body_ark()
+    ensures
+        !(mode_in_body(ml_env(), ml_ark_parser(), ml_named_start(ml_name_b()))->Done_0.formatting.len() == 4),
+{
+    assert(!(crate::independent::w3c_mode_in_body(ml_env(), ml_ark_parser(), ml_named_start(ml_name_b()))->Done_0.formatting.len()
+        == 4)) by (compute_only);
+    ml_w3c_eq_in_body_ark();
+}
+
+// ---------------------------------------------------------------------
+// Rules whose test is a quantifier, which `compute_only` does not
+// evaluate (the certificate would not build on the real spec). The lemma
+// states the result, proven from the W3C transcription; the certificate's
+// witness evaluates the quantifier's body at the input (the explicit
+// witness), and Z3 finds that the mutant contradicts the lemma.
+
+/// The system identifier "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd".
+pub open spec fn ml_ibm_system_id() -> Seq<u32> {
+    seq![
+        0x68u32, 0x74, 0x74, 0x70, 0x3a, 0x2f, 0x2f, 0x77, 0x77, 0x77, 0x2e, 0x69, 0x62, 0x6d, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64,
+        0x61, 0x74, 0x61, 0x2f, 0x64, 0x74, 0x64, 0x2f, 0x76, 0x31, 0x31, 0x2f, 0x69, 0x62, 0x6d, 0x78, 0x68, 0x74, 0x6d, 0x6c,
+        0x31, 0x2d, 0x74, 0x72, 0x61, 0x6e, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x61, 0x6c, 0x2e, 0x64, 0x74, 0x64,
+    ]
+}
+
+/// The W3C's and the WHATWG transcription's lists of DOCTYPE identifiers
+/// classify a token with no public identifier and the IBM system
+/// identifier alike (`independent::equivalence::doctype_lists_agree`, the
+/// precondition of `lemma_initial_doctype`, proven at this input), and the
+/// W3C's puts it in quirks mode.
+proof fn ml_doctype_lists_agree_ibm()
+    ensures
+        crate::independent::equivalence::doctype_lists_agree(None, Some(ml_ibm_system_id())),
+        crate::independent::w3c_quirks_identifiers(None, Some(ml_ibm_system_id())),
+{
+    let id = ml_ibm_system_id();
+    assert(ascii_ci_eq(id, id));
+    assert(crate::independent::w3c_system_is(Some(id), id));
+    assert(quirks_system_ids()[0] == id);
+    assert(id_is_one_of(Some(id), quirks_system_ids()));
+    assert(!doctype_is_limited_quirks(None, Some(id)));
+    assert(!crate::independent::w3c_limited_quirks_identifiers(None, Some(id)));
+}
+
+/// A DOCTYPE token named "html" with no public identifier and the IBM
+/// system identifier sets quirks mode (W3C §8.2.5.4.1: "The system
+/// identifier is set to:
+/// "http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd"").
+pub proof fn ml_w3c_quirks_ibm()
+    ensures
+        doctype_is_quirks(Some(ml_name_html()), None, Some(ml_ibm_system_id()), false),
+{
+    ml_doctype_lists_agree_ibm();
+    assert(doctype_is_quirks(Some(ml_name_html()), None, Some(ml_ibm_system_id()), false));
+}
+
+/// "In table text" over [`ml_doc_html`] with the stack `html`, the
+/// original insertion mode "in table", and one pending space character.
+pub open spec fn ml_table_text_parser() -> Parser {
+    Parser {
+        pending_table_text: seq![0x20u32],
+        original_mode: Mode::InTable,
+        ..ml_parser_html(Mode::InTableText, seq![ml_named(ml_name_html())])
+    }
+}
+
+/// What `independent::equivalence_body::lemma_in_table_text` gives at the
+/// certificate input of `in-table-text-whitespace-dropped`.
+proof fn ml_w3c_eq_in_table_text()
+    ensures
+        crate::independent::w3c_mode_in_table_text(ml_env(), ml_table_text_parser(), Tok::Eof) == mode_in_table_text(
+            ml_env(),
+            ml_table_text_parser(),
+            Tok::Eof,
+        ),
+{
+    crate::independent::equivalence_body::lemma_in_table_text(ml_env(), ml_table_text_parser(), Tok::Eof);
+}
+
+/// The end of a run of space characters "in table text" inserts them (W3C
+/// §8.2.5.4.10: "Otherwise, insert the characters given by the pending
+/// table character tokens list"), so the document changes.
+pub proof fn ml_w3c_in_table_text()
+    ensures
+        mode_in_table_text(ml_env(), ml_table_text_parser(), Tok::Eof)->Reprocess_0.doc != ml_table_text_parser().doc,
+{
+    hide(mode_in_table_text);
+    hide(crate::independent::w3c_mode_in_table_text);
+    hide(ml_table_text_parser);
+    ml_w3c_in_table_text_inserts();
+    ml_w3c_eq_in_table_text();
+}
+
+/// The W3C transcription inserts a `Text` node there.
+proof fn ml_w3c_in_table_text_inserts()
+    ensures
+        crate::independent::w3c_mode_in_table_text(ml_env(), ml_table_text_parser(), Tok::Eof)->Reprocess_0.doc.nodes.len() == 3,
+        ml_table_text_parser().doc.nodes.len() == 2,
+{
+    assert(crate::independent::w3c_mode_in_table_text(ml_env(), ml_table_text_parser(), Tok::Eof)->Reprocess_0.doc.nodes.len()
+        == 3) by (compute_only);
+    assert(ml_table_text_parser().doc.nodes.len() == 2) by (compute_only);
 }
 
 } // verus!
