@@ -63,7 +63,7 @@ pub fn tokenizer_state(s: &TokenizerState) -> (r: State)
 fn reversed<T>(v: Vec<T>) -> (r: Vec<T>) {
     let mut v = v;
     let mut r: Vec<T> = Vec::new();
-    while v.len() > 0
+    while !v.is_empty()
         decreases v.len(),
     {
         match v.pop() {
@@ -78,7 +78,7 @@ fn reversed<T>(v: Vec<T>) -> (r: Vec<T>) {
 fn attrs_of(v: Vec<ExecAttribute>) -> (r: Vec<ExecTokAttr>) {
     let mut rev = reversed(v);
     let mut r: Vec<ExecTokAttr> = Vec::new();
-    while rev.len() > 0
+    while !rev.is_empty()
         decreases rev.len(),
     {
         match rev.pop() {
@@ -158,7 +158,7 @@ fn run<E: EncFnsExec>(env: &E, p: &mut ParserBuf, input: &[u32], start: State) -
         }
         let ghost g1 = g;
         let mut rev = reversed(toks);
-        while rev.len() > 0
+        while !rev.is_empty()
             invariant
                 parser_inv(p@),
                 reachable_inv(p@),
