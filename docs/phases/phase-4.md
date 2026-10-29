@@ -789,11 +789,18 @@ every reachable parser. `theorem_doc_wf` and `theorem_open_elements_in_doc`
 (a step keeps `clazel_dom::spec::wf` and every id of the parse state in the
 document) and `theorem_nodes_per_token` are proven for a step from a
 parser with `parser_wf`, a valid head pointer and `dispatch_needs` (which
-`reachable_inv` gives); that every reachable parser has `parser_wf` at the
-spec level is not proven (the executable step keeps it). The true node
-bound is 44 + 6T + 2F + P(F + 1) per token (T template modes, F formatting
-entries, P pending table characters; it also assumes no element has two
-formatting entries), not the plan's 1 + F: the adoption agency alone may
+`reachable_inv` gives); the last also assumes no element has two
+formatting entries. `theorem_reachable_wf` discharges these hypotheses:
+every reachable parser has a well-formed document, every id of its parse
+state in it and no element with two formatting entries, and, until it
+stops, `parser_wf` and a valid head pointer; so the three hold for a step
+from every reachable parser, with no hypotheses
+(`theorem_reachable_doc_wf`, `theorem_reachable_open_elements_in_doc`,
+`theorem_reachable_nodes_per_token`). Not proven at the spec level:
+`modes_ok` of a stopped parser (which takes no further step) and
+`templates_wf` (the executable step keeps it). The true node bound is 44 +
+6T + 2F + P(F + 1) per token (T template modes, F formatting entries, P
+pending table characters), not the plan's 1 + F: the adoption agency alone may
 clone 32 nodes, and a `nobr` start tag reconstructs twice.
 
 ### 4.10 The tree builder: implementation and proof (L)
@@ -1075,7 +1082,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.6 Tokenizer spec and contracts | done: 84 states (the standard now has 84, not 80); total, output bounded, two faces equal |
 | 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; tier 0 until CI's full run is green |
 | 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
-| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable`; three of them under stated hypotheses (see As built) |
+| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers |
 | 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, 41 certified |
 | 4.11 Tree builder evidence | conformance through a test stand-in tokenizer: 1,381 of 1,967 pass, the rest listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |

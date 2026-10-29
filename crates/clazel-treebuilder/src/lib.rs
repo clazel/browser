@@ -11,7 +11,9 @@
 //! - [`independent`]: a second transcription of the insertion modes, from
 //!   the W3C's HTML 5.2, proven equal where the documents agree.
 //! - [`termination`]: `theorem_dispatch_total`, reprocessing ends.
-//! - [`theorems`]: `theorem_actions_ordered`, the order of the actions.
+//! - [`theorems`]: `theorem_actions_ordered`, the order of the actions; the
+//!   document theorems, and `theorem_reachable_wf`, the document facts of
+//!   every reachable parser.
 //! - [`mutation_lemmas`]: concrete instances of the theorems, the kill
 //!   certificates of `mutations.json`.
 //! - [`reachable`]: `theorem_reachable`, the reachable-state invariant.

@@ -38,6 +38,10 @@
 //! element (`open_elements::fmt_unique`, which the step keeps): with two
 //! entries for one element the adoption agency's inner loop can clone it
 //! past its third round, and its count would grow with the stack.
+//! `super::reachable::theorem_reachable_nodes_per_token` discharges every
+//! hypothesis for the parsers reachable from `new_parser` and
+//! `fragment_parser` (`super::reachable::theorem_reachable_wf` proves
+//! `fmt_unique` of them).
 
 #[allow(unused_imports)]
 use super::spec::*;

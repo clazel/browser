@@ -56,9 +56,15 @@ evidence exists (see "Left" below).
   `theorem_nodes_per_token` (one token creates at most 44 + 6T + 2F +
   P(F + 1) nodes), for a step from a parser with `parser_wf`, a valid head
   pointer and `dispatch_needs` (which `reachable_inv` gives); the last
-  also assumes no element has two formatting entries. That every reachable
-  parser has `parser_wf` is proven for the executable step, not yet at the
-  spec level.
+  also assumes no element has two formatting entries, and keeps that.
+  `theorem_reachable_wf` discharges these hypotheses: every parser
+  reachable from `new_parser` or `fragment_parser` has a well-formed
+  document, every id of its parse state in the document and no element
+  with two formatting entries, and, until it stops, `parser_wf` and a
+  valid head pointer. So `theorem_reachable_doc_wf`,
+  `theorem_reachable_open_elements_in_doc` and
+  `theorem_reachable_nodes_per_token` state the three for a step from
+  every reachable parser, with no hypotheses.
 - **Proven, actions** (`src/theorems/`): `theorem_actions_ordered`: over a
   whole parse, `StopParsing` occurs at most once and last, and
   `ChangeEncoding` at most once (never if the confidence starts certain),
@@ -115,9 +121,11 @@ evidence exists (see "Left" below).
 - The join with `clazel-html`'s tokenizer, and the full suite through it.
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
-- Spec-level `parser_wf` of every reachable parser, which would remove the
-  hypotheses of `theorem_doc_wf`, `theorem_open_elements_in_doc` and
-  `theorem_nodes_per_token`.
+- Spec-level `modes_ok` of a stopped reachable parser (so `parser_wf` is
+  proven of reachable parsers only until they stop; a stopped parser
+  takes no further step), and spec-level `templates_wf` of reachable
+  parsers (the rest of `parser_inv`, which the executable step keeps).
+- Whether reachable parsers need the 6T term of the nodes-per-token bound.
 - Every mutation a certified kill (tier 2's requirement): 7 are not
   (see "Mutations" above); they need a second transcription of the shared
   algorithms and tables, of foreign content, or quantifier-free tests.

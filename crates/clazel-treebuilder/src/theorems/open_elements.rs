@@ -29,7 +29,9 @@
 //! it from `invariant::reachable_inv`), and, until parsing stops,
 //! `invariant::head_ok` (part of `parser_inv`), which the step keeps.
 //! `theorem_doc_wf` (the document stays well formed) comes out of the same
-//! proof.
+//! proof. `super::reachable` discharges these hypotheses for every parser
+//! reachable from `new_parser` or `fragment_parser`
+//! (`theorem_reachable_doc_wf`, `theorem_reachable_open_elements_in_doc`).
 
 #[allow(unused_imports)]
 use super::spec::*;

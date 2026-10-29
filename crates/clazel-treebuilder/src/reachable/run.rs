@@ -290,10 +290,9 @@ pub proof fn lemma_reach_total(env: EncFns, q: Parser)
 /// and every rule application of its next step meets what the executable
 /// step needs ([`lemma_dispatch_reach`]).
 ///
-/// Not stated: `parser_wf` of reachable parsers (`clazel_dom::spec::wf` of the
-/// document and the ids of the parse state), which the executable step
-/// keeps (`exec::step::step` ensures `parser_inv`) but which has no
-/// spec-level proof yet.
+/// `parser_wf` of reachable parsers (`clazel_dom::spec::wf` of the document
+/// and the ids of the parse state) is the companion theorem
+/// `theorems::reachable::theorem_reachable_wf`.
 pub proof fn theorem_reachable(
     env: EncFns,
     url: Seq<u32>,
