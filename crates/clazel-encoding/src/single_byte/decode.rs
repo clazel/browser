@@ -17,6 +17,15 @@ use crate::utf8::spec::HandlerResult;
 
 verus! {
 
+/// Whether `e` is a single-byte encoding (§9).
+pub fn is_single_byte_exec(e: Encoding) -> (r: bool)
+    ensures
+        r == is_single_byte(e),
+{
+    let n = crate::labels::exec::number(e);
+    (1..=28).contains(&n)
+}
+
 /// Entry `pointer` of `e`'s index (the generated table's value, `NULL`
 /// included).
 pub fn index_entry_exec(e: Encoding, pointer: usize) -> (r: u32)
