@@ -3,6 +3,8 @@
 //! and the "in body" loops [`keeps`] a live parser (see [`super`]).
 
 #[cfg(verus_only)]
+use super::cells::*;
+#[cfg(verus_only)]
 use super::helpers::*;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -12,13 +14,14 @@ use vstd::prelude::*;
 verus! {
 
 /// An entry that may join the list of a [`good`] parser: a marker, or an
-/// element other than `html`'s, tagged, for a tagged token other than
-/// `template`.
+/// element other than `html`'s, tagged, not a cell, with an id of the
+/// arena that no cell on the stack has ([`id_new`]), for a tagged token
+/// other than `template`, `td` and `th`.
 pub open spec fn fmt_fresh(p: Parser, x: Fmt) -> bool {
     match x {
         Fmt::Marker => true,
         Fmt::Entry { elem, token } => elem.id != p.open[0].id && elem_tagged(elem) && tok_tagged(token) && token.tag
-            != Tag::Template,
+            != Tag::Template && !cell_pred()(elem) && token.tag != Tag::Td && token.tag != Tag::Th && id_new(p, elem.id),
     }
 }
 
@@ -32,6 +35,10 @@ pub proof fn lemma_fmt_entries_fresh(p: Parser, i: int)
 {
     if p.formatting[i] is Entry {
         assert(p.formatting[i]->Entry_elem.id != p.open[0].id);
+        let id = p.formatting[i]->Entry_elem.id;
+        assert forall|j: int| 0 <= j < p.open.len() && cell_pred()(#[trigger] p.open[j]) implies p.open[j].id != id by {
+            assert(cell_fresh(p, p.open[j].id));
+        }
     }
 }
 
@@ -57,6 +64,18 @@ pub proof fn lemma_fmt_list_keeps(p: Parser, q: Parser)
         assert forall|i: int| 0 <= i < q.formatting.len() && #[trigger] q.formatting[i] is Entry implies q.formatting[i]->Entry_token.tag
             != Tag::Template by {
             assert(fmt_fresh(p, q.formatting[i]));
+        }
+        assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.id
+            < q.doc.nodes.len() && !cell_pred()(q.formatting[i]->Entry_elem) && q.formatting[i]->Entry_token.tag != Tag::Td
+            && q.formatting[i]->Entry_token.tag != Tag::Th by {
+            assert(fmt_fresh(p, q.formatting[i]));
+        }
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies cell_fresh(q, q.open[j].id) by {
+            assert(cell_fresh(p, p.open[j].id));
+            assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]->Entry_elem.id
+                != q.open[j].id by {
+                assert(fmt_fresh(p, q.formatting[i]));
+            }
         }
     }
 }
@@ -167,7 +186,8 @@ pub proof fn lemma_family_range(f: Seq<Fmt>, from: int, i: int, e: Elem, t: TagT
 pub proof fn lemma_push_formatting_keeps(p: Parser, e: Elem, t: TagTok)
     requires
         live(p),
-        !p.stopped ==> e.id != p.open[0].id && elem_tagged(e) && tok_tagged(t) && t.tag != Tag::Template,
+        !p.stopped ==> e.id != p.open[0].id && elem_tagged(e) && tok_tagged(t) && t.tag != Tag::Template && !cell_pred()(e)
+            && t.tag != Tag::Td && t.tag != Tag::Th && id_new(p, e.id),
     ensures
         keeps(p, push_formatting(p, e, t)),
 {
@@ -306,6 +326,38 @@ pub proof fn lemma_reset_shape(p: Parser, i: int)
     }
 }
 
+/// [`reset_from`] chooses "in cell" only on a cell (step 4), never as a
+/// template insertion mode.
+pub proof fn lemma_reset_cell(p: Parser, i: int)
+    requires
+        rooted_seq(p.open),
+        crate::termination::helpers_ranking::count_ok(p),
+        0 <= i < p.open.len(),
+    ensures
+        reset_from(p, i) == Mode::InCell ==> last_index_where(p.open, i + 1, cell_pred()) >= 0,
+    decreases i,
+{
+    let last = i == 0;
+    let node = if last && p.context is Some {
+        p.context->Some_0
+    } else {
+        p.open[i]
+    };
+    if is_html(node, Tag::Template) {
+        if last && p.context is Some {
+            assert(template_count(p) >= 1);
+        } else {
+            crate::termination::helpers_ranking::lemma_templates_in_pos(p.open, p.open.len() as int, i);
+            assert(template_count(p) >= 1);
+        }
+        assert(p.template_modes.len() > 0);
+        assert(crate::termination::template_mode_ok(p.template_modes[p.template_modes.len() - 1]));
+    }
+    if i >= 1 {
+        lemma_reset_cell(p, i - 1);
+    }
+}
+
 /// "Reset the insertion mode appropriately" (only the mode changes).
 pub proof fn lemma_reset_keeps(p: Parser)
     requires
@@ -316,8 +368,10 @@ pub proof fn lemma_reset_keeps(p: Parser)
         reset_insertion_mode(p).mode != Mode::InHeadNoscript,
         reset_insertion_mode(p).mode == Mode::InTemplate ==> p.template_modes.len() > 0,
         reset_insertion_mode(p) == (Parser { mode: reset_insertion_mode(p).mode, ..p }),
+        reset_insertion_mode(p).mode == Mode::InCell ==> has_cell(p.open),
 {
     lemma_reset_shape(p, p.open.len() - 1);
+    lemma_reset_cell(p, p.open.len() - 1);
 }
 
 // ---------------------------------------------------------------------
@@ -328,6 +382,7 @@ pub proof fn lemma_li_loop_keeps(p: Parser, i: int)
     requires
         live(p),
         !p.stopped ==> i < p.open.len(),
+        in_cell(p) ==> last_cell(p.open) <= i || i == p.open.len() - 1,
     ensures
         keeps(p, li_loop(p, i)),
     decreases i + 1,
@@ -340,6 +395,7 @@ pub proof fn lemma_li_loop_keeps(p: Parser, i: int)
         }
     } else {
         let node = p.open[i];
+        lemma_cell_top(p.open);
         if is_html(node, Tag::Li) {
             let f = |e: Elem| is_html(e, Tag::Li);
             assert(i != 0);
@@ -359,6 +415,7 @@ pub proof fn lemma_dd_dt_loop_keeps(p: Parser, i: int)
     requires
         live(p),
         !p.stopped ==> i < p.open.len(),
+        in_cell(p) ==> last_cell(p.open) <= i || i == p.open.len() - 1,
     ensures
         keeps(p, dd_dt_loop(p, i)),
     decreases i + 1,
@@ -371,6 +428,7 @@ pub proof fn lemma_dd_dt_loop_keeps(p: Parser, i: int)
         }
     } else {
         let node = p.open[i];
+        lemma_cell_top(p.open);
         if is_html(node, Tag::Dd) {
             let f = |e: Elem| is_html(e, Tag::Dd);
             assert(i != 0);
@@ -391,13 +449,16 @@ pub proof fn lemma_dd_dt_loop_keeps(p: Parser, i: int)
     }
 }
 
-/// The "any other end tag" loop, for a tagged token that is not `html`.
+/// The "any other end tag" loop, for a tagged token that is not `html`
+/// (nor, in the "in cell" mode, `td` or `th`).
 pub proof fn lemma_any_other_loop_keeps(p: Parser, tt: TagTok, i: int)
     requires
         live(p),
         tok_tagged(tt),
         tt.tag != Tag::Html,
+        in_cell(p) ==> tt.tag != Tag::Td && tt.tag != Tag::Th,
         !p.stopped ==> i < p.open.len(),
+        in_cell(p) ==> last_cell(p.open) <= i || i == p.open.len() - 1,
     ensures
         keeps(p, any_other_end_tag_loop(p, tt, i)),
     decreases i + 1,
@@ -410,6 +471,7 @@ pub proof fn lemma_any_other_loop_keeps(p: Parser, tt: TagTok, i: int)
         }
     } else {
         let node = p.open[i];
+        lemma_cell_top(p.open);
         if is_html_named(node, tt.name) {
             assert(i != 0) by {
                 if i == 0 {
@@ -431,9 +493,11 @@ pub proof fn lemma_any_other_loop_keeps(p: Parser, tt: TagTok, i: int)
     }
 }
 
-/// "Any other end tag" for a tagged token that is not `html`.
+/// "Any other end tag" for a tagged token that is not `html` (nor, in the
+/// "in cell" mode, `td` or `th`).
 pub proof fn lemma_any_other_keeps(p: Parser, tt: TagTok)
     requires
+        in_cell(p) ==> tt.tag != Tag::Td && tt.tag != Tag::Th,
         live(p),
         tok_tagged(tt),
         tt.tag != Tag::Html,

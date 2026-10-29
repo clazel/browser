@@ -3,6 +3,8 @@
 //! ([`next_core`], see [`super`]).
 
 #[cfg(verus_only)]
+use super::cells::*;
+#[cfg(verus_only)]
 use super::helpers::*;
 #[cfg(verus_only)]
 use super::lists::*;
@@ -258,6 +260,7 @@ pub proof fn lemma_generic_text_reach(p: Parser, tt: TagTok, rawtext: bool)
         p.mode != Mode::Text && p.mode != Mode::InTableText,
         tok_tagged(tt),
         tt.tag != Tag::Template,
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
     ensures
         next_core(Outcome::Done(generic_text_parsing(p, tt, rawtext))),
 {
@@ -360,13 +363,56 @@ pub proof fn lemma_in_head_template_start_reach(p: Parser, tt: TagTok)
     }
 }
 
-/// The "in head" `template` end tag.
+/// The "in head" `template` end tag (proven on the parser put in the "in
+/// body" mode: in the "in cell" mode it pops the cell, and the mode is
+/// reset).
 pub proof fn lemma_in_head_template_end_reach(p: Parser)
     requires
         reach_core(p),
         good(p),
         !p.stopped,
         modes_ok(p),
+    ensures
+        next_core(Outcome::Done(in_head_template_end(p))),
+{
+    if !open_has_html(p, Tag::Template) {
+        return;
+    }
+    let p0 = mode_as(p, Mode::InBody);
+    assert(good(p0));
+    lemma_in_head_template_end_reach0(p0);
+    let ft = |e: Elem|
+        e.ns == Namespace::Html && match e.tag {
+            Tag::Caption | Tag::Colgroup | Tag::Dd | Tag::Dt | Tag::Li | Tag::Optgroup | Tag::Option | Tag::P | Tag::Rb
+            | Tag::Rp | Tag::Rt | Tag::Rtc | Tag::Tbody | Tag::Td | Tag::Tfoot | Tag::Th | Tag::Thead | Tag::Tr => true,
+            _ => false,
+        };
+    let p1 = generate_all_implied_end_tags_thoroughly(p);
+    assert(p1 == pop_while(p, ft));
+    assert(generate_all_implied_end_tags_thoroughly(p0) == pop_while(p0, ft));
+    lemma_pop_while_mode(p, ft, Mode::InBody);
+    let f = |e: Elem| is_html(e, Tag::Template);
+    crate::exec::stack::lemma_pop_until_popped(p1, Tag::Template);
+    crate::exec::stack::lemma_pop_until_popped(mode_as(p1, Mode::InBody), Tag::Template);
+    lemma_pop_until_where_mode(p1, f, Mode::InBody);
+    let p2 = pop_until_popped(p1, Tag::Template);
+    lemma_clear_mode(p2, Mode::InBody);
+    let p3 = clear_to_last_marker(p2);
+    let p4 = Parser { template_modes: p3.template_modes.drop_last(), ..p3 };
+    assert(Parser { template_modes: p3.template_modes.drop_last(), ..mode_as(p3, Mode::InBody) } == mode_as(p4, Mode::InBody));
+    lemma_reset_from_mode(p4, Mode::InBody, p4.open.len() - 1);
+    assert(reset_insertion_mode(mode_as(p4, Mode::InBody)) == reset_insertion_mode(p4));
+    assert(in_head_template_end(p0) == in_head_template_end(p));
+}
+
+/// [`lemma_in_head_template_end_reach`] outside the "in cell" mode.
+pub proof fn lemma_in_head_template_end_reach0(p: Parser)
+    requires
+        good(p),
+        !p.stopped,
+        modes_ok(p),
+        p.mode != Mode::InCell,
+        open_has_html(p, Tag::Template),
     ensures
         next_core(Outcome::Done(in_head_template_end(p))),
 {
@@ -421,6 +467,7 @@ pub proof fn lemma_insert_pop_frame(p: Parser, tt: TagTok)
         reach_core(p),
         tok_tagged(tt),
         tt.tag != Tag::Template,
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
     ensures
         ({
             let q = pop(insert_html_element(p, tt).0);
@@ -596,11 +643,50 @@ pub proof fn lemma_after_head_using_in_head_reach(env: EncFns, p: Parser, t: Tok
     lemma_in_head_reach(env, p1, t);
     let o = mode_in_head(env, p1, t);
     if let Outcome::Done(p2) = o {
+        lemma_after_head_tail(p, p2, h);
+    }
+}
+
+/// Case 8 of "after head": removing the `head` element after the "in head"
+/// rules.
+pub proof fn lemma_after_head_tail(p: Parser, p2: Parser, h: NodeId)
+    requires
+        reach_core(p),
+        good(p),
+        !p.stopped,
+        modes_ok(p),
+        p.mode == Mode::AfterHead,
+        !p2.stopped ==> reach_core(p2) && modes_ok(p2),
+        !p2.stopped ==> p2.mode == Mode::AfterHead || p2.mode == Mode::InTemplate || (p2.mode == Mode::Text
+            && p2.original_mode == Mode::AfterHead),
+        !p2.stopped ==> p2.open == p.open.push(head_elem(h)) || (p2.open.len() == p.open.len() + 2 && p2.open.drop_last()
+            == p.open.push(head_elem(h)) && p2.open.last().ns == Namespace::Html),
+        !p2.stopped && p2.mode == Mode::Text ==> p2.open.len() == p.open.len() + 2,
+    ensures
+        ({
+            let i = open_index_of(p2, h);
+            next_core(
+                Outcome::Done(
+                    if p2.stopped || i < 0 {
+                        p2
+                    } else {
+                        remove_open_at(p2, i)
+                    },
+                ),
+            )
+        }),
+{
+    {
         let i = open_index_of(p2, h);
         if !(p2.stopped || i < 0) {
             let f = |e: Elem| e.id == h;
             let n = p.open.len() as int;
-            assert(p2.open[n] == head_elem(h));
+            if p2.open == p.open.push(head_elem(h)) {
+                assert(p2.open[n] == head_elem(h));
+            } else {
+                assert(p2.open.drop_last()[n] == head_elem(h));
+                assert(p2.open[n] == p2.open.drop_last()[n]);
+            }
             crate::exec::stack::lemma_last_index_where_found(p2.open, p2.open.len() as int, f, n);
             assert(i >= n);
             let q = remove_open_at(p2, i);
@@ -640,6 +726,11 @@ pub proof fn lemma_in_head_open(env: EncFns, p: Parser, t: Tok)
                 == p.open && q.open.last().ns == Namespace::Html),
             _ => true,
         },
+        match mode_in_head(env, p, t) {
+            Outcome::Done(q) => q.stopped || q.mode == p.mode || q.mode == Mode::InTemplate || (q.mode == Mode::Text
+                && q.original_mode == p.mode && q.open.len() == p.open.len() + 1),
+            _ => true,
+        },
 {
     let tt = t->Start_0;
     lemma_insert_html_keeps_frame(p, tt);
@@ -675,6 +766,8 @@ pub proof fn lemma_in_head_open(env: EncFns, p: Parser, t: Tok)
 pub proof fn lemma_insert_html_keeps_frame(p: Parser, tt: TagTok)
     ensures
         !insert_html_element(p, tt).0.stopped ==> insert_html_element(p, tt).0.open == p.open.push(insert_html_element(p, tt).1),
+        !insert_html_element(p, tt).0.stopped ==> insert_html_element(p, tt).0.mode == p.mode
+            && insert_html_element(p, tt).0.original_mode == p.original_mode,
         insert_html_element(p, tt).1.ns == Namespace::Html,
 {
     let ip = appropriate_place(p, None).parent;
@@ -685,6 +778,8 @@ pub proof fn lemma_insert_html_keeps_frame(p: Parser, tt: TagTok)
 pub proof fn lemma_ceft_frame(p: Parser, t: TagTok, ns: Namespace, ip: NodeId)
     ensures
         !create_element_for_token(p, t, ns, ip).0.stopped ==> create_element_for_token(p, t, ns, ip).0.open == p.open,
+        !create_element_for_token(p, t, ns, ip).0.stopped ==> create_element_for_token(p, t, ns, ip).0.mode == p.mode
+            && create_element_for_token(p, t, ns, ip).0.original_mode == p.original_mode,
         create_element_for_token(p, t, ns, ip).1.ns == ns,
 {
 }

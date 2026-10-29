@@ -4,6 +4,8 @@
 //! only entries above it.
 
 #[cfg(verus_only)]
+use super::cells::*;
+#[cfg(verus_only)]
 use super::helpers::*;
 #[cfg(verus_only)]
 use super::lists::*;
@@ -28,19 +30,30 @@ pub open spec fn on_stack_from(o: Seq<Elem>, from: int, id: NodeId) -> bool {
     exists|j: int| from <= j < o.len() && (#[trigger] o[j]).id == id
 }
 
-/// Replace entry `i >= 1` of the stack with a tagged element that is not a
-/// `template`.
+/// Replace entry `i >= 1` of the stack (above the last cell in the "in
+/// cell" mode) with a tagged element that is not a `template` nor a cell.
 pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
     requires
         live(p),
         !p.stopped ==> 1 <= i < p.open.len(),
         elem_tagged(e),
         !is_html(e, Tag::Template),
+        !cell_pred()(e),
+        in_cell(p) ==> i > last_cell(p.open),
     ensures
         keeps(p, Parser { open: p.open.update(i, e), ..p }),
+        in_cell(p) ==> last_cell(p.open.update(i, e)) == last_cell(p.open),
 {
     let q = Parser { open: p.open.update(i, e), ..p };
     if !p.stopped {
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies exists|k: int|
+            0 <= k < p.open.len() && (#[trigger] p.open[k]) == q.open[j] by {
+            assert(p.open[j] == q.open[j]);
+        }
+        lemma_cells_wf_open(p, q);
+        if in_cell(p) {
+            lemma_cell_update(p.open, i, e);
+        }
         assert(q.open[0] == p.open[0]);
         assert forall|j: int| 0 <= j < q.open.len() implies elem_tagged(#[trigger] q.open[j]) by {
             if j != i {
@@ -53,19 +66,34 @@ pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
     }
 }
 
-/// Insert a tagged element that is not a `template` at index `i >= 1` of
-/// the stack.
+/// Insert a tagged element that is not a `template` nor a cell at index
+/// `i >= 1` of the stack (above the last cell in the "in cell" mode).
 pub proof fn lemma_open_insert_keeps(p: Parser, i: int, e: Elem)
     requires
         live(p),
         !p.stopped ==> 1 <= i <= p.open.len(),
         elem_tagged(e),
         !is_html(e, Tag::Template),
+        !cell_pred()(e),
+        in_cell(p) ==> i > last_cell(p.open),
     ensures
         keeps(p, Parser { open: p.open.insert(i, e), ..p }),
 {
     let q = Parser { open: p.open.insert(i, e), ..p };
     if !p.stopped {
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies exists|k: int|
+            0 <= k < p.open.len() && (#[trigger] p.open[k]) == q.open[j] by {
+            if j < i {
+                assert(p.open[j] == q.open[j]);
+            } else {
+                assert(j != i);
+                assert(p.open[j - 1] == q.open[j]);
+            }
+        }
+        lemma_cells_wf_open(p, q);
+        if in_cell(p) {
+            lemma_cell_insert(p.open, i, e);
+        }
         assert(q.open[0] == p.open[0]);
         assert forall|j: int| 0 <= j < q.open.len() implies elem_tagged(#[trigger] q.open[j]) by {
             if j < i {
@@ -145,14 +173,15 @@ pub proof fn lemma_in_formatting_update(f: Seq<Fmt>, k: int, x: Fmt, id: NodeId)
     crate::exec::modes::adoption::lemma_fmt_index_of_found(g, g.len() as int, id, j);
 }
 
-/// What the inner loop keeps: formattingElement at `fe_idx >= 1`,
-/// furthestBlock on the stack from `node_idx` on, formattingElement in the
-/// list.
+/// What the inner loop keeps: formattingElement at `fe_idx >= 1` (above
+/// the last cell in the "in cell" mode), furthestBlock on the stack from
+/// `node_idx` on, formattingElement in the list.
 pub open spec fn inner_pre(p: Parser, fe: Elem, fb_id: NodeId, fe_idx: int, node_idx: int) -> bool {
     &&& 1 <= fe_idx < node_idx <= p.open.len()
     &&& p.open[fe_idx].id == fe.id
     &&& on_stack_from(p.open, node_idx, fb_id)
     &&& fmt_index_of(p.formatting, p.formatting.len() as int, fe.id) >= 0
+    &&& in_cell(p) ==> last_cell(p.open) < fe_idx
 }
 
 /// Step 4.16.4.
@@ -228,6 +257,7 @@ pub proof fn lemma_inner_replace_keeps(
     let pa = Parser { formatting: p2.formatting.update(k, x), ..p2 };
     assert(fmt_fresh(p2, x));
     lemma_fmt_update_keeps(p2, k, x);
+    assert(pa.open == p1.open);
     lemma_open_update_keeps(pa, i, new_element);
     let p3 = Parser { formatting: p2.formatting.update(k, x), open: p2.open.update(i, new_element), ..p2 };
     assert(p3 == Parser { open: pa.open.update(i, new_element), ..pa });
@@ -288,6 +318,9 @@ pub proof fn lemma_ai_keeps(
     lemma_keeps_live(p, p1);
     if !in_formatting(p1, node_id) {
         let p2 = remove_open_at(p1, i);
+        if in_cell(p1) {
+            lemma_cell_remove(p1.open, i);
+        }
         lemma_remove_open_keeps(p1, i);
         lemma_keeps_trans(p, p1, p2);
         lemma_keeps_live(p1, p2);
@@ -357,12 +390,14 @@ pub proof fn lemma_mid_stack_keeps(p: Parser, fe_id: NodeId, fb_id: NodeId, ne: 
         live(p),
         elem_tagged(ne),
         !is_html(ne, Tag::Template),
+        !cell_pred()(ne),
         !p.stopped ==> {
             &&& 1 <= fe_idx < p.open.len()
             &&& p.open[fe_idx].id == fe_id
             &&& on_stack_from(p.open, fe_idx + 1, fb_id)
             &&& fb_id != fe_id
         },
+        in_cell(p) ==> last_cell(p.open) < fe_idx,
     ensures
         keeps(p, Parser { open: crate::exec::modes::adoption::mid_stack(p, fe_id, fb_id, ne), ..p }),
 {
@@ -374,6 +409,9 @@ pub proof fn lemma_mid_stack_keeps(p: Parser, fe_id: NodeId, fb_id: NodeId, ne: 
     assert(r == last_index_where(p.open, p.open.len() as int, fef));
     crate::exec::stack::lemma_last_index_where_found(p.open, p.open.len() as int, fef, fe_idx);
     let pc = remove_open_at(p, r);
+    if in_cell(p) {
+        lemma_cell_remove(p.open, r);
+    }
     lemma_remove_open_keeps(p, r);
     let o1 = p.open.remove(r);
     let jb = choose|jb: int| fe_idx + 1 <= jb < p.open.len() && (#[trigger] p.open[jb]).id == fb_id;
@@ -524,6 +562,13 @@ pub proof fn lemma_ao_keeps(p: Parser, tt: TagTok, counter: nat)
         return;
     }
     assert(fe_idx >= 1);
+    if cell_pred()(p.open[fe_idx]) {
+        assert(cell_fresh(p, p.open[fe_idx].id));
+        assert(f[fi] is Entry);
+    }
+    if in_cell(p) {
+        lemma_scope_cell(p.open, fef, Scope::Default);
+    }
     crate::exec::modes::adoption::lemma_first_special_from(p.open, fe_idx + 1);
     let fb_idx = first_special_from(p.open, fe_idx + 1);
     if fb_idx < 0 {
@@ -548,12 +593,13 @@ pub proof fn lemma_ao_keeps(p: Parser, tt: TagTok, counter: nat)
 }
 
 /// The adoption agency algorithm, then (step 4.3) "any other end tag", for a
-/// tagged token that is not `html`.
+/// tagged token that is not `html`, `td` or `th`.
 pub proof fn lemma_in_body_adoption_keeps(p: Parser, tt: TagTok)
     requires
         live(p),
         tok_tagged(tt),
         tt.tag != Tag::Html,
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
     ensures
         keeps(p, in_body_adoption(p, tt)),
 {
@@ -568,6 +614,7 @@ pub proof fn lemma_in_body_adoption_keeps(p: Parser, tt: TagTok)
                     assert(elem_tagged(p.open[0]));
                 }
             }
+            assert(elem_tagged(p.open[p.open.len() - 1]));
         }
         lemma_pop_keeps(p);
     } else {

@@ -5,6 +5,8 @@
 #[cfg(verus_only)]
 use super::body::*;
 #[cfg(verus_only)]
+use super::cells::*;
+#[cfg(verus_only)]
 use super::early::*;
 #[cfg(verus_only)]
 use super::helpers::*;
@@ -33,7 +35,8 @@ pub proof fn lemma_pop_until_cell_is(p: Parser)
     }
 }
 
-/// "Close the cell", with a cell on the stack.
+/// "Close the cell", with a cell on the stack (proven on the parser put in
+/// the "in row" mode, the mode it ends in: it pops the cell).
 pub proof fn lemma_close_the_cell(p: Parser)
     requires
         good(p),
@@ -43,15 +46,74 @@ pub proof fn lemma_close_the_cell(p: Parser)
     ensures
         next_core(Outcome::Reprocess(close_the_cell(p), Tok::Eof)),
 {
-    let k = lemma_has_k(p.open, cell_pred());
-    let q = generate_implied_end_tags(p, None);
+    let p0 = mode_as(p, Mode::InRow);
+    assert(good(p0));
+    let k = lemma_has_k(p0.open, cell_pred());
+    let q = generate_implied_end_tags(p0, None);
     lemma_pop_until_cell_is(q);
-    lemma_close_keeps(p, None, cell_pred(), k);
+    lemma_close_keeps(p0, None, cell_pred(), k);
     let q2 = pop_until_cell_popped(q);
-    lemma_keeps_live(p, q2);
+    lemma_keeps_live(p0, q2);
     lemma_clear_keeps(q2);
-    lemma_keeps_trans(p, q2, clear_to_last_marker(q2));
-    lemma_to_mode(p, clear_to_last_marker(q2), Mode::InRow);
+    lemma_keeps_trans(p0, q2, clear_to_last_marker(q2));
+    lemma_to_mode(p0, clear_to_last_marker(q2), Mode::InRow);
+    let fi = crate::exec::modes::in_body_start_lemmas::implied_pred(None);
+    let r = generate_implied_end_tags(p, None);
+    assert(r == pop_while(p, fi));
+    assert(q == pop_while(p0, fi));
+    lemma_pop_while_mode(p, fi, Mode::InRow);
+    lemma_pop_until_cell_is(r);
+    lemma_pop_until_where_mode(r, cell_pred(), Mode::InRow);
+    lemma_clear_mode(pop_until_cell_popped(r), Mode::InRow);
+}
+
+/// The "in cell" `td` and `th` end tags with the token's element in table
+/// scope (proven on the parser put in the "in row" mode, the mode they end
+/// in: they pop the cell).
+pub proof fn lemma_cell_end_cell(p: Parser, tt: TagTok)
+    requires
+        good(p),
+        !p.stopped,
+        modes_ok(p),
+        tok_tagged(tt),
+        tt.tag == Tag::Td || tt.tag == Tag::Th,
+        has_same_name_in_table_scope(p, tt),
+    ensures
+        next_core(
+            Outcome::Done(
+                Parser {
+                    mode: Mode::InRow,
+                    ..clear_to_last_marker(pop_until_popped(generate_implied_end_tags(p, None), tt.tag))
+                },
+            ),
+        ),
+{
+    let p0 = mode_as(p, Mode::InRow);
+    assert(good(p0));
+    let g = |e: Elem| e.ns == Namespace::Html && e.name == tt.name;
+    assert(!g(p0.open[0])) by {
+        assert(elem_tagged(p0.open[0]));
+    }
+    assert(has_same_name_in_table_scope(p0, tt));
+    let k = lemma_scope_k(p0.open, g, Scope::Table);
+    assert(elem_tagged(p0.open[k]));
+    let f = |e: Elem| is_html(e, tt.tag);
+    let q = generate_implied_end_tags(p0, None);
+    crate::exec::stack::lemma_pop_until_popped(q, tt.tag);
+    lemma_close_keeps(p0, None, f, k);
+    let q2 = pop_until_popped(q, tt.tag);
+    lemma_keeps_live(p0, q2);
+    lemma_clear_keeps(q2);
+    lemma_keeps_trans(p0, q2, clear_to_last_marker(q2));
+    lemma_to_mode(p0, clear_to_last_marker(q2), Mode::InRow);
+    let fi = crate::exec::modes::in_body_start_lemmas::implied_pred(None);
+    let r = generate_implied_end_tags(p, None);
+    assert(r == pop_while(p, fi));
+    assert(q == pop_while(p0, fi));
+    lemma_pop_while_mode(p, fi, Mode::InRow);
+    crate::exec::stack::lemma_pop_until_popped(r, tt.tag);
+    lemma_pop_until_where_mode(r, f, Mode::InRow);
+    lemma_clear_mode(pop_until_popped(r, tt.tag), Mode::InRow);
 }
 
 /// The "in cell" rules.
@@ -70,22 +132,7 @@ pub proof fn lemma_in_cell_reach(env: EncFns, p: Parser, t: Tok)
     if t is End && (t->End_0.tag == Tag::Td || t->End_0.tag == Tag::Th) {
         let tt = t->End_0;
         if has_same_name_in_table_scope(p, tt) {
-            let g = |e: Elem| e.ns == Namespace::Html && e.name == tt.name;
-            assert(!g(p.open[0])) by {
-                assert(elem_tagged(p.open[0]));
-            }
-            let k = lemma_scope_k(p.open, g, Scope::Table);
-            assert(elem_tagged(p.open[k]));
-            let f = |e: Elem| is_html(e, tt.tag);
-            let q = generate_implied_end_tags(p, None);
-            crate::exec::stack::lemma_pop_until_popped(q, tt.tag);
-            reveal(generate_implied_end_tags);
-            lemma_close_keeps(p, None, f, k);
-            let q2 = pop_until_popped(q, tt.tag);
-            lemma_keeps_live(p, q2);
-            lemma_clear_keeps(q2);
-            lemma_keeps_trans(p, q2, clear_to_last_marker(q2));
-            lemma_to_mode(p, clear_to_last_marker(q2), Mode::InRow);
+            lemma_cell_end_cell(p, tt);
         }
     } else if (t is Start && (t->Start_0.tag == Tag::Caption || t->Start_0.tag == Tag::Col || t->Start_0.tag == Tag::Colgroup
         || t->Start_0.tag == Tag::Tbody || t->Start_0.tag == Tag::Td || t->Start_0.tag == Tag::Tfoot || t->Start_0.tag
@@ -103,13 +150,47 @@ pub proof fn lemma_in_cell_reach(env: EncFns, p: Parser, t: Tok)
 // ---------------------------------------------------------------------
 // "in template"
 
-/// The "in template" end-of-file token with a `template` on the stack.
+/// The "in template" end-of-file token with a `template` on the stack
+/// (proven on the parser put in the "in body" mode: in the "in cell" mode
+/// it pops the cell, and the mode is reset).
 pub proof fn lemma_in_template_eof(p: Parser)
     requires
         good(p),
         !p.stopped,
         modes_ok(p),
         open_has_html(p, Tag::Template),
+    ensures
+        ({
+            let p1 = pop_until_popped(p, Tag::Template);
+            let p2 = clear_to_last_marker(p1);
+            let p3 = Parser { template_modes: p2.template_modes.drop_last(), ..p2 };
+            next_core(Outcome::Reprocess(reset_insertion_mode(p3), Tok::Eof))
+        }),
+{
+    let p0 = mode_as(p, Mode::InBody);
+    assert(good(p0));
+    lemma_in_template_eof0(p0);
+    let f = |e: Elem| is_html(e, Tag::Template);
+    crate::exec::stack::lemma_pop_until_popped(p, Tag::Template);
+    crate::exec::stack::lemma_pop_until_popped(p0, Tag::Template);
+    lemma_pop_until_where_mode(p, f, Mode::InBody);
+    let p1 = pop_until_popped(p, Tag::Template);
+    lemma_clear_mode(p1, Mode::InBody);
+    let p2 = clear_to_last_marker(p1);
+    let p3 = Parser { template_modes: p2.template_modes.drop_last(), ..p2 };
+    assert(Parser { template_modes: p2.template_modes.drop_last(), ..mode_as(p2, Mode::InBody) } == mode_as(p3, Mode::InBody));
+    lemma_reset_from_mode(p3, Mode::InBody, p3.open.len() - 1);
+    assert(reset_insertion_mode(mode_as(p3, Mode::InBody)) == reset_insertion_mode(p3));
+}
+
+/// [`lemma_in_template_eof`] outside the "in cell" mode.
+pub proof fn lemma_in_template_eof0(p: Parser)
+    requires
+        good(p),
+        !p.stopped,
+        modes_ok(p),
+        open_has_html(p, Tag::Template),
+        p.mode != Mode::InCell,
     ensures
         ({
             let p1 = pop_until_popped(p, Tag::Template);
@@ -343,6 +424,10 @@ pub proof fn lemma_foreign_loop(p: Parser, t: Tok, i: int)
         crate::exec::stack::lemma_pop_until_node_popped(p, p.open[i].id);
         crate::exec::modes::in_body_start_lemmas::lemma_pop_until_where_prefix(p, f);
         crate::exec::stack::lemma_last_index_where_found(p.open, p.open.len() as int, f, i);
+        lemma_cell_top(p.open);
+        if in_cell(p) {
+            assert(p.open[last_cell(p.open)].ns == Namespace::Html);
+        }
         lemma_pop_until_node_popped_keeps(p, p.open[i].id, i);
         let q = pop_until_node_popped(p, p.open[i].id);
         assert forall|h: int| 0 <= h < p.open.len() && (#[trigger] p.open[h]).ns == Namespace::Html implies q.open.len() > h
@@ -419,6 +504,7 @@ pub proof fn lemma_foreign_ok_breakout(env: EncFns, p: Parser, t: Tok)
     hide(svg_script_end);
     let f = |e: Elem|
         !(is_mathml_text_integration_point(e) || is_html_integration_point(e) || e.ns == Namespace::Html);
+    lemma_cell_top(p.open);
     lemma_pop_while_keeps(p, f);
     crate::termination::helpers_tables::lemma_pop_while(p, f);
 }

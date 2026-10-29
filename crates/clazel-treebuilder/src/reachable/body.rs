@@ -4,6 +4,8 @@
 #[cfg(verus_only)]
 use super::adoption::*;
 #[cfg(verus_only)]
+use super::cells::*;
+#[cfg(verus_only)]
 use super::early::*;
 #[cfg(verus_only)]
 use super::helpers::*;
@@ -38,12 +40,14 @@ pub proof fn lemma_flags_keeps(p: Parser, q: Parser)
     assert(crate::termination::template_count(q) == crate::termination::template_count(p));
 }
 
-/// Then "insert an HTML element" (not `template`).
+/// Then "insert an HTML element" (not `template`, nor a cell in the "in
+/// cell" mode).
 pub proof fn lemma_then_insert(p: Parser, q: Parser, tt: TagTok)
     requires
         keeps(p, q),
         tok_tagged(tt),
         tt.tag != Tag::Template,
+        tt.tag == Tag::Td || tt.tag == Tag::Th ==> p.mode != Mode::InCell,
     ensures
         keeps(p, insert_html_element(q, tt).0),
 {
@@ -58,6 +62,7 @@ pub proof fn lemma_then_insert_pop(p: Parser, q: Parser, tt: TagTok)
         keeps(p, q),
         tok_tagged(tt),
         tt.tag != Tag::Template,
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
     ensures
         keeps(p, insert_and_pop(q, tt)),
 {
@@ -133,13 +138,14 @@ pub proof fn lemma_ib_done(p: Parser, q: Parser)
     }
 }
 
-/// Pop the current node when it is not `html`.
+/// Pop the current node when it is not `html` (nor a cell).
 pub proof fn lemma_pop_not_html(p: Parser)
     requires
         good(p),
         !p.stopped,
         p.open.len() > 0,
         !is_html(current_node(p), Tag::Html),
+        !cell_pred()(current_node(p)),
     ensures
         keeps(p, pop(p)),
 {
@@ -153,6 +159,7 @@ pub proof fn lemma_ib_text(p: Parser, q: Parser, tt: TagTok, rawtext: bool)
         rooted_mode(p.mode),
         keeps(p, q),
         tok_tagged(tt),
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
         tt.tag != Tag::Template,
     ensures
         next_core(Outcome::Done(generic_text_parsing(q, tt, rawtext))),
@@ -221,11 +228,120 @@ pub proof fn lemma_ib_body(p: Parser, tt: TagTok)
     }
 }
 
-/// Case 10, `frameset`.
+/// Case 10, `frameset` (proven on the parser put in the "in body" mode:
+/// in the "in cell" mode it pops the cell, and switches to "in
+/// frameset").
 pub proof fn lemma_ib_frameset(p: Parser, tt: TagTok)
     requires
         ib_pre(p, tt),
         tt.tag == Tag::Frameset,
+    ensures
+        next_core(Outcome::Done(in_body_start_frameset(p, tt))),
+{
+    if p.open.len() == 1 || !is_html(p.open[1], Tag::Body) || !p.frameset_ok {
+        lemma_keeps_refl(p);
+        lemma_ib_done(p, p);
+    } else {
+        let p0 = mode_as(p, Mode::InBody);
+        assert(good(p0));
+        lemma_ib_frameset0(p0, tt);
+        let q1 = dom_remove(p, p.open[1].id);
+        let q2 = Parser { open: q1.open.take(1), ..q1 };
+        assert(dom_remove(p0, p0.open[1].id) == mode_as(q1, Mode::InBody));
+        assert(Parser { open: q1.open.take(1), ..mode_as(q1, Mode::InBody) } == mode_as(q2, Mode::InBody));
+        lemma_insert_html_mode(q2, tt, Mode::InBody);
+        assert(in_body_start_frameset(p0, tt) == in_body_start_frameset(p, tt));
+    }
+}
+
+/// [`appropriate_place`] does not read the mode.
+pub proof fn lemma_place_mode(p: Parser, m: Mode)
+    ensures
+        appropriate_place(mode_as(p, m), None) == appropriate_place(p, None),
+        adjusted_location(mode_as(p, m), None) == adjusted_location(p, None),
+{
+}
+
+/// [`create`] does not read the mode.
+pub proof fn lemma_create_mode(p: Parser, k: NodeKind, m: Mode)
+    ensures
+        create(mode_as(p, m), k) == (mode_as(create(p, k).0, m), create(p, k).1),
+{
+}
+
+/// [`create_element_for_token`] does not read the mode.
+pub proof fn lemma_ceft_mode(p: Parser, tt: TagTok, ns: Namespace, ip: NodeId, m: Mode)
+    ensures
+        create_element_for_token(mode_as(p, m), tt, ns, ip) == (
+            mode_as(create_element_for_token(p, tt, ns, ip).0, m),
+            create_element_for_token(p, tt, ns, ip).1,
+        ),
+{
+    hide(create);
+    hide(same_tree);
+    hide(parsing_template_contents);
+    let pm = mode_as(p, m);
+    assert(parsing_template_contents(pm) == parsing_template_contents(p)) by {
+        reveal(parsing_template_contents);
+    }
+    let owner = if is_form_associated(ns, tt.tag) && p.form is Some && !parsing_template_contents(p) && p.context is None && (
+    !is_listed(ns, tt.tag) || !has_attr(tt, name_form())) && same_tree(p.doc, ip, p.form->Some_0) {
+        p.form
+    } else {
+        None
+    };
+    let k = NodeKind::Element {
+        namespace: Some(ns),
+        prefix: None,
+        local_name: tt.name,
+        attributes: tt.attrs,
+        template_contents: None,
+        form_owner: owner,
+    };
+    lemma_create_mode(p, k, m);
+}
+
+/// [`insert_element_at`] does not read the mode.
+pub proof fn lemma_iea_mode(p: Parser, el: NodeId, m: Mode)
+    ensures
+        insert_element_at(mode_as(p, m), el, None) == mode_as(insert_element_at(p, el, None), m),
+{
+    hide(dom_insert);
+    hide(appropriate_place);
+    lemma_place_mode(p, m);
+    assert(dom_insert(mode_as(p, m), el, adjusted_location(p, None).parent, adjusted_location(p, None).child) == mode_as(
+        dom_insert(p, el, adjusted_location(p, None).parent, adjusted_location(p, None).child),
+        m,
+    )) by {
+        reveal(dom_insert);
+    }
+}
+
+/// [`insert_html_element`] does not read the mode.
+pub proof fn lemma_insert_html_mode(p: Parser, tt: TagTok, m: Mode)
+    ensures
+        insert_html_element(mode_as(p, m), tt).0 == mode_as(insert_html_element(p, tt).0, m),
+        insert_html_element(mode_as(p, m), tt).1 == insert_html_element(p, tt).1,
+{
+    hide(appropriate_place);
+    hide(create_element_for_token);
+    hide(insert_element_at);
+    let pm = mode_as(p, m);
+    lemma_place_mode(p, m);
+    let ip = appropriate_place(p, None).parent;
+    lemma_ceft_mode(p, tt, Namespace::Html, ip, m);
+    let (p1, e) = create_element_for_token(p, tt, Namespace::Html, ip);
+    lemma_iea_mode(p1, e.id, m);
+    let p2 = insert_element_at(p1, e.id, None);
+    assert(push(mode_as(p2, m), e) == mode_as(push(p2, e), m));
+}
+
+/// [`lemma_ib_frameset`] outside the "in cell" mode.
+pub proof fn lemma_ib_frameset0(p: Parser, tt: TagTok)
+    requires
+        ib_pre(p, tt),
+        tt.tag == Tag::Frameset,
+        p.mode != Mode::InCell,
     ensures
         next_core(Outcome::Done(in_body_start_frameset(p, tt))),
 {
@@ -364,6 +480,7 @@ pub proof fn lemma_then_push_formatting(p: Parser, q: Parser, tt: TagTok)
         keeps(p, q),
         tok_tagged(tt),
         tt.tag != Tag::Template,
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
     ensures
         keeps(p, push_formatting(insert_html_element(q, tt).0, insert_html_element(q, tt).1, tt)),
 {
@@ -377,6 +494,66 @@ pub proof fn lemma_then_push_formatting(p: Parser, q: Parser, tt: TagTok)
     }
     lemma_push_formatting_keeps(q1, e, tt);
     lemma_keeps_trans(p, q1, push_formatting(q1, e, tt));
+}
+
+/// Case 29's removal of the `a` element (whose id `a_id` is not the last
+/// cell's in the "in cell" mode) from the list and the stack.
+pub proof fn lemma_a_remove(p: Parser, q1: Parser, a_id: NodeId)
+    requires
+        good(p),
+        !p.stopped,
+        keeps(p, q1),
+        !q1.stopped,
+        a_id != p.open[0].id,
+        in_cell(p) ==> p.open[last_cell(p.open)].id != a_id,
+    ensures
+        ({
+            let k = fmt_index_of(q1.formatting, q1.formatting.len() as int, a_id);
+            let q2 = if k >= 0 {
+                Parser { formatting: q1.formatting.remove(k), ..q1 }
+            } else {
+                q1
+            };
+            let j = open_index_of(q2, a_id);
+            keeps(
+                p,
+                if j >= 0 {
+                    remove_open_at(q2, j)
+                } else {
+                    q2
+                },
+            )
+        }),
+{
+    lemma_keeps_live(p, q1);
+    let k = fmt_index_of(q1.formatting, q1.formatting.len() as int, a_id);
+    let q2 = if k >= 0 {
+        Parser { formatting: q1.formatting.remove(k), ..q1 }
+    } else {
+        q1
+    };
+    if k >= 0 {
+        crate::exec::modes::adoption::lemma_fmt_index_of(q1.formatting, q1.formatting.len() as int, a_id);
+        lemma_fmt_remove_keeps(q1, k);
+        lemma_keeps_trans(p, q1, q2);
+    }
+    let ff = id_is(a_id);
+    let j = open_index_of(q2, a_id);
+    assert(j == last_index_where(q2.open, q2.open.len() as int, ff));
+    if j >= 0 {
+        crate::termination::helpers_ranking::lemma_last_index_where(q2.open, q2.open.len() as int, ff);
+        assert(j != 0);
+        assert(q2.open[j].id == a_id);
+        lemma_keeps_live(p, q2);
+        if in_cell(q2) {
+            assert(in_cell(p));
+            assert(q2.open[last_cell(q2.open)] == p.open[last_cell(p.open)]);
+        }
+        lemma_remove_open_keeps(q2, j);
+        lemma_keeps_trans(p, q2, remove_open_at(q2, j));
+    } else {
+        lemma_keeps_live(p, q2);
+    }
 }
 
 /// Case 29, `a`.
@@ -422,29 +599,15 @@ pub proof fn lemma_ib_a(p: Parser, tt: TagTok)
         );
         let a = f[i]->Entry_elem;
         lemma_fmt_entries_fresh(p, i);
+        lemma_cell_top(p.open);
+        if in_cell(p) {
+            assert(cell_fresh(p, p.open[last_cell(p.open)].id));
+            assert(f[i] is Entry);
+        }
         lemma_in_body_adoption_keeps(p, tt);
         let q1 = in_body_adoption(p, tt);
         if !q1.stopped {
-            let k = fmt_index_of(q1.formatting, q1.formatting.len() as int, a.id);
-            let q2 = if k >= 0 {
-                Parser { formatting: q1.formatting.remove(k), ..q1 }
-            } else {
-                q1
-            };
-            if k >= 0 {
-                crate::exec::modes::adoption::lemma_fmt_index_of(q1.formatting, q1.formatting.len() as int, a.id);
-                lemma_fmt_remove_keeps(q1, k);
-                lemma_keeps_trans(p, q1, q2);
-            }
-            let ff = id_is(a.id);
-            let j = open_index_of(q2, a.id);
-            assert(j == last_index_where(q2.open, q2.open.len() as int, ff));
-            if j >= 0 {
-                crate::termination::helpers_ranking::lemma_last_index_where(q2.open, q2.open.len() as int, ff);
-                assert(j != 0);
-                lemma_remove_open_keeps(q2, j);
-                lemma_keeps_trans(p, q2, remove_open_at(q2, j));
-            }
+            lemma_a_remove(p, q1, a.id);
         }
     } else {
         lemma_keeps_refl(p);
@@ -650,6 +813,7 @@ pub proof fn lemma_ib_ruby(p: Parser, tt: TagTok, except: Option<Tag>)
     requires
         ib_pre(p, tt),
         tt.tag != Tag::Template,
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
     ensures
         next_core(Outcome::Done(insert_html_element(if has_in_scope(p, Tag::Ruby, Scope::Default) {
             generate_implied_end_tags(p, except)

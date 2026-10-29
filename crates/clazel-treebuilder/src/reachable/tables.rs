@@ -27,6 +27,7 @@ pub proof fn lemma_clear_back_keeps(p: Parser, f: spec_fn(Elem) -> bool, k: int)
     requires
         good(p),
         !p.stopped,
+        p.mode != Mode::InCell,
         !f(p.open[0]),
         1 <= k < p.open.len(),
         !f(p.open[k]),
@@ -47,6 +48,7 @@ pub proof fn lemma_to_mode(p: Parser, q1: Parser, m: Mode)
         keeps(p, q1),
         rooted_mode(m),
         m == Mode::InTemplate ==> p.template_modes.len() > 0,
+        m == Mode::InCell && p.mode != Mode::InCell && !q1.stopped ==> has_cell(q1.open),
     ensures
         next_core(Outcome::Done(Parser { mode: m, ..q1 })),
         next_core(Outcome::Reprocess(Parser { mode: m, ..q1 }, Tok::Eof)),
@@ -172,6 +174,7 @@ pub proof fn lemma_in_table_section(p: Parser, t: Tok, tt: TagTok)
     requires
         good(p),
         !p.stopped,
+        p.mode != Mode::InCell,
         modes_ok(p),
         rooted_mode(p.mode),
         tok_tagged(tt),
@@ -504,6 +507,7 @@ pub proof fn lemma_close_caption(p: Parser)
     requires
         good(p),
         !p.stopped,
+        p.mode != Mode::InCell,
         modes_ok(p),
         has_in_scope(p, Tag::Caption, Scope::Table),
     ensures
@@ -605,6 +609,8 @@ pub proof fn lemma_clear_pop(p: Parser, f: spec_fn(Elem) -> bool, k: int, m: Mod
     requires
         good(p),
         !p.stopped,
+        p.mode != Mode::InCell,
+        m != Mode::InCell,
         modes_ok(p),
         rooted_mode(m),
         m != Mode::InTemplate,
@@ -617,6 +623,7 @@ pub proof fn lemma_clear_pop(p: Parser, f: spec_fn(Elem) -> bool, k: int, m: Mod
 {
     lemma_clear_back_keeps(p, f, k);
     let p1 = pop_while(p, f);
+    assert(!in_cell(p1));
     lemma_pop_keeps(p1);
     lemma_keeps_trans(p, p1, pop(p1));
     lemma_to_mode(p, pop(p1), m);
@@ -693,6 +700,17 @@ pub proof fn lemma_in_row_reach(env: EncFns, p: Parser, t: Tok)
         lemma_keeps_live(p, p2);
         lemma_push_marker_keeps(p2);
         lemma_keeps_trans(p, p2, push_marker(p2));
+        if !p2.stopped {
+            reveal(insert_html_element);
+            lemma_insert_html_keeps(p1, t->Start_0);
+            let e = insert_html_element(p1, t->Start_0).1;
+            assert(p2.open == p1.open.push(e));
+            assert(push_marker(p2).open == p2.open) by {
+                reveal(push_marker);
+            }
+            assert(cell_pred()(e));
+            crate::exec::stack::lemma_last_index_where_found(p2.open, p2.open.len() as int, cell_pred(), p2.open.len() - 1);
+        }
         lemma_to_mode(p, push_marker(p2), Mode::InCell);
         assert(push_marker(p3) == Parser { mode: Mode::InCell, ..push_marker(p2) }) by {
             reveal(push_marker);

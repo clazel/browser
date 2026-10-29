@@ -59,73 +59,6 @@ pub proof fn lemma_rules_reach(env: EncFns, r: Rules, p: Parser, t: Tok)
     }
 }
 
-/// The "in row" rules keep [`cell_ok`].
-pub proof fn lemma_row_cell(env: EncFns, p: Parser, t: Tok)
-    requires
-        rules_inv(Rules::Html(Mode::InRow), p, t),
-    ensures
-        outcome_parser(mode_in_row(env, p, t)).stopped || cell_ok(outcome_parser(mode_in_row(env, p, t))),
-{
-    hide(clear_stack_back_to_table_row_context);
-    hide(push_marker);
-    hide(insert_html_element);
-    assert(p.mode == Mode::InRow);
-    if t is Start && (t->Start_0.tag == Tag::Th || t->Start_0.tag == Tag::Td) {
-        let p1 = clear_stack_back_to_table_row_context(p);
-        let (p2, e) = insert_html_element(p1, t->Start_0);
-        assert(e.tag == t->Start_0.tag && e.ns == Namespace::Html) by {
-            reveal(insert_html_element);
-            lemma_insert_html_keeps_frame(p1, t->Start_0);
-            lemma_ceft_frame(p1, t->Start_0, Namespace::Html, appropriate_place(p1, None).parent);
-        }
-        assert(!p2.stopped ==> p2.open == p1.open.push(e)) by {
-            reveal(insert_html_element);
-            lemma_insert_html_keeps_frame(p1, t->Start_0);
-        }
-        let q = push_marker(Parser { mode: Mode::InCell, ..p2 });
-        assert(q.open == p2.open && q.stopped == p2.stopped) by {
-            reveal(push_marker);
-        }
-        if !q.stopped {
-            assert(q.open[q.open.len() - 1] == e);
-            assert(cell_pred()(e));
-            crate::exec::stack::lemma_last_index_where_found(q.open, q.open.len() as int, cell_pred(), q.open.len() - 1);
-        }
-    }
-}
-
-/// The "in cell" rules keep [`cell_ok`].
-pub proof fn lemma_cell_cell(env: EncFns, p: Parser, t: Tok)
-    requires
-        rules_inv(Rules::Html(Mode::InCell), p, t),
-    ensures
-        outcome_parser(mode_in_cell(env, p, t)).stopped || cell_ok(outcome_parser(mode_in_cell(env, p, t))),
-{
-    hide(generate_implied_end_tags);
-    hide(pop_until_cell_popped);
-    hide(pop_until_popped);
-    hide(clear_to_last_marker);
-    assert(p.mode == Mode::InCell);
-}
-
-/// The "in row" and "in cell" rules keep [`cell_ok`]; the others do under
-/// the hypothesis [`cells_kept`].
-pub proof fn lemma_rules_cell(env: EncFns, r: Rules, p: Parser, t: Tok)
-    requires
-        rules_inv(r, p, t),
-        cells_kept(),
-    ensures
-        outcome_parser(apply_rules(env, r, p, t)).stopped || cell_ok(outcome_parser(apply_rules(env, r, p, t))),
-{
-    if r == Rules::Html(Mode::InRow) {
-        lemma_row_cell(env, p, t);
-    } else if r == Rules::Html(Mode::InCell) {
-        lemma_cell_cell(env, p, t);
-    } else {
-        assert(rules_inv(r, p, t) && r != Rules::Html(Mode::InCell) && r != Rules::Html(Mode::InRow));
-    }
-}
-
 /// [`rules_inv`] gives what the executable rules need of the stack.
 pub proof fn lemma_rules_inv_rooted(r: Rules, p: Parser, t: Tok)
     requires
@@ -149,7 +82,6 @@ pub proof fn lemma_rules_inv_rooted(r: Rules, p: Parser, t: Tok)
 pub proof fn lemma_run_reach(env: EncFns, p: Parser, t: Tok, r: Rules, fuel: nat)
     requires
         rules_inv(r, p, t),
-        cells_kept(),
     ensures
         run_needs(env, p, t, r, fuel),
         run(env, p, t, r, fuel) is Some ==> reachable_inv(run(env, p, t, r, fuel)->Some_0),
@@ -159,7 +91,6 @@ pub proof fn lemma_run_reach(env: EncFns, p: Parser, t: Tok, r: Rules, fuel: nat
         let o = apply_rules(env, r, p, t);
         lemma_rules_inv_rooted(r, p, t);
         lemma_rules_reach(env, r, p, t);
-        lemma_rules_cell(env, r, p, t);
         crate::termination::lemma_rules_edges(env, r, p, t);
         crate::exec::step::lemma_rules_tok(env, r, p, t);
         match o {
@@ -203,14 +134,13 @@ pub proof fn lemma_dispatch_inv(p1: Parser, t: Tok)
 }
 
 /// **The step keeps the reachable-state invariant** (Phase 4 item 4.10):
-/// for a parser satisfying [`reachable_inv`], under the hypothesis
-/// [`cells_kept`], every rule application of `dispatch(env, p, token)`
-/// meets `rooted_needs` ([`dispatch_needs`], what the executable step
-/// needs), and the new state satisfies [`reachable_inv`].
+/// for a parser satisfying [`reachable_inv`], every rule application of
+/// `dispatch(env, p, token)` meets `rooted_needs` ([`dispatch_needs`], what
+/// the executable step needs), and the new state satisfies
+/// [`reachable_inv`].
 pub proof fn lemma_dispatch_reach(env: EncFns, p: Parser, token: Token)
     requires
         reachable_inv(p),
-        cells_kept(),
     ensures
         dispatch_needs(env, p, token),
         reachable_inv(dispatch(env, p, token).0),
@@ -326,7 +256,6 @@ pub open spec fn dispatch_steps(env: EncFns, p: Parser, tokens: Seq<Token>) -> P
 pub proof fn lemma_steps_reach(env: EncFns, p: Parser, tokens: Seq<Token>)
     requires
         reachable_inv(p),
-        cells_kept(),
     ensures
         reachable_inv(dispatch_steps(env, p, tokens)),
     decreases tokens.len(),
@@ -361,8 +290,7 @@ pub proof fn lemma_reach_total(env: EncFns, q: Parser)
 /// and every rule application of its next step meets what the executable
 /// step needs ([`lemma_dispatch_reach`]).
 ///
-/// Hypothesis: [`cells_kept`] (not yet proven; see there). Not stated:
-/// `parser_wf` of reachable parsers (`clazel_dom::spec::wf` of the
+/// Not stated: `parser_wf` of reachable parsers (`clazel_dom::spec::wf` of the
 /// document and the ids of the parse state), which the executable step
 /// keeps (`exec::step::step` ensures `parser_inv`) but which has no
 /// spec-level proof yet.
@@ -374,8 +302,6 @@ pub proof fn theorem_reachable(
     tentative: bool,
     tokens: Seq<Token>,
 )
-    requires
-        cells_kept(),
     ensures
         reachable_inv(dispatch_steps(env, new_parser(url, scripting, tentative), tokens)),
         reachable_inv(dispatch_steps(env, fragment_parser(ctx, scripting).0, tokens)),

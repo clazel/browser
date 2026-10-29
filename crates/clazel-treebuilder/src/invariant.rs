@@ -227,79 +227,108 @@ pub open spec fn has_cell(o: Seq<Elem>) -> bool {
     last_index_where(o, o.len() as int, cell_pred()) >= 0
 }
 
+/// The index of the last `td` or `th` element of the stack `o` (-1 if
+/// none).
+pub open spec fn last_cell(o: Seq<Elem>) -> int {
+    last_index_where(o, o.len() as int, cell_pred())
+}
+
 /// In the "in cell" insertion mode the stack holds a cell (§13.2.6.4.15,
 /// "close the cell": "Assert: The stack of open elements has a td or th
 /// element in table scope"; the start tags and end tags that close the
 /// cell pop until one has been popped).
-pub open spec fn cell_ok(p: Parser) -> bool {
+pub open spec fn in_cell_ok(p: Parser) -> bool {
     p.mode == Mode::InCell ==> has_cell(p.open)
 }
 
+/// [`in_cell_ok`], also for the "in cell" mode a parser returns to: in
+/// "text" over "in cell" the stack below the current node holds a cell,
+/// and "in table text" never returns to "in cell" (the "in table" rules,
+/// which switch to it, are never applied in the "in cell" mode).
+pub open spec fn cell_ok(p: Parser) -> bool {
+    &&& in_cell_ok(p)
+    &&& p.mode == Mode::Text && p.original_mode == Mode::InCell ==> has_cell(p.open.drop_last())
+    &&& p.mode == Mode::InTableText ==> p.original_mode != Mode::InCell
+}
+
+/// The id `id` of a cell on the stack names a node of the arena, and
+/// neither the form element pointer nor an entry of the list of active
+/// formatting elements is for it: the rules that remove an element by its
+/// id ("a" start tag, "form" end tag) never remove a cell.
+pub open spec fn cell_fresh(p: Parser, id: NodeId) -> bool {
+    &&& id < p.doc.nodes.len()
+    &&& p.form != Some(id)
+    &&& forall|i: int| 0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry ==> p.formatting[i]->Entry_elem.id != id
+}
+
+/// Facts about cells and ids: every entry of the list of active formatting
+/// elements is for a node of the arena, and neither its element nor its
+/// token is a cell (the parser pushes entries only for the formatting
+/// tags); the form element pointer names a node of the arena; every cell
+/// on the stack is [`cell_fresh`]. (So the elements the parser creates,
+/// whose ids are new, are never in the list, the form pointer, or the
+/// stack's cells.)
+pub open spec fn cells_wf(p: Parser) -> bool {
+    &&& forall|i: int|
+        0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry ==> p.formatting[i]->Entry_elem.id
+            < p.doc.nodes.len() && !cell_pred()(p.formatting[i]->Entry_elem) && p.formatting[i]->Entry_token.tag != Tag::Td
+            && p.formatting[i]->Entry_token.tag != Tag::Th
+    &&& match p.form {
+        Some(f) => f < p.doc.nodes.len(),
+        None => true,
+    }
+    &&& forall|j: int| 0 <= j < p.open.len() && cell_pred()(#[trigger] p.open[j]) ==> cell_fresh(p, p.open[j].id)
+}
+
 /// The reachable-state facts of a running parser: the stack's [`shape`],
-/// [`root_ids`] and [`tags_wf`].
+/// [`root_ids`], [`tags_wf`], [`cells_wf`] and [`cell_ok`].
 pub open spec fn reach_core(p: Parser) -> bool {
-    shape(p) && root_ids(p) && tags_wf(p)
+    shape(p) && root_ids(p) && tags_wf(p) && cells_wf(p) && cell_ok(p)
 }
 
 /// **The reachable-state invariant**: a stopped parser (which takes no
 /// further step), or one whose modes satisfy `termination::modes_ok` (the
-/// hypothesis of `termination::theorem_dispatch_total`), [`reach_core`]
-/// and [`cell_ok`].
+/// hypothesis of `termination::theorem_dispatch_total`) and
+/// [`reach_core`].
 pub open spec fn reachable_inv(p: Parser) -> bool {
-    p.stopped || (crate::termination::modes_ok(p) && reach_core(p) && cell_ok(p))
+    p.stopped || (crate::termination::modes_ok(p) && reach_core(p))
 }
 
 /// What a set of rules other than the current mode's needs (the rule
 /// applications "using the rules for" another mode makes): the "in head"
 /// rules get only the tokens [`crate::termination::headish`] lists; the
-/// "in body" rules get a parser in a [`rooted_mode`], or the `html` start
-/// tag; the "in table" and "in template" rules a parser in a
-/// [`rooted_mode`]; no other rules are used so; never before the `html`
-/// element exists. Foreign content needs a parser in foreign content (as
-/// the dispatcher chooses it).
+/// "in body" rules get a parser in a [`rooted_mode`] (in the "in cell"
+/// mode, not a `td` or `th` end tag, which the "in cell" rules handle
+/// themselves), or the `html` start tag; the "in template" rules a parser
+/// in a [`rooted_mode`]; the "in table" rules one in a [`rooted_mode`]
+/// other than "in cell" (they are used only by "in table body" and "in
+/// row"); no other rules are used so; never before the `html` element
+/// exists. Foreign content needs a parser in foreign content (as the
+/// dispatcher chooses it).
 pub open spec fn rules_need(r: Rules, p: Parser, t: Tok) -> bool {
     match r {
         Rules::Foreign => in_foreign_content(p),
         Rules::Html(m) => m == p.mode || (p.mode != Mode::Initial && p.mode != Mode::BeforeHtml && match m {
             Mode::InHead => crate::termination::headish(t),
-            Mode::InBody => rooted_mode(p.mode) || crate::termination::is_start(t, Tag::Html),
-            Mode::InTable | Mode::InTemplate => rooted_mode(p.mode),
+            Mode::InBody => (rooted_mode(p.mode) && !(p.mode == Mode::InCell && (crate::termination::is_end(t, Tag::Td)
+                || crate::termination::is_end(t, Tag::Th)))) || crate::termination::is_start(t, Tag::Html),
+            Mode::InTable => rooted_mode(p.mode) && p.mode != Mode::InCell,
+            Mode::InTemplate => rooted_mode(p.mode),
             _ => false,
         }),
     }
 }
 
 /// The invariant at every rule application of a token's run: a running
-/// parser satisfying `termination::modes_ok`, [`reach_core`], [`cell_ok`]
-/// and the rules' [`rules_need`], a tagged token, and
-/// `termination::rules_ok`.
+/// parser satisfying `termination::modes_ok`, [`reach_core`] and the
+/// rules' [`rules_need`], a tagged token, and `termination::rules_ok`.
 pub open spec fn rules_inv(r: Rules, p: Parser, t: Tok) -> bool {
     &&& !p.stopped
     &&& crate::exec::modes::initial::tok_ok(t)
     &&& crate::termination::modes_ok(p)
     &&& crate::termination::rules_ok(r, p)
     &&& reach_core(p)
-    &&& cell_ok(p)
     &&& rules_need(r, p, t)
-}
-
-/// **Not yet proven** (an explicit hypothesis of `exec::step::step` and
-/// `reachable::theorem_reachable`): every rule application other than the
-/// "in row" and "in cell" rules keeps [`cell_ok`]. It holds in the
-/// standard (§13.2.6.4.15's assertion), but the proof needs, for the "in
-/// body" rules and foreign content applied in the "in cell" mode, that the
-/// cell is never popped (every pop they make is to an element in a scope
-/// whose boundary list holds `td` and `th`), and for "reset the insertion
-/// mode appropriately" that "in cell" is chosen only on a cell; the
-/// reachable-state proofs track the stack's root, not its other boundary
-/// elements. The "in row" and "in cell" rules themselves are proven to keep
-/// it (`reachable::lemma_rules_cell`).
-pub open spec fn cells_kept() -> bool {
-    forall|env: EncFns, r: Rules, p: Parser, t: Tok|
-        rules_inv(r, p, t) && r != Rules::Html(Mode::InCell) && r != Rules::Html(Mode::InRow) ==> {
-            let q = outcome_parser(#[trigger] apply_rules(env, r, p, t));
-            q.stopped || cell_ok(q)
-        }
 }
 
 // ---------------------------------------------------------------------

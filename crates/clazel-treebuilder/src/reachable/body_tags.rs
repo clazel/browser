@@ -405,6 +405,8 @@ pub proof fn lemma_ib_close_named(p: Parser, tt: TagTok, except: Option<Tag>, s:
         !p.stopped,
         tok_tagged(tt),
         tt.tag != Tag::Html,
+        tt.tag != Tag::Td && tt.tag != Tag::Th,
+        s != Scope::Table,
         in_scope_from(p.open, p.open.len() as int, |e: Elem| is_html_named(e, tt.name), s),
         !crate::exec::modes::in_body_start_lemmas::implied_pred(except)(Elem { tag: tt.tag, ns: Namespace::Html, ..p.open[0] }),
     ensures
@@ -494,7 +496,39 @@ pub proof fn lemma_ib_end_reach(p: Parser, t: Tok, tt: TagTok)
             lemma_ib_close_named(p, tt, Some(g), Scope::Default);
             lemma_ib_done(p, pop_until_named_popped(generate_implied_end_tags(p, Some(g)), tt.name));
         }
-    } else if is_heading_tag(g) {
+    } else {
+        lemma_ib_end_reach2(p, t, tt);
+    }
+}
+
+/// The "in body" end tags from case 24 on (headings).
+pub proof fn lemma_ib_end_reach2(p: Parser, t: Tok, tt: TagTok)
+    requires
+        rules_inv(Rules::Html(Mode::InBody), p, t),
+        t == Tok::End(tt),
+        !(tt.tag == Tag::Template || tt.tag == Tag::Body || tt.tag == Tag::Html || is_block_end_tag(tt.tag) || tt.tag
+            == Tag::Form || tt.tag == Tag::P || tt.tag == Tag::Li || tt.tag == Tag::Dd || tt.tag == Tag::Dt),
+    ensures
+        next_core(in_body_end_tag(p, t, tt)),
+{
+    hide(in_body_end_same_name);
+    hide(in_body_end_form);
+    hide(insert_html_element);
+    hide(close_p_element);
+    hide(generate_implied_end_tags);
+    hide(pop_until_named_popped);
+    hide(pop_until_heading_popped);
+    hide(in_body_any_other_end_tag);
+    hide(in_body_adoption);
+    hide(clear_to_last_marker);
+    hide(in_body_void_start_tag);
+    hide(pop_until_popped);
+    let g = tt.tag;
+    assert(rooted_mode(p.mode));
+    assert(good(p));
+    assert(in_cell(p) ==> g != Tag::Td && g != Tag::Th);
+    lemma_keeps_refl(p);
+    if is_heading_tag(g) {
         if has_heading_in_scope(p) {
             let f = |e: Elem| e.ns == Namespace::Html && (e.tag == Tag::H1 || e.tag == Tag::H2 || e.tag == Tag::H3 || e.tag
                 == Tag::H4 || e.tag == Tag::H5 || e.tag == Tag::H6);
@@ -559,6 +593,11 @@ pub proof fn lemma_ib_end_form(p: Parser)
                 if j >= 0 {
                     crate::termination::helpers_ranking::lemma_last_index_where(q1.open, q1.open.len() as int, ff);
                     assert(j != 0);
+                    super::cells::lemma_cell_top(p.open);
+                    if in_cell(p) {
+                        assert(cell_fresh(p, p.open[last_cell(p.open)].id));
+                        assert(q1.open[j].id == n);
+                    }
                     lemma_remove_open_keeps(q1, j);
                     lemma_keeps_trans(p, q1, remove_open_at(q1, j));
                     lemma_ib_done(p, remove_open_at(q1, j));

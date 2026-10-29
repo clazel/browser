@@ -10,6 +10,19 @@
 //! [`keeps`] that (the `helpers` submodule), under the condition its
 //! callers check (an element in scope above `html`, a fresh element); the
 //! per-mode lemmas compose them and check each mode's [`shape`].
+//!
+//! The cells. In the "in cell" mode the stack holds a cell ([`cell_ok`]),
+//! and [`keeps`] keeps its last cell ([`cell_kept`]): every pop a rule
+//! applied in that mode makes stops above the last cell (a scope search
+//! whose list holds `td` and `th` finds its target above it, "any other
+//! end tag" and foreign content stop at special or HTML elements, the
+//! adoption agency's formattingElement is in scope), and the rules that
+//! remove an element by id never name a cell ([`cells_wf`]: no entry of the
+//! list of active formatting elements, nor the form element pointer, has a
+//! cell's id). The rules that do pop the cell switch the mode ("close the
+//! cell", the `template` end tag, "in template"'s end of file, the
+//! `frameset` start tag); they are proven on the parser put in another mode
+//! (`cells::mode_as`).
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -19,6 +32,7 @@ use vstd::prelude::*;
 pub mod adoption;
 pub mod body;
 pub mod body_tags;
+pub mod cells;
 pub mod early;
 pub mod helpers;
 pub mod lists;
@@ -42,13 +56,24 @@ mod spec {
 verus! {
 
 /// A running parser's stack is rooted, the `html` element's id is fresh,
-/// its records are tagged, and no entry of the list of active formatting
-/// elements is for a `template` start tag.
+/// its records are tagged, no entry of the list of active formatting
+/// elements is for a `template` start tag, the cells' ids are fresh
+/// ([`cells_wf`]), and in the "in cell" mode the stack holds a cell.
 pub open spec fn good(p: Parser) -> bool {
     &&& rooted_seq(p.open)
     &&& root_ids(p)
     &&& tags_wf(p)
     &&& crate::termination::formatting_ok(p)
+    &&& cells_wf(p)
+    &&& in_cell_ok(p)
+}
+
+/// In the "in cell" mode, `q`'s stack holds a cell, its last cell `p`'s
+/// last cell (the record).
+pub open spec fn cell_kept(p: Parser, q: Parser) -> bool {
+    p.mode == Mode::InCell && has_cell(p.open) ==> has_cell(q.open) && q.open[last_cell(q.open)] == p.open[last_cell(
+        p.open,
+    )]
 }
 
 /// A stopped or [`good`] parser.
@@ -58,8 +83,9 @@ pub open spec fn live(p: Parser) -> bool {
 
 /// `q` comes from `p` by steps that keep [`good`], the `html` element, the
 /// modes, the context and the stack of template insertion modes, grow the
-/// document and add no `template` element to the stack; or `q` has stopped.
-/// A stopped parser stays stopped.
+/// document, add no `template` element to the stack and (in the "in cell"
+/// mode) keep the last cell ([`cell_kept`]); or `q` has stopped. A stopped
+/// parser stays stopped.
 pub open spec fn keeps(p: Parser, q: Parser) -> bool {
     &&& p.stopped ==> q.stopped
     &&& !q.stopped ==> {
@@ -71,6 +97,7 @@ pub open spec fn keeps(p: Parser, q: Parser) -> bool {
         &&& q.context == p.context
         &&& q.template_modes == p.template_modes
         &&& crate::termination::template_count(q) <= crate::termination::template_count(p)
+        &&& cell_kept(p, q)
     }
 }
 
@@ -134,8 +161,8 @@ pub proof fn lemma_core_frame(p: Parser, q: Parser)
 {
 }
 
-/// A parser [`keeps`] made, put in a [`rooted_mode`], has [`reach_core`]
-/// and `modes_ok`.
+/// A parser [`keeps`] made, put in a [`rooted_mode`] (one other than "in
+/// cell" unless it has a cell), has [`reach_core`] and `modes_ok`.
 pub proof fn lemma_finish(p: Parser, q1: Parser, q: Parser)
     requires
         crate::termination::modes_ok(p),
@@ -149,6 +176,7 @@ pub proof fn lemma_finish(p: Parser, q1: Parser, q: Parser)
         q.stopped == q1.stopped,
         rooted_mode(q.mode),
         q.mode == Mode::InTemplate ==> q.template_modes.len() > 0,
+        q.mode == Mode::InCell && q.mode != q1.mode ==> has_cell(q.open),
     ensures
         !q.stopped ==> reach_core(q) && crate::termination::modes_ok(q),
 {

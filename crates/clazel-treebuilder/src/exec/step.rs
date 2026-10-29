@@ -16,10 +16,8 @@
 //! `reachable::lemma_dispatch_reach` proves that it gives
 //! [`dispatch_needs`] and that `dispatch` keeps it, so [`step`] requires and
 //! ensures it, and [`new_parser_exec`] and [`fragment_parser_exec`] return
-//! parsers satisfying it. That proof has one hypothesis not yet proven,
-//! [`crate::invariant::cells_kept`] (the "in cell" mode always has a cell
-//! on the stack), which [`step`] requires explicitly. Everything else the
-//! modes require is proven here: `parser_inv` (their contracts keep it),
+//! parsers satisfying it. Everything else the modes require is proven
+//! here: `parser_inv` (their contracts keep it),
 //! `!stopped` (the loop ends when parsing stops), the tags of the
 //! reprocessed tokens ([`lemma_rules_tok`]), `termination::rules_ok` (from
 //! `termination::lemma_rules_edges`), the mode of "text", and
@@ -805,14 +803,11 @@ proof fn lemma_inv_bookkeeping(p: Parser, q: Parser)
 /// [`parser_inv`] and the reachable-state invariant
 /// [`crate::invariant::reachable_inv`], both of which it keeps (so every
 /// parser [`new_parser_exec`] or [`fragment_parser_exec`] returns can be
-/// stepped any number of times), and the hypothesis
-/// [`crate::invariant::cells_kept`] (a closed statement about the spec's
-/// rules, not yet proven; see the module comment).
+/// stepped any number of times).
 pub fn step<E: EncFnsExec>(p: &mut ParserBuf, env: &E, token: ExecToken) -> (actions: Vec<ExecAction>)
     requires
         parser_inv(old(p)@),
         reachable_inv(old(p)@),
-        cells_kept(),
     ensures
         (final(p)@, actions_view(actions@)) == dispatch(env.enc(), old(p)@, token@),
         parser_inv(final(p)@),

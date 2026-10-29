@@ -1,6 +1,8 @@
 //! Each helper of the transcription [`keeps`] a live parser, under the
 //! condition its callers check (see [`super`]).
 
+#[cfg(verus_only)]
+use super::cells::*;
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
@@ -11,17 +13,33 @@ verus! {
 // ---------------------------------------------------------------------
 // The stack of open elements
 
-/// A non-empty prefix of the stack, nothing else changed.
+/// The parser is in the "in cell" mode (with a cell).
+pub open spec fn in_cell(p: Parser) -> bool {
+    !p.stopped && p.mode == Mode::InCell && has_cell(p.open)
+}
+
+/// A non-empty prefix of the stack (holding the last cell in the "in cell"
+/// mode), nothing else changed.
 pub proof fn lemma_prefix_keeps(p: Parser, q: Parser)
     requires
         live(p),
         q == (Parser { open: q.open, ..p }),
         !p.stopped ==> 1 <= q.open.len() <= p.open.len(),
         forall|j: int| 0 <= j < q.open.len() ==> #[trigger] q.open[j] == p.open[j],
+        in_cell(p) ==> q.open.len() > last_cell(p.open),
     ensures
         keeps(p, q),
+        in_cell(p) ==> last_cell(q.open) == last_cell(p.open),
 {
     if !p.stopped {
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies exists|k: int|
+            0 <= k < p.open.len() && (#[trigger] p.open[k]) == q.open[j] by {
+            assert(p.open[j] == q.open[j]);
+        }
+        lemma_cells_wf_open(p, q);
+        if in_cell(p) {
+            lemma_cell_prefix(p.open, q.open);
+        }
         assert(q.open[0] == p.open[0]);
         assert forall|i: int| 0 <= i < q.open.len() implies elem_tagged(#[trigger] q.open[i]) by {
             assert(q.open[i] == p.open[i]);
@@ -33,29 +51,36 @@ pub proof fn lemma_prefix_keeps(p: Parser, q: Parser)
     }
 }
 
-/// "Pop the current node" when it is not the only one.
+/// "Pop the current node" when it is not the only one (nor, in the "in
+/// cell" mode, a cell).
 pub proof fn lemma_pop_keeps(p: Parser)
     requires
         live(p),
         !p.stopped ==> p.open.len() >= 2,
+        in_cell(p) ==> !cell_pred()(current_node(p)),
     ensures
         keeps(p, pop(p)),
 {
     if !p.stopped {
         let q = pop(p);
         assert forall|j: int| 0 <= j < q.open.len() implies #[trigger] q.open[j] == p.open[j] by {}
+        if in_cell(p) {
+            lemma_cell_top(p.open);
+        }
         lemma_prefix_keeps(p, q);
     }
 }
 
 /// Pop while the current node satisfies `f`, which the `html` element does
-/// not.
+/// not (nor, in the "in cell" mode, the last cell).
 pub proof fn lemma_pop_while_keeps(p: Parser, f: spec_fn(Elem) -> bool)
     requires
         live(p),
         !p.stopped ==> !f(p.open[0]),
+        in_cell(p) ==> !f(p.open[last_cell(p.open)]),
     ensures
         keeps(p, pop_while(p, f)),
+        in_cell(p) ==> last_cell(pop_while(p, f).open) == last_cell(p.open),
 {
     crate::termination::helpers_tables::lemma_pop_while(p, f);
     let q = pop_while(p, f);
@@ -64,15 +89,20 @@ pub proof fn lemma_pop_while_keeps(p: Parser, f: spec_fn(Elem) -> bool)
         assert(!f(p.open[0]));
         assert(q.open.len() > 0);
     }
+    if in_cell(p) {
+        lemma_cell_top(p.open);
+        assert(q.open.len() > last_cell(p.open));
+    }
     lemma_prefix_keeps(p, q);
 }
 
 /// Pop until an entry satisfying `f` has been popped, when one is at index
-/// `k >= 1`.
+/// `k >= 1` (above the last cell in the "in cell" mode).
 pub proof fn lemma_pop_until_where_keeps(p: Parser, f: spec_fn(Elem) -> bool, k: int)
     requires
         live(p),
         !p.stopped ==> 1 <= k < p.open.len() && f(p.open[k]),
+        in_cell(p) ==> k > last_cell(p.open),
     ensures
         keeps(p, crate::exec::stack::pop_until_where(p, f)),
         crate::exec::stack::pop_until_where(p, f) == (Parser { open: crate::exec::stack::pop_until_where(p, f).open, ..p }),
@@ -86,7 +116,8 @@ pub proof fn lemma_pop_until_where_keeps(p: Parser, f: spec_fn(Elem) -> bool, k:
 }
 
 /// An entry in scope that the `html` element is not is at an index
-/// `k >= 1`.
+/// `k >= 1`, above the last cell if it is not a cell and the scope is not
+/// table scope.
 pub proof fn lemma_scope_k(o: Seq<Elem>, f: spec_fn(Elem) -> bool, s: Scope) -> (k: int)
     requires
         o.len() > 0,
@@ -95,10 +126,16 @@ pub proof fn lemma_scope_k(o: Seq<Elem>, f: spec_fn(Elem) -> bool, s: Scope) -> 
     ensures
         1 <= k < o.len(),
         f(o[k]),
+        k == last_index_where(o, o.len() as int, f),
+        s != Scope::Table && !cell_pred()(o[k]) ==> last_cell(o) < k,
 {
     crate::exec::modes::in_body_start_lemmas::lemma_scope_liw(o, o.len() as int, f, s);
     crate::termination::helpers_ranking::lemma_last_index_where(o, o.len() as int, f);
-    last_index_where(o, o.len() as int, f)
+    let k = last_index_where(o, o.len() as int, f);
+    if s != Scope::Table && !cell_pred()(o[k]) {
+        lemma_scope_cell(o, f, s);
+    }
+    k
 }
 
 /// An entry on the stack that the `html` element is not is at an index
@@ -122,6 +159,7 @@ pub proof fn lemma_pop_until_popped_keeps(p: Parser, tag: Tag, k: int)
     requires
         live(p),
         !p.stopped ==> 1 <= k < p.open.len() && is_html(p.open[k], tag),
+        in_cell(p) ==> k > last_cell(p.open),
     ensures
         keeps(p, pop_until_popped(p, tag)),
         pop_until_popped(p, tag) == (Parser { open: pop_until_popped(p, tag).open, ..p }),
@@ -137,6 +175,7 @@ pub proof fn lemma_pop_until_heading_popped_keeps(p: Parser, k: int)
     requires
         live(p),
         !p.stopped ==> 1 <= k < p.open.len() && is_heading(p.open[k]),
+        in_cell(p) ==> k > last_cell(p.open),
     ensures
         keeps(p, pop_until_heading_popped(p)),
         pop_until_heading_popped(p) == (Parser { open: pop_until_heading_popped(p).open, ..p }),
@@ -151,6 +190,7 @@ pub proof fn lemma_pop_until_node_popped_keeps(p: Parser, id: NodeId, k: int)
     requires
         live(p),
         !p.stopped ==> 1 <= k < p.open.len() && p.open[k].id == id,
+        in_cell(p) ==> k > last_cell(p.open),
     ensures
         keeps(p, pop_until_node_popped(p, id)),
         pop_until_node_popped(p, id) == (Parser { open: pop_until_node_popped(p, id).open, ..p }),
@@ -177,6 +217,7 @@ pub proof fn lemma_pop_until_named_popped_keeps(p: Parser, name: Seq<u32>, k: in
     requires
         live(p),
         !p.stopped ==> 1 <= k < p.open.len() && is_html_named(p.open[k], name),
+        in_cell(p) ==> k > last_cell(p.open),
     ensures
         keeps(p, pop_until_named_popped(p, name)),
         pop_until_named_popped(p, name) == (Parser { open: pop_until_named_popped(p, name).open, ..p }),
@@ -186,16 +227,30 @@ pub proof fn lemma_pop_until_named_popped_keeps(p: Parser, name: Seq<u32>, k: in
     lemma_pop_until_where_keeps(p, f, k);
 }
 
-/// Remove the entry at index `i >= 1`.
+/// Remove the entry at index `i >= 1` (not the last cell in the "in cell"
+/// mode).
 pub proof fn lemma_remove_open_keeps(p: Parser, i: int)
     requires
         live(p),
         !p.stopped ==> 1 <= i < p.open.len(),
+        in_cell(p) ==> i != last_cell(p.open),
     ensures
         keeps(p, remove_open_at(p, i)),
 {
     let q = remove_open_at(p, i);
     if !p.stopped {
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies exists|k: int|
+            0 <= k < p.open.len() && (#[trigger] p.open[k]) == q.open[j] by {
+            if j < i {
+                assert(p.open[j] == q.open[j]);
+            } else {
+                assert(p.open[j + 1] == q.open[j]);
+            }
+        }
+        lemma_cells_wf_open(p, q);
+        if in_cell(p) {
+            lemma_cell_remove(p.open, i);
+        }
         assert(q.open[0] == p.open[0]);
         assert forall|j: int| 0 <= j < q.open.len() implies elem_tagged(#[trigger] q.open[j]) by {
             if j < i {
@@ -239,18 +294,37 @@ pub proof fn lemma_templates_in_remove(o: Seq<Elem>, i: int, j: int)
     }
 }
 
-/// Push a tagged element that is not a `template`.
+/// Push a tagged element that is not a `template`, nor a cell unless the
+/// mode is not "in cell" and its id is fresh.
 pub proof fn lemma_push_keeps(p: Parser, e: Elem)
     requires
         live(p),
         elem_tagged(e),
         !is_html(e, Tag::Template),
+        !p.stopped && cell_pred()(e) ==> p.mode != Mode::InCell && cell_fresh(p, e.id),
     ensures
         keeps(p, push(p, e)),
         !p.stopped ==> push(p, e).open == p.open.push(e),
 {
     if !p.stopped {
         let q = push(p, e);
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies cell_fresh(q, q.open[j].id) by {
+            if j < p.open.len() {
+                assert(q.open[j] == p.open[j]);
+                assert(cell_fresh(p, p.open[j].id));
+            } else {
+                assert(q.open[j] == e);
+                assert(cell_fresh(p, e.id));
+            }
+        }
+        assert(cells_wf(q));
+        if in_cell(p) {
+            lemma_cell_push(p.open, e);
+            lemma_cell_top(p.open);
+            assert(q.open[last_cell(p.open)] == p.open[last_cell(p.open)]);
+            assert(q.open[last_cell(q.open)] == p.open[last_cell(p.open)]);
+        }
+        assert(in_cell_ok(q));
         assert(q.open[0] == p.open[0]);
         assert forall|i: int| 0 <= i < q.open.len() implies elem_tagged(#[trigger] q.open[i]) by {
             if i < p.open.len() {
@@ -270,6 +344,7 @@ pub proof fn lemma_implied_keeps(p: Parser, except: Option<Tag>)
     ensures
         keeps(p, generate_implied_end_tags(p, except)),
         generate_implied_end_tags(p, except) == (Parser { open: generate_implied_end_tags(p, except).open, ..p }),
+        in_cell(p) ==> last_cell(generate_implied_end_tags(p, except).open) == last_cell(p.open),
         crate::termination::helpers_tables::is_prefix(generate_implied_end_tags(p, except).open, p.open),
         forall|i: int|
             0 <= i < p.open.len() && !crate::exec::modes::in_body_start_lemmas::implied_pred(except)(#[trigger] p.open[i])
@@ -278,13 +353,18 @@ pub proof fn lemma_implied_keeps(p: Parser, except: Option<Tag>)
     let f = crate::exec::modes::in_body_start_lemmas::implied_pred(except);
     assert(generate_implied_end_tags(p, except) == pop_while(p, f));
     crate::termination::helpers_tables::lemma_pop_while(p, f);
+    if in_cell(p) {
+        lemma_cell_top(p.open);
+    }
     lemma_pop_while_keeps(p, f);
 }
 
-/// "Generate all implied end tags thoroughly".
+/// "Generate all implied end tags thoroughly" (not in the "in cell" mode,
+/// where it may pop the cell).
 pub proof fn lemma_thorough_keeps(p: Parser)
     requires
         live(p),
+        !in_cell(p),
     ensures
         keeps(p, generate_all_implied_end_tags_thoroughly(p)),
         generate_all_implied_end_tags_thoroughly(p) == (Parser { open: generate_all_implied_end_tags_thoroughly(p).open, ..p }),
@@ -309,6 +389,7 @@ pub proof fn lemma_close_keeps(p: Parser, except: Option<Tag>, f: spec_fn(Elem) 
         !p.stopped ==> 1 <= k < p.open.len() && f(p.open[k]) && !crate::exec::modes::in_body_start_lemmas::implied_pred(
             except,
         )(p.open[k]),
+        in_cell(p) ==> k > last_cell(p.open),
     ensures
         keeps(p, crate::exec::stack::pop_until_where(generate_implied_end_tags(p, except), f)),
 {
@@ -431,6 +512,7 @@ pub proof fn lemma_ceft_keeps(p: Parser, t: TagTok, ns: Namespace, ip: NodeId)
             &&& q == (Parser { doc: q.doc, ..p })
             &&& e.id as int == p.doc.nodes.len()
             &&& e.id < q.doc.nodes.len()
+            &&& id_new(q, e.id)
         },
         create_element_for_token(p, t, ns, ip).1.ns == ns,
         create_element_for_token(p, t, ns, ip).1.tag == t.tag,
@@ -460,6 +542,13 @@ pub proof fn lemma_ceft_keeps(p: Parser, t: TagTok, ns: Namespace, ip: NodeId)
             lemma_doc_keeps(p1, Parser { doc: d, ..p1 });
         }
     }
+    let (q, e) = create_element_for_token(p, t, ns, ip);
+    if !q.stopped {
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies q.open[j].id != e.id by {
+            assert(q.open[j] == p.open[j]);
+            assert(cell_fresh(p, p.open[j].id));
+        }
+    }
 }
 
 /// "Insert an element at the adjusted insertion location".
@@ -475,13 +564,15 @@ pub proof fn lemma_insert_element_at_keeps(p: Parser, el: NodeId, loc: Option<Lo
     lemma_dom_insert_keeps(p, el, l.parent, l.child);
 }
 
-/// "Insert a foreign element" for a tagged token, not an HTML `template`:
-/// the stack gains the new, fresh, tagged element.
+/// "Insert a foreign element" for a tagged token, not an HTML `template`
+/// (nor a cell in the "in cell" mode): the stack gains the new, fresh,
+/// tagged element.
 pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
     requires
         live(p),
         tok_tagged(t),
         !(ns == Namespace::Html && t.tag == Tag::Template),
+        !p.stopped && ns == Namespace::Html && (t.tag == Tag::Td || t.tag == Tag::Th) ==> p.mode != Mode::InCell,
     ensures
         keeps(p, insert_foreign_element(p, t, ns).0),
         !insert_foreign_element(p, t, ns).0.stopped ==> {
@@ -489,6 +580,7 @@ pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
             &&& q == (Parser { doc: q.doc, open: p.open.push(e), ..p })
             &&& e.id as int >= p.doc.nodes.len()
             &&& e.id < q.doc.nodes.len()
+            &&& !cell_pred()(e) ==> id_new(q, e.id)
         },
         insert_foreign_element(p, t, ns).1.ns == ns,
         insert_foreign_element(p, t, ns).1.tag == t.tag,
@@ -501,16 +593,36 @@ pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
     lemma_insert_element_at_keeps(p1, e.id, None);
     let p2 = insert_element_at(p1, e.id, None);
     lemma_keeps_trans(p, p1, p2);
+    if !p2.stopped {
+        assert(p2.form == p.form && p2.formatting == p.formatting && p2.mode == p.mode);
+        assert(e.id as int == p.doc.nodes.len());
+        assert(e.id < p2.doc.nodes.len());
+        assert(p2.form != Some(e.id));
+        assert forall|i: int| 0 <= i < p2.formatting.len() && (#[trigger] p2.formatting[i]) is Entry implies p2.formatting[i]->Entry_elem.id
+            != e.id by {
+            assert(p.formatting[i] == p2.formatting[i]);
+        }
+        assert(cell_fresh(p2, e.id));
+    }
     lemma_push_keeps(p2, e);
     lemma_keeps_trans(p, p2, push(p2, e));
+    let q = push(p2, e);
+    if !q.stopped && !cell_pred()(e) {
+        assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies q.open[j].id != e.id by {
+            assert(q.open[j] == p.open[j]);
+            assert(cell_fresh(p, p.open[j].id));
+        }
+    }
 }
 
-/// "Insert an HTML element" for a tagged token other than `template`.
+/// "Insert an HTML element" for a tagged token other than `template` (nor
+/// a cell in the "in cell" mode).
 pub proof fn lemma_insert_html_keeps(p: Parser, t: TagTok)
     requires
         live(p),
         tok_tagged(t),
         t.tag != Tag::Template,
+        !p.stopped && (t.tag == Tag::Td || t.tag == Tag::Th) ==> p.mode != Mode::InCell,
     ensures
         keeps(p, insert_html_element(p, t).0),
         !insert_html_element(p, t).0.stopped ==> {
@@ -518,6 +630,7 @@ pub proof fn lemma_insert_html_keeps(p: Parser, t: TagTok)
             &&& q == (Parser { doc: q.doc, open: p.open.push(e), ..p })
             &&& e.id as int >= p.doc.nodes.len()
             &&& e.id < q.doc.nodes.len()
+            &&& t.tag != Tag::Td && t.tag != Tag::Th ==> id_new(q, e.id)
         },
         insert_html_element(p, t).1.ns == Namespace::Html,
         insert_html_element(p, t).1.tag == t.tag,
