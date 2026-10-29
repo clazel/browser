@@ -2,14 +2,24 @@
 //! <https://www.rfc-editor.org/rfc/rfc5280.html#section-4.1.1.2>
 //! <https://www.rfc-editor.org/rfc/rfc4055.html#section-5>
 //! <https://www.rfc-editor.org/rfc/rfc8017.html#appendix-A.2.4>
+//! <https://www.rfc-editor.org/rfc/rfc5758.html#section-3.2>
 //!
 //! Modelling choices and limits:
 //! - Inputs are AlgorithmIdentifier values already decoded by the certificate
 //!   envelope/TBSCertificate parsers; this module parses no DER itself.
 //! - The supported profile set is SHA-256, SHA-384, and SHA-512 with
-//!   RSASSA-PKCS1-v1_5. Other OIDs (including RSASSA-PSS) are explicitly
-//!   Unsupported; PSS parameters and other algorithm-specific parameters
-//!   are not interpreted here.
+//!   RSASSA-PKCS1-v1_5, and ECDSA with SHA-256 and with SHA-384. Other OIDs
+//!   (including RSASSA-PSS, ecdsa-with-SHA1 and ecdsa-with-SHA512) are
+//!   explicitly Unsupported; PSS parameters and other algorithm-specific
+//!   parameters are not interpreted here.
+//! - RFC 5758 §3.2 says that for ecdsa-with-SHA256 and ecdsa-with-SHA384
+//!   "the encoding MUST omit the parameters field". A known ECDSA OID with
+//!   any parameters, NULL included, is therefore malformed (`classify` is
+//!   `None`), as a known RSA OID with disallowed parameters is. Unlike RSA
+//!   there is no "accept NULL" allowance, so absent is the only form.
+//! - `Ecdsa(hash)` says only that the identifier is one of those two. Which
+//!   curve the issuer key is on is the key's property (`spki`), not the
+//!   signature identifier's, and is checked by the link verifier.
 //! - RFC 4055 §5 requires NULL parameters for the three supported OIDs and
 //!   also requires implementations to accept parameters absent. Both forms
 //!   classify to the same profile. For matching those profiles, NULL and
@@ -40,10 +50,20 @@ pub enum RsaPkcs1v15Hash {
     Sha512,
 }
 
+/// Hash selection for supported ECDSA certificate signatures (RFC 5758 §3.2).
+pub enum EcdsaHash {
+    /// ecdsa-with-SHA256.
+    Sha256,
+    /// ecdsa-with-SHA384.
+    Sha384,
+}
+
 /// Result of checking one already-decoded signature AlgorithmIdentifier.
 pub enum AlgorithmClass {
     /// One of the initially supported RSA PKCS #1 v1.5 profiles.
     Supported(RsaPkcs1v15Hash),
+    /// ecdsa-with-SHA256 or ecdsa-with-SHA384, parameters absent.
+    Ecdsa(EcdsaHash),
     /// Algorithm is outside this module's implemented profile.
     Unsupported,
 }
@@ -85,8 +105,27 @@ pub open spec fn is_sha512_with_rsa(oid: Seq<nat>) -> bool {
     oid =~= seq![1nat, 2nat, 840nat, 113549nat, 1nat, 1nat, 13nat]
 }
 
-/// RFC 5280 §4.1.1.2 and RFC 4055 §5: classify supported RSA SHA-2 signature IDs.
-/// Known OIDs with disallowed parameters are malformed; unknown OIDs are explicit.
+/// RFC 5758 §3.2: the parameters of an ECDSA signature AlgorithmIdentifier
+/// "MUST" be omitted, so only an absent field is accepted.
+pub open spec fn ecdsa_parameters(parameters: Option<Seq<u8>>) -> bool {
+    parameters is None
+}
+
+/// RFC 5758 §3.2 OID for ecdsa-with-SHA256: { ecdsa-with-SHA2 2 }, i.e.
+/// 1.2.840.10045.4.3.2.
+pub open spec fn is_ecdsa_with_sha256(oid: Seq<nat>) -> bool {
+    oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]
+}
+
+/// RFC 5758 §3.2 OID for ecdsa-with-SHA384: { ecdsa-with-SHA2 3 }, i.e.
+/// 1.2.840.10045.4.3.3.
+pub open spec fn is_ecdsa_with_sha384(oid: Seq<nat>) -> bool {
+    oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]
+}
+
+/// RFC 5280 §4.1.1.2, RFC 4055 §5 and RFC 5758 §3.2: classify supported RSA
+/// SHA-2 and ECDSA SHA-256/384 signature IDs. Known OIDs with disallowed
+/// parameters are malformed; unknown OIDs are explicit.
 pub open spec fn classify(
     algorithm: crate::certificate::spec::AlgorithmIdentifier,
 ) -> Option<AlgorithmClass> {
@@ -102,6 +141,14 @@ pub open spec fn classify(
         if pkcs1_sha2_parameters(algorithm.parameters_der) {
             Some(AlgorithmClass::Supported(RsaPkcs1v15Hash::Sha512))
         } else { None }
+    } else if is_ecdsa_with_sha256(algorithm.oid) {
+        if ecdsa_parameters(algorithm.parameters_der) {
+            Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha256))
+        } else { None }
+    } else if is_ecdsa_with_sha384(algorithm.oid) {
+        if ecdsa_parameters(algorithm.parameters_der) {
+            Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha384))
+        } else { None }
     } else {
         Some(AlgorithmClass::Unsupported)
     }
@@ -116,7 +163,8 @@ pub open spec fn unsupported_identifiers_equal(
 }
 
 /// RFC 5280 §4.1.1.2/.3: prepare signature inputs only when TBS and outer
-/// AlgorithmIdentifiers match and supported signatures are octet-aligned.
+/// AlgorithmIdentifiers match and supported (RSA or ECDSA) signatures are
+/// octet-aligned.
 pub open spec fn prepare_signature(
     tbs_algorithm: crate::certificate::spec::AlgorithmIdentifier,
     outer_algorithm: crate::certificate::spec::AlgorithmIdentifier,
@@ -130,6 +178,13 @@ pub open spec fn prepare_signature(
             Some(PreparedSignature {
                 tbs_algorithm, outer_algorithm,
                 class: AlgorithmClass::Supported(tbs_hash),
+                tbs_der, signature_bits, signature_unused_bits,
+            }),
+        (Some(AlgorithmClass::Ecdsa(tbs_hash)), Some(AlgorithmClass::Ecdsa(outer_hash)))
+            if tbs_hash == outer_hash && signature_unused_bits == 0 =>
+            Some(PreparedSignature {
+                tbs_algorithm, outer_algorithm,
+                class: AlgorithmClass::Ecdsa(tbs_hash),
                 tbs_der, signature_bits, signature_unused_bits,
             }),
         (Some(AlgorithmClass::Unsupported), Some(AlgorithmClass::Unsupported))
