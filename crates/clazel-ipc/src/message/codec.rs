@@ -403,7 +403,7 @@ fn parse_display(n: u64, toks: &[Tok]) -> (r: Option<Msg>)
                 return None;
             },
         }
-        j = j + 1;
+        j = j.saturating_add(1);
     }
     proof {
         super::lemmas::lemma_all_text(rest);
@@ -539,14 +539,17 @@ fn display_tokens(title: &[u8], text: &[u8], links: &[Vec<u8>]) -> (t: Vec<Tok>)
             views(t@) =~= head + super::spec::text_tokens(lv.take(j as int)),
         decreases links.len() - j,
     {
-        let v = copy(links[j].as_slice());
+        let v = match links.get(j) {
+            Some(l) => copy(l.as_slice()),
+            None => Vec::new(),
+        };
         proof {
             lemma_views_push(t@, Tok::Text(v));
             assert(lv.take(j as int + 1) =~= lv.take(j as int).push(lv[j as int]));
             assert(super::spec::text_tokens(lv.take(j as int + 1)) =~= super::spec::text_tokens(lv.take(j as int)).push(crate::cbor::spec::Token::Text(lv[j as int])));
         }
         t.push(Tok::Text(v));
-        j = j + 1;
+        j = j.saturating_add(1);
     }
     assert(lv.take(links.len() as int) =~= lv);
     t

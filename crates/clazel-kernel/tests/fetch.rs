@@ -339,7 +339,10 @@ fn a_tab_opened_without_a_script_fetches_and_commits_the_document() {
     let body = b"<!DOCTYPE html><title>T</title><p>Hi".to_vec();
     let out = k.net(
         0,
-        InputBuf::Bytes(response_with("Content-Type: text/html; charset=utf-8", &body)),
+        InputBuf::Bytes(response_with(
+            "Content-Type: text/html; charset=utf-8",
+            &body,
+        )),
     );
     assert_eq!(
         out,
@@ -407,10 +410,7 @@ fn a_large_body_is_split_into_body_frames_and_read_back_whole() {
     let body: Vec<u8> = (0..2 * chunk + 17).map(|i| (i % 251) as u8).collect();
     let mut raw = Vec::new();
     // The raw write, to count the frames in it.
-    let out = {
-        let Some(s) = k.state.take() else {
-            panic!("no state");
-        };
+    if let Some(s) = k.state.take() {
         let (next, outputs) = clazel_kernel::exec::real_urls::step_real(
             s,
             &EventRecord::Net {
@@ -424,8 +424,8 @@ fn a_large_body_is_split_into_body_frames_and_read_back_whole() {
                 raw = bytes.clone();
             }
         }
-        support::split_frames(&raw)
-    };
+    }
+    let out = support::split_frames(&raw);
     let msgs = out.unwrap_or_default();
     assert_eq!(msgs.len(), 5, "Commit, three Body frames, BodyEnd");
     assert!(matches!(msgs.get(1), Some(Msg::Body { bytes }) if bytes.len() == chunk));

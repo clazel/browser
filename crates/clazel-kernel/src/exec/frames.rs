@@ -265,11 +265,15 @@ fn texts_ok_exec(links: &[Vec<u8>]) -> (r: bool)
             forall|x: int| 0 <= x < j ==> text_ok(#[trigger] lv[x]),
         decreases links.len() - j,
     {
-        if !text_ok_exec(links[j].as_slice()) {
+        let ok = match links.get(j) {
+            Some(l) => text_ok_exec(l.as_slice()),
+            None => true,
+        };
+        if !ok {
             assert(!text_ok(lv[j as int]));
             return false;
         }
-        j = j + 1;
+        j = j.saturating_add(1);
     }
     true
 }
@@ -421,7 +425,7 @@ pub fn commit_frames_exec(url: &[u32], content_type: &[u8], kind: u64, body: &[u
         proof {
             lemma_body_frames_step(body@, pos as nat);
         }
-        let rest = body.len() - pos;
+        let rest = body.len().saturating_sub(pos);
         if rest <= chunk {
             let piece = reply_frame_exec(&Msg::Body { bytes: vstd::slice::slice_to_vec(slice_subrange(body, pos, body.len())) });
             proof {
@@ -435,7 +439,7 @@ pub fn commit_frames_exec(url: &[u32], content_type: &[u8], kind: u64, body: &[u
             pos = body.len();
             assert(out@ + crate::spec::body_frames(body@.skip(pos as int)) =~= out@);
         } else {
-            let end = pos + chunk;
+            let end = pos.saturating_add(chunk);
             let piece = reply_frame_exec(&Msg::Body { bytes: vstd::slice::slice_to_vec(slice_subrange(body, pos, end)) });
             let ghost before = out@;
             out.extend_from_slice(piece.as_slice());

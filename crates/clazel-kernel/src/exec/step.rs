@@ -932,10 +932,11 @@ pub fn content_type_exec(fields: &[clazel_http::field::types::FieldLineBuf]) -> 
 {
     let name: [u8; 12] = [0x63, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x74, 0x79, 0x70, 0x65];
     assert(name@ =~= content_type_name());
-    match clazel_http::field::section::combined_field_value(fields, &name) {
-        Some(v) => v,
-        None => Vec::new(),
+    let mut out = Vec::new();
+    if let Some(v) = clazel_http::field::section::combined_field_value(fields, &name) {
+        out = v;
     }
+    out
 }
 
 /// [`abort_navigation`]: the navigation of `tab` fails with `code`.

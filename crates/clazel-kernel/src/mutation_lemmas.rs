@@ -353,8 +353,13 @@ pub proof fn ml_carry_out_done(
         lock_of_url(urls, clazel_url::url::spec::url_serializer(url, false), s.next_id) == Some(l),
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
-        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1[2]
-            == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(clazel_url::url::spec::url_serializer(url, false), response_document(response)) }),
+        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1[2] == (Output::ToRenderer {
+            id: s.next_id,
+            bytes: commit_frames(
+                clazel_url::url::spec::url_serializer(url, false),
+                Document { content_type: response_document(response).content_type, kind: kind_document(), body: response.body },
+            ),
+        }),
 {
     crate::counterexamples::lemma_co_commit_spawn(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response), i, l);
     reveal_with_fuel(carry_out, 2);
@@ -419,6 +424,52 @@ pub proof fn ml_carry_out_close(urls: UrlFns, s: State, tab: nat, partition: cra
         carry_out(urls, s, tab, partition, Some(c), seq![clazel_fetch::transducer::spec::Action::Close]).0.conns == without_conn(s.conns, c),
 {
     reveal_with_fuel(carry_out, 2);
+}
+
+// ---------------------------------------------------------------------
+// Item 4.12: display and commits.
+// ---------------------------------------------------------------------
+
+/// A renderer's `Display` is shown for its tab, under its URL, with what
+/// it displays: the core of `theorem_show_only_own_tab` and
+/// `theorem_address_bar_integrity`.
+pub proof fn ml_display_shows(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, title: Seq<u8>, text: Seq<u8>, links: Seq<Seq<u8>>)
+    ensures
+        handle_message(rules, urls, fetch, s, r, clazel_ipc::message::spec::Message::Display { title, text, links }) == (
+            s,
+            seq![Output::Show { tab: r.tab, url: r.url, title, text, links }],
+        ),
+{
+}
+
+/// A renderer that is not committed may not send `Display`: the case
+/// `theorem_address_bar_integrity` excludes.
+pub proof fn ml_uncommitted_display(r: Renderer, bytes: Seq<u8>)
+    requires
+        !r.committed,
+        decode_renderer_frame(bytes) matches Some(m) && m is Display,
+    ensures
+        accepted_message(r, bytes) is None,
+{
+}
+
+/// The `Content-Type` a commit carries is the response's (evaluated on a
+/// response with one `Content-Type` line, its name in another case).
+pub proof fn ml_response_content_type()
+    ensures
+        response_document(
+            clazel_http::message::spec::Response {
+                fields: seq![clazel_http::field::spec::FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65], value: seq![0x74u8, 0x2F, 0x68] }],
+                ..ml_response(Seq::<u8>::empty())
+            },
+        ).content_type == seq![0x74u8, 0x2F, 0x68],
+{
+    assert(response_document(
+        clazel_http::message::spec::Response {
+            fields: seq![clazel_http::field::spec::FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65], value: seq![0x74u8, 0x2F, 0x68] }],
+            ..ml_response(Seq::<u8>::empty())
+        },
+    ).content_type == seq![0x74u8, 0x2F, 0x68]) by (compute_only);
 }
 
 } // verus!

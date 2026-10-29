@@ -195,13 +195,11 @@ struct Tab {
 /// spawned renderer (and, if `old` is given, the kill of that renderer first).
 fn spawn_and_commit(out: &[Out], old: Option<u64>, url: &str) -> Option<u64> {
     match (old, out) {
-        (
-            None,
-            [
-                Out::Spawn(new),
-                Out::Commit(to, Doc { url: committed, .. }),
-            ],
-        ) if new == to && committed == url.as_bytes() => Some(*new),
+        (None, [Out::Spawn(new), Out::Commit(to, Doc { url: committed, .. })])
+            if new == to && committed == url.as_bytes() =>
+        {
+            Some(*new)
+        }
         (
             Some(old),
             [

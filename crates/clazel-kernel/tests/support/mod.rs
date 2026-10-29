@@ -122,8 +122,12 @@ impl Kernel {
             .into_iter()
             .map(|o| match o {
                 OutputRecord::ToRenderer { id, bytes } => match split_frames(&bytes) {
-                    Some(msgs) if msgs.len() == 1 && !matches!(msgs.first(), Some(Msg::Commit { .. })) => {
-                        msgs.into_iter().next().map_or(Out::Garbled(id), |m| Out::To(id, m))
+                    Some(msgs)
+                        if msgs.len() == 1 && !matches!(msgs.first(), Some(Msg::Commit { .. })) =>
+                    {
+                        msgs.into_iter()
+                            .next()
+                            .map_or(Out::Garbled(id), |m| Out::To(id, m))
                     }
                     Some(msgs) => read_doc(msgs).map_or(Out::Garbled(id), |d| Out::Commit(id, d)),
                     None => Out::Garbled(id),
