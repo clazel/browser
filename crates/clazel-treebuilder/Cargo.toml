@@ -32,6 +32,8 @@ theorems = [
     "theorem_reachable_open_elements_in_doc",
     "theorem_reachable_nodes_per_token",
     "theorem_open_distinct",
+    "theorem_reachable_w3c_facts",
+    "theorem_reachable_foreign_content",
 ]
 
 [package.metadata.verus]
