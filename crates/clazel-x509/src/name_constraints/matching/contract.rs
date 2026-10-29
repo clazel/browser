@@ -323,4 +323,137 @@ pub proof fn lemma_over_bound_is_refused()
 {
 }
 
+/// `count` dNSName subtrees.
+pub open spec fn many_subtrees(count: nat) -> Seq<crate::name_constraints::spec::GeneralSubtree> {
+    Seq::new(count, |i: int| super::examples::dns_subtree(super::examples::example_com()))
+}
+
+/// `count` dNSName subjectAltName entries.
+pub open spec fn many_entries(count: nat) -> Seq<crate::extensions::spec::GeneralName> {
+    Seq::new(count, |i: int| super::examples::ip_entry(seq![127u8, 0, 0, 1]))
+}
+
+/// limbo's `pathological::nc-dos-*` shape: one set of 2,048 permitted and
+/// 2,049 excluded subtrees.
+pub open spec fn dos_state() -> Seq<crate::name_constraints::spec::NameConstraints> {
+    seq![super::examples::constraints(Some(many_subtrees(2048)), Some(many_subtrees(2049)))]
+}
+
+/// A one-certificate path with `entries` iPAddress entries.
+pub open spec fn one_certificate(entries: nat) -> Seq<NcCertificate> {
+    seq![super::examples::certificate(many_entries(entries), None)]
+}
+
+/// `pathological::nc-dos-1` and `-2` (2,048 SAN entries) and `-3` (the
+/// subject alone, no entry) are beyond the bound: each costs (entries + 1)
+/// times 4,097 subtrees.
+pub proof fn lemma_nc_dos_shapes_are_beyond_the_bound()
+    ensures
+        !within_budget(one_certificate(2048), dos_state()),
+        !within_budget(one_certificate(0), dos_state()),
+{
+    assert(!within_budget(one_certificate(2048), dos_state())) by (compute_only);
+    assert(!within_budget(one_certificate(0), dos_state())) by (compute_only);
+}
+
+/// A state of 32 permitted and 32 excluded subtrees: 64 in all.
+pub open spec fn sixty_four_subtrees() -> Seq<crate::name_constraints::spec::NameConstraints> {
+    seq![super::examples::constraints(Some(many_subtrees(32)), Some(many_subtrees(32)))]
+}
+
+/// The bound is exactly 4,096: 63 entries and the subject against 64
+/// subtrees are within it and accepted, 64 entries are beyond it and
+/// refused although the spec accepts them.
+pub proof fn lemma_bound_is_exact()
+    ensures
+        within_budget(one_certificate(63), sixty_four_subtrees()),
+        names_constrained_ensures(one_certificate(63), sixty_four_subtrees(), true),
+        names_constrained(one_certificate(64), sixty_four_subtrees()),
+        !within_budget(one_certificate(64), sixty_four_subtrees()),
+        !names_constrained_ensures(one_certificate(64), sixty_four_subtrees(), true),
+{
+    assert(within_budget(one_certificate(63), sixty_four_subtrees())) by (compute_only);
+    assert(names_constrained(one_certificate(63), sixty_four_subtrees())) by (compute_only);
+    assert(names_constrained(one_certificate(64), sixty_four_subtrees())) by (compute_only);
+    assert(!within_budget(one_certificate(64), sixty_four_subtrees())) by (compute_only);
+}
+
+/// Two certificates of 2,080 comparisons each: (31 entries + the subject)
+/// against 65 subtrees. Together they are beyond the bound, though each is
+/// within it.
+pub proof fn lemma_bound_accumulates_over_certificates()
+    ensures
+        within_budget(one_certificate(31), seq![super::examples::constraints(Some(many_subtrees(65)), None)]),
+        !within_budget(
+            seq![
+                super::examples::certificate(many_entries(31), None),
+                super::examples::certificate(many_entries(31), None),
+            ],
+            seq![super::examples::constraints(Some(many_subtrees(65)), None)]),
+{
+    assert(within_budget(one_certificate(31), seq![super::examples::constraints(Some(many_subtrees(65)), None)]))
+        by (compute_only);
+    assert(!within_budget(
+        seq![
+            super::examples::certificate(many_entries(31), None),
+            super::examples::certificate(many_entries(31), None),
+        ],
+        seq![super::examples::constraints(Some(many_subtrees(65)), None)])) by (compute_only);
+}
+
+/// Every set of the state is counted: two sets of 40 subtrees cost 80 per
+/// entry, so 63 entries and the subject (5,120) are beyond the bound.
+pub proof fn lemma_bound_counts_every_set()
+    ensures
+        !within_budget(
+            one_certificate(63),
+            seq![
+                super::examples::constraints(Some(many_subtrees(40)), None),
+                super::examples::constraints(Some(many_subtrees(40)), None),
+            ]),
+{
+    assert(!within_budget(
+        one_certificate(63),
+        seq![
+            super::examples::constraints(Some(many_subtrees(40)), None),
+            super::examples::constraints(Some(many_subtrees(40)), None),
+        ])) by (compute_only);
+}
+
+/// The bound only adds a refusal: a path the spec refuses is refused
+/// within the bound too (`rfc5280::nc::permitted-self-issued`, where a
+/// self-issued intermediate's name is outside the anchor's permitted
+/// subtree).
+pub proof fn lemma_bound_never_accepts_what_the_spec_refuses()
+    ensures
+        within_budget(
+            seq![
+                super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None),
+                super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None),
+            ],
+            seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)]),
+        !names_constrained_ensures(
+            seq![
+                super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None),
+                super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None),
+            ],
+            seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)],
+            true),
+{
+    assert(within_budget(
+        seq![
+            super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None),
+            super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None),
+        ],
+        seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)]))
+        by (compute_only);
+    assert(!names_constrained_ensures(
+        seq![
+            super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None),
+            super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None),
+        ],
+        seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)],
+        true)) by (compute_only);
+}
+
 } // verus!
