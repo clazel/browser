@@ -42,9 +42,23 @@ pub open spec fn trim_back(s: Seq<u32>) -> Seq<u32>
     }
 }
 
+/// A code point with A to Z replaced by a to z.
+pub open spec fn to_lower(c: u32) -> u32 {
+    if 0x41 <= c && c <= 0x5A {
+        (c - 0x41 + 0x61) as u32
+    } else {
+        c
+    }
+}
+
+/// A string with A to Z replaced by a to z.
+pub open spec fn lowered(s: Seq<u32>) -> Seq<u32> {
+    Seq::new(s.len(), |k: int| to_lower(s[k]))
+}
+
 /// "Get an encoding": trim, lowercase, and find the row with that label.
 pub open spec fn lookup(label: Seq<u32>) -> Option<Encoding> {
-    let key = ascii_lowercase(trim_back(trim_front(label)));
+    let key = lowered(trim_back(trim_front(label)));
     if exists|i: int| 0 <= i < label_count() && #[trigger] row_label(i) == key {
         Some(row_encoding(choose|i: int| 0 <= i < label_count() && #[trigger] row_label(i) == key))
     } else {
@@ -144,12 +158,21 @@ proof fn lemma_first_match_found(label: Seq<u32>, k: nat)
     }
 }
 
+/// The two lowercasings agree.
+pub proof fn lemma_lowered(s: Seq<u32>)
+    ensures
+        lowered(s) == ascii_lowercase(s),
+{
+    assert(lowered(s) =~= ascii_lowercase(s));
+}
+
 /// The second transcription equals the spec on every label.
 pub proof fn lemma_equals_get_an_encoding(label: Seq<u32>)
     ensures
         lookup(label) == get_an_encoding(label),
 {
     lemma_trim(label);
+    lemma_lowered(trim_back(trim_front(label)));
     let l = strip_leading_and_trailing_ascii_whitespace(label);
     let key = ascii_lowercase(l);
     super::lemmas::lemma_table();

@@ -285,6 +285,892 @@
         "lemma": "lemma_decode_encode(seq![0x41u32])",
         "witness": "utf8_decode_without_bom(utf8_encode(seq![0x41u32])).len() == 0"
       }
+    },
+    {
+      "id": "labels-strip-leading",
+      "file": "src/labels/spec.rs",
+      "find": "if i < s.len() && is_ascii_whitespace(s[i as int]) {",
+      "replace": "if i < s.len() && false && is_ascii_whitespace(s[i as int]) {",
+      "expect": "killed",
+      "reason": "Get an encoding step 1 keeps leading whitespace: the mutant strips nothing from \" A\", where the second transcription's trim gives \"A\", so lemma_trim is false.",
+      "certificate": {
+        "file": "src/labels/independent.rs",
+        "lemma": "lemma_trim(seq![0x20u32, 0x41u32])",
+        "witness": "strip_leading_and_trailing_ascii_whitespace(seq![0x20u32, 0x41u32]) == seq![0x20u32, 0x41u32] && trim_back(trim_front(seq![0x20u32, 0x41u32])) == seq![0x41u32]"
+      }
+    },
+    {
+      "id": "labels-strip-trailing",
+      "file": "src/labels/spec.rs",
+      "find": "if j > 0 && j <= s.len() && is_ascii_whitespace(s[j - 1]) {",
+      "replace": "if j > 0 && j <= s.len() && false && is_ascii_whitespace(s[j - 1]) {",
+      "expect": "killed",
+      "reason": "Get an encoding step 1 keeps trailing whitespace: \"A \" stays as is in the mutant, so lemma_trim is false.",
+      "certificate": {
+        "file": "src/labels/independent.rs",
+        "lemma": "lemma_trim(seq![0x41u32, 0x20u32])",
+        "witness": "strip_leading_and_trailing_ascii_whitespace(seq![0x41u32, 0x20u32]) == seq![0x41u32, 0x20u32] && trim_back(trim_front(seq![0x41u32, 0x20u32])) == seq![0x41u32]"
+      }
+    },
+    {
+      "id": "labels-lowercase-offset",
+      "file": "src/labels/spec.rs",
+      "find": "(c + 0x20) as u32",
+      "replace": "(c + 0x21) as u32",
+      "expect": "killed",
+      "reason": "ASCII lowercase maps A to b: the second transcription's lowercasing gives a, so lemma_lowered is false.",
+      "certificate": {
+        "file": "src/labels/independent.rs",
+        "lemma": "lemma_lowered(seq![0x41u32])",
+        "witness": "ascii_lowercase(seq![0x41u32]) == seq![0x62u32] && lowered(seq![0x41u32]) == seq![0x61u32]"
+      }
+    },
+    {
+      "id": "labels-wrong-row-encoding",
+      "file": "src/labels/spec.rs",
+      "find": "Some(i) => Some(row_encoding(i as int)),",
+      "replace": "Some(i) => Some(row_encoding(i as int + 1)),",
+      "expect": "killed",
+      "reason": "Get an encoding step 2 returns the next row's encoding: the label 866 (row 0) gives windows-1252, so lemma_every_label is false.",
+      "certificate": {
+        "file": "src/labels/lemmas.rs",
+        "lemma": "lemma_every_label(0)",
+        "witness": "get_an_encoding(row_label(0)) == Some(row_encoding(1)) && row_encoding(0) != row_encoding(1)",
+        "reveal": [
+          "super::data::LABEL_START_0",
+          "super::data::LABEL_LEN_0",
+          "super::data::LABEL_ENCODING_0",
+          "super::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "labels-first-row-only",
+      "file": "src/labels/spec.rs",
+      "find": "if i >= label_count() {",
+      "replace": "if i >= 1 {",
+      "expect": "killed",
+      "reason": "Get an encoding step 2 looks at the first row only: ansi_x3.4-1968 (row 1) gives failure, so lemma_every_label is false.",
+      "certificate": {
+        "file": "src/labels/lemmas.rs",
+        "lemma": "lemma_every_label(1)",
+        "witness": "get_an_encoding(row_label(1)) is None",
+        "reveal": [
+          "super::data::LABEL_START_0",
+          "super::data::LABEL_LEN_0",
+          "super::data::LABEL_ENCODING_0",
+          "super::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "labels-table-duplicate-row",
+      "file": "src/labels/data.rs",
+      "find": ", 1523, 1525,",
+      "replace": ", 1523, 1523,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: row 161 (l2) starts where row 160 (l1) does, so l1 is listed twice and lemma_labels_distinct is false (the table check, lemma_table, fails first).",
+      "certificate": {
+        "file": "src/labels/lemmas.rs",
+        "lemma": "lemma_labels_distinct(160, 161)",
+        "witness": "ascii_case_insensitive_match(row_label(160), row_label(161))",
+        "reveal": [
+          "super::data::LABEL_START_0",
+          "super::data::LABEL_LEN_0",
+          "super::data::LABEL_ENCODING_0",
+          "super::data::LABEL_CHARS_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-ascii-boundary",
+      "file": "src/single_byte/spec.rs",
+      "find": "            if byte <= 0x7F {",
+      "replace": "            if byte <= 0x7E {",
+      "expect": "killed",
+      "reason": "Single-byte decoder step 2 stops at 0x7E: 0x7F becomes an index lookup at pointer -1, an error, U+FFFD, where the byte map gives U+007F, so lemma_equals_decode is false.",
+      "certificate": {
+        "file": "src/single_byte/independent.rs",
+        "lemma": "lemma_equals_decode(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8])",
+        "witness": "decode(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8]) == seq![0xFFFDu32] && decode_map(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8]) == seq![0x7Fu32]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-pointer-offset",
+      "file": "src/single_byte/spec.rs",
+      "find": "index_code_point(e, byte - 0x80)",
+      "replace": "index_code_point(e, byte - 0x7F)",
+      "expect": "killed",
+      "reason": "Single-byte decoder step 3 reads pointer byte - 0x7F: windows-1252 0x80 gives U+0081 instead of U+20AC, so lemma_equals_decode is false.",
+      "certificate": {
+        "file": "src/single_byte/independent.rs",
+        "lemma": "lemma_equals_decode(crate::labels::spec::Encoding::Windows1252, seq![0x80u8])",
+        "witness": "decode(crate::labels::spec::Encoding::Windows1252, seq![0x80u8]) == seq![0x81u32] && decode_map(crate::labels::spec::Encoding::Windows1252, seq![0x80u8]) == seq![0x20ACu32]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-null-not-error",
+      "file": "src/single_byte/spec.rs",
+      "find": "None => crate::utf8::spec::HandlerResult::Error,",
+      "replace": "None => crate::utf8::spec::HandlerResult::CodePoint(0xFFFD),",
+      "expect": "killed",
+      "reason": "Single-byte decoder step 4 returns U+FFFD instead of error, so fatal decoding succeeds on 0xAA and 0xD2 of windows-1253 (both null) with the same output, and lemma_decode_injective is false.",
+      "certificate": {
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "lemma_decode_injective(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8], seq![0xD2u8])",
+        "witness": "decode_or_fail(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8]) == Some(seq![0xFFFDu32]) && decode_or_fail(crate::labels::spec::Encoding::Windows1253, seq![0xD2u8]) == Some(seq![0xFFFDu32]) && seq![0xAAu8] != seq![0xD2u8]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1253_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-replacement-char",
+      "file": "src/single_byte/spec.rs",
+      "find": "crate::utf8::spec::ErrorMode::Replacement => crate::utf8::spec::cons(0xFFFD, process_queue(mode, e, input, i + 1)),",
+      "replace": "crate::utf8::spec::ErrorMode::Replacement => crate::utf8::spec::cons(0xFFFE, process_queue(mode, e, input, i + 1)),",
+      "expect": "killed",
+      "reason": "Process an item step 7 pushes U+FFFE for an error in replacement mode, so lemma_equals_decode is false on windows-1253 0xAA.",
+      "certificate": {
+        "file": "src/single_byte/independent.rs",
+        "lemma": "lemma_equals_decode(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8])",
+        "witness": "decode(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8]) == seq![0xFFFEu32] && decode_map(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8]) == seq![0xFFFDu32]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1253_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-fatal-continues",
+      "file": "src/single_byte/spec.rs",
+      "find": "crate::utf8::spec::ErrorMode::Fatal => None,",
+      "replace": "crate::utf8::spec::ErrorMode::Fatal => crate::utf8::spec::cons(0xFFFD, process_queue(mode, e, input, i + 1)),",
+      "expect": "killed",
+      "reason": "Process an item step 7 in fatal mode pushes U+FFFD and goes on instead of returning the error, so lemma_decode_injective is false on windows-1253 0xAA and 0xD2.",
+      "certificate": {
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "lemma_decode_injective(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8], seq![0xD2u8])",
+        "witness": "decode_or_fail(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8]) == Some(seq![0xFFFDu32]) && decode_or_fail(crate::labels::spec::Encoding::Windows1253, seq![0xD2u8]) == Some(seq![0xFFFDu32]) && seq![0xAAu8] != seq![0xD2u8]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1253_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-encoder-ascii",
+      "file": "src/single_byte/spec.rs",
+      "find": "if code_point <= 0x7F {",
+      "replace": "if code_point <= 0x7E {",
+      "expect": "killed",
+      "reason": "Single-byte encoder step 2 stops at U+007E: U+007F is looked up in the index, not found, and written &#127;, where the second transcription writes 0x7F, so lemma_equals_encode is false.",
+      "certificate": {
+        "file": "src/single_byte/independent.rs",
+        "lemma": "lemma_equals_encode(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu32])",
+        "witness": "encode(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu32]) == seq![0x26u8, 0x23u8, 0x31u8, 0x32u8, 0x37u8, 0x3Bu8] && encode_concat(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu32]) == seq![0x7Fu8]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-encoder-offset",
+      "file": "src/single_byte/spec.rs",
+      "find": "Some(pointer) => EncoderResult::Byte((pointer + 0x80) as u8),",
+      "replace": "Some(pointer) => EncoderResult::Byte((pointer + 0x81) as u8),",
+      "expect": "killed",
+      "reason": "Single-byte encoder step 5 adds 0x81: U+20AC encodes to 0x81 in windows-1252, not back to 0x80, so lemma_encoder_inverts_decoder is false.",
+      "certificate": {
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "lemma_encoder_inverts_decoder(crate::labels::spec::Encoding::Windows1252, 0x80u8)",
+        "witness": "encoder_handler(crate::labels::spec::Encoding::Windows1252, crate::utf8::spec::ScalarItem::ScalarValue(0x20ACu32)) == EncoderResult::Byte(0x81u8) && byte_code_point(crate::labels::spec::Encoding::Windows1252, 0x80u8) == Some(0x20ACu32)",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-index-pointer-not-first",
+      "file": "src/single_byte/spec.rs",
+      "find": "    } else if index_code_point(e, pointer as int) == Some(code_point) {\n        Some(pointer)\n",
+      "replace": "    } else if index_code_point(e, pointer as int) == Some(code_point) {\n        index_pointer_from(e, code_point, pointer + 1)\n",
+      "expect": "killed",
+      "reason": "Index pointer skips the first match: U+20AC (only at pointer 0 of windows-1252) has no pointer, so the encoder errors and lemma_encoder_inverts_decoder is false.",
+      "certificate": {
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "lemma_encoder_inverts_decoder(crate::labels::spec::Encoding::Windows1252, 0x80u8)",
+        "witness": "encoder_handler(crate::labels::spec::Encoding::Windows1252, crate::utf8::spec::ScalarItem::ScalarValue(0x20ACu32)) == EncoderResult::Error(0x20ACu32) && byte_code_point(crate::labels::spec::Encoding::Windows1252, 0x80u8) == Some(0x20ACu32)",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-html-digit",
+      "file": "src/single_byte/spec.rs",
+      "find": "decimal(n / 10).push((0x30 + n % 10) as u8)",
+      "replace": "decimal(n / 10).push((0x31 + n % 10) as u8)",
+      "expect": "killed",
+      "reason": "The html error mode writes each digit after the first one too high: U+4E00 becomes &#1::79; in windows-1252, where the second transcription writes &#19968;, so lemma_equals_encode is false.",
+      "certificate": {
+        "file": "src/single_byte/independent.rs",
+        "lemma": "lemma_equals_encode(crate::labels::spec::Encoding::Windows1252, seq![0x4E00u32])",
+        "witness": "encode(crate::labels::spec::Encoding::Windows1252, seq![0x4E00u32]) == seq![0x26u8, 0x23u8, 0x31u8, 0x3Au8, 0x3Au8, 0x37u8, 0x39u8, 0x3Bu8] && encode_concat(crate::labels::spec::Encoding::Windows1252, seq![0x4E00u32]) == seq![0x26u8, 0x23u8, 0x31u8, 0x39u8, 0x39u8, 0x36u8, 0x38u8, 0x3Bu8]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "single-byte-html-prefix",
+      "file": "src/single_byte/spec.rs",
+      "find": "EncoderResult::Error(c) => seq![0x26u8, 0x23u8] + decimal",
+      "replace": "EncoderResult::Error(c) => seq![0x26u8] + decimal",
+      "expect": "killed",
+      "reason": "The html error mode drops the 0x23 (#): U+4E00 becomes &19968; in windows-1252, so lemma_equals_encode is false.",
+      "certificate": {
+        "file": "src/single_byte/independent.rs",
+        "lemma": "lemma_equals_encode(crate::labels::spec::Encoding::Windows1252, seq![0x4E00u32])",
+        "witness": "encode(crate::labels::spec::Encoding::Windows1252, seq![0x4E00u32]) == seq![0x26u8, 0x31u8, 0x39u8, 0x39u8, 0x36u8, 0x38u8, 0x3Bu8] && encode_concat(crate::labels::spec::Encoding::Windows1252, seq![0x4E00u32]) == seq![0x26u8, 0x23u8, 0x31u8, 0x39u8, 0x39u8, 0x36u8, 0x38u8, 0x3Bu8]",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "table-ibm866-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_IBM866_0: [u32; 128] = [\n    0x410, 0x411,",
+      "replace": "pub const INDEX_IBM866_0: [u32; 128] = [\n    0x410, 0x410,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index ibm866 repeats entry 0 (U+0410), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_ibm866, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Ibm866, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Ibm866, 0) == index_entry(crate::labels::spec::Encoding::Ibm866, 1) && index_entry(crate::labels::spec::Encoding::Ibm866, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_IBM866_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-2-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_2_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_2_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-2 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_2, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_2, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_2, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_2, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_2, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_2_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-3-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_3_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_3_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-3 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_3, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_3, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_3, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_3, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_3, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_3_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-4-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_4_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_4_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-4 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_4, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_4, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_4, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_4, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_4, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_4_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-5-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_5_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_5_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-5 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_5, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_5, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_5, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_5, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_5, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_5_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-6-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_6_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_6_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-6 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_6, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_6, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_6, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_6, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_6, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_6_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-7-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_7_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_7_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-7 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_7, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_7, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_7, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_7, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_7, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_7_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-8-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_8_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_8_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-8 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_8, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_8, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_8, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_8, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_8, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_8_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-10-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_10_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_10_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-10 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_10, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_10, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_10, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_10, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_10, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_10_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-13-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_13_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_13_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-13 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_13, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_13, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_13, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_13, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_13, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_13_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-14-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_14_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_14_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-14 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_14, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_14, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_14, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_14, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_14, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_14_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-15-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_15_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_15_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-15 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_15, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_15, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_15, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_15, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_15, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_15_0"
+        ]
+      }
+    },
+    {
+      "id": "table-iso-8859-16-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_ISO_8859_16_0: [u32; 128] = [\n    0x80, 0x81,",
+      "replace": "pub const INDEX_ISO_8859_16_0: [u32; 128] = [\n    0x80, 0x80,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index iso-8859-16 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_16, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_16, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_16, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_16, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_16, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_ISO_8859_16_0"
+        ]
+      }
+    },
+    {
+      "id": "table-koi8-r-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_KOI8_R_0: [u32; 128] = [\n    0x2500, 0x2502,",
+      "replace": "pub const INDEX_KOI8_R_0: [u32; 128] = [\n    0x2500, 0x2500,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index koi8-r repeats entry 0 (U+2500), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_koi8_r, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Koi8R, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Koi8R, 0) == index_entry(crate::labels::spec::Encoding::Koi8R, 1) && index_entry(crate::labels::spec::Encoding::Koi8R, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_KOI8_R_0"
+        ]
+      }
+    },
+    {
+      "id": "table-koi8-u-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_KOI8_U_0: [u32; 128] = [\n    0x2500, 0x2502,",
+      "replace": "pub const INDEX_KOI8_U_0: [u32; 128] = [\n    0x2500, 0x2500,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index koi8-u repeats entry 0 (U+2500), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_koi8_u, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Koi8U, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Koi8U, 0) == index_entry(crate::labels::spec::Encoding::Koi8U, 1) && index_entry(crate::labels::spec::Encoding::Koi8U, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_KOI8_U_0"
+        ]
+      }
+    },
+    {
+      "id": "table-macintosh-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_MACINTOSH_0: [u32; 128] = [\n    0xC4, 0xC5,",
+      "replace": "pub const INDEX_MACINTOSH_0: [u32; 128] = [\n    0xC4, 0xC4,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index macintosh repeats entry 0 (U+00C4), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_macintosh, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Macintosh, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Macintosh, 0) == index_entry(crate::labels::spec::Encoding::Macintosh, 1) && index_entry(crate::labels::spec::Encoding::Macintosh, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_MACINTOSH_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-874-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_874_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_874_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-874 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_874, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows874, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows874, 0) == index_entry(crate::labels::spec::Encoding::Windows874, 1) && index_entry(crate::labels::spec::Encoding::Windows874, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_874_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1250-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1250_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_1250_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1250 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1250, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1250, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1250, 0) == index_entry(crate::labels::spec::Encoding::Windows1250, 1) && index_entry(crate::labels::spec::Encoding::Windows1250, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1250_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1251-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1251_0: [u32; 128] = [\n    0x402, 0x403,",
+      "replace": "pub const INDEX_WINDOWS_1251_0: [u32; 128] = [\n    0x402, 0x402,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1251 repeats entry 0 (U+0402), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1251, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1251, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1251, 0) == index_entry(crate::labels::spec::Encoding::Windows1251, 1) && index_entry(crate::labels::spec::Encoding::Windows1251, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1251_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1252-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1252_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_1252_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1252 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1252, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1252, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1252, 0) == index_entry(crate::labels::spec::Encoding::Windows1252, 1) && index_entry(crate::labels::spec::Encoding::Windows1252, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1253-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1253_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_1253_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1253 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1253, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1253, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1253, 0) == index_entry(crate::labels::spec::Encoding::Windows1253, 1) && index_entry(crate::labels::spec::Encoding::Windows1253, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1253_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1254-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1254_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_1254_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1254 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1254, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1254, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1254, 0) == index_entry(crate::labels::spec::Encoding::Windows1254, 1) && index_entry(crate::labels::spec::Encoding::Windows1254, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1254_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1255-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1255_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_1255_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1255 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1255, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1255, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1255, 0) == index_entry(crate::labels::spec::Encoding::Windows1255, 1) && index_entry(crate::labels::spec::Encoding::Windows1255, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1255_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1256-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1256_0: [u32; 128] = [\n    0x20AC, 0x67E,",
+      "replace": "pub const INDEX_WINDOWS_1256_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1256 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1256, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1256, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1256, 0) == index_entry(crate::labels::spec::Encoding::Windows1256, 1) && index_entry(crate::labels::spec::Encoding::Windows1256, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1256_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1257-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1257_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_1257_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1257 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1257, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1257, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1257, 0) == index_entry(crate::labels::spec::Encoding::Windows1257, 1) && index_entry(crate::labels::spec::Encoding::Windows1257, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1257_0"
+        ]
+      }
+    },
+    {
+      "id": "table-windows-1258-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_WINDOWS_1258_0: [u32; 128] = [\n    0x20AC, 0x81,",
+      "replace": "pub const INDEX_WINDOWS_1258_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index windows-1258 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1258, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1258, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::Windows1258, 0) == index_entry(crate::labels::spec::Encoding::Windows1258, 1) && index_entry(crate::labels::spec::Encoding::Windows1258, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_WINDOWS_1258_0"
+        ]
+      }
+    },
+    {
+      "id": "table-x-mac-cyrillic-duplicate",
+      "file": "src/single_byte/data.rs",
+      "find": "pub const INDEX_X_MAC_CYRILLIC_0: [u32; 128] = [\n    0x410, 0x411,",
+      "replace": "pub const INDEX_X_MAC_CYRILLIC_0: [u32; 128] = [\n    0x410, 0x410,",
+      "expect": "killed",
+      "reason": "A generated-table mutation: entry 1 of index x-mac-cyrillic repeats entry 0 (U+0410), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_x_mac_cyrillic, fails first).",
+      "certificate": {
+        "file": "src/single_byte/tables.rs",
+        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::XMacCyrillic, 0, 1)",
+        "witness": "index_entry(crate::labels::spec::Encoding::XMacCyrillic, 0) == index_entry(crate::labels::spec::Encoding::XMacCyrillic, 1) && index_entry(crate::labels::spec::Encoding::XMacCyrillic, 0) != null_entry()",
+        "reveal": [
+          "super::data::INDEX_X_MAC_CYRILLIC_0"
+        ]
+      }
+    },
+    {
+      "id": "utf16-be-shift",
+      "file": "src/utf16/spec.rs",
+      "find": "((leading_byte as u32) << 8u32) + byte as u32",
+      "replace": "((leading_byte as u32) << 7u32) + byte as u32",
+      "expect": "killed",
+      "reason": "Shared UTF-16 decoder step 4 (UTF-16BE) shifts the leading byte by 7: 01 00 decodes to U+0080, where the literal transcription gives U+0100, so lemma_equals_spec is false.",
+      "certificate": {
+        "file": "src/utf16/independent.rs",
+        "lemma": "lemma_equals_spec(false, true, seq![0x01u8, 0x00u8])",
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0x01u8, 0x00u8], 0) == Some(seq![0x80u32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0x01u8, 0x00u8]) == Some(seq![0x100u32])"
+      }
+    },
+    {
+      "id": "utf16-le-order",
+      "file": "src/utf16/spec.rs",
+      "find": "((byte as u32) << 8u32) + leading_byte as u32",
+      "replace": "((leading_byte as u32) << 8u32) + byte as u32",
+      "expect": "killed",
+      "reason": "Shared UTF-16 decoder step 4 (UTF-16LE) reads the bytes big-endian: 01 00 decodes to U+0100, where the literal transcription gives U+0001, so lemma_equals_spec is false.",
+      "certificate": {
+        "file": "src/utf16/independent.rs",
+        "lemma": "lemma_equals_spec(false, false, seq![0x01u8, 0x00u8])",
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(false), seq![0x01u8, 0x00u8], 0) == Some(seq![0x100u32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: false }, seq![0x01u8, 0x00u8]) == Some(seq![0x1u32])"
+      }
+    },
+    {
+      "id": "utf16-surrogate-base",
+      "file": "src/utf16/spec.rs",
+      "find": "(0x10000 + (((leading - 0xD800) as u32) << 10u32)",
+      "replace": "(0xFFFF + (((leading - 0xD800) as u32) << 10u32)",
+      "expect": "killed",
+      "reason": "Scalar value from surrogates adds 0xFFFF: D8 00 DC 00 decodes to U+FFFF, where the literal transcription gives U+10000, so lemma_equals_spec is false.",
+      "certificate": {
+        "file": "src/utf16/independent.rs",
+        "lemma": "lemma_equals_spec(false, true, seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8])",
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8], 0) == Some(seq![0xFFFFu32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8]) == Some(seq![0x10000u32])"
+      }
+    },
+    {
+      "id": "utf16-no-restore",
+      "file": "src/utf16/spec.rs",
+      "find": "Step { decoder: d, result: crate::utf8::spec::HandlerResult::Error, restored: true }",
+      "replace": "Step { decoder: d, result: crate::utf8::spec::HandlerResult::Error, restored: false }",
+      "expect": "killed",
+      "reason": "Shared UTF-16 decoder step 6.7 does not restore the bytes: D8 00 00 41 loses the A (U+FFFD only), where the literal transcription gives U+FFFD U+0041, so lemma_equals_spec is false.",
+      "certificate": {
+        "file": "src/utf16/independent.rs",
+        "lemma": "lemma_equals_spec(false, true, seq![0xD8u8, 0x00u8, 0x00u8, 0x41u8])",
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0xD8u8, 0x00u8, 0x00u8, 0x41u8], 0) == Some(seq![0xFFFDu32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0xD8u8, 0x00u8, 0x00u8, 0x41u8]) == Some(seq![0xFFFDu32, 0x41u32])"
+      }
+    },
+    {
+      "id": "utf16-odd-byte-at-end",
+      "file": "src/utf16/spec.rs",
+      "find": "if d.leading_byte is Some || d.leading_surrogate is Some {",
+      "replace": "if d.leading_surrogate is Some {",
+      "expect": "killed",
+      "reason": "Shared UTF-16 decoder step 1 ignores a held leading byte at end-of-queue: 41 decodes to nothing, where the literal transcription gives U+FFFD, so lemma_equals_spec is false.",
+      "certificate": {
+        "file": "src/utf16/independent.rs",
+        "lemma": "lemma_equals_spec(false, true, seq![0x41u8])",
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0x41u8], 0) == Some(Seq::<u32>::empty()) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0x41u8]) == Some(seq![0xFFFDu32])"
+      }
+    },
+    {
+      "id": "utf16-replacement-char",
+      "file": "src/utf16/spec.rs",
+      "find": "crate::utf8::spec::ErrorMode::Replacement => crate::utf8::spec::cons(0xFFFD, process_queue(mode, s.decoder, input, j)),",
+      "replace": "crate::utf8::spec::ErrorMode::Replacement => crate::utf8::spec::cons(0xFFFE, process_queue(mode, s.decoder, input, j)),",
+      "expect": "killed",
+      "reason": "Process an item step 7 pushes U+FFFE: 41 (one byte, UTF-16BE) decodes to U+FFFE, so lemma_equals_spec is false.",
+      "certificate": {
+        "file": "src/utf16/independent.rs",
+        "lemma": "lemma_equals_spec(false, true, seq![0x41u8])",
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0x41u8], 0) == Some(seq![0xFFFEu32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0x41u8]) == Some(seq![0xFFFDu32])"
+      }
+    },
+    {
+      "id": "utf16-leading-range",
+      "file": "src/utf16/spec.rs",
+      "find": "    0xD800 <= c <= 0xDBFF\n",
+      "replace": "    0xD800 <= c <= 0xDFFF\n",
+      "expect": "killed",
+      "reason": "Leading surrogates include the trailing ones: DC 00 DC 00 pairs into 0x110000, which is not a scalar value, so lemma_decode_is_scalar is false.",
+      "certificate": {
+        "file": "src/utf16/lemmas.rs",
+        "lemma": "lemma_decode_is_scalar(true, seq![0xDCu8, 0x00u8, 0xDCu8, 0x00u8])",
+        "witness": "decode(true, seq![0xDCu8, 0x00u8, 0xDCu8, 0x00u8]).len() == 1 && !crate::utf8::spec::is_scalar_value(decode(true, seq![0xDCu8, 0x00u8, 0xDCu8, 0x00u8])[0])"
+      }
+    },
+    {
+      "id": "utf16-lone-trailing",
+      "file": "src/utf16/spec.rs",
+      "find": "step(d, crate::utf8::spec::HandlerResult::Error)",
+      "replace": "step(d, crate::utf8::spec::HandlerResult::CodePoint(code_unit))",
+      "expect": "killed",
+      "reason": "Shared UTF-16 decoder step 8 returns a lone trailing surrogate as a code point: DC 00 decodes to U+DC00, so lemma_decode_is_scalar is false.",
+      "certificate": {
+        "file": "src/utf16/lemmas.rs",
+        "lemma": "lemma_decode_is_scalar(true, seq![0xDCu8, 0x00u8])",
+        "witness": "decode(true, seq![0xDCu8, 0x00u8]).len() == 1 && !crate::utf8::spec::is_scalar_value(decode(true, seq![0xDCu8, 0x00u8])[0])"
+      }
+    },
+    {
+      "id": "replacement-no-error",
+      "file": "src/replacement/spec.rs",
+      "find": "if !replacement_error_returned {",
+      "replace": "if replacement_error_returned {",
+      "expect": "killed",
+      "reason": "Replacement decoder step 2 never returns its error: a non-empty input decodes to nothing, where the second transcription gives one U+FFFD, so lemma_equals_decode is false.",
+      "certificate": {
+        "file": "src/replacement/independent.rs",
+        "lemma": "lemma_equals_decode(seq![0x41u8])",
+        "witness": "decode(seq![0x41u8]) == Seq::<u32>::empty() && one_error(seq![0x41u8]) == seq![0xFFFDu32]"
+      }
+    },
+    {
+      "id": "x-user-defined-base",
+      "file": "src/x_user_defined/spec.rs",
+      "find": "(0xF780 + byte - 0x80)",
+      "replace": "(0xF700 + byte - 0x80)",
+      "expect": "killed",
+      "reason": "x-user-defined decoder step 3 adds 0xF700: 0x80 decodes to U+F700, where the second transcription gives U+F780, so lemma_equals_decode is false.",
+      "certificate": {
+        "file": "src/x_user_defined/independent.rs",
+        "lemma": "lemma_equals_decode(seq![0x80u8])",
+        "witness": "decode(seq![0x80u8]) == seq![0xF700u32] && decode_map(seq![0x80u8]) == seq![0xF780u32]"
+      }
+    },
+    {
+      "id": "x-user-defined-ascii-boundary",
+      "file": "src/x_user_defined/spec.rs",
+      "find": "if byte <= 0x7F {",
+      "replace": "if byte <= 0x7E {",
+      "expect": "killed",
+      "reason": "x-user-defined decoder step 2 stops at 0x7E: 0x7F decodes to U+F77F, where the second transcription gives U+007F, so lemma_equals_decode is false.",
+      "certificate": {
+        "file": "src/x_user_defined/independent.rs",
+        "lemma": "lemma_equals_decode(seq![0x7Fu8])",
+        "witness": "decode(seq![0x7Fu8]) == seq![0xF77Fu32] && decode_map(seq![0x7Fu8]) == seq![0x7Fu32]"
+      }
+    },
+    {
+      "id": "bom-utf8-bytes",
+      "file": "src/hooks/spec.rs",
+      "find": "starts_with(bom, seq![0xEFu8, 0xBBu8, 0xBFu8])",
+      "replace": "starts_with(bom, seq![0xEFu8, 0xBBu8, 0xBEu8])",
+      "expect": "killed",
+      "reason": "BOM sniff's first row is EF BB BE: EF BB BF is not sniffed, so lemma_equals_bom_sniff is false.",
+      "certificate": {
+        "file": "src/hooks/independent.rs",
+        "lemma": "lemma_equals_bom_sniff(seq![0xEFu8, 0xBBu8, 0xBFu8])",
+        "witness": "bom_sniff(seq![0xEFu8, 0xBBu8, 0xBFu8]) is None && byte_order_mark(seq![0xEFu8, 0xBBu8, 0xBFu8]) == Some(crate::labels::spec::Encoding::Utf8)"
+      }
+    },
+    {
+      "id": "bom-utf16be-bytes",
+      "file": "src/hooks/spec.rs",
+      "find": "starts_with(bom, seq![0xFEu8, 0xFFu8])",
+      "replace": "starts_with(bom, seq![0xFEu8, 0xFEu8])",
+      "expect": "killed",
+      "reason": "BOM sniff's second row is FE FE: FE FF is not sniffed as UTF-16BE, so lemma_equals_bom_sniff is false.",
+      "certificate": {
+        "file": "src/hooks/independent.rs",
+        "lemma": "lemma_equals_bom_sniff(seq![0xFEu8, 0xFFu8])",
+        "witness": "bom_sniff(seq![0xFEu8, 0xFFu8]) is None && byte_order_mark(seq![0xFEu8, 0xFFu8]) == Some(crate::labels::spec::Encoding::Utf16Be)"
+      }
+    },
+    {
+      "id": "decode-bom-length",
+      "file": "src/hooks/spec.rs",
+      "find": "{ 3 } else { 2 }",
+      "replace": "{ 2 } else { 2 }",
+      "expect": "killed",
+      "reason": "Decode step 2.2 reads two bytes of a UTF-8 byte order mark: EF BB BF 41 decodes as BF 41, U+FFFD U+0041, where the second transcription gives U+0041, so lemma_equals_decode is false.",
+      "certificate": {
+        "file": "src/hooks/independent.rs",
+        "lemma": "lemma_equals_decode(seq![0xEFu8, 0xBBu8, 0xBFu8, 0x41u8], crate::labels::spec::Encoding::Windows1252)",
+        "witness": "decode(seq![0xEFu8, 0xBBu8, 0xBFu8, 0x41u8], crate::labels::spec::Encoding::Windows1252) == Some(seq![0xFFFDu32, 0x41u32]) && decode_with_mark(seq![0xEFu8, 0xBBu8, 0xBFu8, 0x41u8], crate::labels::spec::Encoding::Windows1252) == Some(seq![0x41u32])"
+      }
+    },
+    {
+      "id": "decode-ignores-fallback",
+      "file": "src/hooks/spec.rs",
+      "find": "None => (encoding, input),",
+      "replace": "None => (crate::labels::spec::Encoding::Utf8, input),",
+      "expect": "killed",
+      "reason": "Decode uses UTF-8 when there is no byte order mark, whatever the fallback: 0x80 with windows-1252 decodes to U+FFFD, where the second transcription gives U+20AC, so lemma_equals_decode is false.",
+      "certificate": {
+        "file": "src/hooks/independent.rs",
+        "lemma": "lemma_equals_decode(seq![0x80u8], crate::labels::spec::Encoding::Windows1252)",
+        "witness": "decode(seq![0x80u8], crate::labels::spec::Encoding::Windows1252) == Some(seq![0xFFFDu32]) && decode_with_mark(seq![0x80u8], crate::labels::spec::Encoding::Windows1252) == Some(seq![0x20ACu32])",
+        "reveal": [
+          "crate::single_byte::data::INDEX_WINDOWS_1252_0"
+        ]
+      }
     }
   ]
 }
