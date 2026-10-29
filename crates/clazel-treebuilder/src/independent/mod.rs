@@ -58,7 +58,11 @@
 //!   [`crate::spec`]). "Prepare the script" is the action
 //!   `Action::ScriptReady(node)` for the driver; the steps after it are those
 //!   of a script that does nothing.
-//! - "Stop parsing" is `crate::spec::stop_parsing`.
+//! - "Stop parsing" is `crate::spec::stop_parsing`. The node limit is
+//!   [`crate::spec`]'s: creating a node beyond it stops parsing, and a
+//!   stopped parser changes nothing, so every later step of the same token is
+//!   a no-op (the helpers reused from [`crate::spec::base`] check it; the
+//!   steps written here, such as "change the encoding", check it too).
 //! - A token for which a mode has no entry (the "text" mode lists only
 //!   characters, end-of-file and end tags; the tokenizer emits nothing else
 //!   there) is ignored.
@@ -83,7 +87,6 @@ pub mod after;
 pub mod early;
 pub mod equivalence;
 pub mod initial;
-pub mod probe;
 
 pub mod tables;
 pub mod template;

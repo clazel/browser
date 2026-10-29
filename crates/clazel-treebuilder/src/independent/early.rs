@@ -181,9 +181,14 @@ pub open spec fn w3c_content_type() -> Seq<u32> {
 }
 
 /// "Change the encoding to" `enc` (the driver's action; see [`super`]: the
-/// confidence becomes certain).
+/// confidence becomes certain). Nothing, once parsing has stopped (the node
+/// limit; see [`super`]).
 pub open spec fn w3c_change_encoding(p: Parser, enc: nat) -> Parser {
-    Parser { actions: p.actions.push(Action::ChangeEncoding(enc)), tentative: false, ..p }
+    if p.stopped {
+        p
+    } else {
+        Parser { actions: p.actions.push(Action::ChangeEncoding(enc)), tentative: false, ..p }
+    }
 }
 
 /// The `meta` entry's encoding steps, for the element created for `tt`,

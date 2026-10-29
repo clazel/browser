@@ -169,6 +169,26 @@ pub open spec fn w3c_limited_quirks_identifiers(public_id: Option<Seq<u32>>, sys
     || (system_id is Some && w3c_public_starts_with(public_id, seq![0x2du32, 0x2f, 0x2f, 0x57, 0x33, 0x43, 0x2f, 0x2f, 0x44, 0x54, 0x44, 0x20, 0x48, 0x54, 0x4d, 0x4c, 0x20, 0x34, 0x2e, 0x30, 0x31, 0x20, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x69, 0x74, 0x69, 0x6f, 0x6e, 0x61, 0x6c, 0x2f, 0x2f]))
 }
 
+/// The node `n` has a child that is a DocumentType node.
+pub open spec fn w3c_has_doctype_child(doc: Document, n: NodeId) -> bool {
+    exists|i: int| 0 <= i < doc.nodes[n as int].children.len() && dom::valid(doc, #[trigger] doc.nodes[n as int].children[i])
+        && doc.nodes[doc.nodes[n as int].children[i] as int].kind is DocumentType
+}
+
+/// DOM "append" the DocumentType node `node` to the Document object:
+/// "pre-insert" it before null, which first "ensures pre-insert validity":
+/// it throws (and so inserts nothing) "if parent is a Document, and …
+/// node is a doctype and either parent has a doctype child, … or child is
+/// null and parent has an element child". Its other checks are
+/// [`dom_insert`]'s guard.
+pub open spec fn w3c_append_doctype(p: Parser, node: NodeId) -> Parser {
+    if p.stopped || (p.doc.nodes[0].kind is Document && (w3c_has_doctype_child(p.doc, 0) || has_element_child(p.doc, 0))) {
+        p
+    } else {
+        dom_insert(p, node, 0, None)
+    }
+}
+
 /// W3C HTML 5.2 §8.2.5.4.1 the "initial" insertion mode
 /// (<https://www.w3.org/TR/2017/REC-html52-20171214/syntax.html#the-initial-insertion-mode>).
 pub open spec fn w3c_mode_initial(env: EncFns, p: Parser, t: Tok) -> Outcome {
@@ -209,13 +229,16 @@ pub open spec fn w3c_mode_initial(env: EncFns, p: Parser, t: Tok) -> Outcome {
                 },
             },
         );
-        let p2 = dom_insert(p1, doctype, 0, None);
+        let p2 = w3c_append_doctype(p1, doctype);
         // "Then, if the document is not an iframe srcdoc document, and the
         // DOCTYPE token matches one of the conditions in the following list,
         // then set the Document to quirks mode: The force-quirks flag is set
         // to on. The name is set to anything other than "html" (compared
         // case-sensitively). …"
-        let p3 = if t->Doctype_force_quirks || name != Some(w3c_name_html()) || w3c_quirks_identifiers(public_id, system_id) {
+        let p3 = if p2.stopped {
+            // Parsing has stopped (the node limit): nothing more changes.
+            p2
+        } else if t->Doctype_force_quirks || name != Some(w3c_name_html()) || w3c_quirks_identifiers(public_id, system_id) {
             Parser { doc: dom::set_mode(p2.doc, DocumentMode::Quirks), ..p2 }
         } else if w3c_limited_quirks_identifiers(public_id, system_id) {
             // "Otherwise, if the document is not an iframe srcdoc document,
