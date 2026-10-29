@@ -1126,7 +1126,7 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
-| 4.14 Text layout | not started |
+| 4.14 Text layout | done locally on branch `claude/phase4-text-layout`, CI not yet run: `clazel-text` (tier 0), every rule unit-tested; golden test of the 1,761 html5lib document cases at width 80; the bound (`T + A + 80·N` characters, `T + A + 82·N` lines) checked on them and on generated documents |
 | 4.15 `clazel browse` | not started |
 | 4.16 Demo and hostile pages | not started |
 | 4.17 Status and README | not started |
