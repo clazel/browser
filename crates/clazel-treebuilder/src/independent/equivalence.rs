@@ -309,10 +309,56 @@ pub proof fn lemma_after_head(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_after_head(env, p, t) == mode_after_head(env, p, t),
 {
-    assert(tag_of(w3c_name_body()) == Tag::Body) by (compute_only);
+    // Split by token kind: one proof of both whole modes exceeds the
+    // resource limit.
     if after_head_in_head_tag(t) {
-        lemma_in_head(env, push(p, w3c_head_elem(p)), t);
+        lemma_after_head_in_head_tag(env, p, t);
+    } else if t is Start {
+        lemma_after_head_start(env, p, t);
+    } else {
+        lemma_after_head_other(env, p, t);
     }
+}
+
+/// [`lemma_after_head`] for the head-element entry (`base`, …, `title`).
+proof fn lemma_after_head_in_head_tag(env: EncFns, p: Parser, t: Tok)
+    requires
+        !p.stopped,
+        place_stable(p),
+        after_head_in_head_tag(t),
+        p.head is Some && place_stable(push(p, w3c_head_elem(p))),
+    ensures
+        w3c_mode_after_head(env, p, t) == mode_after_head(env, p, t),
+{
+    lemma_in_head(env, push(p, w3c_head_elem(p)), t);
+}
+
+/// [`lemma_after_head`] for the other start tags.
+proof fn lemma_after_head_start(env: EncFns, p: Parser, t: Tok)
+    requires
+        t is Start,
+        !after_head_in_head_tag(t),
+        !p.stopped,
+        place_stable(p),
+        after_head_anything_else(t) ==> p.frameset_ok,
+    ensures
+        w3c_mode_after_head(env, p, t) == mode_after_head(env, p, t),
+{
+    assert(tag_of(w3c_name_body()) == Tag::Body) by (compute_only);
+}
+
+/// [`lemma_after_head`] for every token but a start tag.
+proof fn lemma_after_head_other(env: EncFns, p: Parser, t: Tok)
+    requires
+        !(t is Start),
+        !(t is Pi),
+        !p.stopped,
+        place_stable(p),
+        after_head_anything_else(t) ==> p.frameset_ok,
+    ensures
+        w3c_mode_after_head(env, p, t) == mode_after_head(env, p, t),
+{
+    assert(tag_of(w3c_name_body()) == Tag::Body) by (compute_only);
 }
 
 // ---------------------------------------------------------------------
