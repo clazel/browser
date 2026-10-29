@@ -109,7 +109,7 @@ pub open spec fn w3c_mode_in_table(env: EncFns, p: Parser, t: Tok) -> Outcome {
         Outcome::Reprocess(Parser { mode: Mode::InTableBody, ..q }, t)
     } else if w3c_start(t, Tag::Table) {
         // "A start tag whose tag name is "table"": "Parse error."
-        if !has_in_scope(p, Tag::Table, Scope::Table) {
+        if !w3c_has_in_table_scope(p, Tag::Table) {
             // "If the stack of open elements does not have a table element in
             // table scope, ignore the token."
             Outcome::Done(p)
@@ -121,7 +121,7 @@ pub open spec fn w3c_mode_in_table(env: EncFns, p: Parser, t: Tok) -> Outcome {
         }
     } else if w3c_end(t, Tag::Table) {
         // "An end tag whose tag name is "table"":
-        if !has_in_scope(p, Tag::Table, Scope::Table) {
+        if !w3c_has_in_table_scope(p, Tag::Table) {
             // "If the stack of open elements does not have a table element in
             // table scope, this is a parse error; ignore the token."
             Outcome::Done(p)
@@ -256,7 +256,7 @@ pub open spec fn w3c_mode_in_caption(env: EncFns, p: Parser, t: Tok) -> Outcome 
     let tag = w3c_tag(t);
     if w3c_end(t, Tag::Caption) {
         // "An end tag whose tag name is "caption"":
-        if !has_in_scope(p, Tag::Caption, Scope::Table) {
+        if !w3c_has_in_table_scope(p, Tag::Caption) {
             // "If the stack of open elements does not have a caption element
             // in table scope, this is a parse error; ignore the token.
             // (fragment case)"
@@ -270,7 +270,7 @@ pub open spec fn w3c_mode_in_caption(env: EncFns, p: Parser, t: Tok) -> Outcome 
         // "A start tag whose tag name is one of: "caption", "col",
         // "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr"", "An end
         // tag whose tag name is "table"":
-        if !has_in_scope(p, Tag::Caption, Scope::Table) {
+        if !w3c_has_in_table_scope(p, Tag::Caption) {
             // "If the stack of open elements does not have a caption element
             // in table scope, this is a parse error; ignore the token.
             // (fragment case)"
@@ -375,11 +375,10 @@ pub open spec fn w3c_clear_to_table_row_context(p: Parser) -> Parser {
 /// "The stack of open elements has a tbody, thead, or tfoot element in
 /// table scope."
 pub open spec fn w3c_has_table_section_in_table_scope(p: Parser) -> bool {
-    in_scope_from(
+    w3c_in_table_scope(
         p.open,
         p.open.len() as int,
         |e: Elem| is_html(e, Tag::Tbody) || is_html(e, Tag::Thead) || is_html(e, Tag::Tfoot),
-        Scope::Table,
     )
 }
 
@@ -407,7 +406,7 @@ pub open spec fn w3c_mode_in_table_body(env: EncFns, p: Parser, t: Tok) -> Outco
         Outcome::Reprocess(Parser { mode: Mode::InRow, ..q }, t)
     } else if t is End && (tag == Tag::Tbody || tag == Tag::Tfoot || tag == Tag::Thead) {
         // "An end tag whose tag name is one of: "tbody", "tfoot", "thead"":
-        if !has_in_scope(p, tag, Scope::Table) {
+        if !w3c_has_in_table_scope(p, tag) {
             // "If the stack of open elements does not have an element in
             // table scope that is an HTML element with the same tag name as
             // the token, this is a parse error; ignore the token."
@@ -459,7 +458,7 @@ pub open spec fn w3c_mode_in_row(env: EncFns, p: Parser, t: Tok) -> Outcome {
         Outcome::Done(push_marker(Parser { mode: Mode::InCell, ..q }))
     } else if w3c_end(t, Tag::Tr) {
         // "An end tag whose tag name is "tr"":
-        if !has_in_scope(p, Tag::Tr, Scope::Table) {
+        if !w3c_has_in_table_scope(p, Tag::Tr) {
             // "If the stack of open elements does not have a tr element in
             // table scope, this is a parse error; ignore the token."
             Outcome::Done(p)
@@ -474,7 +473,7 @@ pub open spec fn w3c_mode_in_row(env: EncFns, p: Parser, t: Tok) -> Outcome {
         // "A start tag whose tag name is one of: "caption", "col",
         // "colgroup", "tbody", "tfoot", "thead", "tr"", "An end tag whose tag
         // name is "table"":
-        if !has_in_scope(p, Tag::Tr, Scope::Table) {
+        if !w3c_has_in_table_scope(p, Tag::Tr) {
             // "If the stack of open elements does not have a tr element in
             // table scope, this is a parse error; ignore the token."
             Outcome::Done(p)
@@ -487,12 +486,12 @@ pub open spec fn w3c_mode_in_row(env: EncFns, p: Parser, t: Tok) -> Outcome {
         }
     } else if t is End && (tag == Tag::Tbody || tag == Tag::Tfoot || tag == Tag::Thead) {
         // "An end tag whose tag name is one of: "tbody", "tfoot", "thead"":
-        if !has_in_scope(p, tag, Scope::Table) {
+        if !w3c_has_in_table_scope(p, tag) {
             // "If the stack of open elements does not have an element in table
             // scope that is an HTML element with the same tag name as the
             // token, this is a parse error; ignore the token."
             Outcome::Done(p)
-        } else if !has_in_scope(p, Tag::Tr, Scope::Table) {
+        } else if !w3c_has_in_table_scope(p, Tag::Tr) {
             // "If the stack of open elements does not have a tr element in
             // table scope, ignore the token."
             Outcome::Done(p)
@@ -546,7 +545,7 @@ pub open spec fn w3c_mode_in_cell(env: EncFns, p: Parser, t: Tok) -> Outcome {
     let tag = w3c_tag(t);
     if t is End && (tag == Tag::Td || tag == Tag::Th) {
         // "An end tag whose tag name is one of: "td", "th"":
-        if !has_in_scope(p, tag, Scope::Table) {
+        if !w3c_has_in_table_scope(p, tag) {
             // "If the stack of open elements does not have an element in table
             // scope that is an HTML element with the same tag name as that of
             // the token, then this is a parse error; ignore the token."
@@ -566,7 +565,7 @@ pub open spec fn w3c_mode_in_cell(env: EncFns, p: Parser, t: Tok) -> Outcome {
         == Tag::Td || tag == Tag::Tfoot || tag == Tag::Th || tag == Tag::Thead || tag == Tag::Tr) {
         // "A start tag whose tag name is one of: "caption", "col",
         // "colgroup", "tbody", "td", "tfoot", "th", "thead", "tr"":
-        if !in_scope_from(p.open, p.open.len() as int, |e: Elem| is_html(e, Tag::Td) || is_html(e, Tag::Th), Scope::Table) {
+        if !w3c_in_table_scope(p.open, p.open.len() as int, |e: Elem| is_html(e, Tag::Td) || is_html(e, Tag::Th)) {
             // "If the stack of open elements does not have a td or th element
             // in table scope, then this is a parse error; ignore the token.
             // (fragment case)"
@@ -585,7 +584,7 @@ pub open spec fn w3c_mode_in_cell(env: EncFns, p: Parser, t: Tok) -> Outcome {
         == Tag::Tr) {
         // "An end tag whose tag name is one of: "table", "tbody", "tfoot",
         // "thead", "tr"":
-        if !has_in_scope(p, tag, Scope::Table) {
+        if !w3c_has_in_table_scope(p, tag) {
             // "If the stack of open elements does not have an element in table
             // scope that is an HTML element with the same tag name as that of
             // the token, then this is a parse error; ignore the token."

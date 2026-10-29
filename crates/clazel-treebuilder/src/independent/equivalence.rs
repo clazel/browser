@@ -16,6 +16,154 @@ use vstd::prelude::*;
 verus! {
 
 // ---------------------------------------------------------------------
+// §8.2.3.2 and §8.2.3.3: the algorithms of [`super::state`]
+
+/// "Has an element in table scope" (W3C §8.2.3.2, WHATWG §13.2.4.2): the
+/// same list ("html", "table", "template", in the HTML namespace) and the
+/// same algorithm, from every entry of the stack.
+pub broadcast proof fn lemma_w3c_in_table_scope(open: Seq<Elem>, i: int, target: spec_fn(Elem) -> bool)
+    ensures
+        #[trigger] w3c_in_table_scope(open, i, target) == in_scope_from(open, i, target, Scope::Table),
+    decreases i,
+{
+    if i > 0 {
+        lemma_w3c_in_table_scope(open, i - 1, target);
+    }
+}
+
+/// [`lemma_w3c_in_table_scope`] for "has a `tag` element in table scope".
+pub broadcast proof fn lemma_w3c_has_in_table_scope(p: Parser, tag: Tag)
+    ensures
+        #[trigger] w3c_has_in_table_scope(p, tag) == has_in_scope(p, tag, Scope::Table),
+{
+    let f = |e: Elem| is_html(e, tag);
+    lemma_w3c_in_table_scope(p.open, p.open.len() as int, f);
+    lemma_in_scope_ext(p.open, p.open.len() as int, f, |e: Elem| is_html(e, tag), Scope::Table);
+}
+
+/// The two transcriptions' "after the last marker" agree.
+proof fn lemma_w3c_after_last_marker(list: Seq<Fmt>, i: int)
+    requires
+        0 <= i,
+    ensures
+        w3c_after_last_marker(list, i) == after_last_marker(list, i),
+        0 <= after_last_marker(list, i) <= i,
+    decreases i,
+{
+    if i > 0 {
+        lemma_w3c_after_last_marker(list, i - 1);
+    }
+}
+
+/// Counting the entries of `from..to + 1` adds the last one to those of
+/// `from..to`.
+proof fn lemma_w3c_count_same_split(list: Seq<Fmt>, from: int, to: int, e: Elem, t: TagTok)
+    requires
+        from <= to,
+    ensures
+        w3c_count_same(list, from, to + 1, e, t) == w3c_count_same(list, from, to, e, t) + if w3c_same_as_element(
+            list[to],
+            e,
+            t,
+        ) {
+            1nat
+        } else {
+            0nat
+        },
+    decreases to - from,
+{
+    if from < to {
+        lemma_w3c_count_same_split(list, from + 1, to, e, t);
+    } else {
+        assert(w3c_count_same(list, from + 1, to + 1, e, t) == 0);
+    }
+}
+
+/// The earliest entry of `from..to` is in range, it is one at all exactly
+/// when some entry is counted, and it is counted.
+proof fn lemma_w3c_earliest_same_range(list: Seq<Fmt>, from: int, to: int, e: Elem, t: TagTok)
+    requires
+        from <= to,
+    ensures
+        from <= w3c_earliest_same(list, from, to, e, t) <= to,
+        (w3c_earliest_same(list, from, to, e, t) < to) == (w3c_count_same(list, from, to, e, t) > 0),
+        w3c_earliest_same(list, from, to, e, t) < to ==> w3c_same_as_element(
+            list[w3c_earliest_same(list, from, to, e, t)],
+            e,
+            t,
+        ),
+    decreases to - from,
+{
+    if from < to {
+        lemma_w3c_earliest_same_range(list, from + 1, to, e, t);
+    }
+}
+
+/// The earliest entry of `from..to + 1`: that of `from..to`, else the last
+/// one if it is counted.
+proof fn lemma_w3c_earliest_same_split(list: Seq<Fmt>, from: int, to: int, e: Elem, t: TagTok)
+    requires
+        from <= to,
+    ensures
+        w3c_earliest_same(list, from, to + 1, e, t) == if w3c_earliest_same(list, from, to, e, t) < to {
+            w3c_earliest_same(list, from, to, e, t)
+        } else if w3c_same_as_element(list[to], e, t) {
+            to
+        } else {
+            to + 1
+        },
+    decreases to - from,
+{
+    if from < to {
+        lemma_w3c_earliest_same_split(list, from + 1, to, e, t);
+    } else {
+        assert(w3c_earliest_same(list, from + 1, to + 1, e, t) == to + 1);
+    }
+}
+
+/// The WHATWG transcription's family of `e` in `from..i` has as many
+/// entries as the W3C one counts, and the earliest first.
+proof fn lemma_w3c_family(list: Seq<Fmt>, from: int, i: int, e: Elem, t: TagTok)
+    requires
+        from <= i,
+    ensures
+        family_indices(list, from, i, e, t).len() == w3c_count_same(list, from, i, e, t),
+        w3c_count_same(list, from, i, e, t) > 0 ==> family_indices(list, from, i, e, t)[0] == w3c_earliest_same(
+            list,
+            from,
+            i,
+            e,
+            t,
+        ),
+    decreases i - from,
+{
+    if from < i {
+        lemma_w3c_family(list, from, i - 1, e, t);
+        lemma_w3c_count_same_split(list, from, i - 1, e, t);
+        lemma_w3c_earliest_same_split(list, from, i - 1, e, t);
+        lemma_w3c_earliest_same_range(list, from, i - 1, e, t);
+        assert(w3c_same_as_element(list[i - 1], e, t) == same_family(list[i - 1], e, t));
+    }
+}
+
+/// "Push onto the list of active formatting elements" (W3C §8.2.3.3,
+/// WHATWG §13.2.4.3): the same algorithm, three-element clause included.
+pub broadcast proof fn lemma_w3c_push_formatting(p: Parser, e: Elem, t: TagTok)
+    ensures
+        #[trigger] w3c_push_formatting(p, e, t) == push_formatting(p, e, t),
+{
+    let f = p.formatting;
+    lemma_w3c_after_last_marker(f, f.len() as int);
+    lemma_w3c_family(f, after_last_marker(f, f.len() as int), f.len() as int, e, t);
+}
+
+pub broadcast group group_w3c_state {
+    lemma_w3c_in_table_scope,
+    lemma_w3c_has_in_table_scope,
+    lemma_w3c_push_formatting,
+}
+
+// ---------------------------------------------------------------------
 // §8.2.5.4.1 to §8.2.5.4.3, §8.2.5.4.5
 
 /// "initial" (W3C §8.2.5.4.1, WHATWG §13.2.6.4.1), every token but a
@@ -385,6 +533,7 @@ pub proof fn lemma_in_caption(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_caption(env, p, t) == mode_in_caption(env, p, t),
 {
+    broadcast use group_w3c_state;
 }
 
 /// "in column group" (W3C §8.2.5.4.12, WHATWG §13.2.6.4.12): the same
@@ -573,6 +722,7 @@ pub proof fn lemma_in_table_body(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_table_body(env, p, t) == mode_in_table_body(env, p, t),
 {
+    broadcast use group_w3c_state;
     lemma_closure_ext();
     lemma_table_tags_injective();
 }
@@ -588,6 +738,7 @@ pub proof fn lemma_in_row(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_row(env, p, t) == mode_in_row(env, p, t),
 {
+    broadcast use group_w3c_state;
     lemma_closure_ext();
     lemma_table_tags_injective();
 }
@@ -634,6 +785,7 @@ pub proof fn lemma_in_cell(env: EncFns, p: Parser, t: Tok)
     ensures
         w3c_mode_in_cell(env, p, t) == mode_in_cell(env, p, t),
 {
+    broadcast use group_w3c_state;
     lemma_closure_ext();
     lemma_table_tags_injective();
     lemma_pop_until_cell_popped(generate_implied_end_tags(p, None));
