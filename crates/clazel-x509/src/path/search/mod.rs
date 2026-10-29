@@ -8,11 +8,13 @@
 //! - `contract`: what the executable search is proven to meet;
 //! - `lemmas`: the proofs of `theorems`, and the facts `exec` uses;
 //! - `exec`: the executable search and `verify_server_chain`;
-//! - `examples`: known answers.
+//! - `examples`: known answers, which the certified mutations contradict
+//!   (hosted in `mutation_certificates`).
 
 pub mod contract;
 pub mod examples;
 pub mod exec;
 pub mod lemmas;
+pub mod mutation_certificates;
 pub mod spec;
 pub mod theorems;
