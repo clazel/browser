@@ -1653,7 +1653,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_rfc5280_permits_cannot_widen()",
-        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], false, None)], initial_state())"
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], None)], initial_state())"
       }
     },
     {
@@ -1667,7 +1667,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_excluded_subtrees_accumulate()",
-        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::bad_example_com())])))), super::examples::certificate(seq![], false, Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::localhost())])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::bad_example_com())], false, None)], initial_state())"
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::bad_example_com())])))), super::examples::certificate(seq![], Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::localhost())])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::bad_example_com())], None)], initial_state())"
       }
     },
     {
@@ -1709,7 +1709,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_q12_unsupported_base_refuses_path()",
-        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, None)], initial_state())"
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], initial_state())"
       }
     },
     {
@@ -1783,34 +1783,6 @@
       }
     },
     {
-      "id": "nc-self-issued-final-checked",
-      "file": "src/name_constraints/matching/spec.rs",
-      "module": "name_constraints::matching::examples",
-      "find": "&&& (certificate.self_issued && !last)",
-      "replace": "&&& certificate.self_issued",
-      "expect": "killed",
-      "reason": "RFC 5280 §6.1.3 (b), (c): a self-issued certificate is skipped only when it is not final (rfc5280::nc::excluded-self-issued-leaf).",
-      "certificate": {
-        "file": "src/name_constraints/matching/mutation_certificates.rs",
-        "lemma": "super::examples::lemma_rfc5280_self_issued_final_checked()",
-        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], true, None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)])"
-      }
-    },
-    {
-      "id": "nc-self-issued-intermediate-skipped",
-      "file": "src/name_constraints/matching/spec.rs",
-      "module": "name_constraints::matching::examples",
-      "find": "(certificate.self_issued && !last)",
-      "replace": "false",
-      "expect": "killed",
-      "reason": "RFC 5280 §6.1.3 (b), (c) skip a self-issued intermediate (rfc5280::nc::permitted-self-issued).",
-      "certificate": {
-        "file": "src/name_constraints/matching/mutation_certificates.rs",
-        "lemma": "super::examples::lemma_rfc5280_self_issued_intermediate_skipped()",
-        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], true, None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)])"
-      }
-    },
-    {
       "id": "nc-g-adds-not-replaces",
       "file": "src/name_constraints/matching/spec.rs",
       "module": "name_constraints::matching::examples",
@@ -1821,7 +1793,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_rfc5280_permits_cannot_widen()",
-        "witness": "names_constrained(seq![super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], false, Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], false, None)], initial_state())"
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], None)], initial_state())"
       }
     },
     {
@@ -1835,7 +1807,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_final_certificate_constraints_not_processed()",
-        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], false, Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()]))))], initial_state())"
+        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()]))))], initial_state())"
       }
     },
     {
@@ -1849,7 +1821,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_dn_prefix_rule()",
-        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag()) + super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag())))]), None)])"
+        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag()) + super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag())))]), None)])"
       }
     },
     {
@@ -1863,7 +1835,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_rfc5280_permitted_dn_subject_checked()",
-        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![super::examples::dn_entry(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())))], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![super::examples::dn_entry(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())))], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
       }
     },
     {
@@ -1877,7 +1849,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_dn_utf8_printable_relaxation()",
-        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::printable_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::printable_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
       }
     },
     {
@@ -1891,7 +1863,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_dn_attribute_type_matters()",
-        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::foo(), super::examples::utf8_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::foo(), super::examples::utf8_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
       }
     },
     {
@@ -1905,7 +1877,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_rfc5280_permitted_dn_mismatch()",
-        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
       }
     },
     {
@@ -1919,7 +1891,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_dn_values_chrome_cannot_compare()",
-        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())))]), None)])"
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())))]), None)])"
       }
     },
     {
@@ -1933,7 +1905,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_dn_values_chrome_cannot_compare()",
-        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())), seq![], false, None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())))]), None)])"
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())))]), None)])"
       }
     },
     {
@@ -2031,7 +2003,7 @@
       "certificate": {
         "file": "src/name_constraints/matching/mutation_certificates.rs",
         "lemma": "super::examples::lemma_subject_email_address_refused()",
-        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_email(super::examples::at_example_com(super::examples::foo()))), seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))], false, None)], seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)])"
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_email(super::examples::at_example_com(super::examples::foo()))), seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))], None)], seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)])"
       }
     },
     {
@@ -2130,6 +2102,20 @@
         "file": "src/name_constraints/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_directory_name_base_keeps_name_tlv()",
         "witness": "match parse_name_constraints(seq![0x30u8, 0x08, 0xa0, 0x06, 0x30, 0x04, 0xa4, 0x02, 0x30, 0x00]) { Some(value) => match value.permitted_subtrees { Some(items) => items.len() == 1 && match items[0].base { GeneralNameConstraint::DirectoryName(name) => name.len() == 4, _ => false }, None => false }, None => false }"
+      }
+    },
+    {
+      "id": "nc-self-issued-intermediates-checked",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "        &&& certificate_acceptable(state, certificate)\n",
+      "replace": "        &&& !last || certificate_acceptable(state, certificate)\n",
+      "expect": "killed",
+      "reason": "(R), Firefox's CheckNameConstraints: every certificate below a constrained one is checked; skipping intermediates (the RFC 5280 §6.1.3 (b), (c) self-issued exemption or wider) accepts rfc5280::nc::permitted-self-issued.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_self_issued_intermediate_checked()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)])"
       }
     }
   ]

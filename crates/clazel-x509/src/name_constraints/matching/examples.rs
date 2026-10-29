@@ -153,20 +153,18 @@ pub open spec fn uri_entry() -> crate::extensions::spec::GeneralName {
 /// One certificate of a path, with limbo's leaf subject `CN=example.com`.
 pub open spec fn certificate(
     names: Seq<crate::extensions::spec::GeneralName>,
-    self_issued: bool,
     name_constraints: Option<crate::name_constraints::spec::NameConstraints>,
 ) -> NcCertificate {
-    certificate_with_subject(name_of(rdn_cn(example_com(), utf8_tag())), names, self_issued, name_constraints)
+    certificate_with_subject(name_of(rdn_cn(example_com(), utf8_tag())), names, name_constraints)
 }
 
 /// One certificate of a path with the subject Name TLV `subject`.
 pub open spec fn certificate_with_subject(
     subject: Seq<u8>,
     names: Seq<crate::extensions::spec::GeneralName>,
-    self_issued: bool,
     name_constraints: Option<crate::name_constraints::spec::NameConstraints>,
 ) -> NcCertificate {
-    NcCertificate { subject, subject_alt_names: names, self_issued, name_constraints }
+    NcCertificate { subject, subject_alt_names: names, name_constraints }
 }
 
 // ---------------------------------------------------------------------------
@@ -741,8 +739,8 @@ pub proof fn lemma_q12_unsupported_base_refuses_path()
         !constraints_supported(constraints(None, Some(seq![directory_name_subtree()]))),
         !constraints_supported(constraints(Some(seq![dns_subtree(example_com())]), Some(seq![directory_name_subtree()]))),
         !names_constrained(
-            seq![certificate(seq![], false, Some(constraints(None, Some(seq![directory_name_subtree()])))),
-                certificate(seq![dns_entry(example_com())], false, None)],
+            seq![certificate(seq![], Some(constraints(None, Some(seq![directory_name_subtree()])))),
+                certificate(seq![dns_entry(example_com())], None)],
             initial_state()),
 {
     assert(constraints_supported(constraints(Some(seq![directory_name_subtree()]), None))) by (compute_only);
@@ -750,8 +748,8 @@ pub proof fn lemma_q12_unsupported_base_refuses_path()
     assert(!constraints_supported(constraints(Some(seq![dns_subtree(example_com())]), Some(seq![directory_name_subtree()]))))
         by (compute_only);
     assert(!names_constrained(
-        seq![certificate(seq![], false, Some(constraints(None, Some(seq![directory_name_subtree()])))),
-            certificate(seq![dns_entry(example_com())], false, None)],
+        seq![certificate(seq![], Some(constraints(None, Some(seq![directory_name_subtree()])))),
+            certificate(seq![dns_entry(example_com())], None)],
         initial_state())) by (compute_only);
 }
 
@@ -775,19 +773,19 @@ pub proof fn lemma_webpki_both_fields_absent_refused()
 pub proof fn lemma_rfc5280_permits_cannot_widen()
     ensures !names_constrained(
         seq![
-            certificate(seq![], false, Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
-            certificate(seq![], false, Some(constraints(
+            certificate(seq![], Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
+            certificate(seq![], Some(constraints(
                 Some(seq![dns_subtree(foo_example_com()), dns_subtree(bar_example_com())]), None))),
-            certificate(seq![dns_entry(foo_example_com())], false, None),
+            certificate(seq![dns_entry(foo_example_com())], None),
         ],
         initial_state()),
 {
     assert(!names_constrained(
         seq![
-            certificate(seq![], false, Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
-            certificate(seq![], false, Some(constraints(
+            certificate(seq![], Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
+            certificate(seq![], Some(constraints(
                 Some(seq![dns_subtree(foo_example_com()), dns_subtree(bar_example_com())]), None))),
-            certificate(seq![dns_entry(foo_example_com())], false, None),
+            certificate(seq![dns_entry(foo_example_com())], None),
         ],
         initial_state())) by (compute_only);
 }
@@ -797,19 +795,19 @@ pub proof fn lemma_rfc5280_permits_cannot_widen()
 pub proof fn lemma_rfc5280_permits_narrow()
     ensures !names_constrained(
         seq![
-            certificate(seq![], false, Some(constraints(
+            certificate(seq![], Some(constraints(
                 Some(seq![dns_subtree(foo_example_com()), dns_subtree(bar_example_com())]), None))),
-            certificate(seq![], false, Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
-            certificate(seq![dns_entry(foo_example_com())], false, None),
+            certificate(seq![], Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
+            certificate(seq![dns_entry(foo_example_com())], None),
         ],
         initial_state()),
 {
     assert(!names_constrained(
         seq![
-            certificate(seq![], false, Some(constraints(
+            certificate(seq![], Some(constraints(
                 Some(seq![dns_subtree(foo_example_com()), dns_subtree(bar_example_com())]), None))),
-            certificate(seq![], false, Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
-            certificate(seq![dns_entry(foo_example_com())], false, None),
+            certificate(seq![], Some(constraints(Some(seq![dns_subtree(bar_example_com())]), None))),
+            certificate(seq![dns_entry(foo_example_com())], None),
         ],
         initial_state())) by (compute_only);
 }
@@ -820,17 +818,17 @@ pub proof fn lemma_rfc5280_permits_narrow()
 pub proof fn lemma_excluded_subtrees_accumulate()
     ensures !names_constrained(
         seq![
-            certificate(seq![], false, Some(constraints(None, Some(seq![dns_subtree(bad_example_com())])))),
-            certificate(seq![], false, Some(constraints(None, Some(seq![dns_subtree(localhost())])))),
-            certificate(seq![dns_entry(bad_example_com())], false, None),
+            certificate(seq![], Some(constraints(None, Some(seq![dns_subtree(bad_example_com())])))),
+            certificate(seq![], Some(constraints(None, Some(seq![dns_subtree(localhost())])))),
+            certificate(seq![dns_entry(bad_example_com())], None),
         ],
         initial_state()),
 {
     assert(!names_constrained(
         seq![
-            certificate(seq![], false, Some(constraints(None, Some(seq![dns_subtree(bad_example_com())])))),
-            certificate(seq![], false, Some(constraints(None, Some(seq![dns_subtree(localhost())])))),
-            certificate(seq![dns_entry(bad_example_com())], false, None),
+            certificate(seq![], Some(constraints(None, Some(seq![dns_subtree(bad_example_com())])))),
+            certificate(seq![], Some(constraints(None, Some(seq![dns_subtree(localhost())])))),
+            certificate(seq![dns_entry(bad_example_com())], None),
         ],
         initial_state())) by (compute_only);
 }
@@ -841,59 +839,60 @@ pub proof fn lemma_excluded_subtrees_accumulate()
 pub proof fn lemma_rfc5280_intermediate_san_checked()
     ensures !names_constrained(
         seq![
-            certificate(seq![dns_entry(example_com())], false, Some(constraints(
+            certificate(seq![dns_entry(example_com())], Some(constraints(
                 Some(seq![dns_subtree(foo_example_com())]), Some(seq![dns_subtree(bad_example_com())])))),
-            certificate(seq![dns_entry(bad_example_com())], false, None),
-            certificate(seq![dns_entry(foo_example_com())], false, None),
+            certificate(seq![dns_entry(bad_example_com())], None),
+            certificate(seq![dns_entry(foo_example_com())], None),
         ],
         initial_state()),
 {
     assert(!names_constrained(
         seq![
-            certificate(seq![dns_entry(example_com())], false, Some(constraints(
+            certificate(seq![dns_entry(example_com())], Some(constraints(
                 Some(seq![dns_subtree(foo_example_com())]), Some(seq![dns_subtree(bad_example_com())])))),
-            certificate(seq![dns_entry(bad_example_com())], false, None),
-            certificate(seq![dns_entry(foo_example_com())], false, None),
+            certificate(seq![dns_entry(bad_example_com())], None),
+            certificate(seq![dns_entry(foo_example_com())], None),
         ],
         initial_state())) by (compute_only);
 }
 
-/// `rfc5280::nc::permitted-self-issued` SUCCESS: a self-issued intermediate
-/// whose SAN `not-example.com` is outside the anchor's permitted
-/// `example.com` is not checked. (The anchor's constraints are the initial
-/// state here.)
-pub proof fn lemma_rfc5280_self_issued_intermediate_skipped()
-    ensures names_constrained(
-        seq![
-            certificate(seq![dns_entry(not_example_com())], true, None),
-            certificate(seq![dns_entry(example_com())], false, None),
-        ],
-        seq![constraints(Some(seq![dns_subtree(example_com())]), None)]),
-{
-    assert(names_constrained(
-        seq![
-            certificate(seq![dns_entry(not_example_com())], true, None),
-            certificate(seq![dns_entry(example_com())], false, None),
-        ],
-        seq![constraints(Some(seq![dns_subtree(example_com())]), None)])) by (compute_only);
-}
-
-/// `rfc5280::nc::excluded-self-issued-leaf` FAILURE: a self-issued final
-/// certificate is checked. (In limbo the intermediate also has a SAN
-/// outside the constraint; it has none here, so only the final-certificate
-/// rule decides.)
-pub proof fn lemma_rfc5280_self_issued_final_checked()
+/// `rfc5280::nc::permitted-self-issued` (SUCCESS in limbo, a listed
+/// divergence; (R) self-issued intermediates are checked): a self-issued
+/// intermediate whose SAN `not-example.com` is outside the anchor's
+/// permitted `example.com` is checked, as Firefox checks it, and the path is
+/// refused. (The anchor's constraints are the initial state here.)
+pub proof fn lemma_rfc5280_self_issued_intermediate_checked()
     ensures !names_constrained(
         seq![
-            certificate(seq![], false, None),
-            certificate(seq![dns_entry(not_example_com())], true, None),
+            certificate(seq![dns_entry(not_example_com())], None),
+            certificate(seq![dns_entry(example_com())], None),
         ],
         seq![constraints(Some(seq![dns_subtree(example_com())]), None)]),
 {
     assert(!names_constrained(
         seq![
-            certificate(seq![], false, None),
-            certificate(seq![dns_entry(not_example_com())], true, None),
+            certificate(seq![dns_entry(not_example_com())], None),
+            certificate(seq![dns_entry(example_com())], None),
+        ],
+        seq![constraints(Some(seq![dns_subtree(example_com())]), None)])) by (compute_only);
+}
+
+/// `rfc5280::nc::excluded-self-issued-leaf` FAILURE: a self-issued final
+/// certificate is checked, as every certificate is. (In limbo the intermediate also has a SAN
+/// outside the constraint; it has none here, so only the final-certificate
+/// rule decides.)
+pub proof fn lemma_rfc5280_self_issued_final_checked()
+    ensures !names_constrained(
+        seq![
+            certificate(seq![], None),
+            certificate(seq![dns_entry(not_example_com())], None),
+        ],
+        seq![constraints(Some(seq![dns_subtree(example_com())]), None)]),
+{
+    assert(!names_constrained(
+        seq![
+            certificate(seq![], None),
+            certificate(seq![dns_entry(not_example_com())], None),
         ],
         seq![constraints(Some(seq![dns_subtree(example_com())]), None)])) by (compute_only);
 }
@@ -904,12 +903,12 @@ pub proof fn lemma_rfc5280_self_issued_final_checked()
 /// end-entity certificate (`rfc5280::nc::not-allowed-in-ee-critical`).
 pub proof fn lemma_final_certificate_constraints_not_processed()
     ensures names_constrained(
-        seq![certificate(seq![dns_entry(example_com())], false,
+        seq![certificate(seq![dns_entry(example_com())],
             Some(constraints(None, Some(seq![directory_name_subtree()]))))],
         initial_state()),
 {
     assert(names_constrained(
-        seq![certificate(seq![dns_entry(example_com())], false,
+        seq![certificate(seq![dns_entry(example_com())],
             Some(constraints(None, Some(seq![directory_name_subtree()]))))],
         initial_state())) by (compute_only);
 }
@@ -923,20 +922,20 @@ pub proof fn lemma_final_certificate_constraints_not_processed()
 /// anchor's constraints are the initial state here.)
 pub proof fn lemma_rfc5280_permitted_dn_match()
     ensures
-        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
 {
-    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
 }
 
 /// `rfc5280::nc::permitted-dn-mismatch` FAILURE: `CN=not-foo` is not within
 /// `CN=foo`, as a subject or as an entry.
 pub proof fn lemma_rfc5280_permitted_dn_mismatch()
     ensures
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(not_foo(), utf8_tag())))], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(not_foo(), utf8_tag())))], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
 {
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(not_foo(), utf8_tag())))], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(not_foo(), utf8_tag())))], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
 }
 
 /// `rfc5280::nc::permitted-dn-match-subject-san-mismatch` FAILURE: the
@@ -945,9 +944,9 @@ pub proof fn lemma_rfc5280_permitted_dn_mismatch()
 /// §4.2.1.10 "MUST be applied to the subject field").
 pub proof fn lemma_rfc5280_permitted_dn_subject_checked()
     ensures
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
 {
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(not_foo(), utf8_tag())), seq![dn_entry(name_of(rdn_cn(foo(), utf8_tag())))], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
 }
 
 /// Firefox (no limbo case): an empty subject is checked too and fails a
@@ -955,9 +954,9 @@ pub proof fn lemma_rfc5280_permitted_dn_subject_checked()
 /// skips it; this is (R) against Chrome.
 pub proof fn lemma_dn_empty_subject_fails()
     ensures
-        !names_constrained(seq![certificate_with_subject(name_of(seq![]), seq![dns_entry(example_com())], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(seq![]), seq![dns_entry(example_com())], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
 {
-    assert(!names_constrained(seq![certificate_with_subject(name_of(seq![]), seq![dns_entry(example_com())], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(seq![]), seq![dns_entry(example_com())], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
 }
 
 /// The prefix rule (no limbo case): a permitted `O=Example` holds
@@ -965,13 +964,13 @@ pub proof fn lemma_dn_empty_subject_fails()
 /// `CN=foo, O=Example`; and an empty base holds every name.
 pub proof fn lemma_dn_prefix_rule()
     ensures
-        names_constrained(seq![certificate_with_subject(name_of(rdn_o(example_org(), utf8_tag()) + rdn_cn(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)]),
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag()) + rdn_o(example_org(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)]),
-        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(seq![]))]), None)]),
+        names_constrained(seq![certificate_with_subject(name_of(rdn_o(example_org(), utf8_tag()) + rdn_cn(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag()) + rdn_o(example_org(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)]),
+        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(seq![]))]), None)]),
 {
-    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_o(example_org(), utf8_tag()) + rdn_cn(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)])) by (compute_only);
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag()) + rdn_o(example_org(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)])) by (compute_only);
-    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(seq![]))]), None)])) by (compute_only);
+    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_o(example_org(), utf8_tag()) + rdn_cn(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag()) + rdn_o(example_org(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_o(example_org(), utf8_tag())))]), None)])) by (compute_only);
+    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(seq![]))]), None)])) by (compute_only);
 }
 
 /// Firefox's tag relaxation, both directions (no limbo case): a
@@ -979,20 +978,20 @@ pub proof fn lemma_dn_prefix_rule()
 /// the reverse. Chrome normalizes both to the same string.
 pub proof fn lemma_dn_utf8_printable_relaxation()
     ensures
-        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), printable_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
-        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(foo(), printable_tag())))]), None)]),
+        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), printable_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(foo(), printable_tag())))]), None)]),
 {
-    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), printable_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
-    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(foo(), printable_tag())))]), None)])) by (compute_only);
+    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), printable_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(foo(), printable_tag())))]), None)])) by (compute_only);
 }
 
 /// (R) against Chrome (no limbo case): `CN=Foo` is not within `CN=foo`,
 /// which Chrome's case folding would accept and Firefox refuses.
 pub proof fn lemma_dn_no_normalization()
     ensures
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo_upper(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo_upper(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
 {
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo_upper(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(foo_upper(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
 }
 
 /// (R) (no limbo case): values Chrome cannot normalize never match, even
@@ -1000,11 +999,11 @@ pub proof fn lemma_dn_no_normalization()
 /// not a PrintableString character.
 pub proof fn lemma_dn_values_chrome_cannot_compare()
     ensures
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())))]), None)]),
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![b'*'], printable_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![b'*'], printable_tag())))]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())))]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![b'*'], printable_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![b'*'], printable_tag())))]), None)]),
 {
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())))]), None)])) by (compute_only);
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![b'*'], printable_tag())), seq![], false, None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![b'*'], printable_tag())))]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![0u8, b'f'], bmp_tag())))]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_cn(seq![b'*'], printable_tag())), seq![], None)], seq![constraints(Some(seq![dn_subtree(name_of(rdn_cn(seq![b'*'], printable_tag())))]), None)])) by (compute_only);
 }
 
 /// (R) malformed bases (no limbo case): a directoryName base that is not
@@ -1113,11 +1112,11 @@ pub proof fn lemma_rfc5280_invalid_email_entry_refused()
 /// ignored.
 pub proof fn lemma_subject_email_address_refused()
     ensures
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![email_entry(at_example_com(foo()))], false, None)], seq![constraints(Some(seq![email_subtree(example_com())]), None)]),
-        names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![dns_entry(example_com())], false, None)], seq![constraints(Some(seq![dns_subtree(example_com())]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![email_entry(at_example_com(foo()))], None)], seq![constraints(Some(seq![email_subtree(example_com())]), None)]),
+        names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![dns_entry(example_com())], None)], seq![constraints(Some(seq![dns_subtree(example_com())]), None)]),
 {
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![email_entry(at_example_com(foo()))], false, None)], seq![constraints(Some(seq![email_subtree(example_com())]), None)])) by (compute_only);
-    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![dns_entry(example_com())], false, None)], seq![constraints(Some(seq![dns_subtree(example_com())]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![email_entry(at_example_com(foo()))], None)], seq![constraints(Some(seq![email_subtree(example_com())]), None)])) by (compute_only);
+    assert(names_constrained(seq![certificate_with_subject(name_of(rdn_email(at_example_com(foo()))), seq![dns_entry(example_com())], None)], seq![constraints(Some(seq![dns_subtree(example_com())]), None)])) by (compute_only);
 }
 
 // ---------------------------------------------------------------------------
@@ -1162,9 +1161,9 @@ pub proof fn lemma_br_zero_length_dns_decoded()
 /// `CN=foo`, though the values are equal.
 pub proof fn lemma_dn_attribute_type_matters()
     ensures
-        !names_constrained(seq![certificate_with_subject(name_of(rdn_o(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
+        !names_constrained(seq![certificate_with_subject(name_of(rdn_o(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)]),
 {
-    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_o(foo(), utf8_tag())), seq![], false, None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
+    assert(!names_constrained(seq![certificate_with_subject(name_of(rdn_o(foo(), utf8_tag())), seq![], None)], seq![constraints(Some(seq![directory_name_subtree()]), None)])) by (compute_only);
 }
 
 /// (R) malformed entries (no limbo case): `.foo@example.com` has a local
