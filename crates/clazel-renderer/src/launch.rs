@@ -108,7 +108,8 @@ mod imp {
     use std::time::Duration;
 
     use clazel_sandbox::appcontainer as policy;
-    use clazel_sys::windows::{self, Policy, Process};
+    use clazel_sys::Errno;
+    use clazel_sys::windows::{self, Policy, Process, SpawnError};
 
     pub struct Link {
         to_child: Option<PipeWriter>,
@@ -185,25 +186,34 @@ mod imp {
         let owned = env_pairs(&system_root);
         let env: Vec<(&str, &str)> = owned.iter().map(|(k, v)| (*k, v.as_str())).collect();
         let _one_at_a_time = SPAWN.lock().map_err(other)?;
-        let process = windows::spawn(
-            &program,
-            &line,
-            &Policy {
-                container_name: policy::CONTAINER_NAME,
-                mitigations: policy::mitigation_mask(),
-                child_process_restricted: policy::CHILD_PROCESS_RESTRICTED,
-                opt_out_all_application_packages: policy::OPT_OUT_ALL_APPLICATION_PACKAGES,
-                active_process_limit: job.active_process_limit,
-                kill_on_close: job.kill_on_close,
-                ui_restrictions: job.ui_restrictions,
-                process_memory_limit: job.process_memory_limit,
-            },
-            &env,
-            &h_in,
-            &h_out,
-            &h_err,
-        )
-        .map_err(other)?;
+        let confinement = Policy {
+            container_name: policy::CONTAINER_NAME,
+            mitigations: policy::mitigation_mask(),
+            child_process_restricted: policy::CHILD_PROCESS_RESTRICTED,
+            opt_out_all_application_packages: policy::OPT_OUT_ALL_APPLICATION_PACKAGES,
+            active_process_limit: job.active_process_limit,
+            kill_on_close: job.kill_on_close,
+            ui_restrictions: job.ui_restrictions,
+            process_memory_limit: job.process_memory_limit,
+        };
+        // Windows sometimes answers a start with ERROR_FILE_NOT_FOUND although
+        // the binary is there (seen on the CI runner for about 6 in 100
+        // starts of short-lived renderers, and never on a retry), apparently
+        // while the system is still tidying a container whose last process just
+        // exited. Only that error, only while the file exists, is retried.
+        let mut retries = 0u32;
+        let process = loop {
+            match windows::spawn(&program, &line, &confinement, &env, &h_in, &h_out, &h_err) {
+                Ok(p) => break p,
+                Err(SpawnError::Call("CreateProcessW", Errno(2)))
+                    if retries < 100 && program.exists() =>
+                {
+                    retries = retries.saturating_add(1);
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(e) => return Err(other(e)),
+            }
+        };
         // The renderer holds its ends now; closing ours is what makes EOF
         // reach each side when the other dies.
         drop((h_in, h_out, h_err));
