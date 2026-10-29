@@ -37,6 +37,7 @@ theorems = [
     "theorem_open_distinct",
     "theorem_reachable_w3c_facts",
     "theorem_reachable_foreign_content",
+    "theorem_reachable_frameset_cell",
 ]
 
 [package.metadata.verus]

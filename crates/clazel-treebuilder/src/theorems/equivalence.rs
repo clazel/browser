@@ -1,27 +1,31 @@
 //! The preconditions of the W3C equivalence lemmas
 //! (`independent::equivalence`, `independent::equivalence_body`,
 //! `independent::equivalence_foreign`) that are facts of every reachable
-//! parser, proven from [`super::reachable::reach_wf`]; and the foreign
-//! content equivalence for reachable parsers without its stack hypothesis
-//! ([`theorem_reachable_foreign_content`]).
+//! parser, proven from [`super::reachable::reach_wf`]; the foreign content
+//! equivalence for reachable parsers without its stack hypothesis
+//! ([`theorem_reachable_foreign_content`]); and the "in frameset" and "in
+//! cell" equivalences for reachable parsers with no hypothesis
+//! ([`theorem_reachable_frameset_cell`]).
 //!
 //! Discharged here, for every parser reached from `new_parser` or
 //! `fragment_parser` by `dispatch` steps ([`theorem_reachable_w3c_facts`]):
 //! `document_rooted` and `no_document_redirect` (always); `aa_wf` and
 //! `tags_wf` (until parsing stops); `place_stable`, and `place_stable` of
-//! the stack with the `head` element pushed, which "after head" needs
-//! (until parsing stops, once the `html` element exists: in every mode but
-//! "initial" and "before html"); `open_distinct` (until parsing stops).
-//! For a token the tokenizer emits (`classify`), `token_tagged`,
-//! `tok_tagged` and `attrs_plain` of its attributes
-//! ([`lemma_classify_plain`]).
+//! the stack with the `head` element pushed, which "after head" needs,
+//! `html_only_at_root`, which "in frameset" needs (until parsing stops,
+//! once the `html` element exists: in every mode but "initial" and "before
+//! html"); `open_distinct` (until parsing stops); in the "in cell" mode, a
+//! `td` or `th` element in table scope, which "in cell" needs (from
+//! `invariant::html_once` and `invariant::cell_scoped`, parts of
+//! `invariant::reachable_inv`). For a token the tokenizer emits
+//! (`classify`), `token_tagged`, `tok_tagged` and `attrs_plain` of its
+//! attributes ([`lemma_classify_plain`]).
 //!
 //! Not discharged: the preconditions that exclude the inputs where the two
 //! texts differ (they are not facts of states; `w3c_aa_agrees` and "in
-//! table text"'s nonempty pending list among them), and
-//! `html_only_at_root`, `element_plain` of the `html` and `body` elements
-//! and the "in cell" table scope fact, which need invariants of the parse
-//! state no proof here carries.
+//! table text"'s nonempty pending list among them), and `element_plain` of
+//! the `html` and `body` elements ("in body"), which needs a fact about the
+//! attributes of document nodes that no proof here carries.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -177,6 +181,37 @@ pub proof fn lemma_classify_plain(token: Token)
     }
 }
 
+/// The predicate of the "in cell" lemma's precondition: "a td element or a
+/// th element".
+pub open spec fn td_or_th() -> spec_fn(Elem) -> bool {
+    |e: Elem| is_html(e, Tag::Td) || is_html(e, Tag::Th)
+}
+
+/// The stack of a parser in the "in cell" mode has a `td` or `th` element
+/// in table scope (the "in cell" lemma's precondition).
+pub open spec fn cell_in_table_scope(p: Parser) -> bool {
+    in_scope_from(p.open, p.open.len() as int, td_or_th(), Scope::Table)
+}
+
+/// [`reach_core`] of a running parser in a mode after "before html" gives
+/// `html_only_at_root`, and in the "in cell" mode a cell in table scope.
+pub proof fn lemma_core_html_cell(p: Parser)
+    requires
+        reach_core(p),
+        p.mode != Mode::Initial,
+        p.mode != Mode::BeforeHtml,
+    ensures
+        crate::independent::equivalence::html_only_at_root(p),
+        p.mode == Mode::InCell ==> cell_in_table_scope(p),
+{
+    lemma_core_rooted(p);
+    if p.mode == Mode::InCell {
+        crate::reachable::cells::lemma_cell_top(p.open);
+        crate::reachable::walls::lemma_scoped_in_scope(p.open, p.open.len() as int);
+        assert(cell_pred() =~= td_or_th());
+    }
+}
+
 /// The facts of a reachable parser the W3C equivalence lemmas assume.
 pub open spec fn w3c_facts(p: Parser) -> bool {
     &&& crate::independent::equivalence::document_rooted(p)
@@ -191,6 +226,8 @@ pub open spec fn w3c_facts(p: Parser) -> bool {
         &&& p.head is Some ==> crate::independent::equivalence::place_stable(
             push(p, crate::independent::early::w3c_head_elem(p)),
         )
+        &&& crate::independent::equivalence::html_only_at_root(p)
+        &&& p.mode == Mode::InCell ==> cell_in_table_scope(p)
     }
 }
 
@@ -206,6 +243,7 @@ pub proof fn lemma_reach_w3c_facts(p: Parser)
         lemma_reach_aa_wf(p);
         if p.mode != Mode::Initial && p.mode != Mode::BeforeHtml {
             lemma_reach_place_stable(p);
+            lemma_core_html_cell(p);
         }
     }
 }
@@ -216,7 +254,9 @@ pub proof fn lemma_reach_w3c_facts(p: Parser)
 /// Document with children in the arena, the redirection map has no entry
 /// for it, and until parsing stops `aa_wf`, `tags_wf`, `open_distinct`,
 /// and (in every mode after "before html") `place_stable`, also of the
-/// stack with the `head` element pushed. No hypotheses.
+/// stack with the `head` element pushed, `html_only_at_root` (the root is
+/// the stack's only `html` element), and in the "in cell" mode a `td` or
+/// `th` element in table scope. No hypotheses.
 pub proof fn theorem_reachable_w3c_facts(
     env: EncFns,
     url: Seq<u32>,
@@ -305,6 +345,85 @@ pub proof fn theorem_reachable_foreign_content(
     }
     if !(token is ProcessingInstruction) && !p2.stopped && dispatcher(p2, t) == Rules::Foreign && foreign_texts_agree(p2, t) {
         lemma_reach_foreign_content(env, p2, token);
+    }
+}
+
+/// "In frameset" and "in cell", from a parser with
+/// [`reach_wf`](super::reachable::reach_wf): the W3C and WHATWG rules give
+/// the same outcome for every token the tokenizer emits (other than a
+/// processing instruction).
+pub proof fn lemma_reach_frameset_cell(env: EncFns, p: Parser, token: Token)
+    requires
+        super::reachable::reach_wf(p),
+        !(token is ProcessingInstruction),
+        !p.stopped,
+    ensures
+        p.mode == Mode::InFrameset ==> crate::independent::after::w3c_mode_in_frameset(env, p, classify(token))
+            == mode_in_frameset(env, p, classify(token)),
+        p.mode == Mode::InCell ==> crate::independent::tables::w3c_mode_in_cell(env, p, classify(token)) == mode_in_cell(
+            env,
+            p,
+            classify(token),
+        ),
+{
+    let t = classify(token);
+    lemma_reach_w3c_facts(p);
+    lemma_classify_plain(token);
+    if p.mode == Mode::InFrameset {
+        crate::independent::equivalence::lemma_in_frameset(env, p, t);
+    }
+    if p.mode == Mode::InCell {
+        assert(td_or_th() == (|e: Elem| is_html(e, Tag::Td) || is_html(e, Tag::Th)));
+        crate::independent::equivalence::lemma_in_cell(env, p, t);
+    }
+}
+
+/// **"In frameset" and "in cell", from every reachable parser**: the
+/// corollaries of `independent::equivalence::lemma_in_frameset` and
+/// `lemma_in_cell` for every parser `p` reached from `new_parser` or
+/// `fragment_parser` by `dispatch` steps and every token the tokenizer
+/// emits (other than a processing instruction, which the W3C does not
+/// have): in the "in frameset" mode the W3C and WHATWG rules give the same
+/// outcome, and so in the "in cell" mode. No other hypothesis: their state
+/// preconditions (the root is the stack's only `html` element; a `td` or
+/// `th` element in table scope; tagged records and tokens) are discharged
+/// ([`theorem_reachable_w3c_facts`]), and the texts do not differ on any
+/// input a reachable parser meets.
+pub proof fn theorem_reachable_frameset_cell(
+    env: EncFns,
+    url: Seq<u32>,
+    ctx: Context,
+    scripting: bool,
+    tentative: bool,
+    tokens: Seq<Token>,
+    token: Token,
+)
+    ensures
+        ({
+            let p = crate::reachable::run::dispatch_steps(env, new_parser(url, scripting, tentative), tokens);
+            let t = classify(token);
+            &&& !(token is ProcessingInstruction) && !p.stopped && p.mode == Mode::InFrameset
+                ==> crate::independent::after::w3c_mode_in_frameset(env, p, t) == mode_in_frameset(env, p, t)
+            &&& !(token is ProcessingInstruction) && !p.stopped && p.mode == Mode::InCell
+                ==> crate::independent::tables::w3c_mode_in_cell(env, p, t) == mode_in_cell(env, p, t)
+        }),
+        ({
+            let p = crate::reachable::run::dispatch_steps(env, fragment_parser(ctx, scripting).0, tokens);
+            let t = classify(token);
+            &&& !(token is ProcessingInstruction) && !p.stopped && p.mode == Mode::InFrameset
+                ==> crate::independent::after::w3c_mode_in_frameset(env, p, t) == mode_in_frameset(env, p, t)
+            &&& !(token is ProcessingInstruction) && !p.stopped && p.mode == Mode::InCell
+                ==> crate::independent::tables::w3c_mode_in_cell(env, p, t) == mode_in_cell(env, p, t)
+        }),
+{
+    super::reachable::theorem_reachable_wf(env, url, ctx, scripting, tentative, tokens);
+    let p1 = crate::reachable::run::dispatch_steps(env, new_parser(url, scripting, tentative), tokens);
+    let p2 = crate::reachable::run::dispatch_steps(env, fragment_parser(ctx, scripting).0, tokens);
+    if !(token is ProcessingInstruction) && !p1.stopped {
+        lemma_reach_frameset_cell(env, p1, token);
+    }
+    if !(token is ProcessingInstruction) && !p2.stopped {
+        lemma_reach_frameset_cell(env, p2, token);
     }
 }
 
