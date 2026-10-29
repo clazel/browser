@@ -44,8 +44,8 @@
 //!   both at their `main`/`master` heads read on 2026-10-29. A path is accepted
 //!   only where both browsers accept it; where they differ this follows the
 //!   stricter. Each remaining difference from either browser is a refusal,
-//!   marked **(R)** and named with the browser it differs from, except the one
-//!   marked **(A)** below.
+//!   marked **(R)** and named with the browser it differs from. Nothing here
+//!   accepts what either browser refuses.
 //!
 //! Modelling choices. Every place where this refuses more than RFC 5280
 //! requires, or more than a browser does, is marked **(R)**.
@@ -202,18 +202,21 @@
 //!   an end-entity's CN (and emailAddress) against constraints when it has no
 //!   subjectAltName; such a certificate has no identity for this verifier, so
 //!   the hostname check refuses it before acceptance.
-//! - **(A) Self-issued intermediates.** RFC 5280 §6.1.3 (b) and (c) skip a
-//!   self-issued certificate that is not the final one, and so do Chrome
-//!   (`verify_certificate_chain.cc`: `!IsSelfIssued(cert) || is_target_cert`)
-//!   and this module (`rfc5280::nc::permitted-self-issued`). Firefox's
+//! - **(R) Self-issued intermediates are checked.** RFC 5280 §6.1.3 (b) and
+//!   (c) end "If certificate i is self-issued and it is not the final
+//!   certificate in the path, skip this step for certificate i", and Chrome
+//!   skips them (`verify_certificate_chain.cc`:
+//!   `!IsSelfIssued(cert) || is_target_cert`). Firefox's
 //!   `CheckNameConstraints` checks every certificate below the constrained
-//!   one and skips none, so a self-issued intermediate whose own names
-//!   violate a constraint is refused by Firefox and accepted here. This is
-//!   the one place this module accepts what a browser refuses; it is kept by
-//!   decision and listed in the design's Q12 for review.
+//!   one and skips none. This follows Firefox, the stricter: every
+//!   certificate's names are checked, so a self-issued intermediate whose own
+//!   names violate a constraint refuses the path. That makes
+//!   `rfc5280::nc::permitted-self-issued` (SUCCESS in limbo) a listed
+//!   divergence; `rfc5280::nc::excluded-self-issued-leaf` (FAILURE) still
+//!   fails. Since nothing else here depends on it, whether a certificate is
+//!   self-issued is not an input.
 //! - Certificates are indexed from 0 here; the RFC numbers them 1 to n. The
-//!   last element is the RFC's certificate n. Whether a certificate is
-//!   self-issued is an input (the design compares names as bytes, §1.10).
+//!   last element is the RFC's certificate n.
 //!   The initial state is empty: §6.1.1 (h) and (i) with every name
 //!   permitted and none excluded. A trust anchor's own constraints, if the
 //!   path validator uses them, enter through `prepare_name_constraints`.
@@ -1053,8 +1056,6 @@ pub struct NcCertificate {
     pub subject: Seq<u8>,
     /// The subjectAltName entries, in order; empty when there is none.
     pub subject_alt_names: Seq<crate::extensions::spec::GeneralName>,
-    /// Whether the certificate is self-issued (§6.1, decided by the caller).
-    pub self_issued: bool,
     /// The decoded NameConstraints extension, if present.
     pub name_constraints: Option<crate::name_constraints::spec::NameConstraints>,
 }
@@ -1067,11 +1068,13 @@ pub open spec fn certificate_acceptable(state: Seq<crate::name_constraints::spec
 }
 
 /// The name-constraint steps of §6.1.3 and §6.1.4 for `path[i..]`, under
-/// `state`. §6.1.3 (b), (c): "If certificate i is self-issued and it is not
-/// the final certificate in the path, skip this step for certificate i"
-/// (`rfc5280::nc::permitted-self-issued` passes,
+/// `state`. §6.1.3 (b), (c) are applied to every certificate, self-issued
+/// ones included: the step's "If certificate i is self-issued and it is not
+/// the final certificate in the path, skip this step for certificate i" is
+/// not followed ((R) self-issued intermediates are checked; Firefox;
+/// `rfc5280::nc::permitted-self-issued` is a listed divergence,
 /// `rfc5280::nc::excluded-self-issued-leaf` fails). Intermediates' names are
-/// checked too (`rfc5280::nc::intermediate-with-san-rejected-by-intermediate-nc`).
+/// checked (`rfc5280::nc::intermediate-with-san-rejected-by-intermediate-nc`).
 /// §6.1.4 is "preparation for certificate i+1", so it is not applied to the
 /// final certificate.
 pub open spec fn names_constrained_from(path: Seq<NcCertificate>, i: int, state: Seq<crate::name_constraints::spec::NameConstraints>) -> bool
@@ -1083,9 +1086,8 @@ pub open spec fn names_constrained_from(path: Seq<NcCertificate>, i: int, state:
     } else {
         let certificate = path[i];
         let last = i == path.len() - 1;
-        // §6.1.3 (b), (c)
-        &&& (certificate.self_issued && !last)
-            || certificate_acceptable(state, certificate)
+        // §6.1.3 (b), (c), for every certificate ((R) no self-issued skip)
+        &&& certificate_acceptable(state, certificate)
         // §6.1.4 (g), then certificate i + 1
         &&& last || match prepare_name_constraints(state, certificate.name_constraints) {
             Some(next) => names_constrained_from(path, i + 1, next),
