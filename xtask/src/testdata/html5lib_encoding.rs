@@ -39,7 +39,7 @@ fn cases(file: &str, bytes: &[u8]) -> Result<Vec<Case>, String> {
     let mut i = 0usize;
     // A file ends in a newline, so its last "line" is empty.
     let end = match lines.last() {
-        Some(l) if l.is_empty() => lines.len().saturating_sub(1),
+        Some([]) => lines.len().saturating_sub(1),
         _ => return Err(format!("{file}: does not end in a newline")),
     };
     while i < end {
