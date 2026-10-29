@@ -4,10 +4,12 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "WHATWG HTML Standard: input preprocessing (§13.2.3.5), the tokenizer (§13.2.4, §13.2.5) and character references (§13.5)."
+description = "WHATWG HTML Standard: the encoding sniffing algorithm (§13.2.3.2), input preprocessing (§13.2.3.5), the tokenizer (§13.2.4, §13.2.5) and character references (§13.5)."
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
+clazel-encoding = { path = "../clazel-encoding" }
+clazel-mime = { path = "../clazel-mime" }
 
 # Test-only reference engine for the differential test in
 # tests/conformance_tokenizer.rs (class `test` in docs/DEPENDENCIES.md:
