@@ -3531,6 +3531,48 @@
         "lemma": "super::contract::lemma_bound_never_accepts_what_the_spec_refuses()",
         "witness": "super::contract::names_constrained_ensures(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], true)"
       }
+    },
+    {
+      "id": "verifier-comparison-bound-applied",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Ok(()) if !path_within_budget(anchor, certs) => Err(super::spec::PathError::TooManyNameComparisons),\n",
+      "replace": "            Ok(()) if false => Err(super::spec::PathError::TooManyNameComparisons),\n",
+      "expect": "killed",
+      "reason": "Design §1.12: a path beyond 4,096 name-constraint comparisons is refused.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_comparison_bound_first()",
+        "witness": "super::examples::wide_verdict(super::examples::link(), 63) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "verifier-comparison-bound-before-process",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Ok(()) if !path_within_budget(anchor, certs) => Err(super::spec::PathError::TooManyNameComparisons),\n            Ok(()) => match super::spec::process(environment.link, environment.revoked, anchor, certs, now) {\n                Err(e) => Err(e),\n                Ok(key) => Ok(key),\n",
+      "replace": "            Ok(()) => match super::spec::process(environment.link, environment.revoked, anchor, certs, now) {\n                Err(e) => Err(e),\n                Ok(key) => if !path_within_budget(anchor, certs) { Err(super::spec::PathError::TooManyNameComparisons) }\n                    else { Ok(key) },\n",
+      "expect": "killed",
+      "reason": "Design §1.12: the bound is judged before §6.1, so §6.1's name-constraint checks never run on a path beyond it; such a path reports TooManyNameComparisons even when §6.1 would refuse it.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_comparison_bound_first()",
+        "witness": "super::examples::wide_verdict(super::examples::no_link(), 63) == Err::<Seq<u8>, PathError>(PathError::BadSignature)"
+      }
+    },
+    {
+      "id": "verifier-comparison-bound-is-p5s",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        Some(initial) => crate::name_constraints::matching::contract::within_budget(nc_path(certs), initial),\n",
+      "replace": "        Some(initial) => true,\n",
+      "expect": "killed",
+      "reason": "The path bound is P5's within_budget over the path's certificates from the anchor's constraints.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_comparison_bound_first()",
+        "witness": "super::examples::wide_verdict(super::examples::link(), 63) == super::examples::leaf_key()"
+      }
     }
   ]
 }
