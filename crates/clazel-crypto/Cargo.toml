@@ -11,6 +11,8 @@ clazel-tls = { path = "../clazel-tls" }
 # The end-entity key is parsed with our own decoders (CLAUDE.md rule 8).
 clazel-der = { path = "../clazel-der" }
 clazel-x509 = { path = "../clazel-x509" }
+# RSA PKCS#1 v1.5 for certificate links (path-validation P11): ours, tier 2.
+clazel-pkcs1 = { path = "../clazel-pkcs1" }
 vstd = "=0.0.0-2026-10-04-0306"
 # Shipped cryptography (docs/DEPENDENCIES.md, class `shipped`; phase-3.md
 # items 3.0 and 3.5f). Pinned exactly: libcrux is pre-release (0.0.x), so
