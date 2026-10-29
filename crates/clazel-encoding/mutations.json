@@ -322,7 +322,7 @@
       "certificate": {
         "file": "src/labels/independent.rs",
         "lemma": "lemma_lowered(seq![0x41u32])",
-        "witness": "ascii_lowercase(seq![0x41u32]) == seq![0x62u32] && lowered(seq![0x41u32]) == seq![0x61u32]"
+        "witness": "ascii_lowercase(seq![0x41u32])[0] == 0x62u32 && lowered(seq![0x41u32])[0] == 0x61u32"
       }
     },
     {
@@ -366,13 +366,14 @@
     {
       "id": "labels-table-duplicate-row",
       "file": "src/labels/data.rs",
+      "module": "labels::lemmas",
       "find": ", 1523, 1525,",
       "replace": ", 1523, 1523,",
       "expect": "killed",
       "reason": "A generated-table mutation: row 161 (l2) starts where row 160 (l1) does, so l1 is listed twice and lemma_labels_distinct is false (the table check, lemma_table, fails first).",
       "certificate": {
-        "file": "src/labels/lemmas.rs",
-        "lemma": "lemma_labels_distinct(160, 161)",
+        "file": "src/labels/independent.rs",
+        "lemma": "super::lemmas::lemma_labels_distinct(160, 161)",
         "witness": "ascii_case_insensitive_match(row_label(160), row_label(161))",
         "reveal": [
           "super::data::LABEL_START_0",
@@ -392,7 +393,7 @@
       "certificate": {
         "file": "src/single_byte/independent.rs",
         "lemma": "lemma_equals_decode(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8])",
-        "witness": "decode(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8]) == seq![0xFFFDu32] && decode_map(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8]) == seq![0x7Fu32]",
+        "witness": "decode(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8])[0] == 0xFFFDu32 && decode_map(crate::labels::spec::Encoding::Windows1252, seq![0x7Fu8])[0] == 0x7Fu32",
         "reveal": [
           "super::data::INDEX_WINDOWS_1252_0"
         ]
@@ -408,7 +409,7 @@
       "certificate": {
         "file": "src/single_byte/independent.rs",
         "lemma": "lemma_equals_decode(crate::labels::spec::Encoding::Windows1252, seq![0x80u8])",
-        "witness": "decode(crate::labels::spec::Encoding::Windows1252, seq![0x80u8]) == seq![0x81u32] && decode_map(crate::labels::spec::Encoding::Windows1252, seq![0x80u8]) == seq![0x20ACu32]",
+        "witness": "decode(crate::labels::spec::Encoding::Windows1252, seq![0x80u8])[0] == 0x81u32 && decode_map(crate::labels::spec::Encoding::Windows1252, seq![0x80u8])[0] == 0x20ACu32",
         "reveal": [
           "super::data::INDEX_WINDOWS_1252_0"
         ]
@@ -440,7 +441,7 @@
       "certificate": {
         "file": "src/single_byte/independent.rs",
         "lemma": "lemma_equals_decode(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8])",
-        "witness": "decode(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8]) == seq![0xFFFEu32] && decode_map(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8]) == seq![0xFFFDu32]",
+        "witness": "decode(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8])[0] == 0xFFFEu32 && decode_map(crate::labels::spec::Encoding::Windows1253, seq![0xAAu8])[0] == 0xFFFDu32",
         "reveal": [
           "super::data::INDEX_WINDOWS_1253_0"
         ]
@@ -545,13 +546,14 @@
     {
       "id": "table-ibm866-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_IBM866_0: [u32; 128] = [\n    0x410, 0x411,",
       "replace": "pub const INDEX_IBM866_0: [u32; 128] = [\n    0x410, 0x410,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index ibm866 repeats entry 0 (U+0410), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_ibm866, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Ibm866, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Ibm866, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Ibm866, 0) == index_entry(crate::labels::spec::Encoding::Ibm866, 1) && index_entry(crate::labels::spec::Encoding::Ibm866, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_IBM866_0"
@@ -561,13 +563,14 @@
     {
       "id": "table-iso-8859-2-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_2_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_2_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-2 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_2, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_2, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_2, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_2, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_2, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_2, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_2_0"
@@ -577,13 +580,14 @@
     {
       "id": "table-iso-8859-3-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_3_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_3_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-3 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_3, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_3, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_3, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_3, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_3, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_3, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_3_0"
@@ -593,13 +597,14 @@
     {
       "id": "table-iso-8859-4-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_4_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_4_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-4 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_4, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_4, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_4, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_4, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_4, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_4, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_4_0"
@@ -609,13 +614,14 @@
     {
       "id": "table-iso-8859-5-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_5_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_5_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-5 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_5, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_5, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_5, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_5, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_5, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_5, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_5_0"
@@ -625,13 +631,14 @@
     {
       "id": "table-iso-8859-6-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_6_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_6_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-6 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_6, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_6, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_6, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_6, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_6, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_6, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_6_0"
@@ -641,13 +648,14 @@
     {
       "id": "table-iso-8859-7-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_7_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_7_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-7 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_7, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_7, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_7, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_7, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_7, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_7, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_7_0"
@@ -657,13 +665,14 @@
     {
       "id": "table-iso-8859-8-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_8_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_8_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-8 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_8, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_8, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_8, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_8, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_8, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_8, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_8_0"
@@ -673,13 +682,14 @@
     {
       "id": "table-iso-8859-10-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_10_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_10_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-10 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_10, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_10, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_10, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_10, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_10, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_10, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_10_0"
@@ -689,13 +699,14 @@
     {
       "id": "table-iso-8859-13-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_13_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_13_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-13 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_13, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_13, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_13, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_13, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_13, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_13, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_13_0"
@@ -705,13 +716,14 @@
     {
       "id": "table-iso-8859-14-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_14_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_14_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-14 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_14, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_14, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_14, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_14, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_14, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_14, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_14_0"
@@ -721,13 +733,14 @@
     {
       "id": "table-iso-8859-15-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_15_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_15_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-15 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_15, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_15, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_15, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_15, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_15, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_15, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_15_0"
@@ -737,13 +750,14 @@
     {
       "id": "table-iso-8859-16-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_ISO_8859_16_0: [u32; 128] = [\n    0x80, 0x81,",
       "replace": "pub const INDEX_ISO_8859_16_0: [u32; 128] = [\n    0x80, 0x80,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index iso-8859-16 repeats entry 0 (U+0080), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_iso_8859_16, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_16, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Iso8859_16, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Iso8859_16, 0) == index_entry(crate::labels::spec::Encoding::Iso8859_16, 1) && index_entry(crate::labels::spec::Encoding::Iso8859_16, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_ISO_8859_16_0"
@@ -753,13 +767,14 @@
     {
       "id": "table-koi8-r-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_KOI8_R_0: [u32; 128] = [\n    0x2500, 0x2502,",
       "replace": "pub const INDEX_KOI8_R_0: [u32; 128] = [\n    0x2500, 0x2500,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index koi8-r repeats entry 0 (U+2500), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_koi8_r, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Koi8R, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Koi8R, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Koi8R, 0) == index_entry(crate::labels::spec::Encoding::Koi8R, 1) && index_entry(crate::labels::spec::Encoding::Koi8R, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_KOI8_R_0"
@@ -769,13 +784,14 @@
     {
       "id": "table-koi8-u-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_KOI8_U_0: [u32; 128] = [\n    0x2500, 0x2502,",
       "replace": "pub const INDEX_KOI8_U_0: [u32; 128] = [\n    0x2500, 0x2500,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index koi8-u repeats entry 0 (U+2500), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_koi8_u, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Koi8U, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Koi8U, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Koi8U, 0) == index_entry(crate::labels::spec::Encoding::Koi8U, 1) && index_entry(crate::labels::spec::Encoding::Koi8U, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_KOI8_U_0"
@@ -785,13 +801,14 @@
     {
       "id": "table-macintosh-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_MACINTOSH_0: [u32; 128] = [\n    0xC4, 0xC5,",
       "replace": "pub const INDEX_MACINTOSH_0: [u32; 128] = [\n    0xC4, 0xC4,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index macintosh repeats entry 0 (U+00C4), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_macintosh, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Macintosh, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Macintosh, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Macintosh, 0) == index_entry(crate::labels::spec::Encoding::Macintosh, 1) && index_entry(crate::labels::spec::Encoding::Macintosh, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_MACINTOSH_0"
@@ -801,13 +818,14 @@
     {
       "id": "table-windows-874-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_874_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_874_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-874 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_874, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows874, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows874, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows874, 0) == index_entry(crate::labels::spec::Encoding::Windows874, 1) && index_entry(crate::labels::spec::Encoding::Windows874, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_874_0"
@@ -817,13 +835,14 @@
     {
       "id": "table-windows-1250-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1250_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_1250_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1250 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1250, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1250, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1250, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1250, 0) == index_entry(crate::labels::spec::Encoding::Windows1250, 1) && index_entry(crate::labels::spec::Encoding::Windows1250, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1250_0"
@@ -833,13 +852,14 @@
     {
       "id": "table-windows-1251-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1251_0: [u32; 128] = [\n    0x402, 0x403,",
       "replace": "pub const INDEX_WINDOWS_1251_0: [u32; 128] = [\n    0x402, 0x402,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1251 repeats entry 0 (U+0402), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1251, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1251, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1251, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1251, 0) == index_entry(crate::labels::spec::Encoding::Windows1251, 1) && index_entry(crate::labels::spec::Encoding::Windows1251, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1251_0"
@@ -849,13 +869,14 @@
     {
       "id": "table-windows-1252-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1252_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_1252_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1252 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1252, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1252, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1252, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1252, 0) == index_entry(crate::labels::spec::Encoding::Windows1252, 1) && index_entry(crate::labels::spec::Encoding::Windows1252, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1252_0"
@@ -865,13 +886,14 @@
     {
       "id": "table-windows-1253-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1253_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_1253_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1253 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1253, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1253, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1253, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1253, 0) == index_entry(crate::labels::spec::Encoding::Windows1253, 1) && index_entry(crate::labels::spec::Encoding::Windows1253, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1253_0"
@@ -881,13 +903,14 @@
     {
       "id": "table-windows-1254-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1254_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_1254_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1254 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1254, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1254, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1254, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1254, 0) == index_entry(crate::labels::spec::Encoding::Windows1254, 1) && index_entry(crate::labels::spec::Encoding::Windows1254, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1254_0"
@@ -897,13 +920,14 @@
     {
       "id": "table-windows-1255-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1255_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_1255_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1255 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1255, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1255, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1255, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1255, 0) == index_entry(crate::labels::spec::Encoding::Windows1255, 1) && index_entry(crate::labels::spec::Encoding::Windows1255, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1255_0"
@@ -913,13 +937,14 @@
     {
       "id": "table-windows-1256-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1256_0: [u32; 128] = [\n    0x20AC, 0x67E,",
       "replace": "pub const INDEX_WINDOWS_1256_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1256 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1256, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1256, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1256, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1256, 0) == index_entry(crate::labels::spec::Encoding::Windows1256, 1) && index_entry(crate::labels::spec::Encoding::Windows1256, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1256_0"
@@ -929,13 +954,14 @@
     {
       "id": "table-windows-1257-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1257_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_1257_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1257 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1257, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1257, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1257, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1257, 0) == index_entry(crate::labels::spec::Encoding::Windows1257, 1) && index_entry(crate::labels::spec::Encoding::Windows1257, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1257_0"
@@ -945,13 +971,14 @@
     {
       "id": "table-windows-1258-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_WINDOWS_1258_0: [u32; 128] = [\n    0x20AC, 0x81,",
       "replace": "pub const INDEX_WINDOWS_1258_0: [u32; 128] = [\n    0x20AC, 0x20AC,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index windows-1258 repeats entry 0 (U+20AC), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_windows_1258, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::Windows1258, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::Windows1258, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::Windows1258, 0) == index_entry(crate::labels::spec::Encoding::Windows1258, 1) && index_entry(crate::labels::spec::Encoding::Windows1258, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_WINDOWS_1258_0"
@@ -961,13 +988,14 @@
     {
       "id": "table-x-mac-cyrillic-duplicate",
       "file": "src/single_byte/data.rs",
+      "module": "single_byte::tables",
       "find": "pub const INDEX_X_MAC_CYRILLIC_0: [u32; 128] = [\n    0x410, 0x411,",
       "replace": "pub const INDEX_X_MAC_CYRILLIC_0: [u32; 128] = [\n    0x410, 0x410,",
       "expect": "killed",
       "reason": "A generated-table mutation: entry 1 of index x-mac-cyrillic repeats entry 0 (U+0410), so two bytes decode to one code point and lemma_entries_distinct is false (the table's own check, lemma_index_x_mac_cyrillic, fails first).",
       "certificate": {
-        "file": "src/single_byte/tables.rs",
-        "lemma": "lemma_entries_distinct(crate::labels::spec::Encoding::XMacCyrillic, 0, 1)",
+        "file": "src/single_byte/lemmas.rs",
+        "lemma": "super::tables::lemma_entries_distinct(crate::labels::spec::Encoding::XMacCyrillic, 0, 1)",
         "witness": "index_entry(crate::labels::spec::Encoding::XMacCyrillic, 0) == index_entry(crate::labels::spec::Encoding::XMacCyrillic, 1) && index_entry(crate::labels::spec::Encoding::XMacCyrillic, 0) != null_entry()",
         "reveal": [
           "super::data::INDEX_X_MAC_CYRILLIC_0"
@@ -984,7 +1012,7 @@
       "certificate": {
         "file": "src/utf16/independent.rs",
         "lemma": "lemma_equals_spec(false, true, seq![0x01u8, 0x00u8])",
-        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0x01u8, 0x00u8], 0) == Some(seq![0x80u32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0x01u8, 0x00u8]) == Some(seq![0x100u32])"
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0x01u8, 0x00u8], 0)->0[0] == 0x80u32 && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0x01u8, 0x00u8])->0[0] == 0x100u32"
       }
     },
     {
@@ -997,7 +1025,7 @@
       "certificate": {
         "file": "src/utf16/independent.rs",
         "lemma": "lemma_equals_spec(false, false, seq![0x01u8, 0x00u8])",
-        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(false), seq![0x01u8, 0x00u8], 0) == Some(seq![0x100u32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: false }, seq![0x01u8, 0x00u8]) == Some(seq![0x1u32])"
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(false), seq![0x01u8, 0x00u8], 0)->0[0] == 0x100u32 && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: false }, seq![0x01u8, 0x00u8])->0[0] == 0x1u32"
       }
     },
     {
@@ -1010,7 +1038,7 @@
       "certificate": {
         "file": "src/utf16/independent.rs",
         "lemma": "lemma_equals_spec(false, true, seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8])",
-        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8], 0) == Some(seq![0xFFFFu32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8]) == Some(seq![0x10000u32])"
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8], 0)->0[0] == 0xFFFFu32 && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0xD8u8, 0x00u8, 0xDCu8, 0x00u8])->0[0] == 0x10000u32"
       }
     },
     {
@@ -1049,7 +1077,7 @@
       "certificate": {
         "file": "src/utf16/independent.rs",
         "lemma": "lemma_equals_spec(false, true, seq![0x41u8])",
-        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0x41u8], 0) == Some(seq![0xFFFEu32]) && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0x41u8]) == Some(seq![0xFFFDu32])"
+        "witness": "process_queue(crate::utf8::spec::ErrorMode::Replacement, initial_decoder(true), seq![0x41u8], 0)->0[0] == 0xFFFEu32 && run(false, State { lead_byte: None, lead_surrogate: None, big_endian: true }, seq![0x41u8])->0[0] == 0xFFFDu32"
       }
     },
     {
@@ -1088,7 +1116,7 @@
       "certificate": {
         "file": "src/replacement/independent.rs",
         "lemma": "lemma_equals_decode(seq![0x41u8])",
-        "witness": "decode(seq![0x41u8]) == Seq::<u32>::empty() && one_error(seq![0x41u8]) == seq![0xFFFDu32]"
+        "witness": "decode(seq![0x41u8]).len() == 0 && one_error(seq![0x41u8]).len() == 1"
       }
     },
     {
@@ -1101,7 +1129,7 @@
       "certificate": {
         "file": "src/x_user_defined/independent.rs",
         "lemma": "lemma_equals_decode(seq![0x80u8])",
-        "witness": "decode(seq![0x80u8]) == seq![0xF700u32] && decode_map(seq![0x80u8]) == seq![0xF780u32]"
+        "witness": "decode(seq![0x80u8])[0] == 0xF700u32 && decode_map(seq![0x80u8])[0] == 0xF780u32"
       }
     },
     {
@@ -1114,7 +1142,7 @@
       "certificate": {
         "file": "src/x_user_defined/independent.rs",
         "lemma": "lemma_equals_decode(seq![0x7Fu8])",
-        "witness": "decode(seq![0x7Fu8]) == seq![0xF77Fu32] && decode_map(seq![0x7Fu8]) == seq![0x7Fu32]"
+        "witness": "decode(seq![0x7Fu8])[0] == 0xF77Fu32 && decode_map(seq![0x7Fu8])[0] == 0x7Fu32"
       }
     },
     {
@@ -1166,7 +1194,7 @@
       "certificate": {
         "file": "src/hooks/independent.rs",
         "lemma": "lemma_equals_decode(seq![0x80u8], crate::labels::spec::Encoding::Windows1252)",
-        "witness": "decode(seq![0x80u8], crate::labels::spec::Encoding::Windows1252) == Some(seq![0xFFFDu32]) && decode_with_mark(seq![0x80u8], crate::labels::spec::Encoding::Windows1252) == Some(seq![0x20ACu32])",
+        "witness": "decode(seq![0x80u8], crate::labels::spec::Encoding::Windows1252)->0[0] == 0xFFFDu32 && decode_with_mark(seq![0x80u8], crate::labels::spec::Encoding::Windows1252)->0[0] == 0x20ACu32",
         "reveal": [
           "crate::single_byte::data::INDEX_WINDOWS_1252_0"
         ]
