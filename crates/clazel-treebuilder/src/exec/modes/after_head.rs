@@ -16,16 +16,6 @@ use vstd::prelude::*;
 
 verus! {
 
-/// The head element pointer, if set, points to an HTML `head` element of
-/// the document (it is only ever set to the `head` element the parser
-/// created): what case 8 pushes back is a record of the document.
-pub open spec fn head_ok(p: Parser) -> bool {
-    match p.head {
-        Some(h) => elem_in_doc(p.doc, head_elem(h)),
-        None => true,
-    }
-}
-
 /// §13.2.6.4.6 the "after head" insertion mode ([`mode_after_head`]). The
 /// rules are never applied in the "text" or "in table text" modes
 /// (`termination::rules_ok` for "after head").
@@ -34,7 +24,6 @@ pub fn mode_after_head_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, t: ExecTo
         parser_inv(old(p)@),
         tok_ok(t@),
         old(p)@.stopped || stack_rooted(old(p)@),
-        old(p)@.stopped || head_ok(old(p)@),
         old(p)@.mode != Mode::Text && old(p)@.mode != Mode::InTableText,
     ensures
         outcome_view(o, final(p)@) == mode_after_head(env.enc(), old(p)@, t@),
@@ -165,7 +154,6 @@ pub fn after_head_using_in_head_exec<E: EncFnsExec>(env: &E, p: &mut ParserBuf, 
         parser_inv(old(p)@),
         tok_tagged(tt@),
         old(p)@.stopped || stack_rooted(old(p)@),
-        old(p)@.stopped || head_ok(old(p)@),
         old(p)@.mode != Mode::Text && old(p)@.mode != Mode::InTableText,
     ensures
         outcome_view(o, final(p)@) == after_head_using_in_head(env.enc(), old(p)@, Tok::Start(tt@)),

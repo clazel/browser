@@ -12,11 +12,13 @@
 //! - [`theorems`]: `theorem_actions_ordered`, the order of the actions.
 //! - [`mutation_lemmas`]: concrete instances of the theorems, the kill
 //!   certificates of `mutations.json`.
+//! - [`reachable`]: `theorem_reachable`, the reachable-state invariant.
 
 pub mod contract;
 pub mod exec;
 pub mod invariant;
 pub mod mutation_lemmas;
+pub mod reachable;
 pub mod spec;
 pub mod termination;
 pub mod theorems;

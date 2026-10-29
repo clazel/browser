@@ -104,10 +104,22 @@ pub open spec fn templates_wf(p: Parser) -> bool {
             ==> has_template_contents(p.doc, n)
 }
 
+/// The head element pointer, if set, points to an HTML `head` element of
+/// the document (it is only ever set to the `head` element the parser
+/// created): what "after head" case 8 pushes back is a record of the
+/// document. (A parser stopped while creating the `head` element may point
+/// at node 0; a stopped parser takes no further step.)
+pub open spec fn head_ok(p: Parser) -> bool {
+    match p.head {
+        Some(h) => elem_in_doc(p.doc, head_elem(h)),
+        None => true,
+    }
+}
+
 /// The invariant the executable helpers require and keep: `parser_wf`,
-/// `tags_wf` and `templates_wf`.
+/// `tags_wf`, `templates_wf`, and (until parsing stops) [`head_ok`].
 pub open spec fn parser_inv(p: Parser) -> bool {
-    parser_wf(p) && tags_wf(p) && templates_wf(p)
+    parser_wf(p) && tags_wf(p) && templates_wf(p) && (p.stopped || head_ok(p))
 }
 
 /// The stack of open elements is rooted at an HTML `html` element: what
@@ -116,6 +128,139 @@ pub open spec fn parser_inv(p: Parser) -> bool {
 /// stops (and in the fragment case from the start).
 pub open spec fn stack_rooted(p: Parser) -> bool {
     p.open.len() > 0 && is_html(p.open[0], Tag::Html)
+}
+
+// ---------------------------------------------------------------------
+// The reachable-state invariant (Phase 4 item 4.10): what every parser
+// state reachable from `new_parser` or `fragment_parser` by `dispatch`
+// satisfies besides `parser_inv`. It relates each insertion mode to the
+// stack's shape, so that the rules that pop the current node without
+// looking at it ("in head", "in head noscript", "text") never pop the
+// `html` element, and records the facts about node ids that keep the
+// adoption agency algorithm and the `form` end tag from removing it.
+// `termination::reachable` proves `dispatch` keeps it
+// (`theorem_reachable`).
+
+/// The stack `o` is rooted at an HTML `html` element tagged by its name
+/// ([`stack_rooted`], plus the tag).
+pub open spec fn rooted_seq(o: Seq<Elem>) -> bool {
+    o.len() > 0 && is_html(o[0], Tag::Html) && elem_tagged(o[0])
+}
+
+/// A mode whose only shape requirement is a rooted stack: every mode but
+/// the two before the `html` element exists, the two whose rules pop the
+/// current node blindly ("in head", "in head noscript"), and the two that
+/// return to an original insertion mode ("text", "in table text").
+pub open spec fn rooted_mode(m: Mode) -> bool {
+    !(m == Mode::Initial || m == Mode::BeforeHtml || m == Mode::InHead || m == Mode::InHeadNoscript || m == Mode::Text || m
+        == Mode::InTableText)
+}
+
+/// The stack `o` has an HTML element above the `html` element (the last
+/// HTML element is not the first entry).
+pub open spec fn html_above(o: Seq<Elem>) -> bool {
+    last_index_where(o, o.len() as int, html_ns()) >= 1
+}
+
+/// The predicate "is an element in the HTML namespace".
+pub open spec fn html_ns() -> spec_fn(Elem) -> bool {
+    |e: Elem| e.ns == Namespace::Html
+}
+
+/// The shape of the stack `o` in insertion mode `m` (other than "text" and
+/// "in table text"): empty before the `html` element exists; in "in head",
+/// an HTML element (the `head` element) above `html`; in "in head
+/// noscript", an HTML current node (`noscript`) above a stack of the "in
+/// head" shape; otherwise rooted.
+pub open spec fn shape0(m: Mode, o: Seq<Elem>) -> bool {
+    match m {
+        Mode::Initial | Mode::BeforeHtml => o.len() == 0,
+        Mode::InHead => rooted_seq(o) && html_above(o),
+        Mode::InHeadNoscript => rooted_seq(o) && o.len() >= 2 && o.last().ns == Namespace::Html && html_above(o.drop_last()),
+        Mode::Text | Mode::InTableText => false,
+        _ => rooted_seq(o),
+    }
+}
+
+/// The stack's shape for the parser's insertion mode: in "text", an HTML
+/// current node (the element whose text is parsed) above a stack of the
+/// original insertion mode's shape; in "in table text", a rooted stack
+/// with an HTML current node (a table element) above `html`, and an
+/// original insertion mode of [`rooted_mode`]; before the `html` element
+/// exists, no stack, no list of active formatting elements and no form
+/// element pointer (and an arena holding the document); otherwise
+/// [`shape0`].
+pub open spec fn shape(p: Parser) -> bool {
+    match p.mode {
+        Mode::Text => p.open.len() >= 2 && p.open.last().ns == Namespace::Html && shape0(p.original_mode, p.open.drop_last()),
+        Mode::InTableText => rooted_seq(p.open) && p.open.len() >= 2 && p.open.last().ns == Namespace::Html && rooted_mode(
+            p.original_mode,
+        ),
+        Mode::Initial | Mode::BeforeHtml => p.open.len() == 0 && p.formatting.len() == 0 && p.form is None && p.doc.nodes.len()
+            > 0,
+        _ => shape0(p.mode, p.open),
+    }
+}
+
+/// Facts about the `html` element's id: it is a node of the arena (so
+/// every node created later has another id), no entry of the list of
+/// active formatting elements is for it, and the form element pointer does
+/// not point to it.
+pub open spec fn root_ids(p: Parser) -> bool {
+    rooted_seq(p.open) ==> {
+        let r = p.open[0].id;
+        &&& r < p.doc.nodes.len()
+        &&& forall|i: int| 0 <= i < p.formatting.len() && (#[trigger] p.formatting[i]) is Entry ==> p.formatting[i]->Entry_elem.id != r
+        &&& match p.form {
+            Some(f) => f != r,
+            None => true,
+        }
+    }
+}
+
+/// The reachable-state facts of a running parser: the stack's [`shape`],
+/// [`root_ids`] and [`tags_wf`].
+pub open spec fn reach_core(p: Parser) -> bool {
+    shape(p) && root_ids(p) && tags_wf(p)
+}
+
+/// **The reachable-state invariant**: a stopped parser (which takes no
+/// further step), or one whose modes satisfy `termination::modes_ok` (the
+/// hypothesis of `termination::theorem_dispatch_total`) and [`reach_core`].
+pub open spec fn reachable_inv(p: Parser) -> bool {
+    p.stopped || (crate::termination::modes_ok(p) && reach_core(p))
+}
+
+/// What a set of rules other than the current mode's needs (the rule
+/// applications "using the rules for" another mode makes): the "in head"
+/// rules get only the tokens [`crate::termination::headish`] lists; the
+/// "in body" rules get a parser in a [`rooted_mode`], or the `html` start
+/// tag; the "in table" and "in template" rules a parser in a
+/// [`rooted_mode`]; no other rules are used so; never before the `html`
+/// element exists. Foreign content needs a parser in foreign content (as
+/// the dispatcher chooses it).
+pub open spec fn rules_need(r: Rules, p: Parser, t: Tok) -> bool {
+    match r {
+        Rules::Foreign => in_foreign_content(p),
+        Rules::Html(m) => m == p.mode || (p.mode != Mode::Initial && p.mode != Mode::BeforeHtml && match m {
+            Mode::InHead => crate::termination::headish(t),
+            Mode::InBody => rooted_mode(p.mode) || crate::termination::is_start(t, Tag::Html),
+            Mode::InTable | Mode::InTemplate => rooted_mode(p.mode),
+            _ => false,
+        }),
+    }
+}
+
+/// The invariant at every rule application of a token's run: a running
+/// parser satisfying `termination::modes_ok`, [`reach_core`] and the rules'
+/// [`rules_need`], a tagged token, and `termination::rules_ok`.
+pub open spec fn rules_inv(r: Rules, p: Parser, t: Tok) -> bool {
+    &&& !p.stopped
+    &&& crate::exec::modes::initial::tok_ok(t)
+    &&& crate::termination::modes_ok(p)
+    &&& crate::termination::rules_ok(r, p)
+    &&& reach_core(p)
+    &&& rules_need(r, p, t)
 }
 
 // ---------------------------------------------------------------------
@@ -138,7 +283,6 @@ pub open spec fn rooted_needs(r: Rules, p: Parser) -> bool {
         Rules::Html(m) => match m {
             Mode::Initial | Mode::BeforeHtml | Mode::InHeadNoscript | Mode::InCaption | Mode::InCell | Mode::InTemplate
             | Mode::AfterAfterBody | Mode::AfterAfterFrameset => true,
-            Mode::AfterHead => stack_rooted(p) && crate::exec::modes::after_head::head_ok(p),
             _ => stack_rooted(p),
         },
     }

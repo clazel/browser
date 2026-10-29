@@ -193,7 +193,7 @@ proof fn lemma_fmts_insert(doc: Document, f: Seq<Fmt>, i: int, x: Fmt)
 }
 
 /// Replacing a record with one that is no `template` adds no `template`.
-proof fn lemma_templates_in_update(o: Seq<Elem>, i: int, e: Elem, k: int)
+pub proof fn lemma_templates_in_update(o: Seq<Elem>, i: int, e: Elem, k: int)
     requires
         0 <= i < o.len(),
         k <= o.len(),
@@ -232,7 +232,7 @@ proof fn lemma_insert_at(o: Seq<Elem>, i: int, e: Elem, j: int)
 
 /// Inserting a record that is no `template` adds no `template`, below the
 /// insertion point and above it.
-proof fn lemma_templates_in_insert(o: Seq<Elem>, i: int, e: Elem, k: int)
+pub proof fn lemma_templates_in_insert(o: Seq<Elem>, i: int, e: Elem, k: int)
     requires
         0 <= i <= o.len(),
         0 <= k <= o.len(),
@@ -298,7 +298,7 @@ proof fn lemma_fmt_last_where(f: Seq<Fmt>, from: int, i: int, pred: spec_fn(Elem
 }
 
 /// [`first_special_from`] is -1 or a special entry from index `j` on.
-proof fn lemma_first_special_from(open: Seq<Elem>, j: int)
+pub proof fn lemma_first_special_from(open: Seq<Elem>, j: int)
     requires
         j >= 0,
     ensures
@@ -313,7 +313,7 @@ proof fn lemma_first_special_from(open: Seq<Elem>, j: int)
 }
 
 /// [`fmt_index_of`] is -1 or an element entry of that id below `i`.
-proof fn lemma_fmt_index_of(f: Seq<Fmt>, i: int, id: NodeId)
+pub proof fn lemma_fmt_index_of(f: Seq<Fmt>, i: int, id: NodeId)
     requires
         i <= f.len(),
     ensures
@@ -330,7 +330,7 @@ proof fn lemma_fmt_index_of(f: Seq<Fmt>, i: int, id: NodeId)
 }
 
 /// [`fmt_index_of`] finds an entry of that id if there is one.
-proof fn lemma_fmt_index_of_found(f: Seq<Fmt>, i: int, id: NodeId, k: int)
+pub proof fn lemma_fmt_index_of_found(f: Seq<Fmt>, i: int, id: NodeId, k: int)
     requires
         0 <= k < i <= f.len(),
         f[k] is Entry && f[k]->Entry_elem.id == id,
@@ -638,7 +638,7 @@ pub open spec fn inner_replace(p1: Parser, ca: Elem, i: int, node_id: NodeId, la
 }
 
 /// One round of [`aa_inner`], in terms of the hidden parts.
-proof fn lemma_ai_unfold(p: Parser, fe: Elem, ca: Elem, node_idx: int, last: Elem, counter: nat, bm: Bookmark)
+pub proof fn lemma_ai_unfold(p: Parser, fe: Elem, ca: Elem, node_idx: int, last: Elem, counter: nat, bm: Bookmark)
     requires
         !p.stopped,
         node_idx > 0,
@@ -1037,7 +1037,7 @@ pub open spec fn af(p: Parser, fe: Elem, fb: Elem, ca: Elem, last: Elem, bm: Boo
 }
 
 /// [`aa_finish`] in terms of its hidden parts.
-proof fn lemma_af_unfold(p: Parser, fe: Elem, fb: Elem, ca: Elem, last: Elem, bm: Bookmark)
+pub proof fn lemma_af_unfold(p: Parser, fe: Elem, fb: Elem, ca: Elem, last: Elem, bm: Bookmark)
     ensures
         af(p, fe, fb, ca, last, bm) == if p.stopped {
             p
@@ -1188,6 +1188,7 @@ fn aa_mid_stack(p: &mut ParserBuf, fe_id: usize, fb_id: usize, ne: ExecElem, Gho
 {
     hide(parser_inv);
     hide(dom::wf);
+    hide(head_ok);
     let ghost p3 = p@;
     let ghost ne_v = ne@;
     proof {
@@ -1419,7 +1420,7 @@ pub open spec fn ao(p: Parser, tt: TagTok, counter: nat) -> AdoptionOutcome {
 
 /// One round of [`aa_outer`] in terms of the hidden inner loop and
 /// finish.
-proof fn lemma_ao_unfold(p: Parser, tt: TagTok, counter: nat)
+pub proof fn lemma_ao_unfold(p: Parser, tt: TagTok, counter: nat)
     requires
         !p.stopped,
         counter < 8,
@@ -1457,7 +1458,7 @@ proof fn lemma_ao_unfold(p: Parser, tt: TagTok, counter: nat)
 }
 
 /// The algorithm is step 2 or [`ao`] from 0.
-proof fn lemma_aa_start(p: Parser, tt: TagTok)
+pub proof fn lemma_aa_start(p: Parser, tt: TagTok)
     ensures
         adoption_agency(p, tt) == if p.open.len() > 0 && current_node(p).ns == Namespace::Html && current_node(p).name
             == tt.name && !in_formatting(p, current_node(p).id) {

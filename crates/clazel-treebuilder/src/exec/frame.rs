@@ -53,6 +53,7 @@ pub open spec fn rest_ok(p: Parser) -> bool {
     &&& dom::wf(p.doc)
     &&& opt_valid(p.doc, p.head)
     &&& opt_valid(p.doc, p.form)
+    &&& (p.stopped || head_ok(p))
     &&& match p.context {
         None => true,
         Some(c) => elem_in_doc(p.doc, c) && elem_tagged(c),
@@ -301,6 +302,11 @@ pub proof fn lemma_inv_doc(p: Parser, d: Document)
     }
     if let Some((r, f)) = p.redirect {
         assert(kind_kept(p.doc.nodes[f as int].kind, d.nodes[f as int].kind));
+    }
+    if let Some(h) = p.head {
+        if !p.stopped {
+            assert(kind_kept(p.doc.nodes[h as int].kind, d.nodes[h as int].kind));
+        }
     }
     assert forall|n: NodeId|
         dom::valid(d, n) && #[trigger] node_is_template(d, n) && d.nodes[n as int].children.len() > 0 implies has_template_contents(

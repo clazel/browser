@@ -48,6 +48,9 @@ pub fn mode_before_head_exec<E: EncFnsExec>(_env: &E, p: &mut ParserBuf, t: Exec
                 ExecOutcome::Using(Mode::InBody, ExecTok::Start(tt))
             } else if matches!(tt.tag, Tag::Head) {
                 // 6.
+                proof {
+                    lemma_tag_of_head(tt@.name);
+                }
                 insert_head(p, &tt);
                 ExecOutcome::Done
             } else {
@@ -129,11 +132,19 @@ fn insert_html_element_id(p: &mut ParserBuf, t: &ExecTagTok) -> (r: ExecElem)
     r
 }
 
+/// Only the name "head" is the tag `head`.
+pub proof fn lemma_tag_of_head(name: Seq<u32>)
+    ensures
+        tag_of(name) == Tag::Head ==> name == seq![0x68u32, 0x65, 0x61, 0x64],
+{
+}
+
 /// Setting the head element pointer to a node keeps [`parser_inv`].
 pub proof fn lemma_inv_head(p: Parser, h: NodeId)
     requires
         parser_inv(p),
         dom::valid(p.doc, h),
+        p.stopped || elem_in_doc(p.doc, head_elem(h)),
     ensures
         parser_inv(Parser { head: Some(h), ..p }),
 {
@@ -150,6 +161,7 @@ fn insert_head(p: &mut ParserBuf, tt: &ExecTagTok)
         tok_tagged(tt@),
         old(p)@.stopped || stack_rooted(old(p)@),
         tt@.tag != Tag::Template,
+        tt@.name == seq![0x68u32, 0x65, 0x61, 0x64],
     ensures
         final(p)@ == ({
             let (p1, e) = insert_html_element(old(p)@, tt@);
@@ -157,8 +169,17 @@ fn insert_head(p: &mut ParserBuf, tt: &ExecTagTok)
         }),
         parser_inv(final(p)@),
 {
+    let ghost p0 = p@;
     let e = insert_html_element_id(p, tt);
     proof {
+        if !p@.stopped {
+            let q = p@;
+            assert(q.open == insert_html_element(p0, tt@).0.open);
+            assert(q.open[q.open.len() - 1] == e@);
+            lemma_inv_iff(q);
+            assert(elem_ok(q.doc, q.open[q.open.len() - 1]));
+            assert(elem_in_doc(q.doc, head_elem(e.id)));
+        }
         lemma_inv_head(p@, e.id);
     }
     p.head = Some(e.id);
