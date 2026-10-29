@@ -113,6 +113,7 @@ pub mod body;
 pub mod early;
 pub mod equivalence;
 pub mod equivalence_body;
+pub mod foreign;
 pub mod initial;
 
 pub mod tables;
@@ -125,6 +126,8 @@ pub use after::*;
 pub use body::*;
 #[cfg(verus_only)]
 pub use early::*;
+#[cfg(verus_only)]
+pub use foreign::*;
 #[cfg(verus_only)]
 pub use initial::*;
 #[cfg(verus_only)]
