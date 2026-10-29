@@ -297,6 +297,7 @@ pub proof fn lemma_ib_start_param(p: Parser, t: Tok, tt: TagTok)
 }
 
 /// The "in body" start tags.
+#[verifier::spinoff_prover]
 pub proof fn lemma_ib_start_reach(p: Parser, t: Tok, tt: TagTok)
     requires
         rules_inv(Rules::Html(Mode::InBody), p, t),
@@ -305,6 +306,7 @@ pub proof fn lemma_ib_start_reach(p: Parser, t: Tok, tt: TagTok)
         next_core(in_body_start_tag(p, t, tt)),
 {
     hide(super::doc::dinv);
+    hide(crate::independent::equivalence_body::attrs_plain);
     hide(in_body_start_html);
     hide(in_body_start_body);
     hide(in_body_start_frameset);
@@ -346,7 +348,9 @@ pub proof fn lemma_ib_start_reach(p: Parser, t: Tok, tt: TagTok)
     assert(good(p));
     assert(ib_pre(p, tt));
     lemma_keeps_refl(p);
-    if is_in_head_start_tag(g) {
+    if !ib_start_first(g) {
+        lemma_ib_start_reach_rest(p, t, tt);
+    } else if is_in_head_start_tag(g) {
     } else if g == Tag::Body {
         lemma_ib_body(p, tt);
     } else if g == Tag::Frameset {
@@ -368,7 +372,64 @@ pub proof fn lemma_ib_start_reach(p: Parser, t: Tok, tt: TagTok)
     } else if g == Tag::Hr {
         lemma_ib_hr(p, tt);
     } else if g == Tag::Image {
-    } else if g == Tag::Textarea {
+    }
+}
+
+/// The "in body" start tags [`lemma_ib_start_reach`] handles itself.
+pub open spec fn ib_start_first(g: Tag) -> bool {
+    is_in_head_start_tag(g) || g == Tag::Html || g == Tag::Body || g == Tag::Frameset || is_heading_tag(g) || g == Tag::Form
+        || g == Tag::Li || g == Tag::Dd || g == Tag::Dt || g == Tag::Button || g == Tag::A || g == Tag::Nobr || g == Tag::Input
+        || g == Tag::Hr || g == Tag::Image
+}
+
+/// The other "in body" start tags.
+#[verifier::spinoff_prover]
+pub proof fn lemma_ib_start_reach_rest(p: Parser, t: Tok, tt: TagTok)
+    requires
+        rules_inv(Rules::Html(Mode::InBody), p, t),
+        t == Tok::Start(tt),
+        ib_pre(p, tt),
+        !ib_start_first(tt.tag),
+    ensures
+        next_core(in_body_start_tag(p, t, tt)),
+{
+    hide(super::doc::dinv);
+    hide(crate::independent::equivalence_body::attrs_plain);
+    hide(in_body_start_html);
+    hide(in_body_start_body);
+    hide(in_body_start_frameset);
+    hide(insert_html_element);
+    hide(close_p_if_in_button_scope);
+    hide(in_body_start_heading);
+    hide(in_body_start_pre);
+    hide(in_body_start_form);
+    hide(in_body_start_li);
+    hide(in_body_start_dd_dt);
+    hide(in_body_start_button);
+    hide(in_body_start_a);
+    hide(reconstruct_formatting);
+    hide(push_formatting);
+    hide(in_body_start_nobr);
+    hide(push_marker);
+    hide(frameset_not_ok);
+    hide(doc_is_quirks);
+    hide(has_in_scope);
+    hide(close_p_element);
+    hide(in_body_void_start_tag);
+    hide(in_body_start_input);
+    hide(insert_and_pop);
+    hide(in_body_start_hr);
+    hide(in_body_start_textarea);
+    hide(generic_text_parsing);
+    hide(in_body_start_select);
+    hide(in_body_start_option);
+    hide(in_body_start_optgroup);
+    hide(generate_implied_end_tags);
+    hide(in_body_start_math);
+    hide(in_body_start_svg);
+    let g = tt.tag;
+    lemma_keeps_refl(p);
+    if g == Tag::Textarea {
         lemma_ib_textarea(p, tt);
     } else if g == Tag::Xmp {
         lemma_then_close_p_if(p, p);
@@ -418,6 +479,7 @@ pub proof fn lemma_ib_close_named(p: Parser, tt: TagTok, except: Option<Tag>, s:
         good(p),
         !p.stopped,
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Html,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
         s != Scope::Table,

@@ -452,6 +452,73 @@ pub open spec fn in_table_text_agree(p: Parser, t: Tok) -> bool {
     !(t is Char) ==> p.pending_table_text.len() > 0
 }
 
+/// The `html` element and, when the stack's second record is an HTML
+/// `body` element, the `body` element of a running parser with
+/// [`reach_core`] in a mode after "before html" have plain attributes
+/// (`element_plain`): `reachable::doc::html_plain`, and neither is the
+/// context element.
+pub proof fn lemma_core_html_body_plain(p: Parser)
+    requires
+        reach_core(p),
+        p.mode != Mode::Initial,
+        p.mode != Mode::BeforeHtml,
+    ensures
+        p.open.len() > 0,
+        crate::independent::equivalence_body::element_plain(p.doc, p.open[0].id),
+        p.open.len() >= 2 && is_html(p.open[1], Tag::Body) ==> crate::independent::equivalence_body::element_plain(
+            p.doc,
+            p.open[1].id,
+        ),
+{
+    lemma_core_rooted(p);
+    crate::reachable::doc::lemma_dinv_element_plain(p, 0);
+    if p.open.len() >= 2 && is_html(p.open[1], Tag::Body) {
+        crate::reachable::doc::lemma_dinv_element_plain(p, 1);
+    }
+}
+
+/// "In body", "in table" and "in table text", from a parser with
+/// [`reach_wf`](super::reachable::reach_wf) in a mode after "before html":
+/// the W3C and WHATWG rules give the same outcome for every token the
+/// tokenizer emits (other than a processing instruction), but on the
+/// inputs where the texts differ.
+pub proof fn lemma_reach_in_body_table(env: EncFns, p: Parser, token: Token)
+    requires
+        super::reachable::reach_wf(p),
+        !(token is ProcessingInstruction),
+        !p.stopped,
+        p.mode != Mode::Initial,
+        p.mode != Mode::BeforeHtml,
+    ensures
+        in_body_agree(p, classify(token)) ==> crate::independent::body::w3c_mode_in_body(env, p, classify(token))
+            == mode_in_body(env, p, classify(token)),
+        in_table_agree(p, classify(token)) ==> crate::independent::tables::w3c_mode_in_table(env, p, classify(token))
+            == mode_in_table(env, p, classify(token)),
+        in_table_text_agree(p, classify(token)) ==> crate::independent::tables::w3c_mode_in_table_text(
+            env,
+            p,
+            classify(token),
+        ) == mode_in_table_text(env, p, classify(token)),
+{
+    let t = classify(token);
+    lemma_reach_w3c_facts(p);
+    lemma_classify_plain(token);
+    lemma_core_html_body_plain(p);
+    assert(crate::independent::equivalence_body::in_body_facts(p, t));
+    let pf = Parser { foster: true, ..p };
+    assert(crate::independent::equivalence_body::in_body_facts(pf, t));
+    assert(!(t is Pi));
+    if in_body_agree(p, t) {
+        crate::independent::equivalence_body::lemma_in_body(env, p, t);
+    }
+    if in_table_agree(p, t) {
+        crate::independent::equivalence_body::lemma_in_table(env, p, t);
+    }
+    if in_table_text_agree(p, t) {
+        crate::independent::equivalence_body::lemma_in_table_text(env, p, t);
+    }
+}
+
 /// **"In body", "in table" and "in table text", from every reachable
 /// parser**: the corollaries of `independent::equivalence_body::lemma_in_body`,
 /// `lemma_in_table` and `lemma_in_table_text` for every parser `p` reached
@@ -503,6 +570,15 @@ pub proof fn theorem_reachable_in_body_table(
                 == mode_in_table_text(env, p, t)
         }),
 {
+    super::reachable::theorem_reachable_wf(env, url, ctx, scripting, tentative, tokens);
+    let p1 = crate::reachable::run::dispatch_steps(env, new_parser(url, scripting, tentative), tokens);
+    let p2 = crate::reachable::run::dispatch_steps(env, fragment_parser(ctx, scripting).0, tokens);
+    if !(token is ProcessingInstruction) && !p1.stopped && p1.mode != Mode::Initial && p1.mode != Mode::BeforeHtml {
+        lemma_reach_in_body_table(env, p1, token);
+    }
+    if !(token is ProcessingInstruction) && !p2.stopped && p2.mode != Mode::Initial && p2.mode != Mode::BeforeHtml {
+        lemma_reach_in_body_table(env, p2, token);
+    }
 }
 
 } // verus!

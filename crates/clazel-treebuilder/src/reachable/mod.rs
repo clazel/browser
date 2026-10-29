@@ -96,8 +96,9 @@ verus! {
 /// its records are tagged, no entry of the list of active formatting
 /// elements is for a `template` start tag, the cells' ids are fresh
 /// ([`cells_wf`]), in the "in cell" mode the stack holds a cell in table
-/// scope, the root is the stack's only `html` element, and the document
-/// facts [`doc::dinv`] hold.
+/// scope, the root is the stack's only `html` element, the document
+/// facts [`doc::dinv`] hold, and the entries of the list are for tokens
+/// with plain attributes ([`fmt_plain`]).
 pub open spec fn good(p: Parser) -> bool {
     &&& rooted_seq(p.open)
     &&& root_ids(p)
@@ -107,6 +108,7 @@ pub open spec fn good(p: Parser) -> bool {
     &&& in_cell_ok(p)
     &&& doc::dinv(p)
     &&& html_once(p.open)
+    &&& fmt_plain(p.formatting)
 }
 
 /// In the "in cell" mode, `q`'s stack holds a cell, its last cell `p`'s
@@ -199,12 +201,12 @@ pub proof fn lemma_core_frame(p: Parser, q: Parser)
         q.doc.nodes.len() >= p.doc.nodes.len(),
         q.head == p.head,
         q.redirect == p.redirect,
-        q.doc == p.doc || crate::exec::frame::doc_extends(p.doc, q.doc),
+        q.doc == p.doc || doc::dinv(q) || (crate::exec::frame::doc_extends(p.doc, q.doc) && doc::html_plain(q.doc, q.context)),
     ensures
         reach_core(q),
         crate::termination::modes_ok(q),
 {
-    if q.doc != p.doc {
+    if q.doc != p.doc && !doc::dinv(q) {
         doc::lemma_dinv_doc(p, q.doc);
     }
 }
