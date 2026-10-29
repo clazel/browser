@@ -9,10 +9,10 @@ use super::cells::*;
 use super::helpers::*;
 #[cfg(verus_only)]
 use super::lists::*;
-#[cfg(verus_only)]
-use super::walls::*;
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use super::walls::*;
 #[cfg(verus_only)]
 use crate::exec::modes::adoption::{
     af, ai, ao, finish_end, finish_mid, inner_drop, inner_replace, place_last,

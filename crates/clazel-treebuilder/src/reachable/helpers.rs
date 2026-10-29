@@ -3,10 +3,10 @@
 
 #[cfg(verus_only)]
 use super::cells::*;
-#[cfg(verus_only)]
-use super::walls::*;
 #[allow(unused_imports)]
 use super::spec::*;
+#[cfg(verus_only)]
+use super::walls::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
