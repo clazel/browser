@@ -159,8 +159,13 @@ pub open spec fn w3c_mode_in_table(env: EncFns, p: Parser, t: Tok) -> Outcome {
             // "Otherwise: Insert an HTML element for the token, and set the
             // form element pointer to point to the element created. Pop that
             // form element off the stack of open elements."
+            // (A stopped parser changes nothing: see [`super`].)
             let (q, e) = insert_html_element(p, t->Start_0);
-            Outcome::Done(pop(Parser { form: Some(e.id), ..q }))
+            if q.stopped {
+                Outcome::Done(q)
+            } else {
+                Outcome::Done(pop(Parser { form: Some(e.id), ..q }))
+            }
         }
     } else if t is Eof {
         // "An end-of-file token": "Process the token using the rules for the

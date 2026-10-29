@@ -26,8 +26,10 @@
 //!   element "immediately above node" is at the index below it whether node
 //!   is still on the stack (step 14.7 replaces the entry in place) or was
 //!   removed (step 14.6).
-//! - Once the parser has stopped (the node limit), the algorithm's
-//!   remaining steps change nothing (see [`super`]): the loops end there.
+//! - Once the parser has stopped (the node limit), the remaining steps
+//!   change nothing (see [`super`]): the adoption agency algorithm's loops
+//!   end there, and the `form` and `a` start tag entries neither set the
+//!   form element pointer nor remove the old `a` element.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -676,11 +678,14 @@ pub open spec fn w3c_in_body_start(env: EncFns, p: Parser, tt: TagTok) -> Outcom
             // the token, and, if there is no template element on the stack of
             // open elements, set the form element pointer to point to the
             // element created."
-            let (p1, e) = insert_html_element(w3c_close_p_in_button_scope(p), tt);
-            if !open_has_html(p, Tag::Template) {
-                Outcome::Done(Parser { form: Some(e.id), ..p1 })
+            // (The stack the check reads is the one the element is inserted
+            // into; the new element is a form, not a template.)
+            let p1 = w3c_close_p_in_button_scope(p);
+            let (p2, e) = insert_html_element(p1, tt);
+            if !open_has_html(p1, Tag::Template) && !p2.stopped {
+                Outcome::Done(Parser { form: Some(e.id), ..p2 })
             } else {
-                Outcome::Done(p1)
+                Outcome::Done(p2)
             }
         }
     } else if g == Tag::Li {
@@ -738,17 +743,21 @@ pub open spec fn w3c_in_body_start(env: EncFns, p: Parser, tt: TagTok) -> Outcom
         let p1 = if k >= 0 {
             let a = p.formatting[k]->Entry_elem;
             let q = w3c_adoption_agency(p, tt);
-            let kq = w3c_fmt_index(q, a.id);
-            let q1 = if kq >= 0 {
-                w3c_fmt_remove(q, kq)
-            } else {
+            if q.stopped {
                 q
-            };
-            let iq = open_index_of(q1, a.id);
-            if iq >= 0 {
-                remove_open_at(q1, iq)
             } else {
-                q1
+                let kq = w3c_fmt_index(q, a.id);
+                let q1 = if kq >= 0 {
+                    w3c_fmt_remove(q, kq)
+                } else {
+                    q
+                };
+                let iq = open_index_of(q1, a.id);
+                if iq >= 0 {
+                    remove_open_at(q1, iq)
+                } else {
+                    q1
+                }
             }
         } else {
             p
