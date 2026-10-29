@@ -6,12 +6,12 @@
 //! and states the facts of reachable states it relies on; the WHATWG text
 //! (which [`crate::spec`] follows) is the one the parser implements.
 
+#[cfg(verus_only)]
+use super::equivalence::{lemma_in_head, place_stable};
 #[allow(unused_imports)]
 use super::spec::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
-#[cfg(verus_only)]
-use super::equivalence::{lemma_in_head, place_stable};
 
 verus! {
 
