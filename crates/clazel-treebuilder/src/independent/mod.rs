@@ -17,12 +17,18 @@
 //! - Each insertion mode is one spec function, `w3c_mode_<name>`, in a
 //!   module per group of sections ([`initial`]: §8.2.5.4.1; [`early`]:
 //!   §8.2.5.4.2 to §8.2.5.4.6;
-//!   [`text`]: §8.2.5.4.8; [`tables`]: §8.2.5.4.9 to §8.2.5.4.15;
+//!   [`text`]: §8.2.5.4.8; [`tables`]: §8.2.5.4.11 to §8.2.5.4.15;
 //!   [`template`]: §8.2.5.4.18;
 //!   [`after`]: §8.2.5.4.19 to §8.2.5.4.23). Each entry ("A start tag whose
 //!   tag name is …") is one branch, in the W3C's order, with the W3C's
 //!   wording quoted. Entries listed together (two `dt` lines over one `dd`)
 //!   are one branch.
+//! - **Not transcribed yet:** §8.2.5.4.7 "in body" (with the adoption
+//!   agency algorithm), §8.2.5.4.9 "in table" and §8.2.5.4.10 "in table
+//!   text" (whose "anything else" entries run the "in body" rules), and
+//!   §8.2.5.4.16 "in select" and §8.2.5.4.17 "in select in table" (which
+//!   have no counterpart in the WHATWG text or in `Mode`). The "in table"
+//!   foster-parenting modelling choice below is for them.
 //! - The parse state, the tokens and the outcome of one rule application
 //!   are [`crate::spec`]'s (`Parser`, `Tok`, `Outcome`), so that the two
 //!   transcriptions can be compared at all.
@@ -77,6 +83,14 @@
 //! - The W3C has 23 insertion modes: "in select" (§8.2.5.4.16) and "in select
 //!   in table" (§8.2.5.4.17) do not exist in the WHATWG text, whose "in
 //!   body" parses `select` content itself, and `Mode` has no value for them.
+//! - Found by the equivalence proofs (each stated in its lemma): the WHATWG
+//!   "after head" anything-else entry also sets the frameset-ok flag to
+//!   "ok"; for a start tag `caption`, …, `tr` "in cell", the W3C checks
+//!   for a `td` or `th` element in table scope and ignores the token
+//!   without one, where the WHATWG text asserts there is one.
+//! - Not proven: that the W3C's and the WHATWG transcription's lists of
+//!   DOCTYPE identifiers ("initial") classify every token alike
+//!   ([`equivalence::lemma_initial_doctype`] takes it as a precondition).
 
 #[allow(unused_imports)]
 use super::spec::*;
