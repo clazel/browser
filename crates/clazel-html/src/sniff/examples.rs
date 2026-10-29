@@ -277,30 +277,6 @@ pub proof fn lemma_example_meta_utf16()
     assert(sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x63u8, 0x73u8, 0x75u8, 0x6Eu8, 0x69u8, 0x63u8, 0x6Fu8, 0x64u8, 0x65u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Utf8, Confidence::Tentative)) by (compute_only);
 }
 
-/// A `>` inside a quoted value does not end the tag.
-pub proof fn lemma_example_quoted_gt()
-    ensures
-        sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x27u8, 0x3Eu8, 0x27u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative),
-{
-    reveal(clazel_encoding::labels::data::LABEL_START_0);
-    reveal(clazel_encoding::labels::data::LABEL_LEN_0);
-    reveal(clazel_encoding::labels::data::LABEL_ENCODING_0);
-    reveal(clazel_encoding::labels::data::LABEL_CHARS_0);
-    assert(sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x27u8, 0x3Eu8, 0x27u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)) by (compute_only);
-}
-
-/// An unquoted value ends at a space; the next attribute follows.
-pub proof fn lemma_example_unquoted_value_end()
-    ensures
-        sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative),
-{
-    reveal(clazel_encoding::labels::data::LABEL_START_0);
-    reveal(clazel_encoding::labels::data::LABEL_LEN_0);
-    reveal(clazel_encoding::labels::data::LABEL_ENCODING_0);
-    reveal(clazel_encoding::labels::data::LABEL_CHARS_0);
-    assert(sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Ibm866, Confidence::Tentative)) by (compute_only);
-}
-
 /// An XML declaration's `encoding` must be followed by `=`.
 pub proof fn lemma_example_xml_needs_equals()
     ensures

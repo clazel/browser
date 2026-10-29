@@ -2221,14 +2221,14 @@
     {
       "id": "attribute-single-quote",
       "file": "src/sniff/spec.rs",
-      "module": "sniff::examples",
+      "module": "sniff::examples_attribute",
       "find": "        } else if c == 0x22 || c == 0x27 {\n            // 10.",
       "replace": "        } else if c == 0x22 {\n            // 10.",
       "expect": "killed",
       "reason": "Get an attribute step 10 does not treat ' as a quote, so the > inside x='>' ends the tag. lemma_example_quoted_gt is false for the mutant.",
       "certificate": {
         "file": "src/sniff/lemmas.rs",
-        "lemma": "super::examples::lemma_example_quoted_gt()",
+        "lemma": "super::examples_attribute::lemma_example_quoted_gt()",
         "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x27u8, 0x3Eu8, 0x27u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
         "reveal": [
           "clazel_encoding::labels::data::LABEL_START_0",
@@ -2241,14 +2241,14 @@
     {
       "id": "attribute-unquoted-end",
       "file": "src/sniff/spec.rs",
-      "module": "sniff::examples",
+      "module": "sniff::examples_attribute",
       "find": "        if is_space(c) || c == 0x3E {\n            // 0x09",
       "replace": "        if c == 0x3E {\n            // 0x09",
       "expect": "killed",
       "reason": "An unquoted value runs on past a space, swallowing the next attribute. lemma_example_unquoted_value_end is false for the mutant.",
       "certificate": {
         "file": "src/sniff/lemmas.rs",
-        "lemma": "super::examples::lemma_example_unquoted_value_end()",
+        "lemma": "super::examples_attribute::lemma_example_unquoted_value_end()",
         "witness": "sniff(seq![0x3Cu8, 0x6Du8, 0x65u8, 0x74u8, 0x61u8, 0x20u8, 0x78u8, 0x3Du8, 0x61u8, 0x20u8, 0x63u8, 0x68u8, 0x61u8, 0x72u8, 0x73u8, 0x65u8, 0x74u8, 0x3Du8, 0x38u8, 0x36u8, 0x36u8, 0x3Eu8], None) == (clazel_encoding::labels::spec::Encoding::Windows1252, Confidence::Tentative)",
         "reveal": [
           "clazel_encoding::labels::data::LABEL_START_0",
