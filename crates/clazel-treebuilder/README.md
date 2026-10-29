@@ -71,7 +71,10 @@ evidence exists (see "Left" below).
 - **Independent transcription** (`src/independent/`): W3C HTML 5.2
   §8.2.5 (Recommendation, 14 December 2017), written without reading
   `src/spec/modes/`, proven equal to the spec for 21 of its 23 insertion
-  modes, the adoption agency algorithm included, with every difference
+  modes, the adoption agency algorithm included, and for §8.2.5.5's rules
+  for foreign content with their three attribute adjustments and the SVG
+  tag name table (the tables written without reading
+  `src/spec/base/tables.rs`; they have the same rows), with every difference
   between the two texts stated in the lemma's precondition (no processing
   instructions in the W3C text; "after head" sets frameset-ok; "in cell"
   checks a cell is in scope where WHATWG asserts it; "in body"'s
@@ -80,20 +83,26 @@ evidence exists (see "Left" below).
   table"'s characters with a `template` current node; the adoption agency
   algorithm's insertions where the redirection map or the WHATWG's step
   4.21 checks make them differ; an empty pending table character list;
-  the DOCTYPE lists are taken as agreeing, not proven). The two lemmas
+  the DOCTYPE lists are taken as agreeing, not proven; in foreign content,
+  the WHATWG's `menu` breakout start tag and `br` and `p` breakout end
+  tags, the W3C's fragment case of the breakout entries, and the WHATWG
+  adjusting only attributes with no namespace). The two lemmas
   for "in body" and "in table" also assume stated facts of reachable
   states (ids on the stack and in the list of active formatting elements
-  name nodes, records are tagged, the list holds HTML elements). Not
+  name nodes, records are tagged, the list holds HTML elements); the
+  foreign content lemma assumes a token the dispatcher sends there, a
+  tagged start tag with plain attributes, and distinct elements on the
+  stack. Not
   transcribed: the W3C's "in select" and "in select in table", which the
   living standard removed.
-- **Mutations** (`mutations.json`): 48; 41 killed by a theorem with a
+- **Mutations** (`mutations.json`): 48; 44 killed by a theorem with a
   certificate Verus checks (termination, the order of actions, and the
-  W3C equivalences), 7 killed incidentally (they break only the
-  implementation's proof), 0 surviving. Of the 7, four change algorithms
-  both transcriptions share (`push_formatting`'s Noah's Ark clause, the
-  table scope, the SVG tag name and foreign attribute tables), so no W3C
-  equivalence can tell them apart; one is in foreign content, which is not
-  transcribed; and two cannot be evaluated by a certificate: the
+  W3C equivalences, foreign content and its tables among them), 4 killed
+  incidentally (they break only the implementation's proof), 0 surviving.
+  Of the 4, two change algorithms both transcriptions share
+  (`push_formatting`'s Noah's Ark clause, the table scope), so no W3C
+  equivalence can tell them apart; and two cannot be evaluated by a
+  certificate: the
   DOCTYPE system identifier test and "in table text"'s whitespace test are
   `exists` quantifiers in the spec, which `compute_only` does not
   evaluate, so no witness reaching them evaluates in the mutant and on the
@@ -118,6 +127,8 @@ evidence exists (see "Left" below).
 - Spec-level `parser_wf` of every reachable parser, which would remove the
   hypotheses of `theorem_doc_wf`, `theorem_open_elements_in_doc` and
   `theorem_nodes_per_token`.
-- Every mutation a certified kill (tier 2's requirement): 7 are not
+- Every mutation a certified kill (tier 2's requirement): 4 are not
   (see "Mutations" above); they need a second transcription of the shared
-  algorithms and tables, of foreign content, or quantifier-free tests.
+  algorithms, or quantifier-free tests.
+- A proof that the stack of open elements holds distinct elements on
+  every reachable parser, which the foreign content equivalence assumes.
