@@ -68,7 +68,13 @@ evidence exists (see "Left" below).
   with two formatting entries, only HTML elements in the list of active
   formatting elements, the fragment case's redirection map (or none),
   and, until it stops, `parser_wf`, a valid head pointer and distinct
-  elements on the stack. So `theorem_reachable_doc_wf`,
+  elements on the stack. `theorem_reachable_parser_inv`: every reachable
+  parser satisfies `parser_inv` until it stops, `templates_wf` included
+  (every `template` record on the stack has template contents, and no
+  `template` element without them has a child: the reachable-state
+  invariant carries these document facts, `reachable::doc::dinv`, since
+  every insertion's parent comes from the stack's tagged records). So
+  `theorem_reachable_doc_wf`,
   `theorem_reachable_open_elements_in_doc` and
   `theorem_reachable_nodes_per_token` state the three for a step from
   every reachable parser, with no hypotheses. `theorem_reachable_w3c_facts`
@@ -151,18 +157,15 @@ evidence exists (see "Left" below).
   one).
 - A differential against `html5ever` (22 packages with
   `markup5ever_rcdom`; not added).
-- Spec-level `modes_ok` of a stopped reachable parser (so `parser_wf` is
-  proven of reachable parsers only until they stop; a stopped parser
-  takes no further step), and spec-level `templates_wf` of reachable
-  parsers (the rest of `parser_inv`). Both hold: `exec::step::step`
+- Spec-level `modes_ok` of a stopped reachable parser (so `parser_wf` and
+  `parser_inv` are proven of reachable parsers only until they stop; a
+  stopped parser takes no further step). It holds: `exec::step::step`
   proves `parser_inv` of `dispatch`'s result, stopped or not, but an exec
   function's contract cannot be used in a proof. At the spec level the
   per-mode lemmas prove `modes_ok` only of results that have not stopped,
   and a rule that stops part-way has already changed the modes; a proof
   needs every mode lemma (and the ranking edges) extended to stopped
-  results. `templates_wf` needs the tokens' tags at every element
-  creation (a `template` element gets contents by the token's tag, and
-  is one by its name's), which the document theorems do not carry.
+  results.
 - Whether reachable parsers need the 6T term of the nodes-per-token bound.
   The term pays for "in template"'s end of file, which pops a template,
   resets the mode and reprocesses, once per template: the generic proof

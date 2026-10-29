@@ -19,10 +19,10 @@
 //!
 //! Not stated: `termination::modes_ok` of a stopped parser (the rule that
 //! stops parsing may have changed the modes half way; a stopped parser
-//! takes no further step, so nothing needs it), and the rest of
-//! `invariant::parser_inv` (`tags_wf` holds of running reachable parsers by
-//! `reachable_inv`; `templates_wf` has no spec-level proof, only the
-//! executable step's).
+//! takes no further step, so nothing needs it). The rest of
+//! `invariant::parser_inv` for running reachable parsers (`tags_wf` and
+//! `templates_wf`, which `reachable_inv` carries) is
+//! `super::parser_inv::theorem_reachable_parser_inv`.
 
 #[allow(unused_imports)]
 use super::spec::*;
