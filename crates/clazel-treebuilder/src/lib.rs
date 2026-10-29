@@ -16,7 +16,8 @@
 //!   every reachable parser.
 //! - [`mutation_lemmas`]: concrete instances of the theorems, the kill
 //!   certificates of `mutations.json`.
-//! - [`reachable`]: `theorem_reachable`, the reachable-state invariant.
+//! - [`reachable`]: `theorem_reachable`, the reachable-state invariant, and
+//!   `theorem_reachable_stopped`, the modes of a stopped reachable parser.
 
 pub mod contract;
 pub mod exec;

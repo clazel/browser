@@ -791,14 +791,15 @@ document) and `theorem_nodes_per_token` are proven for a step from a
 parser with `parser_wf`, a valid head pointer and `dispatch_needs` (which
 `reachable_inv` gives); the last also assumes no element has two
 formatting entries. `theorem_reachable_wf` discharges these hypotheses:
-every reachable parser has a well-formed document, every id of its parse
-state in it and no element with two formatting entries, and, until it
-stops, `parser_wf` and a valid head pointer; so the three hold for a step
-from every reachable parser, with no hypotheses
+every reachable parser, stopped or not, has `parser_wf` (a well-formed
+document, every id of its parse state in it, `modes_ok`: a stopped one has
+an empty stack, `theorem_reachable_stopped`) and no element with two
+formatting entries, and, until it stops, a valid head pointer; so the
+three hold for a step from every reachable parser, with no hypotheses
 (`theorem_reachable_doc_wf`, `theorem_reachable_open_elements_in_doc`,
 `theorem_reachable_nodes_per_token`). `theorem_open_distinct`: a step keeps
-the stack's elements distinct, so every running reachable parser has
-distinct elements on its stack (part of `theorem_reachable_wf`, with the
+the stack's elements distinct, so every reachable parser has distinct
+elements on its stack (part of `theorem_reachable_wf`, with the
 list of active formatting elements holding HTML elements and the
 redirection map being the fragment case's); `theorem_reachable_w3c_facts`
 proves the state preconditions of the W3C equivalence lemmas that are
@@ -806,10 +807,8 @@ facts of reachable states (`document_rooted`, `no_document_redirect`,
 `aa_wf`, `tags_wf`, distinct stack, `place_stable`), and
 `theorem_reachable_foreign_content` states the foreign content
 equivalence on every reachable parser without its stack hypothesis. Not
-proven at the spec level: `modes_ok` of a stopped parser (which takes no
-further step; the per-mode lemmas cover only results that have not
-stopped) and `templates_wf` (the executable step keeps both, but its
-contract cannot be used in a proof); whether reachable parsers need the
+proven at the spec level: `templates_wf` (the executable step keeps it,
+but its contract cannot be used in a proof); whether reachable parsers need the
 6T term of the node bound (it pays for "in template"'s end of file
 resetting the mode once per template); and the equivalence preconditions
 `html_only_at_root`, `element_plain` of `html` and `body`, the cell in
