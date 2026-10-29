@@ -71,8 +71,8 @@
 //!
 //! How the W3C text differs from the WHATWG text [`crate::spec`]
 //! transcribes, as far as the modes go (each equivalence lemma in
-//! [`equivalence`] excludes the inputs where they differ, in its
-//! precondition, and says why):
+//! [`equivalence`] and [`equivalence_body`] excludes the inputs where they
+//! differ, in its precondition, and says why):
 //! - The WHATWG tokenizer emits processing instruction tokens, which the
 //!   modes insert; the W3C has no such token. Every lemma excludes
 //!   `Tok::Pi`.
@@ -84,6 +84,21 @@
 //!   "ok"; for a start tag `caption`, …, `tr` "in cell", the W3C checks
 //!   for a `td` or `th` element in table scope and ignores the token
 //!   without one, where the WHATWG text asserts there is one.
+//! - Found by the "in body", "in table" and "in table text" proofs
+//!   ([`equivalence_body`]): the WHATWG adds `hgroup`, `menu` and `search`
+//!   to "in body"'s block start and end tags, `select` to its block end
+//!   tags and `keygen` to its void start tags; its `input`, `hr`, `option`
+//!   and `optgroup` entries have steps for a `select` element in scope (or
+//!   a `select` fragment context), and its `select` entry no "in select"
+//!   switch; its `form` entries ("in body", "in table") test "parsing
+//!   template contents", also true for a `template` fragment context; "in
+//!   table" also sends characters to "in table text" when the current node
+//!   is a `template`; the adoption agency algorithm's steps 15 and 18 use
+//!   the adjusted insertion location (the redirection map) and, at step
+//!   15, remove last node before checking whether to insert it; and an
+//!   empty pending table character list inserts nothing in the WHATWG
+//!   transcription (docs/ERRATA.md) but, read literally, an empty `Text`
+//!   node in the W3C text.
 //! - Not proven: that the W3C's and the WHATWG transcription's lists of
 //!   DOCTYPE identifiers ("initial") classify every token alike
 //!   ([`equivalence::lemma_initial_doctype`] takes it as a precondition).
