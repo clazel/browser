@@ -187,7 +187,14 @@ We list this openly. Proofs are only as good as their assumptions.
   `impl_hkdf!`); and libcrux's `pre-verification` support crates
   (`libcrux-hacl-rs`, `-secrets`, `-traits`, `-macros`). Every call into
   libcrux is one axiom in `crates/clazel-crypto/src/axioms.rs`, stating only
-  libcrux's documented types, output lengths and failure cases
+  libcrux's documented types, output lengths and failure cases: the output
+  is an uninterpreted function of exactly those inputs, named for the
+  standard's algorithm, and that it is that algorithm is HACL\*'s proof.
+  The axioms cover TLS (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519 and
+  the CertificateVerify signatures) and certificate-chain links (SHA-384
+  and SHA-512 digests for RSA PKCS#1 v1.5, and ECDSA P-256 with SHA-384).
+  RSA PKCS#1 v1.5 itself is not trusted: it is `clazel-pkcs1`, our own
+  proven code, over those digests
 - fiat-crypto 0.3.0, for the field arithmetic of `clazel-p384` (`mul`, `add`
   and `sub` modulo P-384's p and n). What that trusts, precisely: the Coq
   kernel; Coq's extraction to OCaml and the OCaml compiler that runs the

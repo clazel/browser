@@ -84,6 +84,13 @@ pub open spec fn hash_len(hash: Hash) -> nat {
 pub uninterp spec fn ecdsa_p256_sha256_verify(message: Seq<u8>, r: Seq<u8>, s: Seq<u8>,
     point: Seq<u8>) -> bool;
 
+/// ECDSA P-256 with SHA-384 of `message` (FIPS 186-5 §6.4.2, the hash's
+/// leftmost 256 bits): `r` and `s` are 32 octets, `point` is X || Y (64
+/// octets). Uninterpreted: libcrux's. Not a TLS 1.3 scheme (RFC 8446 §4.2.3
+/// binds P-256 to SHA-256); certificate links use it (`crate::chain`).
+pub uninterp spec fn ecdsa_p256_sha384_verify(message: Seq<u8>, r: Seq<u8>, s: Seq<u8>,
+    point: Seq<u8>) -> bool;
+
 /// RSASSA-PSS-VERIFY (RFC 8017 §8.1.2) with public exponent 65537, MGF1
 /// over `hash` and the given salt length. Uninterpreted: libcrux's.
 pub uninterp spec fn rsa_pss_verify(hash: Hash, modulus: Seq<u8>, message: Seq<u8>,
