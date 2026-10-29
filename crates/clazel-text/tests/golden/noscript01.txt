@@ -1,0 +1,109 @@
+#case 0
+#data "<head><noscript><!doctype html><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<head><noscript><html class=\"foo\"><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<head><noscript></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<head><noscript>   </noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<head><noscript><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<head><noscript><basefont><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<head><noscript><bgsound><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<head><noscript><link><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<head><noscript><meta><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<head><noscript><noframes>XXX</noscript></noframes></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<head><noscript><style>XXX</style></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<head><noscript></br><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<head><noscript><head class=\"foo\"><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<head><noscript><noscript class=\"foo\"><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<head><noscript></p><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<head><noscript><p><!--foo--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<head><noscript>XXX<!--foo--></noscript></head>"
+#title ""
+#lines 1
+"XXX"
+#links 0
+
+#case 17
+#data "<head><noscript>"
+#title ""
+#lines 0
+#links 0
+

@@ -1,0 +1,20 @@
+#case 0
+#data "<input type=\"hidden\"><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!DOCTYPE html><table><caption><svg>foo</table>bar"
+#title ""
+#lines 2
+"foo"
+"bar"
+#links 0
+
+#case 2
+#data "<table><tr><td><svg><desc><td></desc><circle>"
+#title ""
+#lines 0
+#links 0
+

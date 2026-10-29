@@ -1,0 +1,7 @@
+#case 0
+#data "<body><table><tr><td><svg><td><foreignObject><span></td>Foo"
+#title ""
+#lines 1
+"Foo"
+#links 0
+

@@ -1,0 +1,298 @@
+#case 0
+#data "<svg><![CDATA[foo\nbar]]>"
+#title ""
+#lines 1
+"foo bar"
+#links 0
+
+#case 1
+#data "<svg><![CDATA[foo\rbar]]>"
+#title ""
+#lines 1
+"foo bar"
+#links 0
+
+#case 2
+#data "<svg><![CDATA[foo\r\nbar]]>"
+#title ""
+#lines 1
+"foo bar"
+#links 0
+
+#case 3
+#data "<script>a='\0'</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<script type=\"data\"><!--\0</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<script type=\"data\"><!--foo\0</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<script type=\"data\"><!-- foo-\0</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<script type=\"data\"><!-- foo--\0</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<script type=\"data\"><!-- foo-"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<script type=\"data\"><!-- foo-<</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<script type=\"data\"><!-- foo-<S"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<script type=\"data\"><!-- foo-</SCRIPT>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<script type=\"data\"><!--<p></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<script type=\"data\"><!--<script></script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<script type=\"data\"><!--<script>\0</script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<script type=\"data\"><!--<script>-\0</script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<script type=\"data\"><!--<script>--\0</script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<script type=\"data\"><!--<script>---</script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<script type=\"data\"><!--<script></scrip></SCRIPT></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<script type=\"data\"><!--<script></scrip </SCRIPT></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<script type=\"data\"><!--<script></scrip/</SCRIPT></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<script type=\"data\"></scrip/></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<script type=\"data\"></scrip ></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<script type=\"data\"><!--</scrip></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 24
+#data "<script type=\"data\"><!--</scrip </script>"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<script type=\"data\"><!--</scrip/</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<!DOCTYPE html><!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<html><!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<html><head><!DOCTYPE html></head>"
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<html><head></head><!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<body></body><!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 31
+#data "<table><!DOCTYPE html></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 32
+#data "<select><!DOCTYPE html></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 33
+#data "<table><colgroup><!DOCTYPE html></colgroup></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 34
+#data "<table><colgroup><!--test--></colgroup></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<table><colgroup><html></colgroup></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 36
+#data "<table><colgroup> foo</colgroup></table>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 37
+#data "<select><!--test--></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<select><html></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<frameset><html></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<frameset></frameset><html>"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<frameset></frameset><!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<html><body></body></html><!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<svg><!DOCTYPE html></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<svg><font></font></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "<svg><font id=foo></font></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<svg><font size=4></font></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<svg><font color=red></font></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "<svg><font font=sans></font></svg>"
+#title ""
+#lines 0
+#links 0
+

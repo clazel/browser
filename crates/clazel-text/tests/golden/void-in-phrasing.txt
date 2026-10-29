@@ -1,0 +1,88 @@
+#case 0
+#data "<!DOCTYPE html><body><p><br></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!DOCTYPE html><body><p><br>text</p>"
+#title ""
+#lines 2
+""
+"text"
+#links 0
+
+#case 2
+#data "<!DOCTYPE html><body><p>before<br>after</p>"
+#title ""
+#lines 2
+"before"
+"after"
+#links 0
+
+#case 3
+#data "<!DOCTYPE html><body><p><br><br></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><body><p>a<br>b<br>c</p>"
+#title ""
+#lines 3
+"a"
+"b"
+"c"
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><body><h1><br></h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><body><p><input></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><body><p><img></p>"
+#title ""
+#lines 1
+"[image]"
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><body><p><wbr></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<!DOCTYPE html><body><p><embed></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><body><h2><input></h2>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><body><em><br></em>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><body><strong><br>text</strong>"
+#title ""
+#lines 2
+""
+"text"
+#links 0
+

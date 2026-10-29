@@ -1,0 +1,157 @@
+#case 0
+#data "<svg><![CDATA[foo]]>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 1
+#data "<math><![CDATA[foo]]>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 2
+#data "<div><![CDATA[foo]]>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<svg><![CDATA[foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 4
+#data "<svg><![CDATA["
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<svg><![CDATA[]]>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<svg><![CDATA[]] >]]>"
+#title ""
+#lines 1
+"]] >"
+#links 0
+
+#case 7
+#data "<svg><![CDATA[]]"
+#title ""
+#lines 1
+"]]"
+#links 0
+
+#case 8
+#data "<svg><![CDATA[]"
+#title ""
+#lines 1
+"]"
+#links 0
+
+#case 9
+#data "<svg><![CDATA[]>a"
+#title ""
+#lines 1
+"]>a"
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]>"
+#title ""
+#lines 1
+"foo]"
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]]>"
+#title ""
+#lines 1
+"foo]]"
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]]]>"
+#title ""
+#lines 1
+"foo]]]"
+#links 0
+
+#case 13
+#data "<svg><foreignObject><div><![CDATA[foo]]>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<svg><![CDATA[<svg>]]>"
+#title ""
+#lines 1
+"<svg>"
+#links 0
+
+#case 15
+#data "<svg><![CDATA[</svg>a]]>"
+#title ""
+#lines 1
+"</svg>a"
+#links 0
+
+#case 16
+#data "<svg><![CDATA[<svg>a"
+#title ""
+#lines 1
+"<svg>a"
+#links 0
+
+#case 17
+#data "<svg><![CDATA[</svg>a"
+#title ""
+#lines 1
+"</svg>a"
+#links 0
+
+#case 18
+#data "<svg><![CDATA[<svg>]]><path>"
+#title ""
+#lines 1
+"<svg>"
+#links 0
+
+#case 19
+#data "<svg><![CDATA[<svg>]]></path>"
+#title ""
+#lines 1
+"<svg>"
+#links 0
+
+#case 20
+#data "<svg><![CDATA[<svg>]]><!--path-->"
+#title ""
+#lines 1
+"<svg>"
+#links 0
+
+#case 21
+#data "<svg><![CDATA[<svg>]]>path"
+#title ""
+#lines 1
+"<svg>path"
+#links 0
+
+#case 22
+#data "<svg><![CDATA[<!--svg-->]]>"
+#title ""
+#lines 1
+"<!--svg-->"
+#links 0
+

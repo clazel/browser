@@ -1,0 +1,75 @@
+#case 0
+#data "<div>\n<div></div>\n</span>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 1
+#data "<div>x<div></div>\n</span>x"
+#title ""
+#lines 2
+"x"
+"x"
+#links 0
+
+#case 2
+#data "<div>x<div></div>x</span>x"
+#title ""
+#lines 2
+"x"
+"xx"
+#links 0
+
+#case 3
+#data "<div>x<div></div>y</span>z"
+#title ""
+#lines 2
+"x"
+"yz"
+#links 0
+
+#case 4
+#data "<table><div>x<div></div>x</span>x"
+#title ""
+#lines 2
+"x"
+"xx"
+#links 0
+
+#case 5
+#data "<table><li><li></table>"
+#title ""
+#lines 1
+"* *"
+#links 0
+
+#case 6
+#data "x<table>x"
+#title ""
+#lines 1
+"xx"
+#links 0
+
+#case 7
+#data "x<table><table>x"
+#title ""
+#lines 2
+"x"
+"x"
+#links 0
+
+#case 8
+#data "<b>a<div></div><div></b>y"
+#title ""
+#lines 2
+"a"
+"y"
+#links 0
+
+#case 9
+#data "<a><div><p></a>"
+#title ""
+#lines 0
+#links 0
+
