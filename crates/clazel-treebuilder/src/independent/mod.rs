@@ -97,6 +97,7 @@ pub mod after;
 pub mod body;
 pub mod early;
 pub mod equivalence;
+pub mod equivalence_body;
 pub mod initial;
 
 pub mod tables;
