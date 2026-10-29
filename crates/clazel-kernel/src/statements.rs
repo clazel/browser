@@ -182,6 +182,30 @@ pub open spec fn body_is_the_response_statement(rules: Seq<clazel_psl::spec::Rul
             }
 }
 
+/// Some output of `out` is a `ToRenderer` to `id` whose octets are exactly
+/// [`commit_frames`] of `url` and some document: the one write that commits
+/// a document at `url` in renderer `id`.
+pub open spec fn commit_sent(out: Seq<Output>, id: nat, url: Seq<u32>) -> bool {
+    exists|k: int, doc: Document|
+        #![trigger out[k], commit_frames(url, doc)]
+        0 <= k < out.len() && out[k] == Output::ToRenderer { id, bytes: commit_frames(url, doc) }
+}
+
+/// `theorem_committed_only_after_commit` (item 4.12): over every run from the
+/// kernel's first state, a renderer the kernel holds as committed was sent a
+/// `Commit` (the write of `Commit`, `Body`... and `BodyEnd` that
+/// [`commit_frames`] gives) at the URL the kernel holds for it, earlier in
+/// the run. So the flag that lets a renderer `Display`
+/// ([`accepted_message`]) and the URL a `Show` is labelled with
+/// (`theorem_address_bar_integrity`) both come from a commit the kernel
+/// sent, never from the renderer. Renderer ids are never reused
+/// (`next_id`), so the write went to this renderer.
+pub open spec fn committed_only_after_commit_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, t: Seq<Event>) -> bool {
+    let s = run_state(rules, urls, fetch, init_state(), t);
+    let out = run_outputs(rules, urls, fetch, init_state(), t);
+    forall|i: int| 0 <= i < s.renderers.len() && (#[trigger] s.renderers[i]).committed ==> commit_sent(out, s.renderers[i].id, s.renderers[i].url)
+}
+
 /// `theorem_net_only_to_tab` (item 3.7; replaces `theorem_fetched_only_to_tab`):
 /// a `Net { conn, _ }` event is attributed to the renderer of its connection's
 /// tab, as a frame is to its socket's: its renderer-bound outputs are
