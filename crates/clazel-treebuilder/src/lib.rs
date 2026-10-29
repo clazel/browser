@@ -8,6 +8,8 @@
 //! - [`spec`]: the transcription, split by section and insertion mode.
 //! - [`invariant`]: `parser_wf`, the invariant of reachable parser states.
 //! - [`contract`]: what the executable parser is proven to satisfy.
+//! - [`independent`]: a second transcription of the insertion modes, from
+//!   the W3C's HTML 5.2, proven equal where the documents agree.
 //! - [`termination`]: `theorem_dispatch_total`, reprocessing ends.
 //! - [`theorems`]: `theorem_actions_ordered`, the order of the actions.
 //! - [`mutation_lemmas`]: concrete instances of the theorems, the kill
@@ -16,6 +18,7 @@
 
 pub mod contract;
 pub mod exec;
+pub mod independent;
 pub mod invariant;
 pub mod mutation_lemmas;
 pub mod reachable;
