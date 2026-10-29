@@ -21,9 +21,10 @@ untrusted input carry machine-checked proofs.
 - **The end** (§13.2.7) and **fragment parsing** (§13.4).
 - **A transducer:** `dispatch(env, parser, token) -> (parser, actions)`,
   with `ChangeEncoding`, `ScriptReady` and `StopParsing` for the driver.
-  The tokenizer is a parameter (`TokFns`), joined to `clazel-html` later;
-  "get an encoding" and "extract a character encoding from a meta element"
-  are parameters too.
+  The tokenizer is a parameter of the spec (`TokFns`); `exec::driver`
+  runs `clazel-html`'s tokenizer through the executable step. "Get an
+  encoding" and "extract a character encoding from a meta element" are
+  parameters too.
 
 Not modelled, each stated in `src/spec/mod.rs`: the sanitizer, declarative
 shadow roots, template content patching, custom elements, scripting (the
