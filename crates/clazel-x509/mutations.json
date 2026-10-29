@@ -524,6 +524,721 @@
             "lemma": "super::lemmas::lemma_max_year_is_9999()",
             "witness": "max_year() == 10000"
         }
+    },
+    {
+      "id": "sig-ecdsa-sha256-oid-arc-0",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "replace": "oid =~= seq![2nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 is 1.2.840.10045.4.3.2 (RFC 5758 §3.2); changing arc 0 from 1 to 2 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha256-oid-arc-1",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "replace": "oid =~= seq![1nat, 3nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 is 1.2.840.10045.4.3.2 (RFC 5758 §3.2); changing arc 1 from 2 to 3 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha256-oid-arc-2",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 841nat, 10045nat, 4nat, 3nat, 2nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 is 1.2.840.10045.4.3.2 (RFC 5758 §3.2); changing arc 2 from 840 to 841 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha256-oid-arc-3",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10046nat, 4nat, 3nat, 2nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 is 1.2.840.10045.4.3.2 (RFC 5758 §3.2); changing arc 3 from 10045 to 10046 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha256-oid-arc-4",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 5nat, 3nat, 2nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 is 1.2.840.10045.4.3.2 (RFC 5758 §3.2); changing arc 4 from 4 to 5 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha256-oid-arc-5",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 4nat, 2nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 is 1.2.840.10045.4.3.2 (RFC 5758 §3.2); changing arc 5 from 3 to 4 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha256-oid-arc-6",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 is 1.2.840.10045.4.3.2 (RFC 5758 §3.2); changing arc 6 from 2 to 3 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-oid-arc-0",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "replace": "oid =~= seq![2nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 is 1.2.840.10045.4.3.3 (RFC 5758 §3.2); changing arc 0 from 1 to 2 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-oid-arc-1",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "replace": "oid =~= seq![1nat, 3nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 is 1.2.840.10045.4.3.3 (RFC 5758 §3.2); changing arc 1 from 2 to 3 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-oid-arc-2",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 841nat, 10045nat, 4nat, 3nat, 3nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 is 1.2.840.10045.4.3.3 (RFC 5758 §3.2); changing arc 2 from 840 to 841 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-oid-arc-3",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10046nat, 4nat, 3nat, 3nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 is 1.2.840.10045.4.3.3 (RFC 5758 §3.2); changing arc 3 from 10045 to 10046 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-oid-arc-4",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 5nat, 3nat, 3nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 is 1.2.840.10045.4.3.3 (RFC 5758 §3.2); changing arc 4 from 4 to 5 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-oid-arc-5",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 4nat, 3nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 is 1.2.840.10045.4.3.3 (RFC 5758 §3.2); changing arc 5 from 3 to 4 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-oid-arc-6",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 4nat]",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 is 1.2.840.10045.4.3.3 (RFC 5758 §3.2); changing arc 6 from 3 to 4 means the real identifier is no longer recognised.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Unsupported)"
+      }
+    },
+    {
+      "id": "sig-ecdsa-null-parameters-accepted",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "    parameters is None\n",
+      "replace": "    parameters is None || parameters == Some(seq![0x05u8, 0x00u8])\n",
+      "expect": "killed",
+      "reason": "RFC 5758 §3.2: the parameters of ecdsa-with-SHA256/384 MUST be omitted; NULL (which RSA accepts) is malformed.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_rejects_any_parameters()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], Some(seq![0x05u8, 0x00u8]))) is Some"
+      }
+    },
+    {
+      "id": "sig-ecdsa-any-parameters-accepted",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "    parameters is None\n",
+      "replace": "    true\n",
+      "expect": "killed",
+      "reason": "RFC 5758 §3.2: any parameters on an ECDSA identifier make it malformed.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_rejects_any_parameters()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], Some(seq![0x04u8, 0x00u8]))) is Some"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha256-class-hash",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha256))",
+      "replace": "Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha384))",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA256 must select SHA-256, not SHA-384.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None)) == Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha384))"
+      }
+    },
+    {
+      "id": "sig-ecdsa-sha384-class-hash",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha384))",
+      "replace": "Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha256))",
+      "expect": "killed",
+      "reason": "ecdsa-with-SHA384 must select SHA-384, not SHA-256.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha384_class()",
+        "witness": "classify(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None)) == Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha256))"
+      }
+    },
+    {
+      "id": "sig-ecdsa-match-hash",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "Some(AlgorithmClass::Ecdsa(outer_hash)))\n            if tbs_hash == outer_hash && 0 == signature_unused_bits =>",
+      "replace": "Some(AlgorithmClass::Ecdsa(outer_hash)))\n            if signature_unused_bits == 0 =>",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.1.1.2: the TBS and outer ECDSA identifiers must agree; SHA-256 against SHA-384 must not pair.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_sha256_and_sha384_do_not_match()",
+        "witness": "prepare_signature(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], None), super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None), seq![0x30u8, 0x00], seq![0x01u8], 0) is Some"
+      }
+    },
+    {
+      "id": "sig-ecdsa-unused-bits-zero",
+      "file": "src/signature_algorithm/spec.rs",
+      "find": "if tbs_hash == outer_hash && 0 == signature_unused_bits =>\n            Some(PreparedSignature {\n                tbs_algorithm, outer_algorithm,\n                class: AlgorithmClass::Ecdsa(tbs_hash),",
+      "replace": "if tbs_hash == outer_hash =>\n            Some(PreparedSignature {\n                tbs_algorithm, outer_algorithm,\n                class: AlgorithmClass::Ecdsa(tbs_hash),",
+      "expect": "killed",
+      "reason": "An ECDSA signature BIT STRING is octet aligned; a nonzero unused-bit count must be refused.",
+      "certificate": {
+        "file": "src/signature_algorithm/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ecdsa_requires_zero_unused_bits()",
+        "witness": "prepare_signature(super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None), super::certificates::ex_alg(seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 3nat], None), seq![0x30u8, 0x00], seq![0xA0u8], 1) is Some"
+      }
+    },
+    {
+      "id": "spki-ec-oid-arc-0",
+      "file": "src/spki/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat]",
+      "replace": "oid =~= seq![2nat, 2nat, 840nat, 10045nat, 2nat, 1nat]",
+      "expect": "killed",
+      "reason": "id-ecPublicKey is 1.2.840.10045.2.1 (RFC 5480 §2.1.1); changing arc 0 from 1 to 2 means a real EC key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-ec-oid-arc-1",
+      "file": "src/spki/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat]",
+      "replace": "oid =~= seq![1nat, 3nat, 840nat, 10045nat, 2nat, 1nat]",
+      "expect": "killed",
+      "reason": "id-ecPublicKey is 1.2.840.10045.2.1 (RFC 5480 §2.1.1); changing arc 1 from 2 to 3 means a real EC key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-ec-oid-arc-2",
+      "file": "src/spki/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 841nat, 10045nat, 2nat, 1nat]",
+      "expect": "killed",
+      "reason": "id-ecPublicKey is 1.2.840.10045.2.1 (RFC 5480 §2.1.1); changing arc 2 from 840 to 841 means a real EC key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-ec-oid-arc-3",
+      "file": "src/spki/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10046nat, 2nat, 1nat]",
+      "expect": "killed",
+      "reason": "id-ecPublicKey is 1.2.840.10045.2.1 (RFC 5480 §2.1.1); changing arc 3 from 10045 to 10046 means a real EC key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-ec-oid-arc-4",
+      "file": "src/spki/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 3nat, 1nat]",
+      "expect": "killed",
+      "reason": "id-ecPublicKey is 1.2.840.10045.2.1 (RFC 5480 §2.1.1); changing arc 4 from 2 to 3 means a real EC key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-ec-oid-arc-5",
+      "file": "src/spki/spec.rs",
+      "find": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat]",
+      "replace": "oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 2nat]",
+      "expect": "killed",
+      "reason": "id-ecPublicKey is 1.2.840.10045.2.1 (RFC 5480 §2.1.1); changing arc 5 from 1 to 2 means a real EC key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-0",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x07u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 0 changed from 0x06 to 0x07, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-1",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x09u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 1 changed from 0x08 to 0x09, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-2",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2bu8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 2 changed from 0x2a to 0x2b, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-3",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2au8, 0x87u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 3 changed from 0x86 to 0x87, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-4",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x49u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 4 changed from 0x48 to 0x49, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-5",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xcfu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 5 changed from 0xce to 0xcf, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-6",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3eu8, 0x03u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 6 changed from 0x3d to 0x3e, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-7",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x04u8, 0x01u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 7 changed from 0x03 to 0x04, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-8",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x02u8, 0x07u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 8 changed from 0x01 to 0x02, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp256r1-parameter-octet-9",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]",
+      "replace": "seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x08u8]",
+      "expect": "killed",
+      "reason": "secp256r1's parameter is the DER of 1.2.840.10045.3.1.7 (RFC 5480 §2.1.1.1); octet 9 changed from 0x07 to 0x08, so a real P-256 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp384r1-parameter-octet-0",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "replace": "seq![0x07u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "expect": "killed",
+      "reason": "secp384r1's parameter is the DER of 1.3.132.0.34 (RFC 5480 §2.1.1.1); octet 0 changed from 0x06 to 0x07, so a real P-384 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp384r1-parameter-octet-1",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "replace": "seq![0x06u8, 0x06u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "expect": "killed",
+      "reason": "secp384r1's parameter is the DER of 1.3.132.0.34 (RFC 5480 §2.1.1.1); octet 1 changed from 0x05 to 0x06, so a real P-384 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp384r1-parameter-octet-2",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "replace": "seq![0x06u8, 0x05u8, 0x2cu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "expect": "killed",
+      "reason": "secp384r1's parameter is the DER of 1.3.132.0.34 (RFC 5480 §2.1.1.1); octet 2 changed from 0x2b to 0x2c, so a real P-384 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp384r1-parameter-octet-3",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "replace": "seq![0x06u8, 0x05u8, 0x2bu8, 0x82u8, 0x04u8, 0x00u8, 0x22u8]",
+      "expect": "killed",
+      "reason": "secp384r1's parameter is the DER of 1.3.132.0.34 (RFC 5480 §2.1.1.1); octet 3 changed from 0x81 to 0x82, so a real P-384 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp384r1-parameter-octet-4",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "replace": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x05u8, 0x00u8, 0x22u8]",
+      "expect": "killed",
+      "reason": "secp384r1's parameter is the DER of 1.3.132.0.34 (RFC 5480 §2.1.1.1); octet 4 changed from 0x04 to 0x05, so a real P-384 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp384r1-parameter-octet-5",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "replace": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x01u8, 0x22u8]",
+      "expect": "killed",
+      "reason": "secp384r1's parameter is the DER of 1.3.132.0.34 (RFC 5480 §2.1.1.1); octet 5 changed from 0x00 to 0x01, so a real P-384 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-secp384r1-parameter-octet-6",
+      "file": "src/spki/spec.rs",
+      "find": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]",
+      "replace": "seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x23u8]",
+      "expect": "killed",
+      "reason": "secp384r1's parameter is the DER of 1.3.132.0.34 (RFC 5480 §2.1.1.1); octet 6 changed from 0x22 to 0x23, so a real P-384 key is no longer recognised.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-ec-point-prefix-04",
+      "file": "src/spki/spec.rs",
+      "find": "bits.len() > 0 && bits[0] == 0x04u8",
+      "replace": "bits.len() > 0 && bits[0] == 0x02u8",
+      "expect": "killed",
+      "reason": "0x04 marks the uncompressed point (RFC 5480 §2.2, SEC 1 §2.3.3); with 0x02 a real key is refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-ec-point-prefix-any",
+      "file": "src/spki/spec.rs",
+      "find": "bits.len() > 0 && bits[0] == 0x04u8",
+      "replace": "bits.len() > 0",
+      "expect": "killed",
+      "reason": "Only the uncompressed form 0x04 is accepted; a hybrid 0x06 point of the right length must be refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_point_forms_are_refused()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x06u8)) == PublicKey::EcP256(super::certificates::ex_xy())"
+      }
+    },
+    {
+      "id": "spki-ec-unused-bits",
+      "file": "src/spki/spec.rs",
+      "find": "is_id_ec_public_key(algorithm.oid) && unused == 0 &&",
+      "replace": "is_id_ec_public_key(algorithm.oid) &&",
+      "expect": "killed",
+      "reason": "RFC 5480 §2.2: the ECPoint BIT STRING has no unused bits; a nonzero count must be refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_key_with_unused_bits_is_refused()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 1, super::certificates::ex_bits65(0x04u8)) == PublicKey::EcP256(super::certificates::ex_xy())"
+      }
+    },
+    {
+      "id": "spki-ec-oid-checked",
+      "file": "src/spki/spec.rs",
+      "find": "if is_id_ec_public_key(algorithm.oid) && unused == 0",
+      "replace": "if true && unused == 0",
+      "expect": "killed",
+      "reason": "Only id-ecPublicKey (RFC 5480 §2.1.1) names these keys; id-ecDH with the same parameters and point must be refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_non_ec_key_oids_are_refused()",
+        "witness": "classify_ec_public_key(crate::certificate::spec::AlgorithmIdentifier { oid: seq![1nat, 3nat, 132nat, 1nat, 12nat], parameters_der: super::certificates::ex_p256_params() }, 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::EcP256(super::certificates::ex_xy())"
+      }
+    },
+    {
+      "id": "spki-p256-length-short",
+      "file": "src/spki/spec.rs",
+      "find": "bits.len() == 65",
+      "replace": "bits.len() == 64",
+      "expect": "killed",
+      "reason": "A secp256r1 uncompressed point is 1 + 64 = 65 octets (SEC 1 §2.3.3); at 64 a real key is refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-p256-length-long",
+      "file": "src/spki/spec.rs",
+      "find": "bits.len() == 65",
+      "replace": "bits.len() >= 65",
+      "expect": "killed",
+      "reason": "A secp256r1 point of more than 65 octets is not an uncompressed point and must be refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_point_forms_are_refused()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8) + seq![0x00u8]) == PublicKey::EcP256(super::certificates::ex_xy())"
+      }
+    },
+    {
+      "id": "spki-p384-length-short",
+      "file": "src/spki/spec.rs",
+      "find": "bits.len() == 97",
+      "replace": "bits.len() == 96",
+      "expect": "killed",
+      "reason": "A secp384r1 uncompressed point is 1 + 96 = 97 octets (SEC 1 §2.3.3); at 96 a real key is refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-p384-length-long",
+      "file": "src/spki/spec.rs",
+      "find": "bits.len() == 97",
+      "replace": "bits.len() >= 97",
+      "expect": "killed",
+      "reason": "A secp384r1 point of more than 97 octets must be refused.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_point_forms_are_refused()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8) + seq![0x00u8]) == PublicKey::EcP384(super::certificates::ex_bits97(0x04u8) + seq![0x00u8])"
+      }
+    },
+    {
+      "id": "spki-p256-point-offset",
+      "file": "src/spki/spec.rs",
+      "find": "PublicKey::EcP256(bits.subrange(1, 65))",
+      "replace": "PublicKey::EcP256(bits.subrange(0, 64))",
+      "expect": "killed",
+      "reason": "X || Y starts after the 0x04 octet; from 0 the point handed to the verifier is shifted.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p256_is_classified()",
+        "witness": "match classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p256_params()), 0, super::certificates::ex_bits65(0x04u8)) { PublicKey::EcP256(p) => p[0] == 0x04u8, _ => false }"
+      }
+    },
+    {
+      "id": "spki-p384-point-offset",
+      "file": "src/spki/spec.rs",
+      "find": "PublicKey::EcP384(bits)",
+      "replace": "PublicKey::EcP384(bits.subrange(1, 97))",
+      "expect": "killed",
+      "reason": "The P-384 class holds the whole 97-octet ECPoint, 0x04 included (clazel-p384 decodes it); dropping the 0x04 gives 96 octets.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "match classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) { PublicKey::EcP384(p) => p.len() == 96, _ => false }"
+      }
+    },
+    {
+      "id": "spki-p384-uses-p256-parameter",
+      "file": "src/spki/spec.rs",
+      "find": "algorithm.parameters_der == Some(secp384r1_parameter()) && bits.len() == 97",
+      "replace": "algorithm.parameters_der == Some(secp256r1_parameter()) && bits.len() == 97",
+      "expect": "killed",
+      "reason": "A secp384r1 key is recognised by secp384r1's parameter, not secp256r1's.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ec_p384_is_classified()",
+        "witness": "classify_ec_public_key(super::certificates::ex_ec_alg(super::certificates::ex_p384_params()), 0, super::certificates::ex_bits97(0x04u8)) == PublicKey::Unsupported"
+      }
+    },
+    {
+      "id": "spki-parse-classifies-ec",
+      "file": "src/spki/spec.rs",
+      "find": "public_key: classify_ec_public_key(algorithm, unused, key_bits),",
+      "replace": "public_key: PublicKey::Unsupported,",
+      "expect": "killed",
+      "reason": "The decoder must apply the EC classification to the key it parses, not only define it.",
+      "certificate": {
+        "file": "src/spki/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_parse_p256_spki()",
+        "witness": "parse_subject_public_key_info(super::certificates::ex_p256_spki()).unwrap().public_key == PublicKey::Unsupported"
+      }
     }
   ]
 }

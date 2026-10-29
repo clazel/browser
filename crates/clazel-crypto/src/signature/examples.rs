@@ -15,13 +15,16 @@ use vstd::prelude::*;
 
 verus! {
 
-/// A SubjectPublicKeyInfo with the given algorithm and key bits. The fields
+/// A SubjectPublicKeyInfo with the given algorithm and key bits, classified
+/// as `parse_subject_public_key_info` classifies a non-RSA key. The fields
 /// the signature check does not read are left empty.
 pub open spec fn ex_spki(oid: Seq<nat>, parameters_der: Option<Seq<u8>>, unused_bits: u8,
     bits: Seq<u8>) -> clazel_x509::spki::spec::SubjectPublicKeyInfo {
     clazel_x509::spki::spec::SubjectPublicKeyInfo {
         algorithm: clazel_x509::certificate::spec::AlgorithmIdentifier { oid, parameters_der },
-        public_key: clazel_x509::spki::spec::PublicKey::Unsupported,
+        public_key: clazel_x509::spki::spec::classify_ec_public_key(
+            clazel_x509::certificate::spec::AlgorithmIdentifier { oid, parameters_der },
+            unused_bits, bits),
         subject_public_key_unused_bits: unused_bits,
         subject_public_key_bits: bits,
         subject_public_key_tlv: Seq::empty(),
@@ -80,15 +83,27 @@ pub proof fn lemma_pad32_example()
     assert(pad32(seq![0x01u8])[31] == 0x01u8) by (compute_only);
 }
 
-/// RFC 5480 §2.2: only 0x04 || X || Y, 65 octets, with no unused bits.
+/// RFC 5480 §2.2: only 0x04 || X || Y, 65 octets, with no unused bits. The
+/// first three are `p256_point` (through `clazel_x509::spki`'s class), the
+/// last three the earlier direct definition it is proven equal to.
 pub proof fn lemma_p256_point_examples()
     ensures
+        p256_point_direct(ex_p256_spki(0x04u8, ex_point())) == Some(ex_point()),
+        // The compressed form, 0x02 || X.
+        p256_point_direct(ex_p256_spki(0x02u8, ex_point().subrange(0, 32))) is None,
+        // A point one octet short.
+        p256_point_direct(ex_p256_spki(0x04u8, ex_point().subrange(0, 63))) is None,
         p256_point(ex_p256_spki(0x04u8, ex_point())) == Some(ex_point()),
         // The compressed form, 0x02 || X.
         p256_point(ex_p256_spki(0x02u8, ex_point().subrange(0, 32))) is None,
         // A point one octet short.
         p256_point(ex_p256_spki(0x04u8, ex_point().subrange(0, 63))) is None,
 {
+    assert(p256_point_direct(ex_p256_spki(0x04u8, ex_point())) == Some(ex_point())) by (compute_only);
+    assert(p256_point_direct(ex_p256_spki(0x02u8, ex_point().subrange(0, 32))) is None)
+        by (compute_only);
+    assert(p256_point_direct(ex_p256_spki(0x04u8, ex_point().subrange(0, 63))) is None)
+        by (compute_only);
     assert(p256_point(ex_p256_spki(0x04u8, ex_point())) == Some(ex_point())) by (compute_only);
     assert(p256_point(ex_p256_spki(0x02u8, ex_point().subrange(0, 32))) is None) by (compute_only);
     assert(p256_point(ex_p256_spki(0x04u8, ex_point().subrange(0, 63))) is None) by (compute_only);

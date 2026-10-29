@@ -62,7 +62,7 @@
       "certificate": {
         "file": "src/signature/certificates.rs",
         "lemma": "crate::signature::examples::lemma_p256_point_examples()",
-        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())) is None"
+        "witness": "p256_point_direct(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())) is None"
       }
     },
     {
@@ -75,7 +75,7 @@
       "certificate": {
         "file": "src/signature/certificates.rs",
         "lemma": "crate::signature::examples::lemma_p256_point_examples()",
-        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())) is None"
+        "witness": "p256_point_direct(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())) is None"
       }
     },
     {
@@ -88,7 +88,7 @@
       "certificate": {
         "file": "src/signature/certificates.rs",
         "lemma": "crate::signature::examples::lemma_p256_point_examples()",
-        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())).unwrap()[0] == 0x04u8"
+        "witness": "p256_point_direct(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())).unwrap()[0] == 0x04u8"
       }
     },
     {
@@ -372,6 +372,32 @@
       "replace": "if scheme == 0x0808 { ed25519(",
       "expect": "killed-incidentally",
       "reason": "Routes ed448 (0x0808) to Ed25519 and refuses ed25519. The exec dispatcher's proof breaks; tests/signature.rs verifies RFC 8032 under 0x0807."
+    },
+    {
+      "id": "p256-point-class",
+      "file": "src/signature/spec.rs",
+      "find": "clazel_x509::spki::spec::PublicKey::EcP256(point) => Some(point),",
+      "replace": "clazel_x509::spki::spec::PublicKey::EcP256(point) => None,",
+      "expect": "killed",
+      "reason": "p256_point must return the point of the EcP256 class (RFC 5480 §2.2); returning None refuses every P-256 key.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_p256_point_examples()",
+        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())) is None"
+      }
+    },
+    {
+      "id": "p256-point-value",
+      "file": "src/signature/spec.rs",
+      "find": "clazel_x509::spki::spec::PublicKey::EcP256(point) => Some(point),",
+      "replace": "clazel_x509::spki::spec::PublicKey::EcP256(point) => Some(point.subrange(1, 64)),",
+      "expect": "killed",
+      "reason": "The point handed to libcrux is the class's X || Y whole; dropping its first octet shifts it.",
+      "certificate": {
+        "file": "src/signature/certificates.rs",
+        "lemma": "crate::signature::examples::lemma_p256_point_examples()",
+        "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())).unwrap()[0] == 2u8"
+      }
     }
   ]
 }
