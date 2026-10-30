@@ -816,4 +816,215 @@ pub proof fn lemma_pocklington(n: nat, a: nat, fs: Seq<(nat, nat)>)
     }
 }
 
+// ---------------------------------------------------------------------
+// The certificates, from the smallest primes up to p.
+// ---------------------------------------------------------------------
+
+/// 363557 is prime, by trial division.
+proof fn lemma_prime_363557()
+    ensures
+        is_prime(363557),
+{
+    assert(trial(363557, 2)) by (compute_only);
+    lemma_trial(363557);
+}
+
+/// 532247449 is prime: Pocklington with a = 2 and F = 363557
+/// (19 bits; N has 29).
+proof fn lemma_prime_bits29()
+    ensures
+        is_prime(532247449nat),
+{
+    lemma_prime_363557();
+    assert(pocklington(532247449nat, 2, seq![(363557nat, 1nat)])) by (compute_only);
+    assert(seq![(363557nat, 1nat)][0].0 == 363557);
+    lemma_pocklington(532247449nat, 2, seq![(363557nat, 1nat)]);
+}
+
+/// 44925942675193 is prime: Pocklington with a = 2 and F = 532247449
+/// (29 bits; N has 46).
+proof fn lemma_prime_bits46()
+    ensures
+        is_prime(44925942675193nat),
+{
+    lemma_prime_bits29();
+    assert(pocklington(44925942675193nat, 2, seq![(532247449nat, 1nat)])) by (compute_only);
+    assert(seq![(532247449nat, 1nat)][0].0 == 532247449);
+    lemma_pocklington(44925942675193nat, 2, seq![(532247449nat, 1nat)]);
+}
+
+/// 35581458644053887931343 is prime: Pocklington with a = 2 and F = 44925942675193
+/// (46 bits; N has 75).
+proof fn lemma_prime_bits75()
+    ensures
+        is_prime(35581458644053887931343nat),
+{
+    lemma_prime_bits46();
+    assert(pocklington(35581458644053887931343nat, 2, seq![(44925942675193nat, 1nat)])) by (compute_only);
+    assert(seq![(44925942675193nat, 1nat)][0].0 == 44925942675193);
+    lemma_pocklington(35581458644053887931343nat, 2, seq![(44925942675193nat, 1nat)]);
+}
+
+/// 23964610537191310276190549303 is prime: Pocklington with a = 2 and F = 35581458644053887931343
+/// (75 bits; N has 95).
+proof fn lemma_prime_bits95()
+    ensures
+        is_prime(23964610537191310276190549303nat),
+{
+    lemma_prime_bits75();
+    assert(pocklington(23964610537191310276190549303nat, 2, seq![(35581458644053887931343nat, 1nat)])) by (compute_only);
+    assert(seq![(35581458644053887931343nat, 1nat)][0].0 == 35581458644053887931343);
+    lemma_pocklington(23964610537191310276190549303nat, 2, seq![(35581458644053887931343nat, 1nat)]);
+}
+
+/// 862725979338887169942859774909 is prime: Pocklington with a = 2 and F = 23964610537191310276190549303
+/// (95 bits; N has 100).
+proof fn lemma_prime_bits100()
+    ensures
+        is_prime(862725979338887169942859774909nat),
+{
+    lemma_prime_bits95();
+    assert(pocklington(862725979338887169942859774909nat, 2, seq![(23964610537191310276190549303nat, 1nat)])) by (compute_only);
+    assert(seq![(23964610537191310276190549303nat, 1nat)][0].0 == 23964610537191310276190549303);
+    lemma_pocklington(862725979338887169942859774909nat, 2, seq![(23964610537191310276190549303nat, 1nat)]);
+}
+
+/// 20705423504133292078628634597817 is prime: Pocklington with a = 2 and F = 862725979338887169942859774909
+/// (100 bits; N has 105).
+proof fn lemma_prime_bits105()
+    ensures
+        is_prime(20705423504133292078628634597817nat),
+{
+    lemma_prime_bits100();
+    assert(pocklington(20705423504133292078628634597817nat, 2, seq![(862725979338887169942859774909nat, 1nat)])) by (compute_only);
+    assert(seq![(862725979338887169942859774909nat, 1nat)][0].0 == 862725979338887169942859774909);
+    lemma_pocklington(20705423504133292078628634597817nat, 2, seq![(862725979338887169942859774909nat, 1nat)]);
+}
+
+/// 413244619895455989650825325680172591660047 is prime: Pocklington with a = 2 and F = 20705423504133292078628634597817
+/// (105 bits; N has 139).
+proof fn lemma_prime_bits139()
+    ensures
+        is_prime(413244619895455989650825325680172591660047nat),
+{
+    lemma_prime_bits105();
+    assert(pocklington(413244619895455989650825325680172591660047nat, 2, seq![(20705423504133292078628634597817nat, 1nat)])) by (compute_only);
+    assert(seq![(20705423504133292078628634597817nat, 1nat)][0].0 == 20705423504133292078628634597817);
+    lemma_pocklington(413244619895455989650825325680172591660047nat, 2, seq![(20705423504133292078628634597817nat, 1nat)]);
+}
+
+/// 12397338596863679689524759770405177749801411 is prime: Pocklington with a = 2 and F = 413244619895455989650825325680172591660047
+/// (139 bits; N has 144).
+proof fn lemma_prime_bits144()
+    ensures
+        is_prime(12397338596863679689524759770405177749801411nat),
+{
+    lemma_prime_bits139();
+    assert(pocklington(12397338596863679689524759770405177749801411nat, 2, seq![(413244619895455989650825325680172591660047nat, 1nat)])) by (compute_only);
+    assert(seq![(413244619895455989650825325680172591660047nat, 1nat)][0].0 == 413244619895455989650825325680172591660047);
+    lemma_pocklington(12397338596863679689524759770405177749801411nat, 2, seq![(413244619895455989650825325680172591660047nat, 1nat)]);
+}
+
+/// 21407 is prime, by trial division.
+proof fn lemma_prime_21407()
+    ensures
+        is_prime(21407),
+{
+    assert(trial(21407, 2)) by (compute_only);
+    lemma_trial(21407);
+}
+
+/// 246608641 is prime: Pocklington with a = 2 and F = 21407
+/// (15 bits; N has 28).
+proof fn lemma_prime_bits28()
+    ensures
+        is_prime(246608641nat),
+{
+    lemma_prime_21407();
+    assert(pocklington(246608641nat, 2, seq![(21407nat, 1nat)])) by (compute_only);
+    assert(seq![(21407nat, 1nat)][0].0 == 21407);
+    lemma_pocklington(246608641nat, 2, seq![(21407nat, 1nat)]);
+}
+
+/// 881 is prime, by trial division.
+proof fn lemma_prime_881()
+    ensures
+        is_prime(881),
+{
+    assert(trial(881, 2)) by (compute_only);
+    lemma_trial(881);
+}
+
+/// 211 is prime, by trial division.
+proof fn lemma_prime_211()
+    ensures
+        is_prime(211),
+{
+    assert(trial(211, 2)) by (compute_only);
+    lemma_trial(211);
+}
+
+/// 105957871 is prime: Pocklington with a = 2 and F = 881 × 211
+/// (18 bits; N has 27).
+proof fn lemma_prime_bits27()
+    ensures
+        is_prime(105957871nat),
+{
+    lemma_prime_881();
+    lemma_prime_211();
+    assert(pocklington(105957871nat, 2, seq![(881nat, 1nat), (211nat, 1nat)])) by (compute_only);
+    assert(seq![(881nat, 1nat), (211nat, 1nat)][0].0 == 881);
+    assert(seq![(881nat, 1nat), (211nat, 1nat)][1].0 == 211);
+    lemma_pocklington(105957871nat, 2, seq![(881nat, 1nat), (211nat, 1nat)]);
+}
+
+/// 529709925838459440593 is prime: Pocklington with a = 2 and F = 246608641 × 105957871
+/// (55 bits; N has 69).
+proof fn lemma_prime_bits69()
+    ensures
+        is_prime(529709925838459440593nat),
+{
+    lemma_prime_bits28();
+    lemma_prime_bits27();
+    assert(pocklington(529709925838459440593nat, 2, seq![(246608641nat, 1nat), (105957871nat, 1nat)])) by (compute_only);
+    assert(seq![(246608641nat, 1nat), (105957871nat, 1nat)][0].0 == 246608641);
+    assert(seq![(246608641nat, 1nat), (105957871nat, 1nat)][1].0 == 105957871);
+    lemma_pocklington(529709925838459440593nat, 2, seq![(246608641nat, 1nat), (105957871nat, 1nat)]);
+}
+
+/// 19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097 is prime: Pocklington with a = 2 and F = 12397338596863679689524759770405177749801411 × 529709925838459440593
+/// (212 bits; N has 334).
+proof fn lemma_prime_bits334()
+    ensures
+        is_prime(19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097nat),
+{
+    lemma_prime_bits144();
+    lemma_prime_bits69();
+    assert(pocklington(19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097nat, 2, seq![(12397338596863679689524759770405177749801411nat, 1nat), (529709925838459440593nat, 1nat)])) by (compute_only);
+    assert(seq![(12397338596863679689524759770405177749801411nat, 1nat), (529709925838459440593nat, 1nat)][0].0 == 12397338596863679689524759770405177749801411);
+    assert(seq![(12397338596863679689524759770405177749801411nat, 1nat), (529709925838459440593nat, 1nat)][1].0 == 529709925838459440593);
+    lemma_pocklington(19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097nat, 2, seq![(12397338596863679689524759770405177749801411nat, 1nat), (529709925838459440593nat, 1nat)]);
+}
+
+/// P-384's p is prime: Pocklington with a = 2 and F = 19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097
+/// (334 bits; N has 384).
+pub proof fn lemma_p384_prime()
+    ensures
+        is_prime(p384().p),
+{
+    lemma_prime_bits334();
+    assert(pocklington(p384().p, 2, seq![(19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097nat, 1nat)])) by (compute_only);
+    assert(seq![(19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097nat, 1nat)][0].0 == 19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097);
+    lemma_pocklington(p384().p, 2, seq![(19173790298027098165721053155794528970226934547887232785722672956982046098136719667167519737147526097nat, 1nat)]);
+}
+
+/// Euclid's lemma for P-384's p, which [`crate::equivalence`] needs.
+pub proof fn lemma_p384_euclid()
+    ensures
+        crate::equivalence::euclid(p384().p),
+{
+    lemma_p384_prime();
+    lemma_prime_euclid(p384().p);
+}
+
 } // verus!
