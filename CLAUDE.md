@@ -11,7 +11,8 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
    dependency is `libc`. Inside it, every `unsafe` is one block holding one
    call to a foreign function from the fixed list in `xtask/src/sys.rs`, with
    a `// SAFETY:` comment directly above it citing the man page and the
-   `libc` declaration; there is no raw pointer arithmetic and every `pub fn`
+   `libc` declaration (on Windows, the Microsoft Learn page, written
+   `docs <Function>`, and the hand-written declaration); there is no raw pointer arithmetic and every `pub fn`
    is safe. It makes no policy decisions: it takes data that safe, verified
    code built and hands it to the OS. `cargo xtask check` enforces all of
    this, and the README states the measured `unsafe` count.

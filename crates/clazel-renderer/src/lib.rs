@@ -12,6 +12,7 @@
 
 pub mod escape;
 pub mod hostile;
+pub mod launch;
 pub mod sandbox;
 pub mod script;
 

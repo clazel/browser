@@ -1,6 +1,7 @@
 //! The host shell with stub renderers (`/bin/sh` scripts that speak raw
 //! frames) and with the real `clazel-renderer`. Every test spawns processes,
 //! so none runs under Miri.
+#![cfg(unix)]
 
 use std::fs;
 use std::io::{Read, Write};

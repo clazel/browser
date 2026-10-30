@@ -310,6 +310,105 @@ pub fn decode_time(input: &[u8], kind: TimeKind) -> (result: Option<CertificateT
     if calendar_time_valid(&time) && second_allowed { Some(time) } else { None }
 }
 
+/// Number of days in a Gregorian year, from the leap-year rule.
+fn days_in_year(year: u16) -> (result: u16)
+    ensures result as nat == time_spec::days_in_year(year as nat)
+{
+    if is_leap_year(year) { 366 } else { 365 }
+}
+
+/// POSIX.1-2017 XBD §4.16 "Seconds Since the Epoch", read backwards: the UTC
+/// calendar time `t` seconds after 1970-01-01T00:00:00Z, or `None` when that
+/// is past RFC 5280's year 9999. The spec walks year by year; this skips
+/// whole 400-year cycles (146097 days each) by division and walks at most
+/// 400 years and 12 months, proven equal to the spec.
+pub fn from_unix_seconds(t: u64) -> (result: Option<CertificateTime>)
+    ensures
+        super::contract::from_unix_seconds_ensures(t as nat, view_time_result(result))
+{
+    // 1. Whole days since the epoch, and seconds into that day.
+    let days = t / 86400;
+    let second_of_day = t % 86400;
+    // 2a. Skip whole 400-year cycles; the Gregorian calendar repeats exactly.
+    let cycles = days / 146097;
+    let cycle_day = days % 146097;
+    let ghost spec_days = days as nat;
+    let ghost cycle_day_nat = cycle_day as nat;
+    let ghost target_year = time_spec::year_of_day(cycle_day_nat, 1970);
+    let ghost target_day = time_spec::day_in_year(cycle_day_nat, 1970);
+    proof {
+        super::lemmas::lemma_year_of_day_cycle(cycle_day_nat, 1970, cycles as nat);
+        super::lemmas::lemma_year_of_day_bounds(cycle_day_nat, 1970);
+        super::lemmas::lemma_days_in_400_years(1970);
+        super::lemmas::lemma_year_of_day_within(cycle_day_nat, 1970, 400);
+        assert(spec_days == cycle_day_nat + 146097 * cycles as nat);
+        assert(time_spec::year_of_day(spec_days, 1970) == target_year + 400 * cycles as nat);
+        assert(time_spec::day_in_year(spec_days, 1970) == target_day);
+    }
+    // A year above 9999 is refused (RFC 5280 §4.1.2.5): 21 cycles are past it.
+    if cycles > 20 {
+        return None;
+    }
+    // 2b. Walk the years of the cycle.
+    let mut year: u16 = 1970;
+    let mut left: u32 = cycle_day as u32;
+    while left >= days_in_year(year) as u32
+        invariant
+            time_spec::year_of_day(left as nat, year as nat) == target_year,
+            time_spec::day_in_year(left as nat, year as nat) == target_day,
+            year as nat <= target_year,
+            target_year < 2370,
+        decreases left
+    {
+        let length = days_in_year(year);
+        proof {
+            super::lemmas::lemma_year_of_day_bounds(
+                (left - length) as nat, (year + 1) as nat);
+        }
+        left = left.saturating_sub(length as u32);
+        year = year.saturating_add(1);
+    }
+    assert(time_spec::year_of_day(left as nat, year as nat) == year as nat);
+    assert(time_spec::day_in_year(left as nat, year as nat) == left as nat);
+    // 2c. Add back the skipped cycles; 400 * 20 + 2369 stays below u16.
+    let total_year = (year as u32).saturating_add((cycles as u32).saturating_mul(400));
+    // 4. RFC 5280 §4.1.2.5 has no year above 9999.
+    if total_year > 9999 {
+        return None;
+    }
+    let year = total_year as u16;
+    proof {
+        super::lemmas::lemma_days_in_year_is_sum_of_months(year as nat);
+        super::lemmas::lemma_year_of_day_bounds(cycle_day_nat, 1970);
+        super::lemmas::lemma_month_of_day_bounds(target_day, year as nat, 1);
+    }
+    // 3. Walk the months of the year.
+    let mut month: u8 = 1;
+    let mut day_left: u16 = left as u16;
+    while month < 12 && day_left >= days_in_month(year, month) as u16
+        invariant
+            1 <= month <= 12,
+            time_spec::month_of_day(day_left as nat, year as nat, month as nat)
+                == time_spec::month_of_day(target_day, year as nat, 1),
+            time_spec::day_in_month(day_left as nat, year as nat, month as nat)
+                == time_spec::day_in_month(target_day, year as nat, 1),
+        decreases 12 - month
+    {
+        let length = days_in_month(year, month) as u16;
+        month = month.saturating_add(1);
+        day_left = day_left.saturating_sub(length);
+    }
+    assert(time_spec::month_of_day(day_left as nat, year as nat, month as nat) == month as nat);
+    assert(time_spec::day_in_month(day_left as nat, year as nat, month as nat)
+        == day_left as nat);
+    // 5. Clock fields from the seconds into the day; 0..=59, never 60.
+    let hour = (second_of_day / 3600) as u8;
+    let minute = (second_of_day % 3600 / 60) as u8;
+    let second = (second_of_day % 60) as u8;
+    let day = day_left.saturating_add(1) as u8;
+    Some(CertificateTime { year, month, day, hour, minute, second })
+}
+
 /// Executable view adapter used by the refinement contract.
 pub open spec fn view_time_result(result: Option<CertificateTime>) -> Option<time_spec::CertificateTime> {
     match result {

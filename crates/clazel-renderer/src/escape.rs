@@ -19,7 +19,6 @@
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read};
 use std::net::{TcpListener, TcpStream, UdpSocket};
-use std::os::unix::net::{UnixListener, UnixStream};
 use std::process::{Command, Stdio};
 
 /// One thing a renderer must not be able to do.
@@ -92,6 +91,19 @@ impl Attempt {
 /// Make the call on `target` (a path, a `host:port` or a program). `Ok` is
 /// what succeeded, which is an escape; `Err` is the OS refusing.
 pub fn try_it(attempt: Attempt, target: &str) -> io::Result<String> {
+    // In the Windows sandbox Winsock cannot start, and `std` panics on that
+    // instead of returning an error: the call failed, which is a denial.
+    #[cfg(windows)]
+    return std::panic::catch_unwind(|| attempt_it(attempt, target)).unwrap_or_else(|_| {
+        Err(io::Error::other(
+            "the call panicked (Winsock cannot start in the sandbox)",
+        ))
+    });
+    #[cfg(not(windows))]
+    attempt_it(attempt, target)
+}
+
+fn attempt_it(attempt: Attempt, target: &str) -> io::Result<String> {
     match attempt {
         Attempt::OpenCookieJar | Attempt::OpenFile => {
             let mut head = String::new();
@@ -118,11 +130,11 @@ pub fn try_it(attempt: Attempt, target: &str) -> io::Result<String> {
             Ok(format!("bound {addr}"))
         }
         Attempt::UnixConnect => {
-            UnixStream::connect(target)?;
+            unix_connect(target)?;
             Ok(format!("connected to {target}"))
         }
         Attempt::UnixListen => {
-            UnixListener::bind(target)?;
+            unix_listen(target)?;
             Ok(format!("listening on {target}"))
         }
         Attempt::Execve => {
@@ -147,6 +159,26 @@ pub fn try_it(attempt: Attempt, target: &str) -> io::Result<String> {
     }
 }
 
+#[cfg(unix)]
+fn unix_connect(target: &str) -> io::Result<()> {
+    std::os::unix::net::UnixStream::connect(target).map(drop)
+}
+
+#[cfg(unix)]
+fn unix_listen(target: &str) -> io::Result<()> {
+    std::os::unix::net::UnixListener::bind(target).map(drop)
+}
+
+#[cfg(not(unix))]
+fn unix_connect(_target: &str) -> io::Result<()> {
+    Err(io::ErrorKind::Unsupported.into())
+}
+
+#[cfg(not(unix))]
+fn unix_listen(_target: &str) -> io::Result<()> {
+    Err(io::ErrorKind::Unsupported.into())
+}
+
 #[cfg(target_os = "linux")]
 use clazel_sys::linux as os;
 #[cfg(target_os = "macos")]
@@ -167,7 +199,16 @@ fn fork() -> io::Result<()> {
     Err(io::ErrorKind::Unsupported.into())
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+/// Windows: `OpenProcess` with read, write and operation access, the analogue
+/// of a `ptrace` attach.
+#[cfg(windows)]
+fn ptrace_attach(pid: i32) -> io::Result<()> {
+    let pid = u32::try_from(pid)
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "target is not a pid"))?;
+    clazel_sys::windows::attempt_open_process(pid).map_err(|e| io::Error::from_raw_os_error(e.0))
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn ptrace_attach(_pid: i32) -> io::Result<()> {
     Err(io::ErrorKind::Unsupported.into())
 }
