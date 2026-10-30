@@ -11,6 +11,7 @@ use clazel_tls::auth::spec::Phase as AuthPhase;
 use clazel_tls::encode;
 use clazel_tls::hello::client::{Config, Hello, Outcome};
 use clazel_tls::hello::key_exchange::KeyExchange;
+use clazel_tls::host::exec::Host;
 use clazel_tls::reassemble::{Event, Reassembler};
 use clazel_tls::record::Aead;
 use clazel_tls::schedule::crypto::Crypto;
@@ -270,12 +271,11 @@ impl KeyExchange for MockExchange {
 
 fn hello_config() -> Config {
     Config {
-        host: HOST.to_vec(),
+        host: Host::Dns(HOST.to_vec()),
         now: 1_800_000_000,
         random: vec![0x11; 32],
         session_id: vec![0x12; 8],
         public_key: PUBLIC.to_vec(),
-        send_sni: true,
     }
 }
 
@@ -656,7 +656,7 @@ struct NoopVerifier;
 impl clazel_tls::auth::verify::Verifier for NoopVerifier {
     fn chain(
         &self,
-        _host: &[u8],
+        _host: &Host,
         _now: u64,
         _certificate_body: &[u8],
     ) -> Result<Vec<u8>, clazel_tls::auth::spec::CertificateError> {

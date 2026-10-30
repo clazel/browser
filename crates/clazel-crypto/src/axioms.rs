@@ -46,6 +46,32 @@ pub fn sha256(message: &[u8]) -> (out: Vec<u8>)
     libcrux_sha2::sha256(message).to_vec()
 }
 
+/// SHA-384 of `message`, for certificate links signed sha384WithRSAEncryption.
+// AXIOM: libcrux-sha2 0.0.9 `sha384(&[u8]) -> [u8; 48]` returns SHA-384 of its input (HACL*
+// hash_st: Spec.Agile.Hash.hash SHA2_384); it panics above u32::MAX, so we abort above MAX_INPUT.
+#[verifier::external_body]
+pub fn sha384(message: &[u8]) -> (out: Vec<u8>)
+    ensures out@ == crate::spec::sha384(message@), out.len() == 48,
+{
+    if message.len() > MAX_INPUT {
+        std::process::abort();
+    }
+    libcrux_sha2::sha384(message).to_vec()
+}
+
+/// SHA-512 of `message`, for certificate links signed sha512WithRSAEncryption.
+// AXIOM: libcrux-sha2 0.0.9 `sha512(&[u8]) -> [u8; 64]` returns SHA-512 of its input (HACL*
+// hash_st: Spec.Agile.Hash.hash SHA2_512); it panics above u32::MAX, so we abort above MAX_INPUT.
+#[verifier::external_body]
+pub fn sha512(message: &[u8]) -> (out: Vec<u8>)
+    ensures out@ == crate::spec::sha512(message@), out.len() == 64,
+{
+    if message.len() > MAX_INPUT {
+        std::process::abort();
+    }
+    libcrux_sha2::sha512(message).to_vec()
+}
+
 /// HMAC-SHA256(key, message).
 // AXIOM: libcrux-hmac 0.0.9 `hmac_sha2_256(&mut [u8; 32], key, data)` writes
 // HMAC-SHA256(key, data) (verified-hacl); we abort above MAX_INPUT first.
@@ -213,6 +239,27 @@ pub fn ecdsa_p256_sha256_verify(message: &[u8], r: &[u8], s: &[u8], point: &[u8]
     let signature = libcrux_ecdsa::p256::Signature::from_raw(r, s);
     let public_key = libcrux_ecdsa::p256::PublicKey(point);
     libcrux_ecdsa::p256::verify(libcrux_ecdsa::DigestAlgorithm::Sha256, message, &signature,
+        &public_key).is_ok()
+}
+
+/// ECDSA P-256/SHA-384 verification of `message` with raw r, s and X || Y.
+// AXIOM: libcrux-ecdsa 0.0.9 `p256::verify(Sha384, payload, &Signature::from_raw(r, s), &PublicKey(x||y))`
+// is Ok iff HACL's ecdsa_verif_p256_sha384 is true (ecdsa_verification_agile (Hash SHA2_384)).
+#[verifier::external_body]
+pub fn ecdsa_p256_sha384_verify(message: &[u8], r: &[u8], s: &[u8], point: &[u8]) -> (out: bool)
+    requires r.len() == 32, s.len() == 32, point.len() == 64,
+    ensures out == crate::signature::spec::ecdsa_p256_sha384_verify(message@, r@, s@, point@),
+{
+    if message.len() > MAX_INPUT {
+        std::process::abort();
+    }
+    let (Ok(r), Ok(s), Ok(point)) =
+        (<[u8; 32]>::try_from(r), <[u8; 32]>::try_from(s), <[u8; 64]>::try_from(point)) else {
+        std::process::abort();
+    };
+    let signature = libcrux_ecdsa::p256::Signature::from_raw(r, s);
+    let public_key = libcrux_ecdsa::p256::PublicKey(point);
+    libcrux_ecdsa::p256::verify(libcrux_ecdsa::DigestAlgorithm::Sha384, message, &signature,
         &public_key).is_ok()
 }
 

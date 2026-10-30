@@ -30,4 +30,21 @@ pub open spec fn send_safe(after: super::spec::State, action: super::spec::Actio
     action is Send ==> after.phase == super::spec::Phase::SendFinished
         && after.chain_checked && after.signature_checked && after.finished_checked && !after.client_sent
 }
+/// §4.4.2: a state whose chain check passed holds the end-entity key that
+/// the chain validator returned for the state's own host and clock and some
+/// Certificate body. (Which body is not named; the step that set the key
+/// passed it, `lemmas::theorem_certificate_binding`.)
+pub open spec fn chain_justified(v: super::spec::Verification, s: super::spec::State) -> bool {
+    s.chain_checked ==> exists|body: Seq<u8>| #[trigger] (v.chain)(s.config.host, s.config.now, body) == Ok::<Seq<u8>, super::spec::CertificateError>(s.key)
+}
+/// Over every finite trace of peer and I/O inputs, the key that
+/// CertificateVerify is checked with, and every later state's, is one the
+/// chain validator returned for the captured host and clock: no input
+/// sequence reaches chain_checked any other way, and none changes the host,
+/// the clock or the key afterwards except through another validation.
+pub open spec fn thm_chain_justified_trace(c: crate::schedule::spec::Crypto, v: super::spec::Verification,
+    s: super::spec::State, inputs: Seq<super::spec::Input>) -> bool
+{
+    super::spec::wf(s) && chain_justified(v, s) ==> chain_justified(v, super::spec::run(c, v, s, inputs))
+}
 } // verus!

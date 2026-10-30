@@ -78,11 +78,13 @@ pub proof fn lemma_profile(c: super::client_spec::Config, cookie: Seq<u8>)
         super::client_spec::body(c, cookie).len() <= 4524,
 {
     reveal_with_fuel(crate::spec::write_list, 4);
-    let sni = crate::spec::write_server_name_ch(seq![crate::spec::ServerName { host_name: c.host }]);
+    let send_sni = crate::host::spec::sni_host_name(c.host) is Some;
+    let name = match crate::host::spec::sni_host_name(c.host) { Some(n) => n, None => seq![] };
+    let sni = crate::spec::write_server_name_ch(seq![crate::spec::ServerName { host_name: name }]);
     let key = crate::spec::write_key_share_ch(seq![crate::spec::KeyShare { group: 29, key_exchange: c.public_key }]);
-    lemma_vec_len(c.host, 65535);
-    lemma_vec_len(seq![0u8] + crate::spec::write_vec(c.host, 65535), 65535);
-    assert(sni.len() == c.host.len() + 5);
+    lemma_vec_len(name, 65535);
+    lemma_vec_len(seq![0u8] + crate::spec::write_vec(name, 65535), 65535);
+    assert(sni.len() == name.len() + 5);
     crate::lemmas_pl::lemma_be_bytes_len(29, 2);
     lemma_vec_len(c.public_key, 65535);
     lemma_vec_len(crate::spec::write_key_share(crate::spec::KeyShare { group: 29, key_exchange: c.public_key }), 65535);
@@ -91,10 +93,10 @@ pub proof fn lemma_profile(c: super::client_spec::Config, cookie: Seq<u8>)
     let es = super::client_spec::extensions(c, cookie);
     reveal_with_fuel(extension_len, 8);
     lemma_extensions_len(es);
-    assert(extension_len(es) == 79 + (if c.send_sni { c.host.len() + 9 } else { 0 })
+    assert(extension_len(es) == 79 + (if send_sni { name.len() + 9 } else { 0 })
         + (if cookie.len() == 0 { 0 } else { cookie.len() + 4 }));
     assert forall|i: int| 0 <= i < es.len() implies (#[trigger] es[i]).data.len() <= 65535 by {
-        if c.send_sni { if i == 0 {} else if i == 1 {} else if i == 2 {} else if i == 3 {} else if i == 4 {} }
+        if send_sni { if i == 0 {} else if i == 1 {} else if i == 2 {} else if i == 3 {} else if i == 4 {} }
         else { if i == 0 {} else if i == 1 {} else if i == 2 {} else if i == 3 {} }
     }
     assert(crate::contract::client_hello_requires(super::client_spec::client_hello(c, cookie)));

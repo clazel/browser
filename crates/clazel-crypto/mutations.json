@@ -398,6 +398,442 @@
         "lemma": "crate::signature::examples::lemma_p256_point_examples()",
         "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())).unwrap()[0] == 2u8"
       }
+    },
+    {
+      "id": "link-exponent-odd",
+      "file": "src/chain/spec.rs",
+      "find": "e % 2 == 1 && e < 0x2_0000_0000nat",
+      "replace": "e < 0x2_0000_0000nat",
+      "expect": "killed",
+      "reason": "BoringSSL (Chrome) refuses an even public exponent; without the parity check e = 65536 passes the profile.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_exponent_profile_examples()",
+        "witness": "exponent_profile(65536)"
+      }
+    },
+    {
+      "id": "link-exponent-bound",
+      "file": "src/chain/spec.rs",
+      "find": "0x2_0000_0000nat",
+      "replace": "0x4_0000_0000nat",
+      "expect": "killed",
+      "reason": "BoringSSL allows at most 33 exponent bits; at 2^34 the 34-bit e = 2^33 + 1 passes.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_exponent_profile_examples()",
+        "witness": "exponent_profile(0x2_0000_0001nat)"
+      }
+    },
+    {
+      "id": "link-pkcs1-hash-sha384",
+      "file": "src/chain/spec.rs",
+      "find": "RsaPkcs1v15Hash::Sha384 => clazel_pkcs1::spec::HashId::Sha384",
+      "replace": "RsaPkcs1v15Hash::Sha384 => clazel_pkcs1::spec::HashId::Sha512",
+      "expect": "killed",
+      "reason": "sha384WithRSAEncryption puts id-sha384 in DigestInfo (RFC 4055 §5, RFC 8017 §9.2 Note 1); with SHA-512's prefix no real signature verifies.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_pkcs1_hash_examples()",
+        "witness": "clazel_pkcs1::spec::digest_info_prefix(pkcs1_hash(clazel_x509::signature_algorithm::spec::RsaPkcs1v15Hash::Sha384))[14] == 0x03u8"
+      }
+    },
+    {
+      "id": "link-pkcs1-hash-sha512",
+      "file": "src/chain/spec.rs",
+      "find": "RsaPkcs1v15Hash::Sha512 => clazel_pkcs1::spec::HashId::Sha512",
+      "replace": "RsaPkcs1v15Hash::Sha512 => clazel_pkcs1::spec::HashId::Sha256",
+      "expect": "killed",
+      "reason": "sha512WithRSAEncryption puts id-sha512 in DigestInfo; with SHA-256's prefix no real signature verifies.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_pkcs1_hash_examples()",
+        "witness": "clazel_pkcs1::spec::digest_info_prefix(pkcs1_hash(clazel_x509::signature_algorithm::spec::RsaPkcs1v15Hash::Sha512))[14] == 0x01u8"
+      }
+    },
+    {
+      "id": "link-rsa-under-other-key",
+      "file": "src/chain/spec.rs",
+      "find": "rsa_pkcs1_link(key, hash, tbs_der, signature),\n                _ => false,",
+      "replace": "rsa_pkcs1_link(key, hash, tbs_der, signature),\n                _ => true,",
+      "expect": "killed",
+      "reason": "An RSA signature algorithm under a key that is not rsaEncryption must verify nothing (the key algorithm must be the signature's).",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p256(), crate::chain::examples::ex_sha256_rsa(), seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-unsupported-accepted",
+      "file": "src/chain/spec.rs",
+      "find": "Unsupported) => false",
+      "replace": "Unsupported) => true",
+      "expect": "killed",
+      "reason": "RSASSA-PSS, Ed25519, SHA-1 and the rest are refused (header); accepting them would let any signature pass.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p256(), crate::chain::examples::ex_alg(seq![1nat, 3nat, 101nat, 112nat]), seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-malformed-accepted",
+      "file": "src/chain/spec.rs",
+      "find": "parameters.\n        None => false",
+      "replace": "parameters.\n        None => true",
+      "expect": "killed",
+      "reason": "A known OID with disallowed parameters (ECDSA with NULL, RFC 5758 §3.2) is malformed and verifies nothing.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p256(), clazel_x509::certificate::spec::AlgorithmIdentifier { oid: seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], parameters_der: Some(seq![0x05u8, 0x00u8]) }, seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-p384-accepted",
+      "file": "src/chain/spec.rs",
+      "find": "ecdsa_p256_sha384_verify(message, r, s, point),\n        _ => false,",
+      "replace": "ecdsa_p256_sha384_verify(message, r, s, point),\n        _ => true,",
+      "expect": "killed",
+      "reason": "A P-384 issuer key is refused until P17; accepting a key that is not P-256 under ecdsa-with-SHA384 would pass every such link unverified.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p384(), crate::chain::examples::ex_ecdsa_sha384(), seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-rsa-digest-sha384",
+      "file": "src/chain/spec.rs",
+      "find": "RsaPkcs1v15Hash::Sha384 => crate::spec::sha384(message)",
+      "replace": "RsaPkcs1v15Hash::Sha384 => crate::spec::sha256(message)",
+      "expect": "killed-incidentally",
+      "reason": "Digests sha384WithRSAEncryption with SHA-256. The exec proof (which calls axioms::sha384) breaks; the digests are uninterpreted, so no compute_only certificate exists."
+    },
+    {
+      "id": "link-ecdsa-sha384-dispatch",
+      "file": "src/chain/spec.rs",
+      "find": "            ecdsa_p256_sha384(spki, tbs_der, signature),",
+      "replace": "            crate::signature::spec::ecdsa_p256_sha256(spki, tbs_der, signature),",
+      "expect": "killed-incidentally",
+      "reason": "Verifies ecdsa-with-SHA384 with SHA-256. The exec proof breaks, and so does chain::lemmas (checked alone: the link lemma exceeds its rlimit), but the verifications are uninterpreted, so no compute_only certificate exists."
+    },
+    {
+      "id": "link-exponent-from-modulus",
+      "file": "src/chain/spec.rs",
+      "find": "let e = clazel_pkcs1::spec::os2ip(key.public_exponent_octets);",
+      "replace": "let e = clazel_pkcs1::spec::os2ip(key.modulus_octets);",
+      "expect": "killed-incidentally",
+      "reason": "Reads the exponent from the modulus. The exec proof breaks, and so does chain::lemmas (checked alone: an assertion fails); evaluating RSASSA-PKCS1 on a 2048-bit key by compute_only is out of reach here."
+    },
+    {
+      "id": "join-alert-expired",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::Expired => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::Expired => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "Expired sends bad_certificate, not certificate_expired: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::Expired)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-anchorexpired",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::AnchorExpired => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::AnchorExpired => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "AnchorExpired sends bad_certificate, not certificate_expired: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::AnchorExpired)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-unsupportedalgorithm",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::UnsupportedAlgorithm => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::UnsupportedAlgorithm => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "UnsupportedAlgorithm sends bad_certificate, not unsupported_certificate: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::UnsupportedAlgorithm)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-unknownissuer",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::UnknownIssuer => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::UnknownIssuer => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "UnknownIssuer sends bad_certificate, not unknown_ca: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::UnknownIssuer)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-badsignature",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::BadSignature => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::BadSignature => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "BadSignature sends bad_certificate, not unknown_ca: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::BadSignature)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-namechaining",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::NameChaining => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::NameChaining => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "NameChaining sends bad_certificate, not unknown_ca: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::NameChaining)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-distrusted",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::Distrusted => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::Distrusted => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "Distrusted sends bad_certificate, not unknown_ca: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::Distrusted)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-revoked",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::Revoked => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::Revoked => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "Revoked sends bad_certificate, not unknown_ca: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::Revoked)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-buildbudgetexhausted",
+      "file": "src/join/spec.rs",
+      "find": "clazel_x509::path::spec::PathError::BuildBudgetExhausted => clazel_tls::auth::spec::CertificateError::",
+      "replace": "clazel_x509::path::spec::PathError::BuildBudgetExhausted => clazel_tls::auth::spec::CertificateError::BadCertificate, // ",
+      "expect": "killed",
+      "reason": "BuildBudgetExhausted sends bad_certificate, not unknown_ca (Firefox: ERROR_UNKNOWN_ISSUER): lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::BuildBudgetExhausted)) == 42"
+      }
+    },
+    {
+      "id": "join-alert-default",
+      "file": "src/join/spec.rs",
+      "find": "_ => clazel_tls::auth::spec::CertificateError::BadCertificate,",
+      "replace": "_ => clazel_tls::auth::spec::CertificateError::UnknownCa,",
+      "expect": "killed",
+      "reason": "Leaf (a wrong host or an expired leaf) sends unknown_ca, not bad_certificate: lemma_error_alerts is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_error_alerts()",
+        "witness": "clazel_tls::auth::spec::certificate_alert(certificate_error(clazel_x509::path::spec::PathError::Leaf)) == 48"
+      }
+    },
+    {
+      "id": "join-ip-as-dns",
+      "file": "src/join/spec.rs",
+      "find": "clazel_tls::host::spec::Host::Ip(address) => clazel_x509::spec::ReferenceIdentity::Ip(address),",
+      "replace": "clazel_tls::host::spec::Host::Ip(address) => clazel_x509::spec::ReferenceIdentity::Dns(address),",
+      "expect": "killed",
+      "reason": "An IP host becomes a DNS-ID, so it would match dNSName entries (RFC 9525 §6.2): lemma_reference_identity is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_reference_identity()",
+        "witness": "reference_identity(clazel_tls::host::spec::Host::Ip(seq![192u8, 0, 2, 10])) == clazel_x509::spec::ReferenceIdentity::Dns(seq![192u8, 0, 2, 10])"
+      }
+    },
+    {
+      "id": "join-dns-as-ip",
+      "file": "src/join/spec.rs",
+      "find": "clazel_tls::host::spec::Host::Dns(name) => clazel_x509::spec::ReferenceIdentity::Dns(name),",
+      "replace": "clazel_tls::host::spec::Host::Dns(name) => clazel_x509::spec::ReferenceIdentity::Ip(name),",
+      "expect": "killed",
+      "reason": "A DNS host becomes an IP-ID: lemma_reference_identity is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_reference_identity()",
+        "witness": "reference_identity(clazel_tls::host::spec::Host::Dns(seq![104u8])) == clazel_x509::spec::ReferenceIdentity::Ip(seq![104u8])"
+      }
+    },
+    {
+      "id": "join-presented-skips-leaf",
+      "file": "src/join/spec.rs",
+      "find": "entries.map_values(|entry: clazel_tls::spec::CertificateEntry| entry.cert_data)",
+      "replace": "entries.skip(1).map_values(|entry: clazel_tls::spec::CertificateEntry| entry.cert_data)",
+      "expect": "killed",
+      "reason": "The sender's certificate is dropped (RFC 8446 §4.4.2: it \"MUST come in the first CertificateEntry\"): lemma_presented_order is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_presented_order()",
+        "witness": "presented(seq![super::examples::ex_entry(seq![1u8]), super::examples::ex_entry(seq![2u8])]).len() == 1"
+      }
+    },
+    {
+      "id": "join-everything-revoked",
+      "file": "src/join/spec.rs",
+      "find": "|cert: clazel_x509::path::parsed::spec::PathCert| false",
+      "replace": "|cert: clazel_x509::path::parsed::spec::PathCert| true",
+      "expect": "killed",
+      "reason": "Every certificate is revoked (design Q4: nothing is): lemma_production_environment is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_production_environment()",
+        "witness": "(production_environment().revoked)(clazel_x509::path::examples::int())"
+      }
+    },
+    {
+      "id": "join-depth-7",
+      "file": "src/join/spec.rs",
+      "find": "max_intermediates: clazel_x509::path::verifier::default_max_intermediates(),",
+      "replace": "max_intermediates: 7,",
+      "expect": "killed",
+      "reason": "Seven intermediates are allowed (mozilla::pkix MAX_SUBCA_COUNT is 6): lemma_production_environment is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_production_environment()",
+        "witness": "production_environment().max_intermediates == 7"
+      }
+    },
+    {
+      "id": "join-links-unchecked",
+      "file": "src/join/spec.rs",
+      "find": "link: crate::chain::spec::production_link(),",
+      "replace": "link: |d: clazel_x509::path::spec::SignedData| true,",
+      "expect": "killed",
+      "reason": "Every link verifies, under any key: lemma_production_environment (an unparsed key verifies nothing) is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_production_environment()",
+        "witness": "(production_environment().link)(super::examples::ex_unparsed_link())"
+      }
+    },
+    {
+      "id": "join-outcome-key",
+      "file": "src/join/spec.rs",
+      "find": "Ok(validated) => Ok(validated.leaf_spki),",
+      "replace": "Ok(validated) => Ok(seq![]),",
+      "expect": "killed",
+      "reason": "The returned key is not the leaf's SubjectPublicKeyInfo: lemma_outcome is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_outcome()",
+        "witness": "outcome(Ok(clazel_x509::path::verifier::Validated { anchor: 0, path: seq![], leaf_spki: seq![7u8] }))->Ok_0.len() == 0"
+      }
+    },
+    {
+      "id": "join-outcome-alert",
+      "file": "src/join/spec.rs",
+      "find": "Err(error) => Err(certificate_error(error)),",
+      "replace": "Err(error) => Err(clazel_tls::auth::spec::CertificateError::BadCertificate),",
+      "expect": "killed",
+      "reason": "Every refusal sends bad_certificate: lemma_outcome (UnknownIssuer sends unknown_ca) is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_outcome()",
+        "witness": "outcome(Err(clazel_x509::path::spec::PathError::UnknownIssuer)) == Err::<Seq<u8>, clazel_tls::auth::spec::CertificateError>(clazel_tls::auth::spec::CertificateError::BadCertificate)"
+      }
+    },
+    {
+      "id": "join-anchor-dropped",
+      "file": "src/join/spec.rs",
+      "find": "Some(anchor) => before.push(anchor),",
+      "replace": "Some(anchor) => before,",
+      "expect": "killed",
+      "reason": "A root that yields an anchor is left out: lemma_add_anchor is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_add_anchor()",
+        "witness": "add_anchor(seq![], Some(clazel_x509::path::examples::anchor())).len() == 0"
+      }
+    },
+    {
+      "id": "join-anchors-reset",
+      "file": "src/join/spec.rs",
+      "find": "None => before,",
+      "replace": "None => seq![],",
+      "expect": "killed",
+      "reason": "A root that yields no anchor drops the anchors before it: lemma_add_anchor is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_add_anchor()",
+        "witness": "add_anchor(seq![clazel_x509::path::examples::anchor()], None).len() == 0"
+      }
+    },
+    {
+      "id": "join-unparsed-body-alert",
+      "file": "src/join/spec.rs",
+      "find": "None => Err(clazel_tls::auth::spec::CertificateError::BadCertificate),",
+      "replace": "None => Err(clazel_tls::auth::spec::CertificateError::UnknownCa),",
+      "expect": "killed",
+      "reason": "A body that is not a Certificate sends unknown_ca: lemma_not_a_certificate is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_not_a_certificate()",
+        "witness": "validate(seq![], clazel_tls::host::spec::Host::Dns(seq![104u8]), 0, seq![0xffu8]) == Err::<Seq<u8>, clazel_tls::auth::spec::CertificateError>(clazel_tls::auth::spec::CertificateError::UnknownCa)"
+      }
+    },
+    {
+      "id": "join-signature-unchecked",
+      "file": "src/join/spec.rs",
+      "find": "crate::signature::spec::verify(key, scheme, input, signature),",
+      "replace": "true,",
+      "expect": "killed",
+      "reason": "CertificateVerify accepts any signature: lemma_not_a_certificate (an unparsed key verifies nothing) is false.",
+      "module": "join::examples",
+      "certificate": {
+        "file": "src/join/certificates.rs",
+        "lemma": "super::examples::lemma_not_a_certificate()",
+        "witness": "(verification(seq![]).signature)(seq![], 0x0403, seq![], seq![])"
+      }
     }
   ]
 }

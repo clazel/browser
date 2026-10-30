@@ -38,7 +38,7 @@ pub open spec fn nonzero(bytes: Seq<u8>) -> bool
 }
 /// Actual extension types in the final sent ClientHello, including any HRR cookie.
 pub open spec fn extension_types(c: super::client_spec::Config, retried: bool) -> Seq<u16> {
-    (if c.send_sni { seq![0u16] } else { seq![] }) + seq![43u16, 13u16, 10u16, 51u16]
+    (if crate::host::spec::sni_host_name(c.host) is Some { seq![0u16] } else { seq![] }) + seq![43u16, 13u16, 10u16, 51u16]
         + (if retried { seq![44u16] } else { seq![] })
 }
 /// §7.1: both handshake traffic secrets share exactly the final-SH prefix.

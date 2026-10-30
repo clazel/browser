@@ -13,6 +13,7 @@ use clazel_tls::connection::exec::{Action, Connection, Mode};
 use clazel_tls::encode;
 use clazel_tls::hello::client::{Config, Hello, Outcome};
 use clazel_tls::hello::key_exchange::KeyExchange;
+use clazel_tls::host::exec::Host;
 use clazel_tls::record::Aead;
 use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::schedule::exec::finished;
@@ -155,11 +156,11 @@ struct MockVerifier;
 impl Verifier for MockVerifier {
     fn chain(
         &self,
-        host: &[u8],
+        host: &Host,
         now: u64,
         certificate_body: &[u8],
     ) -> Result<Vec<u8>, CertificateError> {
-        if host == HOST && now == NOW && !certificate_body.is_empty() {
+        if *host == Host::Dns(HOST.to_vec()) && now == NOW && !certificate_body.is_empty() {
             Ok(LEAF_KEY.to_vec())
         } else {
             Err(CertificateError::BadCertificate)
@@ -177,12 +178,11 @@ impl Verifier for MockVerifier {
 
 fn config() -> Config {
     Config {
-        host: HOST.to_vec(),
+        host: Host::Dns(HOST.to_vec()),
         now: NOW,
         random: vec![0x11; 32],
         session_id: Vec::new(),
         public_key: PUBLIC.to_vec(),
-        send_sni: true,
     }
 }
 

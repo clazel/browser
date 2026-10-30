@@ -3531,6 +3531,188 @@
         "lemma": "super::contract::lemma_bound_never_accepts_what_the_spec_refuses()",
         "witness": "super::contract::names_constrained_ensures(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], true)"
       }
+    },
+    {
+      "id": "verifier-comparison-bound-applied",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Ok(()) if !path_within_budget(anchor, certs) => Err(super::spec::PathError::TooManyNameComparisons),\n",
+      "replace": "            Ok(()) if false => Err(super::spec::PathError::TooManyNameComparisons),\n",
+      "expect": "killed",
+      "reason": "Design §1.12: a path beyond 4,096 name-constraint comparisons is refused.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_comparison_bound_first()",
+        "witness": "super::examples::wide_verdict(super::examples::link(), 63) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "verifier-comparison-bound-before-process",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Ok(()) if !path_within_budget(anchor, certs) => Err(super::spec::PathError::TooManyNameComparisons),\n            Ok(()) => match super::spec::process(environment.link, environment.revoked, anchor, certs, now) {\n                Err(e) => Err(e),\n                Ok(key) => Ok(key),\n",
+      "replace": "            Ok(()) => match super::spec::process(environment.link, environment.revoked, anchor, certs, now) {\n                Err(e) => Err(e),\n                Ok(key) => if !path_within_budget(anchor, certs) { Err(super::spec::PathError::TooManyNameComparisons) }\n                    else { Ok(key) },\n",
+      "expect": "killed",
+      "reason": "Design §1.12: the bound is judged before §6.1, so §6.1's name-constraint checks never run on a path beyond it; such a path reports TooManyNameComparisons even when §6.1 would refuse it.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_comparison_bound_first()",
+        "witness": "super::examples::wide_verdict(super::examples::no_link(), 63) == Err::<Seq<u8>, PathError>(PathError::BadSignature)"
+      }
+    },
+    {
+      "id": "verifier-comparison-bound-is-p5s",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        Some(initial) => crate::name_constraints::matching::contract::within_budget(nc_path(certs), initial),\n",
+      "replace": "        Some(initial) => true,\n",
+      "expect": "killed",
+      "reason": "The path bound is P5's within_budget over the path's certificates from the anchor's constraints.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_comparison_bound_first()",
+        "witness": "super::examples::wide_verdict(super::examples::link(), 63) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "search-anchors-before-pool",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "super::super::verifier::Issuer::Anchor(_) => seq![step] + rest,",
+      "replace": "super::super::verifier::Issuer::Anchor(_) => rest + seq![step],",
+      "expect": "killed",
+      "reason": "RFC 4158 \u00a73.5.15 and both browsers: at each node trust anchors are tried before intermediates, so a server's copy of its root does not lengthen the path.",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_before_root_copy()",
+        "witness": "super::examples::run(6nat, super::examples::pool(seq![super::examples::root_copy(), super::super::examples::int()]), super::super::examples::leaf(), 200000nat) == super::examples::accepted(seq![0nat, 1])"
+      }
+    },
+    {
+      "id": "search-depth-first",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "super::super::verifier::Issuer::Pool(j) => seq![step] + steps_from(environment, anchors, pool, leaf, seq![j] + path, 0) + rest,",
+      "replace": "super::super::verifier::Issuer::Pool(j) => seq![step] + rest + steps_from(environment, anchors, pool, leaf, seq![j] + path, 0),",
+      "expect": "killed",
+      "reason": "Design \u00a72.6 (mozilla::pkix BuildForward, BoringSSL CertPathIter): a pushed issuer's own issuers are searched before the node's next candidate issuer.",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_first_valid_order()",
+        "witness": "super::examples::run(6nat, super::examples::reissued(), super::super::examples::leaf(), 200000nat) == super::examples::accepted(seq![1nat])"
+      }
+    },
+    {
+      "id": "search-pushes-issuer-on-top",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "seq![j] + path",
+      "replace": "path + seq![j]",
+      "expect": "killed",
+      "reason": "IssuerStep.path holds the top certificate first, so a found issuer goes at the front: the next issuer sought is the new certificate's.",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_depth()",
+        "witness": "super::examples::run(2nat, super::examples::pool(seq![super::super::examples::int(), super::super::examples::in2()]), super::super::examples::leaf_under_in2(), 200000nat) == super::examples::refused(super::super::spec::PathError::UnknownIssuer)"
+      }
+    },
+    {
+      "id": "search-every-pool-certificate-examined",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "super::super::verifier::Issuer::Pool((i - anchors.len()) as nat)",
+      "replace": "super::super::verifier::Issuer::Pool((i + 1 - anchors.len()) as nat)",
+      "expect": "killed",
+      "reason": "Every pool certificate, the first included, is a candidate issuer at every node (completeness, theorems::candidates_complete).",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_depth()",
+        "witness": "super::examples::run(2nat, super::examples::pool(seq![super::super::examples::int(), super::super::examples::in2()]), super::super::examples::leaf_under_in2(), 200000nat) == super::examples::refused(super::super::spec::PathError::UnknownIssuer)"
+      }
+    },
+    {
+      "id": "search-first-valid-not-last",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "else if step_valid(environment, anchors, pool, leaf, order[from], reference, now) { Some(from as nat) }",
+      "replace": "else if step_valid(environment, anchors, pool, leaf, order[from], reference, now) && first_valid_from(environment, anchors, pool, leaf, order, from + 1, to, reference, now) is None { Some(from as nat) }",
+      "expect": "killed",
+      "reason": "The search stops at the first valid candidate in its order (both browsers return the first path that verifies).",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_first_valid_order()",
+        "witness": "super::examples::run(6nat, super::examples::reissued(), super::super::examples::leaf(), 200000nat) == super::examples::accepted(seq![1nat])"
+      }
+    },
+    {
+      "id": "search-budget-bounds-the-steps",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "match first_valid_from(environment, anchors, pool, leaf, order, 0, budget as int, reference, now) {\n        Some(k) => match",
+      "replace": "match first_valid_from(environment, anchors, pool, leaf, order, 0, budget as int + 1, reference, now) {\n        Some(k) => match",
+      "expect": "killed",
+      "reason": "mozilla::pkix checks buildForwardCallBudget before each step: a valid candidate completed by step budget + 1 is not found.",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_first_valid_order()",
+        "witness": "super::examples::run(6nat, super::examples::reissued(), super::super::examples::leaf(), 2nat) == super::examples::accepted(seq![1nat, 0])"
+      }
+    },
+    {
+      "id": "search-budget-exhausted-only-beyond",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "None => if order.len() > budget { Err(",
+      "replace": "None => if order.len() >= budget { Err(",
+      "expect": "killed",
+      "reason": "An order of exactly `budget` steps is searched completely, so the budget did not run out (verifier::budget_exhausted_at).",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_loop()",
+        "witness": "super::examples::run(6nat, super::examples::pool(seq![super::examples::loop_a(), super::examples::loop_b()]), super::super::examples::leaf(), 2nat) == super::examples::refused(super::super::spec::PathError::BuildBudgetExhausted)"
+      }
+    },
+    {
+      "id": "search-reports-first-candidate-error",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "Some(e) => Err(e),",
+      "replace": "Some(e) => Err(super::super::spec::PathError::UnknownIssuer),",
+      "expect": "killed",
+      "reason": "Design \u00a72.6 step 6: with no valid candidate, the first candidate's error is reported (BadSignature here), not a generic one.",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_first_error()",
+        "witness": "super::examples::failing() == super::examples::refused(super::super::spec::PathError::UnknownIssuer)"
+      }
+    },
+    {
+      "id": "search-pool-step-completes-no-candidate",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "None => false,",
+      "replace": "None => true,",
+      "expect": "killed",
+      "reason": "Only an anchor step completes a candidate; a pool step is never itself a valid path.",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_before_root_copy()",
+        "witness": "super::examples::run(6nat, super::examples::pool(seq![super::examples::root_copy(), super::super::examples::int()]), super::super::examples::leaf(), 200000nat) == super::examples::refused(super::super::spec::PathError::UnknownIssuer)"
+      }
+    },
+    {
+      "id": "search-examined-count-includes-the-valid-step",
+      "file": "src/path/search/spec.rs",
+      "module": "path::search::examples",
+      "find": "Some(k) => k + 1,",
+      "replace": "Some(k) => k,",
+      "expect": "killed",
+      "reason": "The step that completes the first valid candidate is examined (and counted by the budget).",
+      "certificate": {
+        "file": "src/path/search/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_first_valid_order()",
+        "witness": "super::examples::reissued_count() == 2nat"
+      }
     }
   ]
 }

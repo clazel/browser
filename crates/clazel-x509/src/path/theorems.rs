@@ -1,8 +1,9 @@
 //! The theorems of the path-validation design (§3.5), **stated**: each is a
-//! spec predicate that P8 is to prove holds for every input (as a lemma
-//! `lemma_<name>` with `ensures <predicate>(...)`, in `path/lemmas.rs`).
-//! None is proven yet, so none may be cited as evidence; they are written
-//! now so that the statements are reviewed with the spec they are about.
+//! spec predicate that holds for every input. P8 proves each in
+//! `path/lemmas.rs`, as a lemma `lemma_<name>` with `ensures
+//! <predicate>(...)` (`lemma_all_path_theorems` for `all_path_theorems`);
+//! they were written first so that the statements are reviewed with the
+//! spec they are about.
 //! Where a statement re-derives something the spec computes (the pathLen
 //! count, the explicit_policy trace), it does so independently of the fold,
 //! so that the theorem says something the fold's own definition does not.

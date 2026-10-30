@@ -4,6 +4,7 @@
 
 use clazel_tls::hello::bootstrap::{Action, Bootstrap};
 use clazel_tls::hello::client::Config;
+use clazel_tls::host::exec::Host;
 use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::spec::{INTERNAL_ERROR, UNEXPECTED_MESSAGE};
 use clazel_tls::{encode, record};
@@ -57,12 +58,11 @@ impl Crypto for TestCrypto {
 
 fn config(session_id: &[u8]) -> Config {
     Config {
-        host: HOST.to_vec(),
+        host: Host::Dns(HOST.to_vec()),
         now: 1_800_000_000,
         random: RANDOM.to_vec(),
         session_id: session_id.to_vec(),
         public_key: CLIENT_KEY.to_vec(),
-        send_sni: true,
     }
 }
 

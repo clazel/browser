@@ -8,6 +8,8 @@
 //! and is in the TCB (docs/VERIFICATION.md); it is not restated here.
 //!
 //! - SHA-256: FIPS 180-4 §6.2, <https://doi.org/10.6028/NIST.FIPS.180-4>.
+//! - SHA-384 and SHA-512: FIPS 180-4 §6.5 and §6.4 (certificate links,
+//!   `chain`).
 //! - HMAC-SHA256: RFC 2104 §2, <https://www.rfc-editor.org/rfc/rfc2104#section-2>.
 //! - HKDF-SHA256: RFC 5869 §2.2 (Extract) and §2.3 (Expand),
 //!   <https://www.rfc-editor.org/rfc/rfc5869#section-2>.
@@ -30,6 +32,12 @@ verus! {
 
 /// SHA-256 of `message` (FIPS 180-4 §6.2).
 pub uninterp spec fn sha256(message: Seq<u8>) -> Seq<u8>;
+
+/// SHA-384 of `message` (FIPS 180-4 §6.5).
+pub uninterp spec fn sha384(message: Seq<u8>) -> Seq<u8>;
+
+/// SHA-512 of `message` (FIPS 180-4 §6.4).
+pub uninterp spec fn sha512(message: Seq<u8>) -> Seq<u8>;
 
 /// HMAC-SHA256(key, message) (RFC 2104 §2 with SHA-256, B = 64, L = 32).
 pub uninterp spec fn hmac_sha256(key: Seq<u8>, message: Seq<u8>) -> Seq<u8>;

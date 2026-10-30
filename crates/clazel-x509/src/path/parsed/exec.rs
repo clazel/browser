@@ -151,7 +151,7 @@ fn copy_time(value: &CertificateTime) -> (result: CertificateTime)
     }
 }
 
-fn name_constraints_oid() -> (result: Vec<u64>)
+pub(crate) fn name_constraints_oid() -> (result: Vec<u64>)
     ensures clazel_der::decode::nats(result@) =~= crate::name_constraints::spec::name_constraints_oid()
 {
     let arcs = vec![2u64, 5, 29, 30];
@@ -164,7 +164,7 @@ fn name_constraints_oid() -> (result: Vec<u64>)
     arcs
 }
 
-fn policy_constraints_oid() -> (result: Vec<u64>)
+pub(crate) fn policy_constraints_oid() -> (result: Vec<u64>)
     ensures clazel_der::decode::nats(result@) =~= crate::policy_constraints::spec::policy_constraints_oid()
 {
     let arcs = vec![2u64, 5, 29, 36];

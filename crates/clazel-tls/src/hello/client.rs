@@ -8,8 +8,8 @@ use vstd::prelude::*;
 verus! {
 /// Captured target, entropy and public X25519 input for the fixed client profile.
 pub struct Config {
-    /// Canonical target host retained for later certificate validation.
-    pub host: Vec<u8>,
+    /// The typed target host: server_name (DNS only) and later certificate validation.
+    pub host: crate::host::exec::Host,
     /// Captured validity-check time.
     pub now: u64,
     /// Fresh 32-byte ClientHello random from the future entropy join.
@@ -18,14 +18,12 @@ pub struct Config {
     pub session_id: Vec<u8>,
     /// Raw 32-byte X25519 public input, checked against the scalar at the join.
     pub public_key: Vec<u8>,
-    /// URL layer's DNS-host classification; IP addresses omit SNI.
-    pub send_sni: bool,
 }
 impl View for Config {
     type V = super::client_spec::Config;
     open spec fn view(&self) -> super::client_spec::Config {
         super::client_spec::Config { host: self.host@, now: self.now, random: self.random@,
-            session_id: self.session_id@, public_key: self.public_key@, send_sni: self.send_sni }
+            session_id: self.session_id@, public_key: self.public_key@ }
     }
 }
 /// Exact scheme list offered for CV and certificate signatures (§4.2.3).
@@ -39,15 +37,19 @@ pub fn signatures() -> (out: Vec<u16>)
 }
 /// Fixed profile's actual initial extension types, matching the body builder.
 pub fn extension_types(config: &Config) -> (out: Vec<u16>)
-    ensures out@ == (if config.send_sni { seq![0u16] } else { seq![] }) + seq![43u16, 13u16, 10u16, 51u16],
+    ensures out@ == (if crate::host::spec::sni_host_name(config.host@) is Some { seq![0u16] } else { seq![] })
+        + seq![43u16, 13u16, 10u16, 51u16],
 {
     let mut out = Vec::new();
-    if config.send_sni { out.push(0); }
+    if config.host.sni_host_name().is_some() { out.push(0); }
     out.push(43); out.push(13); out.push(10); out.push(51);
-    proof { assert(out@ =~= (if config.send_sni { seq![0u16] } else { seq![] }) + seq![43u16, 13u16, 10u16, 51u16]); }
+    proof {
+        assert(out@ =~= (if crate::host::spec::sni_host_name(config.host@) is Some { seq![0u16] } else { seq![] })
+            + seq![43u16, 13u16, 10u16, 51u16]);
+    }
     out
 }
-/// RFC 6066 §3: one DNS server_name; the caller supplies canonical host bytes.
+/// RFC 6066 §3: one DNS server_name, the host's DNS name.
 fn server_name(host: &[u8]) -> (out: Vec<u8>)
     requires 1 <= host.len() <= 253,
     ensures out@ == crate::spec::write_server_name_ch(seq![crate::spec::ServerName { host_name: host@ }]),
@@ -81,7 +83,8 @@ fn build(config: &Config, cookie: &[u8]) -> (out: Vec<u8>)
     requires super::client_contract::build_requires(config@, cookie@),
     ensures super::client_contract::build_ensures(config@, cookie@, out@),
 {
-    let name = server_name(config.host.as_slice());
+    let sni = config.host.sni_host_name();
+    let name = match sni { Some(host) => server_name(host), None => Vec::new() };
     let share = key_share(config.public_key.as_slice());
     let schemes = signatures();
     let mut sig_data = Vec::new();
@@ -92,7 +95,7 @@ fn build(config: &Config, cookie: &[u8]) -> (out: Vec<u8>)
     let versions: &[u8] = &[2u8, 3u8, 4u8];
     let groups: &[u8] = &[0u8, 2u8, 0u8, 29u8];
     let mut es = Vec::new();
-    if config.send_sni { es.push(Extension { etype: 0, data: name.as_slice() }); }
+    if sni.is_some() { es.push(Extension { etype: 0, data: name.as_slice() }); }
     es.push(Extension { etype: 43, data: versions });
     es.push(Extension { etype: 13, data: sig_data.as_slice() });
     es.push(Extension { etype: 10, data: groups });
@@ -199,7 +202,7 @@ impl Hello {
     pub fn start(config: Config) -> (out: Result<(Self, Vec<u8>), u8>)
         ensures super::client_contract::start_ensures(config@, start_view(out)),
     {
-        if config.host.is_empty() || config.host.len() > 253 || config.random.len() != 32
+        if !config.host.is_ok() || config.random.len() != 32
             || config.session_id.len() > 32 || config.public_key.len() != 32 { return Err(80); }
         let b = build(&config, &[]);
         let transcript = match Transcript::new(b.as_slice()) { Ok(t) => t, Err(_) => return Err(80) };

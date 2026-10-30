@@ -819,6 +819,53 @@ pub proof fn lemma_presented_not_capped()
     assert(super::verifier::chain_inputs(seq![], 0) == Err::<super::verifier::ChainInputs, PathError>(PathError::Malformed)) by (compute_only);
 }
 
+/// The anchor permitting `example.com` through 65 dNSName subtrees.
+pub open spec fn anchor_65_subtrees() -> super::parsed::spec::Anchor {
+    anchor_constrained(crate::name_constraints::spec::NameConstraints {
+        permitted_subtrees: Some(crate::name_constraints::matching::contract::many_subtrees(65)),
+        excluded_subtrees: None,
+    })
+}
+
+/// The leaf under the anchor with `entries` dNSName `example.com` entries
+/// (the decoded subjectAltName that name constraints read).
+pub open spec fn leaf_with_entries(entries: nat) -> super::parsed::spec::PathCert {
+    super::parsed::spec::PathCert {
+        san: Some(crate::extensions::spec::SubjectAltName {
+            names: Seq::new(entries, |i: int| crate::extensions::spec::GeneralName::DnsName(example_com())) }),
+        ..leaf_under_root()
+    }
+}
+
+/// Every signature fails.
+pub open spec fn no_link() -> LinkFn {
+    |data: SignedData| false
+}
+
+/// The verdict on `anchor_65_subtrees() -> leaf_with_entries(entries)` under `link`.
+pub open spec fn wide_verdict(link: LinkFn, entries: nat) -> Result<Seq<u8>, PathError> {
+    super::verifier::candidate_verdict(
+        super::verifier::Environment { link, revoked: not_revoked(), max_intermediates: 6 },
+        seq![anchor_65_subtrees()], seq![], leaf_with_entries(entries),
+        super::verifier::Candidate { anchor: 0, path: seq![] }, reference(), now())
+}
+
+/// Design §1.12: 63 entries and the subject against 65 subtrees are 4,160
+/// comparisons, beyond the bound, so the candidate is refused, and refused
+/// for the bound even when §6.1 would refuse it too (the bound is judged
+/// first). 62 entries are 4,095 comparisons, within it, and the path is
+/// accepted.
+pub proof fn lemma_comparison_bound_first()
+    ensures
+        wide_verdict(link(), 63) == Err::<Seq<u8>, PathError>(PathError::TooManyNameComparisons),
+        wide_verdict(no_link(), 63) == Err::<Seq<u8>, PathError>(PathError::TooManyNameComparisons),
+        wide_verdict(link(), 62) == leaf_key(),
+{
+    assert(wide_verdict(link(), 63) == Err::<Seq<u8>, PathError>(PathError::TooManyNameComparisons)) by (compute_only);
+    assert(wide_verdict(no_link(), 63) == Err::<Seq<u8>, PathError>(PathError::TooManyNameComparisons)) by (compute_only);
+    assert(wide_verdict(link(), 62) == leaf_key()) by (compute_only);
+}
+
 // ---------------------------------------------------------------------------
 // The search budget (`verifier.rs`, design §1.12; mozilla::pkix)
 // ---------------------------------------------------------------------------

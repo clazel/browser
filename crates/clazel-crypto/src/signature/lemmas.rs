@@ -17,6 +17,8 @@ pub proof fn lemma_p256_point_unchanged(
     requires clazel_x509::spki::spec::parse_subject_public_key_info(key) == Some(spki),
     ensures p256_point(spki) == p256_point_direct(spki),
 {
+    // Only the classification is needed, not the decoder's definition.
+    hide(clazel_x509::spki::spec::parse_subject_public_key_info);
     clazel_x509::spki::lemmas::lemma_parse_classifies_key(key, spki);
     let alg = spki.algorithm;
     let rsa = seq![1nat, 2nat, 840nat, 113549nat, 1nat, 1nat, 1nat];

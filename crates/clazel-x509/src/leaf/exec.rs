@@ -18,7 +18,7 @@ pub struct LeafPolicy {
 
 impl View for LeafPolicy {
     type V = super::spec::LeafPolicy;
-    closed spec fn view(&self) -> Self::V {
+    open spec fn view(&self) -> Self::V {
         super::spec::LeafPolicy { allow_any_extended_key_usage: self.allow_any_extended_key_usage }
     }
 }
@@ -372,7 +372,7 @@ pub(crate) fn parse_optional_eku(
 }
 
 /// Every critical extension is one of the four whose semantics this checker processes.
-fn critical_extensions_supported(input: &[extensions::Extension<'_>]) -> (result: bool)
+pub(crate) fn critical_extensions_supported(input: &[extensions::Extension<'_>]) -> (result: bool)
     ensures result == super::spec::supported_critical_extensions(extensions::view_extensions(input@), 0)
 {
     let san_oid = san_oid();
@@ -581,7 +581,7 @@ fn san_matches_reference(names: &[extensions::GeneralName<'_>], reference: Refer
 
 /// Check already decoded extensions against parsed TBS fields. This isolates
 /// leaf policy refinement from the outer envelope/TBS parser composition.
-fn check_parsed_leaf_extensions<'a, 'b>(
+pub(crate) fn check_parsed_leaf_extensions<'a, 'b>(
     input: &[extensions::Extension<'b>], tbs: &crate::tbs::exec::TbsCertificate<'_>,
     reference: ReferenceIdentity<'a>, now: &CertificateTime, policy: LeafPolicy,
 ) -> (result: Option<PartialLeafChecks<'a>>)

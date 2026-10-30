@@ -12,6 +12,7 @@ use clazel_tls::encode::{
     write_certificate, write_certificate_request, write_certificate_verify,
     write_encrypted_extensions, write_handshake,
 };
+use clazel_tls::host::exec::Host;
 use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::schedule::exec::finished;
 use clazel_tls::spec::{
@@ -80,7 +81,7 @@ struct SignatureCall {
 
 #[derive(Default)]
 struct Calls {
-    chains: Vec<(Vec<u8>, u64, Vec<u8>)>,
+    chains: Vec<(Host, u64, Vec<u8>)>,
     signatures: Vec<SignatureCall>,
 }
 
@@ -103,14 +104,14 @@ impl MockVerifier {
 impl Verifier for MockVerifier {
     fn chain(
         &self,
-        host: &[u8],
+        host: &Host,
         now: u64,
         certificate_body: &[u8],
     ) -> Result<Vec<u8>, CertificateError> {
         self.calls
             .borrow_mut()
             .chains
-            .push((host.to_vec(), now, certificate_body.to_vec()));
+            .push((host.clone(), now, certificate_body.to_vec()));
         self.chain_result.clone()
     }
 
@@ -131,7 +132,7 @@ impl Verifier for MockVerifier {
 
 fn config() -> Config {
     Config {
-        host: HOST.to_vec(),
+        host: Host::Dns(HOST.to_vec()),
         now: NOW,
         server_secret: SERVER_SECRET.to_vec(),
         client_secret: CLIENT_SECRET.to_vec(),
@@ -346,7 +347,10 @@ fn no_client_certificate_path_gates_application_until_send_ack() -> Result<(), S
         complete_server_authentication(&mut auth, &crypto, &verifier, None)?;
     assert_eq!(flight.get(..4), Some(&[20, 0, 0, 32][..]));
     let calls = verifier.calls.borrow();
-    assert_eq!(calls.chains, vec![(HOST.to_vec(), NOW, certificate)]);
+    assert_eq!(
+        calls.chains,
+        vec![(Host::Dns(HOST.to_vec()), NOW, certificate)]
+    );
     assert_eq!(calls.signatures.len(), 1);
     drop(calls);
 
@@ -429,7 +433,7 @@ fn typed_chain_failures_and_empty_chain_preserve_expected_alerts() -> Result<(),
         );
         assert_eq!(
             verifier.calls.borrow().chains,
-            vec![(HOST.to_vec(), NOW, cert)]
+            vec![(Host::Dns(HOST.to_vec()), NOW, cert)]
         );
     }
 
@@ -521,7 +525,7 @@ fn certificate_verify_checks_captured_identity_and_fails_closed() -> Result<(), 
     );
     assert_eq!(
         verifier.calls.borrow().chains,
-        vec![(HOST.to_vec(), NOW, cert.clone())]
+        vec![(Host::Dns(HOST.to_vec()), NOW, cert.clone())]
     );
     let expected_prefix = through_certificate(None, &cert);
     assert_eq!(auth.messages(), expected_prefix);
@@ -919,5 +923,64 @@ fn premature_application_is_never_delivered_before_send_ack() -> Result<(), Stri
         ),
         Action::None
     );
+    Ok(())
+}
+
+#[test]
+fn the_typed_host_reaches_the_validator_unchanged() -> Result<(), String> {
+    let crypto = TestCrypto;
+    for host in [
+        Host::Ip(vec![192, 0, 2, 10]),
+        Host::Ip(vec![
+            0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+        ]),
+        Host::Dns(b"example.test".to_vec()),
+    ] {
+        let verifier = MockVerifier::accepts_chain();
+        let mut transcript = Transcript::new(b"client hello")
+            .map_err(|error| format!("transcript start: {error:?}"))?;
+        transcript
+            .push(&crypto, Kind::ServerHello, b"server hello")
+            .map_err(|error| format!("transcript ServerHello: {error:?}"))?;
+        let mut auth = Auth::start(
+            Config {
+                host: host.clone(),
+                ..config()
+            },
+            transcript,
+        )
+        .map_err(|alert| format!("auth start alert {alert}"))?;
+        progress_to_certificate(&mut auth, &crypto, &verifier, None)?;
+        let cert = certificate_body(&[], b"opaque certificate bytes");
+        assert_eq!(
+            receive(&mut auth, &crypto, &verifier, 11, &cert),
+            Action::None
+        );
+        assert_eq!(verifier.calls.borrow().chains, vec![(host, NOW, cert)]);
+    }
+    Ok(())
+}
+
+#[test]
+fn hosts_outside_the_bounds_are_refused_at_start() -> Result<(), String> {
+    let crypto = TestCrypto;
+    for host in [
+        Host::Dns(Vec::new()),
+        Host::Dns(vec![b'h'; 254]),
+        Host::Dns(b"example.test.".to_vec()),
+        Host::Ip(Vec::new()),
+        Host::Ip(vec![1; 5]),
+        Host::Ip(vec![1; 17]),
+    ] {
+        let mut transcript = Transcript::new(b"client hello")
+            .map_err(|error| format!("transcript start: {error:?}"))?;
+        transcript
+            .push(&crypto, Kind::ServerHello, b"server hello")
+            .map_err(|error| format!("transcript ServerHello: {error:?}"))?;
+        assert!(matches!(
+            Auth::start(Config { host, ..config() }, transcript),
+            Err(INTERNAL_ERROR)
+        ));
+    }
     Ok(())
 }

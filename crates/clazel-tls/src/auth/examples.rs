@@ -30,8 +30,8 @@ pub open spec fn cv() -> Seq<u8> { seq![4u8, 3u8, 0u8, 1u8, 9u8] }
 /// Chain/name/time and server CertificateVerify fixture checks.
 pub open spec fn verifier() -> Verification {
     Verification {
-        chain: |host: Seq<u8>, now: u64, body: Seq<u8>|
-            if host == seq![104u8] && now == 7 && body == certificate() { Ok(seq![17u8]) }
+        chain: |host: crate::host::spec::Host, now: u64, body: Seq<u8>|
+            if host == crate::host::spec::Host::Dns(seq![104u8]) && now == 7 && body == certificate() { Ok(seq![17u8]) }
             else { Err(CertificateError::BadCertificate) },
         signature: |key: Seq<u8>, scheme: u16, input: Seq<u8>, signature: Seq<u8>|
             key == seq![17u8] && scheme == 0x0403 && signature == seq![9u8]
@@ -41,7 +41,7 @@ pub open spec fn verifier() -> Verification {
 /// Constructor context: an abstract negotiated CH/SH prefix and actual offers.
 pub open spec fn initial() -> State {
     State {
-        config: Config { host: seq![104u8], now: 7,
+        config: Config { host: crate::host::spec::Host::Dns(seq![104u8]), now: 7,
             server_secret: Seq::new(32, |i: int| 49u8), client_secret: Seq::new(32, |i: int| 66u8),
             signatures: seq![0x0403u16], extensions: seq![0u16, 10u16, 13u16, 43u16, 51u16] },
         transcript: crate::transcript::spec::State { messages: seq![1u8, 0u8, 0u8, 1u8, 1u8, 2u8, 0u8, 0u8, 1u8, 2u8],
@@ -63,7 +63,7 @@ pub open spec fn accepted() -> (State, Action) {
 }
 /// A chain validator rejecting the peer's chain with its precise expiry alert.
 pub open spec fn rejected_chain() -> Action {
-    let v = Verification { chain: |host: Seq<u8>, now: u64, body: Seq<u8>| Err(CertificateError::Expired),
+    let v = Verification { chain: |host: crate::host::spec::Host, now: u64, body: Seq<u8>| Err(CertificateError::Expired),
         signature: |key: Seq<u8>, scheme: u16, input: Seq<u8>, signature: Seq<u8>| true };
     receive(crypto(), v, after_extensions(), 11, certificate()).1
 }
@@ -72,6 +72,13 @@ pub open spec fn rejected_signature() -> Action {
     let v = Verification { chain: verifier().chain,
         signature: |key: Seq<u8>, scheme: u16, input: Seq<u8>, signature: Seq<u8>| false };
     receive(crypto(), v, after_certificate(), 15, cv()).1
+}
+
+/// A host outside host_ok (an empty name) refuses the start (internal_error).
+pub proof fn lemma_start_refuses_bad_host()
+    ensures start(Config { host: crate::host::spec::Host::Dns(seq![]), ..initial().config }, initial().transcript) is Err,
+{
+    assert(start(Config { host: crate::host::spec::Host::Dns(seq![]), ..initial().config }, initial().transcript) is Err) by (compute_only);
 }
 
 /// Concrete authentication requirement: early_data.

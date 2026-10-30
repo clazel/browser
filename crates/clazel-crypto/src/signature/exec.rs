@@ -46,7 +46,7 @@ fn pad32(m: &[u8]) -> (out: Vec<u8>)
 
 /// RFC 5480 §2.2: the X || Y of an uncompressed secp256r1 key, as
 /// classified by `clazel_x509::spki`.
-fn p256_point<'a>(spki: &SubjectPublicKeyInfo<'a>) -> (out: Option<&'a [u8]>)
+pub(crate) fn p256_point<'a>(spki: &SubjectPublicKeyInfo<'a>) -> (out: Option<&'a [u8]>)
     ensures
         match out {
             Some(p) => crate::signature::spec::p256_point(spki@) == Some(p@),
@@ -60,7 +60,7 @@ fn p256_point<'a>(spki: &SubjectPublicKeyInfo<'a>) -> (out: Option<&'a [u8]>)
 }
 
 /// RFC 3279 §2.2.3: r and s of one DER Ecdsa-Sig-Value, padded to 32.
-fn ecdsa_sig_value(signature: &[u8]) -> (out: Option<(Vec<u8>, Vec<u8>)>)
+pub(crate) fn ecdsa_sig_value(signature: &[u8]) -> (out: Option<(Vec<u8>, Vec<u8>)>)
     ensures
         match out {
             Some((r, s)) => crate::signature::spec::ecdsa_sig_value(signature@) == Some((r@, s@)),
@@ -86,7 +86,7 @@ fn ecdsa_sig_value(signature: &[u8]) -> (out: Option<(Vec<u8>, Vec<u8>)>)
 }
 
 /// ecdsa_secp256r1_sha256 (0x0403).
-fn ecdsa_p256_sha256(spki: &SubjectPublicKeyInfo, input: &[u8], signature: &[u8]) -> (out: bool)
+pub(crate) fn ecdsa_p256_sha256(spki: &SubjectPublicKeyInfo, input: &[u8], signature: &[u8]) -> (out: bool)
     requires clazel_x509::spki::lemmas::ec_lengths_ok(spki@),
     ensures out == crate::signature::spec::ecdsa_p256_sha256(spki@, input@, signature@),
 {
