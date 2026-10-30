@@ -1,7 +1,7 @@
 //! RFC 5280 §4.1.2.5 time decoding boundaries and adversarial encodings.
 
 use clazel_x509::time::exec::{
-    CertificateTime, TimeKind, decode_time, make_validity, validity_contains,
+    CertificateTime, TimeKind, decode_time, from_unix_seconds, make_validity, validity_contains,
 };
 
 fn utc(value: &[u8]) -> Option<CertificateTime> {
@@ -115,4 +115,83 @@ fn interval_endpoints_are_inclusive_and_reversed_ranges_fail() {
         return;
     };
     assert!(make_validity(later, earlier).is_none());
+}
+
+fn fields(t: Option<CertificateTime>) -> Option<(u16, u8, u8, u8, u8, u8)> {
+    t.map(|t| (t.year, t.month, t.day, t.hour, t.minute, t.second))
+}
+
+/// Known answers, each checked with Python's `calendar.timegm` /
+/// `datetime.fromtimestamp(t, timezone.utc)`.
+#[test]
+fn unix_seconds_known_answers() {
+    assert_eq!(fields(from_unix_seconds(0)), Some((1970, 1, 1, 0, 0, 0)));
+    assert_eq!(
+        fields(from_unix_seconds(951_782_400)),
+        Some((2000, 2, 29, 0, 0, 0))
+    );
+    assert_eq!(
+        fields(from_unix_seconds(951_868_800)),
+        Some((2000, 3, 1, 0, 0, 0))
+    );
+    assert_eq!(
+        fields(from_unix_seconds(2_147_483_647)),
+        Some((2038, 1, 19, 3, 14, 7))
+    );
+    // 2100 is not a leap year: no 29 February.
+    assert_eq!(
+        fields(from_unix_seconds(4_107_542_400)),
+        Some((2100, 3, 1, 0, 0, 0))
+    );
+    assert_eq!(
+        fields(from_unix_seconds(4_107_456_000)),
+        Some((2100, 2, 28, 0, 0, 0))
+    );
+    assert_eq!(
+        fields(from_unix_seconds(253_402_300_799)),
+        Some((9999, 12, 31, 23, 59, 59))
+    );
+    assert!(from_unix_seconds(253_402_300_800).is_none());
+    assert!(from_unix_seconds(u64::MAX).is_none());
+}
+
+/// Every day is 86400 seconds: no second 60, at a leap-second boundary too
+/// (2016-12-31T23:59:60Z existed; Unix time repeats the second).
+#[test]
+fn unix_seconds_never_second_60() {
+    assert_eq!(
+        fields(from_unix_seconds(1_483_228_799)),
+        Some((2016, 12, 31, 23, 59, 59))
+    );
+    assert_eq!(
+        fields(from_unix_seconds(1_483_228_800)),
+        Some((2017, 1, 1, 0, 0, 0))
+    );
+    for t in (0..253_402_300_800u64).step_by(86_399 * 7 + 13) {
+        assert!(from_unix_seconds(t).is_some_and(|t| t.second <= 59));
+    }
+}
+
+/// Cycle boundaries of the 400-year arithmetic, and monotone order.
+#[test]
+fn unix_seconds_cycle_boundaries_and_order() {
+    // 1970 + 400 = 2370-01-01 and 1970 + 8000 = 9970-01-01 (Python timegm).
+    assert_eq!(
+        fields(from_unix_seconds(12_622_780_800)),
+        Some((2370, 1, 1, 0, 0, 0))
+    );
+    assert_eq!(
+        fields(from_unix_seconds(12_622_780_799)),
+        Some((2369, 12, 31, 23, 59, 59))
+    );
+    assert_eq!(
+        fields(from_unix_seconds(252_455_616_000)),
+        Some((9970, 1, 1, 0, 0, 0))
+    );
+    let mut previous = fields(from_unix_seconds(0));
+    for t in (1..4_000_000_000u64).step_by(1_000_003) {
+        let next = fields(from_unix_seconds(t));
+        assert!(previous < next);
+        previous = next;
+    }
 }

@@ -25,10 +25,13 @@ pub const README: &str = "README.md";
 /// sets it.
 pub const HOST_SHELL_DIR: &str = "crates/clazel/src";
 pub const HOST_SHELL_LIMIT: usize = 300;
+/// The network shell's source (phase-3.md item 3.8), counted like the host
+/// shell. The plan sets it no limit.
+pub const NET_SHELL_DIR: &str = "crates/clazel-net/src";
 
-/// Lines (newline characters, as `wc -l` counts) in the Rust files under `dir`,
-/// or `None` if there is no such directory.
-pub fn host_shell_lines(dir: &Path) -> Option<Result<usize, String>> {
+/// Lines (newline characters, as `wc -l` counts) in the Rust files under `dir`
+/// (a shell's source), or `None` if there is no such directory.
+pub fn shell_lines(dir: &Path) -> Option<Result<usize, String>> {
     if !dir.is_dir() {
         return None;
     }
@@ -144,13 +147,19 @@ pub fn rows(block: &str) -> Result<Rows, String> {
 /// The generated block, markers included, with nothing carried over.
 #[cfg(test)]
 pub fn render(table: &Table) -> String {
-    render_with(table, &Rows::new(), None)
+    render_with(table, &Rows::new(), None, None)
 }
 
 /// The generated block, taking [`CARRIED_COLUMNS`] from `carried` for the
 /// crates it has a row for, and every other cell from `table`. The caller
-/// supplies the measured host-shell count; rendering performs no I/O.
-pub fn render_with(table: &Table, carried: &Rows, host_shell_count: Option<usize>) -> String {
+/// supplies the measured host- and network-shell counts; rendering performs
+/// no I/O.
+pub fn render_with(
+    table: &Table,
+    carried: &Rows,
+    host_shell_count: Option<usize>,
+    net_shell_count: Option<usize>,
+) -> String {
     let dash = || "—".to_owned();
     let mut out = vec![BEGIN.to_owned(), HEADER.to_owned(), RULE.to_owned()];
     for (name, m) in table {
@@ -248,6 +257,14 @@ pub fn render_with(table: &Table, carried: &Rows, host_shell_count: Option<usize
              they only call the shell's public functions."
         ));
     }
+    if let Some(n) = net_shell_count {
+        out.push(format!(
+            "⁷ The network shell (`{NET_SHELL_DIR}`, item 3.8: the resolver's sockets, TCP \
+             connections and the loop that drives the fetch transducer) is {n} lines, counted \
+             the same way. It is Tier 0 and makes no protocol decisions: every parser and \
+             decision on its path is a proven function of the crates it calls."
+        ));
+    }
     out.push(END.to_owned());
     out.join("\n")
 }
@@ -330,8 +347,10 @@ mod tests {
             "| a | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |"
         ));
         assert!(!block.contains("⁶ The host shell"));
-        let with_shell = render_with(&t, &super::Rows::new(), Some(298));
+        assert!(!block.contains("⁷ The network shell"));
+        let with_shell = render_with(&t, &super::Rows::new(), Some(298), Some(1805));
         assert!(with_shell.contains("is 298 lines, counted as `wc -l`"));
+        assert!(with_shell.contains("is 1805 lines, counted the same way"));
         Ok(())
     }
 
@@ -376,12 +395,12 @@ mod tests {
                 ..Metrics::default()
             },
         );
-        let block = render_with(&later, &old, None);
+        let block = render_with(&later, &old, None, None);
         assert!(block.contains(
             "| a | 2 (2) | 5 verified, 0 errors | no harnesses | 1 | 0 (0) | 1 / 2 / 3 | 4 / 0 / 0 of 4 | none | 1 of 2 files current |"
         ));
         // Round trip: rendering the full measurement again changes nothing.
-        assert_eq!(render_with(&t, &old, None), render(&t));
+        assert_eq!(render_with(&t, &old, None, None), render(&t));
         Ok(())
     }
 
