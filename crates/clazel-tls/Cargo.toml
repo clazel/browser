@@ -1,0 +1,34 @@
+[package]
+name = "clazel-tls"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "TLS 1.3 (RFC 8446) record layer and handshake message formats: the presentation language, records, handshake messages, extensions and alerts."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Test-only reference engine for the differential test in
+# tests/conformance_tls_formats.rs (class `test` in docs/DEPENDENCIES.md:
+# never shipped). Default features are off, so no cryptography provider is
+# built; only the message codec of `rustls::internal::msgs` is used.
+[dev-dependencies]
+# Test-only SHA-256 oracle for RFC 8448 key-schedule vectors.
+sha2 = { version = "=0.10.9", default-features = false }
+rustls = { version = "=0.23.46", default-features = false }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires. This
+# crate stays at tier 0 until the key schedule and handshake state machine
+# (phase-3.md items 3.5e and 3.5f) are in and CI's full run has checked
+# every proof, mutation and conformance test.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

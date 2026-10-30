@@ -2,12 +2,13 @@
 //! <https://www.rfc-editor.org/rfc/rfc5280.html#section-4.1.2.7>
 //! <https://www.rfc-editor.org/rfc/rfc3279.html#section-2.3.1>
 //! <https://www.rfc-editor.org/rfc/rfc8017.html#appendix-A.1.1>
+//! <https://www.rfc-editor.org/rfc/rfc5480.html#section-2>
 //!
 //! Modelling choices and limits:
 //! - The entire input is exactly one DER SubjectPublicKeyInfo SEQUENCE. Its
 //!   AlgorithmIdentifier and subjectPublicKey BIT STRING TLVs, key bytes, and
 //!   full outer SPKI TLV are retained exactly.
-//! - rsaEncryption (1.2.840.113549.1.1.1) is the only initially supported
+//! - rsaEncryption (1.2.840.113549.1.1.1) is the only supported RSA
 //!   profile. RFC 3279 §2.3.1 requires AlgorithmIdentifier parameters to be
 //!   ASN.1 NULL; omission or another parameter encoding is rejected.
 //! - RSA's BIT STRING must have zero unused bits. Its contents must be one
@@ -17,6 +18,26 @@
 //!   modulus structure, exponent range/GCD, minimum-strength policy, and
 //!   signatures are not checked. Integer values remain borrowed octets; no
 //!   big integers are allocated. No arbitrary key-size cap is imposed here.
+//! - EC keys (RFC 5480 §2.1.1): id-ecPublicKey (1.2.840.10045.2.1) whose
+//!   parameters are exactly the DER OBJECT IDENTIFIER of namedCurve
+//!   secp256r1 (1.2.840.10045.3.1.7) or secp384r1 (1.3.132.0.34) are
+//!   classified by `classify_ec_public_key`. The parameters field is compared
+//!   as the complete DER TLV, so explicit ECParameters, `implicitCurve`,
+//!   absent parameters and every other named curve are not classified.
+//! - The EC point is RFC 5480 §2.2's ECPoint, the BIT STRING's value, which
+//!   must have no unused bits. Only the uncompressed form (leading octet
+//!   0x04, SEC 1 §2.3.3) of exactly the curve's length is classified: 65
+//!   octets for secp256r1, 97 for secp384r1. Compressed points (RFC 5480
+//!   §2.2 makes them optional to support) and any other length are not.
+//!   Whether the point is on the curve is not checked here.
+//! - The two EC classes carry different values, on purpose. `EcP256` holds
+//!   X || Y, the 64 octets after the 0x04 (the form libcrux takes).
+//!   `EcP384` holds the complete 97-octet ECPoint, 0x04 included, so that
+//!   `clazel-p384`'s point decoder, not this module, interprets it.
+//! - An EC key that is not classified is not an error: like every other
+//!   algorithm, the SPKI is returned as Unsupported with its unused-bit count
+//!   and key bytes intact, so the set of inputs that parse is unchanged.
+//!   RSA's classification is unchanged.
 //! - All other well-framed algorithm identifiers are returned explicitly as
 //!   Unsupported with their BIT STRING unused-bit count and key bytes intact.
 //!   Their algorithm-specific parameters and key syntax remain opaque.
@@ -30,6 +51,12 @@ verus! {
 pub enum PublicKey {
     /// RSA public key syntax from RFC 3279 §2.3.1.
     Rsa(RsaPublicKey),
+    /// id-ecPublicKey with namedCurve secp256r1 and an uncompressed point
+    /// (RFC 5480 §2.1.1, §2.2): the 64 octets X || Y, without the 0x04.
+    EcP256(Seq<u8>),
+    /// id-ecPublicKey with namedCurve secp384r1 and an uncompressed point:
+    /// the complete 97-octet ECPoint, 0x04 || X || Y.
+    EcP384(Seq<u8>),
     /// Algorithm OID is outside the implemented key profile.
     Unsupported,
 }
@@ -67,6 +94,42 @@ pub struct SubjectPublicKeyInfo {
 /// Whether the OID arcs designate rsaEncryption.
 pub open spec fn is_rsa_encryption(oid: Seq<nat>) -> bool {
     oid =~= seq![1nat, 2nat, 840nat, 113549nat, 1nat, 1nat, 1nat]
+}
+
+/// RFC 5480 §2.1.1: id-ecPublicKey, 1.2.840.10045.2.1.
+pub open spec fn is_id_ec_public_key(oid: Seq<nat>) -> bool {
+    oid =~= seq![1nat, 2nat, 840nat, 10045nat, 2nat, 1nat]
+}
+
+/// RFC 5480 §2.1.1.1: the DER of the namedCurve parameter secp256r1, OBJECT
+/// IDENTIFIER 1.2.840.10045.3.1.7.
+pub open spec fn secp256r1_parameter() -> Seq<u8> {
+    seq![0x06u8, 0x08u8, 0x2au8, 0x86u8, 0x48u8, 0xceu8, 0x3du8, 0x03u8, 0x01u8, 0x07u8]
+}
+
+/// RFC 5480 §2.1.1.1: the DER of the namedCurve parameter secp384r1, OBJECT
+/// IDENTIFIER 1.3.132.0.34.
+pub open spec fn secp384r1_parameter() -> Seq<u8> {
+    seq![0x06u8, 0x05u8, 0x2bu8, 0x81u8, 0x04u8, 0x00u8, 0x22u8]
+}
+
+/// RFC 5480 §2.1.1 and §2.2: classify a non-RSA key as an EC key on
+/// secp256r1 or secp384r1 with an uncompressed point; anything else is
+/// Unsupported.
+pub open spec fn classify_ec_public_key(
+    algorithm: crate::certificate::spec::AlgorithmIdentifier, unused: u8, bits: Seq<u8>,
+) -> PublicKey {
+    if is_id_ec_public_key(algorithm.oid) && unused == 0 && bits.len() > 0 && bits[0] == 0x04u8 {
+        if algorithm.parameters_der == Some(secp256r1_parameter()) && bits.len() == 65 {
+            PublicKey::EcP256(bits.subrange(1, 65))
+        } else if algorithm.parameters_der == Some(secp384r1_parameter()) && bits.len() == 97 {
+            PublicKey::EcP384(bits)
+        } else {
+            PublicKey::Unsupported
+        }
+    } else {
+        PublicKey::Unsupported
+    }
 }
 
 /// A DER INTEGER magnitude is positive and nonzero iff one octet in its
@@ -108,7 +171,8 @@ pub open spec fn parse_subject_public_key_info(input: Seq<u8>) -> Option<Subject
                                 }}
                             } else {
                                 Some(SubjectPublicKeyInfo {
-                                    algorithm, public_key: PublicKey::Unsupported,
+                                    algorithm,
+                                    public_key: classify_ec_public_key(algorithm, unused, key_bits),
                                     subject_public_key_unused_bits: unused,
                                     subject_public_key_bits: key_bits,
                                     subject_public_key_tlv: bit_string_der,
