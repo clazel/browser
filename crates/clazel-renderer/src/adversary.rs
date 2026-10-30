@@ -13,11 +13,14 @@
 //! - `clazel-adversary control ATTEMPT TARGET`: the same attempt without the
 //!   sandbox, which the tests use to show that the target is reachable, so
 //!   that a denial is the sandbox's.
-//! - `clazel-adversary display TITLE`: wait for its document to be
-//!   committed, then send a `Display` whose title is TITLE and whose text and
-//!   only link claim to be that URL (phase-4.md item 4.16: a renderer that
-//!   tries to show its page under another tab's address), then wait to be
-//!   killed or for the socket to close.
+//! - `clazel-adversary display TITLE [TEXT [LINK]]`: wait for its document
+//!   to be committed, then send a `Display` whose title is TITLE, whose text
+//!   is TEXT (without one, `URL: TITLE`) and whose only link is LINK (without
+//!   one, TITLE), then wait to be killed or for the socket to close. With a
+//!   URL as TITLE it is phase-4.md item 4.16's renderer that tries to show
+//!   its page under another tab's address; with escape characters in TITLE
+//!   it is the renderer of `clazel`'s `browse` test that tries to redraw the
+//!   address line.
 //! - `clazel-adversary idle`: not sandboxed; block until its standard input
 //!   closes. The `ptrace-attach` test starts one as the sibling to attach to
 //!   (a plain binary of this build, which the OS lets a same-user process
@@ -48,7 +51,11 @@ fn main() -> ExitCode {
             let _ = io::Read::read_to_end(&mut io::stdin().lock(), &mut sink);
             ExitCode::SUCCESS
         }
-        (Some("display"), Some(title), None) => display_mode(title),
+        (Some("display"), Some(title), text) => display_mode(
+            title,
+            text.map(String::as_str),
+            args.get(4).map(String::as_str),
+        ),
         (Some("hostile"), Some(seed), None) => match seed.parse::<u64>() {
             Ok(seed) => hostile_mode(seed),
             Err(_) => usage(),
@@ -95,9 +102,10 @@ fn hostile_mode(seed: u64) -> ExitCode {
     }
 }
 
-/// After the first committed document, a `Display` that names `title` as
-/// its title, its text and its one link.
-fn display_mode(title: &str) -> ExitCode {
+/// After the first committed document, a `Display` with this `title`; its
+/// text is `text`, or `URL: title` without one, and its one link is `link`,
+/// or `title` without one.
+fn display_mode(title: &str, text: Option<&str>, link: Option<&str>) -> ExitCode {
     let (mut input, mut output) = (io::stdin().lock(), io::stdout().lock());
     match next_document(&mut input) {
         Ok(Some(_)) => {}
@@ -109,8 +117,10 @@ fn display_mode(title: &str) -> ExitCode {
     }
     let display = Msg::Display {
         title: title.as_bytes().to_vec(),
-        text: format!("URL: {title}").into_bytes(),
-        links: vec![title.as_bytes().to_vec()],
+        text: text
+            .map_or_else(|| format!("URL: {title}"), str::to_owned)
+            .into_bytes(),
+        links: vec![link.unwrap_or(title).as_bytes().to_vec()],
     };
     let sent = encode_framed(&display).is_some_and(|frame| {
         output
@@ -126,7 +136,7 @@ fn display_mode(title: &str) -> ExitCode {
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: clazel-adversary hostile SEED | display TITLE | escape|control ATTEMPT TARGET | idle"
+        "usage: clazel-adversary hostile SEED | display TITLE [TEXT [LINK]] | escape|control ATTEMPT TARGET | idle"
     );
     ExitCode::from(64)
 }
