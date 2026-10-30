@@ -6,8 +6,8 @@ use vstd::prelude::*;
 verus! {
 /// Canonical target, captured time and public share for the fixture scalar 5.
 pub open spec fn config() -> super::client_spec::Config {
-    super::client_spec::Config { host: seq![104u8], now: 7, random: Seq::new(32, |i: int| 1u8),
-        session_id: seq![7u8], public_key: Seq::new(32, |i: int| 5u8), send_sni: true }
+    super::client_spec::Config { host: crate::host::spec::Host::Dns(seq![104u8]), now: 7, random: Seq::new(32, |i: int| 1u8),
+        session_id: seq![7u8], public_key: Seq::new(32, |i: int| 5u8) }
 }
 /// Total first/last byte helpers for input-sensitive fixture functions.
 pub open spec fn first(s: Seq<u8>) -> u8 { if s.len() == 0 { 0 } else { s[0] } }
@@ -102,9 +102,9 @@ pub proof fn lemma_join_master_source()
 }
 /// Concrete RFC 8446 requirement: join host.
 pub proof fn lemma_join_host()
-    ensures attempt(config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == seq![104u8],
+    ensures attempt(config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == crate::host::spec::Host::Dns(seq![104u8]),
 {
-    assert(attempt(config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == seq![104u8]) by (compute_only);
+    assert(attempt(config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == crate::host::spec::Host::Dns(seq![104u8])) by (compute_only);
 }
 /// Concrete RFC 8446 requirement: join time.
 pub proof fn lemma_join_time()

@@ -184,6 +184,9 @@ pub proof fn lemma_feed_complete(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: super::bo
             framing: seq![], action: record_step(hash, s, framed.buffer).1 }
     }),
 {
+    // Both sides reach ServerHello processing through the same call; it
+    // need not be unfolded.
+    hide(super::client_spec::receive);
     let framed = crate::connection::framing_spec::feed_mode(framing, input, false);
     match crate::spec::read_record(framed.buffer, false) {
         crate::spec::Read::Done(frame, rest) => {

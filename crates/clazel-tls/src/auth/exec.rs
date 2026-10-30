@@ -25,8 +25,8 @@ fn initial_certificate_context_valid(context: &[u8]) -> (result: bool)
 
 /// The actual offers, target and traffic secrets supplied by the Hello layer.
 pub struct Config {
-    /// Canonical host identity passed unchanged to certificate validation.
-    pub host: Vec<u8>,
+    /// The typed target host, passed unchanged to certificate validation.
+    pub host: crate::host::exec::Host,
     /// Captured validity-check time.
     pub now: u64,
     /// Negotiated server handshake traffic secret.
@@ -235,7 +235,7 @@ impl Auth {
         requires crate::transcript::spec::wf(transcript@),
         ensures super::contract::start_ensures(config@, transcript@, start_view(out)),
     {
-        if config.host.is_empty() || config.host.len() > 253 || config.server_secret.len() != 32
+        if !config.host.is_ok() || config.server_secret.len() != 32
             || config.client_secret.len() != 32 || config.signatures.is_empty() || config.signatures.len() > 64
             || config.extensions.len() > 64 || !profile_extensions(config.extensions.as_slice())
         { return Err(crate::spec::INTERNAL_ERROR); }
@@ -299,7 +299,7 @@ impl Auth {
         if !empty_context { return self.fail(crate::spec::ILLEGAL_PARAMETER); }
         if empty_chain { return self.fail(crate::spec::DECODE_ERROR); }
         if !entries_offered { return self.fail(crate::spec::UNSUPPORTED_EXTENSION); }
-        let key = match verifier.chain(self.config.host.as_slice(), self.config.now, body) {
+        let key = match verifier.chain(&self.config.host, self.config.now, body) {
             Ok(key) => key,
             Err(error) => { let alert = certificate_alert(error); return self.fail(alert); },
         };
