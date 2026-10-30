@@ -1,4 +1,5 @@
-//! The renderer stub (phase-2.md item 2.15).
+//! The renderer (phase-2.md item 2.15; the document pipeline of phase-4.md
+//! item 4.13).
 //!
 //! The binary's first act is [`sandbox::enter`], before it reads a byte;
 //! then it reads frames from its socket (standard input, with the same
@@ -12,12 +13,12 @@
 //!   prints them, so the renderer needs no channel besides the one the
 //!   kernel also reads. It exits when the script is done; the host sees the
 //!   socket close.
-//! - Kind 0, a document: **a stub until item 4.13** (the document pipeline:
-//!   content type, encoding, the HTML parser and the text layout). It sends
-//!   one `Display` whose title is the committed URL and whose text and links
-//!   are empty, then waits for the next document (a same-origin navigation
-//!   commits into the same renderer). The socket closing while it waits is
-//!   the end of the tab, not an error.
+//! - Kind 0, a document: the document pipeline ([`pipeline`]: content
+//!   type, encoding, the HTML parser, the document base URL and the text
+//!   layout) gives one `Display`, made to fit one frame ([`pipeline::fit`]);
+//!   then the renderer waits for the next document (a same-origin
+//!   navigation commits into the same renderer). The socket closing while
+//!   it waits is the end of the tab, not an error.
 //!
 //! An `Error` while it waits (a navigation that failed, item 3.7) changes
 //! nothing: the renderer keeps its document and waits on.
@@ -25,6 +26,7 @@
 pub mod escape;
 pub mod hostile;
 pub mod launch;
+pub mod pipeline;
 pub mod sandbox;
 pub mod script;
 
@@ -137,10 +139,24 @@ fn send<W: Write>(w: &mut W, m: &Msg) -> Result<(), RunError> {
     Ok(())
 }
 
-/// Take committed documents until a script (kind 1) is run or the socket
-/// closes: a document (kind 0) is displayed, a script's operations are each
-/// sent and their replies read. Returns the number of operations run.
+/// The width [`run`] lays documents out at: the terminal width most hosts
+/// have when `$COLUMNS` says nothing.
+pub const DEFAULT_WIDTH: usize = 80;
+
+/// [`run_with_width`] at [`DEFAULT_WIDTH`].
 pub fn run<R: Read, W: Write>(r: &mut R, w: &mut W) -> Result<usize, RunError> {
+    run_with_width(r, w, DEFAULT_WIDTH)
+}
+
+/// Take committed documents until a script (kind 1) is run or the socket
+/// closes: a document (kind 0) goes through the pipeline and is displayed
+/// `width` columns wide (0: no wrapping), a script's operations are each
+/// sent and their replies read. Returns the number of operations run.
+pub fn run_with_width<R: Read, W: Write>(
+    r: &mut R,
+    w: &mut W,
+    width: usize,
+) -> Result<usize, RunError> {
     loop {
         let Some(doc) = next_document(r)? else {
             return Ok(0);
@@ -148,17 +164,10 @@ pub fn run<R: Read, W: Write>(r: &mut R, w: &mut W) -> Result<usize, RunError> {
         match doc.kind {
             1 => return run_script(r, w, &doc.body),
             0 => {
-                // Stub until item 4.13 (the renderer's document pipeline):
-                // the title is the committed URL, and there is no text and
-                // no link yet.
-                send(
-                    w,
-                    &Msg::Display {
-                        title: doc.url,
-                        text: Vec::new(),
-                        links: Vec::new(),
-                    },
-                )?;
+                let shown = pipeline::render(&doc.url, &doc.content_type, &doc.body, width);
+                // The body and its tree are gone; only the page is kept.
+                drop(doc);
+                send(w, &pipeline::fit(shown))?;
             }
             _ => return Err(RunError::Protocol("unknown document kind")),
         }
@@ -283,23 +292,23 @@ mod tests {
 
     #[test]
     fn a_document_is_displayed_and_the_renderer_waits_for_the_next() -> Result<(), RunError> {
-        // Stub until item 4.13: the title is the URL, no text, no links.
+        // Item 4.13: each document goes through the pipeline. No content
+        // type: the first is sniffed as HTML, the empty one as text.
         let mut input = vec![Msg::Error { code: 5 }];
-        input.extend(commit(0, b"<p>page</p>", 4));
+        input.extend(commit(0, b"<title>T</title><p>page <a href=b>x</a></p>", 4));
         input.extend(commit(0, b"", 4));
         let mut sent = Vec::new();
         assert_eq!(run(&mut Cursor::new(frames(&input)), &mut sent)?, 0);
-        let shown = Msg::Display {
-            title: b"https://a.example/".to_vec(),
-            text: Vec::new(),
-            links: Vec::new(),
-        };
         assert_eq!(
             sent,
             frames(&[
-                shown,
                 Msg::Display {
-                    title: b"https://a.example/".to_vec(),
+                    title: b"T".to_vec(),
+                    text: b"page x[1]".to_vec(),
+                    links: vec![b"https://a.example/b".to_vec()],
+                },
+                Msg::Display {
+                    title: Vec::new(),
                     text: Vec::new(),
                     links: Vec::new(),
                 }

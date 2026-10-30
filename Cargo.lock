@@ -229,9 +229,16 @@ dependencies = [
 name = "clazel-renderer"
 version = "0.0.0"
 dependencies = [
+ "clazel-dom",
+ "clazel-encoding",
+ "clazel-html",
  "clazel-ipc",
+ "clazel-mime",
  "clazel-sandbox",
  "clazel-sys",
+ "clazel-text",
+ "clazel-treebuilder",
+ "clazel-url",
 ]
 
 [[package]]
