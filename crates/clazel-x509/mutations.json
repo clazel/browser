@@ -2537,6 +2537,160 @@
         "lemma": "super::examples::lemma_malformed_policy_constraints_refuses()",
         "witness": "match optional_policy_constraints(seq![super::examples::extension_with(crate::policy_constraints::spec::policy_constraints_oid(), seq![0x30u8, 0x00])]) { Some(None) => true, _ => false }"
       }
+    },
+    {
+      "id": "nc-bound-constant-raised",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    4096\n}\n",
+      "replace": "    8192\n}\n",
+      "expect": "killed",
+      "reason": "design \u00a71.12: the bound is 4,096 comparisons; raised, limbo's pathological::nc-dos-3 shape (the subject against 4,097 subtrees) is within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(0), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-bound-constant-lowered",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    4096\n}\n",
+      "replace": "    4095\n}\n",
+      "expect": "killed",
+      "reason": "The bound is exactly 4,096: 63 entries and the subject against 64 subtrees (4,096) are within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_is_exact()",
+        "witness": "!super::contract::within_budget(super::contract::one_certificate(63), super::contract::sixty_four_subtrees())"
+      }
+    },
+    {
+      "id": "nc-bound-exclusive",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    spent <= comparison_bound()\n",
+      "replace": "    spent < comparison_bound()\n",
+      "expect": "killed",
+      "reason": "At exactly 4,096 comparisons the path is within the bound, not beyond it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_is_exact()",
+        "witness": "!super::contract::within_budget(super::contract::one_certificate(63), super::contract::sixty_four_subtrees())"
+      }
+    },
+    {
+      "id": "nc-bound-subject-not-counted",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    (entries + 1) * subtrees\n",
+      "replace": "    entries * subtrees\n",
+      "expect": "killed",
+      "reason": "The subject is checked against every subtree too (limbo pathological::nc-dos-3 has no SAN entry, only 4,097 subtrees and a large subject).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(0), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-bound-not-accumulated",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "        let total = spent + certificate_comparisons(state, certificate);\n",
+      "replace": "        let total = certificate_comparisons(state, certificate);\n",
+      "expect": "killed",
+      "reason": "The bound is per path, not per certificate: two certificates of 2,080 comparisons each are beyond it together.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_accumulates_over_certificates()",
+        "witness": "super::contract::within_budget(seq![super::examples::certificate(super::contract::many_entries(31), None), super::examples::certificate(super::contract::many_entries(31), None)], seq![super::examples::constraints(Some(super::contract::many_subtrees(65)), None)])"
+      }
+    },
+    {
+      "id": "nc-bound-check-dropped",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "        &&& within_comparison_bound(total)\n",
+      "replace": "        &&& true\n",
+      "expect": "killed",
+      "reason": "Without the check no path is beyond the bound: limbo's pathological::nc-dos-1 shape (2,048 entries against 4,097 subtrees) would be within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(2048), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-bound-last-set-only",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    if state.len() == 0 { 0 } else { subtrees_in(state.last()) + subtree_count(state.drop_last()) }\n",
+      "replace": "    if state.len() == 0 { 0 } else { subtrees_in(state.last()) }\n",
+      "expect": "killed",
+      "reason": "Every set of the state costs comparisons: two sets of 40 subtrees are 80 per entry.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_counts_every_set()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(63), seq![super::examples::constraints(Some(super::contract::many_subtrees(40)), None), super::examples::constraints(Some(super::contract::many_subtrees(40)), None)])"
+      }
+    },
+    {
+      "id": "nc-bound-excluded-subtrees-free",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "        + (match value.excluded_subtrees { Some(items) => items.len(), None => 0 })\n",
+      "replace": "        + 0\n",
+      "expect": "killed",
+      "reason": "Excluded subtrees cost comparisons like permitted ones (limbo nc-dos-3: 2,048 permitted and 2,049 excluded).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(0), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-contract-drops-bound",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    out == (names_constrained(path, initial) && within_budget(path, initial))\n",
+      "replace": "    out == names_constrained(path, initial)\n",
+      "expect": "killed",
+      "reason": "The executable result is the spec's and also within the bound: without it, a path of 64 entries against 64 subtrees (4,160 comparisons), which the spec accepts, is promised accepted.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_is_exact()",
+        "witness": "super::contract::names_constrained_ensures(super::contract::one_certificate(64), super::contract::sixty_four_subtrees(), true)"
+      }
+    },
+    {
+      "id": "nc-contract-bound-only",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    out == (names_constrained(path, initial) && within_budget(path, initial))\n",
+      "replace": "    out == within_budget(path, initial)\n",
+      "expect": "killed",
+      "reason": "The bound only adds a refusal: a path the spec refuses must not be promised accepted just because it is within the bound.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_never_accepts_what_the_spec_refuses()",
+        "witness": "super::contract::names_constrained_ensures(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], true)"
+      }
+    },
+    {
+      "id": "nc-contract-bound-or-spec",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    out == (names_constrained(path, initial) && within_budget(path, initial))\n",
+      "replace": "    out == (names_constrained(path, initial) || within_budget(path, initial))\n",
+      "expect": "killed",
+      "reason": "Acceptance needs the spec's acceptance and the bound, not either.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_never_accepts_what_the_spec_refuses()",
+        "witness": "super::contract::names_constrained_ensures(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], true)"
+      }
     }
   ]
 }
