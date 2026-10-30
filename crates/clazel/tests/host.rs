@@ -1,8 +1,11 @@
 //! The host shell with stub renderers (`/bin/sh` scripts that speak raw
 //! frames) and with the real `clazel-renderer`. Every test spawns processes,
 //! so none runs under Miri.
+#![cfg(unix)]
 
 use std::fs;
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -68,14 +71,62 @@ fn has(host: &Host, needle: &str) -> bool {
     host.log.iter().any(|l| l.contains(needle))
 }
 
+/// Pump the host until its log has a line with `needle`.
+fn wait_log(host: &mut Host, needle: &str) {
+    let end = Instant::now()
+        .checked_add(LONG)
+        .unwrap_or_else(Instant::now);
+    while !has(host, needle) {
+        assert!(
+            Instant::now() < end,
+            "timed out waiting for {needle:?}; host log: {:#?}",
+            host.log
+        );
+        host.pump(Duration::from_millis(20));
+    }
+}
+
+/// A server on loopback that answers every connection with a page whose body
+/// is `body`, and closes it.
+fn serve(body: &'static str) -> SocketAddr {
+    // A failed bind gives an address nothing listens on: the test times out.
+    let dead = SocketAddr::from(([127, 0, 0, 1], 9));
+    let Ok(listener) = TcpListener::bind("127.0.0.1:0") else {
+        return dead;
+    };
+    let addr = listener.local_addr().unwrap_or(dead);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            std::thread::spawn(move || {
+                let mut request = [0u8; 4096];
+                let _ = stream.read(&mut request);
+                let page = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(page.as_bytes());
+            });
+        }
+    });
+    addr
+}
+
 /// After the renderer of tab 0 is gone from the kernel, a navigation of that
-/// tab does nothing; if the kernel still had it, it would spawn a renderer.
+/// tab does nothing; if the kernel still had it, it would ask for a
+/// connection.
 fn kernel_forgot_tab_zero(host: &mut Host) {
-    host.navigate_tab(0, "https://other.example/", "");
+    host.log.clear();
+    host.navigate_tab(0, "http://other.example/");
     assert_eq!(
         host.live(),
         0,
         "the kernel still has renderer 0: {:#?}",
+        host.log
+    );
+    assert!(
+        !has(host, "network: connection"),
+        "the kernel still has tab 0: {:#?}",
         host.log
     );
 }
@@ -157,19 +208,21 @@ fn the_renderer_id_comes_from_the_socket_and_replies_go_to_the_sender() {
     host.open_tab("https://b.example/", "");
     assert_eq!(host.live(), 2);
     let got = wait_for(
-        || Some(decode_all(&fs::read(received(0)).ok()?)).filter(|m| m.len() >= 2),
+        || Some(decode_all(&fs::read(received(0)).ok()?)).filter(|m| m.len() >= 3),
         &mut host,
     );
+    // Its document (`Commit`, no `Body` for the empty script, `BodyEnd`),
+    // then the answer.
     assert!(
-        matches!(got.as_slice(), [Msg::Commit { .. }, Msg::CookieValue { cookie_string }] if cookie_string.is_empty()),
+        matches!(got.as_slice(), [Msg::Commit { .. }, Msg::BodyEnd, Msg::CookieValue { cookie_string }] if cookie_string.is_empty()),
         "{got:?}"
     );
-    // Renderer 1 sent nothing and got only its own Commit.
+    // Renderer 1 sent nothing and got only its own document.
     wait_for(|| received(1).exists().then_some(()), &mut host);
     host.pump(Duration::from_millis(200));
     let other = decode_all(&fs::read(received(1)).unwrap_or_default());
     assert!(
-        matches!(other.as_slice(), [Msg::Commit { .. }]),
+        matches!(other.as_slice(), [Msg::Commit { .. }, Msg::BodyEnd]),
         "{other:?}"
     );
 }
@@ -178,23 +231,31 @@ fn the_renderer_id_comes_from_the_socket_and_replies_go_to_the_sender() {
 #[cfg_attr(miri, ignore = "spawns processes")]
 fn a_cross_origin_navigation_is_kill_spawn_commit_and_a_same_origin_one_is_a_commit() {
     let mut host = stub("exec cat > /dev/null".to_owned());
-    host.open_tab("https://a.example/", "");
-    host.navigate_tab(0, "https://a.example/other", "");
+    host.route = Some(serve("cookie-get"));
+    host.open_tab("http://a.example/", "");
+    host.navigate_tab(0, "http://a.example/other");
+    wait_log(&mut host, "renderer 0 <- commit \"http://a.example/other\"");
     assert_eq!(host.live(), 1);
     assert!(!has(&host, "killed"), "{:#?}", host.log);
     host.log.clear();
-    host.navigate_tab(0, "https://b.example/", "cookie-get");
+    host.navigate_tab(0, "http://b.example/");
+    wait_log(&mut host, "renderer 1 <- commit \"http://b.example/\"");
     assert_eq!(host.live(), 1);
-    let order: Vec<&str> = host.log.iter().map(String::as_str).collect();
-    // The kernel asks for the page, the stand-in network answers with the
-    // script, and the answer commits: the old renderer is killed and a new one
-    // gets the Commit.
+    // The kernel asks for a connection, writes the request on it, closes it
+    // when the response is complete; then the old renderer is killed and a
+    // new one gets the Commit.
+    let position = |needle: &str| host.log.iter().position(|l| l.contains(needle));
+    let order = [
+        position("network: connection 1 to b.example:80"),
+        position("network: connection 1 <- "),
+        position("network: connection 1 closed"),
+        position("renderer 0 exited: killed by the kernel"),
+        position("renderer 1 <- commit \"http://b.example/\""),
+    ];
     assert!(
-        matches!(order.as_slice(),
-            [net, kill, commit] if net.starts_with("network (stand-in): tab 0 <- \"https://b.example/\"")
-                && kill.starts_with("renderer 0 exited: killed by the kernel")
-                && commit.starts_with("renderer 1 <- commit \"https://b.example/\"")),
-        "{order:#?}"
+        order.iter().all(Option::is_some) && order.windows(2).all(|w| matches!(w, [a, b] if a < b)),
+        "{order:?} in {:#?}",
+        host.log
     );
 }
 

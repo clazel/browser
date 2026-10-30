@@ -21,6 +21,12 @@
 #             the proof jobs, and does nothing else. It checks out no code.
 #   base      `verify --part base`: static checks, rustfmt, clippy and tests
 #             over the whole workspace.
+#   base-windows the base part on Windows x86-64: the AppContainer sandbox
+#             (renderer started confined by the host, escape tests), the
+#             demo and the host tests, and the Windows-only code under clippy.
+#             No setup.sh (it supports Linux and macOS): the base part needs
+#             only the pinned Rust toolchain. Proofs, harnesses and Miri are
+#             not repeated, as on macOS.
 #   miri      `verify --part miri`: the workspace's tests under Miri.
 #   base-macos the base part on macOS arm64: the Seatbelt sandbox, the demo,
 #             the host and escape tests, and the macOS-only code under
@@ -163,6 +169,25 @@ jobs:
       - name: Verify (Miri, clazel-sys)
         run: cargo xtask verify --part miri clazel-sys
 
+  base-windows:
+    name: Verify (base, Windows)
+    runs-on: windows-2025
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # rustup reads rust-toolchain.toml and installs the pinned toolchain.
+      - name: Install Rust
+        run: rustup toolchain install
+      # No AppArmor step and no setup.sh. The renderer's sandbox is an
+      # AppContainer that the host creates the process in; an unprivileged
+      # user can do that. The tests grant the container read and execute on
+      # the built binaries with icacls, and hash with certutil, both part of
+      # Windows.
+      - name: Verify (base)
+        run: cargo xtask verify --part base
+
   miri:
     name: Verify (Miri)
     runs-on: ubuntu-24.04
@@ -244,7 +269,7 @@ jobs:
 
   assemble:
     name: Full verification
-    needs: [crates, approval, base, base-macos, miri, crate]
+    needs: [crates, approval, base, base-macos, base-windows, miri, crate]
     # Runs even when a job it needs failed or was skipped, and fails then:
     # a skipped job is not a pass, and a skipped required check would count
     # as one. Only a cancelled run is not judged.
@@ -285,7 +310,14 @@ jobs:
   table:
     name: Update README table
     needs: assemble
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # On a push to main, after a passing full verification. Spelled with a
+    # status function: without one GitHub also requires every job upstream
+    # of `assemble` to have succeeded, and `approval` is skipped on every
+    # push, so the table was never written after the approval gate was
+    # added (last written for 872c1e8).
+    if: >-
+      ${{ !cancelled() && needs.assemble.result == 'success' &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

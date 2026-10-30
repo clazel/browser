@@ -1,168 +1,34 @@
-//! Hand-written checks of item 3.7: a navigation is a fetch. The kernel is
-//! driven by `step_exec` with the real URL functions and a test fetch (the
-//! kernel takes the fetch as a parameter; the shipped one is the stand-in
-//! `StubFetch`, which the other tests use through `step_real`). These cite no
-//! official suite; the proofs (`exec::step::fetched_exec`) are what say the
-//! kernel does these things for every input.
+//! Hand-written checks of item 3.7: a navigation is a fetch the kernel steps
+//! itself. The kernel is driven by `step_real`, with the network played by the
+//! test: it answers `Connect` with `Connected`, a `Send` with a response, and
+//! reports closes and errors. These cite no official suite; the proofs
+//! (`exec::step::{begin_navigation_exec, net_exec, carry_out_exec}`) are what
+//! say the kernel does these things for every input.
 
-use clazel_cookie::matching::exec::CanonicalHostName;
-use clazel_cookie::storage::exec::{HttpRequestRecord, RequestContextRecord, RequestUrlRecord};
-use clazel_ipc::message::codec::{Msg, decode_framed, encode_framed};
-use clazel_kernel::exec::fetch::{
-    FetchFnsExec, FetchResultRecord, FetchRunRecord, HttpStoreRecord, NetOutcomeRecord,
-};
-use clazel_kernel::exec::real_urls::RealUrls;
-use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
-use clazel_kernel::exec::step::step_exec;
-use clazel_kernel::exec::urls::UrlFnsExec;
-use clazel_origin::exec::ParsedOrigin;
+mod support;
 
-fn code_points(s: &str) -> Vec<u32> {
-    s.chars().map(u32::from).collect()
+use clazel_fetch::transducer::types::InputBuf;
+use clazel_ipc::message::codec::Msg;
+use clazel_kernel::exec::records::EventRecord;
+use support::{Kernel, Out, code_points};
+
+/// An HTTP response with `body`, as a server that closes after it would send.
+fn response(body: &[u8]) -> Vec<u8> {
+    response_with("X-Test: 1", body)
 }
 
-/// What a test fetch gives for the URL it is asked for.
-enum Plan {
-    /// A response at the URL asked for, with the octets as the body.
-    Echo,
-    /// The fetch fails.
-    Fail,
-    /// A redirect: the response is at this URL.
-    RedirectTo(&'static str),
-    /// A response at this exact string of code points.
-    At(Vec<u32>),
-    /// The response sets this cookie, as an answer to a request for the host
-    /// (an HTTPS request at `/`).
-    SetsCookie(&'static str, &'static str),
-}
-
-struct TestFetch(Plan);
-
-/// The request URL and HTTP context of an HTTPS request for `host`.
-fn request_for(host: &str) -> (RequestUrlRecord, RequestContextRecord) {
-    let url = code_points(&format!("https://{host}/"));
-    let origin = RealUrls.origin_of(&url).unwrap_or(ParsedOrigin::Opaque(0));
-    let other = RealUrls.origin_of(&url).unwrap_or(ParsedOrigin::Opaque(0));
-    (
-        RequestUrlRecord {
-            scheme: b"https".to_vec(),
-            host: Some(CanonicalHostName {
-                name: host.as_bytes().to_vec(),
-                is_ip_address: false,
-            }),
-            path: b"/".to_vec(),
-        },
-        RequestContextRecord::Http(HttpRequestRecord {
-            url_origin: origin,
-            site_for_cookies: Some(other),
-            is_reload_navigation: false,
-            reloaded_document_was_same_site: false,
-            navigates_top_level_traversable: true,
-            method_is_safe: true,
-            target_is_active_or_top_level: true,
-        }),
-    )
-}
-
-impl FetchFnsExec for TestFetch {
-    fn run(&self, url: &[u32], net: &[u8]) -> FetchRunRecord {
-        let done = |u: Vec<u32>| FetchResultRecord::Done {
-            url: u,
-            body: net.to_vec(),
-        };
-        match &self.0 {
-            Plan::Echo => FetchRunRecord {
-                result: done(url.to_vec()),
-                stores: Vec::new(),
-            },
-            Plan::Fail => FetchRunRecord {
-                result: FetchResultRecord::Failed,
-                stores: Vec::new(),
-            },
-            Plan::RedirectTo(target) => FetchRunRecord {
-                result: done(code_points(target)),
-                stores: Vec::new(),
-            },
-            Plan::At(u) => FetchRunRecord {
-                result: done(u.clone()),
-                stores: Vec::new(),
-            },
-            Plan::SetsCookie(host, line) => {
-                let (u, ctx) = request_for(host);
-                FetchRunRecord {
-                    result: done(url.to_vec()),
-                    stores: vec![HttpStoreRecord {
-                        line: line.as_bytes().to_vec(),
-                        url: u,
-                        ctx,
-                    }],
-                }
-            }
-        }
+/// The document a fetch of `url` commits: kind 0, the responses here carry
+/// no `Content-Type`, and `body`.
+fn commit(url: &str, body: &[u8]) -> support::Doc {
+    support::Doc {
+        url: url.as_bytes().to_vec(),
+        content_type: Vec::new(),
+        kind: 0,
+        body: body.to_vec(),
     }
 }
 
-/// What the kernel sent, decoded.
-#[derive(Debug, PartialEq, Eq)]
-enum Out {
-    To(u64, Msg),
-    Garbled(u64),
-    Spawn(u64),
-    Kill(u64),
-    Fetch(u64, Vec<u32>),
-}
-
-struct Rig {
-    state: Option<StateRecord>,
-    fetch: TestFetch,
-}
-
-impl Rig {
-    fn new(plan: Plan) -> Rig {
-        Rig {
-            state: Some(init_record()),
-            fetch: TestFetch(plan),
-        }
-    }
-
-    fn event(&mut self, e: &EventRecord) -> Vec<Out> {
-        let Some(s) = self.state.take() else {
-            return Vec::new();
-        };
-        let (next, outputs) = step_exec(&RealUrls, &self.fetch, s, e);
-        self.state = Some(next);
-        outputs
-            .into_iter()
-            .map(|o| match o {
-                OutputRecord::ToRenderer { id, bytes } => match decode_framed(&bytes) {
-                    Some(m) => Out::To(id, m),
-                    None => Out::Garbled(id),
-                },
-                OutputRecord::Spawn { id } => Out::Spawn(id),
-                OutputRecord::Kill { id } => Out::Kill(id),
-                OutputRecord::Fetch { tab, url } => Out::Fetch(tab, url),
-            })
-            .collect()
-    }
-
-    fn open(&mut self, url: &str) -> u64 {
-        let out = self.event(&EventRecord::OpenTab {
-            url: code_points(url),
-            script: Vec::new(),
-        });
-        let id = match out.first() {
-            Some(Out::Spawn(id)) => Some(*id),
-            _ => None,
-        };
-        assert!(id.is_some(), "OpenTab of {url}: {out:?}");
-        id.unwrap_or(0)
-    }
-
-    fn send(&mut self, id: u64, m: &Msg) -> Vec<Out> {
-        let bytes = encode_framed(m).unwrap_or_default();
-        self.event(&EventRecord::FromRenderer { id, bytes })
-    }
-
+impl Kernel {
     fn navigate(&mut self, tab: u64, url: &str) -> Vec<Out> {
         self.event(&EventRecord::NavigateTab {
             tab,
@@ -170,131 +36,28 @@ impl Rig {
         })
     }
 
-    fn fetched(&mut self, tab: u64, url: &str, net: &[u8]) -> Vec<Out> {
-        self.event(&EventRecord::Fetched {
-            tab,
-            outcome: NetOutcomeRecord {
-                url: code_points(url),
-                net: net.to_vec(),
-            },
-        })
+    fn net(&mut self, conn: u64, input: InputBuf) -> Vec<Out> {
+        self.event(&EventRecord::Net { conn, input })
+    }
+
+    fn jar_len(&self) -> usize {
+        self.state.as_ref().map_or(0, |s| s.jar.len())
     }
 }
 
-fn commit(url: &str, script: &[u8]) -> Msg {
-    Msg::Commit {
-        url: url.as_bytes().to_vec(),
-        script: script.to_vec(),
-    }
+/// A response with an extra header line.
+fn response_with(header: &str, body: &[u8]) -> Vec<u8> {
+    let mut r = format!(
+        "HTTP/1.1 200 OK\r\n{header}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    r.extend_from_slice(body);
+    r
 }
 
-#[test]
-fn a_navigation_only_asks_for_the_fetch_and_the_fetch_commits_the_body() {
-    let mut rig = Rig::new(Plan::Echo);
-    let id = rig.open("https://example.test/");
-    let out = rig.navigate(id, "https://example.test/next");
-    assert_eq!(
-        out,
-        vec![Out::Fetch(id, code_points("https://example.test/next"))]
-    );
-    // Nothing is committed yet: the renderer is still at its old document.
-    let out = rig.fetched(id, "https://example.test/next", b"page body");
-    assert_eq!(
-        out,
-        vec![Out::To(
-            id,
-            commit("https://example.test/next", b"page body")
-        )]
-    );
-}
-
-#[test]
-fn a_fetched_event_is_ignored_unless_it_answers_the_navigation_in_flight() {
-    let mut rig = Rig::new(Plan::Echo);
-    let id = rig.open("https://example.test/");
-    // Unsolicited: the renderer is not navigating.
-    assert!(rig.fetched(id, "https://example.test/x", b"").is_empty());
-    // A tab that is not open.
-    assert!(rig.fetched(99, "https://example.test/x", b"").is_empty());
-    // A navigation, then another before the first's answer arrives: the first
-    // answer is for a URL the tab no longer navigates to.
-    rig.navigate(id, "https://example.test/first");
-    rig.navigate(id, "https://example.test/second");
-    assert!(
-        rig.fetched(id, "https://example.test/first", b"old")
-            .is_empty()
-    );
-    let out = rig.fetched(id, "https://example.test/second", b"new");
-    assert_eq!(
-        out,
-        vec![Out::To(id, commit("https://example.test/second", b"new"))]
-    );
-    // The navigation is over: its answer, again, is ignored.
-    assert!(
-        rig.fetched(id, "https://example.test/second", b"new")
-            .is_empty()
-    );
-}
-
-#[test]
-fn a_fetched_event_for_a_tab_that_closed_is_ignored() {
-    let mut rig = Rig::new(Plan::Echo);
-    let id = rig.open("https://example.test/");
-    rig.navigate(id, "https://example.test/next");
-    rig.event(&EventRecord::RendererExited { id });
-    assert!(
-        rig.fetched(id, "https://example.test/next", b"x")
-            .is_empty()
-    );
-}
-
-#[test]
-fn a_failed_fetch_gives_the_renderer_an_error_and_it_stays() {
-    let mut rig = Rig::new(Plan::Fail);
-    let id = rig.open("https://example.test/");
-    rig.navigate(id, "https://example.test/next");
-    let out = rig.fetched(id, "https://example.test/next", b"");
-    assert_eq!(out, vec![Out::To(id, Msg::Error { code: 5 })]);
-    // The renderer is still the tab's, and still on its old document.
-    assert!(rig.fetched(id, "https://example.test/next", b"").is_empty());
-    let out = rig.send(id, &Msg::CookieGet);
-    assert!(matches!(
-        out.as_slice(),
-        [Out::To(to, Msg::CookieValue { .. })] if *to == id
-    ));
-}
-
-#[test]
-fn a_redirect_to_another_origin_replaces_the_renderer_with_the_final_url() {
-    let mut rig = Rig::new(Plan::RedirectTo("https://other.test/landed"));
-    let id = rig.open("https://example.test/");
-    rig.navigate(id, "https://example.test/start");
-    let out = rig.fetched(id, "https://example.test/start", b"landing page");
-    let ok = matches!(
-        out.as_slice(),
-        [
-            Out::Kill(old),
-            Out::Spawn(new),
-            Out::To(to, Msg::Commit { url, script }),
-        ] if *old == id
-            && new == to
-            && *new != id
-            && url.as_slice() == b"https://other.test/landed"
-            && script.as_slice() == b"landing page"
-    );
-    assert!(ok, "{out:?}");
-}
-
-#[test]
-fn a_final_url_the_kernel_cannot_lock_is_an_error() {
-    // Not a string of scalar values (a lone surrogate), and not a URL.
-    for bad in [vec![0xD800u32], code_points("not a url"), Vec::new()] {
-        let mut rig = Rig::new(Plan::At(bad));
-        let id = rig.open("https://example.test/");
-        rig.navigate(id, "https://example.test/next");
-        let out = rig.fetched(id, "https://example.test/next", b"");
-        assert_eq!(out, vec![Out::To(id, Msg::Error { code: 3 })]);
-    }
+fn connect(conn: u64, host: &str) -> Out {
+    Out::Connect(conn, host.as_bytes().to_vec(), 80, false)
 }
 
 fn cookie_string(out: &[Out], id: u64) -> Option<&[u8]> {
@@ -306,47 +69,173 @@ fn cookie_string(out: &[Out], id: u64) -> Option<&[u8]> {
     }
 }
 
+fn open(k: &mut Kernel, url: &str) -> u64 {
+    let (id, _) = k.open_tab(url, "");
+    assert!(id.is_some(), "{url} spawned no renderer");
+    id.unwrap_or(0)
+}
+
 #[test]
-fn a_response_sets_a_cookie_through_the_kernel_jar() {
-    let mut rig = Rig::new(Plan::SetsCookie("example.test", "from=http"));
-    rig.event(&EventRecord::Tick {
-        time: 13_000_000_000,
-    });
-    let id = rig.open("https://example.test/");
-    let other = rig.open("https://other.test/");
-    rig.navigate(id, "https://example.test/next");
-    // Nothing is stored until the answer arrives.
-    assert_eq!(
-        cookie_string(&rig.send(id, &Msg::CookieGet), id),
-        Some(&b""[..])
+fn a_navigation_opens_a_connection_and_the_response_commits_its_body() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    let out = k.navigate(id, "http://example.test/next");
+    assert_eq!(out, vec![connect(0, "example.test")]);
+    // Nothing is committed yet: the renderer is still at its old document.
+    let out = k.net(0, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::Send(0, req)] if req.starts_with(b"GET /next HTTP/1.1\r\n")
     );
-    rig.fetched(id, "https://example.test/next", b"");
+    assert!(ok, "{out:?}");
+    let out = k.net(0, InputBuf::Bytes(response(b"page body")));
     assert_eq!(
-        cookie_string(&rig.send(id, &Msg::CookieGet), id),
-        Some(&b"from=http"[..])
-    );
-    // Another root's document does not see it.
-    assert_eq!(
-        cookie_string(&rig.send(other, &Msg::CookieGet), other),
-        Some(&b""[..])
+        out,
+        vec![
+            Out::Close(0),
+            Out::Commit(id, commit("http://example.test/next", b"page body"))
+        ]
     );
 }
 
 #[test]
-fn a_cookie_for_a_stale_answer_is_not_stored() {
-    let mut rig = Rig::new(Plan::SetsCookie("example.test", "from=http"));
-    rig.event(&EventRecord::Tick {
-        time: 13_000_000_000,
-    });
-    let id = rig.open("https://example.test/");
-    rig.navigate(id, "https://example.test/first");
-    rig.navigate(id, "https://example.test/second");
-    assert!(
-        rig.fetched(id, "https://example.test/first", b"")
-            .is_empty()
+fn a_net_event_is_ignored_unless_it_names_an_open_connection_of_a_navigating_tab() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    // No connection at all.
+    assert!(k.net(0, InputBuf::Connected).is_empty());
+    assert!(k.net(99, InputBuf::Bytes(response(b"x"))).is_empty());
+    // A navigation, then another before the first's answer arrives: the
+    // first connection is closed, and its answer is for a connection that no
+    // longer exists.
+    assert_eq!(
+        k.navigate(id, "http://example.test/first"),
+        vec![connect(0, "example.test")]
     );
     assert_eq!(
-        cookie_string(&rig.send(id, &Msg::CookieGet), id),
+        k.navigate(id, "http://example.test/second"),
+        vec![Out::Close(0), connect(1, "example.test")]
+    );
+    assert!(k.net(0, InputBuf::Bytes(response(b"old"))).is_empty());
+    k.net(1, InputBuf::Connected);
+    let out = k.net(1, InputBuf::Bytes(response(b"new")));
+    assert_eq!(
+        out,
+        vec![
+            Out::Close(1),
+            Out::Commit(id, commit("http://example.test/second", b"new"))
+        ]
+    );
+    // The navigation is over: its connection is gone, and its answer, again,
+    // is ignored.
+    assert!(k.net(1, InputBuf::Bytes(response(b"new"))).is_empty());
+}
+
+#[test]
+fn a_tab_that_closed_takes_its_connections_with_it() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    k.navigate(id, "http://example.test/next");
+    let out = k.event(&EventRecord::RendererExited { id });
+    assert_eq!(out, vec![Out::Close(0)]);
+    assert!(k.net(0, InputBuf::Connected).is_empty());
+    assert!(k.net(0, InputBuf::Bytes(response(b"x"))).is_empty());
+}
+
+#[test]
+fn a_renderer_that_is_killed_takes_its_connections_with_it() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    k.navigate(id, "http://example.test/next");
+    let out = k.event(&EventRecord::FromRenderer {
+        id,
+        bytes: vec![0xFF, 0xFF, 0xFF],
+    });
+    assert_eq!(out, vec![Out::Kill(id), Out::Close(0)]);
+}
+
+#[test]
+fn a_failed_connection_gives_the_renderer_an_error_and_it_stays() {
+    for failure in [InputBuf::Error, InputBuf::Closed] {
+        let mut k = Kernel::new();
+        let id = open(&mut k, "http://example.test/");
+        k.navigate(id, "http://example.test/next");
+        let out = k.net(0, failure);
+        assert_eq!(out, vec![Out::To(id, Msg::Error { code: 5 })]);
+        // The connection is gone with the navigation.
+        assert!(k.net(0, InputBuf::Connected).is_empty());
+        // The renderer is still the tab's, and still on its old document.
+        let out = k.send(id, &Msg::CookieGet);
+        assert!(matches!(
+            out.as_slice(),
+            [Out::To(to, Msg::CookieValue { .. })] if *to == id
+        ));
+    }
+}
+
+#[test]
+fn a_url_the_transducer_does_not_fetch_fails_at_once() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    // Userinfo is not fetched (`clazel-fetch`): no connection is opened.
+    let out = k.navigate(id, "http://user:pw@example.test/");
+    assert_eq!(out, vec![Out::To(id, Msg::Error { code: 5 })]);
+}
+
+#[test]
+fn a_redirect_to_another_origin_replaces_the_renderer_with_the_final_url() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    k.navigate(id, "http://example.test/start");
+    k.net(0, InputBuf::Connected);
+    let redirect = b"HTTP/1.1 302 Found\r\nLocation: http://other.test/landed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
+    // The first connection is closed and the next request needs its own.
+    let out = k.net(0, InputBuf::Bytes(redirect));
+    assert_eq!(out, vec![Out::Close(0), connect(1, "other.test")]);
+    k.net(1, InputBuf::Connected);
+    let out = k.net(1, InputBuf::Bytes(response(b"landing page")));
+    let ok = matches!(
+        out.as_slice(),
+        [
+            Out::Close(1),
+            Out::Kill(old),
+            Out::Spawn(new),
+            Out::Commit(to, support::Doc { url, body, kind: 0, .. }),
+        ] if *old == id
+            && new == to
+            && *new != id
+            && url.as_slice() == b"http://other.test/landed"
+            && body.as_slice() == b"landing page"
+    );
+    assert!(ok, "{out:?}");
+}
+
+#[test]
+fn a_response_sets_a_cookie_through_the_kernel_jar() {
+    let mut k = Kernel::new();
+    k.event(&EventRecord::Tick {
+        time: 13_000_000_000,
+    });
+    let id = open(&mut k, "http://example.test/");
+    let other = open(&mut k, "http://other.test/");
+    k.navigate(id, "http://example.test/next");
+    // Nothing is stored until the answer arrives.
+    assert_eq!(
+        cookie_string(&k.send(id, &Msg::CookieGet), id),
+        Some(&b""[..])
+    );
+    k.net(0, InputBuf::Connected);
+    k.net(
+        0,
+        InputBuf::Bytes(response_with("Set-Cookie: from=http", b"")),
+    );
+    assert_eq!(
+        cookie_string(&k.send(id, &Msg::CookieGet), id),
+        Some(&b"from=http"[..])
+    );
+    // Another root's document does not see it.
+    assert_eq!(
+        cookie_string(&k.send(other, &Msg::CookieGet), other),
         Some(&b""[..])
     );
 }
@@ -354,15 +243,193 @@ fn a_cookie_for_a_stale_answer_is_not_stored() {
 #[test]
 fn a_cookie_for_a_public_suffix_host_is_not_stored() {
     // `test` is a public suffix under the list's default rule.
-    let mut rig = Rig::new(Plan::SetsCookie("test", "from=http"));
-    rig.event(&EventRecord::Tick {
+    let mut k = Kernel::new();
+    k.event(&EventRecord::Tick {
         time: 13_000_000_000,
     });
-    let id = rig.open("https://example.test/");
-    rig.navigate(id, "https://example.test/next");
-    rig.fetched(id, "https://example.test/next", b"");
-    assert_eq!(
-        cookie_string(&rig.send(id, &Msg::CookieGet), id),
-        Some(&b""[..])
+    let id = open(&mut k, "http://example.test/");
+    assert_eq!(k.navigate(id, "http://test/"), vec![connect(0, "test")]);
+    k.net(0, InputBuf::Connected);
+    k.net(
+        0,
+        InputBuf::Bytes(response_with("Set-Cookie: from=http", b"")),
     );
+    assert_eq!(k.jar_len(), 0);
+}
+
+#[test]
+fn the_request_carries_the_cookies_of_the_jar_for_its_url() {
+    let mut k = Kernel::new();
+    k.event(&EventRecord::Tick {
+        time: 13_000_000_000,
+    });
+    let id = open(&mut k, "http://example.test/");
+    k.send(
+        id,
+        &Msg::CookieSet {
+            cookie_string: b"a=b".to_vec(),
+        },
+    );
+    k.navigate(id, "http://example.test/next");
+    let out = k.net(0, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::Send(0, req)] if req.windows(11).any(|w| w == b"Cookie: a=b")
+    );
+    assert!(ok, "{out:?}");
+    // Another site's request does not carry it.
+    let other = open(&mut k, "http://other.test/");
+    k.navigate(other, "http://other.test/next");
+    let out = k.net(1, InputBuf::Connected);
+    let ok = matches!(
+        out.as_slice(),
+        [Out::Send(1, req)] if !req.windows(6).any(|w| w == b"Cookie")
+    );
+    assert!(ok, "{out:?}");
+}
+
+#[test]
+fn each_connection_belongs_to_the_tab_that_opened_it() {
+    let mut k = Kernel::new();
+    let a = open(&mut k, "http://a.test/");
+    let b = open(&mut k, "http://b.test/");
+    assert_eq!(k.navigate(a, "http://a.test/x"), vec![connect(0, "a.test")]);
+    assert_eq!(k.navigate(b, "http://b.test/y"), vec![connect(1, "b.test")]);
+    k.net(0, InputBuf::Connected);
+    k.net(1, InputBuf::Connected);
+    // B's answer commits in B and leaves A's connection alone.
+    let out = k.net(1, InputBuf::Bytes(response(b"for b")));
+    assert_eq!(
+        out,
+        vec![
+            Out::Close(1),
+            Out::Commit(b, commit("http://b.test/y", b"for b"))
+        ]
+    );
+    let out = k.net(0, InputBuf::Bytes(response(b"for a")));
+    assert_eq!(
+        out,
+        vec![
+            Out::Close(0),
+            Out::Commit(a, commit("http://a.test/x", b"for a"))
+        ]
+    );
+}
+
+// ---------------------------------------------------------------------
+// Phase 4 item 4.12: a new tab fetches, a document's body arrives in
+// `Body` frames with its content type, and a `Display` is shown under the
+// kernel's URL.
+// ---------------------------------------------------------------------
+
+/// The user opens a tab at `url` without a script: the outputs.
+fn open_fetching(k: &mut Kernel, url: &str) -> Vec<Out> {
+    k.event(&EventRecord::OpenTab {
+        url: code_points(url),
+        script: None,
+    })
+}
+
+#[test]
+fn a_tab_opened_without_a_script_fetches_and_commits_the_document() {
+    let mut k = Kernel::new();
+    let out = open_fetching(&mut k, "http://example.test/page");
+    assert_eq!(out, vec![Out::Spawn(0), connect(0, "example.test")]);
+    k.net(0, InputBuf::Connected);
+    let body = b"<!DOCTYPE html><title>T</title><p>Hi".to_vec();
+    let out = k.net(
+        0,
+        InputBuf::Bytes(response_with(
+            "Content-Type: text/html; charset=utf-8",
+            &body,
+        )),
+    );
+    assert_eq!(
+        out,
+        vec![
+            Out::Close(0),
+            Out::Commit(
+                0,
+                support::Doc {
+                    url: b"http://example.test/page".to_vec(),
+                    content_type: b"text/html; charset=utf-8".to_vec(),
+                    kind: 0,
+                    body,
+                }
+            )
+        ]
+    );
+}
+
+#[test]
+fn an_uncommitted_renderer_that_displays_is_killed() {
+    let mut k = Kernel::new();
+    open_fetching(&mut k, "http://example.test/");
+    let display = Msg::Display {
+        title: b"Bank".to_vec(),
+        text: Vec::new(),
+        links: Vec::new(),
+    };
+    let out = k.send(0, &display);
+    assert_eq!(out, vec![Out::Kill(0), Out::Close(0)]);
+}
+
+#[test]
+fn a_display_is_shown_for_the_senders_tab_under_the_kernels_url() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/a");
+    // The title claims another address; the address line is the kernel's.
+    let out = k.send(
+        id,
+        &Msg::Display {
+            title: b"https://bank.test/".to_vec(),
+            text: b"text".to_vec(),
+            links: vec![b"http://example.test/b".to_vec()],
+        },
+    );
+    assert_eq!(
+        out,
+        vec![Out::Show(
+            id,
+            code_points("http://example.test/a"),
+            b"https://bank.test/".to_vec(),
+            b"text".to_vec(),
+            vec![b"http://example.test/b".to_vec()],
+        )]
+    );
+}
+
+#[test]
+fn a_large_body_is_split_into_body_frames_and_read_back_whole() {
+    let mut k = Kernel::new();
+    let id = open(&mut k, "http://example.test/");
+    k.navigate(id, "http://example.test/big");
+    k.net(0, InputBuf::Connected);
+    // Three pieces: two of MAX_BODY_CHUNK octets and a short one.
+    let chunk = clazel_ipc::message::codec::MAX_BODY_CHUNK;
+    let body: Vec<u8> = (0..2 * chunk + 17).map(|i| (i % 251) as u8).collect();
+    let mut raw = Vec::new();
+    // The raw write, to count the frames in it.
+    if let Some(s) = k.state.take() {
+        let (next, outputs) = clazel_kernel::exec::real_urls::step_real(
+            s,
+            &EventRecord::Net {
+                conn: 0,
+                input: InputBuf::Bytes(response_with("X-Test: 1", &body)),
+            },
+        );
+        k.state = Some(next);
+        for o in &outputs {
+            if let clazel_kernel::exec::records::OutputRecord::ToRenderer { bytes, .. } = o {
+                raw = bytes.clone();
+            }
+        }
+    }
+    let out = support::split_frames(&raw);
+    let msgs = out.unwrap_or_default();
+    assert_eq!(msgs.len(), 5, "Commit, three Body frames, BodyEnd");
+    assert!(matches!(msgs.get(1), Some(Msg::Body { bytes }) if bytes.len() == chunk));
+    assert!(matches!(msgs.get(3), Some(Msg::Body { bytes }) if bytes.len() == 17));
+    let doc = support::read_doc(msgs);
+    assert_eq!(doc.map(|d| d.body), Some(body));
 }

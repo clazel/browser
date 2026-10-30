@@ -73,28 +73,28 @@
     {
       "id": "navigate-keeps-old-lock",
       "file": "src/spec.rs",
-      "find": "let r = Renderer { id, tab, url, lock, pending: None };",
-      "replace": "let r = Renderer { id, tab, url, lock: old.lock, pending: None };",
+      "find": "let r = Renderer { committed: true, id, tab, url, lock, pending: None };",
+      "replace": "let r = Renderer { committed: true, id, tab, url, lock: old.lock, pending: None };",
       "expect": "killed",
       "reason": "A renderer's Navigate to another origin gives the new renderer the old lock: the renderer on a.test is locked to b.test's origin. ml_navigate_new_lock, theorem_lock_is_committed_origin's step, is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_navigate_new_lock(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), Seq::<u8>::empty(), 0, clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), Seq::<u8>::empty()).0.renderers[0].lock == clazel_origin::spec::Origin::Opaque(0nat)"
+        "lemma": "ml_navigate_new_lock(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty()), 0, clazel_origin::spec::Origin::Opaque(1nat))",
+        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).0.renderers[0].lock == clazel_origin::spec::Origin::Opaque(0nat)"
       },
       "module": "mutation_lemmas"
     },
     {
       "id": "spawned-renderer-inherits-sender-url",
       "file": "src/spec.rs",
-      "find": "Output::Spawn { id, policy: Policy::Renderer },\n                        Output::ToRenderer { id, bytes: commit_frame(url, script) },",
-      "replace": "Output::Spawn { id, policy: Policy::Renderer },\n                        Output::ToRenderer { id, bytes: commit_frame(url, script + clazel_cookie::matching::spec::narrow(old.url)) },",
+      "find": "Output::Spawn { id, policy: Policy::Renderer },\n                        Output::ToRenderer { id, bytes: commit_frames(url, doc) },",
+      "replace": "Output::Spawn { id, policy: Policy::Renderer },\n                        Output::ToRenderer { id, bytes: commit_frames(url, Document { body: doc.body + clazel_cookie::matching::spec::narrow(old.url), ..doc }) },",
       "expect": "killed",
-      "reason": "The renderer spawned by a navigation is committed with the navigating renderer's URL as its script, i.e. it inherits something besides the resolved URL: ml_navigate_commit (what lemma_declassified_is_navigate_tab and the declassification of theorem_cookie_noninterference rest on) is false.",
+      "reason": "The renderer spawned by a navigation is committed with the navigating renderer's URL appended to its body, i.e. it inherits something besides the resolved URL: ml_navigate_commit (what lemma_declassified_is_navigate_tab and the declassification of theorem_cookie_noninterference rest on) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_navigate_commit(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), Seq::<u8>::empty(), 0, clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), Seq::<u8>::empty()).1[2]->ToRenderer_bytes != commit_frame(Seq::<u32>::empty(), Seq::<u8>::empty())"
+        "lemma": "ml_navigate_commit(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty()), 0, clazel_origin::spec::Origin::Opaque(1nat))",
+        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).1[2]->ToRenderer_bytes != commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))"
       },
       "module": "mutation_lemmas"
     },
@@ -245,76 +245,6 @@
       "module": "url_mutation_lemmas"
     },
     {
-      "id": "fetched-ignores-pending-url",
-      "file": "src/spec.rs",
-      "find": "            Some(p) => if p == outcome.url {",
-      "replace": "            Some(p) => if true {",
-      "expect": "killed",
-      "reason": "A Fetched event is taken for the navigation in flight whatever URL it was fetched for, so a tab that has navigated elsewhere commits the answer to its old navigation: ml_fetched_stale_ignored, the core of theorem_fetched_answers_navigation, is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_stale_ignored(ml_f_echo(), ml_s_nav(0x61u32), 0, ml_out(0x62u32), 0, ml_u(0x61u32))",
-        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x61u32).renderers[0].pending == Some(ml_u(0x61u32)) && ml_u(0x61u32) != ml_out(0x62u32).url && fetched_run(ml_f_echo(), ml_s_nav(0x61u32), 0, ml_out(0x62u32)) is Some"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
-      "id": "fetched-without-navigation",
-      "file": "src/spec.rs",
-      "find": "            None => None,\n            Some(p) => if p == outcome.url {",
-      "replace": "            None => Some((fetch.run)(outcome.url, outcome.net)),\n            Some(p) => if p == outcome.url {",
-      "expect": "killed",
-      "reason": "A Fetched event for a renderer that is not navigating is run as if it were: an unsolicited answer commits a document: ml_fetched_unsolicited_ignored, part of theorem_fetched_answers_navigation, is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_unsolicited_ignored(ml_f_echo(), ml_state_one(), 0, ml_out(0x61u32), 0)",
-        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && ml_state_one().renderers[0].pending is None && fetched_run(ml_f_echo(), ml_state_one(), 0, ml_out(0x61u32)) is Some"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
-      "id": "fetched-for-the-first-renderer",
-      "file": "src/spec.rs",
-      "find": "    match find_by_tab(s.renderers, tab, 0) {\n        None => None,\n        Some(i) => match s.renderers[i].pending {",
-      "replace": "    match (if s.renderers.len() > 0 { Some(0int) } else { None::<int> }) {\n        None => None,\n        Some(i) => match s.renderers[i].pending {",
-      "expect": "killed",
-      "reason": "A Fetched event is attributed to the first renderer of the table instead of the renderer of its tab, so an answer for a tab that is not open commits into another tab: ml_fetched_unknown_tab, part of theorem_fetched_answers_navigation and of theorem_fetched_only_to_tab, is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_unknown_tab(ml_f_echo(), ml_s_nav(0x61u32), 5, ml_out(0x61u32))",
-        "witness": "find_by_tab(ml_s_nav(0x61u32).renderers, 5, 0) is None && fetched_run(ml_f_echo(), ml_s_nav(0x61u32), 5, ml_out(0x61u32)) is Some"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
-      "id": "fetched-commits-no-body",
-      "file": "src/spec.rs",
-      "find": "                    navigate_tab(urls, s1, tab, url, body)",
-      "replace": "                    navigate_tab(urls, s1, tab, url, seq![])",
-      "expect": "killed",
-      "reason": "The commit of a fetch carries an empty script instead of the body: ml_fetched_commit is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_commit(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32), 0, ml_u(0x63u32), seq![0x7au8], clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "scalar_url(ml_u(0x63u32)) && 0int < ml_s_nav(0x62u32).renderers.len() && find_by_tab(ml_s_nav(0x62u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x62u32).renderers[0].pending == Some(ml_out(0x62u32).url) && (ml_f_at(0x63u32).run)(ml_out(0x62u32).url, ml_out(0x62u32).net).result == (FetchResult::Done { url: ml_u(0x63u32), body: seq![0x7au8] }) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x63u32), ml_s_nav(0x62u32).next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && fetched(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32)).1[2] != (Output::ToRenderer { id: ml_s_nav(0x62u32).next_id, bytes: commit_frame(ml_u(0x63u32), seq![0x7au8]) })"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
-      "id": "fetched-commits-requested-url",
-      "file": "src/spec.rs",
-      "find": "                    navigate_tab(urls, s1, tab, url, body)",
-      "replace": "                    navigate_tab(urls, s1, tab, outcome.url, body)",
-      "expect": "killed",
-      "reason": "A redirect is ignored: the commit is for the URL the tab asked for, not the final URL of the response: ml_fetched_commit is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_commit(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32), 0, ml_u(0x63u32), seq![0x7au8], clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "scalar_url(ml_u(0x63u32)) && 0int < ml_s_nav(0x62u32).renderers.len() && find_by_tab(ml_s_nav(0x62u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x62u32).renderers[0].pending == Some(ml_out(0x62u32).url) && (ml_f_at(0x63u32).run)(ml_out(0x62u32).url, ml_out(0x62u32).net).result == (FetchResult::Done { url: ml_u(0x63u32), body: seq![0x7au8] }) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x63u32), ml_s_nav(0x62u32).next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && fetched(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_f_at(0x63u32), ml_s_nav(0x62u32), 0, ml_out(0x62u32)).1[2] != (Output::ToRenderer { id: ml_s_nav(0x62u32).next_id, bytes: commit_frame(ml_u(0x63u32), seq![0x7au8]) })"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
       "id": "fail-keeps-pending",
       "file": "src/spec.rs",
       "find": "s.renderers.update(i, Renderer { pending: None, ..old }), ..s }, reply(old,",
@@ -331,56 +261,14 @@
     {
       "id": "commit-keeps-pending",
       "file": "src/spec.rs",
-      "find": "let r = Renderer { id, tab, url, lock, pending: None };",
-      "replace": "let r = Renderer { id, tab, url, lock, pending: old.pending };",
+      "find": "let r = Renderer { committed: true, id, tab, url, lock, pending: None };",
+      "replace": "let r = Renderer { committed: true, id, tab, url, lock, pending: old.pending };",
       "expect": "killed",
       "reason": "The renderer a commit spawns inherits the old renderer's navigation in flight: ml_commit_clears_pending, part of theorem_fetched_answers_navigation, is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_commit_clears_pending(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, Seq::<u32>::empty(), Seq::<u8>::empty(), 0, clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), ml_s_nav(0x61u32).next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, Seq::<u32>::empty(), Seq::<u8>::empty()).0.renderers[0].pending is Some"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
-      "id": "begin-forgets-the-url",
-      "file": "src/spec.rs",
-      "find": "Renderer { pending: Some(url), ..s.renderers[i] }",
-      "replace": "Renderer { pending: None, ..s.renderers[i] }",
-      "expect": "killed",
-      "reason": "A navigation does not record the URL it is navigating to, so its answer is never accepted: ml_begin_records_url is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_begin_records_url(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32), 0)",
-        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x62u32), ml_state_one().next_id) is Some && begin_navigation(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32)).0.renderers[0].pending != Some(ml_u(0x62u32))"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
-      "id": "begin-asks-for-nothing",
-      "file": "src/spec.rs",
-      "find": "                seq![Output::Fetch { tab, url }],",
-      "replace": "                seq![],",
-      "expect": "killed",
-      "reason": "A navigation does not ask for the fetch: ml_begin_asks_fetch is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_begin_asks_fetch(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32), 0)",
-        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x62u32), ml_state_one().next_id) is Some && begin_navigation(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32)).1 != seq![Output::Fetch { tab: 0, url: ml_u(0x62u32) }]"
-      },
-      "module": "mutation_lemmas"
-    },
-    {
-      "id": "begin-asks-for-the-old-url",
-      "file": "src/spec.rs",
-      "find": "                seq![Output::Fetch { tab, url }],",
-      "replace": "                seq![Output::Fetch { tab, url: s.renderers[i].url }],",
-      "expect": "killed",
-      "reason": "A navigation asks for the committed URL to be fetched instead of the one navigated to: ml_begin_asks_fetch is false.",
-      "certificate": {
-        "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_begin_asks_fetch(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32), 0)",
-        "witness": "0int < ml_state_one().renderers.len() && find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), ml_u(0x62u32), ml_state_one().next_id) is Some && begin_navigation(crate::counterexamples::ce_urls(), ml_state_one(), 0, ml_u(0x62u32)).1 != seq![Output::Fetch { tab: 0, url: ml_u(0x62u32) }]"
+        "lemma": "ml_commit_clears_pending(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty()), 0, clazel_origin::spec::Origin::Opaque(1nat))",
+        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), ml_s_nav(0x61u32).next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).0.renderers[0].pending is Some"
       },
       "module": "mutation_lemmas"
     },
@@ -444,16 +332,128 @@
       "module": "mutation_lemmas"
     },
     {
-      "id": "apply-stores-skips-the-line",
+      "id": "net-unknown-connection-changes-state",
       "file": "src/spec.rs",
-      "find": "        apply_stores(rules, store_one(rules, jar, stores[0], now), stores.drop_first(), now)",
-      "replace": "        apply_stores(rules, jar, stores.drop_first(), now)",
+      "find": "    match net_target(s, conn) {\n        None => (s, seq![]),",
+      "replace": "    match net_target(s, conn) {\n        None => (State { next_conn: s.next_conn + 1, ..s }, seq![]),",
       "expect": "killed",
-      "reason": "The lines of a fetch's responses are not stored: ml_apply_stores_one is false.",
+      "reason": "A Net event for a connection that is not open changes the state: ml_net_unknown_ignored (the stale or unknown connection is ignored, part of theorem_net_only_to_tab and theorem_net_jar_frame) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_apply_stores_one(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_store(), 6)",
-        "witness": "store_allowed(clazel_cookie::storage::examples::rules(), ml_store().url) && apply_stores(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], seq![ml_store()], 6) != clazel_cookie::storage::spec::store_a_set_cookie_string(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_store().line, ml_store().url, ml_store().ctx, 6)",
+        "lemma": "ml_net_unknown_ignored(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), ml_state_one(), 7, clazel_fetch::transducer::spec::Input::Connected)",
+        "witness": "net_target(ml_state_one(), 7) is None && net(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), ml_state_one(), 7, clazel_fetch::transducer::spec::Input::Connected).0.next_conn == 1nat"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "net-target-by-connection-id",
+      "file": "src/spec.rs",
+      "find": "match find_by_tab(s.renderers, s.conns[ci].tab, 0) {",
+      "replace": "match find_by_tab(s.renderers, s.conns[ci].id, 0) {",
+      "expect": "killed",
+      "reason": "A Net event is attributed to the tab whose id is the connection id, not to the connection's own tab: ml_net_target_owner (connection ownership, theorem_connection_ownership) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_net_target_owner(ml_s_conn(), 1, 0, 0)",
+        "witness": "find_conn(ml_s_conn().conns, 1, 0) == Some(0int) && 0int < ml_s_conn().conns.len() && find_by_tab(ml_s_conn().renderers, ml_s_conn().conns[0].tab, 0) == Some(0int) && 0int < ml_s_conn().renderers.len() && ml_s_conn().renderers[0].pending is Some && net_target(ml_s_conn(), 1) is None"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "open-connection-wrong-tab",
+      "file": "src/spec.rs",
+      "find": "Connection { id, tab, endpoint, partition }",
+      "replace": "Connection { id, tab: 0, endpoint, partition }",
+      "expect": "killed",
+      "reason": "A new connection belongs to tab 0, not to the tab whose navigation opened it: ml_open_connection (theorem_connection_ownership) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint())",
+        "witness": "open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint()).0.conns[1].tab == 0"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "open-connection-wrong-partition",
+      "file": "src/spec.rs",
+      "find": "Connection { id, tab, endpoint, partition }",
+      "replace": "Connection { id, tab, endpoint, partition: crate::domain::Domain::Opaque(7nat) }",
+      "expect": "killed",
+      "reason": "A new connection is keyed by another partition than the navigation's: ml_open_connection (the partition key of every connection) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint())",
+        "witness": "open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint()).0.conns[1].partition == crate::domain::Domain::Opaque(7nat)"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "open-connection-wrong-endpoint",
+      "file": "src/spec.rs",
+      "find": "Connection { id, tab, endpoint, partition }",
+      "replace": "Connection { id, tab, endpoint: Endpoint { port: 0, ..endpoint }, partition }",
+      "expect": "killed",
+      "reason": "The connection table records another port than the one asked for: ml_open_connection is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint())",
+        "witness": "open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint()).0.conns[1].endpoint.port == 0"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "open-connection-reuses-id",
+      "file": "src/spec.rs",
+      "find": "let id = s.next_conn;",
+      "replace": "let id = 0;",
+      "expect": "killed",
+      "reason": "A new connection is given id 0 whatever the counter: ml_open_connection (ids are fresh and never reused) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint())",
+        "witness": "open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint()).1 == 0"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "open-connection-counter-stays",
+      "file": "src/spec.rs",
+      "find": "next_conn: id + 1",
+      "replace": "next_conn: id",
+      "expect": "killed",
+      "reason": "The counter does not advance, so the next connection would reuse the id: ml_open_connection is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint())",
+        "witness": "open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint()).0.next_conn == 2"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "open-connection-asks-for-tls",
+      "file": "src/spec.rs",
+      "find": "tls: endpoint.tls }]",
+      "replace": "tls: true }]",
+      "expect": "killed",
+      "reason": "The shell is asked for TLS whatever the transducer asked: ml_open_connection is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint())",
+        "witness": "open_connection(ml_s_conn(), 3, crate::domain::Domain::Opaque(4nat), ml_endpoint()).2[0]->Connect_tls"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "retrieved-op-leaves-jar",
+      "file": "src/spec.rs",
+      "find": "Retrieved { url, ctx, now } => clazel_cookie::storage::spec::jar_after_retrieval(rules, jar, url, ctx, now),",
+      "replace": "Retrieved { url, ctx, now } => jar,",
+      "expect": "killed",
+      "reason": "The retrieval of a request leaves the jar as it was (no eviction of expired cookies, no step 5 update): ml_apply_net_op_retrieved is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_apply_net_op_retrieved(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_req(None), clazel_cookie::storage::examples::http_request(), 6)",
+        "witness": "apply_net_op(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], clazel_fetch::transducer::spec::JarOp::Retrieved { url: ml_req(None), ctx: clazel_cookie::storage::examples::http_request(), now: 6 }).len() == 1 && clazel_cookie::storage::spec::jar_after_retrieval(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_req(None), clazel_cookie::storage::examples::http_request(), 6).len() == 0",
         "reveal": [
           "Seq::filter"
         ]
@@ -461,16 +461,16 @@
       "module": "mutation_lemmas"
     },
     {
-      "id": "fetched-drops-the-jar-update",
+      "id": "stored-op-skips-store-allowed",
       "file": "src/spec.rs",
-      "find": "            let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };\n            match run.result {",
-      "replace": "            let s1 = State { jar: s.jar, ..s };\n            match run.result {",
+      "find": "Stored { line, url, ctx, now } => store_one(rules, jar, HttpStore { line, url, ctx }, now),",
+      "replace": "Stored { line, url, ctx, now } => clazel_cookie::storage::spec::store_a_set_cookie_string(rules, jar, line, url, ctx, now),",
       "expect": "killed",
-      "reason": "The jar the kernel owns is not updated with the response's cookies: ml_fetched_jar is false.",
+      "reason": "A Set-Cookie line is stored without asking whether its request may store (the public-suffix check is dropped where the jar operation is applied): ml_apply_net_op_stored_refused is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_jar(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32), (ml_f_cookie().run)(ml_out(0x61u32).url, ml_out(0x61u32).net))",
-        "witness": "fetched_run(ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)) == Some((ml_f_cookie().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)) && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)).0.jar != apply_stores(clazel_cookie::storage::examples::rules(), ml_s_nav_jar(0x61u32).jar, ((ml_f_cookie().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)).stores, ml_s_nav_jar(0x61u32).now)",
+        "lemma": "ml_apply_net_op_stored_refused(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], ml_store_com().line, ml_store_com().url, ml_store_com().ctx, 6)",
+        "witness": "!store_allowed(clazel_cookie::storage::examples::rules(), ml_store_com().url) && apply_net_op(clazel_cookie::storage::examples::rules(), seq![clazel_cookie::storage::examples::cookie_expiring()], clazel_fetch::transducer::spec::JarOp::Stored { line: ml_store_com().line, url: ml_store_com().url, ctx: ml_store_com().ctx, now: 6 }) != seq![clazel_cookie::storage::examples::cookie_expiring()]",
         "reveal": [
           "Seq::filter"
         ]
@@ -478,16 +478,44 @@
       "module": "mutation_lemmas"
     },
     {
-      "id": "failed-fetch-drops-the-jar-update",
+      "id": "done-drops-body",
       "file": "src/spec.rs",
-      "find": "FetchResult::Failed => fail_navigation(s1, i, old, error_fetch()),",
-      "replace": "FetchResult::Failed => fail_navigation(s, i, old, error_fetch()),",
+      "find": "        body: response.body,\n    }",
+      "replace": "        body: seq![],\n    }",
       "expect": "killed",
-      "reason": "The cookies of a response the fetch then failed on are not stored: ml_fetched_jar is false (for a failed fetch).",
+      "reason": "The document a fetch commits has an empty body: the body of the final response is dropped, so ml_carry_out_done (the commit, theorem_net_answers_connection and theorem_body_is_the_response) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_jar(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32), (ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net))",
-        "witness": "fetched_run(ml_f_failed(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)) == Some((ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)) && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav_jar(0x61u32), 0, ml_out(0x61u32)).0.jar != apply_stores(clazel_cookie::storage::examples::rules(), ml_s_nav_jar(0x61u32).jar, ((ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net)).stores, ml_s_nav_jar(0x61u32).now)",
+        "lemma": "ml_carry_out_done(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), None, ml_url0(), ml_response(seq![1u8]), 0, clazel_origin::spec::Origin::Opaque(1nat))",
+        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && scalar_url(clazel_url::url::spec::url_serializer(ml_url0(), false)) && lock_of_url(crate::counterexamples::ce_urls(), clazel_url::url::spec::url_serializer(ml_url0(), false), ml_state_one().next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && carry_out(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), None, seq![clazel_fetch::transducer::spec::Action::Done { url: ml_url0(), response: ml_response(seq![1u8]) }]).1[2]->ToRenderer_bytes != commit_frames(clazel_url::url::spec::url_serializer(ml_url0(), false), Document { content_type: Seq::<u8>::empty(), kind: 0, body: seq![1u8] })"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "fail-does-not-end-navigation",
+      "file": "src/spec.rs",
+      "find": "Action::Fail(_) => abort_navigation(s, tab, error_fetch()),",
+      "replace": "Action::Fail(_) => (s, seq![]),",
+      "expect": "killed",
+      "reason": "A failed fetch leaves the renderer navigating and its connections open: ml_carry_out_fail (ending the fetch, theorem_net_answers_connection) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_carry_out_fail(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, crate::domain::Domain::Opaque(0nat), None, clazel_fetch::transducer::spec::Reason::Network, 0)",
+        "witness": "find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && 0int < ml_s_nav(0x61u32).renderers.len() && carry_out(crate::counterexamples::ce_urls(), ml_s_nav(0x61u32), 0, crate::domain::Domain::Opaque(0nat), None, seq![clazel_fetch::transducer::spec::Action::Fail(clazel_fetch::transducer::spec::Reason::Network)]).0.renderers[0].pending is Some"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "close-tab-conns-keeps-table",
+      "file": "src/spec.rs",
+      "find": "(State { conns: without_tab(s.conns, tab), ..s }, closes_of_tab(s.conns, tab))",
+      "replace": "(s, closes_of_tab(s.conns, tab))",
+      "expect": "killed",
+      "reason": "The connections of a tab are closed (a Close is output) but stay in the table: ml_close_tab_conns is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_close_tab_conns(ml_s_conn(), 0)",
+        "witness": "without_tab(ml_s_conn().conns, 0).len() == 0 && close_tab_conns(ml_s_conn(), 0).0.conns.len() == 1",
         "reveal": [
           "Seq::filter"
         ]
@@ -495,16 +523,30 @@
       "module": "mutation_lemmas"
     },
     {
-      "id": "stale-answer-stores-cookies",
+      "id": "begin-keeps-old-connections",
       "file": "src/spec.rs",
-      "find": "    match fetched_run(fetch, s, tab, outcome) {\n        None => (s, seq![]),",
-      "replace": "    match fetched_run(fetch, s, tab, outcome) {\n        None => (State { jar: apply_stores(rules, s.jar, (fetch.run)(outcome.url, outcome.net).stores, s.now), ..s }, seq![]),",
+      "find": "let (s0, closes) = close_tab_conns(s, tab);",
+      "replace": "let (s0, closes) = (s, seq![]);",
       "expect": "killed",
-      "reason": "An answer that is ignored (the tab has navigated elsewhere, or is closed) still sets its cookies: ml_fetched_stale_unchanged, part of theorem_fetched_answers_navigation, is false.",
+      "reason": "A new navigation of a tab leaves the connections of the one it replaces open: ml_begin_closes is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_stale_unchanged(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x62u32))",
-        "witness": "fetched_run(ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x62u32)) is None && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_cookie(), ml_s_nav_jar(0x61u32), 0, ml_out(0x62u32)).0.jar != ml_s_nav_jar(0x61u32).jar",
+        "lemma": "ml_begin_closes(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), ml_s_conn(), 0, Seq::<u32>::empty(), 0)",
+        "witness": "find_by_tab(ml_s_conn().renderers, 0, 0) == Some(0int) && 0int < ml_s_conn().renderers.len() && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), ml_s_conn().next_id) is Some && closes_of_tab(ml_s_conn().conns, 0).len() > 0 && begin_navigation(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), ml_s_conn(), 0, Seq::<u32>::empty()).1[0] != closes_of_tab(ml_s_conn().conns, 0)[0]"
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "commit-keeps-connections",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn commit_navigation(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, doc: Document) -> (State, Seq<Output>) {\n    let (s1, closes) = close_tab_conns(s, tab);",
+      "replace": "pub open spec fn commit_navigation(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, doc: Document) -> (State, Seq<Output>) {\n    let (s1, closes) = (s, seq![]);",
+      "expect": "killed",
+      "reason": "A commit leaves the connections of its navigation open: ml_commit_closes is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_commit_closes(crate::counterexamples::ce_urls(), ml_s_conn(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))",
+        "witness": "closes_of_tab(ml_s_conn().conns, 0).len() > 0 && commit_navigation(crate::counterexamples::ce_urls(), ml_s_conn(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).1[0] != closes_of_tab(ml_s_conn().conns, 0)[0]",
         "reveal": [
           "Seq::filter"
         ]
@@ -512,32 +554,147 @@
       "module": "mutation_lemmas"
     },
     {
-      "id": "failed-fetch-reports-bad-url",
+      "id": "send-on-wrong-connection",
       "file": "src/spec.rs",
-      "find": "FetchResult::Failed => fail_navigation(s1, i, old, error_fetch()),",
-      "replace": "FetchResult::Failed => fail_navigation(s1, i, old, error_bad_url()),",
+      "find": "(s1, seq![Output::Send { conn: c, bytes }] + out)",
+      "replace": "(s1, seq![Output::Send { conn: 0, bytes }] + out)",
       "expect": "killed",
-      "reason": "A failed fetch is reported to the renderer as a bad URL: ml_fetch_failed_error is false.",
+      "reason": "The request is written to connection 0 instead of the connection the actions are for: ml_carry_out_send (wire bytes go to the owner's connection) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetch_failed_error(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav(0x61u32), 0, ml_out(0x61u32), 0)",
-        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x61u32).renderers[0].pending == Some(ml_out(0x61u32).url) && (ml_f_failed().run)(ml_out(0x61u32).url, ml_out(0x61u32).net).result is Failed && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_failed(), ml_s_nav(0x61u32), 0, ml_out(0x61u32)).1 != reply(ml_s_nav(0x61u32).renderers[0], clazel_ipc::message::spec::Message::Error { code: error_fetch() })"
+        "lemma": "ml_carry_out_send(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), 7, seq![1u8])",
+        "witness": "carry_out(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), Some(7nat), seq![clazel_fetch::transducer::spec::Action::Send(seq![1u8])]).1[0]->Send_conn == 0"
       },
       "module": "mutation_lemmas"
     },
     {
-      "id": "final-url-scalar-check-dropped",
+      "id": "send-drops-bytes",
       "file": "src/spec.rs",
-      "find": "scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {",
-      "replace": "lock_of_url(urls, url, s1.next_id) is Some {",
+      "find": "(s1, seq![Output::Send { conn: c, bytes }] + out)",
+      "replace": "(s1, seq![Output::Send { conn: c, bytes: seq![] }] + out)",
       "expect": "killed",
-      "reason": "A final URL that is not a string of scalar values is committed (the commit would have to UTF-8 encode it): ml_fetched_non_scalar_refused is false.",
+      "reason": "The octets the transducer built are not the ones written: ml_carry_out_send is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
-        "lemma": "ml_fetched_non_scalar_refused(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_surrogate(), ml_s_nav(0x61u32), 0, ml_out(0x61u32), 0, seq![0xD800u32], Seq::<u8>::empty(), 0)",
-        "witness": "0int < ml_s_nav(0x61u32).renderers.len() && find_by_tab(ml_s_nav(0x61u32).renderers, 0, 0) == Some(0int) && ml_s_nav(0x61u32).renderers[0].pending == Some(ml_out(0x61u32).url) && (ml_f_surrogate().run)(ml_out(0x61u32).url, ml_out(0x61u32).net).result == (FetchResult::Done { url: seq![0xD800u32], body: Seq::<u8>::empty() }) && !clazel_encoding::utf8::spec::is_scalar_value(seq![0xD800u32][0]) && fetched(clazel_cookie::storage::examples::rules(), crate::counterexamples::ce_urls(), ml_f_surrogate(), ml_s_nav(0x61u32), 0, ml_out(0x61u32)).1 != reply(ml_s_nav(0x61u32).renderers[0], clazel_ipc::message::spec::Message::Error { code: error_bad_url() })"
+        "lemma": "ml_carry_out_send(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), 7, seq![1u8])",
+        "witness": "carry_out(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), Some(7nat), seq![clazel_fetch::transducer::spec::Action::Send(seq![1u8])]).1[0]->Send_bytes.len() == 0"
       },
       "module": "mutation_lemmas"
+    },
+    {
+      "id": "close-action-keeps-connection",
+      "file": "src/spec.rs",
+      "find": "State { conns: without_conn(s.conns, c), ..s }",
+      "replace": "s",
+      "expect": "killed",
+      "reason": "A Close is output but the connection stays in the table: ml_carry_out_close is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_carry_out_close(crate::counterexamples::ce_urls(), ml_s_conn(), 0, crate::domain::Domain::Opaque(0nat), 1)",
+        "witness": "without_conn(ml_s_conn().conns, 1).len() == 0 && carry_out(crate::counterexamples::ce_urls(), ml_s_conn(), 0, crate::domain::Domain::Opaque(0nat), Some(1nat), seq![clazel_fetch::transducer::spec::Action::Close]).0.conns.len() == 1",
+        "reveal": [
+          "Seq::filter"
+        ]
+      },
+      "module": "mutation_lemmas"
+    },
+    {
+      "id": "show-under-another-url",
+      "file": "src/spec.rs",
+      "find": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
+      "replace": "Output::Show { tab: r.tab, url: r.url.drop_last(), title, text, links }",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A Display is shown under an address that is not the sender's committed URL: ml_display_shows, the core of theorem_address_bar_integrity, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_display_shows(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), init_state(), Renderer { tab: 5, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty())",
+        "witness": "handle_message(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), init_state(), Renderer { tab: 5, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, clazel_ipc::message::spec::Message::Display { title: Seq::<u8>::empty(), text: Seq::<u8>::empty(), links: Seq::<Seq<u8>>::empty() }).1[0]->Show_url != seq![0x61u32]"
+      }
+    },
+    {
+      "id": "show-on-the-senders-id",
+      "file": "src/spec.rs",
+      "find": "Output::Show { tab: r.tab, url: r.url, title, text, links }",
+      "replace": "Output::Show { tab: r.id, url: r.url, title, text, links }",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A Display is shown for the tab whose id is the sender's renderer id, which after a cross-origin navigation is not the sender's tab: ml_display_shows, the core of theorem_show_only_own_tab, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_display_shows(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), init_state(), Renderer { tab: 5, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, Seq::<u8>::empty(), Seq::<u8>::empty(), Seq::<Seq<u8>>::empty())",
+        "witness": "handle_message(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), crate::counterexamples::ce_fetch(), init_state(), Renderer { tab: 5, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, clazel_ipc::message::spec::Message::Display { title: Seq::<u8>::empty(), text: Seq::<u8>::empty(), links: Seq::<Seq<u8>>::empty() }).1[0]->Show_tab != 5nat"
+      }
+    },
+    {
+      "id": "display-before-commit",
+      "file": "src/spec.rs",
+      "find": "Some(m) => if m is Display && !r.committed { None } else { Some(m) },",
+      "replace": "Some(m) => Some(m),",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A renderer that has committed nothing may display, under the URL it was opened at: ml_uncommitted_display, the case theorem_address_bar_integrity's committed URL rests on, is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_uncommitted_display(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x05, 0x84, 0x0A, 0x60, 0x60, 0x80])",
+        "witness": "decode_renderer_frame(seq![0x00u8, 0x00, 0x00, 0x05, 0x84, 0x0A, 0x60, 0x60, 0x80]) == Some(clazel_ipc::message::spec::Message::Display { title: Seq::<u8>::empty(), text: Seq::<u8>::empty(), links: Seq::<Seq<u8>>::empty() }) && accepted_message(Renderer { committed: false, ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }, seq![0x00u8, 0x00, 0x00, 0x05, 0x84, 0x0A, 0x60, 0x60, 0x80]) is Some"
+      }
+    },
+    {
+      "id": "content-type-dropped",
+      "file": "src/spec.rs",
+      "find": "            Some(v) => v,\n            None => seq![],\n        },\n        kind: kind_document(),",
+      "replace": "            Some(v) => seq![],\n            None => seq![],\n        },\n        kind: kind_document(),",
+      "expect": "killed",
+      "module": "mutation_examples",
+      "reason": "A commit never carries the response's Content-Type: ml_response_content_type (and so the content type theorem_body_is_the_response states) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "crate::mutation_examples::ml_response_content_type()",
+        "witness": "response_document(clazel_http::message::spec::Response { fields: seq![clazel_http::field::spec::FieldLine { name: seq![0x43u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x54, 0x79, 0x70, 0x65], value: seq![0x74u8, 0x2F, 0x68] }], ..ml_response(Seq::<u8>::empty()) }).content_type.len() == 0"
+      }
+    },
+    {
+      "id": "body-piece-short",
+      "file": "src/spec.rs",
+      "find": "reply_frame(clazel_ipc::message::spec::Message::Body { bytes: body })\n    } else {",
+      "replace": "reply_frame(clazel_ipc::message::spec::Message::Body { bytes: body.drop_last() })\n    } else {",
+      "expect": "killed",
+      "module": "display_theorems",
+      "reason": "The last piece of a body loses its last octet: the Body frames are not read back as the body's pieces, so lemma_body_frames (on which theorem_body_is_the_response rests) is false.",
+      "certificate": {
+        "file": "src/display_theorems.rs",
+        "lemma": "lemma_body_frames(seq![1u8], Seq::<u8>::empty())",
+        "witness": "crate::statements::decode_frames(Seq::<u8>::empty()) == Some(Seq::<clazel_ipc::message::spec::Message>::empty()) && crate::statements::decode_frames(body_frames(seq![1u8]) + Seq::<u8>::empty()) != Some(body_messages(seq![1u8]) + Seq::<clazel_ipc::message::spec::Message>::empty())"
+      }
+    },
+    {
+      "id": "commit-without-body-end",
+      "file": "src/spec.rs",
+      "find": "        + body_frames(doc.body) + reply_frame(clazel_ipc::message::spec::Message::BodyEnd)",
+      "replace": "        + body_frames(doc.body)",
+      "expect": "killed",
+      "module": "display_theorems",
+      "reason": "A committed document is not ended by BodyEnd: the renderer cannot tell where the body ends, and lemma_commit_frames (theorem_body_is_the_response's reading of a commit) is false.",
+      "certificate": {
+        "file": "src/display_theorems.rs",
+        "lemma": "lemma_commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))",
+        "witness": "frame_of(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }) is Some && crate::statements::committed_document(commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))) != Some((clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(Seq::<u32>::empty()), content_type: Seq::<u8>::empty(), kind: 1 }, Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "open-tab-starts-committed",
+      "file": "src/spec.rs",
+      "find": "let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
+      "replace": "let s1 = State { renderers: s.renderers.push(Renderer { committed: true, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };",
+      "expect": "killed",
+      "module": "commit_theorems",
+      "reason": "A tab opened without a script starts committed, so its renderer may display before any document is committed in it, under the URL it was opened at: theorem_committed_only_after_commit is false (ml_open_tab_uncommitted: after an OpenTab whose fetch cannot start, the renderer was sent only an Error, never a Commit).",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_open_tab_uncommitted(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), Seq::<u32>::empty())",
+        "witness": "lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 0) is Some && (ml_fetch_unparsed().parse)(Seq::<u32>::empty()) is None"
+      }
     }
   ]
 }

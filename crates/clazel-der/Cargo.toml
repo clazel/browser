@@ -20,7 +20,7 @@ der = { version = "=0.8.2", default-features = false, features = ["alloc", "oid"
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]

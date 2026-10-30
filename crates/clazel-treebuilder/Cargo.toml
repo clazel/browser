@@ -1,0 +1,58 @@
+[package]
+name = "clazel-treebuilder"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The HTML tree builder (HTML §13.2.4, §13.2.6, §13.2.7, §13.4): parse state, the insertion modes, foreign content and the fragment algorithm, as a one-token transducer over a `clazel-dom` arena."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+# The node tree the parser builds (Phase 4 item 4.8).
+clazel-dom = { path = "../clazel-dom" }
+# The tokenizer the driver (`src/exec/driver.rs`) feeds the step from
+# (Phase 4 item 4.7).
+clazel-html = { path = "../clazel-html" }
+
+[dev-dependencies]
+# The second engine of the differential test (`tests/conformance_html5ever.rs`,
+# Phase 4 items 4.0 and 4.11), with the tree its own tests build. Test-only
+# (docs/DEPENDENCIES.md, class `test`). markup5ever_rcdom's version is
+# 0.39.0+unofficial; Cargo ignores the build metadata in a requirement.
+html5ever = "=0.39.0"
+markup5ever_rcdom = "=0.39.0"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires (Phase 4
+# item 4.0, option A). Tier 0 until items 4.9 to 4.11 are complete and CI's
+# full verification is green.
+[package.metadata.clazel]
+tier = 2
+target-tier = 2
+# Item 4.9's theorems. `cargo xtask check` fails if one is not defined as a
+# `proof fn` in this crate.
+theorems = [
+    "theorem_dispatch_total",
+    "theorem_actions_ordered",
+    "theorem_reachable",
+    "theorem_reachable_stopped",
+    "theorem_open_elements_in_doc",
+    "theorem_doc_wf",
+    "theorem_nodes_per_token",
+    "theorem_reachable_wf",
+    "theorem_reachable_parser_inv",
+    "theorem_reachable_doc_wf",
+    "theorem_reachable_open_elements_in_doc",
+    "theorem_reachable_nodes_per_token",
+    "theorem_open_distinct",
+    "theorem_reachable_w3c_facts",
+    "theorem_reachable_foreign_content",
+    "theorem_reachable_frameset_cell",
+    "theorem_reachable_in_body_table",
+]
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

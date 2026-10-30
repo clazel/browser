@@ -7,7 +7,7 @@
 //! clock, no processes. Bytes, renderer ids and the time come in as arguments,
 //! as the host shell (item 2.15) gets them, and the outputs go out as a value
 //! for the host to act on. An exec `StateRecord` is viewed as a [`State`]
-//! (renderers, jar, storage maps, counter, time), an `EventRecord` as an
+//! (renderers, jar, storage maps, connections, counters, time), an `EventRecord` as an
 //! [`Event`] and an `OutputRecord` as an [`Output`]; the exec jar is the view
 //! of `clazel-cookie`'s (item 2.9), with its times `u64`s, hence
 //! `jar_in_range`. Ids are `u64`s, hence `next_id` below `u64::MAX`. Web
@@ -34,8 +34,8 @@
 //! (`lemma_init_wf`). `jar_in_range` and `now_in_range` of the state hold of
 //! every state the exec `step` returns because its jar and time are `u64`s
 //! that the exec cookie functions keep in range (their contracts); the exec
-//! `step` ensures both. (`next_id` may reach `u64::MAX`, after which the
-//! host must not call it again; the exec `step` ensures it grows by at most
+//! `step` ensures both. (`next_id` and `next_conn` may reach `u64::MAX`, after which the
+//! host must not call it again; the exec `step` ensures each grows by at most
 //! one.)
 //!
 //! The spec casts a storage map's length to `u64` (`StorageLength`). That is
@@ -60,7 +60,7 @@ pub open spec fn psl() -> Seq<clazel_psl::spec::Rule> {
 /// serialization of a parsed URL always is). The `Commit` of a URL sends it
 /// UTF-8 encoded, and the Encoding Standard's encoder is only defined on
 /// scalar values, so the exec `step` needs this of the URL functions it is
-/// given. (Added by item 2.12; the spec's `commit_frame` is unchanged. It
+/// given. (Added by item 2.12; the spec's `commit_frames` is unchanged. It
 /// is a condition on the instantiation, which item 2.13 proves of the real
 /// parser, so the isolation theorems still hold for every `UrlFns`.)
 pub open spec fn urls_resolve_scalar(urls: UrlFns) -> bool {
@@ -74,18 +74,28 @@ pub open spec fn urls_resolve_scalar(urls: UrlFns) -> bool {
 /// Precondition of `step(StateRecord, &EventRecord) -> (StateRecord,
 /// Vec<OutputRecord>)`: the state is well formed (`kernel_wf`); its jar and
 /// time are in the range of the exec cookie functions; the next id fits a
-/// `u64` with room for one more; a `Tick` carries a time in that range; and
+/// `u64` with room for two more (item 4.12: an `OpenTab` without a script
+/// spawns its renderer and starts a fetch, whose ids are checked as a
+/// `NavigateTab`'s); a `Tick` carries a time in that range; and
 /// the URL of an `OpenTab` (and those `resolve` returns,
 /// [`urls_resolve_scalar`]) are strings of Unicode scalar values, which a
 /// `Commit` must UTF-8 encode. (The id in `FromRenderer` and the tab in
-/// `NavigateTab` and `Fetched` are `u64`s, so they fit. A `NavigateTab` or
-/// `Fetched` URL is never encoded: the final URL of a fetch is checked by the
-/// kernel itself, `fetched`, so the fetch functions need no condition.)
-pub open spec fn step_requires(urls: UrlFns, s: State, e: Event) -> bool {
+/// `NavigateTab` and the connection in `Net` are `u64`s, so they fit. A
+/// `NavigateTab` URL is never encoded, and neither is the final URL of a
+/// fetch: the kernel checks it itself (`commit_navigation`), so the fetch
+/// functions need no condition on it.) Item 3.7: the connection counter fits
+/// a `u64` with room for one more (a step opens at most one connection: the
+/// transducer's actions hold at most one `Connect`), and the transducer's
+/// Public Suffix List is the kernel's (`UrlFnsExec::rules_are_psl` of
+/// `clazel-fetch`), so the `Cookie` field is read from the jar with the same
+/// cookie roots the kernel applies the jar operations with.
+pub open spec fn step_requires(urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     &&& super::invariant::kernel_wf(psl(), urls, s)
     &&& clazel_cookie::storage::contract::jar_in_range(s.jar)
     &&& clazel_cookie::set_cookie::contract::now_in_range(s.now)
-    &&& s.next_id < 0xFFFF_FFFF_FFFF_FFFFnat
+    &&& s.next_id + 1 < 0xFFFF_FFFF_FFFF_FFFFnat
+    &&& s.next_conn + 21 <= 0xFFFF_FFFF_FFFF_FFFFnat
+    &&& fetch.urls.rules == psl()
     &&& (e is Tick ==> clazel_cookie::set_cookie::contract::now_in_range(e->Tick_time))
     &&& urls_resolve_scalar(urls)
     &&& (e is OpenTab ==> clazel_encoding::utf8::spec::all_scalar_values(e->OpenTab_url))
@@ -113,10 +123,12 @@ pub open spec fn reply_frame_ensures(m: clazel_ipc::message::spec::Message, outp
     output == reply_frame(m)
 }
 
-/// Contract for `commit_frame(&[u32], &[u8]) -> Vec<u8>`: the frame of a
-/// `Commit` of the URL (encoded as UTF-8) running the script.
-pub open spec fn commit_frame_ensures(url: Seq<u32>, script: Seq<u8>, output: Seq<u8>) -> bool {
-    output == commit_frame(url, script)
+/// Contract for `commit_frames(&[u32], &[u8], u64, &[u8]) -> Vec<u8>`: the
+/// frames that commit the document of this content type, kind and body at
+/// the URL (encoded as UTF-8): `Commit`, the `Body` frames and `BodyEnd`
+/// (phase-4.md item 4.12).
+pub open spec fn commit_frames_ensures(url: Seq<u32>, content_type: Seq<u8>, kind: u64, body: Seq<u8>, output: Seq<u8>) -> bool {
+    output == commit_frames(url, Document { content_type, kind, body })
 }
 
 } // verus!

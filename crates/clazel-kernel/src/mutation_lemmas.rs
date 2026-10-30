@@ -12,7 +12,7 @@ verus! {
 
 /// A renderer with the given id and lock, committed to the URL `a`.
 pub open spec fn ml_renderer(id: nat, lock: clazel_origin::spec::Origin) -> Renderer {
-    Renderer { id, tab: id, url: seq![0x61u32], lock, pending: None }
+    Renderer { committed: true, id, tab: id, url: seq![0x61u32], lock, pending: None }
 }
 
 /// A tuple origin of host `a` with the given scheme.
@@ -36,6 +36,8 @@ pub open spec fn ml_state_one() -> State {
         jar: Seq::empty(),
         storage: Map::empty(),
         next_id: 1,
+        conns: Seq::empty(),
+        next_conn: 0,
         now: 0,
     }
 }
@@ -81,7 +83,7 @@ pub proof fn ml_public_suffix_is_cookie_averse(lock: clazel_origin::spec::Origin
 }
 
 /// Navigating to a different lock gives the new renderer that lock.
-pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
@@ -93,14 +95,14 @@ pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32
 }
 
 /// The `Commit` to a spawned renderer is for the URL and script given.
-pub proof fn ml_navigate_commit(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_navigate_commit(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
         lock_of_url(urls, url, s.next_id) == Some(l),
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
-        navigate_tab(urls, s, tab, url, script).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frame(url, script) }),
+        navigate_tab(urls, s, tab, url, script).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(url, script) }),
 {
 }
 
@@ -114,45 +116,12 @@ pub proof fn ml_find_key(list: Seq<StorageEntry>, key: Seq<u8>)
 
 // ---------------------------------------------------------------------
 // Item 3.7: a navigation is a fetch.
+//
+// The certified mutations of the join's decisions: stale and unknown
+// connections, connection ownership and the partition key, the application
+// of the jar operations, the commit and the ending of a fetch, closing a
+// tab's connections, and what is written to a connection.
 // ---------------------------------------------------------------------
-
-/// The one-code-point string `c`.
-pub open spec fn ml_u(c: u32) -> Seq<u32> {
-    seq![c]
-}
-
-/// The report of a fetch started for the URL `c`, with no octets delivered.
-pub open spec fn ml_out(c: u32) -> NetOutcome {
-    NetOutcome { url: seq![c], net: Seq::empty() }
-}
-
-/// A fetch that answers with the URL it was asked for and the octets as the
-/// body, and sets no cookie.
-pub open spec fn ml_f_echo() -> FetchFns {
-    FetchFns { run: |u: Seq<u32>, n: Seq<u8>| FetchRun { result: FetchResult::Done { url: u, body: n }, stores: Seq::<HttpStore>::empty() } }
-}
-
-/// A fetch that answers with the URL `c` and a body of the octet `0x7a`, and
-/// sets no cookie (a redirect).
-pub open spec fn ml_f_at(c: u32) -> FetchFns {
-    FetchFns { run: |u: Seq<u32>, n: Seq<u8>| FetchRun { result: FetchResult::Done { url: seq![c], body: seq![0x7au8] }, stores: Seq::<HttpStore>::empty() } }
-}
-
-/// A fetch that answers with the empty URL and an empty body, and sets the
-/// cookie of [`ml_store`].
-pub open spec fn ml_f_cookie() -> FetchFns {
-    FetchFns { run: |u: Seq<u32>, n: Seq<u8>| FetchRun { result: FetchResult::Done { url: Seq::<u32>::empty(), body: Seq::<u8>::empty() }, stores: seq![ml_store()] } }
-}
-
-/// A fetch that fails after a response that sets the cookie of [`ml_store`].
-pub open spec fn ml_f_failed() -> FetchFns {
-    FetchFns { run: |u: Seq<u32>, n: Seq<u8>| FetchRun { result: FetchResult::Failed, stores: seq![ml_store()] } }
-}
-
-/// A fetch that answers with a final URL that is not a scalar value string.
-pub open spec fn ml_f_surrogate() -> FetchFns {
-    FetchFns { run: |u: Seq<u32>, n: Seq<u8>| FetchRun { result: FetchResult::Done { url: seq![0xD800u32], body: Seq::<u8>::empty() }, stores: Seq::<HttpStore>::empty() } }
-}
 
 /// A `Set-Cookie` line that does not parse, for `https://a.com/x`.
 pub open spec fn ml_store() -> HttpStore {
@@ -171,80 +140,39 @@ pub open spec fn ml_store_com() -> HttpStore {
     }
 }
 
+/// A URL record with nothing in it: the transducer state of
+/// [`ml_s_nav`] needs one.
+pub open spec fn ml_url0() -> clazel_url::url::spec::Url {
+    clazel_url::url::spec::Url {
+        scheme: Seq::<u32>::empty(),
+        username: Seq::<u32>::empty(),
+        password: Seq::<u32>::empty(),
+        host: None,
+        port: None,
+        path: clazel_url::url::spec::UrlPath::List(Seq::<Seq<u32>>::empty()),
+        query: None,
+        fragment: None,
+    }
+}
+
+/// A navigation to `c`, just started.
+pub open spec fn ml_nav(c: u32) -> Navigation {
+    Navigation {
+        url: seq![c],
+        fetch: clazel_fetch::transducer::spec::State { url: ml_url0(), redirects: 0, phase: clazel_fetch::transducer::spec::Phase::Connecting, tainted: false },
+        partition: crate::domain::Domain::Opaque(0),
+    }
+}
+
 /// A state with one renderer (id 0, opaque lock 0) navigating to `c`, and
 /// the counter 1.
 pub open spec fn ml_s_nav(c: u32) -> State {
-    State { renderers: seq![Renderer { pending: Some(seq![c]), ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }], ..ml_state_one() }
-}
-
-/// [`ml_s_nav`] with a jar of one cookie that has expired by the time 6.
-pub open spec fn ml_s_nav_jar(c: u32) -> State {
-    State { jar: seq![clazel_cookie::storage::examples::cookie_expiring()], now: 6, ..ml_s_nav(c) }
+    State { renderers: seq![Renderer { pending: Some(ml_nav(c)), ..ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)) }], ..ml_state_one() }
 }
 
 /// A request URL with the given host.
 pub open spec fn ml_req(host: Option<clazel_cookie::matching::spec::CanonicalHost>) -> clazel_cookie::storage::spec::RequestUrl {
     clazel_cookie::storage::spec::RequestUrl { scheme: seq![0x61u8], host, path: Seq::<u8>::empty() }
-}
-
-/// A fetch's answer is for a navigation in flight to that URL only: a
-/// different URL is ignored.
-pub proof fn ml_fetched_stale_ignored(fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome, i: int, p: Seq<u32>)
-    requires
-        0 <= i < s.renderers.len(),
-        find_by_tab(s.renderers, tab, 0) == Some(i),
-        s.renderers[i].pending == Some(p),
-        p != outcome.url,
-    ensures
-        fetched_run(fetch, s, tab, outcome) is None,
-{
-}
-
-/// ... and a renderer that is not navigating ignores an answer.
-pub proof fn ml_fetched_unsolicited_ignored(fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome, i: int)
-    requires
-        0 <= i < s.renderers.len(),
-        find_by_tab(s.renderers, tab, 0) == Some(i),
-        s.renderers[i].pending is None,
-    ensures
-        fetched_run(fetch, s, tab, outcome) is None,
-{
-}
-
-/// ... and a tab that is not open does.
-pub proof fn ml_fetched_unknown_tab(fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
-    requires
-        find_by_tab(s.renderers, tab, 0) is None,
-    ensures
-        fetched_run(fetch, s, tab, outcome) is None,
-{
-}
-
-/// A fetch that ends at `url` commits that URL and the body to a renderer of
-/// the new lock.
-pub proof fn ml_fetched_commit(
-    rules: Seq<clazel_psl::spec::Rule>,
-    urls: UrlFns,
-    fetch: FetchFns,
-    s: State,
-    tab: nat,
-    outcome: NetOutcome,
-    i: int,
-    url: Seq<u32>,
-    body: Seq<u8>,
-    l: clazel_origin::spec::Origin,
-)
-    requires
-        0 <= i < s.renderers.len(),
-        find_by_tab(s.renderers, tab, 0) == Some(i),
-        s.renderers[i].pending == Some(outcome.url),
-        (fetch.run)(outcome.url, outcome.net).result == (FetchResult::Done { url, body }),
-        scalar_url(url),
-        lock_of_url(urls, url, s.next_id) == Some(l),
-        !(l is Tuple && l == s.renderers[i].lock),
-    ensures
-        fetched(rules, urls, fetch, s, tab, outcome).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frame(url, body) }),
-{
 }
 
 /// A navigation that ends without a commit leaves the renderer no longer
@@ -258,7 +186,7 @@ pub proof fn ml_fail_clears_pending(s: State, i: int, code: u64)
 }
 
 /// A commit to another origin gives a new renderer that is not navigating.
-pub proof fn ml_commit_clears_pending(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_commit_clears_pending(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
@@ -266,28 +194,6 @@ pub proof fn ml_commit_clears_pending(urls: UrlFns, s: State, tab: nat, url: Seq
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
         navigate_tab(urls, s, tab, url, script).0.renderers[i].pending is None,
-{
-}
-
-/// `begin_navigation` records the URL the renderer is navigating to.
-pub proof fn ml_begin_records_url(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, i: int)
-    requires
-        0 <= i < s.renderers.len(),
-        find_by_tab(s.renderers, tab, 0) == Some(i),
-        lock_of_url(urls, url, s.next_id) is Some,
-    ensures
-        begin_navigation(urls, s, tab, url).0.renderers[i].pending == Some(url),
-{
-}
-
-/// ... and asks for exactly that URL to be fetched, for the tab.
-pub proof fn ml_begin_asks_fetch(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, i: int)
-    requires
-        0 <= i < s.renderers.len(),
-        find_by_tab(s.renderers, tab, 0) == Some(i),
-        lock_of_url(urls, url, s.next_id) is Some,
-    ensures
-        begin_navigation(urls, s, tab, url).1 == seq![Output::Fetch { tab, url }],
 {
 }
 
@@ -316,18 +222,6 @@ pub proof fn ml_store_no_host_refused(url: clazel_cookie::storage::spec::Request
 {
 }
 
-/// One line is stored by §5.7 with the request's own URL and context.
-pub proof fn ml_apply_stores_one(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, st: HttpStore, now: int)
-    requires
-        store_allowed(rules, st.url),
-    ensures
-        apply_stores(rules, jar, seq![st], now) == clazel_cookie::storage::spec::store_a_set_cookie_string(rules, jar, st.line, st.url, st.ctx, now),
-{
-    assert(seq![st].drop_first() =~= Seq::<HttpStore>::empty());
-    assert(seq![st][0] == st);
-    reveal_with_fuel(apply_stores, 2);
-}
-
 /// A line that may not be stored leaves the jar as it was.
 pub proof fn ml_store_one_refused(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, st: HttpStore, now: int)
     requires
@@ -337,65 +231,274 @@ pub proof fn ml_store_one_refused(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<c
 {
 }
 
-/// A fetch's cookies enter the jar, whether the fetch succeeds or not.
-pub proof fn ml_fetched_jar(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome, run: FetchRun)
-    requires
-        fetched_run(fetch, s, tab, outcome) == Some(run),
-    ensures
-        fetched(rules, urls, fetch, s, tab, outcome).0.jar == apply_stores(rules, s.jar, run.stores, s.now),
-{
-    let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
-    if let FetchResult::Done { url, body } = run.result {
-        crate::unwind_base::lemma_navigation_frame(urls, s1, tab, url, body);
+/// One connection (id 1, tab 0) in a state with one navigating renderer
+/// (id 0, tab 0, opaque lock 0), and the counters 1 and 2.
+pub open spec fn ml_conn() -> Connection {
+    Connection {
+        id: 1,
+        tab: 0,
+        endpoint: Endpoint { host: seq![0x61u8], port: 80, tls: false },
+        partition: crate::domain::Domain::Opaque(0nat),
     }
 }
 
-/// An answer that is ignored changes nothing, the jar included.
-pub proof fn ml_fetched_stale_unchanged(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+/// [`ml_conn`] in [`ml_s_nav`].
+pub open spec fn ml_s_conn() -> State {
+    State { conns: seq![ml_conn()], next_conn: 2, ..ml_s_nav(0x61u32) }
+}
+
+/// The endpoint of a connection a transducer `Connect` asks for.
+pub open spec fn ml_endpoint() -> Endpoint {
+    Endpoint { host: seq![0x62u8], port: 81, tls: false }
+}
+
+/// A response with a status line and a body.
+pub open spec fn ml_response(body: Seq<u8>) -> clazel_http::message::spec::Response {
+    clazel_http::message::spec::Response {
+        status_line: clazel_http::message::spec::StatusLine { major: 1, minor: 1, status: 200, reason: Seq::<u8>::empty() },
+        fields: Seq::<clazel_http::message::spec::FieldLine>::empty(),
+        body,
+    }
+}
+
+/// The transducer of [`crate::counterexamples::ce_fetch`], whose parser
+/// accepts no navigation URL.
+pub open spec fn ml_fetch_unparsed() -> FetchFns {
+    FetchFns { parse: |u: Seq<u32>| None::<clazel_url::url::spec::Url>, ..crate::counterexamples::ce_fetch() }
+}
+
+/// A `Net` event for a connection that is not open changes nothing and gives
+/// nothing.
+pub proof fn ml_net_unknown_ignored(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
-        fetched_run(fetch, s, tab, outcome) is None,
+        net_target(s, conn) is None,
     ensures
-        fetched(rules, urls, fetch, s, tab, outcome) == (s, Seq::<Output>::empty()),
+        net(rules, urls, fetch, s, conn, input) == (s, Seq::<Output>::empty()),
 {
 }
 
-/// A failed fetch sends the renderer the fetch error.
-pub proof fn ml_fetch_failed_error(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome, i: int)
+/// A connection is its tab's: a `Net` event for an open connection of a tab
+/// whose renderer is navigating is acted on.
+pub proof fn ml_net_target_owner(s: State, conn: nat, ci: int, i: int)
     requires
+        find_conn(s.conns, conn, 0) == Some(ci),
+        0 <= ci < s.conns.len(),
+        find_by_tab(s.renderers, s.conns[ci].tab, 0) == Some(i),
         0 <= i < s.renderers.len(),
-        find_by_tab(s.renderers, tab, 0) == Some(i),
-        s.renderers[i].pending == Some(outcome.url),
-        (fetch.run)(outcome.url, outcome.net).result is Failed,
+        s.renderers[i].pending is Some,
     ensures
-        fetched(rules, urls, fetch, s, tab, outcome).1 == reply(s.renderers[i], clazel_ipc::message::spec::Message::Error { code: error_fetch() }),
+        net_target(s, conn) is Some,
 {
 }
 
-/// A final URL that is not a string of scalar values is refused.
-pub proof fn ml_fetched_non_scalar_refused(
+/// A new connection has the next id and is the tab's, in the partition of
+/// the navigation; the counter advances; the shell is asked for exactly it.
+pub proof fn ml_open_connection(s: State, tab: nat, partition: crate::domain::Domain, endpoint: Endpoint)
+    ensures
+        open_connection(s, tab, partition, endpoint).1 == s.next_conn,
+        open_connection(s, tab, partition, endpoint).0.conns == s.conns.push(Connection { id: s.next_conn, tab, endpoint, partition }),
+        open_connection(s, tab, partition, endpoint).0.next_conn == s.next_conn + 1,
+        open_connection(s, tab, partition, endpoint).2 == seq![Output::Connect { conn: s.next_conn, host: endpoint.host, port: endpoint.port, tls: endpoint.tls }],
+{
+}
+
+/// A `Retrieved` jar operation is RFC 6265bis §5.8.3 step 5's update (and
+/// the eviction of expired cookies).
+pub proof fn ml_apply_net_op_retrieved(
     rules: Seq<clazel_psl::spec::Rule>,
-    urls: UrlFns,
-    fetch: FetchFns,
-    s: State,
-    tab: nat,
-    outcome: NetOutcome,
-    i: int,
-    url: Seq<u32>,
-    body: Seq<u8>,
-    k: int,
+    jar: Seq<clazel_cookie::storage::spec::Cookie>,
+    url: clazel_cookie::storage::spec::RequestUrl,
+    ctx: clazel_cookie::storage::spec::RequestContext,
+    now: int,
+)
+    ensures
+        apply_net_op(rules, jar, clazel_fetch::transducer::spec::JarOp::Retrieved { url, ctx, now }) == clazel_cookie::storage::spec::jar_after_retrieval(rules, jar, url, ctx, now),
+{
+}
+
+/// A `Stored` jar operation for a request that may not store leaves the jar
+/// as it was.
+pub proof fn ml_apply_net_op_stored_refused(
+    rules: Seq<clazel_psl::spec::Rule>,
+    jar: Seq<clazel_cookie::storage::spec::Cookie>,
+    line: Seq<u8>,
+    url: clazel_cookie::storage::spec::RequestUrl,
+    ctx: clazel_cookie::storage::spec::RequestContext,
+    now: int,
 )
     requires
-        0 <= i < s.renderers.len(),
-        find_by_tab(s.renderers, tab, 0) == Some(i),
-        s.renderers[i].pending == Some(outcome.url),
-        (fetch.run)(outcome.url, outcome.net).result == (FetchResult::Done { url, body }),
-        0 <= k < url.len(),
-        !clazel_encoding::utf8::spec::is_scalar_value(url[k]),
+        !store_allowed(rules, url),
     ensures
-        fetched(rules, urls, fetch, s, tab, outcome).1 == reply(s.renderers[i], clazel_ipc::message::spec::Message::Error { code: error_bad_url() }),
+        apply_net_op(rules, jar, clazel_fetch::transducer::spec::JarOp::Stored { line, url, ctx, now }) == jar,
 {
-    crate::invariant::lemma_not_scalar_url(url, k);
 }
 
+/// The final response commits to the tab's renderer the document at the
+/// serialization of its URL with the response's body.
+pub proof fn ml_carry_out_done(
+    urls: UrlFns,
+    s: State,
+    tab: nat,
+    partition: crate::domain::Domain,
+    cur: Option<nat>,
+    url: clazel_url::url::spec::Url,
+    response: clazel_http::message::spec::Response,
+    i: int,
+    l: clazel_origin::spec::Origin,
+)
+    requires
+        s.conns =~= Seq::<Connection>::empty(),
+        find_by_tab(s.renderers, tab, 0) == Some(i),
+        scalar_url(clazel_url::url::spec::url_serializer(url, false)),
+        lock_of_url(urls, clazel_url::url::spec::url_serializer(url, false), s.next_id) == Some(l),
+        !(l is Tuple && l == s.renderers[i].lock),
+    ensures
+        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1[2] == (Output::ToRenderer {
+            id: s.next_id,
+            bytes: commit_frames(
+                clazel_url::url::spec::url_serializer(url, false),
+                Document { content_type: response_document(response).content_type, kind: kind_document(), body: response.body },
+            ),
+        }),
+{
+    crate::counterexamples::lemma_co_commit_spawn(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response), i, l);
+    reveal_with_fuel(carry_out, 2);
+}
+
+/// A failed fetch ends the navigation: the tab's renderer is no longer
+/// navigating.
+pub proof fn ml_carry_out_fail(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, cur: Option<nat>, why: clazel_fetch::transducer::spec::Reason, i: int)
+    requires
+        find_by_tab(s.renderers, tab, 0) == Some(i),
+        0 <= i < s.renderers.len(),
+    ensures
+        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Fail(why)]).0.renderers[i].pending is None,
+{
+    reveal_with_fuel(carry_out, 2);
+    let (s1, closes) = close_tab_conns(s, tab);
+    assert(s1.renderers =~= s.renderers);
+}
+
+/// Closing the connections of a tab leaves none of them.
+pub proof fn ml_close_tab_conns(s: State, tab: nat)
+    ensures
+        close_tab_conns(s, tab).0.conns == without_tab(s.conns, tab),
+{
+}
+
+/// A new navigation of a tab closes the connections the tab has: its
+/// outputs start with their `Close`s.
+pub proof fn ml_begin_closes(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, i: int)
+    requires
+        find_by_tab(s.renderers, tab, 0) == Some(i),
+        0 <= i < s.renderers.len(),
+        lock_of_url(urls, url, s.next_id) is Some,
+        closes_of_tab(s.conns, tab).len() > 0,
+    ensures
+        begin_navigation(rules, urls, fetch, s, tab, url).1[0] == closes_of_tab(s.conns, tab)[0],
+{
+}
+
+/// A commit closes the connections of its tab: its outputs start with their
+/// `Close`s.
+pub proof fn ml_commit_closes(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Document)
+    requires
+        closes_of_tab(s.conns, tab).len() > 0,
+    ensures
+        commit_navigation(urls, s, tab, href, body).1[0] == closes_of_tab(s.conns, tab)[0],
+{
+}
+
+/// A `Send` is written to the connection the actions are for, with the
+/// octets the transducer built.
+pub proof fn ml_carry_out_send(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, c: nat, bytes: Seq<u8>)
+    ensures
+        carry_out(urls, s, tab, partition, Some(c), seq![clazel_fetch::transducer::spec::Action::Send(bytes)]).1 == seq![Output::Send { conn: c, bytes }],
+{
+    reveal_with_fuel(carry_out, 2);
+}
+
+/// A `Close` closes the connection the actions are for and forgets it.
+pub proof fn ml_carry_out_close(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, c: nat)
+    ensures
+        carry_out(urls, s, tab, partition, Some(c), seq![clazel_fetch::transducer::spec::Action::Close]).0.conns == without_conn(s.conns, c),
+{
+    reveal_with_fuel(carry_out, 2);
+}
+
+// ---------------------------------------------------------------------
+// Item 4.12: display and commits.
+// ---------------------------------------------------------------------
+
+/// A renderer's `Display` is shown for its tab, under its URL, with what
+/// it displays: the core of `theorem_show_only_own_tab` and
+/// `theorem_address_bar_integrity`.
+pub proof fn ml_display_shows(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, title: Seq<u8>, text: Seq<u8>, links: Seq<Seq<u8>>)
+    ensures
+        handle_message(rules, urls, fetch, s, r, clazel_ipc::message::spec::Message::Display { title, text, links }) == (
+            s,
+            seq![Output::Show { tab: r.tab, url: r.url, title, text, links }],
+        ),
+{
+}
+
+/// A renderer that is not committed may not send `Display`: the case
+/// `theorem_address_bar_integrity` excludes.
+pub proof fn ml_uncommitted_display(r: Renderer, bytes: Seq<u8>)
+    requires
+        !r.committed,
+        decode_renderer_frame(bytes) matches Some(m) && m is Display,
+    ensures
+        accepted_message(r, bytes) is None,
+{
+}
+
+/// A tab opened without a script, whose fetch cannot start, is not
+/// committed after its `OpenTab`: the step writes to its renderer only the
+/// `Error`, which is no commit (`theorem_committed_only_after_commit` over
+/// the one-event run, and `lemma_error_is_not_a_commit`).
+pub proof fn ml_open_tab_uncommitted(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, url: Seq<u32>)
+    requires
+        lock_of_url(urls, url, 0) is Some,
+        (fetch.parse)(url) is None,
+    ensures
+        step(rules, urls, fetch, init_state(), Event::OpenTab { url, script: None }).0.renderers.len() > 0,
+        !step(rules, urls, fetch, init_state(), Event::OpenTab { url, script: None }).0.renderers[0].committed,
+{
+    let e = Event::OpenTab { url, script: None };
+    let t = seq![e];
+    let s = init_state();
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    crate::commit_theorems::theorem_committed_only_after_commit(rules, urls, fetch, t);
+    assert(t[0] == e);
+    assert(t.drop_first() =~= Seq::<Event>::empty());
+    assert(run_state(rules, urls, fetch, s1, Seq::<Event>::empty()) == s1);
+    assert(run_outputs(rules, urls, fetch, s1, Seq::<Event>::empty()) =~= Seq::<Output>::empty());
+    assert(run_state(rules, urls, fetch, s, t) == s1);
+    assert(run_outputs(rules, urls, fetch, s, t) =~= out);
+    // The step: `Spawn`, the tab's `Close`s, and the `Error` of the failed
+    // navigation.
+    let lock = lock_of_url(urls, url, 0)->Some_0;
+    let rn = Renderer { committed: false, id: 0, tab: 0, url, lock, pending: None };
+    let sp = State { renderers: s.renderers.push(rn), next_id: 1, ..s };
+    assert(sp.renderers =~= seq![rn]);
+    assert(find_by_tab(sp.renderers, 0, 0) == Some(0int));
+    let (s0, closes) = close_tab_conns(sp, 0);
+    crate::net_theorems::lemma_closes_of_tab(sp.conns, 0);
+    let error = reply(rn, clazel_ipc::message::spec::Message::Error { code: error_bad_url() });
+    assert(out =~= seq![Output::Spawn { id: 0, policy: Policy::Renderer }] + (closes + error));
+    assert(s1.renderers =~= seq![Renderer { pending: None, ..rn }]);
+    if s1.renderers[0].committed {
+        let r = s1.renderers[0];
+        assert(crate::statements::commit_sent(out, r.id, r.url));
+        let (k, doc) = choose|k: int, doc: Document|
+            #![trigger out[k], commit_frames(r.url, doc)]
+            0 <= k < out.len() && out[k] == Output::ToRenderer { id: r.id, bytes: commit_frames(r.url, doc) };
+        crate::commit_theorems::lemma_error_is_not_a_commit(error_bad_url(), r.url, doc);
+        if 1 <= k < 1 + closes.len() {
+            assert(out[k] == closes[k - 1]);
+        }
+    }
+}
 
 } // verus!

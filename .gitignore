@@ -5,7 +5,8 @@
 .DS_Store
 /.verus-log
 # Verus SMT solver logs; single files can exceed GitHub's 100 MB limit.
-/.verus-solver-log/
+# Unanchored, so a log written inside a crate directory is ignored too.
+.verus-solver-log/
 /kani-out
 # `cargo xtask verify --part crate` measurements (xtask/src/parts.rs)
 /parts/

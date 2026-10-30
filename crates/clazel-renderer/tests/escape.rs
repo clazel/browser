@@ -23,6 +23,9 @@
 //! control is refused (`EPERM`) for that reason, so there the control may
 //! end in that error instead of succeeding; the sandboxed run must still be
 //! killed by `SIGSYS`.
+//!
+//! Windows has no sandbox yet (phase 8), so the test is empty there.
+#![cfg(unix)]
 
 use std::fs;
 use std::net::TcpListener;

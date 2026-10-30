@@ -66,7 +66,7 @@ fn decodes_rsa_and_retains_signed_der_and_positive_magnitudes() {
             assert_eq!(key.public_exponent_der, &[0x02, 0x01, 0x03]);
             assert_eq!(key.public_exponent_octets, &[0x03]);
         }
-        PublicKey::Unsupported => (),
+        PublicKey::EcP256(_) | PublicKey::EcP384(_) | PublicKey::Unsupported => (),
     }
 }
 
@@ -119,4 +119,136 @@ fn rejects_extra_fields_trailing_data_and_wrong_outer_tags() {
         &[0x05, 0x00],
     );
     assert!(parse_subject_public_key_info(&extra_field).is_none());
+}
+
+/// Independent known answers: keys generated with `openssl ecparam` (LibreSSL
+/// 3.3.6) and written with `openssl ec -pubout`; the expected points are
+/// the `pub:` octets that `openssl ec -text` prints, not read from our
+/// decoder.
+mod ec {
+    use super::{PublicKey, parse_subject_public_key_info};
+
+    /// prime256v1, 91 octets (RFC 5480 §2.1.1).
+    const P256_SPKI: &str = "3059301306072a8648ce3d020106082a8648ce3d0301070342000462221489361cbf692338cb1c55f7703e3499180eadc7687d662033568a267f672a38d6ba139d54852df13bc50aea510ad435d0b01923ed0bde0656b2c8d484ff";
+    /// secp384r1, 120 octets.
+    const P384_SPKI: &str = "3076301006072a8648ce3d020106052b810400220362000455caf3f821d1ec7fa2309dba54e7b0c0e32ad8f9a178807f3a45131c3d9225597d48585ab736d086fe12843d191b1621cf5036722ccbbd034bfe9b92dabef25b6e26def9345c9e8f3f67e22fbfd3b91c21b9002c2d450f68b886c7c2bfd6c768";
+
+    pub fn unhex(text: &str) -> Vec<u8> {
+        text.as_bytes()
+            .chunks(2)
+            .map(|pair| {
+                let digits: String = pair.iter().map(|&b| char::from(b)).collect();
+                u8::from_str_radix(&digits, 16).unwrap_or(0)
+            })
+            .collect()
+    }
+
+    /// Replace the first occurrence of `from` in `der` by `to` (same length).
+    fn patched(der: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
+        let mut out = der.to_vec();
+        if let Some(at) = der.windows(from.len()).position(|w| w == from) {
+            for (offset, byte) in to.iter().enumerate() {
+                if let Some(slot) = out.get_mut(at.saturating_add(offset)) {
+                    *slot = *byte;
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn p256_key_is_classified_with_x_and_y() {
+        let der = unhex(P256_SPKI);
+        let parsed = parse_subject_public_key_info(&der);
+        assert!(parsed.is_some());
+        let Some(parsed) = parsed else { return };
+        assert!(matches!(parsed.public_key, PublicKey::EcP256(_)));
+        let PublicKey::EcP256(xy) = parsed.public_key else {
+            return;
+        };
+        // `openssl ec -text` prints 04 || X || Y; EcP256 holds X || Y.
+        assert_eq!(xy.len(), 64);
+        assert_eq!(xy.first(), Some(&0x62));
+        assert_eq!(xy.last(), Some(&0xff));
+        assert_eq!(xy, parsed.subject_public_key_bits.get(1..).unwrap_or(&[]));
+        assert_eq!(parsed.subject_public_key_bits.first(), Some(&0x04));
+    }
+
+    #[test]
+    fn p384_key_is_classified_with_the_whole_ecpoint() {
+        let der = unhex(P384_SPKI);
+        let parsed = parse_subject_public_key_info(&der);
+        assert!(parsed.is_some());
+        let Some(parsed) = parsed else { return };
+        assert!(matches!(parsed.public_key, PublicKey::EcP384(_)));
+        let PublicKey::EcP384(point) = parsed.public_key else {
+            return;
+        };
+        // The 97-octet ECPoint, 0x04 included (clazel-p384 decodes it).
+        assert_eq!(point.len(), 97);
+        assert_eq!(point.first(), Some(&0x04));
+        assert_eq!(point.get(1), Some(&0x55));
+        assert_eq!(point.last(), Some(&0x68));
+        assert_eq!(point, parsed.subject_public_key_bits);
+    }
+
+    #[test]
+    fn unclassified_ec_keys_still_parse_as_unsupported() {
+        let p256 = unhex(P256_SPKI);
+        // The compressed prefix 0x02 on a 65-octet point.
+        let compressed_prefix = patched(&p256, &[0x00, 0x04, 0x62], &[0x00, 0x02, 0x62]);
+        // secp256r1's curve OID 1.2.840.10045.3.1.7 -> 1.2.840.10045.3.1.1
+        // (prime192v1), a named curve that is not classified.
+        let other_curve = patched(
+            &p256,
+            &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07],
+            &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x01],
+        );
+        // The P-384 key's curve 1.3.132.0.34 -> secp521r1's 1.3.132.0.35.
+        let p384 = unhex(P384_SPKI);
+        let p521 = patched(
+            &p384,
+            &[0x2b, 0x81, 0x04, 0x00, 0x22],
+            &[0x2b, 0x81, 0x04, 0x00, 0x23],
+        );
+        // id-ecPublicKey 1.2.840.10045.2.1 -> a near miss, ...2.2.
+        let wrong_oid = patched(
+            &p256,
+            &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01],
+            &[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x02],
+        );
+        for der in [compressed_prefix, other_curve, p521, wrong_oid] {
+            let parsed = parse_subject_public_key_info(&der);
+            assert!(parsed.is_some());
+            let Some(parsed) = parsed else { return };
+            assert!(matches!(parsed.public_key, PublicKey::Unsupported));
+        }
+    }
+
+    #[test]
+    fn unused_bits_wrong_length_and_missing_parameters_are_unsupported() {
+        let p256 = unhex(P256_SPKI);
+        // BIT STRING unused-bits octet 0 -> 1.
+        let unused = patched(&p256, &[0x03, 0x42, 0x00, 0x04], &[0x03, 0x42, 0x01, 0x04]);
+        // A 66-octet point: BIT STRING length 0x42 -> 0x43 with an extra
+        // octet, and the outer lengths grown to match.
+        let mut long = p256.clone();
+        long.push(0x00);
+        long = patched(&long, &[0x30, 0x59], &[0x30, 0x5a]);
+        long = patched(&long, &[0x03, 0x42], &[0x03, 0x43]);
+        // Parameters absent: AlgorithmIdentifier is just id-ecPublicKey.
+        let mut absent = vec![0x30, 0x4f, 0x30, 0x09, 0x06, 0x07];
+        absent.extend_from_slice(&[0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01]);
+        absent.extend_from_slice(&[0x03, 0x42]);
+        absent.extend_from_slice(p256.get(p256.len().saturating_sub(66)..).unwrap_or(&[]));
+        // DER also wants the unused low bit of the last octet (0xff) clear,
+        // so the SPKI itself is refused; a key is never classified from it.
+        assert!(parse_subject_public_key_info(&unused).is_none());
+        for der in [long, absent] {
+            let parsed = parse_subject_public_key_info(&der);
+            assert!(parsed.is_some());
+            let Some(parsed) = parsed else { return };
+            assert!(matches!(parsed.public_key, PublicKey::Unsupported));
+        }
+    }
 }

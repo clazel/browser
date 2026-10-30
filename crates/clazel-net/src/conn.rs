@@ -314,10 +314,17 @@ mod tests {
             l.local_addr()?.port()
         };
         let done = run_with(&LOCAL, port, b"x", short(), |_| Flow::Continue);
-        assert_eq!(
-            done,
-            Err(NetError::Connect(io::ErrorKind::ConnectionRefused))
-        );
+        let refused = Err(NetError::Connect(io::ErrorKind::ConnectionRefused));
+        if cfg!(windows) {
+            // Windows retries a refused SYN for about two seconds, longer
+            // than `short()`'s connect timeout, so the timeout can win.
+            assert!(
+                done == refused || done == Err(NetError::Timeout(Stage::Connect)),
+                "{done:?}"
+            );
+        } else {
+            assert_eq!(done, refused);
+        }
         assert_eq!(
             run_with(&[], port, b"x", short(), |_| Flow::Continue),
             Err(NetError::Connect(io::ErrorKind::InvalidInput))

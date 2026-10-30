@@ -4,7 +4,14 @@
 core is formally verified and whose entire codebase is memory safe. It will be
 written by AI, and checked by machines.
 
-**Platforms:** macOS and Linux first. Windows comes later (phase 8).
+**Platforms:** macOS and Linux first. Windows is partly done early: the
+workspace builds and its tests pass on Windows, and the renderer runs in an
+AppContainer (a less-privileged one, with a Job Object and process
+mitigations; policy in `clazel-sandbox`'s `appcontainer`, calls in
+`clazel-sys`'s `windows`, started by `clazel-renderer`'s `launch`). The rest of
+phase 8 stays: the proofs (Verus, Kani) and `scripts/verify.sh` are not run
+on Windows, there is no Windows CI job, and the `clazel-sys` change is not
+audited yet (`docs/SYS-AUDITS.md`).
 
 **Non-goals for now:** JIT compilation, extensions, DRM, WebGL/WebGPU.
 
@@ -41,7 +48,9 @@ crypto from libcrux (decided in phase-3.md item 3.0; rustls was not taken).
 *Exit:* a verified `curl` clone.
 Detailed plan: [phases/phase-3.md](phases/phase-3.md).
 **Status: in progress (started 2026-10-23). The TLS decision (3.0) is
-taken: option B.**
+taken: option B. Everything but TLS is on `main` (HTTP, DNS, the fetch
+client with redirects and cookies, the kernel join, and the `http://` half
+of the `curl` clone); TLS (3.5) is on open pull requests.**
 
 ## Phase 4: HTML and DOM
 WHATWG tokenizer (proven total and panic-free), tree builder, DOM.
@@ -67,5 +76,5 @@ in safe Rust. DOM bindings.
 *Exit:* common sites work, more slowly than in a JIT-based browser.
 
 ## Phase 8: Windows port, compatibility grind
-Windows sandbox backend (AppContainer). WPT score tracking, CSS breadth,
+Windows CI and proofs (the AppContainer backend exists, see Platforms). WPT score tracking, CSS breadth,
 Web APIs, performance.

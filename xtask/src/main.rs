@@ -34,6 +34,7 @@
 mod changed;
 mod conformance;
 mod deps;
+mod encoding_indexes;
 mod entities;
 mod mutate;
 mod parts;
@@ -356,6 +357,11 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     let (problems, notes) = entities::run(false);
     r.step(
         "generated named character references table",
+        outcome(problems, notes),
+    );
+    let (problems, notes) = encoding_indexes::run(false);
+    r.step(
+        "generated encoding labels and indexes",
         outcome(problems, notes),
     );
     let tooling = crates
@@ -762,7 +768,7 @@ fn conformance_suites(r: &mut Runner, crates: &[Crate]) {
 /// since their inputs did not change; CI's full run re-measures them all.
 fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
     const NAME: &str = "README status table";
-    let host_shell_count = report::host_shell_lines(std::path::Path::new(report::HOST_SHELL_DIR));
+    let host_shell_count = report::shell_lines(std::path::Path::new(report::HOST_SHELL_DIR));
     if let Some(counted) = host_shell_count.as_ref() {
         match counted {
             Ok(n) if *n < report::HOST_SHELL_LIMIT => {}
@@ -778,6 +784,10 @@ fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
             }
             Err(e) => r.step("host shell size", Outcome::Fail(vec![e.clone()])),
         }
+    }
+    let net_shell_count = report::shell_lines(std::path::Path::new(report::NET_SHELL_DIR));
+    if let Some(Err(e)) = net_shell_count.as_ref() {
+        r.step("network shell size", Outcome::Fail(vec![e.clone()]));
     }
     let carried = match only {
         None => report::Rows::new(),
@@ -827,7 +837,12 @@ fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
         );
         return;
     }
-    let block = report::render_with(&r.metrics, &carried, host_shell_count.and_then(Result::ok));
+    let block = report::render_with(
+        &r.metrics,
+        &carried,
+        host_shell_count.and_then(Result::ok),
+        net_shell_count.and_then(Result::ok),
+    );
     let readme = match std::fs::read_to_string(report::README) {
         Ok(t) => t,
         Err(e) => {
@@ -920,6 +935,11 @@ fn generate_tables() -> ExitCode {
     let (problems, notes) = entities::run(true);
     r.step(
         "generate named character references table",
+        outcome(problems, notes),
+    );
+    let (problems, notes) = encoding_indexes::run(true);
+    r.step(
+        "generate encoding labels and indexes",
         outcome(problems, notes),
     );
     if r.failed {
@@ -1266,13 +1286,13 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
 
 #[cfg(test)]
 mod tests {
-    use std::process::Command;
-
     /// A streamed run keeps both pipes' output and reports failure.
     #[cfg(unix)]
     #[test]
     #[cfg_attr(miri, ignore = "spawns processes")]
     fn a_streamed_run_keeps_its_output() {
+        use std::process::Command;
+
         let ok = super::run_streamed("t", Command::new("sh").args(["-c", "echo a; echo b >&2"]));
         assert_eq!(ok.as_deref(), Ok("a\nb\n"));
         let failed = super::run_streamed("t", Command::new("sh").args(["-c", "exit 3"]));

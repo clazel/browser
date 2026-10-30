@@ -251,7 +251,12 @@ pub proof fn lemma_addressed_same(
         crate::noninterference::addressed_to(rules, d, s1, s1b, o) == crate::noninterference::addressed_to(rules, d, s2, s2b, o),
 {
     if crate::noninterference::addressed_to(rules, d, s1, s1b, o) {
-        let r = choose|r: Renderer| (s1.renderers.contains(r) || s1b.renderers.contains(r)) && r.id == crate::domain::output_id(o) && crate::domain::domain_of_renderer(rules, r) == d;
+        let r = choose|r: Renderer|
+            (s1.renderers.contains(r) || s1b.renderers.contains(r)) && (if o is Show {
+                r.tab == o->Show_tab
+            } else {
+                r.id == crate::domain::output_id(o)
+            }) && crate::domain::domain_of_renderer(rules, r) == d;
         if s1.renderers.contains(r) {
             let i = choose|i: int| 0 <= i < s1.renderers.len() && s1.renderers[i] == r;
             assert(s2.renderers.contains(r));
@@ -261,7 +266,12 @@ pub proof fn lemma_addressed_same(
         }
     }
     if crate::noninterference::addressed_to(rules, d, s2, s2b, o) {
-        let r = choose|r: Renderer| (s2.renderers.contains(r) || s2b.renderers.contains(r)) && r.id == crate::domain::output_id(o) && crate::domain::domain_of_renderer(rules, r) == d;
+        let r = choose|r: Renderer|
+            (s2.renderers.contains(r) || s2b.renderers.contains(r)) && (if o is Show {
+                r.tab == o->Show_tab
+            } else {
+                r.id == crate::domain::output_id(o)
+            }) && crate::domain::domain_of_renderer(rules, r) == d;
         if s2.renderers.contains(r) {
             let i = choose|i: int| 0 <= i < s2.renderers.len() && s2.renderers[i] == r;
             assert(s1.renderers.contains(s2.renderers[i]));
@@ -299,6 +309,41 @@ pub proof fn lemma_outputs_for_same(
         lemma_addressed_same(rules, urls, d, s1, s2, s1b, s2b, out[i]);
     }
     lemma_filter_pointwise(out, |o: Output| crate::noninterference::addressed_to(rules, d, s1, s1b, o), |o: Output| crate::noninterference::addressed_to(rules, d, s2, s2b, o));
+}
+
+/// Outputs addressed to a domain are renderer-bound ones.
+pub proof fn lemma_outputs_for_renderer_outs(rules: Seq<clazel_psl::spec::Rule>, d: crate::domain::Domain, s: State, sb: State, out: Seq<Output>)
+    ensures
+        crate::noninterference::outputs_for(rules, d, s, sb, out) == crate::noninterference::outputs_for(rules, d, s, sb, crate::noninterference::renderer_outs(out)),
+{
+    let p = |o: Output| crate::noninterference::addressed_to(rules, d, s, sb, o);
+    let q = |o: Output| crate::noninterference::renderer_bound(o);
+    assert forall|i: int| 0 <= i < out.len() && p(#[trigger] out[i]) implies q(out[i]) by {}
+    crate::projection::lemma_filter_implies(out, p, q);
+}
+
+/// Related steps whose renderer-bound outputs are equal send `d` the same.
+pub proof fn lemma_outputs_for_same_rb(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    s1b: State,
+    s2b: State,
+    out1: Seq<Output>,
+    out2: Seq<Output>,
+)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+        crate::noninterference::rel(rules, urls, d, s1b, s2b),
+        crate::noninterference::renderer_outs(out1) == crate::noninterference::renderer_outs(out2),
+    ensures
+        crate::noninterference::outputs_for(rules, d, s1, s1b, out1) == crate::noninterference::outputs_for(rules, d, s2, s2b, out2),
+{
+    lemma_outputs_for_renderer_outs(rules, d, s1, s1b, out1);
+    lemma_outputs_for_renderer_outs(rules, d, s2, s2b, out2);
+    lemma_outputs_for_same(rules, urls, d, s1, s2, s1b, s2b, crate::noninterference::renderer_outs(out1));
 }
 
 // ---------------------------------------------------------------------
@@ -413,35 +458,139 @@ pub proof fn lemma_insert_contains(jar: Seq<clazel_cookie::storage::spec::Cookie
     }
 }
 
-/// `navigate_tab` and `begin_navigation` leave the jar, storage and time alone.
-pub proof fn lemma_navigation_frame(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>)
+/// `navigate_tab` leaves the jar, storage and time alone.
+pub proof fn lemma_navigate_tab_frame(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document)
     ensures
         navigate_tab(urls, s, tab, url, script).0.jar == s.jar,
         navigate_tab(urls, s, tab, url, script).0.storage == s.storage,
         navigate_tab(urls, s, tab, url, script).0.now == s.now,
-        begin_navigation(urls, s, tab, url).0.jar == s.jar,
-        begin_navigation(urls, s, tab, url).0.storage == s.storage,
-        begin_navigation(urls, s, tab, url).0.now == s.now,
-        begin_navigation(urls, s, tab, url).0.next_id == s.next_id,
+        navigate_tab(urls, s, tab, url, script).0.conns == s.conns,
+        navigate_tab(urls, s, tab, url, script).0.next_conn == s.next_conn,
 {
 }
 
-/// What a `Fetched` changes of the state besides the renderers: the jar
-/// takes the fetch's `Set-Cookie` lines if the event answers the navigation
-/// in flight, and nothing else (storage, time) changes.
-pub proof fn lemma_fetched_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome)
+/// `carry_out` leaves the jar, storage and time alone.
+pub proof fn lemma_carry_out_frame(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, cur: Option<nat>, actions: Seq<NetAction>)
     ensures
-        fetched(rules, urls, fetch, s, tab, outcome).0.jar == (match fetched_run(fetch, s, tab, outcome) {
-            Some(run) => apply_stores(rules, s.jar, run.stores, s.now),
+        carry_out(urls, s, tab, partition, cur, actions).0.jar == s.jar,
+        carry_out(urls, s, tab, partition, cur, actions).0.storage == s.storage,
+        carry_out(urls, s, tab, partition, cur, actions).0.now == s.now,
+    decreases actions.len(),
+{
+    if actions.len() > 0 {
+        let rest = actions.drop_first();
+        match actions[0] {
+            clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
+                let ep = Endpoint { host, port, tls };
+                let (s1, id, out) = open_connection(s, tab, partition, ep);
+                lemma_carry_out_frame(urls, s1, tab, partition, Some(id), rest);
+            },
+            clazel_fetch::transducer::spec::Action::Send(bytes) => {
+                lemma_carry_out_frame(urls, s, tab, partition, cur, rest);
+            },
+            clazel_fetch::transducer::spec::Action::Close => match cur {
+                Some(c) => {
+                    lemma_carry_out_frame(urls, State { conns: without_conn(s.conns, c), ..s }, tab, partition, None, rest);
+                },
+                None => {
+                    lemma_carry_out_frame(urls, s, tab, partition, cur, rest);
+                },
+            },
+            clazel_fetch::transducer::spec::Action::Done { url, response } => {
+                let href = clazel_url::url::spec::url_serializer(url, false);
+                let s1 = close_tab_conns(s, tab).0;
+                if let Some(i) = find_by_tab(s1.renderers, tab, 0) {
+                    if scalar_url(href) && lock_of_url(urls, href, s1.next_id) is Some {
+                        lemma_navigate_tab_frame(urls, s1, tab, href, response_document(response));
+                    }
+                }
+            },
+            clazel_fetch::transducer::spec::Action::Fail(_) => {},
+        }
+    }
+}
+
+/// `navigate_tab` and `begin_navigation` leave the jar, storage and time alone.
+pub proof fn lemma_navigation_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, url: Seq<u32>, script: Document)
+    ensures
+        navigate_tab(urls, s, tab, url, script).0.jar == s.jar,
+        navigate_tab(urls, s, tab, url, script).0.storage == s.storage,
+        navigate_tab(urls, s, tab, url, script).0.now == s.now,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.jar == s.jar,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.storage == s.storage,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.now == s.now,
+        begin_navigation(rules, urls, fetch, s, tab, url).0.next_id == s.next_id,
+{
+    if let Some(i) = find_by_tab(s.renderers, tab, 0) {
+        if lock_of_url(urls, url, s.next_id) is Some {
+            let (s0, closes) = close_tab_conns(s, tab);
+            let old = s0.renderers[i];
+            if let Some(parsed) = (fetch.parse)(url) {
+                let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
+                let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
+                lemma_carry_out_frame(urls, s1, tab, nav.partition, None, actions);
+                // `start` gives a `Connect` or a `Fail`: nothing that commits (so `next_id` stays).
+                assert(actions == seq![clazel_fetch::transducer::spec::Action::Connect { host: actions[0]->Connect_host, port: actions[0]->Connect_port, tls: actions[0]->Connect_tls }]
+                    || (actions.len() == 1 && actions[0] is Fail)) by {
+                    reveal_with_fuel(clazel_fetch::transducer::spec::begin, 1);
+                }
+                if actions[0] is Fail {
+                    assert(carry_out(urls, s1, tab, nav.partition, None, actions).0.next_id == s1.next_id) by {
+                        assert(actions.drop_first() =~= Seq::<NetAction>::empty());
+                    }
+                } else {
+                    let ep = Endpoint { host: actions[0]->Connect_host, port: actions[0]->Connect_port, tls: actions[0]->Connect_tls };
+                    let (s2, id, out) = open_connection(s1, tab, nav.partition, ep);
+                    assert(actions.drop_first() =~= Seq::<NetAction>::empty());
+                    assert(carry_out(urls, s2, tab, nav.partition, Some(id), Seq::<NetAction>::empty()) == (s2, Seq::<Output>::empty()));
+                }
+            }
+        }
+    }
+}
+
+/// What a `Net` changes of the state besides the renderers and connections:
+/// the jar takes the jar operations of the transducer's step if the event is
+/// about an open connection, and nothing else (storage, time) changes.
+pub proof fn lemma_net_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
+    ensures
+        net(rules, urls, fetch, s, conn, input).0.jar == (match net_target(s, conn) {
+            Some((_, _, nav)) => apply_net_ops(rules, s.jar, net_transducer_step(fetch, s, nav, input).2),
             None => s.jar,
         }),
-        fetched(rules, urls, fetch, s, tab, outcome).0.storage == s.storage,
-        fetched(rules, urls, fetch, s, tab, outcome).0.now == s.now,
+        net(rules, urls, fetch, s, conn, input).0.storage == s.storage,
+        net(rules, urls, fetch, s, conn, input).0.now == s.now,
 {
-    if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-        let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
-        if let FetchResult::Done { url, body } = run.result {
-            lemma_navigation_frame(urls, s1, tab, url, body);
+    if let Some((c, i, nav)) = net_target(s, conn) {
+        let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
+        let conns = if input is Closed || input is Error { without_conn(s.conns, conn) } else { s.conns };
+        let s1 = State {
+            jar: apply_net_ops(rules, s.jar, ops),
+            conns,
+            renderers: s.renderers.update(i, Renderer { pending: Some(Navigation { fetch: fs, ..nav }), ..s.renderers[i] }),
+            ..s
+        };
+        lemma_carry_out_frame(urls, s1, c.tab, nav.partition, Some(conn), actions);
+    }
+}
+
+/// `OpenTab` changes no cookie, storage or time (item 4.12: without a script
+/// it is a new renderer and the start of its tab's fetch, which reads and
+/// writes no cookie); it adds at most one id.
+pub proof fn lemma_open_tab_frame(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, url: Seq<u32>, script: Option<Seq<u8>>)
+    ensures
+        open_tab(rules, urls, fetch, s, url, script).0.jar == s.jar,
+        open_tab(rules, urls, fetch, s, url, script).0.storage == s.storage,
+        open_tab(rules, urls, fetch, s, url, script).0.now == s.now,
+        open_tab(rules, urls, fetch, s, url, script).0.next_id <= s.next_id + 1,
+{
+    let id = s.next_id;
+    if let Some(lock) = lock_of_url(urls, url, id) {
+        if script is None {
+            let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
+            let s1 = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
+            lemma_navigation_frame(rules, urls, fetch, s1, id, url, script_document(seq![]));
         }
     }
 }
@@ -475,31 +624,7 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                     match m {
                         clazel_ipc::message::spec::Message::CookieGet => {
                             if !cookie_averse(rules, r.lock) {
-                                let url = request_url_of(urls, r);
-                                let live = clazel_cookie::storage::spec::evict_expired(s.jar, s.now);
-                                let host = lock_host(r.lock);
-                                assert(url.host == host);
-                                let f = |c: clazel_cookie::storage::spec::Cookie| c;
-                                // The retrieval maps only the last-access-time.
-                                if let Some(h) = url.host {
-                                    let mapped = clazel_cookie::storage::spec::jar_after_retrieval(rules, s.jar, url, document_context(r.lock), s.now);
-                                    clazel_cookie::storage::isolation::lemma_evict_expired_props(rules, s.jar, s.now, any_root);
-                                    assert forall|k: int| 0 <= k < mapped.len() implies (#[trigger] mapped[k]).domain.is_ip_address || !clazel_cookie::storage::spec::is_public_suffix_string(
-                                        rules,
-                                        mapped[k].domain.name,
-                                    ) by {
-                                        let g = clazel_cookie::storage::spec::update_last_access_time(rules, url, document_context(r.lock), h, s.now);
-                                        assert(mapped[k] == g(live[k]));
-                                        assert(live.contains(live[k]));
-                                        assert(s.jar.contains(live[k]));
-                                        let q = choose|q: int| 0 <= q < s.jar.len() && s.jar[q] == live[k];
-                                        if clazel_cookie::storage::spec::cookie_is_retrieved(rules, url, document_context(r.lock), h, live[k]) {
-                                            assert(g(live[k]) == clazel_cookie::storage::spec::with_last_access_time(live[k], s.now));
-                                        } else {
-                                            assert(g(live[k]) == live[k]);
-                                        }
-                                    }
-                                }
+                                crate::net_wf::lemma_retrieval_no_public_suffix(rules, s.jar, request_url_of(urls, r), document_context(r.lock), s.now);
                             }
                         },
                         clazel_ipc::message::spec::Message::CookieSet { cookie_string } => {
@@ -517,7 +642,7 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                                 if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                     if lock_of_url(urls, resolved, s.next_id) is Some {
-                                        lemma_navigation_frame(urls, s, r.tab, resolved, seq![]);
+                                        lemma_navigation_frame(rules, urls, fetch, s, r.tab, resolved, script_document(seq![]));
                                     }
                                 }
                             }
@@ -527,11 +652,18 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
                 }
             }
         },
-        Event::Fetched { tab, outcome } => {
-            lemma_fetched_frame(rules, urls, fetch, s, tab, outcome);
-            if let Some(run) = fetched_run(fetch, s, tab, outcome) {
-                crate::invariant::lemma_apply_stores_wf(rules, s.jar, run.stores, s.now);
+        Event::NavigateTab { tab, url } => {
+            lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
+        },
+        Event::Net { conn, input } => {
+            lemma_net_frame(rules, urls, fetch, s, conn, input);
+            assert(crate::invariant::jar_wf(rules, s.jar));
+            if let Some((_, _, nav)) = net_target(s, conn) {
+                crate::net_wf::lemma_apply_net_ops_wf(rules, s.jar, net_transducer_step(fetch, s, nav, input).2);
             }
+        },
+        Event::OpenTab { url, script } => {
+            lemma_open_tab_frame(rules, urls, fetch, s, url, script);
         },
         _ => {},
     }

@@ -7,27 +7,32 @@
 
 mod support;
 
-use clazel_kernel::exec::fetch::NetOutcomeRecord;
+use clazel_fetch::transducer::types::InputBuf;
 use clazel_kernel::exec::records::EventRecord;
 
 use clazel_ipc::message::codec::Msg;
 use support::{Kernel, Out};
 
-/// Answer every `Fetch` among `out` as a shell with no network would: the
-/// kernel's stand-in fetch makes the delivered bytes (none) the document's
-/// script. The outputs, with each `Fetch` replaced by what answering it gave.
+/// Answer the network outputs among `out` as a server with an empty page
+/// would: `Connected` for a `Connect`, a whole response for a `Send`, nothing
+/// for a `Close`. The outputs for renderers, in order, with those that
+/// answering gave after them (the document's script is the empty body).
 fn settled(kernel: &mut Kernel, out: Vec<Out>) -> Vec<Out> {
+    let response = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
     let mut all = Vec::new();
-    for o in out {
-        match o {
-            Out::Fetch(tab, url) => {
-                let outcome = NetOutcomeRecord {
-                    url,
-                    net: Vec::new(),
-                };
-                all.extend(kernel.event(&EventRecord::Fetched { tab, outcome }));
+    let mut queue: std::collections::VecDeque<Out> = out.into();
+    while let Some(o) = queue.pop_front() {
+        let answer = match o {
+            Out::Connect(conn, ..) => Some((conn, InputBuf::Connected)),
+            Out::Send(conn, _) => Some((conn, InputBuf::Bytes(response.clone()))),
+            Out::Close(_) => None,
+            other => {
+                all.push(other);
+                None
             }
-            other => all.push(other),
+        };
+        if let Some((conn, input)) = answer {
+            queue.extend(kernel.event(&EventRecord::Net { conn, input }));
         }
     }
     all
@@ -186,7 +191,7 @@ fn a_document_on_a_public_suffix_host_gets_no_cookies() {
 #[test]
 fn a_navigation_to_a_url_that_does_not_parse_is_an_error() {
     let mut kernel = Kernel::new();
-    let id = open(&mut kernel, "https://example.test/");
+    let id = open(&mut kernel, "http://example.test/");
     let out = kernel.send(
         id,
         &Msg::Navigate {
@@ -204,39 +209,46 @@ fn a_navigation_to_a_url_that_does_not_parse_is_an_error() {
     );
     assert_eq!(
         out,
-        vec![Out::Fetch(
-            id,
-            support::code_points("https://example.test/b")
-        )]
+        vec![Out::Connect(0, b"example.test".to_vec(), 80, false)]
     );
     let out = settled(&mut kernel, out);
-    assert_eq!(
-        out,
-        vec![Out::To(
-            id,
-            Msg::Commit {
-                url: b"https://example.test/b".to_vec(),
-                script: Vec::new()
-            }
-        )]
-    );
+    assert_eq!(out, vec![Out::Commit(id, page("http://example.test/b"))]);
+}
+
+/// The document a server with an empty page and no `Content-Type` commits.
+fn page(url: &str) -> support::Doc {
+    support::Doc {
+        url: url.as_bytes().to_vec(),
+        content_type: Vec::new(),
+        kind: 0,
+        body: Vec::new(),
+    }
 }
 
 #[test]
-fn a_script_that_is_not_utf8_cannot_be_sent() {
-    // The user's script is text; a `Commit` that cannot be encoded is
-    // replaced by the encode error, so the tab is still opened.
+fn a_script_is_committed_as_its_bytes() {
+    // Item 4.12: a user script is a document of kind 1 whose body is the
+    // script's bytes, so it need not be UTF-8 (the renderer reads it).
     let mut kernel = Kernel::new();
     let out = kernel.event(&clazel_kernel::exec::records::EventRecord::OpenTab {
         url: support::code_points("https://example.test/"),
-        script: vec![0xFF],
+        script: Some(vec![0xFF]),
     });
-    assert_eq!(out.len(), 2);
-    assert!(matches!(out.first(), Some(Out::Spawn(_))));
-    assert!(matches!(
-        out.get(1),
-        Some(Out::To(_, Msg::Error { code: 4 }))
-    ));
+    assert_eq!(
+        out,
+        vec![
+            Out::Spawn(0),
+            Out::Commit(
+                0,
+                support::Doc {
+                    url: b"https://example.test/".to_vec(),
+                    content_type: Vec::new(),
+                    kind: 1,
+                    body: vec![0xFF],
+                }
+            )
+        ]
+    );
 }
 
 #[test]
@@ -244,7 +256,7 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
     // Dot segments, query and fragment are the parser's, and the committed
     // URL is its serialization (host lower-cased, default port dropped).
     let mut kernel = Kernel::new();
-    let id = open(&mut kernel, "HTTPS://Example.TEST:443/a/b/c");
+    let id = open(&mut kernel, "HTTP://Example.TEST:80/a/b/c");
     let out = kernel.send(
         id,
         &Msg::Navigate {
@@ -254,13 +266,7 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
     let out = settled(&mut kernel, out);
     assert_eq!(
         out,
-        vec![Out::To(
-            id,
-            Msg::Commit {
-                url: b"https://example.test/a/d/e?x=1#y".to_vec(),
-                script: Vec::new()
-            }
-        )]
+        vec![Out::Commit(id, page("http://example.test/a/d/e?x=1#y"))]
     );
     // An absolute URL on another origin replaces the renderer.
     let out = kernel.send(
@@ -272,7 +278,7 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
     let out = settled(&mut kernel, out);
     assert!(matches!(
         out.as_slice(),
-        [Out::Kill(old), Out::Spawn(new), Out::To(to, Msg::Commit { .. })]
+        [Out::Kill(old), Out::Spawn(new), Out::Commit(to, _)]
             if *old == id && new == to && *new != id
     ));
 }

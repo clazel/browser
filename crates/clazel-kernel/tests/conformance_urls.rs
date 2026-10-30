@@ -34,7 +34,7 @@
 
 mod support;
 
-use clazel_kernel::exec::fetch::NetOutcomeRecord;
+use clazel_fetch::transducer::types::InputBuf;
 use clazel_kernel::exec::records::EventRecord;
 
 use clazel_ipc::message::codec::Msg;
@@ -45,21 +45,26 @@ use clazel_url::url::parse::basic_url_parser;
 use clazel_url::url::serialize::url_path_serializer;
 use support::{Kernel, Out, code_points};
 
-/// Answer every `Fetch` among `out` as a shell with no network would: the
-/// kernel's stand-in fetch makes the delivered bytes (none) the document's
-/// script. The outputs, with each `Fetch` replaced by what answering it gave.
+/// Answer the network outputs among `out` as a server with an empty page
+/// would: `Connected` for a `Connect`, a whole response for a `Send`, nothing
+/// for a `Close`. The outputs for renderers, in order, with those that
+/// answering gave after them (the document's script is the empty body).
 fn settled(kernel: &mut Kernel, out: Vec<Out>) -> Vec<Out> {
+    let response = b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec();
     let mut all = Vec::new();
-    for o in out {
-        match o {
-            Out::Fetch(tab, url) => {
-                let outcome = NetOutcomeRecord {
-                    url,
-                    net: Vec::new(),
-                };
-                all.extend(kernel.event(&EventRecord::Fetched { tab, outcome }));
+    let mut queue: std::collections::VecDeque<Out> = out.into();
+    while let Some(o) = queue.pop_front() {
+        let answer = match o {
+            Out::Connect(conn, ..) => Some((conn, InputBuf::Connected)),
+            Out::Send(conn, _) => Some((conn, InputBuf::Bytes(response.clone()))),
+            Out::Close(_) => None,
+            other => {
+                all.push(other);
+                None
             }
-            other => all.push(other),
+        };
+        if let Some((conn, input)) = answer {
+            queue.extend(kernel.event(&EventRecord::Net { conn, input }));
         }
     }
     all
@@ -286,7 +291,7 @@ fn string(v: &[u32]) -> String {
 fn committed(out: &[Out]) -> Option<&[u8]> {
     let mut found = None;
     for o in out {
-        if let Out::To(_, Msg::Commit { url, .. }) = o {
+        if let Out::Commit(_, support::Doc { url, .. }) = o {
             if found.is_some() {
                 return None;
             }
@@ -296,12 +301,25 @@ fn committed(out: &[Out]) -> Option<&[u8]> {
     found
 }
 
+/// Whether the fetch takes `href`: an `http:` URL without userinfo
+/// (`clazel-fetch`; TLS is not carried out).
+fn fetched(href: &str) -> bool {
+    let Some(rest) = href.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    !authority.contains('@')
+}
+
 /// What navigating from `base` to `input` did, or why the row cannot run.
 enum Navigation {
     /// The kernel refused to open a tab on the base.
     BaseRefused,
     /// `Error { code: 3 }` and nothing else.
     BadUrl,
+    /// `Error { code: 5 }` and nothing else: the fetch does not take the URL
+    /// (only `http:` URLs without userinfo are fetched).
+    NotFetched,
     /// A commit of these bytes.
     Committed(Vec<u8>),
     /// Anything else.
@@ -322,6 +340,9 @@ fn navigate(base: &str, input: &str) -> Navigation {
     if out == vec![Out::To(id, Msg::Error { code: 3 })] {
         return Navigation::BadUrl;
     }
+    if out == vec![Out::To(id, Msg::Error { code: 5 })] {
+        return Navigation::NotFetched;
+    }
     let out = settled(&mut kernel, out);
     match committed(&out) {
         Some(url) => Navigation::Committed(url.to_vec()),
@@ -341,7 +362,10 @@ fn wpt_navigation_with_a_base() {
         let got = navigate(base, &r.input);
         let ok = match (&got, r.failure, &r.href) {
             (Navigation::BaseRefused | Navigation::BadUrl, true, _) => true,
-            (Navigation::Committed(url), false, Some(href)) => url.as_slice() == href.as_bytes(),
+            (Navigation::Committed(url), false, Some(href)) => {
+                fetched(href) && url.as_slice() == href.as_bytes()
+            }
+            (Navigation::NotFetched, false, Some(href)) => !fetched(href),
             _ => false,
         };
         if ok && matches!(got, Navigation::Committed(_)) {
@@ -353,6 +377,7 @@ fn wpt_navigation_with_a_base() {
             let shown = match got {
                 Navigation::BaseRefused => "base refused".to_string(),
                 Navigation::BadUrl => "bad url".to_string(),
+                Navigation::NotFetched => "not fetched".to_string(),
                 Navigation::Committed(u) => format!("committed {:?}", String::from_utf8_lossy(&u)),
                 Navigation::Other(s) => s,
             };
@@ -366,9 +391,9 @@ fn wpt_navigation_with_a_base() {
         "clazel-conformance: suite=\"WPT url/ urltestdata.json navigation (rows with a base)\" pass={pass} xfail=0 fail={} total={total}",
         failures.len()
     );
-    println!("{commits} of the {total} rows commit a URL; the rest are refused");
+    println!("{commits} of the {total} rows commit a URL; the rest are refused or not fetched");
     assert!(total > 0, "no rows with a base were read");
-    assert!(commits > total / 2, "too few navigations committed");
+    assert!(commits > total / 10, "too few navigations committed");
     assert!(failures.is_empty(), "{failures:#?}");
 }
 

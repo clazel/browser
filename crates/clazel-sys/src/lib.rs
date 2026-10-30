@@ -14,8 +14,10 @@
 //! and none panics.
 //!
 //! Which calls exist depends on the target: `linux` on Linux, `macos` on
-//! macOS. On other targets the crate is empty, so a renderer cannot be
-//! sandboxed there, and the renderer must refuse to run.
+//! macOS, `windows` on Windows (which starts the renderer confined, since a
+//! running process cannot be moved into an AppContainer). On other targets
+//! the crate is empty, so a renderer cannot be sandboxed there, and the
+//! renderer must refuse to run.
 
 use std::fmt;
 
@@ -23,6 +25,8 @@ use std::fmt;
 pub mod linux;
 #[cfg(target_os = "macos")]
 pub mod macos;
+#[cfg(windows)]
+pub mod windows;
 
 /// An operating system error number (`errno`), as a foreign call left it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +38,7 @@ impl Errno {
 
     /// The calling thread's `errno`. Call it immediately after the foreign
     /// call that failed, with nothing in between.
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(any(target_os = "linux", target_os = "macos", windows))]
     pub(crate) fn last() -> Errno {
         Errno(std::io::Error::last_os_error().raw_os_error().unwrap_or(-1))
     }

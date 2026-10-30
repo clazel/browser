@@ -543,6 +543,13 @@ pub open spec fn view_eku_items_result(
 pub fn eku_allows_server_auth(eku: ExtendedKeyUsage, allow_any: bool) -> (result: bool)
     ensures result == constraint_spec::eku_allows_server_auth(eku@, allow_any)
 {
+    eku_allows_server_auth_borrowed(&eku, allow_any)
+}
+
+/// [`eku_allows_server_auth`] on a borrowed value.
+pub fn eku_allows_server_auth_borrowed(eku: &ExtendedKeyUsage, allow_any: bool) -> (result: bool)
+    ensures result == constraint_spec::eku_allows_server_auth(eku@, allow_any)
+{
     let server_auth = vec![1u64, 3, 6, 1, 5, 5, 7, 3, 1];
     let any_eku = vec![2u64, 5, 29, 37, 0];
     let has_server_auth = oid_seen_exec(&eku.purposes, &server_auth);

@@ -1,4 +1,5 @@
-//! `clazel-renderer`: enter the sandbox, then run the script of the `Commit`.
+//! `clazel-renderer`: enter the sandbox, then take committed documents: run a
+//! user script, or display a document (a stub until phase-4.md item 4.13).
 //! Exit codes: 71 a sandbox layer failed (nothing was read), 70 the socket or
 //! protocol failed, 64 the script is not a script. The messages go to
 //! standard error, which the host reports.

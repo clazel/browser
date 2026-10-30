@@ -63,61 +63,123 @@
 //!   `Commit` to the same renderer and updates its committed URL. A
 //!   navigation to an opaque-origin URL always spawns (each opaque origin is
 //!   new).
+//! - **A committed document (phase-4.md item 4.12).** A document reaches its
+//!   renderer as one `ToRenderer` whose bytes are several whole frames, in
+//!   order: `Commit { url, content type, kind }`, zero or more `Body` frames
+//!   whose bytes concatenate to the document's body, and `BodyEnd`
+//!   ([`commit_frames`]; each `Body` holds at most `max_body_chunk` octets,
+//!   so every frame is within `MAX_FRAME`). A stream socket carries the same
+//!   octets whether they are one write or several, so this is the plan's
+//!   "`Commit`, zero or more `Body` frames, `BodyEnd`" as one output, which
+//!   keeps every statement about whom an output is for unchanged.
+//!   [`Document`] is what is committed: the body of a fetch is a document of
+//!   kind 0 whose content type is the response's combined `Content-Type`
+//!   field value (RFC 9110 §5.2, through `clazel-http`; the kernel does not
+//!   parse the type, the renderer does), or empty if it has none.
 //! - **Where a script comes from.** Phase 2 renderers run scripted
-//!   operations, not pages (the plan's "Commit { url, script }" does not say
-//!   where the script is from). `OpenTab` carries it, since it is what the
-//!   user does (the demo of item 2.16 types in a URL and a script; `OpenTab`
-//!   is not yet a fetch, see below). Every other document is the body of a
-//!   fetch (item 3.7, below): `Commit { url, script }` is sent with the
-//!   fetch's body as the script, "for now; Phase 4 gives it a document".
-//!   Nothing a renderer or the user sends reaches the script of a navigation:
-//!   that is what keeps a navigation from another domain from carrying
-//!   anything into the new renderer except the resolved URL (item 2.11's
-//!   declassification allows only that).
+//!   operations (the demo of item 2.16 and the WPT `cookies/` rows), which
+//!   stay until Phase 7 replaces them with JavaScript. `OpenTab` carries the
+//!   script, since it is what the user does: `OpenTab(url, Some(script))`
+//!   commits the URL at once with the script as a document of kind 1 (a user
+//!   script, with no content type). `OpenTab(url, None)` is the browser's
+//!   ordinary new tab: it spawns the tab's renderer, not yet committed, and
+//!   starts the fetch of the URL ([`begin_navigation`]), whose body is then
+//!   committed as a document of kind 0. Every other document is the body of
+//!   a fetch (item 3.7, below). Nothing a renderer or the user sends reaches
+//!   the body of a navigation: that is what keeps a navigation from another
+//!   domain from carrying anything into the new renderer except the resolved
+//!   URL (item 2.11's declassification allows only that).
+//! - **A renderer is committed once its first document is.** Its record
+//!   holds whether it is ([`Renderer::committed`]); until then its `url` is
+//!   the URL it is navigating to, not one it committed. Only a committed
+//!   renderer may send `Display`.
+//! - **What the user sees (phase-4.md item 4.12).** A committed renderer's
+//!   `Display { title, text, links }` becomes the output `Show { tab, url,
+//!   title, text, links }`, where `tab` is the sender's tab and `url` the
+//!   sender's committed URL, both from the kernel's state, never from the
+//!   message: the address line is the kernel's. It has no other effect. A
+//!   `Display` from a renderer that is not committed is a message the
+//!   renderer may not send, and is treated as every such frame is (below):
+//!   the sender is killed. A `Display` over `MAX_FRAME` never reaches `step`
+//!   (the host shell turns it into `RendererExited`).
 //! - **A renderer's `Navigate` is a `NavigateTab`.** The kernel decodes the
 //!   URL as UTF-8, resolves it against the renderer's committed URL (the
 //!   `resolve` function) and then does exactly `NavigateTab(its tab,
 //!   resolved)` ([`begin_navigation`] is literally the function both call).
 //!   The only difference is the error reply to the sender when the URL
 //!   cannot be decoded, resolved or locked.
-//! - **A navigation is a fetch, and the fetch is a parameter (item 3.7).**
-//!   `NavigateTab` and a renderer's `Navigate` do not commit: the tab's
-//!   renderer records the URL it is navigating to ([`Renderer::pending`]) and
-//!   the kernel outputs `Fetch { tab, url }`, the request for the network
-//!   shell to fetch it. The shell answers with `Fetched { tab, outcome }`,
-//!   where the [`NetOutcome`] holds the URL the fetch was started for and
-//!   what the network delivered (octets, opaque to the kernel). The kernel
-//!   runs the fetch itself, as a pure function of those two ([`FetchFns`],
-//!   which item 3.6's transducer instantiates, as [`UrlFns`] is instantiated
-//!   by the URL parser): it gives a [`FetchRun`], the result (the final URL
-//!   after redirects and the body, or a failure) and the `Set-Cookie` lines
-//!   of the response chain with the request each answers ([`HttpStore`]).
-//!   The kernel owns the jar: the shell never sees it, and an outcome cannot
-//!   set a cookie but through [`apply_stores`], RFC 6265bis §5.7 storage
-//!   of those lines. A fetch's result does not depend on the jar (the shell
-//!   sees only the `Cookie` field of requests, which 3.6 proves is §5.8's
-//!   retrieval, and the kernel replays the response, so the jar affects
-//!   nothing the kernel reads from the network). `OpenTab` is not changed:
-//!   the new tab's first document is still the user's script (the demo), and
-//!   making it a fetch needs the network shell wired in.
-//! - **A `Fetched` event answers the navigation in flight, or nothing
-//!   ([`fetched`]).** The tab is the event's tab and it must still be open,
-//!   its renderer must still be navigating (`pending` is `Some`), and the
-//!   outcome's URL must be the one it is navigating to. Otherwise (the tab
-//!   was closed, the navigation finished, or the tab has since navigated to
-//!   another URL, whose own `Fetched` is still to come) the outcome is
-//!   ignored in full: no state change, no output and no cookie stored
-//!   (a stale response is not applied to the jar, a deliberate choice: a
-//!   cancelled fetch has no effect). A `Fetched` for the same URL as a
-//!   newer navigation of the tab is taken for that navigation's. The
-//!   kernel's own commit follows [`navigate_tab`] with the final URL and the
-//!   body as the script: the final URL must be a string of Unicode scalar
-//!   values with a lock, or the navigation fails with [`error_bad_url`]; a
-//!   failed fetch gives the tab's renderer [`error_fetch`]; either way the
-//!   renderer stays, and is no longer navigating. A redirect lands wherever
-//!   the server says: the navigation is the one the user made, and its final
-//!   URL is the kernel's to lock (item 2.11 treats a `Navigate` that
-//!   resolves as one the user made; a redirect is the same).
+//! - **A navigation is a fetch, and the kernel steps it (item 3.7).**
+//!   `NavigateTab` and a renderer's `Navigate` do not commit: they start a
+//!   fetch ([`begin_navigation`]). The tab's renderer records a
+//!   [`Navigation`] ([`Renderer::pending`]): the URL it is navigating to and
+//!   the state of item 3.6's transducer (`clazel_fetch::transducer::spec`),
+//!   started at that URL. The kernel itself steps the transducer, so every
+//!   byte on the wire is produced by this function; the network shell is a
+//!   pipe: it carries out `Connect`, `Send` and `Close` and reports what
+//!   happened as `Net { conn, input }`, `input` being the transducer's
+//!   `Connected`, `Bytes`, `Closed` or `Error`. The transducer is a parameter
+//!   ([`FetchFns`]: its `HttpFns` and `UrlFns`, and the URL parser that turns
+//!   a navigation URL into the transducer's [`clazel_url::url::spec::Url`]),
+//!   as [`UrlFns`] is; every theorem holds for every one, as those of
+//!   `clazel-fetch` do, and the shipped kernel instantiates it with the real
+//!   parsers (`clazel_fetch::transducer::real`).
+//! - **Connections are kernel state ([`Connection`]).** A connection has an
+//!   id the kernel allocates from its own counter ([`State::next_conn`],
+//!   never reused), the tab whose fetch opened it (its owner: the only tab
+//!   its events and outputs ever concern), the [`Endpoint`] it connects to
+//!   and a **partition key**, the [`Domain`] of the renderer that started the
+//!   navigation (the domain of the tab's renderer when [`begin_navigation`]
+//!   ran). The key is recorded so that pooling, HTTP/1.1 keep-alive, HTTP/2
+//!   multiplexing and coalescing can later choose a connection only within
+//!   one domain, which is what keeps noninterference between domains
+//!   tractable. Today each transducer `Connect` opens a new connection,
+//!   carrying one request with `Connection: close`; which connection a
+//!   `Connect` uses is one function, [`choose_connection`], and it is the
+//!   decision a later item changes (always `None` now: a new connection).
+//!   A connection ends when the transducer asks for its `Close`, when the
+//!   shell reports it `Closed` or failed (`Error`), when its navigation ends (`Done` or `Fail`: whatever is left of the tab's
+//!   connections is closed with it), when the navigation is replaced by
+//!   another, or when its renderer exits or is killed; every `Connect` is
+//!   matched by a `Close` once its tab's navigation is over. A `Close` for
+//!   a connection the peer has already closed is harmless to the shell.
+//! - **A `Net` event is attributed to the connection's tab ([`net`]).**
+//!   The tab is the connection's owner, as a frame is attributed to the
+//!   renderer of its socket. A `Net` for a connection the kernel does not
+//!   know (never opened, or closed since), or whose tab is not navigating, is
+//!   ignored in full: no state change, no output, no cookie stored (a cancelled
+//!   fetch has no effect, as a stale answer had none). Otherwise the kernel
+//!   (1) steps the transducer of the tab's navigation with the kernel's jar and
+//!   `now`; (2) applies the jar operations it returns to the jar, in order
+//!   ([`apply_net_ops`]): `Retrieved` is `jar_after_retrieval`, `Stored` is RFC
+//!   6265bis §5.7 storage kept behind [`store_allowed`]; (3) maps the actions to
+//!   outputs on the connections ([`carry_out`]): `Connect` to a connection
+//!   ([`open_connection`]) and `Connect` output, `Send` to `Send` on the
+//!   connection the event is about, `Close` to `Close` of it; (4) on `Done`
+//!   the navigation commits: the final URL is serialized by `clazel-url`'s
+//!   URL serializer, must be a string of Unicode scalar values with a lock
+//!   (else [`error_bad_url`]), and the tab's renderer commits it with the
+//!   response's body as the script ([`navigate_tab`]); on `Fail` the tab's
+//!   renderer gets [`error_fetch`] and stays (`fail_navigation`). A redirect
+//!   lands wherever the server says: the navigation is the one the user made,
+//!   and its final URL is the kernel's to lock (item 2.11 treats a `Navigate`
+//!   that resolves as one the user made; a redirect is the same). Starting a
+//!   navigation on a tab that is already navigating closes the old
+//!   navigation's connections (the replaced fetch has no effect).
+//!   A navigation URL the fetch's parser rejects, though it has a lock, fails
+//!   at once with [`error_bad_url`] (the real parser rejects exactly those
+//!   `origin_of` rejects); one the transducer does not fetch (`start` gives
+//!   `Fail(NotFetched)`, e.g. `https:` until TLS) fails with [`error_fetch`].
+//! - **The network is outside every renderer domain.** What a `Net` event
+//!   carries came from a server. A server can echo the cookies it receives
+//!   into a body, and a redirect can hand that body, or a `Location`, to the
+//!   tab of another site: that is how the web behaves, not a flow through the
+//!   kernel, and no theorem here says otherwise. What the kernel proves is
+//!   that the only part of the wire derived from the jar is the `Cookie`
+//!   field of the request, and that field is §5.8's cookie-string for that
+//!   request (`wire_cookies_statement`, from item 3.6's `theorem_wire_cookies`);
+//!   and that the shell is never given the jar. The noninterference theorem
+//!   treats a `Net` event as an input that belongs to no renderer domain (it
+//!   is kept in every observer's purge, see `domain.rs`).
 //! - **A response's cookies are stored unless the host is a public suffix
 //!   ([`store_allowed`]).** A `Set-Cookie` line whose request host is a
 //!   public suffix (or has no host) is not stored, as a document on such a
@@ -194,18 +256,21 @@
 //!   then one CBOR item), decoded by `clazel_ipc::message::spec::decode_framed`;
 //!   a frame over `MAX_FRAME` never reaches `step` (the host shell turns it
 //!   into `RendererExited`, item 2.15), and if one did, it would not decode.
-//!   Every output is a whole frame ([`reply_frame`]). A message that cannot
-//!   be sent (a `Commit` whose script is not UTF-8, or one over the frame
-//!   limit) is replaced by [`error_encode`]; the fallback is itself always
-//!   encodable.
+//!   Every `ToRenderer` is whole frames ([`reply_frame`], or the frames of a
+//!   committed document). A message that cannot be sent (a reply whose text
+//!   is not UTF-8, or one over the frame limit) is replaced by
+//!   [`error_encode`]; the fallback is itself always encodable, and the
+//!   frames of a document never need it (`theorem_body_is_the_response`).
 //! - **Malformed input.** Every defined result depends only on the sender's
 //!   own record, the sender's domain's state and the message:
 //!   - an id that names no renderer: no state change, no output;
 //!   - a frame that does not decode to a message, or that decodes to a
-//!     message a renderer may not send (`Commit`, `CookieValue`,
-//!     `StorageValue`, `StorageLengthValue`, `Error`): the sender is
-//!     killed, `Kill(id)` and its record is removed (a protocol violation is
-//!     not recoverable; the host kills the process). The tab is closed;
+//!     message a renderer may not send (`Commit`, `Body`, `BodyEnd`,
+//!     `CookieValue`, `StorageValue`, `StorageLengthValue`, `Error`, and
+//!     `Display` before the renderer is committed, [`accepted_message`]):
+//!     the sender is killed, `Kill(id)` and its record is removed (a
+//!     protocol violation is not recoverable; the host kills the process).
+//!     The tab is closed;
 //!   - a message that decodes but cannot be served (a `Navigate` URL that
 //!     fails, a quota, an opaque `localStorage`): an `Error` reply to the
 //!     sender with a code.
@@ -220,11 +285,12 @@
 //!   ([`clazel_cookie::storage::spec::evict_expired`], which depends on
 //!   time only). Every cookie call takes the current time from the state.
 //! - **Renderer ids never appear in a byte sent to a renderer.** The
-//!   messages built here (`Commit`, `CookieValue`, `StorageValue`,
-//!   `StorageLengthValue`, `Error`) have no id field (the schema rule of item
-//!   2.3), and their fields are the committed URL and script (inputs of the
-//!   user or of the sender's own navigation), cookie strings and storage
-//!   values (of the sender's own domain) and constant codes.
+//!   messages built here (`Commit`, `Body`, `BodyEnd`, `CookieValue`,
+//!   `StorageValue`, `StorageLengthValue`, `Error`) have no id field (the
+//!   schema rule of item 2.3), and their fields are the committed URL, the
+//!   document's content type and body (inputs of the user or of the sender's
+//!   own navigation), cookie strings and storage values (of the sender's own
+//!   domain) and constant codes.
 //! - **A spawn names a policy.** `Spawn(id, policy)` carries [`Policy`], of
 //!   which there is one value (the renderer sandbox of item 2.14); the host
 //!   maps it to the platform's policy.
@@ -263,32 +329,19 @@ pub struct UrlFns {
 // The fetch (item 3.7).
 // ---------------------------------------------------------------------
 
-/// What the network shell reports for a fetch: the URL the fetch was started
-/// for (the `url` of the `Fetch` output it answers) and the octets the
-/// network delivered, which only [`FetchFns::run`] reads.
-pub struct NetOutcome {
-    /// The URL the fetch was started for.
-    pub url: Seq<u32>,
-    /// What the network delivered.
-    pub net: Seq<u8>,
-}
+/// The state of item 3.6's transducer for one navigation.
+pub type FetchState = clazel_fetch::transducer::spec::State;
 
-/// How a fetch ended (the `Done` and `Fail` of item 3.6's transducer).
-pub enum FetchResult {
-    /// The response: the URL it answers, after redirects, and its body.
-    Done {
-        /// The final URL, absolute.
-        url: Seq<u32>,
-        /// The body.
-        body: Seq<u8>,
-    },
-    /// The fetch failed (no response, an invalid or unsupported one, or a
-    /// redirect to somewhere that is not fetched).
-    Failed,
-}
+/// What the network shell reports of a connection: the transducer's `Input`
+/// (`Connected`, `Bytes`, `Closed` or `Error`).
+pub type NetInput = clazel_fetch::transducer::spec::Input;
+
+/// What the transducer asks for (`Connect`, `Send`, `Close`, `Done`, `Fail`).
+pub type NetAction = clazel_fetch::transducer::spec::Action;
 
 /// One `Set-Cookie` line a response carried, with the request it answers:
-/// RFC 6265bis §5.7's inputs ("receives a cookie").
+/// RFC 6265bis §5.7's inputs ("receives a cookie"). The transducer's `Stored`
+/// jar operation, as [`store_one`] reads it.
 pub struct HttpStore {
     /// The `Set-Cookie` field value.
     pub line: Seq<u8>,
@@ -299,21 +352,21 @@ pub struct HttpStore {
     pub ctx: clazel_cookie::storage::spec::RequestContext,
 }
 
-/// What running a fetch gives.
-pub struct FetchRun {
-    /// How it ended.
-    pub result: FetchResult,
-    /// The `Set-Cookie` lines of every response of the chain, in order.
-    pub stores: Seq<HttpStore>,
-}
-
-/// The fetch, as a parameter of the kernel (see the modelling choices):
-/// `run(url, net)` is the fetch of `url` given the octets the network
-/// delivered. It reads no jar. Item 3.6's transducer, replayed over `net`,
-/// instantiates it; the theorems hold for every one.
+/// The transducer, as a parameter of the kernel (see the modelling choices).
+/// Item 3.6's `step` and `start` are `clazel_fetch::transducer::spec`'s,
+/// over these; the theorems hold for every value.
 pub struct FetchFns {
-    /// The fetch of `url` over what the network delivered.
-    pub run: spec_fn(Seq<u32>, Seq<u8>) -> FetchRun,
+    /// The response parser the transducer reads the connection's octets with.
+    pub http: clazel_fetch::transducer::spec::HttpFns,
+    /// The URL-side functions of the transducer: the redirect `Location`
+    /// parser, the URL origin, the cookie request URL and the Public Suffix
+    /// List it reads the jar with. (The shipped kernel gives the same list
+    /// as the kernel's `rules`.)
+    pub urls: clazel_fetch::transducer::spec::UrlFns,
+    /// The URL parser on a navigation URL (a string of code points the
+    /// kernel has accepted): the URL record the transducer fetches, or
+    /// `None` for failure.
+    pub parse: spec_fn(Seq<u32>) -> Option<clazel_url::url::spec::Url>,
 }
 
 // ---------------------------------------------------------------------
@@ -331,18 +384,61 @@ pub struct StorageEntry {
 
 /// A renderer process, from the kernel's side.
 pub struct Renderer {
+    /// Whether a document has been committed in it: false only from an
+    /// `OpenTab` without a script until the first commit of its tab's fetch.
+    pub committed: bool,
     /// The renderer's id (never sent to any renderer).
     pub id: nat,
     /// The tab it renders (the id of the first renderer of the tab).
     pub tab: nat,
-    /// The URL it committed, absolute.
+    /// The URL it committed, absolute (before its first commit, the URL its
+    /// tab was opened at).
     pub url: Seq<u32>,
     /// Its lock: the origin of `url`, chosen by the kernel
     /// ([`lock_of_url`]). The one origin this renderer ever serves.
     pub lock: clazel_origin::spec::Origin,
-    /// The URL its tab is navigating to, while the fetch for it is in flight
-    /// (item 3.7); `None` once the navigation commits or fails.
-    pub pending: Option<Seq<u32>>,
+    /// The navigation its tab has in flight (item 3.7); `None` once it
+    /// commits or fails.
+    pub pending: Option<Navigation>,
+}
+
+/// A navigation in flight: the fetch of the URL the tab is navigating to.
+pub struct Navigation {
+    /// The URL the tab is navigating to (absolute; what `begin_navigation`
+    /// locked). The fetch may redirect elsewhere.
+    pub url: Seq<u32>,
+    /// The state of the fetch: item 3.6's transducer, which only the `Net`
+    /// events of this navigation's connections step.
+    pub fetch: FetchState,
+    /// The domain of the renderer that started the navigation: the
+    /// partition key of every connection the fetch opens.
+    pub partition: crate::domain::Domain,
+}
+
+/// Where a connection goes: the network half of an origin, as the transducer
+/// asks for it.
+pub struct Endpoint {
+    /// The host, as the resolver takes it.
+    pub host: Seq<u8>,
+    /// The port.
+    pub port: nat,
+    /// Whether to speak TLS on it.
+    pub tls: bool,
+}
+
+/// A connection the kernel has asked the network shell for and not closed.
+pub struct Connection {
+    /// Its id: from [`State::next_conn`], never reused.
+    pub id: nat,
+    /// The tab whose navigation opened it, and the only tab its events and
+    /// outputs concern.
+    pub tab: nat,
+    /// The origin it connects to.
+    pub endpoint: Endpoint,
+    /// The partition key: the domain the navigation belongs to. A connection
+    /// is chosen for a fetch only within its own partition
+    /// ([`choose_connection`]).
+    pub partition: crate::domain::Domain,
 }
 
 /// The kernel's state.
@@ -357,6 +453,11 @@ pub struct State {
     pub storage: Map<clazel_origin::spec::Origin, Seq<StorageEntry>>,
     /// The next fresh renderer (and tab) id.
     pub next_id: nat,
+    /// The open connections, each owned by one tab with a navigation in
+    /// flight (item 3.7).
+    pub conns: Seq<Connection>,
+    /// The next fresh connection id.
+    pub next_conn: nat,
     /// The current time, seconds since 1601-01-01T00:00:00Z (the unit of
     /// `clazel-cookie`).
     pub now: int,
@@ -372,12 +473,13 @@ pub enum Event {
         /// The raw frame bytes.
         bytes: Seq<u8>,
     },
-    /// The user typed an absolute URL into a new tab.
+    /// The user typed an absolute URL into a new tab: the page is fetched,
+    /// or, with a script (the Phase 2 path), committed at once with it.
     OpenTab {
         /// The URL.
         url: Seq<u32>,
-        /// The script the document runs (UTF-8 text).
-        script: Seq<u8>,
+        /// A user script the document runs instead of a fetch.
+        script: Option<Seq<u8>>,
     },
     /// The user typed an absolute URL into an existing tab.
     NavigateTab {
@@ -386,13 +488,14 @@ pub enum Event {
         /// The URL.
         url: Seq<u32>,
     },
-    /// The network shell finished the fetch the kernel asked for the tab
-    /// (item 3.7).
-    Fetched {
-        /// The tab the fetch was for.
-        tab: nat,
-        /// What the network delivered.
-        outcome: NetOutcome,
+    /// The network shell reports on a connection the kernel asked for
+    /// (item 3.7): it is open, bytes arrived, the peer closed it, or it
+    /// failed.
+    Net {
+        /// The connection.
+        conn: nat,
+        /// What happened to it.
+        input: NetInput,
     },
     /// The process of renderer `id` exited (or the host killed it).
     RendererExited {
@@ -433,20 +536,63 @@ pub enum Output {
         /// The renderer.
         id: nat,
     },
-    /// Ask the network shell to fetch `url` for `tab` (item 3.7). Addressed
-    /// to no renderer: it names a tab, and the shell answers with
-    /// `Fetched { tab, outcome }`.
-    Fetch {
+    /// Ask the network shell to open connection `conn` (item 3.7). Addressed
+    /// to no renderer; the shell reports `Connected` or `Error` as
+    /// `Net { conn, .. }`.
+    Connect {
+        /// The connection.
+        conn: nat,
+        /// The host, as the resolver takes it.
+        host: Seq<u8>,
+        /// The port.
+        port: nat,
+        /// Whether to speak TLS on it.
+        tls: bool,
+    },
+    /// Write these octets to connection `conn`: bytes the kernel built.
+    Send {
+        /// The connection.
+        conn: nat,
+        /// The octets.
+        bytes: Seq<u8>,
+    },
+    /// Close connection `conn` (a no-op for the shell if it is already
+    /// closed).
+    Close {
+        /// The connection.
+        conn: nat,
+    },
+    /// Show the user what the renderer of `tab` displays (phase-4.md item
+    /// 4.12), under the address line `url`. Addressed to the user, not to a
+    /// renderer; `tab` and `url` come from the kernel's state.
+    Show {
         /// The tab.
         tab: nat,
-        /// The URL, absolute.
+        /// Its renderer's committed URL.
         url: Seq<u32>,
+        /// The title the renderer displays.
+        title: Seq<u8>,
+        /// The text it displays.
+        text: Seq<u8>,
+        /// The links it displays.
+        links: Seq<Seq<u8>>,
     },
+}
+
+/// A document to commit (phase-4.md item 4.12): its content type, its kind
+/// and its body.
+pub struct Document {
+    /// The response's combined `Content-Type` field value, or empty.
+    pub content_type: Seq<u8>,
+    /// [`kind_document`] or [`kind_script`].
+    pub kind: u64,
+    /// The body.
+    pub body: Seq<u8>,
 }
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, now: 0 }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0 }
 }
 
 // ---------------------------------------------------------------------
@@ -501,10 +647,62 @@ pub open spec fn reply_frame(m: clazel_ipc::message::spec::Message) -> Seq<u8> {
     }
 }
 
-/// The frame of a `Commit` of `url` running `script`. The URL is sent as
-/// UTF-8 (the Encoding Standard's encoder).
-pub open spec fn commit_frame(url: Seq<u32>, script: Seq<u8>) -> Seq<u8> {
-    reply_frame(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(url), script })
+/// `Commit`'s kind for a document the renderer parses.
+pub open spec fn kind_document() -> u64 {
+    0
+}
+
+/// `Commit`'s kind for a user script (the Phase 2 script path).
+pub open spec fn kind_script() -> u64 {
+    1
+}
+
+/// The `Body` frames of `body`, in order: consecutive pieces of at most
+/// `max_body_chunk` octets, none for an empty body.
+pub open spec fn body_frames(body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_body_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::Body { bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::Body { bytes: body.take(clazel_ipc::message::spec::max_body_chunk() as int) })
+            + body_frames(body.skip(clazel_ipc::message::spec::max_body_chunk() as int))
+    }
+}
+
+/// The frames that commit `doc` at `url`: `Commit`, the `Body` frames and
+/// `BodyEnd`, as the octets of one write. The URL is sent as UTF-8 (the
+/// Encoding Standard's encoder).
+pub open spec fn commit_frames(url: Seq<u32>, doc: Document) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::Commit { url: clazel_encoding::utf8::spec::utf8_encode(url), content_type: doc.content_type, kind: doc.kind })
+        + body_frames(doc.body) + reply_frame(clazel_ipc::message::spec::Message::BodyEnd)
+}
+
+/// The field name `content-type`.
+pub open spec fn content_type_name() -> Seq<u8> {
+    seq![0x63u8, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x74, 0x79, 0x70, 0x65]
+}
+
+/// The document a fetch's response commits: kind 0, the combined value of
+/// its `Content-Type` field lines (RFC 9110 §5.2 and §5.3, through
+/// `clazel-http`'s `combined_field_value`), or empty if it has none, and its
+/// body.
+pub open spec fn response_document(response: clazel_http::message::spec::Response) -> Document {
+    Document {
+        content_type: match clazel_http::field::spec::combined_field_value(response.fields, content_type_name()) {
+            Some(v) => v,
+            None => seq![],
+        },
+        kind: kind_document(),
+        body: response.body,
+    }
+}
+
+/// The document of a user script: kind 1, no content type.
+pub open spec fn script_document(script: Seq<u8>) -> Document {
+    Document { content_type: seq![], kind: kind_script(), body: script }
 }
 
 /// A single `ToRenderer` of `m` to renderer `r`.
@@ -638,6 +836,19 @@ pub open spec fn find_by_tab(rs: Seq<Renderer>, tab: nat, i: nat) -> Option<int>
     }
 }
 
+/// The index of the first connection from `i` on with id `id`.
+pub open spec fn find_conn(cs: Seq<Connection>, id: nat, i: nat) -> Option<int>
+    decreases cs.len() - i,
+{
+    if i >= cs.len() {
+        None
+    } else if cs[i as int].id == id {
+        Some(i as int)
+    } else {
+        find_conn(cs, id, i + 1)
+    }
+}
+
 // ---------------------------------------------------------------------
 // Web Storage (HTML §12.2.1).
 // ---------------------------------------------------------------------
@@ -758,11 +969,11 @@ pub open spec fn storage_call(s: State, r: Renderer, m: clazel_ipc::message::spe
 // The events.
 // ---------------------------------------------------------------------
 
-/// The renderer `old` of tab `tab`, at index `i`, commits the document at
-/// `url` running `script`: the shared body of a successful `Fetched` (the
-/// final URL and the body) and, as item 2.11 states it, what a navigation
-/// does to the renderers. The renderer is no longer navigating.
-pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>) -> (State, Seq<Output>) {
+/// The renderer `old` of tab `tab`, at index `i`, commits the document `doc`
+/// at `url`: the shared body of a successful navigation
+/// ([`commit_navigation`]: the final URL and the response) and, as item 2.11 states it, what a navigation
+/// does to the renderers. The renderer is committed and no longer navigating.
+pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, doc: Document) -> (State, Seq<Output>) {
     match find_by_tab(s.renderers, tab, 0) {
         // No such tab (or its renderer has exited): nothing to navigate.
         None => (s, seq![]),
@@ -773,19 +984,19 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, s
                 None => (s, seq![]),
                 Some(lock) => if lock is Tuple && lock == old.lock {
                     // The same origin: the renderer stays and commits again.
-                    let r = Renderer { url, pending: None, ..old };
+                    let r = Renderer { url, pending: None, committed: true, ..old };
                     (State { renderers: s.renderers.update(i, r), ..s }, seq![
-                        Output::ToRenderer { id: old.id, bytes: commit_frame(url, script) },
+                        Output::ToRenderer { id: old.id, bytes: commit_frames(url, doc) },
                     ])
                 } else {
                     // A different origin: one renderer, one origin. A new
                     // renderer in the tab, the old one killed.
                     let id = s.next_id;
-                    let r = Renderer { id, tab, url, lock, pending: None };
+                    let r = Renderer { committed: true, id, tab, url, lock, pending: None };
                     (State { renderers: s.renderers.update(i, r), next_id: id + 1, ..s }, seq![
                         Output::Kill { id: old.id },
                         Output::Spawn { id, policy: Policy::Renderer },
-                        Output::ToRenderer { id, bytes: commit_frame(url, script) },
+                        Output::ToRenderer { id, bytes: commit_frames(url, doc) },
                     ])
                 },
             }
@@ -794,33 +1005,77 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, s
 }
 
 /// `NavigateTab(tab, url)` (and a renderer's `Navigate`): the tab's renderer
-/// starts navigating to `url`, and the kernel asks for it to be fetched. The
+/// starts navigating to `url`, which starts the fetch (item 3.7). The
 /// renderer, its URL and its lock are unchanged; a navigation already in
-/// flight is replaced (its `Fetched` will find another URL and be ignored).
-pub open spec fn begin_navigation(urls: UrlFns, s: State, tab: nat, url: Seq<u32>) -> (State, Seq<Output>) {
+/// flight is replaced, and its connections are closed.
+///
+/// The fetch is item 3.6's `start` at the URL the fetch's parser gives. Its
+/// actions are carried out as those of a step are ([`carry_out`]): `Connect`
+/// for the first request, or `Fail(NotFetched)` for a URL the transducer
+/// does not fetch.
+pub open spec fn begin_navigation(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    tab: nat,
+    url: Seq<u32>,
+) -> (State, Seq<Output>) {
     match find_by_tab(s.renderers, tab, 0) {
         // No such tab (or its renderer has exited): nothing to navigate.
         None => (s, seq![]),
         Some(i) => match lock_of_url(urls, url, s.next_id) {
             // A URL that does not parse, or has no lock: ignored.
             None => (s, seq![]),
-            Some(_) => (
-                State { renderers: s.renderers.update(i, Renderer { pending: Some(url), ..s.renderers[i] }), ..s },
-                seq![Output::Fetch { tab, url }],
-            ),
+            Some(_) => {
+                let (s0, closes) = close_tab_conns(s, tab);
+                let old = s0.renderers[i];
+                match (fetch.parse)(url) {
+                    // A URL the fetch's parser does not accept.
+                    None => {
+                        let (s1, out) = fail_navigation(s0, i, old, error_bad_url());
+                        (s1, closes + out)
+                    },
+                    Some(parsed) => {
+                        let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                        let nav = Navigation { url, fetch: fs, partition: crate::domain::domain_of_renderer(rules, old) };
+                        let s1 = State { renderers: s0.renderers.update(i, Renderer { pending: Some(nav), ..old }), ..s0 };
+                        let (s2, out) = carry_out(urls, s1, tab, nav.partition, None, actions);
+                        (s2, closes + out)
+                    },
+                }
+            },
         },
     }
 }
 
-/// `OpenTab(url)`: a new tab with a new renderer.
-pub open spec fn open_tab(urls: UrlFns, s: State, url: Seq<u32>, script: Seq<u8>) -> (State, Seq<Output>) {
+/// `OpenTab(url, script)`: a new tab with a new renderer, locked to the
+/// URL's origin. With a script, the renderer commits the URL at once with
+/// the script (kind 1); without one, it starts uncommitted and its tab starts
+/// the fetch of the URL ([`begin_navigation`]), which commits it when it
+/// completes.
+pub open spec fn open_tab(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    url: Seq<u32>,
+    script: Option<Seq<u8>>,
+) -> (State, Seq<Output>) {
     let id = s.next_id;
     match lock_of_url(urls, url, id) {
         None => (s, seq![]),
-        Some(lock) => (
-            State { renderers: s.renderers.push(Renderer { id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s },
-            seq![Output::Spawn { id, policy: Policy::Renderer }, Output::ToRenderer { id, bytes: commit_frame(url, script) }],
-        ),
+        Some(lock) => match script {
+            Some(script) => (
+                State { renderers: s.renderers.push(Renderer { committed: true, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s },
+                seq![Output::Spawn { id, policy: Policy::Renderer }, Output::ToRenderer { id, bytes: commit_frames(url, script_document(script)) }],
+            ),
+            None => {
+                let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };
+                let (s2, out) = begin_navigation(rules, urls, fetch, s1, id, url);
+                (s2, seq![Output::Spawn { id, policy: Policy::Renderer }] + out)
+            },
+        },
     }
 }
 
@@ -864,31 +1119,25 @@ pub open spec fn store_one(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_c
     }
 }
 
-/// The jar after the `Set-Cookie` lines of a fetch's responses, in order.
-pub open spec fn apply_stores(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, stores: Seq<HttpStore>, now: int) -> Seq<clazel_cookie::storage::spec::Cookie>
-    decreases stores.len(),
-{
-    if stores.len() == 0 {
-        jar
-    } else {
-        apply_stores(rules, store_one(rules, jar, stores[0], now), stores.drop_first(), now)
+/// The jar after one jar operation of the transducer: `Retrieved` is RFC
+/// 6265bis §5.8.3 step 5's update and the eviction of expired cookies
+/// (`jar_after_retrieval`); `Stored` is §5.7 storage of one `Set-Cookie` line
+/// ([`store_one`]: only if [`store_allowed`]).
+pub open spec fn apply_net_op(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, op: clazel_fetch::transducer::spec::JarOp) -> Seq<clazel_cookie::storage::spec::Cookie> {
+    match op {
+        clazel_fetch::transducer::spec::JarOp::Retrieved { url, ctx, now } => clazel_cookie::storage::spec::jar_after_retrieval(rules, jar, url, ctx, now),
+        clazel_fetch::transducer::spec::JarOp::Stored { line, url, ctx, now } => store_one(rules, jar, HttpStore { line, url, ctx }, now),
     }
 }
 
-/// The fetch a `Fetched { tab, outcome }` event answers, run: `Some` only if
-/// the tab is open, its renderer is navigating, and to the URL the outcome
-/// was fetched for.
-pub open spec fn fetched_run(fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome) -> Option<FetchRun> {
-    match find_by_tab(s.renderers, tab, 0) {
-        None => None,
-        Some(i) => match s.renderers[i].pending {
-            None => None,
-            Some(p) => if p == outcome.url {
-                Some((fetch.run)(p, outcome.net))
-            } else {
-                None
-            },
-        },
+/// The jar after the jar operations of one transducer step, in order.
+pub open spec fn apply_net_ops(rules: Seq<clazel_psl::spec::Rule>, jar: Seq<clazel_cookie::storage::spec::Cookie>, ops: Seq<clazel_fetch::transducer::spec::JarOp>) -> Seq<clazel_cookie::storage::spec::Cookie>
+    decreases ops.len(),
+{
+    if ops.len() == 0 {
+        jar
+    } else {
+        apply_net_ops(rules, apply_net_op(rules, jar, ops[0]), ops.drop_first())
     }
 }
 
@@ -907,24 +1156,208 @@ pub open spec fn scalar_url(s: Seq<u32>) -> bool
     s.len() == 0 || (clazel_encoding::utf8::spec::is_scalar_value(s[0]) && scalar_url(s.drop_first()))
 }
 
-/// `Fetched { tab, outcome }`: see the modelling choices. The jar takes the
-/// response chain's cookies, then the navigation commits with the final URL
-/// and the body, or fails.
-pub open spec fn fetched(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, outcome: NetOutcome) -> (State, Seq<Output>) {
-    match fetched_run(fetch, s, tab, outcome) {
-        None => (s, seq![]),
-        Some(run) => {
-            let i = find_by_tab(s.renderers, tab, 0)->Some_0;
-            let old = s.renderers[i];
-            let s1 = State { jar: apply_stores(rules, s.jar, run.stores, s.now), ..s };
-            match run.result {
-                FetchResult::Done { url, body } => if scalar_url(url) && lock_of_url(urls, url, s1.next_id) is Some {
-                    navigate_tab(urls, s1, tab, url, body)
-                } else {
-                    fail_navigation(s1, i, old, error_bad_url())
+// ---------------------------------------------------------------------
+// Connections (item 3.7).
+// ---------------------------------------------------------------------
+
+/// `conns` without the connections of `tab`.
+pub open spec fn without_tab(conns: Seq<Connection>, tab: nat) -> Seq<Connection> {
+    conns.filter(|c: Connection| c.tab != tab)
+}
+
+/// `conns` without the connection `id`.
+pub open spec fn without_conn(conns: Seq<Connection>, id: nat) -> Seq<Connection> {
+    conns.filter(|c: Connection| c.id != id)
+}
+
+/// `Close` for each connection of `tab`, in order.
+pub open spec fn closes_of_tab(conns: Seq<Connection>, tab: nat) -> Seq<Output>
+    decreases conns.len(),
+{
+    if conns.len() == 0 {
+        seq![]
+    } else {
+        (if conns[0].tab == tab {
+            seq![Output::Close { conn: conns[0].id }]
+        } else {
+            seq![]
+        }) + closes_of_tab(conns.drop_first(), tab)
+    }
+}
+
+/// Every connection of `tab` is closed: the navigation that owned them is
+/// over, replaced, or gone with its renderer.
+pub open spec fn close_tab_conns(s: State, tab: nat) -> (State, Seq<Output>) {
+    (State { conns: without_tab(s.conns, tab), ..s }, closes_of_tab(s.conns, tab))
+}
+
+/// **The one decision about reusing a connection.** The connection a
+/// transducer `Connect` to `endpoint` is carried by, for the navigation of
+/// `tab` in `partition`: `Some(id)` is an open connection to use instead of
+/// a new one, `None` a new one. Today it is always `None`: each request
+/// opens its own connection and carries `Connection: close` (item 3.6), so a
+/// connection is used by one tab for one request. HTTP/1.1 keep-alive,
+/// HTTP/2 multiplexing and coalescing are changes to this function and to
+/// nothing else in the state machine: a connection it returns must be of
+/// `partition` (so of one domain), and the ownership and noninterference
+/// theorems are then restated over that.
+pub open spec fn choose_connection(s: State, tab: nat, partition: crate::domain::Domain, endpoint: Endpoint) -> Option<nat> {
+    None
+}
+
+/// A transducer `Connect` to `endpoint` for `tab`: the connection that
+/// carries it and, if it is new, its record and the `Connect` output.
+pub open spec fn open_connection(s: State, tab: nat, partition: crate::domain::Domain, endpoint: Endpoint) -> (State, nat, Seq<Output>) {
+    match choose_connection(s, tab, partition, endpoint) {
+        Some(id) => (s, id, seq![]),
+        None => {
+            let id = s.next_conn;
+            (
+                State { conns: s.conns.push(Connection { id, tab, endpoint, partition }), next_conn: id + 1, ..s },
+                id,
+                seq![Output::Connect { conn: id, host: endpoint.host, port: endpoint.port, tls: endpoint.tls }],
+            )
+        },
+    }
+}
+
+/// The navigation of `tab` ends with the document `doc` at the final URL
+/// `href`: its connections are closed, then, if `href` is a string of
+/// Unicode scalar values with a lock, the tab's renderer commits it
+/// ([`navigate_tab`]); otherwise the navigation fails with [`error_bad_url`].
+pub open spec fn commit_navigation(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, doc: Document) -> (State, Seq<Output>) {
+    let (s1, closes) = close_tab_conns(s, tab);
+    match find_by_tab(s1.renderers, tab, 0) {
+        None => (s1, closes),
+        Some(i) => {
+            let (s2, out) = if scalar_url(href) && lock_of_url(urls, href, s1.next_id) is Some {
+                navigate_tab(urls, s1, tab, href, doc)
+            } else {
+                fail_navigation(s1, i, s1.renderers[i], error_bad_url())
+            };
+            (s2, closes + out)
+        },
+    }
+}
+
+/// The navigation of `tab` fails with `code`: its connections are closed and
+/// the renderer stays, with an `Error`.
+pub open spec fn abort_navigation(s: State, tab: nat, code: u64) -> (State, Seq<Output>) {
+    let (s1, closes) = close_tab_conns(s, tab);
+    match find_by_tab(s1.renderers, tab, 0) {
+        None => (s1, closes),
+        Some(i) => {
+            let (s2, out) = fail_navigation(s1, i, s1.renderers[i], code);
+            (s2, closes + out)
+        },
+    }
+}
+
+/// What the kernel does for the `actions` the transducer gave the navigation
+/// of `tab` (of partition `partition`), in order, to the state `s` (whose jar
+/// and navigation are already updated). `cur` is the connection the actions
+/// apply to: the event's connection, the one just opened after a `Connect`,
+/// none after a `Close`.
+///
+/// - `Connect`: [`open_connection`]; the actions after it are for the
+///   connection it returns;
+/// - `Send(bytes)`: `Send { conn: cur, bytes }`, the bytes unchanged;
+/// - `Close`: `Close { conn: cur }`, and `cur` leaves the table;
+/// - `Done { url, response }`: the navigation commits ([`commit_navigation`])
+///   `url` serialized by the URL Standard's URL serializer (§4.5, exclude
+///   fragment false) with the response's document ([`response_document`]);
+/// - `Fail(_)`: the navigation fails with [`error_fetch`]
+///   ([`abort_navigation`]).
+///
+/// `Done` and `Fail` end the actions (the transducer gives nothing after
+/// them).
+pub open spec fn carry_out(urls: UrlFns, s: State, tab: nat, partition: crate::domain::Domain, cur: Option<nat>, actions: Seq<NetAction>) -> (State, Seq<Output>)
+    decreases actions.len(),
+{
+    if actions.len() == 0 {
+        (s, seq![])
+    } else {
+        let rest = actions.drop_first();
+        match actions[0] {
+            clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
+                let (s1, id, out) = open_connection(s, tab, partition, Endpoint { host, port, tls });
+                let (s2, out2) = carry_out(urls, s1, tab, partition, Some(id), rest);
+                (s2, out + out2)
+            },
+            clazel_fetch::transducer::spec::Action::Send(bytes) => match cur {
+                Some(c) => {
+                    let (s1, out) = carry_out(urls, s, tab, partition, cur, rest);
+                    (s1, seq![Output::Send { conn: c, bytes }] + out)
                 },
-                FetchResult::Failed => fail_navigation(s1, i, old, error_fetch()),
-            }
+                None => carry_out(urls, s, tab, partition, cur, rest),
+            },
+            clazel_fetch::transducer::spec::Action::Close => match cur {
+                Some(c) => {
+                    let (s1, out) = carry_out(urls, State { conns: without_conn(s.conns, c), ..s }, tab, partition, None, rest);
+                    (s1, seq![Output::Close { conn: c }] + out)
+                },
+                None => carry_out(urls, s, tab, partition, cur, rest),
+            },
+            clazel_fetch::transducer::spec::Action::Done { url, response } => commit_navigation(
+                urls,
+                s,
+                tab,
+                clazel_url::url::spec::url_serializer(url, false),
+                response_document(response),
+            ),
+            clazel_fetch::transducer::spec::Action::Fail(_) => abort_navigation(s, tab, error_fetch()),
+        }
+    }
+}
+
+/// The navigation a `Net` event for connection `conn` is about: the
+/// connection, the index of its tab's renderer and that renderer's navigation.
+/// `None` if the connection is not open, its tab has gone, or its tab is not
+/// navigating.
+pub open spec fn net_target(s: State, conn: nat) -> Option<(Connection, int, Navigation)> {
+    match find_conn(s.conns, conn, 0) {
+        None => None,
+        Some(ci) => match find_by_tab(s.renderers, s.conns[ci].tab, 0) {
+            None => None,
+            Some(i) => match s.renderers[i].pending {
+                None => None,
+                Some(nav) => Some((s.conns[ci], i, nav)),
+            },
+        },
+    }
+}
+
+/// The transducer's step for `input` on a navigation, with the kernel's jar
+/// and time: item 3.6's `step`, its next state, actions and jar operations.
+pub open spec fn net_transducer_step(fetch: FetchFns, s: State, nav: Navigation, input: NetInput) -> (FetchState, Seq<NetAction>, Seq<clazel_fetch::transducer::spec::JarOp>) {
+    clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, nav.fetch, input, s.jar, s.now)
+}
+
+/// `Net { conn, input }`: see the modelling choices. If the connection is
+/// open and its tab is navigating, the kernel steps the transducer of the
+/// navigation with its jar and the time, applies the jar operations to its
+/// jar, and carries out the actions on the connections; otherwise the event is
+/// ignored.
+pub open spec fn net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> (State, Seq<Output>) {
+    match net_target(s, conn) {
+        None => (s, seq![]),
+        Some((c, i, nav)) => {
+            let (fs, actions, ops) = net_transducer_step(fetch, s, nav, input);
+            // The peer closing a connection, or it failing, ends it: the
+            // kernel forgets it before anything else (a `Close` the transducer
+            // asks for after it is then harmless to the shell).
+            let conns = if input is Closed || input is Error {
+                without_conn(s.conns, conn)
+            } else {
+                s.conns
+            };
+            let s1 = State {
+                jar: apply_net_ops(rules, s.jar, ops),
+                conns,
+                renderers: s.renderers.update(i, Renderer { pending: Some(Navigation { fetch: fs, ..nav }), ..s.renderers[i] }),
+                ..s
+            };
+            carry_out(urls, s1, c.tab, nav.partition, Some(conn), actions)
         },
     }
 }
@@ -935,11 +1368,15 @@ pub open spec fn tick(s: State, time: int) -> (State, Seq<Output>) {
     (State { jar: clazel_cookie::storage::spec::evict_expired(s.jar, now), now, ..s }, seq![])
 }
 
-/// `RendererExited(id)`: the renderer and its tab are gone.
+/// `RendererExited(id)`: the renderer and its tab are gone, and the
+/// connections of its navigation are closed.
 pub open spec fn renderer_exited(s: State, id: nat) -> (State, Seq<Output>) {
     match find_by_id(s.renderers, id, 0) {
         None => (s, seq![]),
-        Some(i) => (State { renderers: s.renderers.remove(i), ..s }, seq![]),
+        Some(i) => {
+            let (s0, closes) = close_tab_conns(s, s.renderers[i].tab);
+            (State { renderers: s.renderers.remove(i), ..s0 }, closes)
+        },
     }
 }
 
@@ -952,10 +1389,20 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
     }
 }
 
+/// The message in a frame renderer `r` sent, if `r` may send it: a message
+/// a renderer may send, and `Display` only once `r` is committed.
+pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
+    match decode_renderer_frame(bytes) {
+        Some(m) => if m is Display && !r.committed { None } else { Some(m) },
+        None => None,
+    }
+}
+
 /// A message that decoded, from the renderer `r`.
 pub open spec fn handle_message(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
+    fetch: FetchFns,
     s: State,
     r: Renderer,
     m: clazel_ipc::message::spec::Message,
@@ -1007,10 +1454,13 @@ pub open spec fn handle_message(
                 Some(resolved) => if lock_of_url(urls, resolved, s.next_id) is None {
                     (s, reply(r, clazel_ipc::message::spec::Message::Error { code: error_bad_url() }))
                 } else {
-                    begin_navigation(urls, s, r.tab, resolved)
+                    begin_navigation(rules, urls, fetch, s, r.tab, resolved)
                 },
             },
         },
+        // `Display` (phase-4.md item 4.12): shown for the sender's tab, under
+        // its committed URL; neither comes from the message.
+        clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),
@@ -1021,6 +1471,7 @@ pub open spec fn handle_message(
 pub open spec fn from_renderer(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
+    fetch: FetchFns,
     s: State,
     id: nat,
     bytes: Seq<u8>,
@@ -1028,11 +1479,14 @@ pub open spec fn from_renderer(
     match find_by_id(s.renderers, id, 0) {
         // An id that names no renderer: ignored.
         None => (s, seq![]),
-        Some(i) => match decode_renderer_frame(bytes) {
-            // A frame that is not a message a renderer may send: the sender
-            // is killed.
-            None => (State { renderers: s.renderers.remove(i), ..s }, seq![Output::Kill { id }]),
-            Some(m) => handle_message(rules, urls, s, s.renderers[i], m),
+        Some(i) => match accepted_message(s.renderers[i], bytes) {
+            // A frame that is not a message this renderer may send: the
+            // sender is killed.
+            None => {
+                let (s0, closes) = close_tab_conns(s, s.renderers[i].tab);
+                (State { renderers: s.renderers.remove(i), ..s0 }, seq![Output::Kill { id }] + closes)
+            },
+            Some(m) => handle_message(rules, urls, fetch, s, s.renderers[i], m),
         },
     }
 }
@@ -1040,10 +1494,10 @@ pub open spec fn from_renderer(
 /// The kernel's step function.
 pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> (State, Seq<Output>) {
     match e {
-        Event::FromRenderer { id, bytes } => from_renderer(rules, urls, s, id, bytes),
-        Event::OpenTab { url, script } => open_tab(urls, s, url, script),
-        Event::NavigateTab { tab, url } => begin_navigation(urls, s, tab, url),
-        Event::Fetched { tab, outcome } => fetched(rules, urls, fetch, s, tab, outcome),
+        Event::FromRenderer { id, bytes } => from_renderer(rules, urls, fetch, s, id, bytes),
+        Event::OpenTab { url, script } => open_tab(rules, urls, fetch, s, url, script),
+        Event::NavigateTab { tab, url } => begin_navigation(rules, urls, fetch, s, tab, url),
+        Event::Net { conn, input } => net(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => renderer_exited(s, id),
         Event::Tick { time } => tick(s, time),
     }
