@@ -114,26 +114,36 @@ pub proof fn lemma_os2ip_first(s: Seq<u8>)
         ),
     decreases s.len(),
 {
+    let x0 = s[0] as nat;
+    let big = crate::independent::power(256, (s.len() - 1) as nat);
     if s.len() == 1 {
         assert(s.drop_last() =~= Seq::<u8>::empty());
         assert(s.skip(1) =~= Seq::<u8>::empty());
         assert(os2ip(Seq::<u8>::empty()) == 0);
-        assert(crate::independent::power(256, 0) == 1);
+        assert(big == 1);
         assert(os2ip(s) == os2ip(s.drop_last()) * 256 + s.last() as nat);
+        assert(os2ip(s) == x0);
+        vstd::arithmetic::mul::lemma_mul_basics(x0 as int);
+        assert(x0 * big == x0);
     } else {
         let d = s.drop_last();
         lemma_os2ip_first(d);
         assert(d.skip(1) =~= s.skip(1).drop_last());
         assert(s.skip(1).last() == s.last());
         let pw = crate::independent::power(256, (s.len() - 2) as nat);
-        assert(crate::independent::power(256, (s.len() - 1) as nat) == 256 * pw);
-        let x0 = s[0] as nat;
+        assert((d.len() - 1) as nat == (s.len() - 2) as nat);
+        assert(big == 256 * pw);
         assert(d[0] == s[0]);
-        assert(os2ip(s) == os2ip(d) * 256 + s.last() as nat);
-        assert(os2ip(s.skip(1)) == os2ip(s.skip(1).drop_last()) * 256 + s.last() as nat);
-        assert((x0 * pw + os2ip(d.skip(1))) * 256 + s.last() as nat == x0 * (256 * pw) + (os2ip(
-            d.skip(1),
-        ) * 256 + s.last() as nat)) by (nonlinear_arith);
+        let o1 = os2ip(d.skip(1));
+        let l = s.last() as nat;
+        assert(os2ip(d) == x0 * pw + o1);
+        assert(os2ip(s) == os2ip(d) * 256 + l);
+        assert(os2ip(s.skip(1)) == o1 * 256 + l);
+        assert((x0 * pw + o1) * 256 + l == x0 * (256 * pw) + (o1 * 256 + l)) by (nonlinear_arith);
+        assert(x0 * big == x0 * (256 * pw)) by (nonlinear_arith)
+            requires
+                big == 256 * pw,
+        ;
     }
 }
 
@@ -258,8 +268,11 @@ proof fn lemma_bits_value_concat(a: Seq<bool>, b: Seq<bool>)
 {
     if b.len() == 0 {
         assert(a + b =~= a);
-        assert(crate::independent::power(2, 0) == 1);
+        let va = crate::independent::bits_value(a);
+        assert(crate::independent::power(2, b.len()) == 1);
         assert(crate::independent::bits_value(b) == 0);
+        vstd::arithmetic::mul::lemma_mul_basics(va as int);
+        assert(va * crate::independent::power(2, b.len()) == va);
     } else {
         let b1 = b.drop_last();
         lemma_bits_value_concat(a, b1);
@@ -283,6 +296,8 @@ proof fn lemma_bits_value_concat(a: Seq<bool>, b: Seq<bool>)
             requires
                 pb == 2 * pw,
         ;
+        assert(crate::independent::bits_value(a + b1) == va * pw + vb1);
+        assert(crate::independent::bits_value(a + b) == va * pb + crate::independent::bits_value(b));
     }
 }
 
@@ -387,6 +402,359 @@ proof fn lemma_ceil_log2(x: nat)
     if x > 1 {
         lemma_ceil_log2((x + 1) / 2);
     }
+}
+
+// ---------------------------------------------------------------------
+// Congruences modulo p.
+// ---------------------------------------------------------------------
+
+/// `u ≡ v (mod p)`.
+pub open spec fn cong(p: int, u: int, v: int) -> bool {
+    u % p == v % p
+}
+
+/// Reducing is congruent, and lands in [0, p).
+proof fn lemma_cong_mod(p: int, u: int)
+    requires
+        p > 0,
+    ensures
+        cong(p, u % p, u),
+        0 <= u % p < p,
+{
+    vstd::arithmetic::div_mod::lemma_mod_twice(u, p);
+    vstd::arithmetic::div_mod::lemma_mod_bound(u, p);
+}
+
+/// Sums and differences of congruent terms are congruent.
+proof fn lemma_cong_add(p: int, u1: int, v1: int, u2: int, v2: int)
+    requires
+        p > 0,
+        cong(p, u1, v1),
+        cong(p, u2, v2),
+    ensures
+        cong(p, u1 + u2, v1 + v2),
+        cong(p, u1 - u2, v1 - v2),
+{
+    vstd::arithmetic::div_mod::lemma_add_mod_noop(u1, u2, p);
+    vstd::arithmetic::div_mod::lemma_add_mod_noop(v1, v2, p);
+    vstd::arithmetic::div_mod::lemma_sub_mod_noop(u1, u2, p);
+    vstd::arithmetic::div_mod::lemma_sub_mod_noop(v1, v2, p);
+}
+
+/// Products of congruent terms are congruent.
+proof fn lemma_cong_mul(p: int, u1: int, v1: int, u2: int, v2: int)
+    requires
+        p > 0,
+        cong(p, u1, v1),
+        cong(p, u2, v2),
+    ensures
+        cong(p, u1 * u2, v1 * v2),
+{
+    vstd::arithmetic::div_mod::lemma_mul_mod_noop(u1, u2, p);
+    vstd::arithmetic::div_mod::lemma_mul_mod_noop(v1, v2, p);
+}
+
+/// A term congruent to 0, times anything, is congruent to 0.
+proof fn lemma_cong_zero_mul(p: int, u: int, v: int)
+    requires
+        p > 0,
+        cong(p, u, 0),
+    ensures
+        cong(p, u * v, 0),
+        cong(p, v * u, 0),
+{
+    lemma_cong_mul(p, u, 0, v, v);
+    lemma_cong_mul(p, v, v, u, 0);
+}
+
+/// Two residues in [0, p) that are congruent are equal.
+proof fn lemma_cong_reduced(p: int, u: int, v: int)
+    requires
+        p > 0,
+        0 <= u < p,
+        0 <= v < p,
+        cong(p, u, v),
+    ensures
+        u == v,
+{
+    vstd::arithmetic::div_mod::lemma_small_mod(u as nat, p as nat);
+    vstd::arithmetic::div_mod::lemma_small_mod(v as nat, p as nat);
+}
+
+/// `fe_sub` is congruent to the difference, and reduced.
+proof fn lemma_cong_fe_sub(m: nat, x: nat, y: nat)
+    requires
+        m > 0,
+    ensures
+        cong(m as int, fe_sub(m, x, y) as int, x - y),
+        fe_sub(m, x, y) < m,
+{
+    lemma_fe_sub(m, x, y);
+    lemma_cong_mod(m as int, x - y);
+}
+
+// ---------------------------------------------------------------------
+// Small ring identities, each its own query.
+// ---------------------------------------------------------------------
+
+proof fn lemma_cube_diff(x: int, z: int)
+    ensures
+        x * x * x - z * z * z == (x - z) * (x * x + x * z + z * z),
+{
+    assert(x * x * x - z * z * z == (x - z) * (x * x + x * z + z * z)) by (nonlinear_arith);
+}
+
+proof fn lemma_line_sq(l: int, u: int, y: int)
+    ensures
+        (l * u + y) * (l * u + y) - y * y == u * (l * l * u + 2 * l * y),
+{
+    assert((l * u + y) * (l * u + y) - y * y == u * (l * l * u + 2 * l * y)) by (nonlinear_arith);
+}
+
+proof fn lemma_lin_diff(a: int, x: int, z: int)
+    ensures
+        a * x - a * z == (x - z) * a,
+{
+    assert(a * x - a * z == (x - z) * a) by (nonlinear_arith);
+}
+
+proof fn lemma_factor3(u: int, s1: int, s2: int, s3: int)
+    ensures
+        u * s1 + u * s2 - u * s3 == u * (s1 + s2 - s3),
+{
+    assert(u * s1 + u * s2 - u * s3 == u * (s1 + s2 - s3)) by (nonlinear_arith);
+}
+
+proof fn lemma_mul_zero(a: int, b: int)
+    requires
+        b == 0,
+    ensures
+        a * b == 0,
+{
+}
+
+proof fn lemma_assoc_swap(a: int, b: int, c: int)
+    ensures
+        (a * b) * c == a * (c * b),
+        (c * b) * a == b * (c * a),
+{
+    assert((a * b) * c == a * (c * b)) by (nonlinear_arith);
+    assert((c * b) * a == b * (c * a)) by (nonlinear_arith);
+}
+
+proof fn lemma_neg_line(lam: int, x1: int, x3: int, y1: int)
+    ensures
+        lam * (x1 - x3) - y1 == -(lam * (x3 - x1) + y1),
+{
+    assert(lam * (x1 - x3) == -(lam * (x3 - x1))) by (nonlinear_arith);
+}
+
+proof fn lemma_neg_sq(y: int)
+    ensures
+        (-y) * (-y) == y * y,
+{
+    assert((-y) * (-y) == y * y) by (nonlinear_arith);
+}
+
+proof fn lemma_three(x: int)
+    ensures
+        3 * x * x == x * x + x * x + x * x,
+{
+    assert(3 * x * x == x * x + x * x + x * x) by (nonlinear_arith);
+}
+
+proof fn lemma_two_lam_y(lam: int, y1: int, t: int, w: int)
+    ensures
+        2 * lam * y1 == lam * (2 * y1),
+        (t * w) * (2 * y1) == t * (2 * y1 * w),
+{
+    assert(2 * lam * y1 == lam * (2 * y1)) by (nonlinear_arith);
+    assert((t * w) * (2 * y1) == t * (2 * y1 * w)) by (nonlinear_arith);
+}
+
+// ---------------------------------------------------------------------
+// SEC 1 §2.2.1: the chord and the tangent stay on the curve.
+// ---------------------------------------------------------------------
+
+/// `y^2 - (x^3 + a x + b)`: zero modulo p exactly on the curve.
+pub open spec fn ce(a: int, b: int, x: int, y: int) -> int {
+    y * y - (x * x * x + a * x + b)
+}
+
+/// `x^2 + x x1 + x1^2 + a - lam^2 (x - x1) - 2 lam y1`: the curve minus the
+/// line of slope `lam` through `(x1, y1)`, divided by `x - x1`
+/// ([`lemma_ce_line`]).
+pub open spec fn g_line(a: int, lam: int, x1: int, y1: int, x: int) -> int {
+    x * x + x * x1 + x1 * x1 + a - lam * lam * (x - x1) - 2 * lam * y1
+}
+
+/// The curve polynomial at the point of the line of slope `lam` through
+/// `(x1, y1)` above `x`: its value at `(x1, y1)` less `(x - x1) g(x)`.
+proof fn lemma_ce_line(a: int, b: int, lam: int, x1: int, y1: int, x: int)
+    ensures
+        ce(a, b, x, lam * (x - x1) + y1) == ce(a, b, x1, y1) - (x - x1) * g_line(a, lam, x1, y1, x),
+{
+    let u = x - x1;
+    lemma_line_sq(lam, u, y1);
+    lemma_cube_diff(x, x1);
+    lemma_lin_diff(a, x, x1);
+    lemma_factor3(u, x * x + x * x1 + x1 * x1, a, lam * lam * u + 2 * lam * y1);
+}
+
+/// `g(x) - g(z) = (x - z)(x + z + x1 - lam^2)`.
+proof fn lemma_g_diff(a: int, lam: int, x1: int, y1: int, x: int, z: int)
+    ensures
+        g_line(a, lam, x1, y1, x) - g_line(a, lam, x1, y1, z) == (x - z) * (x + z + x1 - lam
+            * lam),
+{
+    let l2 = lam * lam;
+    assert(l2 * (x - x1) - l2 * (z - x1) == (x - z) * l2) by (nonlinear_arith);
+    assert(x * x + x * x1 - (z * z + z * x1) == (x - z) * (x + z + x1)) by (nonlinear_arith);
+    assert((x - z) * (x + z + x1) - (x - z) * l2 == (x - z) * (x + z + x1 - l2)) by (nonlinear_arith);
+}
+
+/// `ce` does not see the sign of y.
+proof fn lemma_ce_neg(a: int, b: int, x: int, y: int)
+    ensures
+        ce(a, b, x, -y) == ce(a, b, x, y),
+{
+    lemma_neg_sq(y);
+}
+
+/// The curve polynomial respects congruence.
+proof fn lemma_ce_cong(p: int, a: int, b: int, x: int, y: int, x2: int, y2: int)
+    requires
+        p > 0,
+        cong(p, x, x2),
+        cong(p, y, y2),
+    ensures
+        cong(p, ce(a, b, x, y), ce(a, b, x2, y2)),
+{
+    lemma_cong_mul(p, y, y2, y, y2);
+    lemma_cong_mul(p, x, x2, x, x2);
+    lemma_cong_mul(p, x * x, x2 * x2, x, x2);
+    lemma_cong_mul(p, a, a, x, x2);
+    lemma_cong_add(p, x * x * x, x2 * x2 * x2, a * x, a * x2);
+    lemma_cong_add(p, x * x * x + a * x, x2 * x2 * x2 + a * x2, b, b);
+    lemma_cong_add(p, y * y, y2 * y2, x * x * x + a * x + b, x2 * x2 * x2 + a * x2 + b);
+}
+
+/// SEC 1 §2.2.1 rule 4 (the chord) gives a point on the curve: if `(x1,
+/// y1)` and `(x2, y2)` are on it, `w` is an inverse of `x2 - x1` and `lam ≡
+/// (y2 - y1) w`, then `(lam^2 - x1 - x2, lam (x1 - x3) - y1)` is on it.
+proof fn lemma_chord_on_curve(
+    p: int,
+    a: int,
+    b: int,
+    x1: int,
+    y1: int,
+    x2: int,
+    y2: int,
+    w: int,
+    lam: int,
+)
+    requires
+        p > 0,
+        cong(p, ce(a, b, x1, y1), 0),
+        cong(p, ce(a, b, x2, y2), 0),
+        cong(p, (x2 - x1) * w, 1),
+        cong(p, lam, (y2 - y1) * w),
+    ensures
+        ({
+            let x3 = lam * lam - x1 - x2;
+            cong(p, ce(a, b, x3, lam * (x1 - x3) - y1), 0)
+        }),
+{
+    let x3 = lam * lam - x1 - x2;
+    let v = x2 - x1;
+    let e1 = ce(a, b, x1, y1);
+    // The line meets x = x2 at y2 (mod p): lam v ≡ (y2 - y1) w v ≡ y2 - y1.
+    lemma_cong_mul(p, lam, (y2 - y1) * w, v, v);
+    lemma_assoc_swap(y2 - y1, w, v);
+    lemma_cong_mul(p, y2 - y1, y2 - y1, v * w, 1);
+    assert(cong(p, lam * v, y2 - y1));
+    lemma_cong_add(p, lam * v, y2 - y1, y1, y1);
+    assert(cong(p, lam * v + y1, y2));
+    lemma_ce_cong(p, a, b, x2, lam * v + y1, x2, y2);
+    // So v g(x2) ≡ 0, and g(x2) ≡ w v g(x2) ≡ 0.
+    lemma_ce_line(a, b, lam, x1, y1, x2);
+    let g2 = g_line(a, lam, x1, y1, x2);
+    lemma_cong_add(p, e1, 0, ce(a, b, x2, lam * v + y1), 0);
+    assert(cong(p, v * g2, 0));
+    lemma_cong_zero_mul(p, v * g2, w);
+    lemma_assoc_swap(g2, w, v);
+    lemma_cong_mul(p, v * w, 1, g2, g2);
+    assert(cong(p, g2, 0));
+    // g(x3) = g(x2), since x3 + x2 + x1 = lam^2.
+    lemma_g_diff(a, lam, x1, y1, x3, x2);
+    lemma_mul_zero(x3 - x2, x3 + x2 + x1 - lam * lam);
+    let g3 = g_line(a, lam, x1, y1, x3);
+    assert(g3 == g2);
+    // So the curve at (x3, -y3) is e1 - (x3 - x1) g3 ≡ 0.
+    lemma_ce_line(a, b, lam, x1, y1, x3);
+    lemma_cong_zero_mul(p, g3, x3 - x1);
+    lemma_cong_add(p, e1, 0, (x3 - x1) * g3, 0);
+    lemma_neg_line(lam, x1, x3, y1);
+    lemma_ce_neg(a, b, x3, lam * (x3 - x1) + y1);
+}
+
+/// SEC 1 §2.2.1 rule 5 (the tangent) gives a point on the curve: if `(x1,
+/// y1)` is on it, `w` is an inverse of `2 y1` and `lam ≡ (3 x1^2 + a) w`,
+/// then `(lam^2 - 2 x1, lam (x1 - x3) - y1)` is on it.
+proof fn lemma_tangent_on_curve(p: int, a: int, b: int, x1: int, y1: int, w: int, lam: int)
+    requires
+        p > 0,
+        cong(p, ce(a, b, x1, y1), 0),
+        cong(p, 2 * y1 * w, 1),
+        cong(p, lam, (3 * x1 * x1 + a) * w),
+    ensures
+        ({
+            let x3 = lam * lam - 2 * x1;
+            cong(p, ce(a, b, x3, lam * (x1 - x3) - y1), 0)
+        }),
+{
+    let x3 = lam * lam - 2 * x1;
+    let e1 = ce(a, b, x1, y1);
+    let t = 3 * x1 * x1 + a;
+    // g(x1) = 3 x1^2 + a - 2 lam y1 ≡ 0, since 2 lam y1 ≡ t w 2 y1 ≡ t.
+    lemma_mul_zero(lam * lam, x1 - x1);
+    lemma_three(x1);
+    let g1 = g_line(a, lam, x1, y1, x1);
+    assert(g1 == t - 2 * lam * y1);
+    lemma_two_lam_y(lam, y1, t, w);
+    lemma_cong_mul(p, lam, t * w, 2 * y1, 2 * y1);
+    lemma_cong_mul(p, t, t, 2 * y1 * w, 1);
+    assert(cong(p, 2 * lam * y1, t));
+    lemma_cong_add(p, t, t, 2 * lam * y1, t);
+    assert(cong(p, g1, 0));
+    // g(x3) = g(x1), since x3 + 2 x1 = lam^2.
+    lemma_g_diff(a, lam, x1, y1, x3, x1);
+    lemma_mul_zero(x3 - x1, x3 + x1 + x1 - lam * lam);
+    let g3 = g_line(a, lam, x1, y1, x3);
+    assert(g3 == g1);
+    lemma_ce_line(a, b, lam, x1, y1, x3);
+    lemma_cong_zero_mul(p, g3, x3 - x1);
+    lemma_cong_add(p, e1, 0, (x3 - x1) * g3, 0);
+    lemma_neg_line(lam, x1, x3, y1);
+    lemma_ce_neg(a, b, x3, lam * (x3 - x1) + y1);
+}
+
+/// On the curve, as a congruence.
+proof fn lemma_on_curve_cong(c: Curve, x: nat, y: nat)
+    requires
+        c.p > 0,
+    ensures
+        satisfies_equation(c, x, y) == cong(
+            c.p as int,
+            ce(c.a as int, c.b as int, x as int, y as int),
+            0,
+        ),
+{
+    vstd::arithmetic::div_mod::lemma_mod_equivalence(
+        (y * y) as int,
+        (x * x * x + c.a * x + c.b) as int,
+        c.p as int,
+    );
 }
 
 } // verus!
