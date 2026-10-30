@@ -67,27 +67,48 @@ fn limbo_cert(index: usize) -> Result<&'static [u8], String> {
 
 fn case(id: &str) -> Result<&'static Case, String> {
     assert_eq!(CASES.len(), TESTCASE_COUNT);
-    need(CASES.iter().find(|c| c.id == id), id)
+    let c = need(CASES.iter().find(|c| c.id == id), id)?;
+    // A server testcase with one peer name (the host).
+    assert_eq!(c.kind, "SERVER", "{id}");
+    assert!(c.peer_names.is_empty(), "{id}");
+    Ok(c)
 }
 
-/// Days since 1970-01-01 of a proleptic Gregorian date (H. Hinnant's
-/// `days_from_civil`).
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
-    let y = if month <= 2 { year - 1 } else { year };
-    let era = if y >= 0 { y } else { y - 399 } / 400;
-    let yoe = y - era * 400;
-    let mp = (month + 9) % 12;
-    let doy = (153 * mp + 2) / 5 + day - 1;
-    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    era * 146_097 + doe - 719_468
+/// Seconds since 1970-01-01T00:00:00Z of a proleptic Gregorian date and
+/// time (H. Hinnant's `days_from_civil`), for years 1970 to 9999.
+fn unix(year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64) -> Option<u64> {
+    let y = if month <= 2 {
+        year.checked_sub(1)?
+    } else {
+        year
+    };
+    let era = y.checked_div(400)?;
+    let yoe = y.checked_sub(era.checked_mul(400)?)?;
+    let mp = month.checked_add(9)?.checked_rem(12)?;
+    let doy = mp
+        .checked_mul(153)?
+        .checked_add(2)?
+        .checked_div(5)?
+        .checked_add(day)?
+        .checked_sub(1)?;
+    let doe = yoe
+        .checked_mul(365)?
+        .checked_add(yoe.checked_div(4)?)?
+        .checked_sub(yoe.checked_div(100)?)?
+        .checked_add(doy)?;
+    let days = era
+        .checked_mul(146_097)?
+        .checked_add(doe)?
+        .checked_sub(719_468)?;
+    let seconds = days
+        .checked_mul(86_400)?
+        .checked_add(hour.checked_mul(3_600)?)?
+        .checked_add(minute.checked_mul(60)?)?
+        .checked_add(second)?;
+    u64::try_from(seconds).ok()
 }
 
-fn unix(year: i64, month: i64, day: i64, hour: i64, minute: i64, second: i64) -> u64 {
-    let seconds = days_from_civil(year, month, day) * 86_400 + hour * 3_600 + minute * 60 + second;
-    u64::try_from(seconds).unwrap_or(0)
-}
-
-fn unix_of(time: &CertificateTime) -> u64 {
+fn unix_of(time: &CertificateTime) -> Option<u64> {
     unix(
         i64::from(time.year),
         i64::from(time.month),
@@ -103,7 +124,8 @@ fn unix_of(time: &CertificateTime) -> u64 {
 fn limbo_now(case: &Case) -> Result<u64, String> {
     if case.time.is_empty() {
         let leaf = need(parse_path_cert(limbo_cert(case.leaf)?), "leaf parses")?;
-        return Ok(unix_of(&leaf.tbs.not_before).saturating_add(86_400));
+        let not_before = need(unix_of(&leaf.tbs.not_before), "leaf notBefore")?;
+        return Ok(not_before.saturating_add(86_400));
     }
     let body = need(case.time.strip_suffix("+00:00"), case.time)?;
     let (date, clock) = need(body.split_once('T'), case.time)?;
@@ -117,14 +139,17 @@ fn limbo_now(case: &Case) -> Result<u64, String> {
     };
     let mut d = date.split('-');
     let mut c = clock.split(':');
-    Ok(unix(
-        number(d.next())?,
-        number(d.next())?,
-        number(d.next())?,
-        number(c.next())?,
-        number(c.next())?,
-        number(c.next())?,
-    ))
+    need(
+        unix(
+            number(d.next())?,
+            number(d.next())?,
+            number(d.next())?,
+            number(c.next())?,
+            number(c.next())?,
+            number(c.next())?,
+        ),
+        case.time,
+    )
 }
 
 fn host_of(case: &Case) -> Result<Host, String> {
@@ -229,7 +254,14 @@ fn real_world_chains_validate_against_the_mozilla_roots() -> Result<(), String> 
     let mut accepted = Vec::new();
     let mut p384 = Vec::new();
     for c in CASES.iter().filter(|c| c.id.starts_with("online::")) {
-        assert_eq!(c.expected, "SUCCESS", "{}", c.id);
+        assert_eq!(
+            (c.expected, c.kind),
+            ("SUCCESS", "SERVER"),
+            "{} {:?} {}",
+            c.id,
+            c.features,
+            c.importance
+        );
         match validate(&production, c)? {
             // The key returned is the leaf's SubjectPublicKeyInfo.
             Ok(key) => {
