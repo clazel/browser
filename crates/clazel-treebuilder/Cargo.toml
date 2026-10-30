@@ -15,8 +15,12 @@ clazel-dom = { path = "../clazel-dom" }
 clazel-html = { path = "../clazel-html" }
 
 [dev-dependencies]
+# The second engine of the differential test (`tests/conformance_html5ever.rs`,
+# Phase 4 items 4.0 and 4.11), with the tree its own tests build. Test-only
+# (docs/DEPENDENCIES.md, class `test`). markup5ever_rcdom's version is
+# 0.39.0+unofficial; Cargo ignores the build metadata in a requirement.
 html5ever = "=0.39.0"
-markup5ever_rcdom = "=0.39.0+unofficial"
+markup5ever_rcdom = "=0.39.0"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (Phase 4
