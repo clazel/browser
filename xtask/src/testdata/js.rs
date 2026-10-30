@@ -1,5 +1,6 @@
 //! Just enough JavaScript to read the literal tables in WPT test files:
-//! numbers, strings, arrays and object literals with identifier keys.
+//! `null`, numbers, strings, arrays and object literals with identifier or
+//! string keys.
 //! Anything else is an error, so a changed upstream file fails loudly
 //! instead of being half-read.
 
@@ -12,6 +13,7 @@ pub struct Node {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lit {
+    Null,
     Bool(bool),
     Num(u64),
     /// A string as JavaScript sees it: UTF-16 code units.
@@ -60,6 +62,11 @@ impl Node {
     pub fn string(&self) -> Result<String, String> {
         String::from_utf16(self.str_units()?)
             .map_err(|_| format!("line {}: string has a lone surrogate", self.line))
+    }
+
+    /// True for `null`.
+    pub fn is_null(&self) -> bool {
+        self.lit == Lit::Null
     }
 
     pub fn array(&self) -> Result<&[Node], String> {
@@ -214,7 +221,14 @@ impl Parser {
             Some('{') => {
                 self.bump();
                 Lit::Obj(self.list('}', |p| {
-                    let key = p.ident()?;
+                    let key = match p.peek() {
+                        Some(q @ ('\'' | '"')) => {
+                            p.bump();
+                            String::from_utf16(&p.string_body(q)?)
+                                .map_err(|_| format!("line {}: key has a lone surrogate", p.line))?
+                        }
+                        _ => p.ident()?,
+                    };
                     p.expect(":")?;
                     Ok((key, p.literal()?))
                 })?)
@@ -229,6 +243,12 @@ impl Parser {
                     self.bump();
                 }
                 Lit::Bool(true)
+            }
+            Some('n') if self.rest_starts_with("null") => {
+                for _ in 0..4 {
+                    self.bump();
+                }
+                Lit::Null
             }
             Some('f') if self.rest_starts_with("false") => {
                 for _ in 0..5 {
@@ -336,6 +356,7 @@ impl Parser {
                 Some('x') => self.hex(2)?,
                 Some('0') if !self.peek().is_some_and(|c| c.is_ascii_digit()) => 0,
                 Some('n') => 0x0A,
+                Some('f') => 0x0C,
                 Some('r') => 0x0D,
                 Some('t') => 0x09,
                 Some(e @ ('\\' | '\'' | '"')) => u32::from(e),
@@ -368,7 +389,7 @@ pub fn find_all(source: &str, needle: &str) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lit, Parser, scalars};
+    use super::{Lit, Node, Parser, scalars};
 
     #[test]
     fn parses_wpt_shapes() -> Result<(), String> {
@@ -382,6 +403,10 @@ mod tests {
         assert_eq!(second.line, 3);
         assert_eq!(scalars(second.str_units()?)?, vec![0x1D11E, 0xA2, 0]);
         assert!(matches!(n.lit, Lit::Arr(_)));
+        let obj = Parser::new("{ \"IBM866\": [1, null], 'k': true }").literal()?;
+        let index = obj.field("IBM866")?.array()?;
+        assert!(index.get(1).is_some_and(Node::is_null));
+        assert!(obj.field("k")?.boolean()?);
         Ok(())
     }
 

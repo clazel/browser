@@ -4,16 +4,21 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "WHATWG HTML Standard: input preprocessing (§13.2.3.5), the tokenizer (§13.2.4, §13.2.5) and character references (§13.5)."
+description = "WHATWG HTML Standard: the encoding sniffing algorithm (§13.2.3.2), input preprocessing (§13.2.3.5), the tokenizer (§13.2.4, §13.2.5) and character references (§13.5)."
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
+clazel-encoding = { path = "../clazel-encoding" }
+clazel-mime = { path = "../clazel-mime" }
 
 # Test-only reference engine for the differential test in
 # tests/conformance_tokenizer.rs (class `test` in docs/DEPENDENCIES.md:
 # never shipped). Without default features it has no dependencies.
 [dev-dependencies]
 html5gum = { version = "=0.8.4", default-features = false }
+# Firefox's label resolution, the oracle for the labels the sniffer reads in
+# tests/conformance_sniff.rs.
+encoding_rs = "=0.8.35"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (the
@@ -22,7 +27,7 @@ html5gum = { version = "=0.8.4", default-features = false }
 # exec function against its contract, with the independent transcription,
 # certified mutations and conformance tests (Phase 4 items 4.5 to 4.7).
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]

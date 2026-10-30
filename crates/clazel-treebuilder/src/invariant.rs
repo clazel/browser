@@ -305,13 +305,32 @@ pub open spec fn cells_wf(p: Parser) -> bool {
     &&& forall|j: int| 0 <= j < p.open.len() && cell_pred()(#[trigger] p.open[j]) ==> cell_fresh(p, p.open[j].id)
 }
 
+/// A tag token's attributes have no namespace and no prefix
+/// (`independent::equivalence_body::attrs_plain`), as the tokenizer's
+/// attributes do (`classify`).
+pub open spec fn tok_plain(t: Tok) -> bool {
+    &&& t is Start ==> crate::independent::equivalence_body::attrs_plain(t->Start_0.attrs)
+    &&& t is End ==> crate::independent::equivalence_body::attrs_plain(t->End_0.attrs)
+}
+
+/// Every entry of the list of active formatting elements is for a token
+/// whose attributes have no namespace and no prefix.
+#[verifier::opaque]
+pub open spec fn fmt_plain(f: Seq<Fmt>) -> bool {
+    forall|i: int|
+        0 <= i < f.len() && (#[trigger] f[i]) is Entry ==> crate::independent::equivalence_body::attrs_plain(
+            f[i]->Entry_token.attrs,
+        )
+}
+
 /// The reachable-state facts of a running parser: the stack's [`shape`],
 /// [`root_ids`], [`tags_wf`], [`cells_wf`], [`cell_ok`], [`html_once`],
-/// and the document facts `reachable::doc::dinv` (among them
-/// [`templates_wf`]'s).
+/// the document facts `reachable::doc::dinv` (among them
+/// [`templates_wf`]'s and `reachable::doc::html_plain`), and
+/// [`fmt_plain`].
 pub open spec fn reach_core(p: Parser) -> bool {
     shape(p) && root_ids(p) && tags_wf(p) && cells_wf(p) && cell_ok(p) && html_once(p.open)
-        && crate::reachable::doc::dinv(p)
+        && crate::reachable::doc::dinv(p) && fmt_plain(p.formatting)
 }
 
 /// **The reachable-state invariant**: a stopped parser (which takes no
@@ -349,10 +368,12 @@ pub open spec fn rules_need(r: Rules, p: Parser, t: Tok) -> bool {
 
 /// The invariant at every rule application of a token's run: a running
 /// parser satisfying `termination::modes_ok`, [`reach_core`] and the
-/// rules' [`rules_need`], a tagged token, and `termination::rules_ok`.
+/// rules' [`rules_need`], a tagged token with plain attributes
+/// ([`tok_plain`]), and `termination::rules_ok`.
 pub open spec fn rules_inv(r: Rules, p: Parser, t: Tok) -> bool {
     &&& !p.stopped
     &&& crate::exec::modes::initial::tok_ok(t)
+    &&& tok_plain(t)
     &&& crate::termination::modes_ok(p)
     &&& crate::termination::rules_ok(r, p)
     &&& reach_core(p)
