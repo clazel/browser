@@ -414,7 +414,7 @@ pub open spec fn cong(p: int, u: int, v: int) -> bool {
 }
 
 /// Reducing is congruent, and lands in [0, p).
-proof fn lemma_cong_mod(p: int, u: int)
+pub proof fn lemma_cong_mod(p: int, u: int)
     requires
         p > 0,
     ensures
@@ -426,7 +426,7 @@ proof fn lemma_cong_mod(p: int, u: int)
 }
 
 /// Sums and differences of congruent terms are congruent.
-proof fn lemma_cong_add(p: int, u1: int, v1: int, u2: int, v2: int)
+pub proof fn lemma_cong_add(p: int, u1: int, v1: int, u2: int, v2: int)
     requires
         p > 0,
         cong(p, u1, v1),
@@ -442,7 +442,7 @@ proof fn lemma_cong_add(p: int, u1: int, v1: int, u2: int, v2: int)
 }
 
 /// Products of congruent terms are congruent.
-proof fn lemma_cong_mul(p: int, u1: int, v1: int, u2: int, v2: int)
+pub proof fn lemma_cong_mul(p: int, u1: int, v1: int, u2: int, v2: int)
     requires
         p > 0,
         cong(p, u1, v1),
@@ -455,7 +455,7 @@ proof fn lemma_cong_mul(p: int, u1: int, v1: int, u2: int, v2: int)
 }
 
 /// A term congruent to 0, times anything, is congruent to 0.
-proof fn lemma_cong_zero_mul(p: int, u: int, v: int)
+pub proof fn lemma_cong_zero_mul(p: int, u: int, v: int)
     requires
         p > 0,
         cong(p, u, 0),
@@ -468,7 +468,7 @@ proof fn lemma_cong_zero_mul(p: int, u: int, v: int)
 }
 
 /// Two residues in [0, p) that are congruent are equal.
-proof fn lemma_cong_reduced(p: int, u: int, v: int)
+pub proof fn lemma_cong_reduced(p: int, u: int, v: int)
     requires
         p > 0,
         0 <= u < p,
@@ -482,7 +482,7 @@ proof fn lemma_cong_reduced(p: int, u: int, v: int)
 }
 
 /// `fe_sub` is congruent to the difference, and reduced.
-proof fn lemma_cong_fe_sub(m: nat, x: nat, y: nat)
+pub proof fn lemma_cong_fe_sub(m: nat, x: nat, y: nat)
     requires
         m > 0,
     ensures
@@ -525,7 +525,7 @@ proof fn lemma_factor3(u: int, s1: int, s2: int, s3: int)
     assert(u * s1 + u * s2 - u * s3 == u * (s1 + s2 - s3)) by (nonlinear_arith);
 }
 
-proof fn lemma_mul_zero(a: int, b: int)
+pub proof fn lemma_mul_zero(a: int, b: int)
     requires
         b == 0,
     ensures
@@ -533,7 +533,7 @@ proof fn lemma_mul_zero(a: int, b: int)
 {
 }
 
-proof fn lemma_assoc_swap(a: int, b: int, c: int)
+pub proof fn lemma_assoc_swap(a: int, b: int, c: int)
     ensures
         (a * b) * c == a * (c * b),
         (c * b) * a == b * (c * a),

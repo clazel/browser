@@ -49,6 +49,7 @@ pub mod independent;
 pub mod lemmas;
 pub mod point;
 pub mod point_contract;
+pub mod primality;
 pub mod scalar;
 pub mod spec;
 pub mod verify;
