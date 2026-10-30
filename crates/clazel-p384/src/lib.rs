@@ -9,9 +9,9 @@
 //! [`verify::verify`], each proven against [`spec`] over those six axioms and
 //! nothing else. An independent transcription from SEC 1
 //! ([`independent`]) is proven to accept exactly what [`spec`] accepts
-//! ([`equivalence`]). The crate is still at tier 0: the other evidence tier 1
-//! and tier 2 require (Kani harnesses, certified mutations of the code) is
-//! not written yet.
+//! ([`equivalence`]). The crate is still at tier 0: the mutations (53, all
+//! certified), the conformance tests and the equivalence proof are in place,
+//! and the tier is raised only after CI's full verification is green.
 //! Conformance tests (Wycheproof, NIST CAVP) and a differential against
 //! `ring` run in `tests/`.
 //!
