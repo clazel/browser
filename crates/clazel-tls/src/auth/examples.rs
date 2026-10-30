@@ -74,6 +74,13 @@ pub open spec fn rejected_signature() -> Action {
     receive(crypto(), v, after_certificate(), 15, cv()).1
 }
 
+/// A host outside host_ok (an empty name) refuses the start (internal_error).
+pub proof fn lemma_start_refuses_bad_host()
+    ensures start(Config { host: crate::host::spec::Host::Dns(seq![]), ..initial().config }, initial().transcript) is Err,
+{
+    assert(start(Config { host: crate::host::spec::Host::Dns(seq![]), ..initial().config }, initial().transcript) is Err) by (compute_only);
+}
+
 /// Concrete authentication requirement: early_data.
 pub proof fn lemma_early_data()
     ensures step(crypto(), verifier(), initial(), Input::Application(seq![1u8])).1 == Action::Fail(10u8),

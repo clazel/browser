@@ -1698,7 +1698,7 @@
       "id": "auth-wrong-chain-host",
       "file": "src/auth/spec.rs",
       "find": "(v.chain)(s.config.host, s.config.now, body)",
-      "replace": "(v.chain)(Seq::empty(), s.config.now, body)",
+      "replace": "(v.chain)(crate::host::spec::Host::Dns(Seq::empty()), s.config.now, body)",
       "expect": "killed",
       "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
       "module": "auth::examples",
@@ -2076,14 +2076,14 @@
       "id": "join-host",
       "file": "src/hello/join_spec.rs",
       "find": "host: config.host, now: config.now",
-      "replace": "host: seq![120u8], now: config.now",
+      "replace": "host: crate::host::spec::Host::Dns(seq![120u8]), now: config.now",
       "expect": "killed",
       "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
       "module": "hello::client_examples",
       "certificate": {
         "file": "src/hello/client_certificates.rs",
         "lemma": "super::client_examples::lemma_join_host()",
-        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == seq![104u8])"
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == crate::host::spec::Host::Dns(seq![104u8]))"
       }
     },
     {
@@ -2504,6 +2504,132 @@
         "file": "src/connection/dispatcher_certificates.rs",
         "lemma": "super::dispatcher_lemmas::lemma_key_update_after_close_owes_no_response()",
         "witness": "super::dispatcher_spec::receive_key_update(super::dispatcher_certificates::passthrough_crypto(), super::dispatcher_certificates::sample_write_closed_state(), 1).response_due"
+      }
+    },
+    {
+      "id": "host-dns-max-254",
+      "file": "src/host/spec.rs",
+      "find": "1 <= name.len() <= 253",
+      "replace": "1 <= name.len() <= 254",
+      "expect": "killed",
+      "reason": "A 254-octet DNS name is accepted: lemma_host_bounds (!host_ok of a 254-octet name) is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "host_ok(Host::Dns(super::examples::name_of(254)))"
+      }
+    },
+    {
+      "id": "host-trailing-dot",
+      "file": "src/host/spec.rs",
+      "find": " && name.last() != 0x2eu8",
+      "replace": "",
+      "expect": "killed",
+      "reason": "A name ending in a dot is accepted (RFC 6066 §3: \"without a trailing dot\"): lemma_host_bounds is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8]))"
+      }
+    },
+    {
+      "id": "host-no-ipv6",
+      "file": "src/host/spec.rs",
+      "find": "address.len() == 4 || address.len() == 16",
+      "replace": "address.len() == 4",
+      "expect": "killed",
+      "reason": "A 16-octet IPv6 address is refused: lemma_host_bounds (host_ok of 16 octets) is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "!host_ok(Host::Ip(super::examples::address_of(16)))"
+      }
+    },
+    {
+      "id": "host-ip-any-length",
+      "file": "src/host/spec.rs",
+      "find": "address.len() == 4 || address.len() == 16",
+      "replace": "address.len() >= 4",
+      "expect": "killed",
+      "reason": "A 5-octet address is accepted: lemma_host_bounds is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "host_ok(Host::Ip(super::examples::address_of(5)))"
+      }
+    },
+    {
+      "id": "sni-for-ip",
+      "file": "src/host/spec.rs",
+      "find": "Host::Ip(_) => None,",
+      "replace": "Host::Ip(address) => Some(address),",
+      "expect": "killed",
+      "reason": "An IP address becomes a HostName (RFC 6066 §3: \"Literal IPv4 and IPv6 addresses are not permitted\"): lemma_sni_host_name is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_sni_host_name()",
+        "witness": "sni_host_name(Host::Ip(seq![192u8, 0, 2, 10])) is Some"
+      }
+    },
+    {
+      "id": "hello-ip-server-name",
+      "file": "src/hello/client_spec.rs",
+      "find": "None => seq![],",
+      "replace": "None => seq![crate::spec::Ext { etype: 0, data: seq![] }],",
+      "expect": "killed",
+      "reason": "An IP host's ClientHello carries a server_name extension: lemma_ip_no_server_name is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_ip_no_server_name()",
+        "witness": "super::client_spec::extensions(super::client_examples::ip_config(), seq![]).len() == 5"
+      }
+    },
+    {
+      "id": "join-ip-offers-server-name",
+      "file": "src/hello/join_spec.rs",
+      "find": "is Some { seq![0u16] }",
+      "replace": "is None { seq![0u16] }",
+      "expect": "killed",
+      "reason": "The offers auth checks EncryptedExtensions against list server_name for an IP host and not for a DNS host: lemma_ip_no_server_name is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_ip_no_server_name()",
+        "witness": "super::join_spec::extension_types(super::client_examples::ip_config(), false).len() == 5"
+      }
+    },
+    {
+      "id": "hello-host-unchecked",
+      "file": "src/hello/client_spec.rs",
+      "find": "crate::host::spec::host_ok(c.host) && c.random.len() == 32",
+      "replace": "c.random.len() == 32",
+      "expect": "killed",
+      "reason": "A host outside host_ok (an empty name) starts a ClientHello: lemma_bad_host_refused is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_bad_host_refused()",
+        "witness": "super::client_spec::start(super::client_examples::bad_host_config()) is Ok"
+      }
+    },
+    {
+      "id": "auth-host-unchecked",
+      "file": "src/auth/spec.rs",
+      "find": "crate::host::spec::host_ok(c.host) && c.server_secret.len() == 32",
+      "replace": "c.server_secret.len() == 32",
+      "expect": "killed",
+      "reason": "A host outside host_ok (an empty name) starts authentication: lemma_start_refuses_bad_host is false.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_start_refuses_bad_host()",
+        "witness": "start(Config { host: crate::host::spec::Host::Dns(seq![]), ..super::examples::initial().config }, super::examples::initial().transcript) is Ok"
       }
     }
   ]

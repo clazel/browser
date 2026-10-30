@@ -9,6 +9,34 @@ pub open spec fn config() -> super::client_spec::Config {
     super::client_spec::Config { host: crate::host::spec::Host::Dns(seq![104u8]), now: 7, random: Seq::new(32, |i: int| 1u8),
         session_id: seq![7u8], public_key: Seq::new(32, |i: int| 5u8) }
 }
+/// config() with an IPv4 host.
+pub open spec fn ip_config() -> super::client_spec::Config {
+    super::client_spec::Config { host: crate::host::spec::Host::Ip(seq![192u8, 0, 2, 10]), ..config() }
+}
+/// config() with a host outside host_ok (an empty name).
+pub open spec fn bad_host_config() -> super::client_spec::Config {
+    super::client_spec::Config { host: crate::host::spec::Host::Dns(seq![]), ..config() }
+}
+/// RFC 6066 §3: an IP host's ClientHello has no server_name; a DNS host's does.
+pub proof fn lemma_ip_no_server_name()
+    ensures super::client_spec::extensions(ip_config(), seq![]).len() == 4,
+        super::client_spec::extensions(ip_config(), seq![])[0].etype == 43,
+        super::client_spec::extensions(config(), seq![])[0].etype == 0,
+        super::join_spec::extension_types(ip_config(), false) == seq![43u16, 13u16, 10u16, 51u16],
+        super::join_spec::extension_types(config(), false) == seq![0u16, 43u16, 13u16, 10u16, 51u16],
+{
+    assert(super::client_spec::extensions(ip_config(), seq![]).len() == 4) by (compute_only);
+    assert(super::client_spec::extensions(ip_config(), seq![])[0].etype == 43) by (compute_only);
+    assert(super::client_spec::extensions(config(), seq![])[0].etype == 0) by (compute_only);
+    assert(super::join_spec::extension_types(ip_config(), false) == seq![43u16, 13u16, 10u16, 51u16]) by (compute_only);
+    assert(super::join_spec::extension_types(config(), false) == seq![0u16, 43u16, 13u16, 10u16, 51u16]) by (compute_only);
+}
+/// A host outside host_ok refuses the configuration (internal_error).
+pub proof fn lemma_bad_host_refused()
+    ensures super::client_spec::start(bad_host_config()) == Err::<(super::client_spec::State, Seq<u8>), u8>(80u8),
+{
+    assert(super::client_spec::start(bad_host_config()) == Err::<(super::client_spec::State, Seq<u8>), u8>(80u8)) by (compute_only);
+}
 /// Total first/last byte helpers for input-sensitive fixture functions.
 pub open spec fn first(s: Seq<u8>) -> u8 { if s.len() == 0 { 0 } else { s[0] } }
 /// Total last byte, used to bind expanded output to the transcript-hash context.
