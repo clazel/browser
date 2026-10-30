@@ -12,6 +12,7 @@
 //! (a full 40-hex commit) and `License:` lines.
 
 mod cbor_appendix_a;
+mod html5lib_encoding;
 mod html5lib_tokenizer;
 mod html5lib_tree;
 mod http_state_dates;
@@ -21,6 +22,7 @@ mod llhttp;
 mod wpt_base64;
 mod wpt_cookies;
 mod wpt_encoding;
+mod wpt_encoding_legacy;
 mod wpt_idna;
 mod wpt_mime_types;
 mod wpt_mimesniff;
@@ -63,6 +65,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         http_state_parser::FILES,
     ),
     (
+        "html5lib-encoding",
+        html5lib_encoding::convert,
+        html5lib_encoding::FILES,
+    ),
+    (
         "html5lib-tokenizer",
         html5lib_tokenizer::convert,
         html5lib_tokenizer::FILES,
@@ -71,6 +78,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
     ("wpt-base64", wpt_base64::convert, wpt_base64::FILES),
     ("wpt-cookies", wpt_cookies::convert, wpt_cookies::FILES),
     ("wpt-encoding", wpt_encoding::convert, wpt_encoding::FILES),
+    (
+        "wpt-encoding-legacy",
+        wpt_encoding_legacy::convert,
+        wpt_encoding_legacy::FILES,
+    ),
     ("wpt-url-idna", wpt_idna::convert, wpt_idna::FILES),
     (
         "wpt-mime-types",
