@@ -27,7 +27,7 @@ encoding_rs = "=0.8.35"
 # exec function against its contract, with the independent transcription,
 # certified mutations and conformance tests (Phase 4 items 4.5 to 4.7).
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]

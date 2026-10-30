@@ -325,6 +325,7 @@ pub proof fn lemma_push_keeps(p: Parser, e: Elem)
         !is_html(e, Tag::Html),
         !p.stopped && cell_pred()(e) ==> p.mode != Mode::InCell && cell_fresh(p, e.id),
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
+        !p.stopped ==> after_ctx(p, e),
         !p.stopped && is_html(e, Tag::Table) ==> p.mode != Mode::InCell,
     ensures
         keeps(p, push(p, e)),
@@ -334,6 +335,11 @@ pub proof fn lemma_push_keeps(p: Parser, e: Elem)
         let q = push(p, e);
         lemma_dinv(p);
         crate::exec::frame::lemma_open_push(p.doc, p.open, e);
+        assert forall|j: int| 0 <= j < p.open.push(e).len() implies after_ctx(p, #[trigger] p.open.push(e)[j]) by {
+            if j < p.open.len() {
+                assert(p.open.push(e)[j] == p.open[j]);
+            }
+        }
         lemma_dinv_open(p, p.open.push(e));
         assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies cell_fresh(q, q.open[j].id) by {
             if j < p.open.len() {
@@ -474,6 +480,7 @@ pub proof fn lemma_doc_keeps(p: Parser, q: Parser)
         q == (Parser { doc: q.doc, ..p }),
         q.doc.nodes.len() >= p.doc.nodes.len(),
         !p.stopped ==> crate::exec::frame::doc_extends(p.doc, q.doc),
+        !p.stopped ==> html_plain(q.doc, p.context),
     ensures
         keeps(p, q),
 {
@@ -514,6 +521,7 @@ pub proof fn lemma_dom_insert_keeps(p: Parser, node: NodeId, parent: NodeId, chi
         lemma_dinv(p);
         if insert_valid(p.doc, node, parent, child) {
             crate::exec::frame::lemma_insert_extends(p.doc, node, parent, child);
+            lemma_insert_plain(p.doc, node, parent, child, p.context);
             lemma_dinv_doc(p, dom::insert(p.doc, node, parent, child));
         } else {
             crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p.doc);
@@ -535,6 +543,7 @@ pub proof fn lemma_dom_remove_keeps(p: Parser, node: NodeId)
         lemma_dinv(p);
         if dom::valid(p.doc, node) && p.doc.nodes[node as int].parent is Some {
             crate::exec::frame::lemma_remove_extends(p.doc, node);
+            lemma_remove_plain(p.doc, node, p.context);
             lemma_dinv_doc(p, dom::remove(p.doc, node));
         } else {
             crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p.doc);
@@ -548,6 +557,7 @@ pub proof fn lemma_create_keeps(p: Parser, k: NodeKind)
     requires
         live(p),
         !p.stopped ==> dom::creatable(p.doc, k),
+        !p.stopped ==> kind_plain(k),
     ensures
         keeps(p, create(p, k).0),
         !create(p, k).0.stopped ==> {
@@ -561,6 +571,7 @@ pub proof fn lemma_create_keeps(p: Parser, k: NodeKind)
     if !p.stopped && dom::can_create(p.doc, 1) {
         lemma_dinv(p);
         crate::exec::frame::lemma_create_extends(p.doc, k);
+        lemma_create_plain(p.doc, k, p.context);
         lemma_dinv_doc(p, dom::create_node(p.doc, k).0);
     }
 }
@@ -570,6 +581,7 @@ pub proof fn lemma_create_keeps(p: Parser, k: NodeKind)
 pub proof fn lemma_ceft_keeps(p: Parser, t: TagTok, ns: Namespace, ip: NodeId)
     requires
         live(p),
+        !p.stopped && ns == Namespace::Html ==> crate::independent::equivalence_body::attrs_plain(t.attrs),
     ensures
         keeps(p, create_element_for_token(p, t, ns, ip).0),
         !create_element_for_token(p, t, ns, ip).0.stopped ==> {
@@ -608,6 +620,8 @@ pub proof fn lemma_ceft_keeps(p: Parser, t: TagTok, ns: Namespace, ip: NodeId)
             let d = dom::create_template_contents(p1.doc, id).0;
             assert(d.nodes.len() == p1.doc.nodes.len() + 1);
             crate::exec::frame::lemma_create_template_contents_extends(p1.doc, id);
+            lemma_dinv(p1);
+            lemma_ctc_plain(p1.doc, id, p1.context);
             lemma_doc_keeps(p1, Parser { doc: d, ..p1 });
             crate::exec::frame::lemma_doc_extends_trans(p.doc, p1.doc, d);
         }
@@ -652,6 +666,7 @@ pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
     requires
         live(p),
         tok_tagged(t),
+        ns == Namespace::Html ==> crate::independent::equivalence_body::attrs_plain(t.attrs),
         !(ns == Namespace::Html && t.tag == Tag::Template),
         !(ns == Namespace::Html && t.tag == Tag::Html),
         !p.stopped && ns == Namespace::Html && (t.tag == Tag::Td || t.tag == Tag::Th || t.tag == Tag::Table) ==> p.mode
@@ -687,6 +702,7 @@ pub proof fn lemma_insert_foreign_keeps(p: Parser, t: TagTok, ns: Namespace)
             assert(p.formatting[i] == p2.formatting[i]);
         }
         assert(cell_fresh(p2, e.id));
+        lemma_fresh_after_ctx(p, e);
         assert(crate::exec::frame::elem_ok(p1.doc, e));
         crate::exec::frame::lemma_elem_ok_extends(p1.doc, p2.doc, e);
         crate::exec::frame::lemma_doc_extends_trans(p.doc, p1.doc, p2.doc);
@@ -708,6 +724,7 @@ pub proof fn lemma_insert_html_keeps(p: Parser, t: TagTok)
     requires
         live(p),
         tok_tagged(t),
+        crate::independent::equivalence_body::attrs_plain(t.attrs),
         t.tag != Tag::Template,
         t.tag != Tag::Html,
         !p.stopped && (t.tag == Tag::Td || t.tag == Tag::Th || t.tag == Tag::Table) ==> p.mode != Mode::InCell,
@@ -757,6 +774,7 @@ pub proof fn lemma_insert_characters_keeps(p: Parser, data: Seq<u32>)
             Some(s) if dom::valid(doc, s) && doc.nodes[s as int].kind is Text => {
                 assert(dom::append_data(doc, s, data).nodes.len() == doc.nodes.len());
                 crate::exec::frame::lemma_append_data_extends(doc, s, data);
+                lemma_append_data_plain(doc, s, data, p.context);
                 lemma_doc_keeps(p, Parser { doc: dom::append_data(doc, s, data), ..p });
             },
             _ => {
@@ -864,6 +882,9 @@ pub proof fn lemma_push_marker_keeps(p: Parser)
     if !p.stopped {
         assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]
             == p.formatting[i] by {}
+        assert(fmt_plain(q.formatting)) by {
+            reveal(fmt_plain);
+        }
     }
 }
 
@@ -880,6 +901,9 @@ pub proof fn lemma_formatting_prefix_keeps(p: Parser, q: Parser)
     if !p.stopped {
         assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies q.formatting[i]
             == p.formatting[i] by {}
+        assert(fmt_plain(q.formatting)) by {
+            reveal(fmt_plain);
+        }
     }
 }
 

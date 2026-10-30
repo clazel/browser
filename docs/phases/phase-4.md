@@ -808,8 +808,14 @@ facts of reachable states (`document_rooted`, `no_document_redirect`,
 and in "in cell" a cell in table scope, from `reachable_inv`'s `html_once`
 and `cell_scoped`), `theorem_reachable_foreign_content` states the foreign
 content equivalence on every reachable parser without its stack
-hypothesis, and `theorem_reachable_frameset_cell` the "in frameset" and
-"in cell" equivalences on every reachable parser with no hypothesis.
+hypothesis, `theorem_reachable_frameset_cell` the "in frameset" and
+"in cell" equivalences on every reachable parser with no hypothesis, and
+`theorem_reachable_in_body_table` the "in body", "in table" and "in
+table text" equivalences on every reachable parser after "before html"
+with only the text-difference hypotheses (their precondition
+`element_plain` of `html` and `body` follows from `reachable_inv`'s
+`html_plain`: every HTML element but the context element has plain
+attributes).
 `theorem_reachable_parser_inv`: every reachable parser satisfies
 `parser_inv` until it stops, `templates_wf` included (the reachable-state
 invariant carries the document facts: every `template` record on the
@@ -817,8 +823,7 @@ stack has template contents, and no `template` element without them has
 a child, since every insertion's parent comes from the stack's records,
 tagged by their names). Not proven at the spec level: whether reachable parsers need the
 6T term of the node bound (it pays for "in template"'s end of file
-resetting the mode once per template); and the "in body" equivalence
-precondition `element_plain` of `html` and `body`. The true node bound is 44 +
+resetting the mode once per template). The true node bound is 44 +
 6T + 2F + P(F + 1) per token (T template modes, F formatting entries, P
 pending table characters), not the plan's 1 + F: the adoption agency alone may
 clone 32 nodes, and a `nobr` start tag reconstructs twice.
@@ -1112,18 +1117,18 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 
 | Item | State |
 |------|-------|
-| 4.0 Decisions | done (2026-10-28): A, tier 2 for the tree builder and DOM; 4.3 in phase and 4.4 may slip; byte strings and `Body` frames; the forward-design additions folded in |
+| 4.0 Decisions | done (2026-10-28): A, tier 2 for the tree builder and DOM; 4.3 in phase and 4.4 may slip; byte strings and `Body` frames; the forward-design additions folded in. Decided (2026-10-30), by the maintainer: `html5ever` with `markup5ever_rcdom` is the tree builder's second engine (4.11's differential), as test-only dependencies (`[dev-dependencies]` of `clazel-treebuilder`, 22 `test` rows in DEPENDENCIES.md), not a pinned binary outside the workspace |
 | 4.1 Test data and tables | tokenizer suite and entity table done (`clazel-html`); WPT tree-construction suite vendored with its converter (`clazel-treebuilder`); encoding data done: `encodings.json` and `indexes.json` vendored and generated (`cargo xtask tables`), the single-byte indexes checked against the Unicode mapping files (Apple's not vendored: no redistribution grant), WPT `encoding/` labels, single-byte, fatal single-byte and UTF-16 cases, html5lib-tests `encoding/`; `legacy-mb-*` with 4.4 |
 | 4.2 Encoding labels and sniffing | done locally: get an encoding, BOM sniff and decode proven (`clazel-encoding`, tier 2) with both lemmas; the sniffing algorithm, prescan and change the encoding proven (`clazel-html` `sniff/`), Encoding's decode proven to agree with its first steps; WPT labels, html5lib-tests `encoding/` (75 pass, 7 expected failures needing the parser's restart, 1 scripted not run) and `encoding_rs` differentials; mutations certified; a same-text second transcription of the prescan proven equal on every input; waiting for CI's full run |
 | 4.3 Single-byte, UTF-16, replacement, x-user-defined | done locally: every decoder and the single-byte encoder proven, with the three lemmas and same-text independent transcriptions; WPT and `encoding_rs` conformance; tables checked against the Unicode mapping files; mutations per step and per table certified; waiting for CI's full run |
 | 4.4 Multi-byte encodings | not started |
 | 4.5 Character references | done: spec, contracts, proof, examples, mutations |
 | 4.6 Tokenizer spec and contracts | done: 84 states (the standard now has 84, not 80); total, output bounded, two faces equal |
-| 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; tier 0 until CI's full run is green |
-| 4.8 DOM | proofs, mutations and independent transcription done on branch `claude/phase4-dom-treebuilder-279901`; tier 0 until CI is green |
-| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers (`parser_wf` of every reachable parser, stopped or not: `theorem_reachable_stopped`), `theorem_reachable_parser_inv` (`parser_inv` of every reachable parser until it stops), `theorem_open_distinct` (distinct elements on the stack of every reachable parser), and `theorem_reachable_w3c_facts`, `theorem_reachable_foreign_content` and `theorem_reachable_frameset_cell`, which discharge the W3C equivalences' state preconditions that are facts of reachable states (all but `element_plain`) |
-| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified |
-| 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
+| 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; `tier = 2` raised in PR `phase4/tier2-html-dom-treebuilder`, awaiting CI's full verification (real only once it is green) |
+| 4.8 DOM | proofs, mutations and independent transcription done (merged); stays tier 0: `cargo xtask check` requires a `tests/conformance*.rs` in the crate itself for tier 2, and its conformance evidence is 4.11's suite in `clazel-treebuilder`, so the tier is not raised in PR `phase4/tier2-html-dom-treebuilder` |
+| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers (`parser_wf` of every reachable parser, stopped or not: `theorem_reachable_stopped`), `theorem_reachable_parser_inv` (`parser_inv` of every reachable parser until it stops), `theorem_open_distinct` (distinct elements on the stack of every reachable parser), and `theorem_reachable_w3c_facts`, `theorem_reachable_foreign_content`, `theorem_reachable_frameset_cell` and `theorem_reachable_in_body_table`, which discharge the W3C equivalences' state preconditions that are facts of reachable states (`element_plain` of `html` and `body` included); `clazel-treebuilder` raised to `tier = 2` in PR `phase4/tier2-html-dom-treebuilder` (with 4.9 to 4.11), awaiting CI's full verification (real only once it is green) |
+| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified; `clazel-treebuilder` raised to `tier = 2` in PR `phase4/tier2-html-dom-treebuilder` (with 4.9 to 4.11), awaiting CI's full verification (real only once it is green) |
+| 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential against `html5ever` 0.39.0 (`markup5ever_rcdom`, `tests/conformance_html5ever.rs`): on the suite's inputs (3,898 parses, a case naming no scripting flag run with both), 3,699 trees agree and 199 differ in five listed classes, in each of which ours is the suite's tree and html5ever is behind our pinned standard or departs from it (processing instructions 175, `search` special 10, frameset-ok after head 6, "parsing template contents" for `form` 6, `input` in a `select` fragment 2); on 10,000 random tag-soup inputs, 9,991 agree and 9 differ by the same rules (`search` 3, `select` fragment 5, and html5ever's "in table body" scope test lacking `thead` 1, seen only there); no failure, no bug found in ours; `clazel-treebuilder` raised to `tier = 2` in PR `phase4/tier2-html-dom-treebuilder` (with 4.9 to 4.11), awaiting CI's full verification (real only once it is green) |
 | 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
 | 4.13 Renderer pipeline | not started |
 | 4.14 Text layout | not started |
