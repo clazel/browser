@@ -27,6 +27,7 @@ pub struct Request {
 
 /// A reply: the status line and fields (without `Content-Length`, which
 /// the server adds), and a body of `piece` repeated `times` times.
+#[derive(Clone)]
 pub struct Reply {
     /// The status line and fields, each ending in CR LF.
     pub head: String,

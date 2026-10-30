@@ -33,6 +33,9 @@ path = "cli/main.rs"
 # hostile frames with the renderer crate.
 [dev-dependencies]
 clazel-cookie = { path = "../clazel-cookie", version = "=0.0.0" }
+# The hostile pages of phase-4.md item 4.16 count the nodes and attributes
+# of a parsed page to check the renderer's memory bound against them.
+clazel-dom = { path = "../clazel-dom", version = "=0.0.0" }
 clazel-origin = { path = "../clazel-origin", version = "=0.0.0" }
 clazel-url = { path = "../clazel-url", version = "=0.0.0" }
 
