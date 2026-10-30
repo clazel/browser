@@ -48,10 +48,6 @@ fn print_case(out: &mut String, case: &Case, page: &clazel_text::Page) {
 }
 
 #[test]
-#[cfg_attr(
-    miri,
-    ignore = "1,761 documents through the parser and the layout; the unit tests and the bound test run under Miri"
-)]
 fn golden_layouts() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
     let bless = std::env::var_os("CLAZEL_BLESS").is_some_and(|v| v == "1");
@@ -59,7 +55,10 @@ fn golden_layouts() {
     let mut laid_out = 0usize;
     let mut fragments = 0usize;
     let mut bound_failures: Vec<String> = Vec::new();
-    for case in CASES {
+    // Under Miri every 40th case (45 of them), as `clazel-html`'s tokenizer
+    // suite samples: Miri checks for undefined behaviour, not coverage.
+    let stride = if cfg!(miri) { 40 } else { 1 };
+    for case in CASES.iter().step_by(stride) {
         let out = files.entry(case.file).or_default();
         if case.fragment.is_some() {
             fragments = fragments.saturating_add(1);
@@ -74,7 +73,11 @@ fn golden_layouts() {
         laid_out = laid_out.saturating_add(1);
     }
     let mut differ: Vec<String> = Vec::new();
-    for (file, text) in &files {
+    // Miri's isolation forbids opening the fixtures, and a sample cannot
+    // match a whole fixture file; the full comparison runs in the normal
+    // test job.
+    let compared = if cfg!(miri) { BTreeMap::new() } else { files };
+    for (file, text) in &compared {
         if text.is_empty() {
             continue;
         }
@@ -95,9 +98,11 @@ fn golden_layouts() {
             Err(e) => differ.push(format!("{}: {e}", path.display())),
         }
     }
-    println!(
-        "golden: {laid_out} document cases laid out at width {WIDTH}; {fragments} fragment cases and {SCRIPTED_NOT_RUN} scripted cases not laid out"
-    );
+    if !cfg!(miri) {
+        println!(
+            "golden: {laid_out} document cases laid out at width {WIDTH}; {fragments} fragment cases and {SCRIPTED_NOT_RUN} scripted cases not laid out"
+        );
+    }
     assert!(
         bound_failures.is_empty(),
         "bound fails: {bound_failures:#?}"
