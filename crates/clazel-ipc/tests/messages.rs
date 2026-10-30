@@ -6,7 +6,8 @@
 use clazel_ipc::frame::codec::{decode_frame, encode_frame, payload_length};
 use clazel_ipc::frame::spec::MAX_FRAME;
 use clazel_ipc::message::codec::{
-    Msg, decode_framed, decode_message, decode_renderer_message, encode_framed, encode_message,
+    MAX_BODY_CHUNK, Msg, decode_framed, decode_message, decode_renderer_message, encode_framed,
+    encode_message,
 };
 
 fn all() -> Vec<Msg> {
@@ -28,10 +29,30 @@ fn all() -> Vec<Msg> {
         Msg::Navigate {
             url: t("https://a.test/"),
         },
+        Msg::Display {
+            title: t("A title"),
+            text: t("Some text\nand more"),
+            links: vec![t("https://a.test/x"), t("https://b.test/")],
+        },
+        Msg::Display {
+            title: Vec::new(),
+            text: Vec::new(),
+            links: Vec::new(),
+        },
         Msg::Commit {
             url: t("https://a.test/"),
-            script: t("1+1"),
+            content_type: t("text/html; charset=utf-8"),
+            kind: 0,
         },
+        Msg::Commit {
+            url: t("https://a.test/"),
+            content_type: vec![0xFF, 0x00],
+            kind: 1,
+        },
+        Msg::Body {
+            bytes: vec![0x00, 0xFF, 0x3C],
+        },
+        Msg::BodyEnd,
         Msg::CookieValue {
             cookie_string: t("a=b"),
         },
@@ -75,6 +96,7 @@ fn the_kernel_decoder_takes_only_renderer_messages() {
                 | Msg::StorageKey { .. }
                 | Msg::StorageLength
                 | Msg::Navigate { .. }
+                | Msg::Display { .. }
         );
         assert_eq!(
             decode_renderer_message(&bytes).is_some(),
@@ -99,6 +121,20 @@ fn frames_respect_the_limit() {
 }
 
 #[test]
+fn a_largest_body_fits_one_frame() {
+    let m = Msg::Body {
+        bytes: vec![0xA5; MAX_BODY_CHUNK],
+    };
+    let frame = encode_framed(&m).unwrap_or_default();
+    assert_eq!(frame.len(), MAX_FRAME + 4);
+    assert_eq!(decode_framed(&frame), Some(m_clone(&m)));
+    let over = Msg::Body {
+        bytes: vec![0xA5; MAX_BODY_CHUNK + 1],
+    };
+    assert!(encode_framed(&over).is_none());
+}
+
+#[test]
 fn random_bytes_decode_to_one_encoding() {
     let mut x: u64 = 0x2545_F491_4F6C_DD1D;
     let mut next = move || {
@@ -112,7 +148,7 @@ fn random_bytes_decode_to_one_encoding() {
     let rounds = if cfg!(miri) { 200 } else { 50_000usize };
     for i in 0..rounds {
         let mut b = all_bytes
-            .get(usize::try_from(next() % 15).unwrap_or(0))
+            .get(usize::try_from(next() % 21).unwrap_or(0))
             .cloned()
             .unwrap_or_default();
         for _ in 0..=(next() % 3) {

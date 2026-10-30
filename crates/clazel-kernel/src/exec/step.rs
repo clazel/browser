@@ -147,8 +147,8 @@ pub fn renderer_at(rs: &[RendererRecord], i: usize) -> (r: RendererRecord)
         r.pending is None,
 {
     match rs.get(i) {
-        Some(r) => RendererRecord { id: r.id, tab: r.tab, url: copy(r.url.as_slice()), lock: clone_origin(&r.lock), pending: None },
-        None => RendererRecord { id: 0, tab: 0, url: Vec::new(), lock: ParsedOrigin::Opaque(0), pending: None },
+        Some(r) => RendererRecord { committed: r.committed, id: r.id, tab: r.tab, url: copy(r.url.as_slice()), lock: clone_origin(&r.lock), pending: None },
+        None => RendererRecord { committed: false, id: 0, tab: 0, url: Vec::new(), lock: ParsedOrigin::Opaque(0), pending: None },
     }
 }
 
@@ -712,8 +712,17 @@ pub fn open_connection_exec(s: StateRecord, tab: u64, partition: &DomainRecord, 
 // Navigation.
 // ---------------------------------------------------------------------
 
-/// [`navigate_tab`]: the renderer of tab `tab` commits the document at `url`.
-pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: StateRecord, tab: u64, url: &[u32], script: &[u8]) -> (out: (
+/// [`navigate_tab`]: the renderer of tab `tab` commits the document of this
+/// content type, kind and body at `url`.
+pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(
+    urls: &U,
+    s: StateRecord,
+    tab: u64,
+    url: &[u32],
+    content_type: &[u8],
+    kind: u64,
+    body: &[u8],
+) -> (out: (
     StateRecord,
     Vec<OutputRecord>,
 ))
@@ -722,7 +731,7 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: StateRecor
         clazel_encoding::utf8::spec::all_scalar_values(url@),
         renderers_ok::<F>(s.renderers@),
     ensures
-        result_view(out) == navigate_tab(urls.urls(), s@, tab as nat, url@, script@),
+        result_view(out) == navigate_tab(urls.urls(), s@, tab as nat, url@, Document { content_type: content_type@, kind, body: body@ }),
         keeps_storage_jar_now(s, out.0),
         keeps_conns(s, out.0),
         out.0.next_id <= s.next_id + 1,
@@ -741,11 +750,11 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: StateRecor
                         ParsedOrigin::Tuple { .. } => origin_eq_exec(&lock, &old.lock),
                         ParsedOrigin::Opaque(_) => false,
                     };
-                    let frame = commit_frame_exec(url, script);
+                    let frame = commit_frames_exec(url, content_type, kind, body);
                     let mut s = s;
                     if same {
                         let ghost old_renderers = s.renderers@;
-                        let rec = RendererRecord { id: old.id, tab: old.tab, url: copy(url), lock: old.lock, pending: None };
+                        let rec = RendererRecord { committed: true, id: old.id, tab: old.tab, url: copy(url), lock: old.lock, pending: None };
                         let ghost rv = rec@;
                         s.renderers.set(i, rec);
                         proof {
@@ -757,7 +766,7 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: StateRecor
                     } else {
                         let id = s.next_id;
                         let ghost old_renderers = s.renderers@;
-                        let rec = RendererRecord { id, tab, url: copy(url), lock, pending: None };
+                        let rec = RendererRecord { committed: true, id, tab, url: copy(url), lock, pending: None };
                         s.renderers.set(i, rec);
                         proof {
                             lemma_renderers_view_update(old_renderers, i as int, rec);
@@ -777,38 +786,70 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: StateRecor
     }
 }
 
-/// [`open_tab`]: a new tab with a new renderer.
-pub fn open_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: StateRecord, url: &[u32], script: &[u8]) -> (out: (
+/// [`open_tab`]: a new tab with a new renderer, which commits the script at
+/// once, or starts uncommitted while its tab fetches the URL.
+pub fn open_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRecord, url: &[u32], script: &Option<Vec<u8>>) -> (out: (
     StateRecord,
     Vec<OutputRecord>,
 ))
     requires
-        s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
+        s.next_id + 1 < 0xFFFF_FFFF_FFFF_FFFFu64,
+        s.next_conn as nat + conn_headroom() <= 0xFFFF_FFFF_FFFF_FFFFnat,
         clazel_encoding::utf8::spec::all_scalar_values(url@),
         renderers_ok::<F>(s.renderers@),
     ensures
-        result_view(out) == open_tab(urls.urls(), s@, url@, script@),
+        result_view(out) == open_tab(
+            crate::contract::psl(),
+            urls.urls(),
+            fetch.fetch(),
+            s@,
+            url@,
+            match script {
+                Some(v) => Some(v@),
+                None => None,
+            },
+        ),
         keeps_storage_jar_now(s, out.0),
-        keeps_conns(s, out.0),
-        out.0.next_id <= s.next_id + 1,
+        script is Some ==> keeps_conns(s, out.0),
+        out.0.next_id <= s.next_id + 2,
+        out.0.next_conn as nat <= s.next_conn as nat + conn_headroom(),
         renderers_ok::<F>(out.0.renderers@),
 {
+    let ghost sv = s@;
     let id = s.next_id;
     match lock_of_url_exec(urls, url, id) {
         None => (s, no_outputs()),
         Some(lock) => {
-            let frame = commit_frame_exec(url, script);
+            let committed = script.is_some();
             let mut s = s;
             let ghost old_renderers = s.renderers@;
-            let rec = RendererRecord { id, tab: id, url: copy(url), lock, pending: None };
+            let rec = RendererRecord { committed, id, tab: id, url: copy(url), lock, pending: None };
+            let ghost rv = rec@;
             s.renderers.push(rec);
             proof {
                 lemma_renderers_view_push(old_renderers, rec);
                 lemma_ok_push_idle::<F>(old_renderers, rec);
             }
             s.next_id = id.saturating_add(1);
-            let outs = two_outputs(OutputRecord::Spawn { id }, OutputRecord::ToRenderer { id, bytes: frame });
-            (s, outs)
+            let ghost s1 = State { renderers: sv.renderers.push(rv), next_id: id as nat + 1, ..sv };
+            assert(s@ == s1);
+            match script {
+                Some(script) => {
+                    let empty: Vec<u8> = Vec::new();
+                    let frame = commit_frames_exec(url, empty.as_slice(), 1, script.as_slice());
+                    proof {
+                        assert(empty@ =~= Seq::<u8>::empty());
+                        assert(script_document(script@) == Document { content_type: empty@, kind: 1, body: script@ });
+                    }
+                    let outs = two_outputs(OutputRecord::Spawn { id }, OutputRecord::ToRenderer { id, bytes: frame });
+                    (s, outs)
+                },
+                None => {
+                    let spawn = one_output(OutputRecord::Spawn { id });
+                    let (s2, out) = begin_navigation_exec(urls, fetch, s, id, url);
+                    (s2, append_outputs(spawn, out))
+                },
+            }
         },
     }
 }
@@ -829,7 +870,7 @@ pub fn fail_navigation_exec<F: FetchFnsExec>(s: StateRecord, i: usize, code: u64
     let old = renderer_at(s.renderers.as_slice(), i);
     let mut s = s;
     let ghost old_renderers = s.renderers@;
-    let rec = RendererRecord { id: old.id, tab: old.tab, url: copy(old.url.as_slice()), lock: clone_origin(&old.lock), pending: None };
+    let rec = RendererRecord { committed: old.committed, id: old.id, tab: old.tab, url: copy(old.url.as_slice()), lock: clone_origin(&old.lock), pending: None };
     let e = Msg::Error { code };
     let outs = reply_exec(&old, &e);
     s.renderers.set(i, rec);
@@ -840,9 +881,16 @@ pub fn fail_navigation_exec<F: FetchFnsExec>(s: StateRecord, i: usize, code: u64
     (s, outs)
 }
 
-/// [`commit_navigation`]: the navigation of `tab` ends with the document at
-/// `href` and the response's `body`.
-pub fn commit_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: StateRecord, tab: u64, href: &[u32], body: &[u8]) -> (out: (
+/// [`commit_navigation`]: the navigation of `tab` ends with the document of
+/// this content type and body (kind 0) at `href`.
+pub fn commit_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(
+    urls: &U,
+    s: StateRecord,
+    tab: u64,
+    href: &[u32],
+    content_type: &[u8],
+    body: &[u8],
+) -> (out: (
     StateRecord,
     Vec<OutputRecord>,
 ))
@@ -850,7 +898,7 @@ pub fn commit_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: State
         s.next_id < 0xFFFF_FFFF_FFFF_FFFFu64,
         renderers_ok::<F>(s.renderers@),
     ensures
-        result_view(out) == commit_navigation(urls.urls(), s@, tab as nat, href@, body@),
+        result_view(out) == commit_navigation(urls.urls(), s@, tab as nat, href@, Document { content_type: content_type@, kind: 0, body: body@ }),
         keeps_storage_jar_now(s, out.0),
         out.0.next_conn == s.next_conn,
         out.0.next_id <= s.next_id + 1,
@@ -864,13 +912,31 @@ pub fn commit_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, s: State
                 crate::invariant::lemma_scalar_url(href@);
             }
             let (s2, out) = if super::real_urls::all_scalar_values_exec(href) && lock_of_url_exec(urls, href, s1.next_id).is_some() {
-                navigate_tab_exec::<U, F>(urls, s1, tab, href, body)
+                navigate_tab_exec::<U, F>(urls, s1, tab, href, content_type, 0, body)
             } else {
                 fail_navigation_exec::<F>(s1, i, 3)
             };
             (s2, append_outputs(closes, out))
         },
     }
+}
+
+/// The content type [`response_document`] commits: the combined value of the
+/// `Content-Type` field lines (RFC 9110 §5.3, `clazel-http`), or empty.
+pub fn content_type_exec(fields: &[clazel_http::field::types::FieldLineBuf]) -> (r: Vec<u8>)
+    ensures
+        r@ == (match clazel_http::field::spec::combined_field_value(clazel_http::field::types::lines_view(fields@), content_type_name()) {
+            Some(v) => v,
+            None => Seq::<u8>::empty(),
+        }),
+{
+    let name: [u8; 12] = [0x63, 0x6F, 0x6E, 0x74, 0x65, 0x6E, 0x74, 0x2D, 0x74, 0x79, 0x70, 0x65];
+    assert(name@ =~= content_type_name());
+    let mut out = Vec::new();
+    if let Some(v) = clazel_http::field::section::combined_field_value(fields, &name) {
+        out = v;
+    }
+    out
 }
 
 /// [`abort_navigation`]: the navigation of `tab` fails with `code`.
@@ -1036,7 +1102,7 @@ proof fn lemma_carry_out_head(urls: UrlFns, s: State, tab: nat, partition: crate
                     s,
                     tab,
                     clazel_url::url::spec::url_serializer(url, false),
-                    response.body,
+                    response_document(response),
                 ),
                 clazel_fetch::transducer::spec::Action::Fail(_) => carry_out(urls, s, tab, partition, cur, actions) == abort_navigation(s, tab, error_fetch()),
             }
@@ -1112,7 +1178,8 @@ pub fn carry_out_exec<U: UrlFnsExec, F: FetchFnsExec>(
         },
         ActionBuf::Done { url, response } => {
             let href = url.serialize(false);
-            commit_navigation_exec::<U, F>(urls, s, tab, href.as_slice(), response.body.as_slice())
+            let content_type = content_type_exec(response.fields.as_slice());
+            commit_navigation_exec::<U, F>(urls, s, tab, href.as_slice(), content_type.as_slice(), response.body.as_slice())
         },
         ActionBuf::Fail(_) => abort_navigation_exec::<F>(s, tab, 5),
     }
@@ -1164,6 +1231,7 @@ pub fn begin_navigation_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F
                         let ghost old_renderers = s1.renderers@;
                         let old = s1.renderers.remove(i);
                         let rec = RendererRecord {
+                            committed: old.committed,
                             id: old.id,
                             tab: old.tab,
                             url: old.url,
@@ -1237,6 +1305,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                     let mut renderers = renderers;
                     let ghost old_renderers = renderers@;
                     let rec = renderers.remove(i);
+                    let committed = rec.committed;
                     let id = rec.id;
                     let tab = rec.tab;
                     let url = rec.url;
@@ -1279,6 +1348,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                                 _ => conns,
                             };
                             let rec2 = RendererRecord {
+                                committed,
                                 id,
                                 tab,
                                 url,
@@ -1468,6 +1538,10 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
                 },
             },
         },
+        Msg::Display { title, text, links } => {
+            let outs = one_output(OutputRecord::Show { tab: r.tab, url: copy(r.url.as_slice()), title, text, links });
+            (s, outs)
+        },
         _ => (s, no_outputs()),
     }
 }
@@ -1524,7 +1598,12 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
         Some(i) => {
             match clazel_ipc::message::codec::decode_framed(bytes) {
                 Some(m) => {
-                    if clazel_ipc::message::codec::is_from_renderer(&m) {
+                    let committed = match s.renderers.get(i) {
+                        Some(r) => r.committed,
+                        None => false,
+                    };
+                    let display = matches!(m, Msg::Display { .. });
+                    if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {
                         kill_renderer_exec::<F>(s, i, id)
@@ -1548,7 +1627,7 @@ pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRe
         out.0.exec_wf::<F>(),
         clazel_cookie::storage::contract::jar_in_range(out.0@.jar),
         clazel_cookie::set_cookie::contract::now_in_range(out.0@.now),
-        out.0@.next_id <= s@.next_id + 1,
+        out.0@.next_id <= s@.next_id + 2,
         out.0@.next_conn <= s@.next_conn + conn_headroom(),
 {
     proof {
@@ -1556,7 +1635,7 @@ pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRe
     }
     let out = match e {
         EventRecord::FromRenderer { id, bytes } => from_renderer_exec(urls, fetch, s, *id, bytes.as_slice()),
-        EventRecord::OpenTab { url, script } => open_tab_exec::<U, F>(urls, s, url.as_slice(), script.as_slice()),
+        EventRecord::OpenTab { url, script } => open_tab_exec::<U, F>(urls, fetch, s, url.as_slice(), script),
         EventRecord::NavigateTab { tab, url } => begin_navigation_exec(urls, fetch, s, *tab, url.as_slice()),
         EventRecord::Net { conn, input } => net_exec(urls, fetch, s, *conn, input),
         EventRecord::RendererExited { id } => renderer_exited_exec::<F>(s, *id),

@@ -385,7 +385,7 @@ pub proof fn lemma_close_tab_conns_wf(rules: Seq<clazel_psl::spec::Rule>, urls: 
 }
 
 /// `commit_navigation` keeps `crate::invariant::kernel_wf`.
-pub proof fn lemma_commit_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
+pub proof fn lemma_commit_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Document)
     requires
         crate::invariant::kernel_wf(rules, urls, s),
     ensures
@@ -478,7 +478,7 @@ pub proof fn lemma_carry_out_wf(
                 },
             },
             clazel_fetch::transducer::spec::Action::Done { url, response } => {
-                lemma_commit_navigation_wf(rules, urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response.body);
+                lemma_commit_navigation_wf(rules, urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response));
             },
             clazel_fetch::transducer::spec::Action::Fail(_) => {
                 lemma_abort_navigation_wf(rules, urls, s, tab, error_fetch());

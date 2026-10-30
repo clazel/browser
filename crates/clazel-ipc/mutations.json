@@ -731,8 +731,8 @@
     {
       "id": "dir-navigate-not-renderer",
       "file": "src/message/spec.rs",
-      "find": "| Message::StorageLength\n        | Message::Navigate { .. } => true,",
-      "replace": "| Message::StorageLength => true,",
+      "find": "| Message::StorageLength\n        | Message::Navigate { .. }\n        | Message::Display { .. } => true,",
+      "replace": "| Message::StorageLength\n        | Message::Display { .. } => true,",
       "expect": "killed",
       "reason": "Navigate is not counted as a renderer message: the kernel rejects it, so lemma_example_renderer_navigate is false.",
       "certificate": {
@@ -796,14 +796,14 @@
     {
       "id": "identity-commit-origin",
       "file": "src/message/spec.rs",
-      "find": "Message::Commit { .. } => seq![Field::Url, Field::Script],",
-      "replace": "Message::Commit { .. } => seq![Field::Url, Field::Script, Field::Origin],",
+      "find": "Message::Commit { .. } => seq![Field::Url, Field::ContentType, Field::Kind],",
+      "replace": "Message::Commit { .. } => seq![Field::Url, Field::ContentType, Field::Kind, Field::Origin],",
       "expect": "killed",
       "reason": "Commit carries an origin: lemma_no_identity_fields is false.",
       "certificate": {
         "file": "src/message/lemmas.rs",
-        "lemma": "lemma_no_identity_fields(Message::Commit { url: seq![0x61u8], script: seq![0x62u8] })",
-        "witness": "message_fields(Message::Commit { url: seq![0x61u8], script: seq![0x62u8] }).len() == 3 && is_identity(message_fields(Message::Commit { url: seq![0x61u8], script: seq![0x62u8] })[2])"
+        "lemma": "lemma_no_identity_fields(Message::Commit { url: seq![0x61u8], content_type: seq![0x62u8], kind: 0 })",
+        "witness": "message_fields(Message::Commit { url: seq![0x61u8], content_type: seq![0x62u8], kind: 0 }).len() == 4 && is_identity(message_fields(Message::Commit { url: seq![0x61u8], content_type: seq![0x62u8], kind: 0 })[3])"
       }
     },
     {
@@ -895,6 +895,149 @@
         "file": "src/frame/lemmas.rs",
         "lemma": "lemma_decode_encode_frame(seq![0x01u8, 0x02, 0x03])",
         "witness": "payload_ok(seq![0x01u8, 0x02, 0x03]) && decode_frame(encode_frame(seq![0x01u8, 0x02, 0x03])) != Some(seq![0x01u8, 0x02, 0x03])"
+      }
+    },
+    {
+      "id": "msg-commit-field-order",
+      "file": "src/message/spec.rs",
+      "find": "Token::Text(url), Token::Bytes(content_type), Token::Uint(kind)]",
+      "replace": "Token::Bytes(content_type), Token::Text(url), Token::Uint(kind)]",
+      "expect": "killed",
+      "reason": "Commit writes its content type before its URL: it does not decode back, so lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Commit { url: seq![0x61u8], content_type: seq![0x62u8], kind: 1 })",
+        "witness": "message_ok(Message::Commit { url: seq![0x61u8], content_type: seq![0x62u8], kind: 1 }) && decode_message(encode_message(Message::Commit { url: seq![0x61u8], content_type: seq![0x62u8], kind: 1 })) != Some(Message::Commit { url: seq![0x61u8], content_type: seq![0x62u8], kind: 1 })"
+      }
+    },
+    {
+      "id": "msg-body-tag",
+      "file": "src/message/spec.rs",
+      "find": "Message::Body { bytes } => seq![Token::Array(2), Token::Uint(106), Token::Bytes(bytes)],",
+      "replace": "Message::Body { bytes } => seq![Token::Array(2), Token::Uint(107), Token::Bytes(bytes)],",
+      "expect": "killed",
+      "reason": "Body is written with BodyEnd's tag: it does not decode back, so lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Body { bytes: seq![0x01u8] })",
+        "witness": "message_ok(Message::Body { bytes: seq![0x01u8] }) && decode_message(encode_message(Message::Body { bytes: seq![0x01u8] })) != Some(Message::Body { bytes: seq![0x01u8] })"
+      }
+    },
+    {
+      "id": "msg-body-parse-tag",
+      "file": "src/message/spec.rs",
+      "find": "} else if tag == 106 {",
+      "replace": "} else if tag == 116 {",
+      "expect": "killed",
+      "reason": "The parser reads Body under tag 116: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Body { bytes: seq![0x01u8] })",
+        "witness": "message_ok(Message::Body { bytes: seq![0x01u8] }) && decode_message(encode_message(Message::Body { bytes: seq![0x01u8] })) != Some(Message::Body { bytes: seq![0x01u8] })"
+      }
+    },
+    {
+      "id": "msg-display-link-tokens",
+      "file": "src/message/spec.rs",
+      "find": "ls.map_values(|l: Seq<u8>| Token::Text(l))",
+      "replace": "ls.map_values(|l: Seq<u8>| Token::Bytes(l))",
+      "expect": "killed",
+      "reason": "Display's links are written as byte strings: they do not parse back, so lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8]] })",
+        "witness": "message_ok(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8]] }) && decode_message(encode_message(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8]] })) != Some(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8]] })"
+      }
+    },
+    {
+      "id": "msg-display-all-text",
+      "file": "src/message/spec.rs",
+      "find": "if k as nat == rest.len() && all_text(rest) {",
+      "replace": "if k as nat == rest.len() {",
+      "expect": "killed",
+      "reason": "A link that is not a text string is accepted: lemma_reject_display is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_reject_display()",
+        "witness": "decode_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x81, 0x01]) is Some"
+      }
+    },
+    {
+      "id": "msg-display-count",
+      "file": "src/message/spec.rs",
+      "find": "if n == 4 && f.len() >= 3 {",
+      "replace": "if n >= 3 && f.len() >= 3 {",
+      "expect": "killed",
+      "reason": "Display is read from an array of any size from 3 up: tokens with five elements parse to a Display whose tokens have four, so lemma_message_tokens_parse is false. (On bytes, the profile's item structure makes the check redundant; the lemma is stated on tokens.)",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_message_tokens_parse(seq![Token::Array(5), Token::Uint(10), Token::Text(seq![0x74u8]), Token::Text(seq![0x78u8]), Token::Array(0)])",
+        "witness": "parse_message(seq![Token::Array(5), Token::Uint(10), Token::Text(seq![0x74u8]), Token::Text(seq![0x78u8]), Token::Array(0)]) is Some && message_tokens(parse_message(seq![Token::Array(5), Token::Uint(10), Token::Text(seq![0x74u8]), Token::Text(seq![0x78u8]), Token::Array(0)])->Some_0) != seq![Token::Array(5), Token::Uint(10), Token::Text(seq![0x74u8]), Token::Text(seq![0x78u8]), Token::Array(0)]"
+      }
+    },
+    {
+      "id": "msg-display-direction",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::Navigate { .. }\n        | Message::Display { .. } => true,",
+      "replace": "        | Message::Navigate { .. } => true,",
+      "expect": "killed",
+      "reason": "Display is not counted as a renderer message: the kernel rejects it, so lemma_example_display is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_display()",
+        "witness": "decode_renderer_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x82, 0x61, 0x61, 0x61, 0x62]) is None"
+      }
+    },
+    {
+      "id": "msg-body-end-direction",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::Display { .. } => true,",
+      "replace": "        | Message::Display { .. }\n        | Message::BodyEnd => true,",
+      "expect": "killed",
+      "reason": "A renderer may send BodyEnd: the kernel accepts a kernel-to-renderer message, so lemma_reject_document_from_renderer is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_reject_document_from_renderer()",
+        "witness": "decode_renderer_message(seq![0x81u8, 0x18, 0x6B]) is Some"
+      }
+    },
+    {
+      "id": "identity-display-sender-url",
+      "file": "src/message/spec.rs",
+      "find": "Message::Display { .. } => seq![Field::Title, Field::Text, Field::Links],",
+      "replace": "Message::Display { .. } => seq![Field::Title, Field::Text, Field::Links, Field::SenderUrl],",
+      "expect": "killed",
+      "reason": "Display names the sender's URL: lemma_no_identity_fields (rule 1) is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_no_identity_fields(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8]] })",
+        "witness": "message_fields(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8]] }).len() == 4 && is_identity(message_fields(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8]] })[3])"
+      }
+    },
+    {
+      "id": "fields-display-links",
+      "file": "src/message/spec.rs",
+      "find": "Message::Display { .. } => seq![Field::Title, Field::Text, Field::Links],",
+      "replace": "Message::Display { .. } => seq![Field::Title, Field::Text],",
+      "expect": "killed",
+      "reason": "The field table leaves out Display's links: lemma_fields_match_tokens is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_fields_match_tokens(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: Seq::<Seq<u8>>::empty() })",
+        "witness": "message_tokens(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: Seq::<Seq<u8>>::empty() }).len() != 2 + message_fields(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: Seq::<Seq<u8>>::empty() }).len() + nested_len(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: Seq::<Seq<u8>>::empty() })"
+      }
+    },
+    {
+      "id": "msg-max-body-chunk",
+      "file": "src/message/spec.rs",
+      "find": "(crate::frame::spec::MAX_FRAME - 8) as nat",
+      "replace": "(crate::frame::spec::MAX_FRAME - 7) as nat",
+      "expect": "killed",
+      "reason": "The largest Body is one octet too long for a frame. lemma_body_fits_frame is false for it, but a certificate on a 1 MiB input is too large to evaluate; the certificate is lemma_max_body_chunk, which ties the codec's MAX_BODY_CHUNK (1_048_568, the size a_largest_body_fits_one_frame checks on the real code) to the spec.",
+      "certificate": {
+        "file": "src/message/codec.rs",
+        "lemma": "lemma_max_body_chunk()",
+        "witness": "max_body_chunk() != 1048568nat"
       }
     }
   ]

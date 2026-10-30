@@ -24,7 +24,8 @@ clazel-url = { path = "../clazel-url" }
 # `start` and `step`, and the real parsers it is joined to.
 clazel-fetch = { path = "../clazel-fetch" }
 # The response the transducer finishes with (`Action::Done`), which the
-# mutation lemmas build.
+# mutation lemmas build, and its combined `Content-Type` field value (RFC 9110
+# §5.2), which a commit carries (item 4.12).
 clazel-http = { path = "../clazel-http" }
 # A navigation URL arrives as UTF-8 text in a message (item 2.3) and is
 # decoded to code points for the URL functions.
@@ -106,6 +107,14 @@ theorems = [
     "corollary_real_wire_cookies",
     "corollary_real_cookie_noninterference",
     "lemma_real_urls_resolve_scalar",
+    # Phase 4 item 4.12: commits, bodies and display. The statements are in
+    # `statements.rs`; the proofs in `display_theorems.rs`.
+    "theorem_show_only_own_tab",
+    "theorem_address_bar_integrity",
+    "theorem_body_is_the_response",
+    # A renderer is committed only after a `Commit` was sent to it; the proof
+    # is in `commit_theorems.rs`.
+    "theorem_committed_only_after_commit",
 ]
 
 [package.metadata.verus]

@@ -22,7 +22,8 @@
 //!   `counterexamples::example_dead_tab_breaks_noninterference`);
 //!
 //! the outputs addressed to the renderers of `d` ([`run_outputs_for`], their
-//! `Spawn` and `Kill` included) are the same from running `t` as from running
+//! `Spawn` and `Kill` included, and item 4.12's `Show`s of their tabs) are
+//! the same from running `t` as from running
 //! `ipurge(s, d, t)` (`domain.rs`), up to a bijection on renderer ids that is
 //! the identity (the declassified `NavigateTab` takes the same id from the
 //! shared counter as the `Navigate` it replaces).
@@ -61,10 +62,15 @@ pub open spec fn user_tabs_open(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 /// names a renderer of `s`, a `Spawn` one of `s1`) is in `d`. A renderer's
 /// lock never changes while its id lives, so the domain of an id is the same
 /// in `s` and `s1`. `Connect`, `Send` and `Close` are addressed to the network shell, not to a
-/// renderer.
+/// renderer. A `Show` (item 4.12) is in the observation of the domain of the
+/// renderer of its tab: what the user sees of a tab is that domain's.
 pub open spec fn addressed_to(rules: Seq<clazel_psl::spec::Rule>, d: crate::domain::Domain, s: State, s1: State, o: Output) -> bool {
     !(o is Connect || o is Send || o is Close) && exists|r: Renderer|
-        (s.renderers.contains(r) || s1.renderers.contains(r)) && r.id == crate::domain::output_id(o) && crate::domain::domain_of_renderer(rules, r) == d
+        (s.renderers.contains(r) || s1.renderers.contains(r)) && (if o is Show {
+            r.tab == o->Show_tab
+        } else {
+            r.id == crate::domain::output_id(o)
+        }) && crate::domain::domain_of_renderer(rules, r) == d
 }
 
 /// The outputs of one step that are addressed to `d`.
@@ -88,10 +94,11 @@ pub open spec fn run_outputs_for(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 // The relation between the run of the trace (`s1`) and of its purge (`s2`).
 // ---------------------------------------------------------------------
 
-/// The outputs addressed to renderers (a reply, a `Spawn`, a `Kill`), as
-/// opposed to those addressed to the network shell.
+/// The outputs addressed to renderers (a reply, a `Spawn`, a `Kill`) or to
+/// the user about a renderer's tab (a `Show`, item 4.12), as opposed to those
+/// addressed to the network shell.
 pub open spec fn renderer_bound(o: Output) -> bool {
-    o is ToRenderer || o is Spawn || o is Kill
+    o is ToRenderer || o is Spawn || o is Kill || o is Show
 }
 
 /// The renderer-bound outputs of `out`, in order. Two related runs' outputs

@@ -231,7 +231,7 @@ pub proof fn lemma_d_kill(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetc
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::domain::event_domain(rules, s1, Event::FromRenderer { id, bytes }) == Some(d),
-        decode_renderer_frame(bytes) is None,
+        accepted_message(s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0], bytes) is None,
     ensures
         crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, Event::FromRenderer { id, bytes }).0, step(rules, urls, fetch, s2, Event::FromRenderer { id, bytes }).0),
@@ -275,7 +275,8 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
 {
     let e = Event::FromRenderer { id, bytes };
     lemma_d_sender(rules, urls, d, s1, s2, id, bytes);
-    match decode_renderer_frame(bytes) {
+    let r = s1.renderers[find_by_id(s1.renderers, id, 0)->Some_0];
+    match accepted_message(r, bytes) {
         None => lemma_d_kill(rules, urls, fetch, d, s1, s2, id, bytes),
         Some(m) => match m {
             clazel_ipc::message::spec::Message::CookieGet => lemma_d_cookie_get(rules, urls, fetch, d, s1, s2, id, bytes),
@@ -285,11 +286,15 @@ pub proof fn lemma_d_event(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
                 if crate::statements::is_storage_message(m) {
                     lemma_d_storage(rules, urls, fetch, d, s1, s2, id, bytes, m);
                 } else {
+                    // `Display` (item 4.12) changes nothing and shows the same
+                    // on the same tab in both runs: the sender is the same
+                    // record in both. Any other message is not served.
                     let (s1b, o1) = step(rules, urls, fetch, s1, e);
                     let (s2b, o2) = step(rules, urls, fetch, s2, e);
                     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
                     crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
                     assert(s1b == s1 && s2b == s2);
+                    assert(o1 == o2);
                 }
             },
         },

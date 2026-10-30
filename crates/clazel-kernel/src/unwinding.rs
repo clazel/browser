@@ -26,7 +26,7 @@ pub proof fn lemma_navigate_tab_consistency(
     s2: State,
     tab: nat,
     url: Seq<u32>,
-    script: Seq<u8>,
+    script: Document,
 )
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
@@ -53,9 +53,9 @@ pub proof fn lemma_navigate_tab_consistency(
         None => {},
         Some(lock) => {
             let r = if lock is Tuple && lock == old.lock {
-                Renderer { url, pending: None, ..old }
+                Renderer { url, pending: None, committed: true, ..old }
             } else {
-                Renderer { id: s1.next_id, tab, url, lock, pending: None }
+                Renderer { committed: true, id: s1.next_id, tab, url, lock, pending: None }
             };
             assert(s1b.renderers == s1.renderers.update(i1, r));
             assert(s2b.renderers == s2.renderers.update(i2, r));
@@ -221,20 +221,32 @@ pub proof fn lemma_rel_from_sets(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 }
 
 /// `OpenTab` from related states: the same outputs, and related states.
-pub proof fn lemma_open_tab_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, url: Seq<u32>, script: Seq<u8>)
+/// Without a script it is the new renderer, then a `NavigateTab` of its tab
+/// (item 4.12), whose consistency is `lemma_begin_consistency`.
+pub proof fn lemma_open_tab_consistency(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    url: Seq<u32>,
+    script: Option<Seq<u8>>,
+)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
     ensures
-        crate::noninterference::renderer_outs(open_tab(urls, s1, url, script).1) == crate::noninterference::renderer_outs(open_tab(urls, s2, url, script).1),
-        crate::noninterference::rel(rules, urls, d, open_tab(urls, s1, url, script).0, open_tab(urls, s2, url, script).0),
+        crate::noninterference::renderer_outs(open_tab(rules, urls, fetch, s1, url, script).1) == crate::noninterference::renderer_outs(
+            open_tab(rules, urls, fetch, s2, url, script).1,
+        ),
+        crate::noninterference::rel(rules, urls, d, open_tab(rules, urls, fetch, s1, url, script).0, open_tab(rules, urls, fetch, s2, url, script).0),
 {
-    let e = Event::OpenTab { url, script };
-    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
-    crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s2, e);
-    let (s1b, o1) = open_tab(urls, s1, url, script);
-    let (s2b, o2) = open_tab(urls, s2, url, script);
     if let Some(lock) = lock_of_url(urls, url, s1.next_id) {
-        let rn = Renderer { id: s1.next_id, tab: s1.next_id, url, lock, pending: None };
+        let rn = Renderer { committed: script is Some, id: s1.next_id, tab: s1.next_id, url, lock, pending: None };
+        let s1b = State { renderers: s1.renderers.push(rn), next_id: s1.next_id + 1, ..s1 };
+        let s2b = State { renderers: s2.renderers.push(rn), next_id: s2.next_id + 1, ..s2 };
+        crate::invariant::lemma_open_tab_push_wf(rules, urls, s1, url, lock, script is Some);
+        crate::invariant::lemma_open_tab_push_wf(rules, urls, s2, url, lock, script is Some);
         assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
             crate::unwind_base::lemma_push_contains(s1.renderers, rn, x);
             crate::unwind_base::lemma_push_contains(s2.renderers, rn, x);
@@ -250,10 +262,18 @@ pub proof fn lemma_open_tab_consistency(rules: Seq<clazel_psl::spec::Rule>, urls
                 assert(s1.renderers.contains(s2.renderers[k]));
             }
         }
-        assert(s1b.conns == s1.conns && s2b.conns == s2.conns && s1b.next_conn == s1.next_conn && s2b.next_conn == s2.next_conn);
-        assert(s1b.renderers == s1.renderers.push(rn));
         crate::net_rel::lemma_rel_conn_open_tab(rules, urls, s1, s2, s1b, s2b, rn);
         lemma_rel_from_sets(rules, urls, d, s1b, s2b);
+        if script is None {
+            assert(find_by_tab(s1b.renderers, s1.next_id, 0) is Some) by {
+                crate::invariant::lemma_find_by_tab(s1b.renderers, s1.next_id, 0);
+                assert(s1b.renderers[s1.renderers.len() as int].tab == s1.next_id);
+            }
+            crate::net_rel::lemma_begin_consistency(rules, urls, fetch, d, s1b, s2b, s1.next_id, url);
+            let spawn = seq![Output::Spawn { id: s1.next_id, policy: Policy::Renderer }];
+            crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s1b, s1.next_id, url).1);
+            crate::net_rel::lemma_renderer_outs_concat(spawn, begin_navigation(rules, urls, fetch, s2b, s1.next_id, url).1);
+        }
     }
 }
 
