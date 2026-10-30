@@ -27,7 +27,7 @@ markup5ever_rcdom = "=0.39.0"
 # item 4.0, option A). Tier 0 until items 4.9 to 4.11 are complete and CI's
 # full verification is green.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 # Item 4.9's theorems. `cargo xtask check` fails if one is not defined as a
 # `proof fn` in this crate.
