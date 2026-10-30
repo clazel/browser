@@ -99,12 +99,34 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | der | 0.8.2 | test | RustCrypto's DER implementation (used by `rsa`, `x509-cert` and `pkcs8`): the reference engine in `clazel-der`'s differential test (`tests/conformance_der.rs`). Used with default features off and only `alloc` and `oid`, so its only dependencies are `const-oid` and `zeroize` (the smallest DER crate that parses and writes every type item 3.5a covers; no other candidate was needed). Pinned to 0.8.2, the latest stable release. |
 | const-oid | 0.10.2 | test | `der`'s OBJECT IDENTIFIER type (the `oid` feature). No dependencies with default features off. |
 | zeroize | 1.9.1 | test | Zeroing of memory on drop, required by `der`'s `alloc` feature. No dependencies as built. |
+| html5ever | 0.39.0 | test | Servo's HTML parser (tokenizer and tree builder, written from the WHATWG standard by an independent team): the second engine in `clazel-treebuilder`'s differential test (`tests/conformance_html5ever.rs`), on the WPT tree-construction inputs and on random tag soup (Phase 4 items 4.0 and 4.11). Pinned to 0.39.0, the newest release `markup5ever_rcdom` (its only published tree) supports; 0.40.1 has no matching `markup5ever_rcdom`. Its dependencies are `log` (already listed) and `markup5ever`. These 22 rows (`html5ever` to `windows-link`) are the whole cost of the oracle; the alternative in 4.11, a pinned binary built outside the workspace, was not needed. |
+| markup5ever_rcdom | 0.39.0+unofficial | test | The reference-counted DOM that `html5ever`'s own tests build (its `TreeSink`), published by the Servo project as "unofficial": the tree the differential prints in the suite's format. It depends on `html5ever`, `markup5ever` (with its `serde` feature), `tendril` and `xml5ever`. |
+| markup5ever | 0.39.0 | test | The interfaces shared by `html5ever` and `xml5ever` (`TreeSink`, `QualName`, atoms). Its dependencies are `log`, `tendril` and `web_atoms`. |
+| xml5ever | 0.39.0 | test | Servo's XML parser, required by `markup5ever_rcdom` (which can hold either parser's tree); not called by the test. Its dependencies are `log` and `markup5ever`. |
+| web_atoms | 0.2.6 | test | The interned tag, attribute and namespace names of `markup5ever` (static atom tables generated at build time). Its dependencies are `phf` and `string_cache`, and, as build dependencies, `phf_codegen` and `string_cache_codegen`. |
+| tendril | 0.5.1 | test | The compact string buffer `html5ever` reads input into and stores text in. Its only dependency (without its optional `encoding_rs`) is `new_debug_unreachable`. |
+| new_debug_unreachable | 1.0.6 | test | An `unreachable!` that is checked in debug builds, required by `tendril` and `string_cache`. No dependencies. |
+| string_cache | 0.9.0 | test | String interning (atoms), required by `web_atoms`. Its dependencies are `new_debug_unreachable`, `parking_lot`, `phf_shared`, `precomputed-hash` and, through its default `serde_support` feature, `serde` (already listed). |
+| string_cache_codegen | 0.6.1 | test | Build-time generator of `string_cache`'s static atom sets, a build dependency of `web_atoms`. Its dependencies are `phf_generator`, `phf_shared`, `proc-macro2` and `quote` (the last two already listed, class `proof`). |
+| precomputed-hash | 0.1.1 | test | A trait for types carrying their hash, required by `string_cache`. No dependencies. |
+| parking_lot | 0.12.5 | test | Mutex, required by `string_cache` for its dynamic atom set. Its dependencies are `lock_api` and `parking_lot_core`. |
+| lock_api | 0.4.14 | test | Lock traits of `parking_lot`. Its only dependency (without optional features) is `scopeguard`. |
+| scopeguard | 1.2.0 | test | Run-on-scope-exit helper, required by `lock_api`. No dependencies. |
+| parking_lot_core | 0.9.12 | test | `parking_lot`'s thread parking. Its dependencies are `cfg-if`, `libc` and `smallvec` (already listed), `redox_syscall` on Redox and `windows-link` on Windows. |
+| redox_syscall | 0.5.18 | test | Redox system calls, required by `parking_lot_core` on Redox only (locked, not compiled on our targets). Its only dependency is `bitflags` (already listed). |
+| windows-link | 0.2.1 | test | Windows import linking, required by `parking_lot_core` on Windows. No dependencies. |
+| phf | 0.13.1 | test | Perfect-hash static maps, required by `web_atoms`. Its only dependency (its `macros` and `serde` features are off) is `phf_shared`. |
+| phf_shared | 0.13.1 | test | The hashing shared by `phf`, its generator and `string_cache`. Its only dependency is `siphasher`. |
+| siphasher | 1.0.4 | test | SipHash, required by `phf_shared`. No dependencies. |
+| phf_codegen | 0.13.1 | test | Build-time generator of `phf` maps, a build dependency of `web_atoms`. Its dependencies are `phf_generator` and `phf_shared`. |
+| phf_generator | 0.13.1 | test | The perfect-hash search used by `phf_codegen` and `string_cache_codegen` at build time. Its dependencies are `fastrand` and `phf_shared`. |
+| fastrand | 2.5.0 | test | A small PRNG, required by `phf_generator` (build time only). No dependencies as used. |
 | serde_json | 1.0.154 | tooling | `xtask` parses `cargo metadata` output. |
-| serde_core | 1.0.229 | test | Required by `serde_json`. |
+| serde_core | 1.0.229 | test | Required by `serde_json` and `serde`. |
 | itoa | 1.0.18 | test | Integer formatting, required by `serde_json`. |
 | memchr | 2.8.3 | tooling | Byte search, required by `serde_json`. |
 | zmij | 1.0.23 | tooling | Float formatting, required by `serde_json`. |
-| serde | 1.0.229 | test | Locked but never compiled: `serde_json` names it under the always-false `cfg(any())` to pin versions. |
+| serde | 1.0.229 | test | `serde_json` names it under the always-false `cfg(any())` to pin versions; also compiled into `clazel-treebuilder`'s test binaries, as a dependency of `string_cache` (its default `serde_support` feature, which `markup5ever_rcdom` also asks for through `markup5ever`'s `serde`), without its `derive` feature. |
 | serde_derive | 1.0.229 | test | Locked but never compiled: `serde_core` names it under `cfg(any())`. |
 | syn | 3.0.9 | test | Locked but never compiled: dependency of `serde_derive`. |
 <!-- END ALLOWLIST -->

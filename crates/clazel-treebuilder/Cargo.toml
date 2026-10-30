@@ -14,6 +14,10 @@ clazel-dom = { path = "../clazel-dom" }
 # (Phase 4 item 4.7).
 clazel-html = { path = "../clazel-html" }
 
+[dev-dependencies]
+html5ever = "=0.39.0"
+markup5ever_rcdom = "=0.39.0+unofficial"
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (Phase 4
 # item 4.0, option A). Tier 0 until items 4.9 to 4.11 are complete and CI's
