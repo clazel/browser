@@ -78,5 +78,14 @@ elements or runs the adoption agency, so attribute storage grows with the
 number of copies (at most `N`) times the largest attribute list, not with
 `B`; and the page's text is bounded by `T + A + N`, not by `B` alone. Both
 are capped by `MAX_NODES` but the cap is large (gigabytes in the worst
-case). Phase 4 item 4.16 measures the hostile pages against these terms;
-until it does, the numbers above are the arithmetic, not a measurement.
+case).
+
+Measured (Phase 4 item 4.16, `crates/clazel/tests/hostile_pages.rs`):
+each hostile page is loaded into a real sandboxed renderer, and its peak
+resident set (`VmHWM` on Linux, sampled with `ps` on macOS) is checked
+against these terms for the page's `B`, `N` and attributes, plus 16 MiB for
+the process itself. On macOS arm64, debug build: 64 MiB of words, 1,007
+MiB of a 1,361 MiB bound; 64 MiB of `&amp;` (an ignored test), 675 MiB;
+a page cut at `MAX_NODES`, 1,327 of 3,480 MiB; the active formatting list
+reconstructed 2,000 times (604,305 nodes from 18,977 bytes, 57 MiB of
+attribute copies), 335 of 571 MiB; every other page under 20 MiB.
