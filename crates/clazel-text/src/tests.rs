@@ -283,13 +283,16 @@ fn empty_document() {
 }
 
 /// A million nested `div`s, built directly in the arena (the parser is
-/// slow on that many open elements): the walk is iterative.
+/// slow on that many open elements): the walk is iterative. Under Miri,
+/// which interprets every step, 300 (as `clazel-dom`'s depth test): the
+/// walk is the same code at any depth.
 #[test]
 fn deep_nesting_does_not_overflow_the_stack() {
     let s = |t: &str| t.chars().map(u32::from).collect::<Vec<u32>>();
     let mut doc = Arena::new(Vec::new());
     let mut parent = 0;
-    for _ in 0..1_000_000 {
+    let depth: usize = if cfg!(miri) { 300 } else { 1_000_000 };
+    for _ in 0..depth {
         let Some(div) = doc.create(ExecKind::Element {
             namespace: Some(Namespace::Html),
             prefix: None,

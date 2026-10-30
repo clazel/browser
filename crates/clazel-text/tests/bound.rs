@@ -92,7 +92,9 @@ impl Lcg {
 fn bound_holds_on_generated_documents() {
     let mut rng = Lcg(0x5eed);
     let mut failures: Vec<String> = Vec::new();
-    for doc_no in 0..400u32 {
+    // Fewer documents under Miri, which interprets every step.
+    let docs: u32 = if cfg!(miri) { 10 } else { 400 };
+    for doc_no in 0..docs {
         let len = usize::try_from(rng.next() % 120).unwrap_or(0);
         let mut html = String::new();
         for _ in 0..len {

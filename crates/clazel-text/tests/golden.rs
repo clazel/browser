@@ -48,6 +48,10 @@ fn print_case(out: &mut String, case: &Case, page: &clazel_text::Page) {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "1,761 documents through the parser and the layout; the unit tests and the bound test run under Miri"
+)]
 fn golden_layouts() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
     let bless = std::env::var_os("CLAZEL_BLESS").is_some_and(|v| v == "1");
