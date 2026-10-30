@@ -215,12 +215,16 @@ proves today is that every spec function terminates (each recursive one has a
 meets its contract in `field/contract.rs`, and that `ec_add`,
 `scalar_mul`, `decode_public_key`, `derive_e` and `verify` meet theirs
 (`point_contract.rs`, `contract.rs`), over the six axioms.
-`mutations.json` holds 26 mutations of `spec.rs`, each killed with a
-certificate that contradicts one of those examples; the executable code has
-no mutations yet. There is no lemma about the spec of the signature itself,
-no independent transcription, no mutation of the executable code and no
-Kani harness yet, so the crate stays at tier 0 even though the conformance
-suites and the differential pass; see
+`mutations.json` holds 53 mutations of `spec.rs`, each killed with a
+certificate that contradicts one of those examples (the constants, the group
+law and its special cases, the scalar product, key decoding, steps 1 to 9
+and the inverse). The executable code has no mutations: a certificate
+evaluates the spec, and the executable code is proven equal to the spec, so a
+mutant of it is caught by that proof, which `mutations.json` cannot certify.
+Tier 2 does not require Kani harnesses (Verus proves panic-freedom). What is
+still missing for tier 2 is the independent transcription
+(`independent.rs`) and its equivalence proof, so the crate stays at tier 0
+even though the conformance suites and the differential pass; see
 [docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier
 requires. The proofs cover memory and arithmetic safety of the Verus-checked
 code, but the claim is only as good as `spec.rs` (read against the standards

@@ -25,9 +25,9 @@ ring = { version = "=0.17.14", default-features = false, features = ["alloc"] }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires. The spec,
-# the field, the group law and `verify` exist and are proven, but none of the
-# tier 1 or tier 2 evidence (Kani harnesses, mutations of the code, an
-# independent transcription, conformance suites) does yet, so tier 0.
+# the field, the group law and `verify` exist and are proven, and the
+# mutations and conformance suites are in place, but the independent
+# transcription and its equivalence proof (tier 2) are not, so tier 0.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2

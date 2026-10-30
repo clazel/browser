@@ -7,9 +7,10 @@
 //! code behind six axioms, with the rest proven over them), and on top of
 //! that the affine group law, the scalar product, the key decoding and
 //! [`verify::verify`], each proven against [`spec`] over those six axioms and
-//! nothing else. The crate is still at tier 0: the evidence tier 1 and tier 2
-//! require beyond these proofs (Kani harnesses, an independent
-//! transcription, certified mutations of the code) is not written yet.
+//! nothing else.
+//! The crate is still at tier 0: the mutations (53, all certified) and the
+//! conformance tests are in place, but the independent transcription and its
+//! equivalence proof, which tier 2 requires, are not written yet.
 //! Conformance tests (Wycheproof, NIST CAVP) and a differential against
 //! `ring` run in `tests/`.
 //!
