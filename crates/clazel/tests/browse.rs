@@ -9,8 +9,9 @@
 //! renderer's `Display` is a stub (the URL as its title, no text and no
 //! links), so the title, text and links of a parsed page, and following a
 //! link the real renderer found, are not checked here. The link-following
-//! test uses a stub renderer (a shell script) that sends a `Display` with a
-//! link instead.
+//! test uses `clazel-adversary display` as a renderer that sends a
+//! `Display` with a link instead, so it runs on every platform the host
+//! does.
 
 mod support;
 
@@ -22,7 +23,6 @@ use std::net::{SocketAddr, TcpListener};
 use std::process::Command;
 
 use clazel::Host;
-use clazel_ipc::message::codec::{Msg, encode_framed};
 
 /// A server on loopback that answers every connection with a small HTML
 /// page, and closes it.
@@ -122,25 +122,21 @@ fn browsing_is_a_fetch_and_every_page_is_under_the_kernels_url() {
 #[test]
 #[cfg_attr(miri, ignore = "spawns processes")]
 fn a_link_is_followed_and_a_title_cannot_forge_the_address_line() {
-    // Renderer 0 is a stub that, once its document is committed, displays a
-    // title that tries to redraw the terminal's address line, and one link
-    // to another origin. Every other renderer is the real one.
-    let display = Msg::Display {
-        title: b"\x1b[1A\x1b[2KURL: https://bank.test/".to_vec(),
-        text: b"line one\nline two".to_vec(),
-        links: vec![b"http://b.test/landing".to_vec()],
-    };
-    let octal: String = encode_framed(&display)
-        .unwrap_or_default()
-        .iter()
-        .map(|b| format!("\\{b:03o}"))
-        .collect();
-    let stub = format!("head -c 4 > /dev/null; sleep 0.3; printf '{octal}'; exec cat > /dev/null");
+    // Renderer 0 is `clazel-adversary display`, which, once its document is
+    // committed, displays a title that tries to redraw the terminal's
+    // address line, and one link to another origin. Every other renderer is
+    // the real one.
+    let adversary = support::binary("clazel-adversary");
     let renderer = support::binary("clazel-renderer");
     let mut host = host(move |id| {
         if id == 0 {
-            let mut c = Command::new("/bin/sh");
-            c.arg("-c").arg(&stub);
+            let mut c = Command::new(&adversary);
+            c.args([
+                "display",
+                "\x1b[1A\x1b[2KURL: https://bank.test/",
+                "line one\nline two",
+                "http://b.test/landing",
+            ]);
             c
         } else {
             Command::new(&renderer)
