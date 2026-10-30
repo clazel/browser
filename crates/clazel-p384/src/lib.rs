@@ -42,6 +42,7 @@ pub mod axioms;
 pub mod certificates;
 pub mod contract;
 pub mod convert;
+pub mod equivalence;
 pub mod examples;
 pub mod field;
 pub mod independent;
