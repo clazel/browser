@@ -185,11 +185,25 @@ evidence exists (see "Left" below).
   to 47); the 6 `scripted_*.dat` cases need a script engine and are not
   run. Cases with neither `#script-on` nor `#script-off` run with
   scripting off only.
+- **Differential** (`tests/conformance_html5ever.rs`): Servo's `html5ever`
+  0.39.0, with `markup5ever_rcdom` for its tree (test-only, 22 packages),
+  against the same driver, both trees printed in the suite's format and
+  compared byte for byte. On the suite's inputs (3,898 parses: a case
+  naming no scripting flag runs with both) 3,699 agree and 199 differ, each
+  in a listed class with a rule over the input, and in every one ours is
+  the suite's expected tree: processing instructions (175; html5ever
+  predates them and makes bogus comments), `search` in the special
+  category (10), "after head" setting frameset-ok to "ok" (6), "parsing
+  template contents" for `form` (6), and an `input` start tag in a `select`
+  fragment, which html5ever inserts though the text it implements ignores
+  it (2). On 10,000 random tag-soup inputs 9,991 agree and 9 differ by the
+  same rules, one in a class seen only there: html5ever's "in table body"
+  scope test omits `thead`, a bug visible in template contents. No failure
+  and no bug in this crate; the `selectedcontent` cases above agree (both
+  leave the element empty).
 
 ## Left
 
-- A differential against `html5ever` (22 packages with
-  `markup5ever_rcdom`; not added).
 - Whether reachable parsers need the 6T term of the nodes-per-token bound.
   The term pays for "in template"'s end of file, which pops a template,
   resets the mode and reprocesses, once per template: the generic proof
