@@ -419,7 +419,7 @@ pub proof fn lemma_same_renderer_by_tab(rules: Seq<clazel_psl::spec::Rule>, urls
 }
 
 /// `commit_navigation` from related states, for a tab open in the first.
-pub proof fn lemma_commit_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
+pub proof fn lemma_commit_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State, tab: nat, href: Seq<u32>, body: Document)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         find_by_tab(s1.renderers, tab, 0) is Some,
@@ -576,7 +576,7 @@ pub proof fn lemma_carry_out_consistency(
             },
             clazel_fetch::transducer::spec::Action::Done { url, response } => {
                 assert(a2[0] == a1[0]);
-                lemma_commit_consistency(rules, urls, d, s1, s2, tab, clazel_url::url::spec::url_serializer(url, false), response.body);
+                lemma_commit_consistency(rules, urls, d, s1, s2, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response));
             },
             clazel_fetch::transducer::spec::Action::Fail(_) => {
                 assert(a2[0] == a1[0]);

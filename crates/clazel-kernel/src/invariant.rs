@@ -570,7 +570,7 @@ pub proof fn lemma_navigate_tab_wf(
     s: State,
     tab: nat,
     url: Seq<u32>,
-    script: Seq<u8>,
+    script: Document,
 )
     requires
         kernel_wf(rules, urls, s),
@@ -583,7 +583,7 @@ pub proof fn lemma_navigate_tab_wf(
         let old = s.renderers[i];
         if let Some(lock) = lock_of_url(urls, url, s.next_id) {
             if lock is Tuple && lock == old.lock {
-                let r = Renderer { url, pending: None, ..old };
+                let r = Renderer { url, pending: None, committed: true, ..old };
                 // `lock` is `old.lock`, a tuple, so the origin of `url` is that tuple
                 // whatever id the lock is asked for.
                 assert(lock_of_url(urls, url, old.id) == Some(old.lock));
@@ -592,7 +592,7 @@ pub proof fn lemma_navigate_tab_wf(
                 crate::net_wf::lemma_conns_wf_update(s.renderers, s.conns, s.next_conn, i, r);
             } else {
                 let id = s.next_id;
-                let r = Renderer { id, tab, url, lock, pending: None };
+                let r = Renderer { committed: true, id, tab, url, lock, pending: None };
                 lemma_renderers_wf_update(urls, s.renderers, s.next_id, i, r, id + 1);
                 crate::net_wf::lemma_navigations_wf_update(rules, s.renderers, i, r);
                 crate::net_wf::lemma_conns_wf_update(s.renderers, s.conns, s.next_conn, i, r);
@@ -681,6 +681,33 @@ pub proof fn lemma_fail_navigation_wf(rules: Seq<clazel_psl::spec::Rule>, urls: 
     crate::net_wf::lemma_conns_wf_update(s.renderers, s.conns, s.next_conn, i, Renderer { pending: None, ..old });
 }
 
+/// The renderer an `OpenTab` adds, committed or not (item 4.12), keeps the
+/// invariant.
+pub proof fn lemma_open_tab_push_wf(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    s: State,
+    url: Seq<u32>,
+    lock: clazel_origin::spec::Origin,
+    committed: bool,
+)
+    requires
+        kernel_wf(rules, urls, s),
+        lock_of_url(urls, url, s.next_id) == Some(lock),
+    ensures
+        kernel_wf(
+            rules,
+            urls,
+            State { renderers: s.renderers.push(Renderer { committed, id: s.next_id, tab: s.next_id, url, lock, pending: None }), next_id: s.next_id + 1, ..s },
+        ),
+{
+    let id = s.next_id;
+    let rn = Renderer { committed, id, tab: id, url, lock, pending: None };
+    lemma_renderers_wf_push(urls, s.renderers, s.next_id, rn);
+    crate::net_wf::lemma_navigations_wf_push(rules, s.renderers, rn);
+    crate::net_wf::lemma_conns_wf_push_renderer(s.renderers, s.conns, s.next_conn, rn);
+}
+
 /// **`step` preserves `kernel_wf`.** For every Public Suffix List, every
 /// instantiation of the URL functions, every state satisfying the invariant
 /// and every event.
@@ -707,9 +734,12 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
         Event::OpenTab { url, script } => {
             let id = s.next_id;
             if let Some(lock) = lock_of_url(urls, url, id) {
-                lemma_renderers_wf_push(urls, s.renderers, s.next_id, Renderer { id, tab: id, url, lock, pending: None });
-                crate::net_wf::lemma_navigations_wf_push(rules, s.renderers, Renderer { id, tab: id, url, lock, pending: None });
-                crate::net_wf::lemma_conns_wf_push_renderer(s.renderers, s.conns, s.next_conn, Renderer { id, tab: id, url, lock, pending: None });
+                lemma_open_tab_push_wf(rules, urls, s, url, lock, script is Some);
+                if script is None {
+                    let rn = Renderer { committed: false, id, tab: id, url, lock, pending: None };
+                    let s1 = State { renderers: s.renderers.push(rn), next_id: id + 1, ..s };
+                    crate::net_wf::lemma_begin_navigation_wf(rules, urls, fetch, s1, id, url);
+                }
             }
         },
         Event::NavigateTab { tab, url } => {
@@ -723,7 +753,7 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
             if let Some(i) = find_by_id(s.renderers, id, 0) {
                 let r = s.renderers[i];
                 assert(lock_of_url(urls, r.url, r.id) == Some(r.lock));
-                match decode_renderer_frame(bytes) {
+                match accepted_message(r, bytes) {
                     None => {
                         lemma_renderers_wf_remove(urls, s.renderers, s.next_id, i);
                         crate::net_wf::lemma_navigations_wf_remove(rules, s.renderers, i);

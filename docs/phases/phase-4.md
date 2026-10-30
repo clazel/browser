@@ -1124,10 +1124,10 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers (`parser_wf` of every reachable parser, stopped or not: `theorem_reachable_stopped`), `theorem_reachable_parser_inv` (`parser_inv` of every reachable parser until it stops), `theorem_open_distinct` (distinct elements on the stack of every reachable parser), and `theorem_reachable_w3c_facts`, `theorem_reachable_foreign_content` and `theorem_reachable_frameset_cell`, which discharge the W3C equivalences' state preconditions that are facts of reachable states (all but `element_plain`) |
 | 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified |
 | 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential not started |
-| 4.12 IPC schema and kernel | not started (after the kernel-join merge) |
+| 4.12 IPC schema and kernel | done locally: schema (Commit, Body, BodyEnd, Display), kernel commit protocol and Show, `theorem_show_only_own_tab`, `theorem_address_bar_integrity`, `theorem_body_is_the_response` proven, `theorem_committed_only_after_commit` proven, Phase 2 and 3 theorems restated; both crates stay at tier 2; waiting for CI's full run |
 | 4.13 Renderer pipeline | not started |
 | 4.14 Text layout | not started |
-| 4.15 `clazel browse` | not started |
+| 4.15 `clazel browse` | done locally: the loop, tested against an in-process server through real renderers; pages show the 4.13 stub until the pipeline lands |
 | 4.16 Demo and hostile pages | not started |
 | 4.17 Status and README | not started |
 
