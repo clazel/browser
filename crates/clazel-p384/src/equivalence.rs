@@ -757,4 +757,312 @@ proof fn lemma_on_curve_cong(c: Curve, x: nat, y: nat)
     );
 }
 
+// ---------------------------------------------------------------------
+// SEC 1 §2.2.1: the two group laws.
+// ---------------------------------------------------------------------
+
+/// A point the verification can reach: O, or `(x, y)` with both
+/// coordinates in [0, p-1] and on the curve.
+pub open spec fn good(c: Curve, q: Point) -> bool {
+    match q {
+        Point::Infinity => true,
+        Point::Affine { x, y } => x < c.p && y < c.p && satisfies_equation(c, x, y),
+    }
+}
+
+/// Euclid's lemma for `p`: if p divides a product, it divides a factor.
+/// True exactly for prime `p` (and 1); P-384's is [`crate::primality`]'s.
+pub open spec fn euclid(p: nat) -> bool {
+    forall|u: int, v: int|
+        #[trigger] ((u * v) % (p as int)) == 0 ==> u % (p as int) == 0 || v % (p as int) == 0
+}
+
+/// Euclid's lemma, used once.
+proof fn lemma_euclid_use(p: nat, u: int, v: int)
+    requires
+        euclid(p),
+        (u * v) % (p as int) == 0,
+    ensures
+        u % (p as int) == 0 || v % (p as int) == 0,
+{
+}
+
+/// What the two group laws need of the field to agree: p is an odd prime
+/// (Euclid's lemma stands for primality).
+pub open spec fn field_ok(c: Curve) -> bool {
+    c.p > 2 && c.p % 2 == 1 && euclid(c.p)
+}
+
+/// SEC 1 §2.2.1 rule 3, as the two texts read it, for two points on the
+/// curve with the same x: `y1 + y2 ≡ 0` exactly when "the points are either
+/// distinct or have y-coordinate 0". Both coordinates are in [0, p-1].
+pub proof fn lemma_rule3(c: Curve, x: nat, y1: nat, y2: nat)
+    requires
+        field_ok(c),
+        y1 < c.p,
+        y2 < c.p,
+        satisfies_equation(c, x, y1),
+        satisfies_equation(c, x, y2),
+    ensures
+        ((y1 + y2) % c.p == 0) == (y1 != y2 || y1 == 0),
+{
+    let p = c.p as int;
+    if y1 == y2 {
+        vstd::arithmetic::div_mod::lemma_small_mod(0, c.p);
+        if y1 != 0 {
+            // 0 < 2 y1 < 2p and p is odd, so 2 y1 is not 0 or p.
+            if y1 + y2 < c.p {
+                vstd::arithmetic::div_mod::lemma_small_mod((y1 + y2) as nat, c.p);
+            } else {
+                assert(y1 + y2 != c.p);
+                vstd::arithmetic::div_mod::lemma_fundamental_div_mod_converse(
+                    (y1 + y2) as int,
+                    p,
+                    1,
+                    (y1 + y2) - p,
+                );
+            }
+            assert((y1 + y2) % c.p != 0);
+        }
+    } else {
+        // y1^2 ≡ y2^2, so p | (y1 - y2)(y1 + y2), and p ∤ (y1 - y2).
+        assert(y1 * y1 % c.p == y2 * y2 % c.p);
+        vstd::arithmetic::div_mod::lemma_mod_equivalence((y1 * y1) as int, (y2 * y2) as int, p);
+        assert((y1 - y2) * (y1 + y2) == y1 * y1 - y2 * y2) by (nonlinear_arith);
+        assert(((y1 - y2) * (y1 + y2)) % p == 0);
+        lemma_euclid_use(c.p, y1 - y2, (y1 + y2) as int);
+        vstd::arithmetic::div_mod::lemma_mod_equivalence(y1 as int, y2 as int, p);
+        vstd::arithmetic::div_mod::lemma_small_mod(y1, c.p);
+        vstd::arithmetic::div_mod::lemma_small_mod(y2, c.p);
+        assert((y1 - y2) % p != 0);
+    }
+}
+
+/// From `inv(m, a) == Some(w)`: `a w ≡ 1`.
+proof fn lemma_inv_some(m: nat, a: nat)
+    requires
+        m > 1,
+        a < m,
+        inv(m, a) is Some,
+    ensures
+        cong(m as int, (a * inv(m, a)->Some_0) as int, 1),
+{
+    vstd::arithmetic::div_mod::lemma_small_mod(a, m);
+    vstd::arithmetic::div_mod::lemma_small_mod(1, m);
+}
+
+/// Rule 4, the chord (`x1 ≠ x2`): the same point, on the curve.
+proof fn lemma_add_chord(
+    c: Curve,
+    d: crate::independent::Curve,
+    x1: nat,
+    y1: nat,
+    x2: nat,
+    y2: nat,
+)
+    requires
+        corresponds(c, d),
+        c.p > 1,
+        x1 != x2,
+        good(c, Point::Affine { x: x1, y: y1 }),
+        good(c, Point::Affine { x: x2, y: y2 }),
+    ensures
+        ec_add(c, Point::Affine { x: x1, y: y1 }, Point::Affine { x: x2, y: y2 }) == opt_pt(
+            crate::independent::add(
+                d,
+                crate::independent::EcPoint::Aff { x: x1, y: y1 },
+                crate::independent::EcPoint::Aff { x: x2, y: y2 },
+            ),
+        ),
+        match ec_add(c, Point::Affine { x: x1, y: y1 }, Point::Affine { x: x2, y: y2 }) {
+            Some(r) => good(c, r),
+            None => true,
+        },
+{
+    let p = c.p;
+    let pi = p as int;
+    let dx = fe_sub(p, x2, x1);
+    let dy = fe_sub(p, y2, y1);
+    lemma_cong_fe_sub(p, x2, x1);
+    lemma_cong_fe_sub(p, y2, y1);
+    lemma_fe_sub(p, x2, x1);
+    lemma_fe_sub(p, y2, y1);
+    lemma_inv(p, dx);
+    if inv(p, dx) is Some {
+        let w = inv(p, dx)->Some_0;
+        let lam = dy * w % p;
+        let f1 = fe_sub(p, lam * lam % p, x1);
+        let x3 = fe_sub(p, f1, x2);
+        let fx = fe_sub(p, x1, x3);
+        let y3 = fe_sub(p, lam * fx % p, y1);
+        // The coordinates are equal.
+        lemma_cong_mod(pi, (lam * lam) as int);
+        lemma_cong_fe_sub(p, lam * lam % p, x1);
+        lemma_cong_fe_sub(p, f1, x2);
+        let xx3 = (lam * lam) as int - x1 - x2;
+        lemma_cong_add(pi, (lam * lam % p) as int, (lam * lam) as int, x1 as int, x1 as int);
+        lemma_cong_add(pi, f1 as int, (lam * lam) as int - x1, x2 as int, x2 as int);
+        assert(cong(pi, x3 as int, xx3));
+        lemma_cong_mod(pi, xx3);
+        lemma_cong_reduced(pi, x3 as int, crate::independent::fmod(xx3, p) as int);
+        assert(x3 == crate::independent::fmod(xx3, p));
+        lemma_cong_fe_sub(p, x1, x3);
+        lemma_cong_mul(pi, lam as int, lam as int, fx as int, x1 - x3);
+        lemma_cong_mod(pi, (lam * fx) as int);
+        lemma_cong_fe_sub(p, lam * fx % p, y1);
+        let yy3 = lam * (x1 - x3) - y1;
+        lemma_cong_add(pi, (lam * fx % p) as int, lam * (x1 - x3), y1 as int, y1 as int);
+        assert(cong(pi, y3 as int, yy3));
+        lemma_cong_mod(pi, yy3);
+        lemma_cong_reduced(pi, y3 as int, crate::independent::fmod(yy3, p) as int);
+        // The new point is on the curve (lemma_chord_on_curve).
+        lemma_inv_some(p, dx);
+        lemma_cong_mul(pi, dx as int, x2 - x1, w as int, w as int);
+        assert(cong(pi, (x2 - x1) * w, 1));
+        lemma_cong_mod(pi, (dy * w) as int);
+        lemma_cong_mul(pi, dy as int, y2 - y1, w as int, w as int);
+        assert(cong(pi, lam as int, (y2 - y1) * w));
+        lemma_on_curve_cong(c, x1, y1);
+        lemma_on_curve_cong(c, x2, y2);
+        lemma_chord_on_curve(
+            pi,
+            c.a as int,
+            c.b as int,
+            x1 as int,
+            y1 as int,
+            x2 as int,
+            y2 as int,
+            w as int,
+            lam as int,
+        );
+        let ex3 = lam * lam - x1 - x2;
+        let ey3 = lam * (x1 - ex3) - y1;
+        assert(ex3 == xx3);
+        lemma_cong_add(pi, x1 as int, x1 as int, x3 as int, ex3);
+        lemma_cong_mul(pi, lam as int, lam as int, x1 - x3, x1 - ex3);
+        lemma_cong_add(pi, lam * (x1 - x3), lam * (x1 - ex3), y1 as int, y1 as int);
+        assert(cong(pi, y3 as int, ey3));
+        lemma_ce_cong(pi, c.a as int, c.b as int, x3 as int, y3 as int, ex3, ey3);
+        lemma_on_curve_cong(c, x3, y3);
+    }
+}
+
+/// Rule 5, the tangent (`x1 = x2`, and not rule 3): the double of the
+/// first point, the same in both, on the curve.
+proof fn lemma_add_tangent(
+    c: Curve,
+    d: crate::independent::Curve,
+    x1: nat,
+    y1: nat,
+    y2: nat,
+)
+    requires
+        corresponds(c, d),
+        field_ok(c),
+        good(c, Point::Affine { x: x1, y: y1 }),
+        good(c, Point::Affine { x: x1, y: y2 }),
+        !((y1 + y2) % c.p == 0),
+    ensures
+        ec_add(c, Point::Affine { x: x1, y: y1 }, Point::Affine { x: x1, y: y2 }) == opt_pt(
+            crate::independent::add(
+                d,
+                crate::independent::EcPoint::Aff { x: x1, y: y1 },
+                crate::independent::EcPoint::Aff { x: x1, y: y2 },
+            ),
+        ),
+        match ec_add(c, Point::Affine { x: x1, y: y1 }, Point::Affine { x: x1, y: y2 }) {
+            Some(r) => good(c, r),
+            None => true,
+        },
+{
+    let p = c.p;
+    let pi = p as int;
+    lemma_rule3(c, x1, y1, y2);
+    let dy = 2 * y1 % p;
+    lemma_inv(p, dy);
+    lemma_cong_mod(pi, (2 * y1) as int);
+    if inv(p, dy) is Some {
+        let w = inv(p, dy)->Some_0;
+        let t = 3 * x1 * x1 + c.a;
+        let lam = t % p * w % p;
+        vstd::arithmetic::div_mod::lemma_mul_mod_noop_left(t as int, w as int, pi);
+        assert(lam == (t * w) % p);
+        let x3 = fe_sub(p, lam * lam % p, 2 * x1 % p);
+        let fx = fe_sub(p, x1, x3);
+        let y3 = fe_sub(p, lam * fx % p, y1);
+        // The coordinates are equal.
+        lemma_cong_mod(pi, (lam * lam) as int);
+        lemma_cong_mod(pi, (2 * x1) as int);
+        lemma_cong_fe_sub(p, lam * lam % p, 2 * x1 % p);
+        let xx3 = (lam * lam) as int - 2 * x1;
+        lemma_cong_add(pi, (lam * lam % p) as int, (lam * lam) as int, (2 * x1 % p) as int, (2 * x1) as int);
+        assert(cong(pi, x3 as int, xx3));
+        lemma_cong_mod(pi, xx3);
+        lemma_cong_reduced(pi, x3 as int, crate::independent::fmod(xx3, p) as int);
+        lemma_cong_fe_sub(p, x1, x3);
+        lemma_cong_mul(pi, lam as int, lam as int, fx as int, x1 - x3);
+        lemma_cong_mod(pi, (lam * fx) as int);
+        lemma_cong_fe_sub(p, lam * fx % p, y1);
+        let yy3 = lam * (x1 - x3) - y1;
+        lemma_cong_add(pi, (lam * fx % p) as int, lam * (x1 - x3), y1 as int, y1 as int);
+        assert(cong(pi, y3 as int, yy3));
+        lemma_cong_mod(pi, yy3);
+        lemma_cong_reduced(pi, y3 as int, crate::independent::fmod(yy3, p) as int);
+        // The new point is on the curve (lemma_tangent_on_curve).
+        lemma_inv_some(p, dy);
+        lemma_cong_mul(pi, dy as int, (2 * y1) as int, w as int, w as int);
+        assert(cong(pi, (2 * y1 * w) as int, 1));
+        lemma_cong_mod(pi, (t * w) as int);
+        assert(cong(pi, lam as int, ((3 * x1 * x1 + c.a) * w) as int));
+        lemma_on_curve_cong(c, x1, y1);
+        lemma_tangent_on_curve(pi, c.a as int, c.b as int, x1 as int, y1 as int, w as int, lam as int);
+        let ex3 = lam * lam - 2 * x1;
+        let ey3 = lam * (x1 - ex3) - y1;
+        lemma_cong_add(pi, x1 as int, x1 as int, x3 as int, ex3);
+        lemma_cong_mul(pi, lam as int, lam as int, x1 - x3, x1 - ex3);
+        lemma_cong_add(pi, lam * (x1 - x3), lam * (x1 - ex3), y1 as int, y1 as int);
+        assert(cong(pi, y3 as int, ey3));
+        lemma_ce_cong(pi, c.a as int, c.b as int, x3 as int, y3 as int, ex3, ey3);
+        lemma_on_curve_cong(c, x3, y3);
+    }
+}
+
+/// SEC 1 §2.2.1, as the two texts transcribe it, gives the same sum of two
+/// reachable points, and the sum is reachable.
+pub proof fn lemma_add(
+    c: Curve,
+    d: crate::independent::Curve,
+    q1: crate::independent::EcPoint,
+    q2: crate::independent::EcPoint,
+)
+    requires
+        corresponds(c, d),
+        field_ok(c),
+        good(c, pt(q1)),
+        good(c, pt(q2)),
+    ensures
+        ec_add(c, pt(q1), pt(q2)) == opt_pt(crate::independent::add(d, q1, q2)),
+        match ec_add(c, pt(q1), pt(q2)) {
+            Some(r) => good(c, r),
+            None => true,
+        },
+{
+    match (q1, q2) {
+        (
+            crate::independent::EcPoint::Aff { x: x1, y: y1 },
+            crate::independent::EcPoint::Aff { x: x2, y: y2 },
+        ) => {
+            if x1 != x2 {
+                lemma_add_chord(c, d, x1, y1, x2, y2);
+            } else {
+                lemma_rule3(c, x1, y1, y2);
+                if !((y1 + y2) % c.p == 0) {
+                    lemma_add_tangent(c, d, x1, y1, y2);
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
 } // verus!
