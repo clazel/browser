@@ -48,6 +48,7 @@ pub proof fn lemma_then_insert(p: Parser, q: Parser, tt: TagTok)
     requires
         keeps(p, q),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Template,
         tt.tag != Tag::Html,
         tt.tag == Tag::Td || tt.tag == Tag::Th || tt.tag == Tag::Table ==> p.mode != Mode::InCell,
@@ -64,6 +65,7 @@ pub proof fn lemma_then_insert_pop(p: Parser, q: Parser, tt: TagTok)
     requires
         keeps(p, q),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
         tt.tag != Tag::Html && tt.tag != Tag::Table,
@@ -119,13 +121,15 @@ pub proof fn lemma_then_fno(p: Parser, q: Parser)
 }
 
 /// What the "in body" cases need: a running, [`good`] parser in a
-/// [`rooted_mode`] with `modes_ok`, and a tagged token.
+/// [`rooted_mode`] with `modes_ok`, and a tagged token with plain
+/// attributes.
 pub open spec fn ib_pre(p: Parser, tt: TagTok) -> bool {
     &&& good(p)
     &&& !p.stopped
     &&& modes_ok(p)
     &&& rooted_mode(p.mode)
     &&& tok_tagged(tt)
+    &&& crate::independent::equivalence_body::attrs_plain(tt.attrs)
 }
 
 /// A case that keeps the mode is done.
@@ -163,6 +167,7 @@ pub proof fn lemma_ib_text(p: Parser, q: Parser, tt: TagTok, rawtext: bool)
         rooted_mode(p.mode),
         keeps(p, q),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Td && tt.tag != Tag::Th,
         tt.tag != Tag::Template,
         tt.tag != Tag::Html && tt.tag != Tag::Table,
@@ -193,6 +198,7 @@ pub proof fn lemma_ib_html(p: Parser, t: Tok, tt: TagTok)
     if !open_has_html(p, Tag::Template) {
         lemma_add_missing_frame(p, p.open[0].id, tt.attrs, 0);
         super::doc::lemma_dinv_at(p, 0);
+        super::doc::lemma_dinv(p);
         lemma_core_frame(p, in_body_start_html(p, tt));
     }
 }
@@ -207,6 +213,11 @@ pub proof fn lemma_add_missing_frame(p: Parser, el: NodeId, attrs: Seq<Attr>, i:
         clazel_dom::contract::append_attribute_requires(p.doc, el) ==> crate::exec::frame::doc_extends(
             p.doc,
             add_missing_attributes(p, el, attrs, i).doc,
+        ),
+        clazel_dom::contract::append_attribute_requires(p.doc, el) && crate::independent::equivalence_body::attrs_plain(attrs)
+            && super::doc::html_plain(p.doc, p.context) ==> super::doc::html_plain(
+            add_missing_attributes(p, el, attrs, i).doc,
+            p.context,
         ),
     decreases attrs.len() - i,
 {
@@ -224,6 +235,9 @@ pub proof fn lemma_add_missing_frame(p: Parser, el: NodeId, attrs: Seq<Attr>, i:
         if clazel_dom::contract::append_attribute_requires(p.doc, el) {
             if q != p {
                 crate::exec::modes::in_body_start_lemmas::lemma_append_attribute_extends(p.doc, el, a);
+                if crate::independent::equivalence_body::attrs_plain(attrs) && super::doc::html_plain(p.doc, p.context) {
+                    super::doc::lemma_append_attribute_plain(p.doc, el, a, p.context);
+                }
                 assert(crate::exec::frame::kind_kept(p.doc.nodes[el as int].kind, q.doc.nodes[el as int].kind));
             }
             crate::exec::frame::lemma_doc_extends_trans(p.doc, q.doc, add_missing_attributes(q, el, attrs, i + 1).doc);
@@ -502,6 +516,7 @@ pub proof fn lemma_then_push_formatting(p: Parser, q: Parser, tt: TagTok)
     requires
         keeps(p, q),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
         tt.tag != Tag::Html && tt.tag != Tag::Table,

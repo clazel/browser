@@ -46,8 +46,7 @@ scripting).
 
 ## Verification
 
-Tier 0 today, target tier 2. The crate's `tier` is raised only after CI's
-full verification is green on a run with everything below. See the
+Tier 2, the crate's target. See the
 [tiers](../../docs/VERIFICATION.md#tiers).
 
 - Every exec state function is proven equal to its spec function, a

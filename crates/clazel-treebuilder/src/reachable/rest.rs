@@ -76,6 +76,7 @@ pub proof fn lemma_cell_end_cell(p: Parser, tt: TagTok)
         !p.stopped,
         modes_ok(p),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag == Tag::Td || tt.tag == Tag::Th,
         has_same_name_in_table_scope(p, tt),
     ensures

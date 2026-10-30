@@ -127,6 +127,7 @@ pub proof fn lemma_dispatch_inv(p1: Parser, t: Tok)
         reachable_inv(p1),
         !p1.stopped,
         crate::exec::modes::initial::tok_ok(t),
+        tok_plain(t),
     ensures
         rules_inv(dispatcher(p1, t), p1, t),
 {
@@ -160,6 +161,7 @@ pub proof fn lemma_dispatch_reach(env: EncFns, p: Parser, token: Token)
     }
     let t = classify(token);
     lemma_classify_ok(token);
+    crate::theorems::equivalence::lemma_classify_plain(token);
     let r = dispatcher(p1, t);
     assert(reachable_inv(p1));
     lemma_dispatch_inv(p1, t);
@@ -183,6 +185,13 @@ pub proof fn lemma_new_parser_reach(url: Seq<u32>, scripting: bool, tentative: b
     let p = new_parser(url, scripting, tentative);
     assert(crate::termination::templates_in(p.open, 0) == 0);
     clazel_dom::lemmas::theorem_new_document_wf(url);
+    assert(p.doc.nodes.len() == 1 && p.doc.nodes[0].kind is Document);
+    assert(super::doc::html_plain(p.doc, p.context)) by {
+        reveal(super::doc::html_plain);
+    }
+    assert(fmt_plain(p.formatting)) by {
+        reveal(fmt_plain);
+    }
     super::doc::lemma_dinv_intro(p);
 }
 
@@ -223,6 +232,10 @@ pub proof fn lemma_fragment_parser_reach(ctx: Context, scripting: bool)
     crate::theorems::reachable::lemma_fragment_doc_ok(ctx);
     assert(crate::exec::frame::kind_kept(crate::exec::step::root_kind(), d4.nodes[root as int].kind));
     assert(crate::exec::frame::elem_ok(d4, root_el));
+    lemma_fragment_plain(ctx, Some(ctx_el));
+    assert(fmt_plain(p1.formatting)) by {
+        reveal(fmt_plain);
+    }
     assert forall|i: int| 0 <= i < p1.open.len() implies crate::exec::frame::elem_ok(d4, #[trigger] p1.open[i]) by {
         assert(p1.open[i] == root_el);
     }
@@ -245,6 +258,48 @@ pub proof fn lemma_fragment_parser_reach(ctx: Context, scripting: bool)
     };
     assert(fragment_parser(ctx, scripting).0 == p3);
     assert(reach_core(p3));
+}
+
+/// The fragment parser's arena is `doc::html_plain` but for the context
+/// element (node 1): the root `html` element has no attributes.
+pub proof fn lemma_fragment_plain(ctx: Context, c: Option<Elem>)
+    requires
+        c is Some && c->Some_0.id == 1,
+    ensures
+        super::doc::html_plain(crate::exec::step::fragment_doc(ctx).0, c),
+{
+    hide(dom::insert);
+    hide(dom::wf);
+    hide(tag_of);
+    let dn = dom::new_document(seq![]);
+    assert(dn.nodes.len() == 1 && dn.nodes[0].kind is Document);
+    assert(super::doc::html_plain(dn, c)) by {
+        reveal(super::doc::html_plain);
+    }
+    crate::exec::step::lemma_new_doc_extends(seq![], ctx.mode);
+    clazel_dom::lemmas::theorem_set_mode_wf(dn, ctx.mode);
+    super::doc::lemma_set_mode_plain(dn, ctx.mode, c);
+    let d0 = dom::set_mode(dn, ctx.mode);
+    assert(d0.nodes.len() == 1);
+    crate::exec::frame::lemma_create_extends(d0, crate::exec::step::context_kind(ctx));
+    let (d1, ctx_id) = dom::create_node(d0, crate::exec::step::context_kind(ctx));
+    assert forall|i: int| 0 <= i < d0.nodes.len() && i != 1 implies (#[trigger] d1.nodes[i]).kind == d0.nodes[i].kind by {
+        assert(d1.nodes[i] == d0.nodes[i]);
+    }
+    super::doc::lemma_plain_update(d0, d1, 1, c);
+    crate::exec::frame::lemma_create_extends(d1, crate::exec::step::root_kind());
+    super::doc::lemma_create_plain(d1, crate::exec::step::root_kind(), c);
+    let (d2, root) = dom::create_node(d1, crate::exec::step::root_kind());
+    assert(ctx_id == 1 && root == 2 && d2.nodes.len() == 3);
+    assert(d2.nodes[0] == d0.nodes[0]);
+    assert(d2.nodes[root as int].kind == crate::exec::step::root_kind());
+    assert(!dom::is_inclusive_ancestor(d2, root, 0)) by {
+        assert(d2.nodes[0].parent is None);
+    }
+    crate::exec::frame::lemma_insert_extends(d2, root, 0, None);
+    super::doc::lemma_insert_plain(d2, root, 0, None, c);
+    let d3 = dom::append(d2, 0, root);
+    super::doc::lemma_create_plain(d3, NodeKind::DocumentFragment { host: None }, c);
 }
 
 // ---------------------------------------------------------------------

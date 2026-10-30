@@ -22,12 +22,16 @@ encoding_rs = "=0.8.35"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (the
-# HTML tokenizer state machine is on the Tier 2 list). The crate stays at
-# tier 0 until CI's full verification is green on a run that proves every
-# exec function against its contract, with the independent transcription,
-# certified mutations and conformance tests (Phase 4 items 4.5 to 4.7).
+# HTML tokenizer state machine is on the Tier 2 list). Tier 2: every exec
+# state function, `next_token` and `tokenize` are proven against the spec
+# (src/tokenizer/spec.rs, src/charref/spec.rs); independent.rs (W3C HTML
+# 5.2 §8.2.4) is proven equal to the spec on every input with no `&`, no
+# `<?` and no `[CDATA[`, where the texts describe the same steps
+# (theorem_w3c_equivalent); every mutation is certified killed; and
+# tests/conformance_tokenizer.rs runs html5lib-tests and a differential
+# test against html5gum.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]

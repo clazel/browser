@@ -16,13 +16,14 @@ verus! {
 /// An entry that may join the list of a [`good`] parser: a marker, or an
 /// element other than `html`'s, tagged, not a cell, with an id of the
 /// arena that no cell on the stack has ([`id_new`]), for a tagged token
-/// other than `template`, `td`, `th`, `html` and `table`.
+/// with plain attributes other than `template`, `td`, `th`, `html` and
+/// `table`.
 pub open spec fn fmt_fresh(p: Parser, x: Fmt) -> bool {
     match x {
         Fmt::Marker => true,
         Fmt::Entry { elem, token } => elem.id != p.open[0].id && elem_tagged(elem) && tok_tagged(token) && token.tag
             != Tag::Template && !cell_pred()(elem) && token.tag != Tag::Td && token.tag != Tag::Th && token.tag != Tag::Html
-            && token.tag != Tag::Table && id_new(p, elem.id),
+            && token.tag != Tag::Table && id_new(p, elem.id) && crate::independent::equivalence_body::attrs_plain(token.attrs),
     }
 }
 
@@ -35,6 +36,7 @@ pub proof fn lemma_fmt_entries_fresh(p: Parser, i: int)
         fmt_fresh(p, p.formatting[i]),
 {
     if p.formatting[i] is Entry {
+        reveal(fmt_plain);
         assert(p.formatting[i]->Entry_elem.id != p.open[0].id);
         let id = p.formatting[i]->Entry_elem.id;
         assert forall|j: int| 0 <= j < p.open.len() && cell_pred()(#[trigger] p.open[j]) implies p.open[j].id != id by {
@@ -71,6 +73,14 @@ pub proof fn lemma_fmt_list_keeps(p: Parser, q: Parser)
             && q.formatting[i]->Entry_token.tag != Tag::Th && q.formatting[i]->Entry_token.tag != Tag::Html
             && q.formatting[i]->Entry_token.tag != Tag::Table by {
             assert(fmt_fresh(p, q.formatting[i]));
+        }
+        assert(fmt_plain(q.formatting)) by {
+            reveal(fmt_plain);
+            assert forall|i: int| 0 <= i < q.formatting.len() && (#[trigger] q.formatting[i]) is Entry implies crate::independent::equivalence_body::attrs_plain(
+                q.formatting[i]->Entry_token.attrs,
+            ) by {
+                assert(fmt_fresh(p, q.formatting[i]));
+            }
         }
         assert forall|j: int| 0 <= j < q.open.len() && cell_pred()(#[trigger] q.open[j]) implies cell_fresh(q, q.open[j].id) by {
             assert(cell_fresh(p, p.open[j].id));
@@ -190,7 +200,8 @@ pub proof fn lemma_push_formatting_keeps(p: Parser, e: Elem, t: TagTok)
     requires
         live(p),
         !p.stopped ==> e.id != p.open[0].id && elem_tagged(e) && tok_tagged(t) && t.tag != Tag::Template && !cell_pred()(e)
-            && t.tag != Tag::Td && t.tag != Tag::Th && t.tag != Tag::Html && t.tag != Tag::Table && id_new(p, e.id),
+            && t.tag != Tag::Td && t.tag != Tag::Th && t.tag != Tag::Html && t.tag != Tag::Table && id_new(p, e.id)
+            && crate::independent::equivalence_body::attrs_plain(t.attrs),
     ensures
         keeps(p, push_formatting(p, e, t)),
 {
@@ -267,6 +278,7 @@ pub proof fn lemma_add_missing_keeps(p: Parser, el: NodeId, attrs: Seq<Attr>, i:
     requires
         live(p),
         !p.stopped ==> dom::valid(p.doc, el) && p.doc.nodes[el as int].kind is Element,
+        crate::independent::equivalence_body::attrs_plain(attrs),
     ensures
         keeps(p, add_missing_attributes(p, el, attrs, i)),
         add_missing_attributes(p, el, attrs, i) == (Parser { doc: add_missing_attributes(p, el, attrs, i).doc, ..p }),
@@ -451,6 +463,7 @@ pub proof fn lemma_any_other_loop_keeps(p: Parser, tt: TagTok, i: int)
     requires
         live(p),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Html,
         in_cell(p) ==> tt.tag != Tag::Td && tt.tag != Tag::Th,
         !p.stopped ==> i < p.open.len(),
@@ -496,6 +509,7 @@ pub proof fn lemma_any_other_keeps(p: Parser, tt: TagTok)
         in_cell(p) ==> tt.tag != Tag::Td && tt.tag != Tag::Th,
         live(p),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Html,
     ensures
         keeps(p, in_body_any_other_end_tag(p, tt)),
