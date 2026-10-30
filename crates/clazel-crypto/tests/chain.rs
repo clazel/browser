@@ -110,6 +110,36 @@ fn ecdsa_p256_links_verify() -> TestResult {
     Ok(())
 }
 
+// One link of each accepted key type that also runs under Miri, so the
+// libcrux code a certificate link reaches (SHA-2 for RSA, which
+// clazel-pkcs1 then checks, and the P-256 ECDSA verifier) is interpreted
+// by Miri on every run. Under Miri only the valid signature is checked:
+// the tampered check costs a second full verification, which doubles the
+// interpretation time (locally about 17 minutes of CPU for the two valid
+// checks, 40 with the tampered ones), and runs natively. The tests around
+// them cover the other hashes and shapes natively and are ignored under Miri
+// for time.
+
+#[test]
+fn one_rsa_2048_link_verifies_also_under_miri() -> TestResult {
+    let der = fixture!("rsa2048-sha256.der");
+    assert!(self_link(der)?);
+    if !cfg!(miri) {
+        assert!(!self_link(&flip_tbs(der)?)?);
+    }
+    Ok(())
+}
+
+#[test]
+fn one_p256_link_verifies_also_under_miri() -> TestResult {
+    let der = fixture!("p256-sha256.der");
+    assert!(self_link(der)?);
+    if !cfg!(miri) {
+        assert!(!self_link(&flip_tbs(der)?)?);
+    }
+    Ok(())
+}
+
 #[test]
 #[cfg_attr(miri, ignore = "full RSA and P-256 verifications are slow under Miri")]
 fn links_across_key_types_verify_under_the_issuer_key() -> TestResult {
