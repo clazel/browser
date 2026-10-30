@@ -235,6 +235,15 @@ fn verify(presented: &[Vec<u8>]) -> Result<Validated, PathError> {
 
 /// The search with a budget, on `[leaf, pool...]` under `root()`.
 fn search_with_budget(presented: &[Vec<u8>], budget: usize) -> Result<Validated, PathError> {
+    search_with_budget_using(&KeyedLink, presented, budget)
+}
+
+/// `search_with_budget` with the given link verifier.
+fn search_with_budget_using<L: LinkVerifier>(
+    link: &L,
+    presented: &[Vec<u8>],
+    budget: usize,
+) -> Result<Validated, PathError> {
     let root_der = root();
     let anchors: Vec<Anchor<'_>> = anchor_from_root(&root_der, None).into_iter().collect();
     let Some((first, rest)) = presented.split_first() else {
@@ -245,7 +254,7 @@ fn search_with_budget(presented: &[Vec<u8>], budget: usize) -> Result<Validated,
     };
     let pool: Vec<Option<PathCert<'_>>> = rest.iter().map(|der| parse_path_cert(der)).collect();
     let environment = Environment {
-        link: &KeyedLink,
+        link,
         revoked: &NotRevoked,
         max_intermediates: 6,
     };
@@ -447,9 +456,15 @@ struct Work {
     distinct: usize,
 }
 
-fn measure(presented: &[Vec<u8>]) -> Work {
+/// Signature work of the search on `presented`: `verify_server_chain` (the
+/// production budget) when `budget` is `None`, else the search with that
+/// budget.
+fn measure(presented: &[Vec<u8>], budget: Option<usize>) -> Work {
     let link = CountingLink::default();
-    let result = verify_with(&link, &[root()], presented, 6);
+    let result = match budget {
+        None => verify_with(&link, &[root()], presented, 6),
+        Some(b) => search_with_budget_using(&link, presented, b),
+    };
     let distinct = link.distinct.borrow().len();
     Work {
         result,
@@ -464,10 +479,15 @@ fn signature_work_of_a_fan_of_junk_issuers() {
     // the leaf is under `mid`. Each junk certificate is one candidate
     // `root -> x -> junk_i -> leaf` costing three steps and two links,
     // `root -> x` (verifies) and `x -> junk_i` (fails).
-    let n: u16 = 2000;
+    //
+    // Under Miri the fan is 20 wide, not 2,000: the interpreter is far too
+    // slow for the full measurement (it timed out CI's 6-hour Miri job on
+    // #46), and the assertions are formulas in `n`, so the same code runs
+    // and the same facts are checked on a smaller input.
+    let n: u16 = if cfg!(miri) { 20 } else { 2000 };
     let mut presented = vec![leaf("mid", 50), ca(2, "root", "x", 2, 1)];
     presented.extend((0..n).map(|i| ca(i.saturating_add(100), "x", "mid", 50, 77)));
-    let work = measure(&presented);
+    let work = measure(&presented, None);
     println!(
         "fan of {n}: {:?}, {} link calls, {} distinct links",
         work.result.as_ref().err(),
@@ -486,10 +506,19 @@ fn signature_work_of_a_tree_of_self_issued_junk() {
     // leaf, topped by the real `mid`, is a candidate: the budget bounds the
     // search, and each candidate verifies `root -> mid` again and fails on
     // `mid -> junk`.
-    let n: u16 = 12;
+    //
+    // Natively: 12 junk certificates under the production budget. Under
+    // Miri (see the fan above): 4 junk certificates, whose tree of
+    // candidates still exceeds a budget of 60 steps, so the search ends the
+    // same way, through the same code, on an input Miri can interpret.
+    let (n, budget): (u16, Option<usize>) = if cfg!(miri) {
+        (4, Some(60))
+    } else {
+        (12, None)
+    };
     let mut presented = vec![leaf("mid", 50), ca(2, "root", "mid", 2, 1)];
     presented.extend((0..n).map(|i| ca(i.saturating_add(100), "mid", "mid", 50, 77)));
-    let work = measure(&presented);
+    let work = measure(&presented, budget);
     println!(
         "tree of {n}: {:?}, {} link calls, {} distinct links",
         work.result.as_ref().err(),
