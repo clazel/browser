@@ -187,7 +187,7 @@ pub fn step_real(s: StateRecord, e: &EventRecord) -> (out: (StateRecord, Vec<sup
         out.0.exec_wf::<RealFetch>(),
         clazel_cookie::storage::contract::jar_in_range(out.0@.jar),
         clazel_cookie::set_cookie::contract::now_in_range(out.0@.now),
-        out.0@.next_id <= s@.next_id + 1,
+        out.0@.next_id <= s@.next_id + 2,
         out.0@.next_conn <= s@.next_conn + 21,
 {
     let fetch = RealFetch { http: clazel_fetch::transducer::real::RealHttp, urls: clazel_fetch::transducer::real::RealUrls };

@@ -21,10 +21,15 @@ parsers of untrusted input carry machine-checked proofs.
   an oversized frame from its first four bytes.
 - **Messages** (`message`): the schema is ours, not a standard's. An array
   whose first element is a tag, with renderer-to-kernel messages
-  (`CookieGet`, `CookieSet`, `StorageGetItem`, `Navigate` and so on) and
-  kernel-to-renderer ones (`Commit`, `CookieValue`, `StorageValue`, `Error`).
-  No message carries a claimed identity (origin, renderer id, tab id or
-  sender URL), and renderer ids never reach a renderer.
+  (`CookieGet`, `CookieSet`, `StorageGetItem`, `Navigate`, `Display` and so
+  on) and kernel-to-renderer ones (`Commit`, `Body`, `BodyEnd`,
+  `CookieValue`, `StorageValue`, `Error`). A committed document is `Commit`
+  (URL, content type as a byte string, kind: 0 a document, 1 a user
+  script), zero or more `Body` frames of at most `MAX_BODY_CHUNK` octets
+  each, and `BodyEnd`. `Display` (title, text, links) is a renderer's text
+  rendering; its links are the schema's one nested array. No message
+  carries a claimed identity (origin, renderer id, tab id or sender URL),
+  and renderer ids never reach a renderer.
 
 Out of scope: any CBOR outside the profile, and the transport itself
 (sockets, reading and writing); this crate only turns bytes into values and
@@ -46,7 +51,8 @@ numbers are in the
   nothing. The two schema rules are lemmas over a table of message fields;
   that table is a view of the schema, not the encoder, so the rules hold
   because `Message` has no identity field, and the mutation tests show the
-  lemmas fail if the table changes.
+  lemmas fail if the table changes. Every `Body` of at most
+  `MAX_BODY_CHUNK` octets fits one frame (`lemma_body_fits_frame`).
 - **Independent transcription:** `cbor/independent.rs` is written from
   RFC 7049 §2, Appendix C and §3.9 and proven equal to the spec on every
   input. The same agent wrote both, so it is weaker evidence than a second
@@ -87,7 +93,7 @@ let frame = encode_framed(&msg).expect("under MAX_FRAME");
 assert_eq!(decode_framed(&frame), Some(msg));
 
 // A renderer may only send renderer-to-kernel messages.
-let commit = Msg::Commit { url: b"https://a.test/".to_vec(), script: Vec::new() };
+let commit = Msg::Commit { url: b"https://a.test/".to_vec(), content_type: Vec::new(), kind: 1 };
 let frame = encode_framed(&commit).expect("under MAX_FRAME");
 assert!(decode_framed(&frame).is_some());
 assert_eq!(decode_renderer_message(&frame[4..]), None);

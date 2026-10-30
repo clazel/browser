@@ -12,7 +12,7 @@ verus! {
 
 /// A renderer with the given id and lock, committed to the URL `a`.
 pub open spec fn ml_renderer(id: nat, lock: clazel_origin::spec::Origin) -> Renderer {
-    Renderer { id, tab: id, url: seq![0x61u32], lock, pending: None }
+    Renderer { committed: true, id, tab: id, url: seq![0x61u32], lock, pending: None }
 }
 
 /// A tuple origin of host `a` with the given scheme.
@@ -83,7 +83,7 @@ pub proof fn ml_public_suffix_is_cookie_averse(lock: clazel_origin::spec::Origin
 }
 
 /// Navigating to a different lock gives the new renderer that lock.
-pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
@@ -95,14 +95,14 @@ pub proof fn ml_navigate_new_lock(urls: UrlFns, s: State, tab: nat, url: Seq<u32
 }
 
 /// The `Commit` to a spawned renderer is for the URL and script given.
-pub proof fn ml_navigate_commit(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_navigate_commit(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
         lock_of_url(urls, url, s.next_id) == Some(l),
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
-        navigate_tab(urls, s, tab, url, script).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frame(url, script) }),
+        navigate_tab(urls, s, tab, url, script).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(url, script) }),
 {
 }
 
@@ -186,7 +186,7 @@ pub proof fn ml_fail_clears_pending(s: State, i: int, code: u64)
 }
 
 /// A commit to another origin gives a new renderer that is not navigating.
-pub proof fn ml_commit_clears_pending(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>, i: int, l: clazel_origin::spec::Origin)
+pub proof fn ml_commit_clears_pending(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document, i: int, l: clazel_origin::spec::Origin)
     requires
         0 <= i < s.renderers.len(),
         find_by_tab(s.renderers, tab, 0) == Some(i),
@@ -353,10 +353,15 @@ pub proof fn ml_carry_out_done(
         lock_of_url(urls, clazel_url::url::spec::url_serializer(url, false), s.next_id) == Some(l),
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
-        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1[2]
-            == (Output::ToRenderer { id: s.next_id, bytes: commit_frame(clazel_url::url::spec::url_serializer(url, false), response.body) }),
+        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1[2] == (Output::ToRenderer {
+            id: s.next_id,
+            bytes: commit_frames(
+                clazel_url::url::spec::url_serializer(url, false),
+                Document { content_type: response_document(response).content_type, kind: kind_document(), body: response.body },
+            ),
+        }),
 {
-    crate::counterexamples::lemma_co_commit_spawn(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response.body, i, l);
+    crate::counterexamples::lemma_co_commit_spawn(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response), i, l);
     reveal_with_fuel(carry_out, 2);
 }
 
@@ -396,7 +401,7 @@ pub proof fn ml_begin_closes(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
 
 /// A commit closes the connections of its tab: its outputs start with their
 /// `Close`s.
-pub proof fn ml_commit_closes(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
+pub proof fn ml_commit_closes(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Document)
     requires
         closes_of_tab(s.conns, tab).len() > 0,
     ensures
@@ -419,6 +424,81 @@ pub proof fn ml_carry_out_close(urls: UrlFns, s: State, tab: nat, partition: cra
         carry_out(urls, s, tab, partition, Some(c), seq![clazel_fetch::transducer::spec::Action::Close]).0.conns == without_conn(s.conns, c),
 {
     reveal_with_fuel(carry_out, 2);
+}
+
+// ---------------------------------------------------------------------
+// Item 4.12: display and commits.
+// ---------------------------------------------------------------------
+
+/// A renderer's `Display` is shown for its tab, under its URL, with what
+/// it displays: the core of `theorem_show_only_own_tab` and
+/// `theorem_address_bar_integrity`.
+pub proof fn ml_display_shows(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, title: Seq<u8>, text: Seq<u8>, links: Seq<Seq<u8>>)
+    ensures
+        handle_message(rules, urls, fetch, s, r, clazel_ipc::message::spec::Message::Display { title, text, links }) == (
+            s,
+            seq![Output::Show { tab: r.tab, url: r.url, title, text, links }],
+        ),
+{
+}
+
+/// A renderer that is not committed may not send `Display`: the case
+/// `theorem_address_bar_integrity` excludes.
+pub proof fn ml_uncommitted_display(r: Renderer, bytes: Seq<u8>)
+    requires
+        !r.committed,
+        decode_renderer_frame(bytes) matches Some(m) && m is Display,
+    ensures
+        accepted_message(r, bytes) is None,
+{
+}
+
+/// A tab opened without a script, whose fetch cannot start, is not
+/// committed after its `OpenTab`: the step writes to its renderer only the
+/// `Error`, which is no commit (`theorem_committed_only_after_commit` over
+/// the one-event run, and `lemma_error_is_not_a_commit`).
+pub proof fn ml_open_tab_uncommitted(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, url: Seq<u32>)
+    requires
+        lock_of_url(urls, url, 0) is Some,
+        (fetch.parse)(url) is None,
+    ensures
+        step(rules, urls, fetch, init_state(), Event::OpenTab { url, script: None }).0.renderers.len() > 0,
+        !step(rules, urls, fetch, init_state(), Event::OpenTab { url, script: None }).0.renderers[0].committed,
+{
+    let e = Event::OpenTab { url, script: None };
+    let t = seq![e];
+    let s = init_state();
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    crate::commit_theorems::theorem_committed_only_after_commit(rules, urls, fetch, t);
+    assert(t[0] == e);
+    assert(t.drop_first() =~= Seq::<Event>::empty());
+    assert(run_state(rules, urls, fetch, s1, Seq::<Event>::empty()) == s1);
+    assert(run_outputs(rules, urls, fetch, s1, Seq::<Event>::empty()) =~= Seq::<Output>::empty());
+    assert(run_state(rules, urls, fetch, s, t) == s1);
+    assert(run_outputs(rules, urls, fetch, s, t) =~= out);
+    // The step: `Spawn`, the tab's `Close`s, and the `Error` of the failed
+    // navigation.
+    let lock = lock_of_url(urls, url, 0)->Some_0;
+    let rn = Renderer { committed: false, id: 0, tab: 0, url, lock, pending: None };
+    let sp = State { renderers: s.renderers.push(rn), next_id: 1, ..s };
+    assert(sp.renderers =~= seq![rn]);
+    assert(find_by_tab(sp.renderers, 0, 0) == Some(0int));
+    let (s0, closes) = close_tab_conns(sp, 0);
+    crate::net_theorems::lemma_closes_of_tab(sp.conns, 0);
+    let error = reply(rn, clazel_ipc::message::spec::Message::Error { code: error_bad_url() });
+    assert(out =~= seq![Output::Spawn { id: 0, policy: Policy::Renderer }] + (closes + error));
+    assert(s1.renderers =~= seq![Renderer { pending: None, ..rn }]);
+    if s1.renderers[0].committed {
+        let r = s1.renderers[0];
+        assert(crate::statements::commit_sent(out, r.id, r.url));
+        let (k, doc) = choose|k: int, doc: Document|
+            #![trigger out[k], commit_frames(r.url, doc)]
+            0 <= k < out.len() && out[k] == Output::ToRenderer { id: r.id, bytes: commit_frames(r.url, doc) };
+        crate::commit_theorems::lemma_error_is_not_a_commit(error_bad_url(), r.url, doc);
+        if 1 <= k < 1 + closes.len() {
+            assert(out[k] == closes[k - 1]);
+        }
+    }
 }
 
 } // verus!

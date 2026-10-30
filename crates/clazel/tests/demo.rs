@@ -24,6 +24,9 @@ fn the_demo_shows_that_neither_tab_sees_the_others_cookies() {
         String::from_utf8_lossy(&out.stderr).into_owned(),
     );
     assert!(status.success(), "{status}\n{stdout}\n{stderr}");
+    // The host's log of frames goes to standard error (item 4.15), the
+    // demo's own statements to standard output: read both.
+    let stdout = format!("{stdout}\n{stderr}");
     for want in [
         // Each tab's own cookie and storage item, set and read back.
         "renderer 0 -> document.cookie = \"session=alpha; Domain=a.test; Path=/\"",
