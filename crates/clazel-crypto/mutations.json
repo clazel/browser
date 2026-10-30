@@ -398,6 +398,134 @@
         "lemma": "crate::signature::examples::lemma_p256_point_examples()",
         "witness": "p256_point(crate::signature::examples::ex_p256_spki(0x04u8, crate::signature::examples::ex_point())).unwrap()[0] == 2u8"
       }
+    },
+    {
+      "id": "link-exponent-odd",
+      "file": "src/chain/spec.rs",
+      "find": "e % 2 == 1 && e < 0x2_0000_0000nat",
+      "replace": "e < 0x2_0000_0000nat",
+      "expect": "killed",
+      "reason": "BoringSSL (Chrome) refuses an even public exponent; without the parity check e = 65536 passes the profile.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_exponent_profile_examples()",
+        "witness": "exponent_profile(65536)"
+      }
+    },
+    {
+      "id": "link-exponent-bound",
+      "file": "src/chain/spec.rs",
+      "find": "0x2_0000_0000nat",
+      "replace": "0x4_0000_0000nat",
+      "expect": "killed",
+      "reason": "BoringSSL allows at most 33 exponent bits; at 2^34 the 34-bit e = 2^33 + 1 passes.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_exponent_profile_examples()",
+        "witness": "exponent_profile(0x2_0000_0001nat)"
+      }
+    },
+    {
+      "id": "link-pkcs1-hash-sha384",
+      "file": "src/chain/spec.rs",
+      "find": "RsaPkcs1v15Hash::Sha384 => clazel_pkcs1::spec::HashId::Sha384",
+      "replace": "RsaPkcs1v15Hash::Sha384 => clazel_pkcs1::spec::HashId::Sha512",
+      "expect": "killed",
+      "reason": "sha384WithRSAEncryption puts id-sha384 in DigestInfo (RFC 4055 §5, RFC 8017 §9.2 Note 1); with SHA-512's prefix no real signature verifies.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_pkcs1_hash_examples()",
+        "witness": "clazel_pkcs1::spec::digest_info_prefix(pkcs1_hash(clazel_x509::signature_algorithm::spec::RsaPkcs1v15Hash::Sha384))[14] == 0x03u8"
+      }
+    },
+    {
+      "id": "link-pkcs1-hash-sha512",
+      "file": "src/chain/spec.rs",
+      "find": "RsaPkcs1v15Hash::Sha512 => clazel_pkcs1::spec::HashId::Sha512",
+      "replace": "RsaPkcs1v15Hash::Sha512 => clazel_pkcs1::spec::HashId::Sha256",
+      "expect": "killed",
+      "reason": "sha512WithRSAEncryption puts id-sha512 in DigestInfo; with SHA-256's prefix no real signature verifies.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_pkcs1_hash_examples()",
+        "witness": "clazel_pkcs1::spec::digest_info_prefix(pkcs1_hash(clazel_x509::signature_algorithm::spec::RsaPkcs1v15Hash::Sha512))[14] == 0x01u8"
+      }
+    },
+    {
+      "id": "link-rsa-under-other-key",
+      "file": "src/chain/spec.rs",
+      "find": "rsa_pkcs1_link(key, hash, tbs_der, signature),\n                _ => false,",
+      "replace": "rsa_pkcs1_link(key, hash, tbs_der, signature),\n                _ => true,",
+      "expect": "killed",
+      "reason": "An RSA signature algorithm under a key that is not rsaEncryption must verify nothing (the key algorithm must be the signature's).",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p256(), crate::chain::examples::ex_sha256_rsa(), seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-unsupported-accepted",
+      "file": "src/chain/spec.rs",
+      "find": "Unsupported) => false",
+      "replace": "Unsupported) => true",
+      "expect": "killed",
+      "reason": "RSASSA-PSS, Ed25519, SHA-1 and the rest are refused (header); accepting them would let any signature pass.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p256(), crate::chain::examples::ex_alg(seq![1nat, 3nat, 101nat, 112nat]), seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-malformed-accepted",
+      "file": "src/chain/spec.rs",
+      "find": "parameters.\n        None => false",
+      "replace": "parameters.\n        None => true",
+      "expect": "killed",
+      "reason": "A known OID with disallowed parameters (ECDSA with NULL, RFC 5758 §3.2) is malformed and verifies nothing.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p256(), clazel_x509::certificate::spec::AlgorithmIdentifier { oid: seq![1nat, 2nat, 840nat, 10045nat, 4nat, 3nat, 2nat], parameters_der: Some(seq![0x05u8, 0x00u8]) }, seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-p384-accepted",
+      "file": "src/chain/spec.rs",
+      "find": "ecdsa_p256_sha384_verify(message, r, s, point),\n        _ => false,",
+      "replace": "ecdsa_p256_sha384_verify(message, r, s, point),\n        _ => true,",
+      "expect": "killed",
+      "reason": "A P-384 issuer key is refused until P17; accepting a key that is not P-256 under ecdsa-with-SHA384 would pass every such link unverified.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_link_refusals()",
+        "witness": "link_with_key(crate::chain::examples::ex_p384(), crate::chain::examples::ex_ecdsa_sha384(), seq![], seq![])"
+      }
+    },
+    {
+      "id": "link-rsa-digest-sha384",
+      "file": "src/chain/spec.rs",
+      "find": "RsaPkcs1v15Hash::Sha384 => crate::spec::sha384(message)",
+      "replace": "RsaPkcs1v15Hash::Sha384 => crate::spec::sha256(message)",
+      "expect": "killed-incidentally",
+      "reason": "Digests sha384WithRSAEncryption with SHA-256. The exec proof (which calls axioms::sha384) breaks; the digests are uninterpreted, so no compute_only certificate exists."
+    },
+    {
+      "id": "link-ecdsa-sha384-dispatch",
+      "file": "src/chain/spec.rs",
+      "find": "            ecdsa_p256_sha384(spki, tbs_der, signature),",
+      "replace": "            crate::signature::spec::ecdsa_p256_sha256(spki, tbs_der, signature),",
+      "expect": "killed-incidentally",
+      "reason": "Verifies ecdsa-with-SHA384 with SHA-256. The exec proof breaks, and so does chain::lemmas (checked alone: the link lemma exceeds its rlimit), but the verifications are uninterpreted, so no compute_only certificate exists."
+    },
+    {
+      "id": "link-exponent-from-modulus",
+      "file": "src/chain/spec.rs",
+      "find": "let e = clazel_pkcs1::spec::os2ip(key.public_exponent_octets);",
+      "replace": "let e = clazel_pkcs1::spec::os2ip(key.modulus_octets);",
+      "expect": "killed-incidentally",
+      "reason": "Reads the exponent from the modulus. The exec proof breaks, and so does chain::lemmas (checked alone: an assertion fails); evaluating RSASSA-PKCS1 on a 2048-bit key by compute_only is out of reach here."
     }
   ]
 }
