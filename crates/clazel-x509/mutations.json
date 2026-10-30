@@ -1239,6 +1239,2298 @@
         "lemma": "super::certificates::lemma_parse_p256_spki()",
         "witness": "parse_subject_public_key_info(super::certificates::ex_p256_spki()).unwrap().public_key == PublicKey::Unsupported"
       }
+    },
+    {
+      "id": "pc-empty-sequence-refused",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "after_inhibit == end && (require is Some || inhibit is Some)",
+      "replace": "after_inhibit == end",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.11: an empty PolicyConstraints must not be issued; this decoder refuses it.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_empty_policy_constraints_is_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-negative-refused",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "integer_contents_ok(contents) && contents[0] < 128",
+      "replace": "integer_contents_ok(contents)",
+      "expect": "killed",
+      "reason": "SkipCerts is INTEGER (0..MAX): a negative value (bit 8 set) must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_negative_skip_certs_is_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x80, 0x01, 0x80]) is Some"
+      }
+    },
+    {
+      "id": "pc-minimal-integer",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "clazel_der::spec::integer_contents_ok(contents) && contents[0] < 128",
+      "replace": "contents.len() >= 1 && contents[0] < 128",
+      "expect": "killed",
+      "reason": "X.690 §8.3.2: INTEGER contents must be minimal; a redundant leading 0x00 must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_integer_contents_are_minimal()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x04, 0x80, 0x02, 0x00, 0x05]) is Some"
+      }
+    },
+    {
+      "id": "pc-sign-pad-dropped",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "if contents.len() >= 2 && contents[0] == 0 {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "A leading 0x00 that only keeps the value non-negative is not part of the magnitude.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_integer_contents_are_minimal()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x04, 0x80, 0x02, 0x00, 0x80]).unwrap().require_explicit_policy.unwrap().len() == 2"
+      }
+    },
+    {
+      "id": "pc-bound-widened",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "pub open spec fn max_skip_certs_octets() -> nat { 4 }",
+      "replace": "pub open spec fn max_skip_certs_octets() -> nat { 5 }",
+      "expect": "killed",
+      "reason": "The accepted SkipCerts stops below 2^32 (four magnitude octets); five octets must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_skip_certs_below_2_pow_32()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x07, 0x80, 0x05, 0x01, 0x00, 0x00, 0x00, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-bound-narrowed",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "pub open spec fn max_skip_certs_octets() -> nat { 4 }",
+      "replace": "pub open spec fn max_skip_certs_octets() -> nat { 3 }",
+      "expect": "killed",
+      "reason": "2^32 - 1 has four magnitude octets and must be accepted.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_skip_certs_below_2_pow_32()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x07, 0x80, 0x05, 0x00, 0xFF, 0xFF, 0xFF, 0xFF]) is None"
+      }
+    },
+    {
+      "id": "pc-primitive-form",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "if !constructed && clazel_der::spec::integer_contents_ok",
+      "replace": "if clazel_der::spec::integer_contents_ok",
+      "expect": "killed",
+      "reason": "X.690 §8.14.4: an implicit INTEGER keeps the primitive form; a constructed [0] must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_wrong_tags_are_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x05, 0xA0, 0x03, 0x02, 0x01, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-require-tag",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "parse_skip_certs(input, pos, end, 0)",
+      "replace": "parse_skip_certs(input, pos, end, 1)",
+      "expect": "killed",
+      "reason": "requireExplicitPolicy is [0], not [1].",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_both_fields_are_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x06, 0x80, 0x01, 0x02, 0x81, 0x01, 0x03]) is None"
+      }
+    },
+    {
+      "id": "pc-inhibit-tag",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "parse_skip_certs(input, after_require, end, 1)",
+      "replace": "parse_skip_certs(input, after_require, end, 0)",
+      "expect": "killed",
+      "reason": "inhibitPolicyMapping is [1], not [0].",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_each_field_alone_is_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x81, 0x01, 0x05]) is None"
+      }
+    },
+    {
+      "id": "pc-trailing-inside-sequence",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "after_inhibit == end &&",
+      "replace": "after_inhibit <= end &&",
+      "expect": "killed",
+      "reason": "Bytes after the fields inside the SEQUENCE must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_trailing_bytes_are_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x05, 0x80, 0x01, 0x00, 0x05, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-fields-in-order",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "after_inhibit == end &&",
+      "replace": "after_inhibit <= end &&",
+      "expect": "killed",
+      "reason": "[1] before [0] violates the ASN.1 order and must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_fields_are_ordered_and_unique()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x06, 0x81, 0x01, 0x03, 0x80, 0x01, 0x02]) is Some"
+      }
+    },
+    {
+      "id": "pc-outer-exact",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "outer.cend == end && end == input.len()",
+      "replace": "outer.cend == end",
+      "expect": "killed",
+      "reason": "A second value after the outer SEQUENCE must be refused.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_trailing_bytes_are_refused()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x80, 0x01, 0x00, 0x05, 0x00]) is Some"
+      }
+    },
+    {
+      "id": "pc-fields-swapped",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "require_explicit_policy: match require { Some((value, _)) => Some(value), None => None },",
+      "replace": "require_explicit_policy: match inhibit { Some((value, _)) => Some(value), None => None },",
+      "expect": "killed",
+      "reason": "requireExplicitPolicy must hold the [0] value, not the [1] one.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_both_fields_are_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x06, 0x80, 0x01, 0x02, 0x81, 0x01, 0x03]).unwrap().require_explicit_policy.unwrap()[0] == 0x03u8"
+      }
+    },
+    {
+      "id": "pc-absent-require-position",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "Some((_, next)) => next, None => pos }",
+      "replace": "Some((_, next)) => next, None => end }",
+      "expect": "killed",
+      "reason": "When [0] is absent [1] is read where [0] would have been.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_each_field_alone_is_decoded()",
+        "witness": "parse_policy_constraints(seq![0x30u8, 0x03, 0x81, 0x01, 0x05]) is None"
+      }
+    },
+    {
+      "id": "pc-oid-arc-0",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![3nat, 5, 29, 36]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 0 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![3nat, 5nat, 29nat, 36nat]"
+      }
+    },
+    {
+      "id": "pc-oid-arc-1",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![2nat, 6, 29, 36]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 1 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![2nat, 6nat, 29nat, 36nat]"
+      }
+    },
+    {
+      "id": "pc-oid-arc-2",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![2nat, 5, 30, 36]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 2 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![2nat, 5nat, 30nat, 36nat]"
+      }
+    },
+    {
+      "id": "pc-oid-arc-3",
+      "file": "src/policy_constraints/spec.rs",
+      "find": "seq![2nat, 5, 29, 36]",
+      "replace": "seq![2nat, 5, 29, 37]",
+      "expect": "killed",
+      "reason": "id-ce-policyConstraints is 2.5.29.36 (RFC 5280 §4.2.1.11); arc 3 changed.",
+      "certificate": {
+        "file": "src/policy_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_policy_constraints_oid()",
+        "witness": "policy_constraints_oid() =~= seq![2nat, 5nat, 29nat, 37nat]"
+      }
+    },
+    {
+      "id": "nc-dns-label-boundary",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "name[name.len() - base.len() - 1] == b'.'",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 adds whole labels: without the dot, not-example.com would be within example.com.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dns_mismatch_label_boundary()",
+        "witness": "dns_within(super::examples::not_example_com(), super::examples::example_com())"
+      }
+    },
+    {
+      "id": "nc-dns-zero-labels-added",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::spec::folded_equal_from(name, base, 0)",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 \"zero or more labels\": a name equal to the base is within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dns_match()",
+        "witness": "!dns_within(super::examples::example_com(), super::examples::example_com())"
+      }
+    },
+    {
+      "id": "nc-dns-case-insensitive",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::spec::folded_equal_from(name.subrange(name.len() - base.len(), name.len() as int), base, 0)",
+      "replace": "name.subrange(name.len() - base.len(), name.len() as int) =~= base",
+      "expect": "killed",
+      "reason": "RFC 9549 §2.3 compares labels case-insensitively: WWW.Example.COM is within example.com.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dns_case_insensitive_example()",
+        "witness": "!dns_within(super::examples::www_example_com_mixed_case(), super::examples::example_com())"
+      }
+    },
+    {
+      "id": "nc-dns-empty-base-holds-all",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    if base.len() == 0 {\n        true\n",
+      "replace": "    if base.len() == 0 {\n        false\n",
+      "expect": "killed",
+      "reason": "An empty dNSName base (BR §7.1.2.5.2 zero-length dNSName) holds every DNS name; excluding it excludes all.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_br_zero_length_dns_excludes_all()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::dns_subtree(seq![])]))], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-wildcard-within-every-expansion",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "pub open spec fn dns_wildcard_within(suffix: Seq<u8>, base: Seq<u8>) -> bool {\n    dns_within(suffix, base)",
+      "replace": "pub open spec fn dns_wildcard_within(suffix: Seq<u8>, base: Seq<u8>) -> bool {\n    dns_wildcard_meets(suffix, base)",
+      "expect": "killed",
+      "reason": "A permitted subtree must hold every name *.example.com stands for, not just one (cve-2025-61727-nc-permits-variant).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_cve_2025_61727_wildcard_wider_than_permitted()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com())]), None)], seq![super::examples::dns_entry(super::examples::wildcard_example_com())])"
+      }
+    },
+    {
+      "id": "nc-wildcard-meets-one-label-base",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "dot < base.len() && crate::spec::folded_equal_from(base.subrange(dot + 1, base.len() as int), suffix, 0)",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "An excluded bar.example.com must catch *.example.com, which stands for it (CVE-2025-61727).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_cve_2025_61727_wildcard_meets_excluded()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]))], seq![super::examples::dns_entry(super::examples::wildcard_example_com())])"
+      }
+    },
+    {
+      "id": "nc-ip-mask-applied",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "address[i] & mask[i] == base[i] & mask[i]",
+      "replace": "address[i] == base[i]",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 CIDR range: 127.0.0.1 is in 127.0.0.0/24 (BetterTLS tc340).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc340_inside_permitted_ip()",
+        "witness": "!certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::loopback_24()]), None)], seq![super::examples::dns_entry(super::examples::test_localhost()), super::examples::ip_entry(seq![127u8, 0, 0, 1])])"
+      }
+    },
+    {
+      "id": "nc-ip-lengths-equal",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    address.len() == base.len() && base.len() == mask.len()\n        && ip_masked_equal_from",
+      "replace": "    ip_masked_equal_from",
+      "expect": "killed",
+      "reason": "An IPv4 address is never within an IPv6 range: the lengths must agree.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_ipv4_not_within_ipv6_range()",
+        "witness": "ip_within(seq![127u8, 0, 0, 1], super::examples::sixteen(0), super::examples::sixteen(0))"
+      }
+    },
+    {
+      "id": "nc-ip-mask-contiguous",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&& mask_contiguous_from(mask, 0)",
+      "replace": "",
+      "expect": "killed",
+      "reason": "Modelling choice: a non-contiguous mask is not a CIDR range (RFC 4632) and is refused.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_noncontiguous_mask_example()",
+        "witness": "constraints_supported(super::examples::constraints(None, Some(seq![super::examples::ip_subtree(seq![10u8, 0, 10, 0], seq![255u8, 0, 255, 0])])))"
+      }
+    },
+    {
+      "id": "nc-permitted-other-type-unchanged",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "!has_base_of_type(items, name) || within_some(items, name)",
+      "replace": "within_some(items, name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g)(1): a permittedSubtrees without a dNSName base leaves DNS names unconstrained (BetterTLS tc259).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc259_permitted_ip_leaves_dns_alone()",
+        "witness": "!certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::loopback_24()]), None)], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-permitted-applies",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(items) => !has_base_of_type(items, name) || within_some(items, name),",
+      "replace": "Some(items) => true,",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (b): a name outside every permitted dNSName subtree fails (BetterTLS tc304).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc304_outside_permitted_dns()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-excluded-applies",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(items) => meets_some(items, name),",
+      "replace": "Some(items) => false,",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (c): a name within an excluded subtree fails (BetterTLS tc253).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc253_excluded_dns()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::localhost())]))], seq![super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-permitted-intersects-all-sets",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "(permitted_by(state.last(), name) && within_permitted_subtrees(state.drop_last(), name))",
+      "replace": "permitted_by(state.last(), name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g)(1) intersects: a later certificate cannot widen what an earlier one permitted.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permits_cannot_widen()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-excluded-unions-all-sets",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "(excluded_by(state.last(), name) || within_excluded_subtrees(state.drop_last(), name))",
+      "replace": "excluded_by(state.last(), name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g)(2) unions: an earlier exclusion stays in force after later constraints.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_excluded_subtrees_accumulate()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::bad_example_com())])))), super::examples::certificate(seq![], Some(super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::localhost())])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::bad_example_com())], None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-q12-unmatched-name-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& state.len() == 0 || names_well_formed(names)",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "Q12 as revised, (R) malformed entries: under any constraint, a malformed dNSName entry (http://test.localhost, BetterTLS tc8785) is refused. Repointed from the withdrawn 'every entry of a matched form' rule.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bettertls_tc8785_malformed_dns_entry()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::dns_entry(super::examples::http_test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-q12-unsupported-base-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(items) => !has_directory_name_base(items),",
+      "replace": "Some(items) => true,",
+      "expect": "killed",
+      "reason": "Q12 as revised, (R) excluded directoryName: a directoryName base in excludedSubtrees makes the NameConstraints unsupported (rfc5280::nc::excluded-dn-match). Repointed from the withdrawn 'any non-dNSName/iPAddress base is unsupported' rule.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_q12_unsupported_base_refuses_path()",
+        "witness": "constraints_supported(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()])))"
+      }
+    },
+    {
+      "id": "nc-q12-unsupported-refuses-path",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "if constraints_supported(value) { Some(state.push(value)) } else { None }",
+      "replace": "Some(state.push(value))",
+      "expect": "killed",
+      "reason": "Q12 as revised: §6.1.4 (g) refuses the path at a NameConstraints it cannot apply (here an excluded directoryName) instead of ignoring the base.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_q12_unsupported_base_refuses_path()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()])))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-one-field-present",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& (value.permitted_subtrees is Some || value.excluded_subtrees is Some)",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: either permittedSubtrees or excludedSubtrees MUST be present.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_webpki_both_fields_absent_refused()",
+        "witness": "constraints_supported(super::examples::constraints(None, None))"
+      }
+    },
+    {
+      "id": "nc-dns-base-syntax",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::name_constraints::spec::GeneralNameConstraint::DnsName(b) => b.len() == 0 || crate::spec::dns_name_shape(b),",
+      "replace": "crate::name_constraints::spec::GeneralNameConstraint::DnsName(b) => true,",
+      "expect": "killed",
+      "reason": "Erratum 5997: a dNSName base uses preferred name syntax, so .example.com is refused (rfc5280::nc::invalid-dnsname-leading-period).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_malformed_dns_bases_refused()",
+        "witness": "constraints_supported(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::dot_example_com())]), None))"
+      }
+    },
+    {
+      "id": "nc-malformed-dns-entry-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "if crate::spec::dns_name_shape(name) {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "A dNSName entry that is not a DNS name (.example.com) must not be matched as one (rfc5280::nc::nc-permits-invalid-dns-san).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_nc_permits_invalid_dns_san()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], seq![super::examples::dns_entry(super::examples::dot_example_com()), super::examples::dns_entry(super::examples::foo_example_com())])"
+      }
+    },
+    {
+      "id": "nc-excluded-every-entry",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& names_not_excluded(state, names.drop_last())",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (c) checks each alternative name, wherever it stands.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_every_entry_checked_in_any_position()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::dns_subtree(super::examples::bad_example_com())]))], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::dns_entry(super::examples::example_com())])"
+      }
+    },
+    {
+      "id": "nc-permitted-every-entry",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& names_within_permitted(state, names.drop_last())",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.3 (b) checks each alternative name, wherever it stands.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_every_entry_checked_in_any_position()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::localhost())]), None)], seq![super::examples::dns_entry(super::examples::bad_example_com()), super::examples::dns_entry(super::examples::test_localhost())])"
+      }
+    },
+    {
+      "id": "nc-g-adds-not-replaces",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(state.push(value))",
+      "replace": "Some(seq![value])",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 (g) intersects and unions with the previous state; replacing it would let a later certificate widen.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permits_cannot_widen()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![], Some(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::foo_example_com()), super::examples::dns_subtree(super::examples::bar_example_com())]), None))), super::examples::certificate(seq![super::examples::dns_entry(super::examples::foo_example_com())], None)], initial_state())"
+      }
+    },
+    {
+      "id": "nc-final-extension-not-processed",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& last || match prepare_name_constraints(state, certificate.name_constraints) {",
+      "replace": "&&& match prepare_name_constraints(state, certificate.name_constraints) {",
+      "expect": "killed",
+      "reason": "RFC 5280 §6.1.4 prepares for certificate i+1 and is not applied to the final certificate.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_final_certificate_constraints_not_processed()",
+        "witness": "!names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], Some(super::examples::constraints(None, Some(seq![super::examples::directory_name_subtree()]))))], initial_state())"
+      }
+    },
+    {
+      "id": "nc-dn-prefix",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "base.len() <= name.len() && rdns_match(base, name.subrange(0, base.len() as int))",
+      "replace": "rdns_match(base, name)",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10 subtrees and Firefox's prefix rule: O=Example holds O=Example, CN=foo.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_prefix_rule()",
+        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag()) + super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_o(super::examples::example_org(), super::examples::utf8_tag())))]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-subject-checked",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "        && subject_acceptable(state, certificate.subject)",
+      "replace": "",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: directoryName restrictions MUST be applied to the subject field (rfc5280::nc::permitted-dn-match-subject-san-mismatch).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dn_subject_checked()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![super::examples::dn_entry(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::utf8_tag())))], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-tag-relaxation",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "a == b || (is_utf8_or_printable(a) && is_utf8_or_printable(b))",
+      "replace": "a == b",
+      "expect": "killed",
+      "reason": "Firefox relaxes UTF8String/PrintableString tags in permitted directoryName attributes, both directions; Chrome normalizes both.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_utf8_printable_relaxation()",
+        "witness": "!names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::foo(), super::examples::printable_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-attribute-type",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& base.oid =~= name.oid",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §7.1 / both browsers: attributes match only with equal types; O=foo is not within CN=foo.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_attribute_type_matters()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_o(super::examples::foo(), super::examples::utf8_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-attribute-value",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& value_contents(base.value_der) =~= value_contents(name.value_der)",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "RFC 5280 §7.1 / both browsers: attribute values must match; CN=not-foo is not within CN=foo (rfc5280::nc::permitted-dn-mismatch).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_permitted_dn_mismatch()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(super::examples::not_foo(), super::examples::utf8_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::directory_name_subtree()]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-no-bmp-universal",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "attribute.value_tag != string_tag(28) && attribute.value_tag != string_tag(30)",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "(R): BMPString and UniversalString values, which Chrome must convert and may fail to, never match.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_values_chrome_cannot_compare()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![0u8, b'f'], super::examples::bmp_tag())))]), None)])"
+      }
+    },
+    {
+      "id": "nc-dn-printable-charset",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "printable_from(contents, 0)",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "Chrome's ENFORCE_PRINTABLE_STRING refuses a PrintableString with '*', so such a value never matches.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_dn_values_chrome_cannot_compare()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())), seq![], None)], seq![super::examples::constraints(Some(seq![super::examples::dn_subtree(super::examples::name_of(super::examples::rdn_cn(seq![b'*'], super::examples::printable_tag())))]), None)])"
+      }
+    },
+    {
+      "id": "nc-email-permitted-local-exact",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "local =~= mailbox_local(base)",
+      "replace": "crate::spec::folded_equal_from(local, mailbox_local(base), 0)",
+      "expect": "killed",
+      "reason": "Chrome compares a permitted mailbox's local part case-sensitively; the stricter rule (R against Firefox) keeps it byte-exact.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_email_local_part_case()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::at_example_com(super::examples::foo_upper()))]), None)], seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-excluded-local-folded",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::spec::folded_equal_from(local, mailbox_local(base), 0)",
+      "replace": "local =~= mailbox_local(base)",
+      "expect": "killed",
+      "reason": "Firefox compares an excluded mailbox ignoring ASCII case; an excluded Foo@example.com must catch foo@example.com.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_email_local_part_case()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(None, Some(seq![super::examples::email_subtree(super::examples::at_example_com(super::examples::foo_upper()))]))], seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-domain-not-apex",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "host.len() > base.len()\n            && crate::spec::folded_equal_from(host.subrange(host.len() - base.len(), host.len() as int), base, 0)",
+      "replace": "dns_within(host, base.subrange(1, base.len() as int))",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: .example.com covers the domain's hosts but not the host example.com (nc-permits-email-subdomains-rejects-apex).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_email_domain()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::dot_example_com())]), None)], seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-host-exact",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "        crate::spec::folded_equal_from(host, base, 0)\n",
+      "replace": "        dns_within(host, base)\n",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.10: a host base holds mailboxes at exactly that host (nc-permits-email-domain-rejects-subdomain).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_email_host()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)], seq![super::examples::email_entry(super::examples::foo_at_sub_example_com())])"
+      }
+    },
+    {
+      "id": "nc-email-base-shape",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::name_constraints::spec::GeneralNameConstraint::Rfc822Name(b) => rfc822_base_shape(b),",
+      "replace": "crate::name_constraints::spec::GeneralNameConstraint::Rfc822Name(b) => true,",
+      "expect": "killed",
+      "reason": "(R) malformed bases: invalid@invalid@example.com is no mailbox, host or domain (rfc5280::nc::invalid-email-address).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_invalid_email_base_refused()",
+        "witness": "constraints_supported(super::examples::constraints(Some(seq![super::examples::email_subtree(seq![b'i', b'@'] + super::examples::at_example_com(seq![b'i']))]), None))"
+      }
+    },
+    {
+      "id": "nc-email-entry-mailbox",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "Some(mailbox) => if is_mailbox(mailbox) {",
+      "replace": "Some(mailbox) => if true {",
+      "expect": "killed",
+      "reason": "(R) malformed entries: .foo@example.com is no mailbox and must not be matched as one.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_email_malformed_local_refused()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)], seq![super::examples::email_entry(super::examples::at_example_com(seq![b'.'] + super::examples::foo()))])"
+      }
+    },
+    {
+      "id": "nc-email-subject-address",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "&&& !(rfc822_in_force(state) && rdns_have_email(parsed.rdns))",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "(R) emailAddress: a subject emailAddress attribute fails a certificate while an rfc822Name constraint is in force.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_subject_email_address_refused()",
+        "witness": "names_constrained(seq![super::examples::certificate_with_subject(super::examples::name_of(super::examples::rdn_email(super::examples::at_example_com(super::examples::foo()))), seq![super::examples::email_entry(super::examples::at_example_com(super::examples::foo()))], None)], seq![super::examples::constraints(Some(seq![super::examples::email_subtree(super::examples::example_com())]), None)])"
+      }
+    },
+    {
+      "id": "nc-other-form-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "!is_uninterpreted_form(tag) || !form_constrained(state, tag),",
+      "replace": "true,",
+      "expect": "killed",
+      "reason": "Firefox's rule: an otherName entry under an otherName constraint fails (rfc5280::nc::nc-forbids-othername).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_othername()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::other_name_subtree()]))], seq![super::examples::dns_entry(super::examples::example_com()), super::examples::other_name_entry()])"
+      }
+    },
+    {
+      "id": "nc-other-form-excluded-counts",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    ||| match value.excluded_subtrees {\n        Some(items) => has_base_of_form(items, tag),",
+      "replace": "    ||| match value.excluded_subtrees {\n        Some(items) => false,",
+      "expect": "killed",
+      "reason": "An excluded otherName constrains the otherName form (rfc5280::nc::nc-forbids-othername).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_othername()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::other_name_subtree()]))], seq![super::examples::dns_entry(super::examples::example_com()), super::examples::other_name_entry()])"
+      }
+    },
+    {
+      "id": "nc-other-form-permitted-counts",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "    ||| match value.permitted_subtrees {\n        Some(items) => has_base_of_form(items, tag),",
+      "replace": "    ||| match value.permitted_subtrees {\n        Some(items) => false,",
+      "expect": "killed",
+      "reason": "A permitted URI constrains the URI form, and URI subtrees have no meaning here (nc-permits-uri-host-rejects-subdomain).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_uri_constrained()",
+        "witness": "certificate_names_acceptable(seq![super::examples::constraints(Some(seq![super::examples::uri_subtree()]), None)], seq![super::examples::dns_entry(super::examples::example_com()), super::examples::uri_entry()])"
+      }
+    },
+    {
+      "id": "nc-other-form-constraint-not-refused",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => true,",
+      "replace": "crate::name_constraints::spec::GeneralNameConstraint::Unsupported { .. } => false,",
+      "expect": "killed",
+      "reason": "Q12 as revised: a constraint of another form no longer refuses the path by itself (rfc5280::nc::nc-forbids-othername-noop passes).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_othername()",
+        "witness": "!constraints_supported(super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), Some(seq![super::examples::other_name_subtree()])))"
+      }
+    },
+    {
+      "id": "name-constraints-zero-length-dns-base",
+      "file": "src/name_constraints/spec.rs",
+      "module": "name_constraints::certificates",
+      "find": "                if crate::extensions::spec::ia5_bytes(value, 0) {\n                    Some((GeneralNameConstraint::DnsName(value), tlv.cend))",
+      "replace": "                if value.len() > 0 && crate::extensions::spec::ia5_bytes(value, 0) {\n                    Some((GeneralNameConstraint::DnsName(value), tlv.cend))",
+      "expect": "killed",
+      "reason": "CA/B BR §7.1.2.5.2's zero-length dNSName (exclude every DNS name) is a valid base; both browsers accept it.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_zero_length_dns_base_is_accepted()",
+        "witness": "parse_name_constraints(seq![0x30u8, 0x06, 0xa1, 0x04, 0x30, 0x02, 0x82, 0x00]) is None"
+      }
+    },
+    {
+      "id": "name-constraints-rfc822-base-decoded",
+      "file": "src/name_constraints/spec.rs",
+      "module": "name_constraints::certificates",
+      "find": "Some((GeneralNameConstraint::Rfc822Name(value), tlv.cend))",
+      "replace": "Some((GeneralNameConstraint::Unsupported { tag: 1, der: value }, tlv.cend))",
+      "expect": "killed",
+      "reason": "rfc822Name bases are decoded for matching, not kept uninterpreted.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_rfc822_base_is_decoded()",
+        "witness": "match parse_name_constraints(seq![0x30u8, 0x07, 0xa0, 0x05, 0x30, 0x03, 0x81, 0x01, b'a']) { Some(value) => match value.permitted_subtrees { Some(items) => items.len() == 1 && !(items[0].base is Rfc822Name), None => false }, None => false }"
+      }
+    },
+    {
+      "id": "name-constraints-directory-name-contents",
+      "file": "src/name_constraints/spec.rs",
+      "module": "name_constraints::certificates",
+      "find": "Some((GeneralNameConstraint::DirectoryName(value), tlv.cend))",
+      "replace": "Some((GeneralNameConstraint::DirectoryName(input.subrange(pos as int, tlv.cend as int)), tlv.cend))",
+      "expect": "killed",
+      "reason": "directoryName is [4] EXPLICIT Name: the base is the Name TLV inside the tag, not the [4] TLV.",
+      "certificate": {
+        "file": "src/name_constraints/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_directory_name_base_keeps_name_tlv()",
+        "witness": "match parse_name_constraints(seq![0x30u8, 0x08, 0xa0, 0x06, 0x30, 0x04, 0xa4, 0x02, 0x30, 0x00]) { Some(value) => match value.permitted_subtrees { Some(items) => items.len() == 1 && match items[0].base { GeneralNameConstraint::DirectoryName(name) => name.len() == 4, _ => false }, None => false }, None => false }"
+      }
+    },
+    {
+      "id": "nc-self-issued-intermediates-checked",
+      "file": "src/name_constraints/matching/spec.rs",
+      "module": "name_constraints::matching::examples",
+      "find": "        &&& certificate_acceptable(state, certificate)\n",
+      "replace": "        &&& !last || certificate_acceptable(state, certificate)\n",
+      "expect": "killed",
+      "reason": "(R), Firefox's CheckNameConstraints: every certificate below a constrained one is checked; skipping intermediates (the RFC 5280 §6.1.3 (b), (c) self-issued exemption or wider) accepts rfc5280::nc::permitted-self-issued.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_rfc5280_self_issued_intermediate_checked()",
+        "witness": "names_constrained(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)])"
+      }
+    },
+    {
+      "id": "path-skip-certs-is-big-endian",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    clazel_der::spec::be_value(octets)\n}",
+      "replace": "    octets.len()\n}",
+      "expect": "killed",
+      "reason": "A SkipCerts or pathLenConstraint is the number its octets spell, big-endian (design §1.7); the mutant reads the octet count, so 01 00 would be 2, not 256.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_skip_certs_is_big_endian()",
+        "witness": "skip_certs_value(seq![0x01u8, 0x00u8]) == 2nat"
+      }
+    },
+    {
+      "id": "path-require-explicit-policy-is-the-first-field",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "match value.require_explicit_policy {",
+      "replace": "match value.inhibit_policy_mapping {",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.2.1.11 and §6.1.4 (i): requireExplicitPolicy is the [0] field; the mutant reads inhibitPolicyMapping.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_require_explicit_policy_is_the_first_field()",
+        "witness": "require_explicit_policy_of(Some(super::examples::policy_constraints_2_9())) == Some(9nat)"
+      }
+    },
+    {
+      "id": "path-policy-mappings-oid",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "seq![2nat, 5, 29, 33]",
+      "replace": "seq![2nat, 5, 29, 34]",
+      "expect": "killed",
+      "reason": "policyMappings is id-ce 33 (RFC 5280 §4.2.1.5); with another OID a certificate that carries it would not be flagged, and §6.1.4 (a) (design Q8) would not refuse it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_policy_mappings_is_found()",
+        "witness": "!has_extension(seq![super::examples::extension(seq![2nat, 5, 29, 33], false)], policy_mappings_oid())"
+      }
+    },
+    {
+      "id": "path-inhibit-any-policy-oid",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "seq![2nat, 5, 29, 54]",
+      "replace": "seq![2nat, 5, 29, 55]",
+      "expect": "killed",
+      "reason": "inhibitAnyPolicy is id-ce 54 (RFC 5280 §4.2.1.14); the mutant would not see it on an anchor.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_inhibit_any_policy_refuses()",
+        "witness": "anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 54], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-refuses-policy-constraints",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "    !has_extension(extensions, inhibit_any_policy_oid())",
+      "expect": "killed",
+      "reason": "(R), RFC 5937 §3.2 bullets 6 and 7: an anchor with policyConstraints would set initial-explicit-policy or initial-policy-mapping-inhibit, which the unmodelled policy tree cannot honour, so it is refused.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_policy_constraints_refuses()",
+        "witness": "anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 36], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-refuses-inhibit-any-policy",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "    !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "expect": "killed",
+      "reason": "(R), RFC 5937 §3.2 bullet 5: an anchor with inhibitAnyPolicy is refused for the same reason.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_inhibit_any_policy_refuses()",
+        "witness": "anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 54], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-allows-certificate-policies",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "    !has_extension(extensions, seq![2nat, 5, 29, 32]) && !has_extension(extensions, inhibit_any_policy_oid())\n        && !has_extension(extensions, crate::policy_constraints::spec::policy_constraints_oid())",
+      "expect": "killed",
+      "reason": "(I), RFC 5937 §3.2 bullet 4: certificatePolicies on an anchor is ignored, as the browsers do; four Mozilla roots carry it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_certificate_policies_is_allowed()",
+        "witness": "!anchor_policy_inputs_absent(seq![super::examples::extension(seq![2nat, 5, 29, 32], false)])"
+      }
+    },
+    {
+      "id": "path-anchor-role-needs-ca",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    basic.ca && match key_usage {",
+      "replace": "    true && match key_usage {",
+      "expect": "killed",
+      "reason": "(R), design §1.4: the anchor needs cA TRUE; the mutant accepts a non-CA.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_role_needs_ca()",
+        "witness": "anchor_role_allowed(super::examples::basic(false, None), Some(super::examples::key_cert_sign_only()))"
+      }
+    },
+    {
+      "id": "path-anchor-role-needs-key-cert-sign",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "usage, crate::constraints::spec::KeyUsageBit::KeyCertSign),",
+      "replace": "usage, crate::constraints::spec::KeyUsageBit::DigitalSignature),",
+      "expect": "killed",
+      "reason": "(R), design §1.4: with keyUsage present the anchor needs keyCertSign; the mutant asks for digitalSignature.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_role_needs_key_cert_sign()",
+        "witness": "anchor_role_allowed(super::examples::basic(true, None), Some(super::examples::digital_signature_only()))"
+      }
+    },
+    {
+      "id": "path-anchor-role-allows-absent-key-usage",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "        None => true,\n    }\n}\n\n/// **(R)** Anchor EKU",
+      "replace": "        None => false,\n    }\n}\n\n/// **(R)** Anchor EKU",
+      "expect": "killed",
+      "reason": "Design §1.4: keyUsage is checked only if present; one Mozilla root has none.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_role_allows_absent_key_usage()",
+        "witness": "!anchor_role_allowed(super::examples::basic(true, None), None)"
+      }
+    },
+    {
+      "id": "path-anchor-eku-refuses-any-eku",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "Some(value) => crate::constraints::spec::eku_allows_server_auth(value, false),",
+      "replace": "Some(value) => crate::constraints::spec::eku_allows_server_auth(value, true),",
+      "expect": "killed",
+      "reason": "(R), design §1.4: an anchor's EKU must contain serverAuth; anyExtendedKeyUsage alone is not accepted.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_eku_any_alone_refuses()",
+        "witness": "anchor_eku_allowed(Some(super::examples::eku_any()))"
+      }
+    },
+    {
+      "id": "path-anchor-eku-absent-is-allowed",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "        Some(value) => crate::constraints::spec::eku_allows_server_auth(value, false),\n        None => true,",
+      "replace": "        Some(value) => crate::constraints::spec::eku_allows_server_auth(value, false),\n        None => false,",
+      "expect": "killed",
+      "reason": "Design §1.4: a root with no EKU, which is all 118, is fine.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_absent_eku_is_allowed()",
+        "witness": "!anchor_eku_allowed(None)"
+      }
+    },
+    {
+      "id": "path-anchor-needs-a-subject",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "subject_der != seq![0x30u8, 0x00u8]",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 1: no subject name refuses; (R) the empty Name counts as none.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_empty_subject_refuses()",
+        "witness": "anchor_has_subject(seq![0x30u8, 0x00u8])"
+      }
+    },
+    {
+      "id": "path-anchor-critical-unknown-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "(!extension.critical",
+      "replace": "(true",
+      "expect": "killed",
+      "reason": "RFC 5937 §2: an anchor with an unrecognized critical extension is refused.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_unknown_critical_extension_refuses()",
+        "witness": "anchor_critical_supported(seq![super::examples::extension(super::examples::unknown_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-noncritical-allowed",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "(!extension.critical",
+      "replace": "(false",
+      "expect": "killed",
+      "reason": "RFC 5937 §2 concerns critical extensions only; a non-critical unknown one is allowed.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_noncritical_unknown_extension_is_allowed()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(super::examples::unknown_oid(), false)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-basic-constraints-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::basic_constraints_oid()\n            || extension.oid =~= crate::leaf::spec::key_usage_oid()\n",
+      "replace": "            || extension.oid =~= crate::leaf::spec::key_usage_oid()\n",
+      "expect": "killed",
+      "reason": "The anchor reads basicConstraints, which all 118 roots mark critical (RFC 5937 §2).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_basic_constraints()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::leaf::spec::basic_constraints_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-key-usage-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::key_usage_oid()\n            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n",
+      "replace": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n",
+      "expect": "killed",
+      "reason": "The anchor reads keyUsage, which 117 Mozilla roots mark critical.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_key_usage()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::leaf::spec::key_usage_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-ext-key-usage-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n",
+      "replace": "            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n",
+      "expect": "killed",
+      "reason": "The anchor reads extKeyUsage (design §1.4 root EKU).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_extended_key_usage()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::leaf::spec::extended_key_usage_extension_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-name-constraints-recognized",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid()\n            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n",
+      "replace": "            || extension.oid =~= crate::leaf::spec::extended_key_usage_extension_oid())\n",
+      "expect": "killed",
+      "reason": "The anchor reads nameConstraints, which RFC 5280 §4.2.1.10 says SHOULD be critical (RFC 5937 §3.2 bullets 2 and 3).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_reads_critical_name_constraints()",
+        "witness": "!anchor_critical_supported(seq![super::examples::extension(crate::name_constraints::spec::name_constraints_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-critical-subject-alt-name-unread",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid())\n            && anchor_critical_supported",
+      "replace": "            || extension.oid =~= crate::name_constraints::spec::name_constraints_oid()\n            || extension.oid =~= crate::extensions::spec::subject_alt_name_oid())\n            && anchor_critical_supported",
+      "expect": "killed",
+      "reason": "The anchor does not read subjectAltName, so a critical one is unrecognized (RFC 5937 §2).",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_critical_subject_alt_name_refuses()",
+        "witness": "anchor_critical_supported(seq![super::examples::extension(crate::extensions::spec::subject_alt_name_oid(), true)], 0)"
+      }
+    },
+    {
+      "id": "path-anchor-path-len-is-the-constraint",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "pub open spec fn anchor_path_len(basic: crate::constraints::spec::BasicConstraints) -> Option<nat> {\n    match basic.path_len_constraint {\n        Some(octets) => Some(skip_certs_value(octets)),\n        None => None,\n    }\n}",
+      "replace": "pub open spec fn anchor_path_len(basic: crate::constraints::spec::BasicConstraints) -> Option<nat> {\n    None\n}",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 8: the anchor's pathLenConstraint caps max_path_length; the mutant drops it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_path_len_is_the_constraint()",
+        "witness": "anchor_path_len(super::examples::basic(true, Some(seq![3u8]))) is None"
+      }
+    },
+    {
+      "id": "path-distrust-after-absent-is-none",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "    match text {\n        None => Some(None),",
+      "replace": "    match text {\n        None => None,",
+      "expect": "killed",
+      "reason": "A root without NSS distrust-after has none; it is not refused.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_no_distrust_after_text_is_none()",
+        "witness": "decode_distrust_after(None) is None"
+      }
+    },
+    {
+      "id": "path-distrust-after-text-must-decode",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "            Some(time) => Some(Some(time)),\n            None => None,\n        },\n    }\n}\n\n/// Design §1.4, `anchor_from_root`",
+      "replace": "            Some(time) => Some(Some(time)),\n            None => Some(None),\n        },\n    }\n}\n\n/// Design §1.4, `anchor_from_root`",
+      "expect": "killed",
+      "reason": "(R): distrust-after text that does not decode refuses the anchor instead of being dropped, which would trust a root the table distrusts.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_empty_distrust_after_text_refuses()",
+        "witness": "match decode_distrust_after(Some(seq![])) { Some(None) => true, _ => false }"
+      }
+    },
+    {
+      "id": "path-no-extensions-field-is-empty-list",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "        None => Some(seq![]),\n        Some(encoded) =>",
+      "replace": "        None => None,\n        Some(encoded) =>",
+      "expect": "killed",
+      "reason": "RFC 5280 §4.1.2.9: Extensions is optional (v1 and v2 have none); a certificate without them parses with an empty list.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_no_extensions_field_is_an_empty_list()",
+        "witness": "tbs_extensions(super::examples::tbs_without_extensions()) is None"
+      }
+    },
+    {
+      "id": "path-absent-subject-alt-name-is-not-an-error",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "crate::extensions::spec::subject_alt_name_oid(), 0) {\n        None => Some(None),",
+      "replace": "crate::extensions::spec::subject_alt_name_oid(), 0) {\n        None => None,",
+      "expect": "killed",
+      "reason": "An absent subject-alt-name extension is not an error; the certificate parses with the field unset.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_absent_subject_alt_name_is_none()",
+        "witness": "optional_subject_alt_name(seq![]) is None"
+      }
+    },
+    {
+      "id": "path-absent-name-constraints-is-not-an-error",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "crate::name_constraints::spec::name_constraints_oid(), 0) {\n        None => Some(None),",
+      "replace": "crate::name_constraints::spec::name_constraints_oid(), 0) {\n        None => None,",
+      "expect": "killed",
+      "reason": "An absent name-constraints extension is not an error; the certificate parses with the field unset.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_absent_name_constraints_is_none()",
+        "witness": "optional_name_constraints(seq![]) is None"
+      }
+    },
+    {
+      "id": "path-absent-policy-constraints-is-not-an-error",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "crate::policy_constraints::spec::policy_constraints_oid(), 0) {\n        None => Some(None),",
+      "replace": "crate::policy_constraints::spec::policy_constraints_oid(), 0) {\n        None => None,",
+      "expect": "killed",
+      "reason": "An absent policy-constraints extension is not an error; the certificate parses with the field unset.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_absent_policy_constraints_is_none()",
+        "witness": "optional_policy_constraints(seq![]) is None"
+      }
+    },
+    {
+      "id": "path-malformed-subject-alt-name-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "parse_subject_alt_name(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => None,",
+      "replace": "parse_subject_alt_name(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => Some(None),",
+      "expect": "killed",
+      "reason": "(R): a subject-alt-name extension that does not decode refuses the certificate; the mutant ignores it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_malformed_subject_alt_name_refuses()",
+        "witness": "match optional_subject_alt_name(seq![super::examples::extension_with(crate::extensions::spec::subject_alt_name_oid(), seq![0x30u8, 0x00])]) { Some(None) => true, _ => false }"
+      }
+    },
+    {
+      "id": "path-malformed-name-constraints-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "parse_name_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => None,",
+      "replace": "parse_name_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => Some(None),",
+      "expect": "killed",
+      "reason": "(R): a name-constraints extension that does not decode refuses the certificate; the mutant ignores it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_malformed_name_constraints_refuses()",
+        "witness": "match optional_name_constraints(seq![super::examples::extension_with(crate::name_constraints::spec::name_constraints_oid(), seq![0x30u8, 0x02, 0xa0, 0x00])]) { Some(None) => true, _ => false }"
+      }
+    },
+    {
+      "id": "path-malformed-policy-constraints-refuses",
+      "file": "src/path/parsed/spec.rs",
+      "module": "path::parsed::examples",
+      "find": "parse_policy_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => None,",
+      "replace": "parse_policy_constraints(extensions[index].value) {\n            Some(value) => Some(Some(value)), None => Some(None),",
+      "expect": "killed",
+      "reason": "(R): a policy-constraints extension that does not decode refuses the certificate; the mutant ignores it.",
+      "certificate": {
+        "file": "src/path/parsed/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_malformed_policy_constraints_refuses()",
+        "witness": "match optional_policy_constraints(seq![super::examples::extension_with(crate::policy_constraints::spec::policy_constraints_oid(), seq![0x30u8, 0x00])]) { Some(None) => true, _ => false }"
+      }
+    },
+    {
+      "id": "path-a1-link-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !link(signed_data(state.working_public_key, cert)) { Err(PathError::BadSignature) }",
+      "replace": "else if false { Err(PathError::BadSignature) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(1): the signature on every certificate must verify; the mutant never asks the link function.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_bad_signature()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(7))]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a1-link-under-working-key",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !link(signed_data(state.working_public_key, cert)) { Err(PathError::BadSignature) }",
+      "replace": "else if !link(signed_data(cert.tbs.subject_public_key_info_der, cert)) { Err(PathError::BadSignature) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(1): the signature is verified with working_public_key, the issuer's key, not the certificate's own.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Err::<Seq<u8>, PathError>(PathError::BadSignature)"
+      }
+    },
+    {
+      "id": "path-a1-unsupported-algorithm-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if cert.signature.class is Unsupported { Err(PathError::UnsupportedAlgorithm) }",
+      "replace": "if false { Err(PathError::UnsupportedAlgorithm) }",
+      "expect": "killed",
+      "reason": "(R) design §1.11: an unsupported signature algorithm refuses whatever the link instance says.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_unsupported_algorithm()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::unsupported_leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a2-validity-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !crate::time::spec::validity_contains(validity(cert), now) { Err(PathError::Expired) }",
+      "replace": "else if false { Err(PathError::Expired) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(2): the validity period must include the current time.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_expired()",
+        "witness": "process(super::examples::link(), super::examples::not_revoked(), super::examples::anchor(), seq![super::examples::leaf_under_root()], crate::time::spec::CertificateTime { year: 2040, month: 1, day: 1, hour: 0, minute: 0, second: 1 }) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a2-validity-is-not-before-to-not-after",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "crate::time::spec::Validity { not_before: cert.tbs.not_before, not_after: cert.tbs.not_after }",
+      "replace": "crate::time::spec::Validity { not_before: cert.tbs.not_before, not_after: cert.tbs.not_before }",
+      "expect": "killed",
+      "reason": "§4.1.2.5: the period runs from notBefore through notAfter; the mutant ends it at notBefore.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_under_anchor()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::leaf_under_root()]) == Err::<Seq<u8>, PathError>(PathError::Expired)"
+      }
+    },
+    {
+      "id": "path-a3-revocation-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if revoked(cert) { Err(PathError::Revoked) }",
+      "replace": "else if false { Err(PathError::Revoked) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(3): a revoked certificate fails.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_revoked()",
+        "witness": "process(super::examples::link(), super::examples::all_revoked(), super::examples::anchor(), seq![super::examples::leaf_under_root()], super::examples::now()) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a4-issuer-is-working-issuer-name",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if cert.tbs.issuer_der != state.working_issuer_name { Err(PathError::NameChaining) }",
+      "replace": "else if false { Err(PathError::NameChaining) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (a)(4): the issuer name must be working_issuer_name.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_name_chaining()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(1))]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-bc-names-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !crate::name_constraints::matching::spec::certificate_acceptable(state.subtrees, nc_certificate(cert)) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "§6.1.3 (b), (c): every certificate's names are checked against the subtrees in force.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(Some(super::examples::other_com()), None)), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-bc-subject-alt-names-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "subject_alt_names: match cert.san { Some(san) => san.names, None => seq![] },",
+      "replace": "subject_alt_names: seq![],",
+      "expect": "killed",
+      "reason": "§6.1.3 (b), (c): \"each of the alternative names in the subjectAltName extension\" is checked; the mutant checks only the subject.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(Some(super::examples::other_com()), None)), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-bc-self-issued-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !crate::name_constraints::matching::spec::certificate_acceptable(state.subtrees, nc_certificate(cert)) {",
+      "replace": "else if !self_issued(cert) && !crate::name_constraints::matching::spec::certificate_acceptable(state.subtrees, nc_certificate(cert)) {",
+      "expect": "killed",
+      "reason": "(R) self-issued intermediates are checked (Firefox); the mutant restores RFC 5280's skip.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_self_issued_intermediate_checked()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(None, Some(super::examples::other_com()))), seq![super::examples::int(), super::examples::int_self_with_san(), super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(2))]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-g-intermediate-constraints-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else { match crate::name_constraints::matching::spec::prepare_name_constraints(state.subtrees, cert.name_constraints) {",
+      "replace": "else { match crate::name_constraints::matching::spec::prepare_name_constraints(state.subtrees, None) {",
+      "expect": "killed",
+      "reason": "§6.1.4 (g): an intermediate's nameConstraints modifies permitted_subtrees and excluded_subtrees for what follows.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_constrained(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-anchor-constraints-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "crate::name_constraints::matching::spec::initial_state(), anchor.name_constraints,\n    ) {",
+      "replace": "crate::name_constraints::matching::spec::initial_state(), None,\n    ) {",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullets 2 and 3: the anchor's nameConstraints initialize permitted_subtrees and excluded_subtrees.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_constraints_refuse()",
+        "witness": "super::examples::run(super::examples::anchor_constrained(super::examples::dns_constraints(Some(super::examples::other_com()), None)), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-d-explicit-policy-starts-at-n-plus-1",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "explicit_policy: n + 1,",
+      "replace": "explicit_policy: n,",
+      "expect": "killed",
+      "reason": "§6.1.2 (d): with initial-explicit-policy unset the initial value is n+1; with n, a one-certificate path would need a policy.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_under_anchor()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::leaf_under_root()]) == Err::<Seq<u8>, PathError>(PathError::PolicyRequired)"
+      }
+    },
+    {
+      "id": "path-f-explicit-policy-checked-per-certificate",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if state.explicit_policy == 0 { Err(PathError::PolicyRequired) }",
+      "replace": "else if false { Err(PathError::PolicyRequired) }",
+      "expect": "killed",
+      "reason": "§6.1.3 (f) is checked for each certificate, before §6.1.4 runs on it; without it a later check reports instead.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_policy_check_runs_before_preparation()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(0), super::parsed::spec::PathCert { basic: Some(super::examples::basic(false, None)), ..super::examples::in2() }, super::examples::leaf_under_in2()]) == Err::<Seq<u8>, PathError>(PathError::NotCa)"
+      }
+    },
+    {
+      "id": "path-wrap-up-g-explicit-policy-checked",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if explicit_policy == 0 { Err(PathError::PolicyRequired) }",
+      "replace": "else if false { Err(PathError::PolicyRequired) }",
+      "expect": "killed",
+      "reason": "§6.1.5: success needs explicit_policy greater than zero (R: the tree is not modelled).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_require_explicit_policy_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { require_explicit_policy: Some(0), ..super::examples::leaf_under_root() }]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-wrap-up-b-require-zero",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if cert.require_explicit_policy == Some(0nat) { 0 } else { explicit_policy }",
+      "replace": "if false { 0 } else { explicit_policy }",
+      "expect": "killed",
+      "reason": "§6.1.5 (b): requireExplicitPolicy 0 on the target sets explicit_policy to 0.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_require_explicit_policy_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { require_explicit_policy: Some(0), ..super::examples::leaf_under_root() }]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-wrap-up-a-decrement",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let explicit_policy = if state.explicit_policy != 0 { (state.explicit_policy - 1) as nat }",
+      "replace": "let explicit_policy = if state.explicit_policy != 0 { state.explicit_policy }",
+      "expect": "killed",
+      "reason": "§6.1.5 (a): the wrap-up decrements explicit_policy, so requireExplicitPolicy 1 on the intermediate counts the leaf.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_require_explicit_policy_counts_the_leaf()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(1), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-h1-self-issued-not-counted",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !self_issued(cert) && state.explicit_policy != 0 { (state.explicit_policy - 1) as nat }",
+      "replace": "if state.explicit_policy != 0 { (state.explicit_policy - 1) as nat }",
+      "expect": "killed",
+      "reason": "§6.1.4 (h): only a certificate that is not self-issued decrements explicit_policy.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_self_issued_keeps_explicit_policy()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(2), super::examples::int_self(), super::examples::leaf_cert(20, super::examples::int_name(), super::examples::key(2))]) == Err::<Seq<u8>, PathError>(PathError::PolicyRequired)"
+      }
+    },
+    {
+      "id": "path-i1-require-explicit-policy-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "Some(r) => if r < explicit_policy { r } else { explicit_policy },\n        None => explicit_policy,",
+      "replace": "Some(r) => explicit_policy,\n        None => explicit_policy,",
+      "expect": "killed",
+      "reason": "§6.1.4 (i)(1): requireExplicitPolicy lowers explicit_policy.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_require_explicit_policy_counts_the_leaf()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_require(1), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-a-policy-mappings-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if cert.has_policy_mappings { Err(PathError::PolicyMappings) }",
+      "replace": "if false { Err(PathError::PolicyMappings) }",
+      "expect": "killed",
+      "reason": "(R) §6.1.4 (a), design Q8: an intermediate with policyMappings is refused.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_policy_mappings_refused()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { has_policy_mappings: true, ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-c-working-issuer-name-advances",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let working_issuer_name = cert.tbs.subject_der;",
+      "replace": "let working_issuer_name = state.working_issuer_name;",
+      "expect": "killed",
+      "reason": "§6.1.4 (c): working_issuer_name becomes the certificate's subject.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Err::<Seq<u8>, PathError>(PathError::NameChaining)"
+      }
+    },
+    {
+      "id": "path-d-working-public-key-advances",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let working_public_key = cert.tbs.subject_public_key_info_der;\n            // (h)",
+      "replace": "let working_public_key = state.working_public_key;\n            // (h)",
+      "expect": "killed",
+      "reason": "§6.1.4 (d): working_public_key becomes the certificate's key.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) == Err::<Seq<u8>, PathError>(PathError::BadSignature)"
+      }
+    },
+    {
+      "id": "path-wrap-up-c-output-is-target-key",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let working_public_key = cert.tbs.subject_public_key_info_der;\n    // (f)",
+      "replace": "let working_public_key = state.working_public_key;\n    // (f)",
+      "expect": "killed",
+      "reason": "§6.1.5 (c), §6.1.6: the output is the target's key, not its issuer's.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_two_certificate_path()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::leaf()]) != super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-k-ca-required",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !(cert.tbs.version == 2 && match cert.basic { Some(basic) => basic.ca, None => false }) {",
+      "replace": "if !(cert.tbs.version == 2 && match cert.basic { Some(basic) => true, None => false }) {",
+      "expect": "killed",
+      "reason": "§6.1.4 (k): basicConstraints must have cA TRUE.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_not_ca()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { basic: Some(super::examples::basic(false, None)), ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-k-v3-required",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !(cert.tbs.version == 2 && match cert.basic {",
+      "replace": "if !(true && match cert.basic {",
+      "expect": "killed",
+      "reason": "§6.1.4 (k): version 1 and 2 intermediates are rejected (the RFC's allowed choice).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_not_ca()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { tbs: crate::tbs::spec::TbsCertificate { version: 0, ..super::examples::int().tbs }, ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-l-self-issued-not-counted",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "let max_path_length = if !self_issued(cert) { (state.max_path_length - 1) as nat }",
+      "replace": "let max_path_length = if true { (state.max_path_length - 1) as nat }",
+      "expect": "killed",
+      "reason": "§6.1.4 (l): only a certificate that is not self-issued decrements max_path_length.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_skips_self_issued()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(1), super::examples::int_self(), super::examples::in2(), super::examples::leaf_under_in2()]) == Err::<Seq<u8>, PathError>(PathError::PathLen)"
+      }
+    },
+    {
+      "id": "path-self-issued-is-name-equality",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "    cert.tbs.issuer_der == cert.tbs.subject_der\n}",
+      "replace": "    false\n}",
+      "expect": "killed",
+      "reason": "§6.1: a certificate whose issuer and subject are the same name is self-issued.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_skips_self_issued()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(1), super::examples::int_self(), super::examples::in2(), super::examples::leaf_under_in2()]) == Err::<Seq<u8>, PathError>(PathError::PathLen)"
+      }
+    },
+    {
+      "id": "path-m-path-len-caps-exactly",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if p < max_path_length { p } else { max_path_length }",
+      "replace": "if p < max_path_length { p + 1 } else { max_path_length }",
+      "expect": "killed",
+      "reason": "§6.1.4 (m): max_path_length becomes pathLenConstraint itself, not one more.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(0), super::examples::in2(), super::examples::leaf_under_in2()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-m-path-len-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if p < max_path_length { p } else { max_path_length }",
+      "replace": "if false { p } else { max_path_length }",
+      "expect": "killed",
+      "reason": "§6.1.4 (m): a pathLenConstraint lowers max_path_length.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_path_len_zero()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int_path_len(0), super::examples::in2(), super::examples::leaf_under_in2()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-anchor-path-len-is-p",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "max_path_length: match anchor.path_len { Some(p) => p, None => n },",
+      "replace": "max_path_length: match anchor.path_len { Some(p) => p + 1, None => n },",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 8: max_path_length is set equal to the anchor's pathLenConstraint (the design's min(n, p + 1) would allow one more).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_path_len()",
+        "witness": "super::examples::run(super::examples::anchor_path_len(0), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-anchor-path-len-applied",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "max_path_length: match anchor.path_len { Some(p) => p, None => n },",
+      "replace": "max_path_length: match anchor.path_len { Some(p) => n, None => n },",
+      "expect": "killed",
+      "reason": "RFC 5937 §3.2 bullet 8: the anchor's pathLenConstraint applies.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_path_len()",
+        "witness": "super::examples::run(super::examples::anchor_path_len(0), seq![super::examples::int(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-n-key-cert-sign-required",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "Some(usage) => !crate::constraints::spec::key_usage_has(\n                        usage, crate::constraints::spec::KeyUsageBit::KeyCertSign),",
+      "replace": "Some(usage) => false,",
+      "expect": "killed",
+      "reason": "§6.1.4 (n): a present keyUsage must have keyCertSign.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_key_usage_without_key_cert_sign()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { key_usage: Some(super::examples::digital_signature()), ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-o-unknown-critical-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !intermediate_critical_supported(cert.extensions, 0) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "§6.1.4 (o): an unrecognized critical extension on an intermediate refuses.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_critical_extensions()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(super::examples::unknown_oid(), true, seq![])], ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-o-certificate-policies-not-recognized",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "|| extension.oid =~= crate::policy_constraints::spec::policy_constraints_oid())",
+      "replace": "|| extension.oid =~= crate::policy_constraints::spec::policy_constraints_oid()\n            || extension.oid =~= seq![2nat, 5, 29, 32])",
+      "expect": "killed",
+      "reason": "Design §1.6: certificatePolicies is not processed, so a critical one is unrecognized; the mutant widens the set.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_critical_extensions()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(super::examples::certificate_policies_oid(), true, seq![])], ..super::examples::int() }, super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-wrap-up-f-unknown-critical-refused",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "if !crate::leaf::spec::supported_critical_extensions(cert.extensions, 0) {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "§6.1.5 (f): an unrecognized critical extension on the target refuses.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_critical_extensions()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: super::examples::leaf_under_root().extensions.push(super::examples::extension(super::examples::unknown_oid(), true, seq![])), ..super::examples::leaf_under_root() }]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "path-certificate-appears-once",
+      "file": "src/path/spec.rs",
+      "module": "path::examples",
+      "find": "else if !certificates_distinct_from(certs, 0) { Err(PathError::RepeatedCertificate) }",
+      "replace": "else if false { Err(PathError::RepeatedCertificate) }",
+      "expect": "killed",
+      "reason": "§6.1: \"A certificate MUST NOT appear more than once in a prospective certification path.\"",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_repeated_certificate()",
+        "witness": "super::examples::run(super::examples::anchor(), seq![super::examples::int(), super::examples::int_self(), super::examples::int_self(), super::examples::leaf()]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "profile-leaf-checks",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "if crate::leaf::spec::check_extensions(leaf.extensions, leaf.tbs, reference, now, leaf_policy()) is None {",
+      "replace": "if false {",
+      "expect": "killed",
+      "reason": "The target's identity and usage checks (leaf::spec::check_extensions) apply.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_checks()",
+        "witness": "super::profile::path_profile(super::examples::anchor(), seq![super::examples::leaf_under_root()], crate::spec::ReferenceIdentity::Dns(super::examples::other_com()), super::examples::now()) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-leaf-any-eku-not-server-auth",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "crate::leaf::spec::LeafPolicy { allow_any_extended_key_usage: false }",
+      "replace": "crate::leaf::spec::LeafPolicy { allow_any_extended_key_usage: true }",
+      "expect": "killed",
+      "reason": "BR §7.1.2.7.10: anyExtendedKeyUsage MUST NOT appear and is not serverAuth.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_checks()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(crate::extensions::spec::subject_alt_name_oid(), false, super::examples::san_example_com_der()), super::examples::extension(crate::leaf::spec::extended_key_usage_extension_oid(), false, super::examples::eku_any_der())], eku: Some(super::examples::eku_any()), ..super::examples::leaf_under_root() }]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-leaf-eku-required",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "else if leaf.eku is None { Err(super::spec::PathError::ExtendedKeyUsage) }",
+      "replace": "else if false { Err(super::spec::PathError::ExtendedKeyUsage) }",
+      "expect": "killed",
+      "reason": "(R) design Q7, BR §7.1.2.7.6: the target must carry extKeyUsage.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_without_eku()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { extensions: seq![super::examples::extension(crate::extensions::spec::subject_alt_name_oid(), false, super::examples::san_example_com_der())], eku: None, ..super::examples::leaf_under_root() }]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-leaf-name-constraints-refused",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "else if leaf.name_constraints is Some { Err(super::spec::PathError::LeafNameConstraints) }",
+      "replace": "else if false { Err(super::spec::PathError::LeafNameConstraints) }",
+      "expect": "killed",
+      "reason": "(R) RFC 5280 §4.2.1.10, BR §7.1.2.7.6: nameConstraints MUST NOT appear in the target.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_leaf_name_constraints()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { name_constraints: Some(super::examples::dns_constraints(Some(super::examples::example_com()), None)), ..super::examples::leaf_under_root() }]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-intermediate-key-usage-required",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "if cert.key_usage is None { Err(super::spec::PathError::KeyUsage) }",
+      "replace": "if false { Err(super::spec::PathError::KeyUsage) }",
+      "expect": "killed",
+      "reason": "(R) design Q6, BR §7.1.2.6.1: an intermediate must carry keyUsage.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_without_key_usage()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { key_usage: None, ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-intermediate-any-eku-refused",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(eku) => !crate::constraints::spec::eku_allows_server_auth(eku, false),",
+      "replace": "Some(eku) => !crate::constraints::spec::eku_allows_server_auth(eku, true),",
+      "expect": "killed",
+      "reason": "(R) design §1.8, BR §7.1.2.10.6: anyExtendedKeyUsage does not stand for serverAuth on an intermediate.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_eku()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { eku: Some(super::examples::eku_any()), ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-intermediate-eku-checked",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(eku) => !crate::constraints::spec::eku_allows_server_auth(eku, false),",
+      "replace": "Some(eku) => false,",
+      "expect": "killed",
+      "reason": "(R) design §1.8: a present intermediate extKeyUsage must contain serverAuth.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_eku()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { eku: Some(super::examples::eku_client_auth()), ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-every-intermediate-checked",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "if i < 0 || i >= certs.len() - 1 { Ok(()) }",
+      "replace": "if true { Ok(()) }",
+      "expect": "killed",
+      "reason": "The intermediate profile applies to every intermediate.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_intermediate_without_key_usage()",
+        "witness": "super::examples::profile_of(super::examples::anchor(), seq![super::parsed::spec::PathCert { key_usage: None, ..super::examples::int() }, super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-anchor-validity-checked",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "        Err(super::spec::PathError::AnchorExpired)",
+      "replace": "        Ok(())",
+      "expect": "killed",
+      "reason": "(R) design Q9: the anchor certificate must be valid at now.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_anchor_expired()",
+        "witness": "super::examples::profile_of(super::parsed::spec::Anchor { not_after: super::examples::day(2026, 1, 1), ..super::examples::anchor() }, seq![super::examples::int(), super::examples::leaf()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "profile-distrust-after-uses-not-before",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(after) => !crate::time::spec::time_le(leaf.tbs.not_before, after),",
+      "replace": "Some(after) => !crate::time::spec::time_le(leaf.tbs.not_after, after),",
+      "expect": "killed",
+      "reason": "NSS CKA_NSS_SERVER_DISTRUST_AFTER compares the end entity's notBefore (its issuance), not its notAfter.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_distrust_after()",
+        "witness": "super::examples::profile_of(super::examples::anchor_distrust(super::examples::day(2026, 1, 1)), seq![super::examples::leaf_2025()]) == Err::<(), PathError>(PathError::Distrusted)"
+      }
+    },
+    {
+      "id": "profile-distrust-after-applied",
+      "file": "src/path/profile.rs",
+      "module": "path::examples",
+      "find": "Some(after) => !crate::time::spec::time_le(leaf.tbs.not_before, after),",
+      "replace": "Some(after) => false,",
+      "expect": "killed",
+      "reason": "(R) NSS CKA_NSS_SERVER_DISTRUST_AFTER: a target issued after the date is refused.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_distrust_after()",
+        "witness": "super::examples::profile_of(super::examples::anchor_distrust(super::examples::day(2024, 1, 1)), seq![super::examples::leaf_2025()]) == Ok::<(), PathError>(())"
+      }
+    },
+    {
+      "id": "verifier-intermediates-bounded",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "    &&& candidate.path.len() <= max_intermediates\n",
+      "replace": "    &&& true\n",
+      "expect": "killed",
+      "reason": "Design §1.12: a candidate has at most max_intermediates intermediates.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_candidate_too_long()",
+        "witness": "super::examples::verdict(0, seq![0nat]) == super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "verifier-candidate-indices-distinct",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "    &&& indices_distinct_from(candidate.path, 0)\n",
+      "replace": "    &&& true\n",
+      "expect": "killed",
+      "reason": "Design §2.6: a candidate never repeats a pool index.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_candidate_repeats_index()",
+        "witness": "super::examples::verdict(6, seq![0nat, 1, 1]) == Err::<Seq<u8>, PathError>(PathError::RepeatedCertificate)"
+      }
+    },
+    {
+      "id": "verifier-candidate-runs-process",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Ok(()) => match super::spec::process(environment.link, environment.revoked, anchor, certs, now) {",
+      "replace": "            Ok(()) => match Ok::<Seq<u8>, super::spec::PathError>(leaf.der) {",
+      "expect": "killed",
+      "reason": "The candidate verdict includes §6.1 and returns its key.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_candidate_valid()",
+        "witness": "super::examples::verdict(6, seq![0nat]) != super::examples::leaf_key()"
+      }
+    },
+    {
+      "id": "verifier-build-budget-is-firefox",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "pub open spec fn build_budget() -> nat { 200000 }",
+      "replace": "pub open spec fn build_budget() -> nat { 199999 }",
+      "expect": "killed",
+      "reason": "mozilla::pkix BuildCertChain: \"unsigned int buildForwardCallBudget = 200000;\".",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_firefox_bounds()",
+        "witness": "super::verifier::build_budget() != 200000nat"
+      }
+    },
+    {
+      "id": "verifier-depth-is-firefox",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "pub open spec fn default_max_intermediates() -> nat { 6 }",
+      "replace": "pub open spec fn default_max_intermediates() -> nat { 7 }",
+      "expect": "killed",
+      "reason": "mozilla::pkix BuildForward: \"static const unsigned int MAX_SUBCA_COUNT = 6;\".",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_firefox_bounds()",
+        "witness": "super::verifier::default_max_intermediates() != 6nat"
+      }
+    },
+    {
+      "id": "verifier-budget-strictly-exceeded",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "    order.len() > budget\n",
+      "replace": "    order.len() >= budget\n",
+      "expect": "killed",
+      "reason": "The budget runs out only when a step beyond it would be examined (\"if (buildForwardCallBudget == 0)\" is reached on step budget + 1).",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_budget()",
+        "witness": "super::examples::exhausted(super::examples::order3().take(1), 1)"
+      }
+    },
+    {
+      "id": "verifier-budget-stops-at-first-valid",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            Some(candidate) => !candidate_valid(environment, anchors, pool, leaf, candidate, reference, now),",
+      "replace": "            Some(candidate) => true,",
+      "expect": "killed",
+      "reason": "The search stops at the first valid path within the budget, so a valid candidate there means the budget did not run out.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_budget()",
+        "witness": "super::examples::exhausted(super::examples::order3(), 2)"
+      }
+    },
+    {
+      "id": "verifier-anchor-step-name-chained",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        Issuer::Anchor(a) => a < anchors.len()\n            && anchors[a as int].subject_der == sought_issuer(pool, leaf, step.path),",
+      "replace": "        Issuer::Anchor(a) => a < anchors.len(),",
+      "expect": "killed",
+      "reason": "Firefox counts a potential issuer only after its subject-name check; an anchor whose subject is not the sought issuer is no step.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(6, super::examples::step(seq![], super::verifier::Issuer::Anchor(0)))"
+      }
+    },
+    {
+      "id": "verifier-pool-step-name-chained",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "                Some(c) => c.tbs.subject_der == sought_issuer(pool, leaf, step.path),",
+      "replace": "                Some(c) => true,",
+      "expect": "killed",
+      "reason": "Firefox counts a potential issuer only after its subject-name check.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(6, super::examples::step(seq![0nat], super::verifier::Issuer::Pool(1)))"
+      }
+    },
+    {
+      "id": "verifier-pool-step-loop-free",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "            && index_absent_from(step.path, j, 0)\n",
+      "replace": "\n",
+      "expect": "killed",
+      "reason": "Firefox's loop prevention: a certificate already on the path is not a potential issuer again.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(6, super::examples::step(seq![1nat], super::verifier::Issuer::Pool(1)))"
+      }
+    },
+    {
+      "id": "verifier-pool-step-within-depth",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        Issuer::Pool(j) => j < pool.len() && step.path.len() < environment.max_intermediates",
+      "replace": "        Issuer::Pool(j) => j < pool.len() && true",
+      "expect": "killed",
+      "reason": "Design §1.12: a pool issuer that would exceed max_intermediates is not searched.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_do_not_count()",
+        "witness": "super::examples::counts(0, super::examples::step(seq![], super::verifier::Issuer::Pool(0)))"
+      }
+    },
+    {
+      "id": "verifier-sought-issuer-is-top-issuer",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "Some(c) => c.tbs.issuer_der, None => leaf.tbs.issuer_der } }",
+      "replace": "Some(c) => c.tbs.subject_der, None => leaf.tbs.issuer_der } }",
+      "expect": "killed",
+      "reason": "The search seeks the issuer of the top certificate of the partial path, not its subject.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_steps_that_count()",
+        "witness": "!super::examples::counts(6, super::examples::step(seq![0nat], super::verifier::Issuer::Anchor(0)))"
+      }
+    },
+    {
+      "id": "verifier-order-steps-distinct",
+      "file": "src/path/verifier.rs",
+      "module": "path::examples",
+      "find": "        &&& step_absent_from(order, order[from], from + 1)\n",
+      "replace": "        &&& true\n",
+      "expect": "killed",
+      "reason": "A well-formed search order examines no step twice.",
+      "certificate": {
+        "file": "src/path/mutation_certificates.rs",
+        "lemma": "super::examples::lemma_order_well_formed()",
+        "witness": "super::verifier::search_order_well_formed_from(super::examples::environment(6), seq![super::examples::anchor()], seq![Some(super::examples::int()), Some(super::examples::int_self())], super::examples::leaf(), super::examples::order3().push(super::examples::order3()[0]), 0)"
+      }
+    },
+    {
+      "id": "nc-bound-constant-raised",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    4096\n}\n",
+      "replace": "    8192\n}\n",
+      "expect": "killed",
+      "reason": "design \u00a71.12: the bound is 4,096 comparisons; raised, limbo's pathological::nc-dos-3 shape (the subject against 4,097 subtrees) is within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(0), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-bound-constant-lowered",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    4096\n}\n",
+      "replace": "    4095\n}\n",
+      "expect": "killed",
+      "reason": "The bound is exactly 4,096: 63 entries and the subject against 64 subtrees (4,096) are within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_is_exact()",
+        "witness": "!super::contract::within_budget(super::contract::one_certificate(63), super::contract::sixty_four_subtrees())"
+      }
+    },
+    {
+      "id": "nc-bound-exclusive",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    spent <= comparison_bound()\n",
+      "replace": "    spent < comparison_bound()\n",
+      "expect": "killed",
+      "reason": "At exactly 4,096 comparisons the path is within the bound, not beyond it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_is_exact()",
+        "witness": "!super::contract::within_budget(super::contract::one_certificate(63), super::contract::sixty_four_subtrees())"
+      }
+    },
+    {
+      "id": "nc-bound-subject-not-counted",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    (entries + 1) * subtrees\n",
+      "replace": "    entries * subtrees\n",
+      "expect": "killed",
+      "reason": "The subject is checked against every subtree too (limbo pathological::nc-dos-3 has no SAN entry, only 4,097 subtrees and a large subject).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(0), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-bound-not-accumulated",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "        let total = spent + certificate_comparisons(state, certificate);\n",
+      "replace": "        let total = certificate_comparisons(state, certificate);\n",
+      "expect": "killed",
+      "reason": "The bound is per path, not per certificate: two certificates of 2,080 comparisons each are beyond it together.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_accumulates_over_certificates()",
+        "witness": "super::contract::within_budget(seq![super::examples::certificate(super::contract::many_entries(31), None), super::examples::certificate(super::contract::many_entries(31), None)], seq![super::examples::constraints(Some(super::contract::many_subtrees(65)), None)])"
+      }
+    },
+    {
+      "id": "nc-bound-check-dropped",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "        &&& within_comparison_bound(total)\n",
+      "replace": "        &&& true\n",
+      "expect": "killed",
+      "reason": "Without the check no path is beyond the bound: limbo's pathological::nc-dos-1 shape (2,048 entries against 4,097 subtrees) would be within it.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(2048), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-bound-last-set-only",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    if state.len() == 0 { 0 } else { subtrees_in(state.last()) + subtree_count(state.drop_last()) }\n",
+      "replace": "    if state.len() == 0 { 0 } else { subtrees_in(state.last()) }\n",
+      "expect": "killed",
+      "reason": "Every set of the state costs comparisons: two sets of 40 subtrees are 80 per entry.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_counts_every_set()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(63), seq![super::examples::constraints(Some(super::contract::many_subtrees(40)), None), super::examples::constraints(Some(super::contract::many_subtrees(40)), None)])"
+      }
+    },
+    {
+      "id": "nc-bound-excluded-subtrees-free",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "        + (match value.excluded_subtrees { Some(items) => items.len(), None => 0 })\n",
+      "replace": "        + 0\n",
+      "expect": "killed",
+      "reason": "Excluded subtrees cost comparisons like permitted ones (limbo nc-dos-3: 2,048 permitted and 2,049 excluded).",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_nc_dos_shapes_are_beyond_the_bound()",
+        "witness": "super::contract::within_budget(super::contract::one_certificate(0), super::contract::dos_state())"
+      }
+    },
+    {
+      "id": "nc-contract-drops-bound",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    out == (names_constrained(path, initial) && within_budget(path, initial))\n",
+      "replace": "    out == names_constrained(path, initial)\n",
+      "expect": "killed",
+      "reason": "The executable result is the spec's and also within the bound: without it, a path of 64 entries against 64 subtrees (4,160 comparisons), which the spec accepts, is promised accepted.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_is_exact()",
+        "witness": "super::contract::names_constrained_ensures(super::contract::one_certificate(64), super::contract::sixty_four_subtrees(), true)"
+      }
+    },
+    {
+      "id": "nc-contract-bound-only",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    out == (names_constrained(path, initial) && within_budget(path, initial))\n",
+      "replace": "    out == within_budget(path, initial)\n",
+      "expect": "killed",
+      "reason": "The bound only adds a refusal: a path the spec refuses must not be promised accepted just because it is within the bound.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_never_accepts_what_the_spec_refuses()",
+        "witness": "super::contract::names_constrained_ensures(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], true)"
+      }
+    },
+    {
+      "id": "nc-contract-bound-or-spec",
+      "file": "src/name_constraints/matching/contract.rs",
+      "module": "name_constraints::matching::contract",
+      "find": "    out == (names_constrained(path, initial) && within_budget(path, initial))\n",
+      "replace": "    out == (names_constrained(path, initial) || within_budget(path, initial))\n",
+      "expect": "killed",
+      "reason": "Acceptance needs the spec's acceptance and the bound, not either.",
+      "certificate": {
+        "file": "src/name_constraints/matching/mutation_certificates.rs",
+        "lemma": "super::contract::lemma_bound_never_accepts_what_the_spec_refuses()",
+        "witness": "super::contract::names_constrained_ensures(seq![super::examples::certificate(seq![super::examples::dns_entry(super::examples::not_example_com())], None), super::examples::certificate(seq![super::examples::dns_entry(super::examples::example_com())], None)], seq![super::examples::constraints(Some(seq![super::examples::dns_subtree(super::examples::example_com())]), None)], true)"
+      }
     }
   ]
 }

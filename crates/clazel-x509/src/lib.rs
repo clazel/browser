@@ -19,6 +19,8 @@ pub mod lemmas;
 pub mod matcher;
 pub mod name;
 pub mod name_constraints;
+pub mod path;
+pub mod policy_constraints;
 pub mod roots;
 pub mod signature_algorithm;
 pub mod spec;

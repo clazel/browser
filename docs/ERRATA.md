@@ -313,3 +313,25 @@ it evidently means. Each entry records what we specified instead.
   crate implements the living standard, whose named character reference
   state reconsumes that character first (§13.2.5.77, §13.2.5.78).
 - **Reported upstream:** not yet.
+
+## RFC 5937 §3.2: the anchor's pathLenConstraint is set before RFC 5280 §6.1.2 (k) resets it
+
+- **Spec:** RFC 5937, August 2010, <https://www.rfc-editor.org/rfc/rfc5937.txt>
+  (SHA-256 `6424a9b13e2ea7accfed71e0adef806309851909775aea74471187910f861f01`),
+  §3.2; with RFC 5280 §6.1.2 (k).
+- **Text:** RFC 5937 §3.2: "These steps (or equivalent) MUST be performed
+  prior to initialization steps described in RFC 5280." Its last step: "If a
+  basic constraints extension is associated with the trust anchor and
+  contains a pathLenConstraint value, set the max_path_length state variable
+  equal to the pathLenConstraint value from the basic constraints
+  extension." RFC 5280 §6.1.2 (k): "max_path_length: this integer is
+  initialized to n".
+- **Problem:** the other §3.2 steps set *inputs* (§6.1.1) that §6.1.2 then
+  reads, so performing them first is right. max_path_length is not an input
+  but a §6.1.2 state variable. Read literally, the order makes §6.1.2 (k)
+  overwrite the anchor's value with n, and the step has no effect.
+- **We specify:** max_path_length starts at the anchor's pathLenConstraint
+  when it has one, and at n otherwise. See `initialization` in
+  `crates/clazel-x509/src/path/spec.rs`. (No RFC 5937 erratum was found on
+  2026-10-29.)
+- **Reported upstream:** not yet.
