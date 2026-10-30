@@ -2,6 +2,7 @@
 //! The provider below is input-sensitive but is only a transcript test double.
 
 use clazel_tls::hello::client::{Config, Established, Hello, Outcome};
+use clazel_tls::host::exec::Host;
 use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::spec::{ILLEGAL_PARAMETER, INTERNAL_ERROR, UNEXPECTED_MESSAGE};
 use clazel_tls::types::{ClientHello, HsMsg};
@@ -56,12 +57,11 @@ impl Crypto for TestCrypto {
 
 fn config() -> Config {
     Config {
-        host: HOST.to_vec(),
+        host: Host::Dns(HOST.to_vec()),
         now: 1_800_000_000,
         random: RANDOM.to_vec(),
         session_id: SESSION_ID.to_vec(),
         public_key: PUBLIC_KEY.to_vec(),
-        send_sni: true,
     }
 }
 
@@ -194,20 +194,28 @@ fn start_emits_the_fixed_client_profile_and_respects_sni_choice() -> Result<(), 
     );
     assert_eq!(extension_data(&hello, 44), None);
 
-    let mut ip_config = config();
-    ip_config.host = b"192.0.2.10".to_vec();
-    ip_config.send_sni = false;
-    let (_, flight) = Hello::start(ip_config).map_err(|alert| format!("IP start alert {alert}"))?;
-    let hello = client_hello(&flight)?;
-    assert_eq!(extension_data(&hello, 0), None);
-    assert_eq!(hello.session_id, SESSION_ID);
+    // RFC 6066 §3: "Literal IPv4 and IPv6 addresses are not permitted in
+    // "HostName"", so an IP host sends no server_name at all.
+    for address in [
+        vec![192, 0, 2, 10],
+        vec![0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    ] {
+        let mut ip_config = config();
+        ip_config.host = Host::Ip(address);
+        let (_, flight) =
+            Hello::start(ip_config).map_err(|alert| format!("IP start alert {alert}"))?;
+        let hello = client_hello(&flight)?;
+        assert_eq!(extension_data(&hello, 0), None);
+        assert!(hello.extensions.iter().all(|e| e.etype != 0));
+        assert_eq!(hello.session_id, SESSION_ID);
+    }
     Ok(())
 }
 
 #[test]
 fn accepts_profile_bounds_and_rejects_invalid_configuration() -> Result<(), String> {
     let mut maximal = config();
-    maximal.host = vec![b'h'; 253];
+    maximal.host = Host::Dns(vec![b'h'; 253]);
     maximal.session_id = vec![0x77; 32];
     let (_, flight) =
         Hello::start(maximal).map_err(|alert| format!("maximum config alert {alert}"))?;
@@ -215,11 +223,21 @@ fn accepts_profile_bounds_and_rejects_invalid_configuration() -> Result<(), Stri
     assert_eq!(hello.session_id.len(), 32);
 
     let mut invalid = config();
-    invalid.host.clear();
+    invalid.host = Host::Dns(Vec::new());
     assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
     let mut invalid = config();
-    invalid.host = vec![b'h'; 254];
+    invalid.host = Host::Dns(vec![b'h'; 254]);
     assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
+    // RFC 6066 §3: HostName has no trailing dot; the caller removes it.
+    let mut invalid = config();
+    invalid.host = Host::Dns(b"example.test.".to_vec());
+    assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
+    // An address is 4 or 16 octets.
+    for length in [0, 3, 5, 15, 17] {
+        let mut invalid = config();
+        invalid.host = Host::Ip(vec![1; length]);
+        assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
+    }
     let mut invalid = config();
     invalid.random.pop();
     assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
@@ -290,7 +308,6 @@ fn assert_established_prefix(
     assert_eq!(captured.random, original_config.random);
     assert_eq!(captured.session_id, original_config.session_id);
     assert_eq!(captured.public_key, original_config.public_key);
-    assert_eq!(captured.send_sni, original_config.send_sni);
     assert_eq!(peer_key, SERVER_KEY);
     let initial_hash = crypto.hash(first_flight);
     let mut expected_messages = handshake_message(254, &initial_hash);

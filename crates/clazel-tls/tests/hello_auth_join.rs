@@ -12,6 +12,7 @@ use clazel_tls::auth::verify::Verifier;
 use clazel_tls::encode;
 use clazel_tls::hello::client::{Config, Established, Hello, Outcome};
 use clazel_tls::hello::key_exchange::KeyExchange;
+use clazel_tls::host::exec::Host;
 use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::schedule::exec::finished;
 use clazel_tls::spec::{DECRYPT_ERROR, ILLEGAL_PARAMETER, INTERNAL_ERROR};
@@ -104,7 +105,7 @@ impl KeyExchange for MockExchange {
 
 #[derive(Default)]
 struct VerificationCalls {
-    chain: Vec<(Vec<u8>, u64, Vec<u8>)>,
+    chain: Vec<(Host, u64, Vec<u8>)>,
     signature: Vec<SignatureCall>,
 }
 
@@ -127,14 +128,14 @@ impl MockVerifier {
 impl Verifier for MockVerifier {
     fn chain(
         &self,
-        host: &[u8],
+        host: &Host,
         now: u64,
         certificate_body: &[u8],
     ) -> Result<Vec<u8>, CertificateError> {
         self.calls
             .borrow_mut()
             .chain
-            .push((host.to_vec(), now, certificate_body.to_vec()));
+            .push((host.clone(), now, certificate_body.to_vec()));
         Ok(LEAF_KEY.to_vec())
     }
 
@@ -155,12 +156,11 @@ impl Verifier for MockVerifier {
 
 fn config() -> Config {
     Config {
-        host: HOST.to_vec(),
+        host: Host::Dns(HOST.to_vec()),
         now: 1_800_000_000,
         random: vec![0x11; 32],
         session_id: Vec::new(),
         public_key: PUBLIC.to_vec(),
-        send_sni: true,
     }
 }
 
@@ -313,7 +313,7 @@ fn progress_to_certificate_verify(
     );
     assert_eq!(
         verifier.calls.borrow().chain,
-        vec![(HOST.to_vec(), 1_800_000_000, certificate.clone())]
+        vec![(Host::Dns(HOST.to_vec()), 1_800_000_000, certificate.clone())]
     );
     assert_eq!(
         verifier.calls.borrow().signature,
@@ -516,7 +516,7 @@ fn joined_secrets_drive_mock_authentication_and_finished_transcript() -> Result<
     assert_eq!(auth.phase(), AuthPhase::SendFinished);
     assert_eq!(
         success.verifier.calls.borrow().chain,
-        vec![(HOST.to_vec(), 1_800_000_000, success.certificate)]
+        vec![(Host::Dns(HOST.to_vec()), 1_800_000_000, success.certificate)]
     );
     Ok(())
 }
