@@ -186,8 +186,9 @@ refused).
   transcribed too (`b1_inverse`) and the examples evaluate both.
 - **Cited, not proven:** associativity of the group law (so that double-and-add
   is the k-fold sum) and Fermat's little theorem for P-384's p and n (so that
-  the `None` branch of `inv` is unreachable). The primality of p and n is
-  SP 800-186's statement.
+  the `None` branch of `inv` is unreachable). The primality of n is
+  SP 800-186's statement; that of p is also proven (`src/primality.rs`,
+  below).
 - The public key is always validated (SP 800-186 D.1.1.1). The `nQ = O` check
   is omitted because the cofactor is 1 (SEC 1 §3.2.2.1 says why that is
   sound).
@@ -207,6 +208,42 @@ by construction. A verification with full-size scalars (about 1,150 group
 operations) is **not** evaluated: the interpreter of `by (compute_only)`
 times out on it.
 
+## Independent transcription
+
+`src/independent.rs` transcribes SEC 1 v2 §4.1.4 (with §2.2.1, §2.3 and
+§3.2.2.1) and SP 800-186's P-384 parameters, written by a session that did
+not read `spec.rs`. Its header lists the conventions the two files were
+given in common (the digest as input, `inv` by Fermat with a `None` branch,
+MSB-first double-and-add, `u1 G + u2 Q` as two products, uncompressed keys
+only, no `nQ = O` check); the equivalence relies on those and does not
+check them. The *Guide to Elliptic Curve Cryptography* was not available,
+so it is a single-source transcription.
+
+`src/equivalence.rs` proves `lemma_independent_equals_spec`: for every
+digest `h`, `r`, `s` and key `q`, `independent::ecdsa_verify(independent::p384(),
+h, r, s, q) == spec::ecdsa_verify(spec::p384(), h, r, s, q)`. It proves the
+forms that differ equal: step 3 through SEC 1's bit and octet strings
+against FIPS 186-5 B.2.1, `inv` with and without intermediate reduction,
+first- and last-octet-first integer conversions, the computed and stored
+octet length of a field element, and the group law.
+
+The two group laws read SEC 1 §2.2.1 rule 3 differently: `spec.rs` as `y1 +
+y2 ≡ 0`, `independent.rs` as the rule's words, "either distinct or have
+y-coordinate 0". Off the curve, or over a composite modulus, the two
+disagree; for points on the curve over a prime field they agree. So the
+proof also shows that every point the verification adds is on the curve
+(the chord and the tangent of a curve point are curve points), and that
+P-384's p is prime. Neither text is wrong: SEC 1 defines the rule only on
+the curve, and neither verification adds a point off it.
+
+`src/primality.rs` proves p prime without an axiom: Pocklington's criterion
+(with `F^2 > N`) is proven in Verus from Bézout's identity and a
+pigeonhole bound on the multiplicative order, and a chain of 13
+certificates, each checked by `by (compute_only)`, leads from p down to
+primes below 2^20, which trial division proves. The certificates were found
+with Pollard's rho and the elliptic curve method outside the repository;
+Verus checks them, not that search.
+
 ## Verification
 
 Run `cargo verus focus -- -A missing_docs` in this directory. What it
@@ -218,7 +255,7 @@ meets its contract in `field/contract.rs`, and that `ec_add`,
 `mutations.json` holds 26 mutations of `spec.rs`, each killed with a
 certificate that contradicts one of those examples; the executable code has
 no mutations yet. There is no lemma about the spec of the signature itself,
-no independent transcription, no mutation of the executable code and no
+no mutation of the executable code and no
 Kani harness yet, so the crate stays at tier 0 even though the conformance
 suites and the differential pass; see
 [docs/VERIFICATION.md](../../docs/VERIFICATION.md) for what each tier

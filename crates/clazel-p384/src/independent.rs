@@ -3,7 +3,8 @@
 //! Written without reading any other specification of ECDSA in this
 //! repository (`spec.rs`, `contract.rs`, `examples.rs` and the P-256 ECDSA
 //! spec of `clazel-crypto` were not opened); the equivalence proof against
-//! `spec.rs` is a later change by a different session.
+//! `spec.rs` is a later change by a different session, in `equivalence.rs`
+//! ([`crate::equivalence::lemma_independent_equals_spec`]).
 //!
 //! Sources, read in full for the sections cited (the PDFs were downloaded
 //! on 30 October 2026 and hashed with SHA-256):

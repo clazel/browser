@@ -1173,4 +1173,24 @@ pub proof fn lemma_p384_corresponds()
     assert(good(p384(), base_point(p384()))) by (compute_only);
 }
 
+/// **`independent.rs` equals `spec.rs`**: SEC 1 §4.1.4 as transcribed
+/// without reading `spec.rs` accepts exactly what FIPS 186-5 §6.4.2 as
+/// `spec.rs` transcribes it accepts, for P-384, on every digest, `r`, `s`
+/// and public key. (The contract restricts the digest to 64 octets; the
+/// equality holds for every length.)
+pub proof fn lemma_independent_equals_spec(h: Seq<u8>, r: nat, s: nat, q: Seq<u8>)
+    ensures
+        crate::independent::ecdsa_verify(crate::independent::p384(), h, r, s, q) == ecdsa_verify(
+            p384(),
+            h,
+            r,
+            s,
+            q,
+        ),
+{
+    lemma_p384_corresponds();
+    crate::primality::lemma_p384_euclid();
+    lemma_verify_equal(p384(), crate::independent::p384(), h, r, s, q);
+}
+
 } // verus!

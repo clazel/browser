@@ -7,9 +7,11 @@
 //! code behind six axioms, with the rest proven over them), and on top of
 //! that the affine group law, the scalar product, the key decoding and
 //! [`verify::verify`], each proven against [`spec`] over those six axioms and
-//! nothing else. The crate is still at tier 0: the evidence tier 1 and tier 2
-//! require beyond these proofs (Kani harnesses, an independent
-//! transcription, certified mutations of the code) is not written yet.
+//! nothing else. An independent transcription from SEC 1
+//! ([`independent`]) is proven to accept exactly what [`spec`] accepts
+//! ([`equivalence`]). The crate is still at tier 0: the other evidence tier 1
+//! and tier 2 require (Kani harnesses, certified mutations of the code) is
+//! not written yet.
 //! Conformance tests (Wycheproof, NIST CAVP) and a differential against
 //! `ring` run in `tests/`.
 //!
@@ -32,6 +34,11 @@
 //! - [`scalar`]: MSB-first double-and-add against `spec::scalar_mul`, and the
 //!   digest's step 3 and reduction mod n.
 //! - [`verify`]: FIPS 186-5 §6.4.2.
+//! - [`independent`]: SEC 1 §4.1.4 transcribed without reading [`spec`], and
+//!   [`equivalence`], the proof that the two accept the same signatures
+//!   ([`equivalence::lemma_independent_equals_spec`]).
+//! - [`primality`]: P-384's p is prime, by Pocklington certificates proven
+//!   in Verus (the equivalence needs it).
 //! - [`convert`] and [`lemmas`]: small conversions and the facts the proofs
 //!   above use.
 //! - [`axioms`]: the six calls into fiat-crypto, each an axiom.
