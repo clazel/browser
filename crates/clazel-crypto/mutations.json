@@ -762,7 +762,7 @@
       "certificate": {
         "file": "src/join/certificates.rs",
         "lemma": "super::examples::lemma_outcome()",
-        "witness": "outcome(Ok(clazel_x509::path::verifier::Validated { anchor: 0, path: seq![], leaf_spki: seq![7u8] })) == Ok::<Seq<u8>, clazel_tls::auth::spec::CertificateError>(seq![])"
+        "witness": "outcome(Ok(clazel_x509::path::verifier::Validated { anchor: 0, path: seq![], leaf_spki: seq![7u8] }))->Ok_0.len() == 0"
       }
     },
     {
