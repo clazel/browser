@@ -329,3 +329,52 @@ fn table_equals_certdata_txt() {
         );
     }
 }
+
+/// How many roots have each key class (EcP256, EcP384, Rsa, Unsupported).
+fn key_class_counts() -> (usize, usize, usize, usize) {
+    use clazel_x509::spki::exec::PublicKey;
+    let mut counts: (usize, usize, usize, usize) = (0, 0, 0, 0);
+    for root in &ROOTS {
+        let key = parse_certificate(root.der)
+            .and_then(|c| parse_tbs_certificate(c.tbs_certificate_der))
+            .and_then(|t| parse_subject_public_key_info(t.subject_public_key_info_der));
+        match key.map(|k| k.public_key) {
+            Some(PublicKey::EcP256(_)) => counts.0 = counts.0.saturating_add(1),
+            Some(PublicKey::EcP384(_)) => counts.1 = counts.1.saturating_add(1),
+            Some(PublicKey::Rsa(_)) => counts.2 = counts.2.saturating_add(1),
+            _ => counts.3 = counts.3.saturating_add(1),
+        }
+    }
+    counts
+}
+
+/// Whether `haystack` contains `needle`.
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack.windows(needle.len()).any(|w| w == needle)
+}
+
+#[test]
+fn root_key_classes_are_pinned_and_match_a_raw_curve_oid_scan() {
+    // The pinned numbers are NSS 0a2b0c75's, as classified by clazel_x509::spki.
+    // The design (path-validation.md P2) expected 35 P-384 and 3 P-256.
+    let (p256, p384, rsa, other) = key_class_counts();
+    assert_eq!(
+        (p256, p384, rsa, other),
+        (P256_ROOTS, P384_ROOTS, RSA_ROOTS, OTHER_ROOTS)
+    );
+    // Independent of the decoder: the DER of the namedCurve parameter occurs
+    // in a certificate only as the key's (or a signature's) curve.
+    let raw_p256 = [0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07];
+    let raw_p384 = [0x06, 0x05, 0x2b, 0x81, 0x04, 0x00, 0x22];
+    let scan256 = ROOTS.iter().filter(|r| contains(r.der, &raw_p256)).count();
+    let scan384 = ROOTS.iter().filter(|r| contains(r.der, &raw_p384)).count();
+    assert_eq!((scan256, scan384), (P256_ROOTS, P384_ROOTS));
+}
+
+/// secp256r1, secp384r1 and RSA roots, as the design expected (3 and 35).
+const P256_ROOTS: usize = 3;
+const P384_ROOTS: usize = 35;
+const RSA_ROOTS: usize = 79;
+/// Well framed but not classified: "e-Szigno TLS Root CA 2023" is on
+/// secp521r1 (1.3.132.0.35), which has no class.
+const OTHER_ROOTS: usize = 1;

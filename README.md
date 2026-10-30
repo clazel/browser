@@ -3,7 +3,7 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 38 `unsafe` blocks (136 lines) that enter the OS sandbox, machine-checked and audited.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 38 `unsafe` blocks (136 lines) that enter the OS sandbox, machine-checked and audited. Shipped dependencies are `libc` and libcrux.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Honest about it:** each crate declares its verification tier, and the
