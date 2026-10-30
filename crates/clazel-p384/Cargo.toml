@@ -1,0 +1,39 @@
+[package]
+name = "clazel-p384"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "ECDSA signature verification over NIST P-384 (FIPS 186-5 §6.4.2), specified in Verus."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+fiat-crypto = { version = "=0.3.0", default-features = false }
+
+# Test-only (class `test` in docs/DEPENDENCIES.md: never shipped), for
+# tests/conformance_ecdsa.rs and tests/differential.rs:
+# - `clazel-der` reads the DER Ecdsa-Sig-Value of Wycheproof's signatures
+#   (`verify` itself takes r and s);
+# - `sha2` hashes the messages of the differential (the verifier takes the
+#   digest; the conformance tables carry theirs);
+# - `ring` is the independent engine: it signs, and verifies the same
+#   signatures. It compiles C and assembly, so Miri skips its test.
+[dev-dependencies]
+clazel-der = { path = "../clazel-der", version = "=0.0.0" }
+sha2 = { version = "=0.10.9", default-features = false }
+ring = { version = "=0.17.14", default-features = false, features = ["alloc"] }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires. The spec,
+# the field, the group law and `verify` exist and are proven, but none of the
+# tier 1 or tier 2 evidence (Kani harnesses, mutations of the code, an
+# independent transcription, conformance suites) does yet, so tier 0.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

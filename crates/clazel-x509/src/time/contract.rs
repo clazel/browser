@@ -33,4 +33,13 @@ pub open spec fn validity_contains_ensures(
     output == validity_contains(validity, now)
 }
 
+/// Executable Unix-time conversion returns exactly the calendar value that
+/// POSIX.1-2017 XBD §4.16 gives for `t` seconds after the epoch (UTC, no
+/// leap seconds), or `None` when that is after 9999-12-31T23:59:59Z.
+pub open spec fn from_unix_seconds_ensures(
+    t: nat, output: Option<CertificateTime>,
+) -> bool {
+    output == from_unix_seconds(t)
+}
+
 } // verus!

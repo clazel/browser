@@ -1,0 +1,342 @@
+{
+  "mutations": [
+    {
+      "id": "step1-r-upper",
+      "file": "src/spec.rs",
+      "find": "r <= c.n - 1 && 1 <= s",
+      "replace": "r <= c.n && 1 <= s",
+      "expect": "killed",
+      "reason": "Step 1 bounds r by n - 1; r = n would pass.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_verify_examples()",
+        "witness": "!crate::examples::ex_rejects(toy(), seq![0xB5u8, 0x12u8], 67nat, 5nat, crate::examples::toy_q(), Step::S1)"
+      }
+    },
+    {
+      "id": "step1-r-lower",
+      "file": "src/spec.rs",
+      "find": "if !(1 <= r && r <= c.n - 1",
+      "replace": "if !(0 <= r && r <= c.n - 1",
+      "expect": "killed",
+      "reason": "Step 1 refuses r = 0.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_verify_examples()",
+        "witness": "!crate::examples::ex_rejects(toy(), seq![0xB5u8, 0x12u8], 0nat, 5nat, crate::examples::toy_q(), Step::S1)"
+      }
+    },
+    {
+      "id": "step1-s-upper",
+      "file": "src/spec.rs",
+      "find": "&& s <= c.n - 1)",
+      "replace": "&& s <= c.n)",
+      "expect": "killed",
+      "reason": "Step 1 bounds s by n - 1.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_verify_examples()",
+        "witness": "!crate::examples::ex_rejects(toy(), seq![0xB5u8, 0x12u8], 14nat, 67nat, crate::examples::toy_q(), Step::S1)"
+      }
+    },
+    {
+      "id": "step9-no-reduction",
+      "file": "src/spec.rs",
+      "find": "if r == r1 % c.n {",
+      "replace": "if r == r1 {",
+      "expect": "killed",
+      "reason": "Step 9 compares r with r1 mod n; the toy signature has x_R = 81 > n.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_verify_examples()",
+        "witness": "!ecdsa_verify(toy(), seq![0xB5u8, 0x12u8], 14nat, 5nat, crate::examples::toy_q())"
+      }
+    },
+    {
+      "id": "step5-u-uses-r",
+      "file": "src/spec.rs",
+      "find": "let u = e * w % c.n;",
+      "replace": "let u = r * w % c.n;",
+      "expect": "killed",
+      "reason": "Step 5: u = e·s⁻¹; with r the digest is ignored.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_verify_examples()",
+        "witness": "!ecdsa_verify(toy(), seq![0xB5u8, 0x12u8], 14nat, 5nat, crate::examples::toy_q())"
+      }
+    },
+    {
+      "id": "step5-v-uses-e",
+      "file": "src/spec.rs",
+      "find": "let v = r * w % c.n;",
+      "replace": "let v = e * w % c.n;",
+      "expect": "killed",
+      "reason": "Step 5: v = r·s⁻¹.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_verify_examples()",
+        "witness": "!ecdsa_verify(toy(), seq![0xB5u8, 0x12u8], 14nat, 5nat, crate::examples::toy_q())"
+      }
+    },
+    {
+      "id": "step6-infinity-accepted",
+      "file": "src/spec.rs",
+      "find": "Some(Point::Infinity) => Err(Step::S6),",
+      "replace": "Some(Point::Infinity) => Ok(()),",
+      "expect": "killed",
+      "reason": "Step 6 rejects R1 = O.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_verify_examples()",
+        "witness": "!crate::examples::ex_rejects(toy(), seq![0x02u8], 32nat, 5nat, crate::examples::toy_q(), Step::S6)"
+      }
+    },
+    {
+      "id": "step3-truncation",
+      "file": "src/spec.rs",
+      "find": "hbits.take(ceil_log2(c.n) as int)",
+      "replace": "hbits.take((ceil_log2(c.n) - 1) as int)",
+      "expect": "killed",
+      "reason": "Step 3a keeps the leftmost ⌈log2 n⌉ bits, 7 for the toy curve; 6 halves e.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_derive_e_examples()",
+        "witness": "derive_e(toy(), seq![0xB5u8]) == 45nat"
+      }
+    },
+    {
+      "id": "ceil-log2-halving",
+      "file": "src/spec.rs",
+      "find": "1 + ceil_log2((n + 1) / 2)",
+      "replace": "1 + ceil_log2(n / 2)",
+      "expect": "killed",
+      "reason": "Rounds down: ⌈log2 5⌉ would be 2.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_conversion_examples()",
+        "witness": "ceil_log2(5nat) == 2nat"
+      }
+    },
+    {
+      "id": "bits-to-int-base",
+      "file": "src/spec.rs",
+      "find": "bits_to_int(b.drop_last()) * 2 +",
+      "replace": "bits_to_int(b.drop_last()) * 3 +",
+      "expect": "killed",
+      "reason": "B.2.1 is base 2.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_conversion_examples()",
+        "witness": "bits_to_int(seq![true, false, true]) == 10nat"
+      }
+    },
+    {
+      "id": "octet-bit-order",
+      "file": "src/spec.rs",
+      "find": "two_to((7 - i % 8) as nat)",
+      "replace": "two_to((i % 8) as nat)",
+      "expect": "killed",
+      "reason": "SEC 1 §2.3.2 writes each octet most significant bit first.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_conversion_examples()",
+        "witness": "octets_to_bits(seq![0xB5u8]) == seq![true, false, true, false, true, true, false, true]"
+      }
+    },
+    {
+      "id": "os2ip-base",
+      "file": "src/spec.rs",
+      "find": "os2ip(m.drop_last()) * 256 + m.last() as nat",
+      "replace": "os2ip(m.drop_last()) * 255 + m.last() as nat",
+      "expect": "killed",
+      "reason": "SEC 1 §2.3.8 is base 256.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_conversion_examples()",
+        "witness": "os2ip(seq![1u8, 2u8]) == 257nat"
+      }
+    },
+    {
+      "id": "os2fe-range",
+      "file": "src/spec.rs",
+      "find": "if a < c.p {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "SEC 1 §2.3.6 refuses a coordinate of p or more; 127 = 44 + 83 would alias x = 44.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_decode_examples()",
+        "witness": "os2p(toy(), seq![0x04u8, 127u8, 39u8]) is Some"
+      }
+    },
+    {
+      "id": "os2p-hybrid",
+      "file": "src/spec.rs",
+      "find": "if w != 0x04 {",
+      "replace": "if w != 0x04 && w != 0x06 {",
+      "expect": "killed",
+      "reason": "SEC 1 §2.3.4 step 3.2 accepts only W = 04.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_decode_examples()",
+        "witness": "os2p(toy(), seq![0x06u8, 44u8, 39u8]) is Some"
+      }
+    },
+    {
+      "id": "os2p-on-curve",
+      "file": "src/spec.rs",
+      "find": "if satisfies_equation(c, x, y) {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "SEC 1 §2.3.4 step 3.5 checks the curve equation; (0, 0) is not on the toy curve.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_decode_examples()",
+        "witness": "os2p(toy(), seq![0x04u8, 0u8, 0u8]) is Some"
+      }
+    },
+    {
+      "id": "key-infinity",
+      "file": "src/spec.rs",
+      "find": "Point::Infinity => false,",
+      "replace": "Point::Infinity => true,",
+      "expect": "killed",
+      "reason": "SP 800-186 D.1.1.1 step 1 rejects the point at infinity.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_decode_examples()",
+        "witness": "decode_public_key(toy(), seq![0x00u8]) is Some"
+      }
+    },
+    {
+      "id": "double-uses-b",
+      "file": "src/spec.rs",
+      "find": "(3 * x1 * x1 + c.a)",
+      "replace": "(3 * x1 * x1 + c.b)",
+      "expect": "killed",
+      "reason": "SEC 1 rule 5: λ = (3x² + a)/(2y).",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_group_examples()",
+        "witness": "!(ec_add(toy(), crate::examples::toy_g(), crate::examples::toy_g()) == Some(Point::Affine { x: 81nat, y: 52nat }))"
+      }
+    },
+    {
+      "id": "add-slope-sign",
+      "file": "src/spec.rs",
+      "find": "let lambda = fe_sub(c.p, y2, y1) * w % c.p;",
+      "replace": "let lambda = fe_sub(c.p, y1, y2) * w % c.p;",
+      "expect": "killed",
+      "reason": "SEC 1 rule 4: λ = (y2 - y1)/(x2 - x1).",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_group_examples()",
+        "witness": "!(ec_add(toy(), Point::Affine { x: 81nat, y: 52nat }, crate::examples::toy_g()) == Some(Point::Affine { x: 50nat, y: 63nat }))"
+      }
+    },
+    {
+      "id": "add-x3",
+      "file": "src/spec.rs",
+      "find": "let x3 = fe_sub(c.p, fe_sub(c.p, lambda * lambda % c.p, x1), x2);",
+      "replace": "let x3 = fe_sub(c.p, fe_sub(c.p, lambda * lambda % c.p, x1), x1);",
+      "expect": "killed",
+      "reason": "SEC 1 rule 4: x3 = λ² - x1 - x2.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_group_examples()",
+        "witness": "!(ec_add(toy(), Point::Affine { x: 81nat, y: 52nat }, crate::examples::toy_g()) == Some(Point::Affine { x: 50nat, y: 63nat }))"
+      }
+    },
+    {
+      "id": "negation-rule",
+      "file": "src/spec.rs",
+      "find": "if x1 == x2 && (y1 + y2) % c.p == 0 {",
+      "replace": "if x1 == x2 && (y1 + y2) % c.p == 1 {",
+      "expect": "killed",
+      "reason": "SEC 1 rule 3: (x, y) + (x, -y) = O.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_group_examples()",
+        "witness": "!(ec_add(toy(), crate::examples::toy_g(), Point::Affine { x: 1nat, y: 52nat }) == Some(Point::Infinity))"
+      }
+    },
+    {
+      "id": "scalar-odd-bit",
+      "file": "src/spec.rs",
+      "find": "Some(twice) => if k % 2 == 1 {",
+      "replace": "Some(twice) => if k % 2 == 0 {",
+      "expect": "killed",
+      "reason": "Double-and-add adds P on a one bit.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_toy_group_examples()",
+        "witness": "!(scalar_mul(toy(), 2nat, crate::examples::toy_g()) == Some(Point::Affine { x: 81nat, y: 52nat }))"
+      }
+    },
+    {
+      "id": "inv-unchecked",
+      "file": "src/spec.rs",
+      "find": "if (a % m) * w % m == 1 {",
+      "replace": "if true {",
+      "expect": "killed",
+      "reason": "The inverse is accepted only when it is checked to be one; 0 has none.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_inverse_examples()",
+        "witness": "inv(83nat, 0nat) is Some"
+      }
+    },
+    {
+      "id": "b1-step5-sign",
+      "file": "src/spec.rs",
+      "find": "let y = y2 - y1 * quotient;",
+      "replace": "let y = y2 + y1 * quotient;",
+      "expect": "killed",
+      "reason": "FIPS 186-5 B.1 step 5: y = y2 - y1·quotient; with + the inverse of 2 mod 83 comes out 41, not 42.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_inverse_examples()",
+        "witness": "b1_inverse(2nat, 83nat) == Some(41nat)"
+      }
+    },
+    {
+      "id": "p384-gx",
+      "file": "src/spec.rs",
+      "find": "gx: 0xaa87ca22_",
+      "replace": "gx: 0xaa87ca23_",
+      "expect": "killed",
+      "reason": "SP 800-186 §3.2.1.4's Gx; changed, G is off the curve.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_p384_group_examples()",
+        "witness": "!satisfies_equation(p384(), p384().gx, p384().gy)"
+      }
+    },
+    {
+      "id": "p384-b",
+      "file": "src/spec.rs",
+      "find": "b: 0xb3312fa7_",
+      "replace": "b: 0xb3312fa6_",
+      "expect": "killed",
+      "reason": "SP 800-186 §3.2.1.4's b; changed, G is off the curve.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_p384_group_examples()",
+        "witness": "!satisfies_equation(p384(), p384().gx, p384().gy)"
+      }
+    },
+    {
+      "id": "p384-n",
+      "file": "src/spec.rs",
+      "find": "ffffffff_c7634d81_f4372ddf",
+      "replace": "ffffffff_c7634d82_f4372ddf",
+      "expect": "killed",
+      "reason": "SP 800-186 §3.2.1.4's n; the changed value is composite, so 2 has no Fermat inverse.",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "crate::examples::lemma_inverse_examples()",
+        "witness": "inv(p384().n, 2nat) is None"
+      }
+    }
+  ]
+}
