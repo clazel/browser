@@ -101,6 +101,17 @@ pub struct RootEntry {
     pub server_distrust_after: Option<Seq<u8>>,
 }
 
+/// The anchors after one more row, whose `anchor_from_root` is `anchor`:
+/// appended if the row yields one, and (R) left out if not.
+pub open spec fn add_anchor(before: Seq<clazel_x509::path::parsed::spec::Anchor>,
+    anchor: Option<clazel_x509::path::parsed::spec::Anchor>) -> Seq<clazel_x509::path::parsed::spec::Anchor>
+{
+    match anchor {
+        Some(anchor) => before.push(anchor),
+        None => before,
+    }
+}
+
 /// The anchors of a root table, in table order: every row that
 /// `anchor_from_root` accepts ((R) the others are left out).
 pub open spec fn anchors_from_roots(roots: Seq<RootEntry>) -> Seq<clazel_x509::path::parsed::spec::Anchor>
@@ -108,11 +119,8 @@ pub open spec fn anchors_from_roots(roots: Seq<RootEntry>) -> Seq<clazel_x509::p
 {
     if roots.len() == 0 { seq![] }
     else {
-        let before = anchors_from_roots(roots.drop_last());
-        match clazel_x509::path::parsed::spec::anchor_from_root(roots.last().der, roots.last().server_distrust_after) {
-            Some(anchor) => before.push(anchor),
-            None => before,
-        }
+        add_anchor(anchors_from_roots(roots.drop_last()),
+            clazel_x509::path::parsed::spec::anchor_from_root(roots.last().der, roots.last().server_distrust_after))
     }
 }
 
@@ -177,6 +185,19 @@ pub open spec fn certificate_error(error: clazel_x509::path::spec::PathError) ->
 // The validator
 // ---------------------------------------------------------------------------
 
+/// Steps 3 and 4 of [`validate`]: the validator's answer to the search's
+/// verdict.
+pub open spec fn outcome(verdict: Result<clazel_x509::path::verifier::Validated, clazel_x509::path::spec::PathError>)
+    -> Result<Seq<u8>, clazel_tls::auth::spec::CertificateError>
+{
+    match verdict {
+        // 3. The leaf's key, for CertificateVerify (§4.4.3).
+        Ok(validated) => Ok(validated.leaf_spki),
+        // 4. §6.2: the alert of the refusal.
+        Err(error) => Err(certificate_error(error)),
+    }
+}
+
 /// RFC 8446 §4.4.2: the server's Certificate body, validated for `host` at
 /// Unix time `now` against `anchors`; `Ok` carries the leaf's
 /// SubjectPublicKeyInfo DER.
@@ -188,13 +209,9 @@ pub open spec fn validate(anchors: Seq<clazel_x509::path::parsed::spec::Anchor>,
         None => Err(clazel_tls::auth::spec::CertificateError::BadCertificate),
         // 2. The leaf first, then the pool, for this reference identity and
         //    clock: RFC 5280 §6.1 with the profile and the search.
-        Some(certificate) => match clazel_x509::path::search::spec::verify_server_chain(
-            production_environment(), anchors, presented(certificate.entries), reference_identity(host), now) {
-            // 3. The leaf's key, for CertificateVerify (§4.4.3).
-            Ok(validated) => Ok(validated.leaf_spki),
-            // 4. §6.2: the alert of the refusal.
-            Err(error) => Err(certificate_error(error)),
-        },
+        //    Then 3. and 4. ([`outcome`]).
+        Some(certificate) => outcome(clazel_x509::path::search::spec::verify_server_chain(
+            production_environment(), anchors, presented(certificate.entries), reference_identity(host), now)),
     }
 }
 
