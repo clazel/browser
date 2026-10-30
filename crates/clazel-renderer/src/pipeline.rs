@@ -429,19 +429,27 @@ fn cut(s: &str, max: usize) -> &str {
 /// cut to [`MAX_TITLE`] characters, the links kept while they take at most
 /// a quarter of the frame, and the text cut at a line to what is left, with
 /// a last line saying what was cut. If even that does not encode, a notice
-/// alone.
+/// alone. A page that fits is moved into the message, not copied.
 pub fn fit(shown: Shown) -> Msg {
-    let whole = Msg::Display {
-        title: shown.title.clone().into_bytes(),
-        text: shown.text.clone().into_bytes(),
-        links: shown.links.iter().map(|l| l.clone().into_bytes()).collect(),
-    };
-    if encode_framed(&whole).is_some() {
-        return whole;
-    }
     // Room for the headers: 4 for the frame, and at most 9 per string and
-    // per array, with a margin.
+    // per array, with a margin for the tag.
     let budget = MAX_FRAME.saturating_sub(4096);
+    let size = shown.links.iter().fold(
+        shown.title.len().saturating_add(shown.text.len()),
+        |a, l| a.saturating_add(l.len()).saturating_add(9),
+    );
+    if size <= budget {
+        let whole = Msg::Display {
+            title: shown.title.into_bytes(),
+            text: shown.text.into_bytes(),
+            links: shown.links.into_iter().map(String::into_bytes).collect(),
+        };
+        return if encode_framed(&whole).is_some() {
+            whole
+        } else {
+            too_large()
+        };
+    }
     let title: String = shown.title.chars().take(MAX_TITLE).collect();
     let mut links = Vec::new();
     let mut used = 0usize;
@@ -473,8 +481,15 @@ pub fn fit(shown: Shown) -> Msg {
         links,
     };
     if encode_framed(&cut_msg).is_some() {
-        return cut_msg;
+        cut_msg
+    } else {
+        too_large()
     }
+}
+
+/// The `Display` of a page that cannot be sent at all (not reached: [`fit`]
+/// stays under the frame's size).
+fn too_large() -> Msg {
     Msg::Display {
         title: Vec::new(),
         text: b"[the page is too large to display]".to_vec(),
