@@ -26,6 +26,7 @@ pub proof fn lemma_comment_frame(p: Parser, data: Seq<u32>, loc: Option<Location
         p.redirect is None || (dom::valid(p.doc, p.redirect->Some_0.1) && p.doc.nodes[p.redirect->Some_0.1 as int].kind is DocumentFragment),
         loc is Some,
         super::doc::pok(p.doc, loc->Some_0.parent),
+        super::doc::html_plain(p.doc, p.context),
     ensures
         insert_comment(p, data, loc).stopped || (insert_comment(p, data, loc) == (Parser {
             doc: insert_comment(p, data, loc).doc,
@@ -34,6 +35,7 @@ pub proof fn lemma_comment_frame(p: Parser, data: Seq<u32>, loc: Option<Location
             p.doc,
             insert_comment(p, data, loc).doc,
         )),
+        super::doc::html_plain(insert_comment(p, data, loc).doc, p.context),
 {
     let l = adjusted_location(p, loc);
     let (p1, c) = create(p, NodeKind::Comment { data });
@@ -53,6 +55,7 @@ pub proof fn lemma_pi_frame(p: Parser, target: Seq<u32>, data: Seq<u32>, loc: Op
         p.redirect is None || (dom::valid(p.doc, p.redirect->Some_0.1) && p.doc.nodes[p.redirect->Some_0.1 as int].kind is DocumentFragment),
         loc is Some,
         super::doc::pok(p.doc, loc->Some_0.parent),
+        super::doc::html_plain(p.doc, p.context),
     ensures
         insert_pi(p, target, data, loc).stopped || (insert_pi(p, target, data, loc) == (Parser {
             doc: insert_pi(p, target, data, loc).doc,
@@ -61,6 +64,7 @@ pub proof fn lemma_pi_frame(p: Parser, target: Seq<u32>, data: Seq<u32>, loc: Op
             p.doc,
             insert_pi(p, target, data, loc).doc,
         )),
+        super::doc::html_plain(insert_pi(p, target, data, loc).doc, p.context),
 {
     let l = adjusted_location(p, loc);
     let (p1, n) = create(p, NodeKind::ProcessingInstruction { target, data });
@@ -114,6 +118,51 @@ pub proof fn lemma_initial_doctype_frame(
     assert(set_document_mode(p2, DocumentMode::LimitedQuirks).doc.nodes.len() >= p.doc.nodes.len());
 }
 
+/// The DOCTYPE of the "initial" mode keeps `doc::html_plain`.
+pub proof fn lemma_initial_doctype_plain(
+    p: Parser,
+    name: Option<Seq<u32>>,
+    public_id: Option<Seq<u32>>,
+    system_id: Option<Seq<u32>>,
+    force_quirks: bool,
+)
+    requires
+        dom::wf(p.doc),
+        super::doc::html_plain(p.doc, p.context),
+    ensures
+        !initial_doctype(p, name, public_id, system_id, force_quirks).stopped ==> super::doc::html_plain(
+            initial_doctype(p, name, public_id, system_id, force_quirks).doc,
+            p.context,
+        ),
+{
+    hide(create);
+    hide(dom_insert);
+    hide(set_document_mode);
+    hide(doctype_is_quirks);
+    hide(doctype_is_limited_quirks);
+    let k = NodeKind::DocumentType { name: or_empty(name), public_id: or_empty(public_id), system_id: or_empty(system_id) };
+    let (p1, doctype) = create(p, k);
+    super::doc::lemma_create_doc_extends(p, k);
+    assert(super::doc::kind_plain(k));
+    if !p1.stopped {
+        assert(p1.context == p.context);
+        assert(super::doc::html_plain(p1.doc, p.context));
+        super::doc::lemma_document_pok(p1.doc);
+        super::doc::lemma_dom_insert_extends(p1, doctype, 0, None);
+        let p2 = if has_doctype_child(p1.doc, 0) || has_element_child(p1.doc, 0) {
+            p1
+        } else {
+            dom_insert(p1, doctype, 0, None)
+        };
+        assert(p2.context == p.context);
+        assert(super::doc::html_plain(p2.doc, p.context));
+        super::doc::lemma_set_document_mode_extends(p2, DocumentMode::Quirks);
+        super::doc::lemma_set_document_mode_extends(p2, DocumentMode::LimitedQuirks);
+    } else {
+        reveal(set_document_mode);
+    }
+}
+
 /// A parser whose document changed (extending it), or that stopped, keeps
 /// [`reach_core`] and `modes_ok`.
 pub proof fn lemma_doc_only(p: Parser, q: Parser)
@@ -122,6 +171,7 @@ pub proof fn lemma_doc_only(p: Parser, q: Parser)
         modes_ok(p),
         q.stopped || (q == (Parser { doc: q.doc, ..p }) && q.doc.nodes.len() >= p.doc.nodes.len()
             && crate::exec::frame::doc_extends(p.doc, q.doc)),
+        q.stopped || super::doc::html_plain(q.doc, p.context),
     ensures
         q.stopped || (reach_core(q) && modes_ok(q)),
 {
@@ -139,6 +189,7 @@ pub proof fn lemma_early_doc(p: Parser)
         dom::wf(p.doc),
         p.redirect is None || (dom::valid(p.doc, p.redirect->Some_0.1) && p.doc.nodes[p.redirect->Some_0.1 as int].kind is DocumentFragment),
         super::doc::pok(p.doc, document_location().parent),
+        super::doc::html_plain(p.doc, p.context),
 {
     super::doc::lemma_dinv(p);
     super::doc::lemma_document_pok(p.doc);
@@ -148,6 +199,7 @@ pub proof fn lemma_early_doc(p: Parser)
 // "initial" and "before html"
 
 /// The "initial" rules.
+#[verifier::spinoff_prover]
 pub proof fn lemma_initial_reach(env: EncFns, p: Parser, t: Tok)
     requires
         rules_inv(Rules::Html(Mode::Initial), p, t),
@@ -155,6 +207,7 @@ pub proof fn lemma_initial_reach(env: EncFns, p: Parser, t: Tok)
         next_core(mode_initial(env, p, t)),
 {
     lemma_early_doc(p);
+    super::doc::lemma_dinv(p);
     super::doc::lemma_set_document_mode_extends(p, DocumentMode::Quirks);
     super::doc::lemma_dinv_doc(p, set_document_mode(p, DocumentMode::Quirks).doc);
     if t is Comment {
@@ -165,6 +218,7 @@ pub proof fn lemma_initial_reach(env: EncFns, p: Parser, t: Tok)
         lemma_doc_only(p, insert_pi(p, t->Pi_0, t->Pi_1, Some(document_location())));
     } else if t is Doctype {
         lemma_initial_doctype_frame(p, t->Doctype_name, t->Doctype_public_id, t->Doctype_system_id, t->Doctype_force_quirks);
+        lemma_initial_doctype_plain(p, t->Doctype_name, t->Doctype_public_id, t->Doctype_system_id, t->Doctype_force_quirks);
         let p1 = Parser { mode: Mode::BeforeHtml, ..p };
         lemma_doc_only(
             p1,
@@ -174,6 +228,7 @@ pub proof fn lemma_initial_reach(env: EncFns, p: Parser, t: Tok)
 }
 
 /// The `html` element "before html" creates and pushes.
+#[verifier::spinoff_prover]
 pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
     requires
         reach_core(p),
@@ -181,6 +236,7 @@ pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
         p.mode == Mode::BeforeHtml,
         !p.stopped,
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag == Tag::Html,
     ensures
         ({
@@ -213,6 +269,7 @@ pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
         assert(root_ids(q));
         assert(tags_wf(q));
         super::doc::lemma_dinv(p);
+        assert(super::doc::kind_plain(k));
         super::doc::lemma_create_doc_extends(p, k);
         super::doc::lemma_dinv_doc(p, p1.doc);
         super::doc::lemma_document_pok(p1.doc);
@@ -224,7 +281,10 @@ pub proof fn lemma_before_html_push(p: Parser, tt: TagTok)
         crate::exec::frame::lemma_elem_ok_extends(p1.doc, p2.doc, e);
         super::doc::lemma_dinv(p2);
         crate::exec::frame::lemma_open_push(p2.doc, p2.open, e);
+        super::doc::lemma_fresh_after_ctx(p, e);
+        super::doc::lemma_push_after_ctx(p2, e);
         super::doc::lemma_dinv_open(p2, p2.open.push(e));
+        assert(q.formatting == p.formatting);
     }
 }
 
@@ -265,6 +325,7 @@ pub proof fn lemma_insert_head(p: Parser, tt: TagTok)
         p.mode == Mode::BeforeHead,
         !p.stopped,
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag == Tag::Head,
     ensures
         ({
@@ -284,6 +345,7 @@ pub proof fn lemma_insert_head(p: Parser, tt: TagTok)
         assert(crate::exec::frame::elem_ok(p1.doc, p1.open[p1.open.len() - 1]));
         crate::exec::modes::before_head::lemma_tag_of_head(tt.name);
         assert(elem_in_doc(q.doc, head_elem(e.id)));
+        super::doc::lemma_fresh_after_ctx(p, e);
         super::doc::lemma_dinv_intro(q);
     }
 }
@@ -347,6 +409,7 @@ pub proof fn lemma_generic_text_reach(p: Parser, tt: TagTok, rawtext: bool)
         shape0(p.mode, p.open),
         p.mode != Mode::Text && p.mode != Mode::InTableText,
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
         tt.tag != Tag::Html && tt.tag != Tag::Table,
@@ -373,6 +436,7 @@ pub proof fn lemma_in_head_script_reach(p: Parser, tt: TagTok)
         shape0(p.mode, p.open),
         p.mode != Mode::Text && p.mode != Mode::InTableText,
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag == Tag::Script,
     ensures
         next_core(Outcome::Done(in_head_script(p, tt))),
@@ -403,6 +467,7 @@ pub proof fn lemma_tcount_push_template(o: Seq<Elem>, e: Elem)
 }
 
 /// The "in head" `template` start tag.
+#[verifier::spinoff_prover]
 pub proof fn lemma_in_head_template_start_reach(p: Parser, tt: TagTok)
     requires
         good(p),
@@ -411,6 +476,7 @@ pub proof fn lemma_in_head_template_start_reach(p: Parser, tt: TagTok)
         shape0(p.mode, p.open),
         p.mode != Mode::Initial && p.mode != Mode::BeforeHtml,
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag == Tag::Template,
     ensures
         next_core(Outcome::Done(in_head_template_start(p, tt))),
@@ -429,6 +495,8 @@ pub proof fn lemma_in_head_template_start_reach(p: Parser, tt: TagTok)
         super::doc::lemma_dinv(p3);
         assert(crate::exec::frame::elem_ok(p3.doc, template));
         crate::exec::frame::lemma_open_push(p3.doc, p3.open, template);
+        super::doc::lemma_fresh_after_ctx(p2, template);
+        super::doc::lemma_push_after_ctx(p3, template);
         super::doc::lemma_dinv_open(p3, p3.open.push(template));
         super::doc::lemma_place_pok(p3, None);
     }
@@ -562,6 +630,7 @@ pub proof fn lemma_insert_pop_frame(p: Parser, tt: TagTok)
         modes_ok(p),
         reach_core(p),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Template,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
         tt.tag != Tag::Html && tt.tag != Tag::Table,
@@ -576,6 +645,7 @@ pub proof fn lemma_insert_pop_frame(p: Parser, tt: TagTok)
     let q = pop(p1);
     if !q.stopped {
         assert(q.open == p.open);
+        super::doc::lemma_dinv(p1);
         lemma_core_frame(p, q);
     }
 }

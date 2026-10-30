@@ -178,6 +178,7 @@ pub proof fn lemma_in_table_section(p: Parser, t: Tok, tt: TagTok)
         modes_ok(p),
         rooted_mode(p.mode),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag == Tag::Caption || tt.tag == Tag::Colgroup || tt.tag == Tag::Col || tt.tag == Tag::Tbody || tt.tag == Tag::Tfoot
             || tt.tag == Tag::Thead || tt.tag == Tag::Td || tt.tag == Tag::Th || tt.tag == Tag::Tr,
     ensures

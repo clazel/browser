@@ -8,20 +8,27 @@ use vstd::prelude::*;
 
 verus! {
 
-/// [`dinv_of`] of the parser's document, stack, head element pointer and
-/// redirection map.
+/// [`dinv_of`] of the parser's document, stack, head element pointer,
+/// redirection map and context element.
 pub open spec fn dinv(p: Parser) -> bool {
-    dinv_of(p.doc, p.open, p.head, p.redirect)
+    dinv_of(p.doc, p.open, p.head, p.redirect, p.context)
 }
 
 /// The document is well formed; every record on the stack is an element
 /// of it with its namespace and name, tagged by its name, and a `template`
 /// record has template contents (`exec::frame::open_ok`); the head element
 /// pointer names an HTML `head` element; the redirection map's target is a
-/// fragment; and every `template` element with a child has template
-/// contents.
+/// fragment; every `template` element with a child has template
+/// contents; and every HTML element but the context element has plain
+/// attributes ([`html_plain`]).
 #[verifier::opaque]
-pub open spec fn dinv_of(doc: Document, open: Seq<Elem>, head: Option<NodeId>, redirect: Option<(NodeId, NodeId)>) -> bool {
+pub open spec fn dinv_of(
+    doc: Document,
+    open: Seq<Elem>,
+    head: Option<NodeId>,
+    redirect: Option<(NodeId, NodeId)>,
+    ctx: Option<Elem>,
+) -> bool {
     &&& dom::wf(doc)
     &&& crate::exec::frame::open_ok(doc, open)
     &&& match head {
@@ -35,6 +42,41 @@ pub open spec fn dinv_of(doc: Document, open: Seq<Elem>, head: Option<NodeId>, r
     &&& forall|n: NodeId|
         dom::valid(doc, n) && #[trigger] node_is_template(doc, n) && doc.nodes[n as int].children.len() > 0
             ==> has_template_contents(doc, n)
+    &&& html_plain(doc, ctx)
+    &&& ctx_below(doc, open, head, ctx)
+}
+
+/// The context element (the fragment case's) is a node of the document
+/// created before every element on the stack and the head element pointer's
+/// (so none of them is it).
+pub open spec fn ctx_below(doc: Document, open: Seq<Elem>, head: Option<NodeId>, ctx: Option<Elem>) -> bool {
+    match ctx {
+        None => true,
+        Some(c) => {
+            &&& c.id < doc.nodes.len()
+            &&& forall|j: int| 0 <= j < open.len() ==> c.id < (#[trigger] open[j]).id
+            &&& head is Some ==> c.id < head->Some_0
+        },
+    }
+}
+
+/// A record created after the context element (or with no context).
+pub open spec fn after_ctx(p: Parser, e: Elem) -> bool {
+    p.context is None || p.context->Some_0.id < e.id
+}
+
+/// Every HTML element of the document but the context element `ctx` (the
+/// fragment case's, whose attributes are the caller's) has attributes with
+/// no namespace and no prefix
+/// (`independent::equivalence_body::attrs_plain`): the parser creates HTML
+/// elements only for tokens, whose attributes are plain, and appends only
+/// a token's attributes to an element.
+#[verifier::opaque]
+pub open spec fn html_plain(doc: Document, ctx: Option<Elem>) -> bool {
+    forall|i: int|
+        0 <= i < doc.nodes.len() && (ctx is None || i != ctx->Some_0.id) && (#[trigger] doc.nodes[i]).kind is Element
+            && doc.nodes[i].kind->Element_namespace == Some(Namespace::Html)
+            ==> crate::independent::equivalence_body::attrs_plain(doc.nodes[i].kind->Element_attributes)
 }
 
 /// Node `n` may receive a child: it is a node, and no `template` element
@@ -61,6 +103,8 @@ pub proof fn lemma_dinv(p: Parser)
         forall|n: NodeId|
             dom::valid(p.doc, n) && #[trigger] node_is_template(p.doc, n) && p.doc.nodes[n as int].children.len() > 0
                 ==> has_template_contents(p.doc, n),
+        html_plain(p.doc, p.context),
+        ctx_below(p.doc, p.open, p.head, p.context),
 {
     reveal(dinv_of);
 }
@@ -111,18 +155,21 @@ pub proof fn lemma_dinv_intro(p: Parser)
         forall|n: NodeId|
             dom::valid(p.doc, n) && #[trigger] node_is_template(p.doc, n) && p.doc.nodes[n as int].children.len() > 0
                 ==> has_template_contents(p.doc, n),
+        html_plain(p.doc, p.context),
+        ctx_below(p.doc, p.open, p.head, p.context),
     ensures
         dinv(p),
 {
     reveal(dinv_of);
 }
 
-/// A document that `exec::frame::doc_extends` the parser's keeps
-/// [`dinv`].
+/// A document that `exec::frame::doc_extends` the parser's, and is
+/// [`html_plain`], keeps [`dinv`].
 pub proof fn lemma_dinv_doc(p: Parser, d: Document)
     requires
         dinv(p),
         crate::exec::frame::doc_extends(p.doc, d),
+        html_plain(d, p.context),
     ensures
         dinv(Parser { doc: d, ..p }),
 {
@@ -152,11 +199,13 @@ pub proof fn lemma_dinv_doc(p: Parser, d: Document)
     lemma_dinv_intro(q);
 }
 
-/// A new stack of records that are `exec::frame::elem_ok` keeps [`dinv`].
+/// A new stack of records that are `exec::frame::elem_ok` and created
+/// after the context element keeps [`dinv`].
 pub proof fn lemma_dinv_open(p: Parser, o: Seq<Elem>)
     requires
         dinv(p),
         crate::exec::frame::open_ok(p.doc, o),
+        forall|j: int| 0 <= j < o.len() ==> after_ctx(p, #[trigger] o[j]),
     ensures
         dinv(Parser { open: o, ..p }),
 {
@@ -174,27 +223,63 @@ pub proof fn lemma_dinv_sub(p: Parser, o: Seq<Elem>)
 {
     lemma_dinv(p);
     crate::exec::frame::lemma_open_sub(p.doc, p.open, o);
+    assert forall|j: int| 0 <= j < o.len() implies after_ctx(p, #[trigger] o[j]) by {
+        let k = choose|k: int| 0 <= k < p.open.len() && p.open[k] == o[j];
+        assert(after_ctx(p, p.open[k]));
+    }
     lemma_dinv_open(p, o);
 }
 
 /// A stack whose records come from the parser's or are `e`, a record that
-/// is `exec::frame::elem_ok`, keeps [`dinv`].
+/// is `exec::frame::elem_ok` and created after the context element, keeps
+/// [`dinv`].
 pub proof fn lemma_dinv_with(p: Parser, o: Seq<Elem>, e: Elem)
     requires
         dinv(p),
         crate::exec::frame::elem_ok(p.doc, e),
+        after_ctx(p, e),
         forall|j: int| 0 <= j < o.len() ==> #[trigger] o[j] == e || p.open.contains(o[j]),
     ensures
         dinv(Parser { open: o, ..p }),
 {
     lemma_dinv(p);
-    assert forall|j: int| 0 <= j < o.len() implies crate::exec::frame::elem_ok(p.doc, #[trigger] o[j]) by {
+    assert forall|j: int| 0 <= j < o.len() implies crate::exec::frame::elem_ok(p.doc, #[trigger] o[j]) && after_ctx(p, o[j]) by {
         if o[j] != e {
             let k = choose|k: int| 0 <= k < p.open.len() && p.open[k] == o[j];
             assert(crate::exec::frame::elem_ok(p.doc, p.open[k]));
+            assert(after_ctx(p, p.open[k]));
         }
     }
     lemma_dinv_open(p, o);
+}
+
+/// The stack with a record created after the context element pushed
+/// holds only such records.
+pub proof fn lemma_push_after_ctx(p: Parser, e: Elem)
+    requires
+        dinv(p),
+        after_ctx(p, e),
+    ensures
+        forall|j: int| 0 <= j < p.open.push(e).len() ==> after_ctx(p, #[trigger] p.open.push(e)[j]),
+{
+    lemma_dinv(p);
+    assert forall|j: int| 0 <= j < p.open.push(e).len() implies after_ctx(p, #[trigger] p.open.push(e)[j]) by {
+        if j < p.open.len() {
+            assert(p.open.push(e)[j] == p.open[j]);
+        }
+    }
+}
+
+/// A record of a node created at or after the arena's current size is
+/// created after the context element.
+pub proof fn lemma_fresh_after_ctx(p: Parser, e: Elem)
+    requires
+        dinv(p),
+        e.id >= p.doc.nodes.len(),
+    ensures
+        after_ctx(p, e),
+{
+    lemma_dinv(p);
 }
 
 /// A template's contents may receive a child (it is a fragment).
@@ -269,12 +354,16 @@ pub proof fn lemma_dom_insert_extends(p: Parser, node: NodeId, parent: NodeId, c
         crate::exec::frame::doc_extends(p.doc, dom_insert(p, node, parent, child).doc),
         dom_insert(p, node, parent, child) == (Parser { doc: dom_insert(p, node, parent, child).doc, ..p }),
         dom_insert(p, node, parent, child).doc.nodes.len() == p.doc.nodes.len(),
+        html_plain(p.doc, p.context) ==> html_plain(dom_insert(p, node, parent, child).doc, p.context),
 {
     crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p.doc);
     let d1 = dom::adopt(p.doc, node);
     assert(d1.nodes.len() == p.doc.nodes.len());
     if !p.stopped && insert_valid(p.doc, node, parent, child) {
         crate::exec::frame::lemma_insert_extends(p.doc, node, parent, child);
+        if html_plain(p.doc, p.context) {
+            lemma_insert_plain(p.doc, node, parent, child, p.context);
+        }
     }
 }
 
@@ -293,10 +382,14 @@ pub proof fn lemma_create_doc_extends(p: Parser, k: NodeKind)
         !create(p, k).0.stopped ==> create(p, k).0 == (Parser { doc: create(p, k).0.doc, ..p }),
         create(p, k).0.doc.nodes.len() >= p.doc.nodes.len(),
         p.stopped ==> create(p, k).0 == p,
+        html_plain(p.doc, p.context) && kind_plain(k) ==> html_plain(create(p, k).0.doc, p.context),
 {
     crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p.doc);
     if !p.stopped && dom::can_create(p.doc, 1) {
         crate::exec::frame::lemma_create_extends(p.doc, k);
+        if html_plain(p.doc, p.context) && kind_plain(k) {
+            lemma_create_plain(p.doc, k, p.context);
+        }
     }
 }
 
@@ -307,10 +400,15 @@ pub proof fn lemma_set_document_mode_extends(p: Parser, mode: DocumentMode)
     ensures
         crate::exec::frame::doc_extends(p.doc, set_document_mode(p, mode).doc),
         set_document_mode(p, mode) == (Parser { doc: set_document_mode(p, mode).doc, ..p }),
+        html_plain(p.doc, p.context) ==> html_plain(set_document_mode(p, mode).doc, p.context),
 {
     crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p.doc);
     if !p.stopped {
         lemma_set_mode_extends(p.doc, mode);
+        if html_plain(p.doc, p.context) {
+            crate::exec::insert::lemma_wf_nonempty(p.doc);
+            lemma_set_mode_plain(p.doc, mode, p.context);
+        }
     }
 }
 
@@ -404,6 +502,216 @@ pub proof fn lemma_adjusted_pok(p: Parser, loc: Option<Location>)
     if loc is None {
         lemma_place_pok(p, None);
     }
+}
+
+// ---------------------------------------------------------------------
+// Plain attributes ([`html_plain`])
+
+/// A node kind that is an HTML element only with plain attributes.
+pub open spec fn kind_plain(k: NodeKind) -> bool {
+    k is Element && k->Element_namespace == Some(Namespace::Html) ==> crate::independent::equivalence_body::attrs_plain(
+        k->Element_attributes,
+    )
+}
+
+/// A document whose nodes have the kinds of a [`html_plain`] one's is
+/// [`html_plain`].
+pub proof fn lemma_plain_same(d0: Document, d1: Document, c: Option<Elem>)
+    requires
+        html_plain(d0, c),
+        d1.nodes.len() == d0.nodes.len(),
+        forall|i: int| 0 <= i < d0.nodes.len() ==> (#[trigger] d1.nodes[i]).kind == d0.nodes[i].kind,
+    ensures
+        html_plain(d1, c),
+{
+    reveal(html_plain);
+    assert forall|i: int|
+        0 <= i < d1.nodes.len() && (c is None || i != c->Some_0.id) && (#[trigger] d1.nodes[i]).kind is Element
+            && d1.nodes[i].kind->Element_namespace == Some(Namespace::Html)
+            implies crate::independent::equivalence_body::attrs_plain(d1.nodes[i].kind->Element_attributes) by {
+        assert(d1.nodes[i].kind == d0.nodes[i].kind);
+    }
+}
+
+/// A document that changes node `n` of a [`html_plain`] one to a
+/// [`kind_plain`] kind (or any kind, for the context element), or adds such
+/// a node, is [`html_plain`].
+pub proof fn lemma_plain_update(d0: Document, d1: Document, n: int, c: Option<Elem>)
+    requires
+        html_plain(d0, c),
+        d1.nodes.len() == d0.nodes.len() || (d1.nodes.len() == d0.nodes.len() + 1 && n == d0.nodes.len()),
+        0 <= n < d1.nodes.len(),
+        kind_plain(d1.nodes[n].kind) || (c is Some && n == c->Some_0.id),
+        forall|i: int| 0 <= i < d0.nodes.len() && i != n ==> (#[trigger] d1.nodes[i]).kind == d0.nodes[i].kind,
+    ensures
+        html_plain(d1, c),
+{
+    reveal(html_plain);
+    assert forall|i: int|
+        0 <= i < d1.nodes.len() && (c is None || i != c->Some_0.id) && (#[trigger] d1.nodes[i]).kind is Element
+            && d1.nodes[i].kind->Element_namespace == Some(Namespace::Html)
+            implies crate::independent::equivalence_body::attrs_plain(d1.nodes[i].kind->Element_attributes) by {
+        if i != n {
+            assert(d1.nodes[i].kind == d0.nodes[i].kind);
+        }
+    }
+}
+
+/// Creating a [`kind_plain`] node keeps [`html_plain`].
+pub proof fn lemma_create_plain(d: Document, k: NodeKind, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        kind_plain(k),
+    ensures
+        html_plain(dom::create_node(d, k).0, c),
+{
+    let d1 = dom::create_node(d, k).0;
+    assert forall|i: int| 0 <= i < d.nodes.len() && i != d.nodes.len() implies (#[trigger] d1.nodes[i]).kind == d.nodes[i].kind by {
+        assert(d1.nodes[i] == d.nodes[i]);
+    }
+    lemma_plain_update(d, d1, d.nodes.len() as int, c);
+}
+
+/// Creating a template's contents keeps [`html_plain`].
+pub proof fn lemma_ctc_plain(d: Document, t: NodeId, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        dom::valid(d, t),
+    ensures
+        html_plain(dom::create_template_contents(d, t).0, c),
+{
+    reveal(html_plain);
+    let (d1, f) = dom::create_node(d, NodeKind::DocumentFragment { host: Some(t) });
+    lemma_create_plain(d, NodeKind::DocumentFragment { host: Some(t) }, c);
+    let d2 = dom::create_template_contents(d, t).0;
+    assert(d1.nodes[t as int] == d.nodes[t as int]);
+    assert forall|i: int|
+        0 <= i < d2.nodes.len() && (c is None || i != c->Some_0.id) && (#[trigger] d2.nodes[i]).kind is Element
+            && d2.nodes[i].kind->Element_namespace == Some(Namespace::Html)
+            implies crate::independent::equivalence_body::attrs_plain(d2.nodes[i].kind->Element_attributes) by {
+        if i != t {
+            assert(d2.nodes[i] == d1.nodes[i]);
+        } else {
+            assert(d1.nodes[i].kind is Element);
+            assert(d2.nodes[i].kind->Element_attributes == d1.nodes[i].kind->Element_attributes);
+        }
+    }
+}
+
+/// Appending data to a `Text` node keeps [`html_plain`].
+pub proof fn lemma_append_data_plain(d: Document, n: NodeId, data: Seq<u32>, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        dom::valid(d, n),
+        d.nodes[n as int].kind is Text,
+    ensures
+        html_plain(dom::append_data(d, n, data), c),
+{
+    let d1 = dom::append_data(d, n, data);
+    assert forall|i: int| 0 <= i < d.nodes.len() && i != n implies (#[trigger] d1.nodes[i]).kind == d.nodes[i].kind by {}
+    lemma_plain_update(d, d1, n as int, c);
+}
+
+/// Setting the document's mode keeps [`html_plain`].
+pub proof fn lemma_set_mode_plain(d: Document, mode: DocumentMode, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        d.nodes.len() > 0,
+        d.nodes[0].kind is Document,
+    ensures
+        html_plain(dom::set_mode(d, mode), c),
+{
+    let d1 = dom::set_mode(d, mode);
+    assert forall|i: int| 0 <= i < d.nodes.len() && i != 0 implies (#[trigger] d1.nodes[i]).kind == d.nodes[i].kind by {}
+    lemma_plain_update(d, d1, 0, c);
+}
+
+/// Appending a plain attribute to an element keeps [`html_plain`].
+pub proof fn lemma_append_attribute_plain(d: Document, e: NodeId, a: Attr, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        dom::valid(d, e),
+        a.namespace is None && a.prefix is None,
+    ensures
+        html_plain(dom::append_attribute(d, e, a), c),
+{
+    reveal(html_plain);
+    let d1 = dom::append_attribute(d, e, a);
+    assert forall|i: int|
+        0 <= i < d1.nodes.len() && (c is None || i != c->Some_0.id) && (#[trigger] d1.nodes[i]).kind is Element
+            && d1.nodes[i].kind->Element_namespace == Some(Namespace::Html)
+            implies crate::independent::equivalence_body::attrs_plain(d1.nodes[i].kind->Element_attributes) by {
+        if i == e {
+            let old = d.nodes[i].kind->Element_attributes;
+            let new = d1.nodes[i].kind->Element_attributes;
+            assert(d.nodes[i].kind is Element);
+            assert(new == old.push(a));
+            assert forall|j: int| 0 <= j < new.len() implies (#[trigger] new[j]).namespace is None && new[j].prefix is None by {
+                if j < old.len() {
+                    assert(new[j] == old[j]);
+                }
+            }
+        } else {
+            assert(d1.nodes[i] == d.nodes[i]);
+        }
+    }
+}
+
+/// DOM "insert" keeps [`html_plain`].
+pub proof fn lemma_insert_plain(d: Document, node: NodeId, parent: NodeId, child: Option<NodeId>, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        dom::insert_requires(d, node, parent, child),
+    ensures
+        html_plain(dom::insert(d, node, parent, child), c),
+{
+    clazel_dom::lemmas::theorem_insert_wf(d, node, parent, child);
+    lemma_plain_same(d, dom::insert(d, node, parent, child), c);
+}
+
+/// DOM "remove" keeps [`html_plain`].
+pub proof fn lemma_remove_plain(d: Document, node: NodeId, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        clazel_dom::contract::remove_requires(d, node),
+    ensures
+        html_plain(dom::remove(d, node), c),
+{
+    clazel_dom::lemmas::theorem_remove_keeps_record(d, node);
+    lemma_plain_same(d, dom::remove(d, node), c);
+}
+
+/// Moving the children of a node keeps [`html_plain`].
+pub proof fn lemma_reparent_plain(d: Document, from: NodeId, to: NodeId, c: Option<Elem>)
+    requires
+        html_plain(d, c),
+        dom::reparent_children_requires(d, from, to),
+    ensures
+        html_plain(dom::reparent_children(d, from, to), c),
+{
+    clazel_dom::lemmas::theorem_reparent_children_wf(d, from, to);
+    lemma_plain_same(d, dom::reparent_children(d, from, to), c);
+}
+
+/// [`dinv`] gives `element_plain` of an HTML element on the stack (the
+/// `html` and `body` elements of the "in body" equivalence): it is not the
+/// context element ([`ctx_below`]).
+pub proof fn lemma_dinv_element_plain(p: Parser, i: int)
+    requires
+        dinv(p),
+        0 <= i < p.open.len(),
+        p.open[i].ns == Namespace::Html,
+    ensures
+        crate::independent::equivalence_body::element_plain(p.doc, p.open[i].id),
+{
+    lemma_dinv_at(p, i);
+    lemma_dinv(p);
+    reveal(html_plain);
+    let id = p.open[i].id as int;
+    if let Some(c) = p.context {
+        assert(c.id < p.open[i].id);
+    }
+    assert(p.doc.nodes[id].kind is Element);
 }
 
 } // verus!
