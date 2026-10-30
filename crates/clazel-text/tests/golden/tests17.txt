@@ -1,0 +1,79 @@
+#case 0
+#data "<!doctype html><table><tbody><select><tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!doctype html><table><tr><select><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!doctype html><table><tr><td><select><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html><table><tr><th><select><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!doctype html><table><caption><select><tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!doctype html><select><tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!doctype html><select><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<!doctype html><select><th>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<!doctype html><select><tbody>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<!doctype html><select><thead>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<!doctype html><select><tfoot>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<!doctype html><select><caption>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!doctype html><table><tr></table>a"
+#title ""
+#lines 1
+"a"
+#links 0
+

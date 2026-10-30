@@ -1,0 +1,773 @@
+#case 0
+#data "Test"
+#title ""
+#lines 1
+"Test"
+#links 0
+
+#case 1
+#data "<p>One<p>Two"
+#title ""
+#lines 3
+"One"
+""
+"Two"
+#links 0
+
+#case 2
+#data "Line1<br>Line2<br>Line3<br>Line4"
+#title ""
+#lines 4
+"Line1"
+"Line2"
+"Line3"
+"Line4"
+#links 0
+
+#case 3
+#data "<html>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<head>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<body>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<html><head>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<html><head></head>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<html><head></head><body>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<html><head></head><body></body>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<html><head><body></body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<html><head></body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<html><head><body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<html><body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<head></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "</head>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "</body>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "</html>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<b><table><td><i></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<b><table><td></b><i></table>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 21
+#data "<h1>Hello<h2>World"
+#title ""
+#lines 3
+"Hello"
+""
+"World"
+#links 0
+
+#case 22
+#data "<a><p>X<a>Y</a>Z</p></a>"
+#title ""
+#lines 1
+"XYZ"
+#links 0
+
+#case 23
+#data "<b><button>foo</b>bar"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 24
+#data "<!DOCTYPE html><span><button>foo</span>bar"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 25
+#data "<p><b><div><marquee></p></b></div>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 26
+#data "<script><div></script></div><title><p></title><p><p>"
+#title "<p>"
+#lines 0
+#links 0
+
+#case 27
+#data "<!--><div>--<!-->"
+#title ""
+#lines 1
+"--"
+#links 0
+
+#case 28
+#data "<p><hr></p>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 29
+#data "<select><b><option><select><option></b></select>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 30
+#data "<a><table><td><a><table></table><a></tr><a></table><b>X</b>C<a>Y"
+#title ""
+#lines 1
+"XCY"
+#links 0
+
+#case 31
+#data "<a X>0<b>1<a Y>2"
+#title ""
+#lines 1
+"012"
+#links 0
+
+#case 32
+#data "<!-----><font><div>hello<table>excite!<b>me!<th><i>please!</tr><!--X-->"
+#title ""
+#lines 2
+"helloexcite!me!"
+"please!"
+#links 0
+
+#case 33
+#data "<!DOCTYPE html><li>hello<li>world<ul>how<li>do</ul>you</body><!--do-->"
+#title ""
+#lines 5
+"* hello"
+"* world"
+"how"
+"* do"
+"you"
+#links 0
+
+#case 34
+#data "<!DOCTYPE html>A<option>B<optgroup>C<select>D</option>E"
+#title ""
+#lines 1
+"ABCDE"
+#links 0
+
+#case 35
+#data "<"
+#title ""
+#lines 1
+"<"
+#links 0
+
+#case 36
+#data "<#"
+#title ""
+#lines 1
+"<#"
+#links 0
+
+#case 37
+#data "</"
+#title ""
+#lines 1
+"</"
+#links 0
+
+#case 38
+#data "</#"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<?"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<?#"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<!"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<!#"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<?COMMENT?>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<!COMMENT>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "</ COMMENT >"
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<?COM--MENT?>"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<!COM--MENT>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "</ COM--MENT >"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data "<!DOCTYPE html><style> EOF"
+#title ""
+#lines 0
+#links 0
+
+#case 50
+#data "<!DOCTYPE html><script> <!-- </script> --> </script> EOF"
+#title ""
+#lines 1
+"--> EOF"
+#links 0
+
+#case 51
+#data "<b><p></b>TEST"
+#title ""
+#lines 1
+"TEST"
+#links 0
+
+#case 52
+#data "<p id=a><b><p id=b></b>TEST"
+#title ""
+#lines 1
+"TEST"
+#links 0
+
+#case 53
+#data "<b id=a><p><b id=b></p></b>TEST"
+#title ""
+#lines 1
+"TEST"
+#links 0
+
+#case 54
+#data "<!DOCTYPE html><title>U-test</title><body><div><p>Test<u></p></div></body>"
+#title "U-test"
+#lines 1
+"Test"
+#links 0
+
+#case 55
+#data "<!DOCTYPE html><font><table></font></table></font>"
+#title ""
+#lines 0
+#links 0
+
+#case 56
+#data "<font><p>hello<b>cruel</font>world"
+#title ""
+#lines 1
+"hellocruelworld"
+#links 0
+
+#case 57
+#data "<b>Test</i>Test"
+#title ""
+#lines 1
+"TestTest"
+#links 0
+
+#case 58
+#data "<b>A<cite>B<div>C"
+#title ""
+#lines 2
+"AB"
+"C"
+#links 0
+
+#case 59
+#data "<b>A<cite>B<div>C</cite>D"
+#title ""
+#lines 2
+"AB"
+"CD"
+#links 0
+
+#case 60
+#data "<b>A<cite>B<div>C</b>D"
+#title ""
+#lines 2
+"AB"
+"CD"
+#links 0
+
+#case 61
+#data ""
+#title ""
+#lines 0
+#links 0
+
+#case 62
+#data "<DIV>"
+#title ""
+#lines 0
+#links 0
+
+#case 63
+#data "<DIV> abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 64
+#data "<DIV> abc <B>"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 65
+#data "<DIV> abc <B> def"
+#title ""
+#lines 1
+"abc def"
+#links 0
+
+#case 66
+#data "<DIV> abc <B> def <I>"
+#title ""
+#lines 1
+"abc def"
+#links 0
+
+#case 67
+#data "<DIV> abc <B> def <I> ghi"
+#title ""
+#lines 1
+"abc def ghi"
+#links 0
+
+#case 68
+#data "<DIV> abc <B> def <I> ghi <P>"
+#title ""
+#lines 1
+"abc def ghi"
+#links 0
+
+#case 69
+#data "<DIV> abc <B> def <I> ghi <P> jkl"
+#title ""
+#lines 3
+"abc def ghi"
+""
+"jkl"
+#links 0
+
+#case 70
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B>"
+#title ""
+#lines 3
+"abc def ghi"
+""
+"jkl"
+#links 0
+
+#case 71
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno"
+#title ""
+#lines 3
+"abc def ghi"
+""
+"jkl mno"
+#links 0
+
+#case 72
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I>"
+#title ""
+#lines 3
+"abc def ghi"
+""
+"jkl mno"
+#links 0
+
+#case 73
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr"
+#title ""
+#lines 3
+"abc def ghi"
+""
+"jkl mno pqr"
+#links 0
+
+#case 74
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P>"
+#title ""
+#lines 3
+"abc def ghi"
+""
+"jkl mno pqr"
+#links 0
+
+#case 75
+#data "<DIV> abc <B> def <I> ghi <P> jkl </B> mno </I> pqr </P> stu"
+#title ""
+#lines 5
+"abc def ghi"
+""
+"jkl mno pqr"
+""
+"stu"
+#links 0
+
+#case 76
+#data "<test attribute---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------->"
+#title ""
+#lines 0
+#links 0
+
+#case 77
+#data "<a href=\"blah\">aba<table><a href=\"foo\">br<tr><td></td></tr>x</table>aoe"
+#title ""
+#lines 2
+"ababr[2]x[3]"
+"[1]aoe[4]"
+#links 4
+1 "blah"
+2 "foo"
+3 "foo"
+4 "foo"
+
+#case 78
+#data "<a href=\"blah\">aba<table><tr><td><a href=\"foo\">br</td></tr>x</table>aoe"
+#title ""
+#lines 3
+"abax"
+"br[2]"
+"aoe[1]"
+#links 2
+1 "blah"
+2 "foo"
+
+#case 79
+#data "<table><a href=\"blah\">aba<tr><td><a href=\"foo\">br</td></tr>x</table>aoe"
+#title ""
+#lines 3
+"aba[1]x[2]"
+"br[3]"
+"aoe[4]"
+#links 4
+1 "blah"
+2 "blah"
+3 "foo"
+4 "blah"
+
+#case 80
+#data "<a href=a>aa<marquee>aa<a href=b>bb</marquee>aa"
+#title ""
+#lines 1
+"aaaabb[2]aa[1]"
+#links 2
+1 "a"
+2 "b"
+
+#case 81
+#data "<wbr><strike><code></strike><code><strike></code>"
+#title ""
+#lines 0
+#links 0
+
+#case 82
+#data "<!DOCTYPE html><spacer>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 83
+#data "<title><meta></title><link><title><meta></title>"
+#title "<meta>"
+#lines 0
+#links 0
+
+#case 84
+#data "<style><!--</style><meta><script>--><link></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 85
+#data "<head><meta></head><link>"
+#title ""
+#lines 0
+#links 0
+
+#case 86
+#data "<table><tr><tr><td><td><span><th><span>X</table>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 87
+#data "<body><body><base><link><meta><title><p></title><body><p></body>"
+#title "<p>"
+#lines 0
+#links 0
+
+#case 88
+#data "<textarea><p></textarea>"
+#title ""
+#lines 1
+"<p>"
+#links 0
+
+#case 89
+#data "<p><image></p>"
+#title ""
+#lines 1
+"[image]"
+#links 0
+
+#case 90
+#data "<a><table><a></table><p><a><div><a>"
+#title ""
+#lines 0
+#links 0
+
+#case 91
+#data "<head></p><meta><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 92
+#data "<head></html><meta><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 93
+#data "<b><table><td></b><i></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 94
+#data "<h1><h2>"
+#title ""
+#lines 0
+#links 0
+
+#case 95
+#data "<a><p><a></a></p></a>"
+#title ""
+#lines 0
+#links 0
+
+#case 96
+#data "<b><button></b></button></b>"
+#title ""
+#lines 0
+#links 0
+
+#case 97
+#data "<p><b><div><marquee></p></b></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 98
+#data "<script></script></div><title></title><p><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 99
+#data "<select><b><option><select><option></b></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 100
+#data "<html><head><title></title><body></body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 101
+#data "<a><table><td><a><table></table><a></tr><a></table><a>"
+#title ""
+#lines 0
+#links 0
+
+#case 102
+#data "<ul><li></li><div><li></div><li><li><div><li><address><li><b><em></b><li></ul>"
+#title ""
+#lines 1
+"* * * * * * *"
+#links 0
+
+#case 103
+#data "<ul><li><ul></li><li>a</li></ul></li></ul>"
+#title ""
+#lines 1
+"* * a"
+#links 0
+
+#case 104
+#data "<frameset><frame><frameset><frame></frameset><noframes></noframes></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 105
+#data "<h1><table><td><h3></table><h3></h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 106
+#data "<table><colgroup><col><colgroup><col><col><col><colgroup><col><col><thead><tr><td></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 107
+#data "<table><col><tbody><col><tr><col><td><col></table><col>"
+#title ""
+#lines 0
+#links 0
+
+#case 108
+#data "<table><colgroup><tbody><colgroup><tr><colgroup><td><colgroup></table><colgroup>"
+#title ""
+#lines 0
+#links 0
+
+#case 109
+#data "</strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>"
+#title ""
+#lines 0
+#links 0
+
+#case 110
+#data "<table><tr></strong></b></em></i></u></strike></s></blink></tt></pre></big></small></font></select></h1></h2></h3></h4></h5></h6></body></br></a></img></title></span></style></script></table></th></td></tr></frame></area></link></param></hr></input></col></base></meta></basefont></bgsound></embed></spacer></p></dd></dt></caption></colgroup></tbody></tfoot></thead></address></blockquote></center></dir></div></dl></fieldset></listing></menu></ol></ul></li></nobr></wbr></form></button></marquee></object></html></frameset></head></iframe></image></isindex></noembed></noframes></noscript></optgroup></option></plaintext></textarea>"
+#title ""
+#lines 0
+#links 0
+
+#case 111
+#data "<frameset>"
+#title ""
+#lines 0
+#links 0
+

@@ -1,0 +1,93 @@
+#case 0
+#data "<!DOCTYPE html><p><b><i><u></p> <p>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 1
+#data "<p><b><i><u></p>\n<p>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 2
+#data "<!doctype html></html> <head>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html></body><meta>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<html></html><!-- foo -->"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!doctype html></body><title>X</title>"
+#title "X"
+#lines 0
+#links 0
+
+#case 6
+#data "<!doctype html><table> X<meta></table>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 7
+#data "<!doctype html><table> x</table>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 8
+#data "<!doctype html><table> x </table>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 9
+#data "<!doctype html><table><tr> x</table>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 10
+#data "<!doctype html><table>X<style> <tr>x </style> </table>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 11
+#data "<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>"
+#title ""
+#lines 2
+"foo"
+"bar"
+#links 0
+
+#case 12
+#data "<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes></frameset><noframes>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<!DOCTYPE html><object></html>"
+#title ""
+#lines 0
+#links 0
+

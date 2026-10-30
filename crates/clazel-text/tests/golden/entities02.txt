@@ -1,0 +1,163 @@
+#case 0
+#data "<div bar=\"ZZ&gt;YY\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<div bar=\"ZZ&\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<div bar='ZZ&'></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<div bar=ZZ&></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<div bar=\"ZZ&gt=YY\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<div bar=\"ZZ&gt0YY\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<div bar=\"ZZ&gt9YY\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<div bar=\"ZZ&gtaYY\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<div bar=\"ZZ&gtZYY\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<div bar=\"ZZ&gt YY\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<div bar=\"ZZ&gt\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<div bar='ZZ&gt'></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<div bar=ZZ&gt></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<div bar=\"ZZ&pound_id=23\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<div bar=\"ZZ&prod_id=23\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<div bar=\"ZZ&pound;_id=23\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<div bar=\"ZZ&prod;_id=23\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<div bar=\"ZZ&pound=23\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<div bar=\"ZZ&prod=23\"></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<div>ZZ&pound_id=23</div>"
+#title ""
+#lines 1
+"ZZ£_id=23"
+#links 0
+
+#case 20
+#data "<div>ZZ&prod_id=23</div>"
+#title ""
+#lines 1
+"ZZ&prod_id=23"
+#links 0
+
+#case 21
+#data "<div>ZZ&pound;_id=23</div>"
+#title ""
+#lines 1
+"ZZ£_id=23"
+#links 0
+
+#case 22
+#data "<div>ZZ&prod;_id=23</div>"
+#title ""
+#lines 1
+"ZZ∏_id=23"
+#links 0
+
+#case 23
+#data "<div>ZZ&pound=23</div>"
+#title ""
+#lines 1
+"ZZ£=23"
+#links 0
+
+#case 24
+#data "<div>ZZ&prod=23</div>"
+#title ""
+#lines 1
+"ZZ&prod=23"
+#links 0
+
+#case 25
+#data "<div>ZZ&AElig=</div>"
+#title ""
+#lines 1
+"ZZÆ="
+#links 0
+

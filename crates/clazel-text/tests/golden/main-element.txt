@@ -1,0 +1,27 @@
+#case 0
+#data "<!doctype html><p>foo<main>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 1
+#data "<!doctype html><main><p>foo</main>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><main><b>"
+#title ""
+#lines 1
+"xxx"
+#links 0
+

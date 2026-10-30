@@ -1,0 +1,235 @@
+#case 0
+#data "<!doctype html></head> <head>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!doctype html><form><div></form><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!doctype html><title>&amp;</title>"
+#title "&"
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html><title><!--&amp;--></title>"
+#title "<!--&-->"
+#lines 0
+#links 0
+
+#case 4
+#data "<!doctype>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!---x"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<frameset></frameset>\nfoo"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<frameset></frameset>\n<noframes>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<frameset></frameset>\n<div>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<frameset></frameset>\n</html>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<frameset></frameset>\n</div>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<form><form>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<button><button>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<table><tr><td></th>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<table><caption><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<table><caption><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<table><caption><div></caption>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<table><caption></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<table><caption></body></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<table><caption><div></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<table><tr><td></body></caption></col></colgroup></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<table><colgroup>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 27
+#data "<table><colgroup></col>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<frameset><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<frameset></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 32
+#data "<table><tr><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<table><tr><div><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 37
+#data "<table><tbody></thead>"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<table><tbody></body></caption></col></colgroup></html></td></th></tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<table><tbody></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<table><table>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "<html><frameset></frameset></html> "
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01//EN\"><html></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<param><frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "<source><frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data "<track><frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 50
+#data "</html><frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 51
+#data "</body><frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+

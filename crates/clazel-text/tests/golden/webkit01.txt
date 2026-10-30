@@ -1,0 +1,337 @@
+#case 0
+#data "Test"
+#title ""
+#lines 1
+"Test"
+#links 0
+
+#case 1
+#data "<div></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<div>Test</div>"
+#title ""
+#lines 1
+"Test"
+#links 0
+
+#case 3
+#data "<di"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<div>Hello</div>\n<script>\nconsole.log(\"PASS\");\n</script>\n<div>Bye</div>"
+#title ""
+#lines 2
+"Hello"
+"Bye"
+#links 0
+
+#case 5
+#data "<div foo=\"bar\">Hello</div>"
+#title ""
+#lines 1
+"Hello"
+#links 0
+
+#case 6
+#data "<div>Hello</div>\n<script>\nconsole.log(\"FOO<span>BAR</span>BAZ\");\n</script>\n<div>Bye</div>"
+#title ""
+#lines 2
+"Hello"
+"Bye"
+#links 0
+
+#case 7
+#data "<foo bar=\"baz\"></foo><potato quack=\"duck\"></potato>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<foo bar=\"baz\"><potato quack=\"duck\"></potato></foo>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<foo></foo bar=\"baz\"><potato></potato quack=\"duck\">"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "</ tttt>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<div FOO ><img><img></div>"
+#title ""
+#lines 1
+"[image][image]"
+#links 0
+
+#case 12
+#data "<p>Test</p<p>Test2</p>"
+#title ""
+#lines 1
+"TestTest2"
+#links 0
+
+#case 13
+#data "<rdar://problem/6869687>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<A>test< /A>"
+#title ""
+#lines 1
+"test< /A>"
+#links 0
+
+#case 15
+#data "&lt;"
+#title ""
+#lines 1
+"<"
+#links 0
+
+#case 16
+#data "<body foo='bar'><body foo='baz' yo='mama'>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<body></br foo=\"bar\"></body>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<bdy><br foo=\"bar\"></body>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<body></body></br foo=\"bar\">"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<bdy></body><br foo=\"bar\">"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<html><body></body></html><!-- Hi there -->"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<html><body></body></html><!-- Comment A --><!-- Comment B --><!-- Comment C --><!-- Comment D --><!-- Comment E -->"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<html><body></body></html>x<!-- Hi there -->"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 24
+#data "<html><body></body></html>x<!-- Hi there --></html><!-- Again -->"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 25
+#data "<html><body></body></html>x<!-- Hi there --></body></html><!-- Again -->"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 26
+#data "<html><body></body>\n   <!-- Hi there --></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<html><body></body></html>\n   <!-- Hi there -->"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<html><body><ruby><div><rp>xx</rp></div></ruby></body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<html><body><ruby><div><rt>xx</rt></div></ruby></body></html>"
+#title ""
+#lines 1
+"xx"
+#links 0
+
+#case 30
+#data "<html><frameset><!--1--><noframes>A</noframes><!--2--></frameset><!--3--><noframes>B</noframes><!--4--></html><!--5--><noframes>C</noframes><!--6-->"
+#title ""
+#lines 0
+#links 0
+
+#case 31
+#data "<select><option>A<select><option>B<select><option>C<select><option>D<select><option>E<select><option>F<select><option>G<select>"
+#title ""
+#lines 1
+"ABCDEFG"
+#links 0
+
+#case 32
+#data "<dd><dd><dt><dt><dd><li><li>"
+#title ""
+#lines 1
+"* *"
+#links 0
+
+#case 33
+#data "<div><b></div><div><nobr>a<nobr>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 34
+#data "<head></head>\n<body></body>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<head></head> <style></style>ddd"
+#title ""
+#lines 1
+"ddd"
+#links 0
+
+#case 36
+#data "<kbd><table></kbd><col><select><tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 37
+#data "<kbd><table></kbd><col><select><tr></table><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<a><li><style></style><title></title></a>"
+#title ""
+#lines 1
+"*"
+#links 0
+
+#case 39
+#data "<font></p><p><meta><title></title></font>"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<a><center><title></title><a>"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<svg><title><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<svg><title><rect><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<svg><title><svg><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<img <=\"\" FAIL>"
+#title ""
+#lines 1
+"[image]"
+#links 0
+
+#case 45
+#data "<ul><li><div id='foo'/>A</li><li>B<div>C</div></li></ul>"
+#title ""
+#lines 3
+"* A"
+"* B"
+"C"
+#links 0
+
+#case 46
+#data "<svg><em><desc></em>"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<table><tr><td><svg><desc><td></desc><circle>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "<svg><tfoot></mi><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data "<math><mrow><mrow><mn>1</mn></mrow><mi>a</mi></mrow></math>"
+#title ""
+#lines 1
+"1a"
+#links 0
+
+#case 50
+#data "<!doctype html><input type=\"hidden\"><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 51
+#data "<!doctype html><input type=\"button\"><frameset>"
+#title ""
+#lines 0
+#links 0
+

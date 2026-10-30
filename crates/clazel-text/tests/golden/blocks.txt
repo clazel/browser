@@ -1,0 +1,474 @@
+#case 0
+#data "<!doctype html><p>foo<address>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 1
+#data "<!doctype html><address><p>foo</address>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 2
+#data "<!doctype html><p>foo<article>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 3
+#data "<!doctype html><article><p>foo</article>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 4
+#data "<!doctype html><p>foo<aside>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 5
+#data "<!doctype html><aside><p>foo</aside>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 6
+#data "<!doctype html><p>foo<blockquote>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 7
+#data "<!doctype html><blockquote><p>foo</blockquote>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 8
+#data "<!doctype html><p>foo<center>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 9
+#data "<!doctype html><center><p>foo</center>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 10
+#data "<!doctype html><p>foo<details>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 11
+#data "<!doctype html><details><p>foo</details>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 12
+#data "<!doctype html><p>foo<dialog>bar<p>baz"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 13
+#data "<!doctype html><dialog><p>foo</dialog>bar"
+#title ""
+#lines 1
+"bar"
+#links 0
+
+#case 14
+#data "<!doctype html><p>foo<dir>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 15
+#data "<!doctype html><dir><p>foo</dir>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 16
+#data "<!doctype html><p>foo<div>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 17
+#data "<!doctype html><div><p>foo</div>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 18
+#data "<!doctype html><p>foo<dl>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 19
+#data "<!doctype html><dl><p>foo</dl>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 20
+#data "<!doctype html><p>foo<fieldset>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 21
+#data "<!doctype html><fieldset><p>foo</fieldset>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 22
+#data "<!doctype html><p>foo<figcaption>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 23
+#data "<!doctype html><figcaption><p>foo</figcaption>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 24
+#data "<!doctype html><p>foo<figure>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 25
+#data "<!doctype html><figure><p>foo</figure>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 26
+#data "<!doctype html><p>foo<footer>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 27
+#data "<!doctype html><footer><p>foo</footer>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 28
+#data "<!doctype html><p>foo<header>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 29
+#data "<!doctype html><header><p>foo</header>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 30
+#data "<!doctype html><p>foo<hgroup>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 31
+#data "<!doctype html><hgroup><p>foo</hgroup>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 32
+#data "<!doctype html><p>foo<listing>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 33
+#data "<!doctype html><listing><p>foo</listing>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 34
+#data "<!doctype html><p>foo<menu>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 35
+#data "<!doctype html><menu><p>foo</menu>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 36
+#data "<!doctype html><p>foo<nav>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 37
+#data "<!doctype html><nav><p>foo</nav>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 38
+#data "<!doctype html><p>foo<ol>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 39
+#data "<!doctype html><ol><p>foo</ol>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 40
+#data "<!doctype html><p>foo<pre>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 41
+#data "<!doctype html><pre><p>foo</pre>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 42
+#data "<!doctype html><p>foo<section>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 43
+#data "<!doctype html><section><p>foo</section>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 44
+#data "<!doctype html><p>foo<summary>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 45
+#data "<!doctype html><summary><p>foo</summary>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 46
+#data "<!doctype html><p>foo<ul>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 47
+#data "<!doctype html><ul><p>foo</ul>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+

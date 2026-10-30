@@ -1,0 +1,371 @@
+#case 0
+#data "<!DOCTYPE html><svg></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!DOCTYPE html><svg></svg><![CDATA[a]]>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!DOCTYPE html><body><svg></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!DOCTYPE html><body><select><svg></svg></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><body><select><option><svg></svg></option></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><body><table><svg></svg></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><body><table><svg><g>foo</g></svg></table>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><body><table><svg><g>foo</g><g>bar</g></svg></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><body><table><tbody><svg><g>foo</g><g>bar</g></svg></tbody></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 9
+#data "<!DOCTYPE html><body><table><tbody><tr><svg><g>foo</g><g>bar</g></svg></tr></tbody></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg></td></tr></tbody></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg><p>baz</td></tr></tbody></table>"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g></svg><p>baz</caption></table>"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 13
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 14
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g>baz</table><p>quux"
+#title ""
+#lines 3
+"foobarbaz"
+""
+"quux"
+#links 0
+
+#case 15
+#data "<!DOCTYPE html><body><table><colgroup><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 16
+#data "<!DOCTYPE html><body><table><tr><td><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 17
+#data "<!DOCTYPE html><body><table><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 18
+#data "<!DOCTYPE html><body></body></html><svg><g>foo</g><g>bar</g><p>baz"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 19
+#data "<!DOCTYPE html><body></body><svg><g>foo</g><g>bar</g><p>baz"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 20
+#data "<!DOCTYPE html><frameset><svg><g></g><g></g><p><span>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<!DOCTYPE html><frameset></frameset><svg><g></g><g></g><p><span>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<!DOCTYPE html><body xlink:href=foo><svg xlink:href=foo></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo></g></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 24
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo /></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo />bar</svg>"
+#title ""
+#lines 1
+"bar"
+#links 0
+
+#case 26
+#data "<svg></path>"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<div><svg></div>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 28
+#data "<div><svg><path></div>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 29
+#data "<div><svg><path></svg><path>"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<div><svg><path><foreignObject><math></div>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 31
+#data "<div><svg><path><foreignObject><p></div>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 32
+#data "<!DOCTYPE html><svg><desc><div><svg><ul>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 33
+#data "<!DOCTYPE html><svg><desc><svg><ul>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 34
+#data "<!DOCTYPE html><p><svg><desc><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<!DOCTYPE html><p><svg><title><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 36
+#data "<div><svg><path><foreignObject><p></foreignObject><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 37
+#data "<math><mi><div><object><div><span></span></div></object></div></mi><mi>"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<math><mi><svg><foreignObject><div><div></div></div></foreignObject></svg></mi><mi>"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<svg><script></script><path>"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<table><svg></svg><tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<math><mi><mglyph>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<math><mi><malignmark>"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<math><mo><mglyph>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<math><mo><malignmark>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "<math><mn><mglyph>"
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<math><mn><malignmark>"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<math><ms><mglyph>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "<math><ms><malignmark>"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data "<math><mtext><mglyph>"
+#title ""
+#lines 0
+#links 0
+
+#case 50
+#data "<math><mtext><malignmark>"
+#title ""
+#lines 0
+#links 0
+
+#case 51
+#data "<math><annotation-xml><svg></svg></annotation-xml><mi>"
+#title ""
+#lines 0
+#links 0
+
+#case 52
+#data "<math><annotation-xml><svg><foreignObject><div><math><mi></mi></math><span></span></div></foreignObject><path></path></svg></annotation-xml><mi>"
+#title ""
+#lines 0
+#links 0
+
+#case 53
+#data "<math><annotation-xml><svg><foreignObject><math><mi><svg></svg></mi><mo></mo></math><span></span></foreignObject><path></path></svg></annotation-xml><mi>"
+#title ""
+#lines 0
+#links 0
+

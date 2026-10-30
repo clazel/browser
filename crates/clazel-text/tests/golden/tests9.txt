@@ -1,0 +1,203 @@
+#case 0
+#data "<!DOCTYPE html><math></math>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!DOCTYPE html><body><math></math>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!DOCTYPE html><math><mi>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!DOCTYPE html><math><annotation-xml><svg><u>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><body><select><math></math></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><body><select><option><math></math></option></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><body><table><math></math></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><body><table><math><mi>foo</mi></math></table>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><body><table><math><mi>foo</mi><mi>bar</mi></math></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 9
+#data "<!DOCTYPE html><body><table><tbody><math><mi>foo</mi><mi>bar</mi></math></tbody></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><body><table><tbody><tr><math><mi>foo</mi><mi>bar</mi></math></tr></tbody></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><body><table><tbody><tr><td><math><mi>foo</mi><mi>bar</mi></math></td></tr></tbody></table>"
+#title ""
+#lines 1
+"foobar"
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><body><table><tbody><tr><td><math><mi>foo</mi><mi>bar</mi></math><p>baz</td></tr></tbody></table>"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 13
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi></math><p>baz</caption></table>"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 14
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 15
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi>baz</table><p>quux"
+#title ""
+#lines 3
+"foobarbaz"
+""
+"quux"
+#links 0
+
+#case 16
+#data "<!DOCTYPE html><body><table><colgroup><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 17
+#data "<!DOCTYPE html><body><table><tr><td><select><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 18
+#data "<!DOCTYPE html><body><table><select><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+#title ""
+#lines 5
+"foobar"
+""
+"baz"
+""
+"quux"
+#links 0
+
+#case 19
+#data "<!DOCTYPE html><body></body></html><math><mi>foo</mi><mi>bar</mi><p>baz"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 20
+#data "<!DOCTYPE html><body></body><math><mi>foo</mi><mi>bar</mi><p>baz"
+#title ""
+#lines 3
+"foobar"
+""
+"baz"
+#links 0
+
+#case 21
+#data "<!DOCTYPE html><frameset><math><mi></mi><mi></mi><p><span>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<!DOCTYPE html><frameset></frameset><math><mi></mi><mi></mi><p><span>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<!DOCTYPE html><body xlink:href=foo><math xlink:href=foo></math>"
+#title ""
+#lines 0
+#links 0
+
+#case 24
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo></mi></math>"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo /></math>"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo />bar</math>"
+#title ""
+#lines 1
+"bar"
+#links 0
+

@@ -1,0 +1,147 @@
+#case 0
+#data "<html><ruby>a<rb>b<rb></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 1
+#data "<html><ruby>a<rb>b<rt></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 2
+#data "<html><ruby>a<rb>b<rtc></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 3
+#data "<html><ruby>a<rb>b<rp></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 4
+#data "<html><ruby>a<rb>b<span></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 5
+#data "<html><ruby>a<rt>b<rb></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 6
+#data "<html><ruby>a<rt>b<rt></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 7
+#data "<html><ruby>a<rt>b<rtc></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 8
+#data "<html><ruby>a<rt>b<rp></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 9
+#data "<html><ruby>a<rt>b<span></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 10
+#data "<html><ruby>a<rtc>b<rb></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 11
+#data "<html><ruby>a<rtc>b<rt>c<rt>d</ruby></html>"
+#title ""
+#lines 1
+"abcd"
+#links 0
+
+#case 12
+#data "<html><ruby>a<rtc>b<rtc></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 13
+#data "<html><ruby>a<rtc>b<rp></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 14
+#data "<html><ruby>a<rtc>b<span></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 15
+#data "<html><ruby>a<rp>b<rb></ruby></html>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 16
+#data "<html><ruby>a<rp>b<rt></ruby></html>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 17
+#data "<html><ruby>a<rp>b<rtc></ruby></html>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 18
+#data "<html><ruby>a<rp>b<rp></ruby></html>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 19
+#data "<html><ruby>a<rp>b<span></ruby></html>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 20
+#data "<html><ruby><rtc><ruby>a<rb>b<rt></ruby></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+

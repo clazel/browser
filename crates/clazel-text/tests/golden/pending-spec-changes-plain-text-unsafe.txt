@@ -1,0 +1,7 @@
+#case 0
+#data "<body><table>\0filler\0text\0"
+#title ""
+#lines 1
+"fillertext"
+#links 0
+

@@ -1,0 +1,113 @@
+#case 0
+#data "<style> <!-- </style>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 1
+#data "<style> <!-- </style> --> </style>x"
+#title ""
+#lines 1
+"--> x"
+#links 0
+
+#case 2
+#data "<style> <!--> </style>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 3
+#data "<style> <!---> </style>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 4
+#data "<iframe> <!---> </iframe>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 5
+#data "<iframe> <!--- </iframe>->x</iframe> --> </iframe>x"
+#title ""
+#lines 1
+"->x --> x"
+#links 0
+
+#case 6
+#data "<script> <!-- </script> --> </script>x"
+#title ""
+#lines 1
+"--> x"
+#links 0
+
+#case 7
+#data "<title> <!-- </title> --> </title>x"
+#title "<!--"
+#lines 1
+"--> x"
+#links 0
+
+#case 8
+#data "<textarea> <!--- </textarea>->x</textarea> --> </textarea>x"
+#title ""
+#lines 1
+" <!--- ->x --> x"
+#links 0
+
+#case 9
+#data "<style> <!</-- </style>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 10
+#data "<p><xmp></xmp>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<xmp> <!-- > --> </xmp>"
+#title ""
+#lines 1
+" <!-- > --> "
+#links 0
+
+#case 12
+#data "<title>&amp;</title>"
+#title "&"
+#lines 0
+#links 0
+
+#case 13
+#data "<title><!--&amp;--></title>"
+#title "<!--&-->"
+#lines 0
+#links 0
+
+#case 14
+#data "<title><!--</title>"
+#title "<!--"
+#lines 0
+#links 0
+
+#case 15
+#data "<noscript><!--</noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<noscript><!--</noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+

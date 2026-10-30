@@ -1,0 +1,536 @@
+#case 0
+#data "FOO&gt;BAR"
+#title ""
+#lines 1
+"FOO>BAR"
+#links 0
+
+#case 1
+#data "FOO&gtBAR"
+#title ""
+#lines 1
+"FOO>BAR"
+#links 0
+
+#case 2
+#data "FOO&gt BAR"
+#title ""
+#lines 1
+"FOO> BAR"
+#links 0
+
+#case 3
+#data "FOO&gt;;;BAR"
+#title ""
+#lines 1
+"FOO>;;BAR"
+#links 0
+
+#case 4
+#data "I'm &notit; I tell you"
+#title ""
+#lines 1
+"I'm ¬it; I tell you"
+#links 0
+
+#case 5
+#data "I'm &notin; I tell you"
+#title ""
+#lines 1
+"I'm ∉ I tell you"
+#links 0
+
+#case 6
+#data "&ammmp;"
+#title ""
+#lines 1
+"&ammmp;"
+#links 0
+
+#case 7
+#data "&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;"
+#title ""
+#lines 12
+"&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+"mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;"
+#links 0
+
+#case 8
+#data "FOO& BAR"
+#title ""
+#lines 1
+"FOO& BAR"
+#links 0
+
+#case 9
+#data "FOO&<BAR>"
+#title ""
+#lines 1
+"FOO&"
+#links 0
+
+#case 10
+#data "FOO&&&&gt;BAR"
+#title ""
+#lines 1
+"FOO&&&>BAR"
+#links 0
+
+#case 11
+#data "FOO&#41;BAR"
+#title ""
+#lines 1
+"FOO)BAR"
+#links 0
+
+#case 12
+#data "FOO&#x41;BAR"
+#title ""
+#lines 1
+"FOOABAR"
+#links 0
+
+#case 13
+#data "FOO&#X41;BAR"
+#title ""
+#lines 1
+"FOOABAR"
+#links 0
+
+#case 14
+#data "FOO&#BAR"
+#title ""
+#lines 1
+"FOO&#BAR"
+#links 0
+
+#case 15
+#data "FOO&#ZOO"
+#title ""
+#lines 1
+"FOO&#ZOO"
+#links 0
+
+#case 16
+#data "FOO&#xBAR"
+#title ""
+#lines 1
+"FOOºR"
+#links 0
+
+#case 17
+#data "FOO&#xZOO"
+#title ""
+#lines 1
+"FOO&#xZOO"
+#links 0
+
+#case 18
+#data "FOO&#XZOO"
+#title ""
+#lines 1
+"FOO&#XZOO"
+#links 0
+
+#case 19
+#data "FOO&#41BAR"
+#title ""
+#lines 1
+"FOO)BAR"
+#links 0
+
+#case 20
+#data "FOO&#x41BAR"
+#title ""
+#lines 1
+"FOO䆺R"
+#links 0
+
+#case 21
+#data "FOO&#x41ZOO"
+#title ""
+#lines 1
+"FOOAZOO"
+#links 0
+
+#case 22
+#data "FOO&#x0000;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 23
+#data "FOO&#x0078;ZOO"
+#title ""
+#lines 1
+"FOOxZOO"
+#links 0
+
+#case 24
+#data "FOO&#x0079;ZOO"
+#title ""
+#lines 1
+"FOOyZOO"
+#links 0
+
+#case 25
+#data "FOO&#x0080;ZOO"
+#title ""
+#lines 1
+"FOO€ZOO"
+#links 0
+
+#case 26
+#data "FOO&#x0081;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 27
+#data "FOO&#x0082;ZOO"
+#title ""
+#lines 1
+"FOO‚ZOO"
+#links 0
+
+#case 28
+#data "FOO&#x0083;ZOO"
+#title ""
+#lines 1
+"FOOƒZOO"
+#links 0
+
+#case 29
+#data "FOO&#x0084;ZOO"
+#title ""
+#lines 1
+"FOO„ZOO"
+#links 0
+
+#case 30
+#data "FOO&#x0085;ZOO"
+#title ""
+#lines 1
+"FOO…ZOO"
+#links 0
+
+#case 31
+#data "FOO&#x0086;ZOO"
+#title ""
+#lines 1
+"FOO†ZOO"
+#links 0
+
+#case 32
+#data "FOO&#x0087;ZOO"
+#title ""
+#lines 1
+"FOO‡ZOO"
+#links 0
+
+#case 33
+#data "FOO&#x0088;ZOO"
+#title ""
+#lines 1
+"FOOˆZOO"
+#links 0
+
+#case 34
+#data "FOO&#x0089;ZOO"
+#title ""
+#lines 1
+"FOO‰ZOO"
+#links 0
+
+#case 35
+#data "FOO&#x008A;ZOO"
+#title ""
+#lines 1
+"FOOŠZOO"
+#links 0
+
+#case 36
+#data "FOO&#x008B;ZOO"
+#title ""
+#lines 1
+"FOO‹ZOO"
+#links 0
+
+#case 37
+#data "FOO&#x008C;ZOO"
+#title ""
+#lines 1
+"FOOŒZOO"
+#links 0
+
+#case 38
+#data "FOO&#x008D;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 39
+#data "FOO&#x008E;ZOO"
+#title ""
+#lines 1
+"FOOŽZOO"
+#links 0
+
+#case 40
+#data "FOO&#x008F;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 41
+#data "FOO&#x0090;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 42
+#data "FOO&#x0091;ZOO"
+#title ""
+#lines 1
+"FOO‘ZOO"
+#links 0
+
+#case 43
+#data "FOO&#x0092;ZOO"
+#title ""
+#lines 1
+"FOO’ZOO"
+#links 0
+
+#case 44
+#data "FOO&#x0093;ZOO"
+#title ""
+#lines 1
+"FOO“ZOO"
+#links 0
+
+#case 45
+#data "FOO&#x0094;ZOO"
+#title ""
+#lines 1
+"FOO”ZOO"
+#links 0
+
+#case 46
+#data "FOO&#x0095;ZOO"
+#title ""
+#lines 1
+"FOO•ZOO"
+#links 0
+
+#case 47
+#data "FOO&#x0096;ZOO"
+#title ""
+#lines 1
+"FOO–ZOO"
+#links 0
+
+#case 48
+#data "FOO&#x0097;ZOO"
+#title ""
+#lines 1
+"FOO—ZOO"
+#links 0
+
+#case 49
+#data "FOO&#x0098;ZOO"
+#title ""
+#lines 1
+"FOO˜ZOO"
+#links 0
+
+#case 50
+#data "FOO&#x0099;ZOO"
+#title ""
+#lines 1
+"FOO™ZOO"
+#links 0
+
+#case 51
+#data "FOO&#x009A;ZOO"
+#title ""
+#lines 1
+"FOOšZOO"
+#links 0
+
+#case 52
+#data "FOO&#x009B;ZOO"
+#title ""
+#lines 1
+"FOO›ZOO"
+#links 0
+
+#case 53
+#data "FOO&#x009C;ZOO"
+#title ""
+#lines 1
+"FOOœZOO"
+#links 0
+
+#case 54
+#data "FOO&#x009D;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 55
+#data "FOO&#x009E;ZOO"
+#title ""
+#lines 1
+"FOOžZOO"
+#links 0
+
+#case 56
+#data "FOO&#x009F;ZOO"
+#title ""
+#lines 1
+"FOOŸZOO"
+#links 0
+
+#case 57
+#data "FOO&#x00A0;ZOO"
+#title ""
+#lines 1
+"FOO\u{a0}ZOO"
+#links 0
+
+#case 58
+#data "FOO&#xD7FF;ZOO"
+#title ""
+#lines 1
+"FOO\u{d7ff}ZOO"
+#links 0
+
+#case 59
+#data "FOO&#xD800;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 60
+#data "FOO&#xD801;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 61
+#data "FOO&#xDFFE;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 62
+#data "FOO&#xDFFF;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 63
+#data "FOO&#xE000;ZOO"
+#title ""
+#lines 1
+"FOO\u{e000}ZOO"
+#links 0
+
+#case 64
+#data "FOO&#x10FFFE;ZOO"
+#title ""
+#lines 1
+"FOO\u{10fffe}ZOO"
+#links 0
+
+#case 65
+#data "FOO&#x1087D4;ZOO"
+#title ""
+#lines 1
+"FOO\u{1087d4}ZOO"
+#links 0
+
+#case 66
+#data "FOO&#x10FFFF;ZOO"
+#title ""
+#lines 1
+"FOO\u{10ffff}ZOO"
+#links 0
+
+#case 67
+#data "FOO&#x110000;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 68
+#data "FOO&#xFFFFFF;ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 69
+#data "FOO&#11111111111"
+#title ""
+#lines 1
+"FOO�"
+#links 0
+
+#case 70
+#data "FOO&#1111111111"
+#title ""
+#lines 1
+"FOO�"
+#links 0
+
+#case 71
+#data "FOO&#111111111111"
+#title ""
+#lines 1
+"FOO�"
+#links 0
+
+#case 72
+#data "FOO&#11111111111ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 73
+#data "FOO&#1111111111ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+
+#case 74
+#data "FOO&#111111111111ZOO"
+#title ""
+#lines 1
+"FOO�ZOO"
+#links 0
+

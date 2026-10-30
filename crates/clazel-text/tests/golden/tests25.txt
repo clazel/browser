@@ -1,0 +1,184 @@
+#case 0
+#data "<!DOCTYPE html><body><foo>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 1
+#data "<!DOCTYPE html><body><area>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 2
+#data "<!DOCTYPE html><body><base>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 3
+#data "<!DOCTYPE html><body><basefont>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><body><bgsound>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><body><br>A"
+#title ""
+#lines 2
+""
+"A"
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><body><col>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><body><command>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><body><embed>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 9
+#data "<!DOCTYPE html><body><frame>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><body><hr>A"
+#title ""
+#lines 2
+"--------------------------------------------------------------------------------"
+"A"
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><body><img>A"
+#title ""
+#lines 1
+"[image]A"
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><body><input>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 13
+#data "<!DOCTYPE html><body><keygen>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 14
+#data "<!DOCTYPE html><keygen>A</keygen>B"
+#title ""
+#lines 1
+"AB"
+#links 0
+
+#case 15
+#data "</keygen>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 16
+#data "<!DOCTYPE html></keygen>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 17
+#data "<!DOCTYPE html><head></keygen>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 18
+#data "<!DOCTYPE html><head></head></keygen>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 19
+#data "<!DOCTYPE html><body></keygen>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 20
+#data "<!DOCTYPE html><body><link>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 21
+#data "<!DOCTYPE html><body><meta>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 22
+#data "<!DOCTYPE html><body><param>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 23
+#data "<!DOCTYPE html><body><source>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 24
+#data "<!DOCTYPE html><body><track>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 25
+#data "<!DOCTYPE html><body><wbr>A"
+#title ""
+#lines 1
+"A"
+#links 0
+

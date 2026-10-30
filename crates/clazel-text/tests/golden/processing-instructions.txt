@@ -1,0 +1,746 @@
+#case 0
+#data "<body><?something>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<body><?something><span>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<body><?something good>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<body><?something else is good>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<body><?one><?two>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<body><?a$><?b$><?good?>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<body><?hey there?>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<body><?hey   there?>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<body><?hey?there>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<body><?hey\tthere=1?>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<body><?hey\nthere=1?>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<body><?hey\rthere=1?>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<body><?hey\u{c}there=1?>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<body><?something ? >"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<body><?something x >"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<body><?something ?\\t   ??>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<body><?t d > ?>"
+#title ""
+#lines 1
+"?>"
+#links 0
+
+#case 17
+#data "<body><?module-handler>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<body><?module-handler data>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<body><?view-port>"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<body><?view-port data>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<body><?config-v2>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<body><?config-v2 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<body><?x>"
+#title ""
+#lines 0
+#links 0
+
+#case 24
+#data "<body><?x data>"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<body><?zz2op>"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<body><?zz2op data>"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<body><?xla->"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<body><?xla- data>"
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<body><?a-b-c>"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<body><?a-b-c data>"
+#title ""
+#lines 0
+#links 0
+
+#case 31
+#data "<body><?v-123>"
+#title ""
+#lines 0
+#links 0
+
+#case 32
+#data "<body><?v-123 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 33
+#data "<body><?a0-b1-c2>"
+#title ""
+#lines 0
+#links 0
+
+#case 34
+#data "<body><?a0-b1-c2 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<body><?page-404>"
+#title ""
+#lines 0
+#links 0
+
+#case 36
+#data "<body><?page-404 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 37
+#data "<body><?r2-d2>"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<body><?r2-d2 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<body><?level-99>"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<body><?level-99 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<body><?UPPERCASE>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<body><?UPPERCASE data>"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<body><?all-KINDS-of-CaSeS>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<body><?all-KINDS-of-CaSeS data>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "<body><?user_name>"
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<body><?user_name data>"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<body><?S_S-S_S>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "<body><?S_S-S_S data>"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data "<body><?b_>"
+#title ""
+#lines 0
+#links 0
+
+#case 50
+#data "<body><?b_ data>"
+#title ""
+#lines 0
+#links 0
+
+#case 51
+#data "<body><?_prefix>"
+#title ""
+#lines 0
+#links 0
+
+#case 52
+#data "<body><?_prefix data>"
+#title ""
+#lines 0
+#links 0
+
+#case 53
+#data "<body><?_x132>"
+#title ""
+#lines 0
+#links 0
+
+#case 54
+#data "<body><?_x132 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 55
+#data "<body><?_-_>"
+#title ""
+#lines 0
+#links 0
+
+#case 56
+#data "<body><?_-_ data>"
+#title ""
+#lines 0
+#links 0
+
+#case 57
+#data "<body><?_>"
+#title ""
+#lines 0
+#links 0
+
+#case 58
+#data "<body><?_ data>"
+#title ""
+#lines 0
+#links 0
+
+#case 59
+#data "<body><?A---------------->"
+#title ""
+#lines 0
+#links 0
+
+#case 60
+#data "<body><?A---------------- data>"
+#title ""
+#lines 0
+#links 0
+
+#case 61
+#data "<body><?z0123456789>"
+#title ""
+#lines 0
+#links 0
+
+#case 62
+#data "<body><?z0123456789 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 63
+#data "<body><?m-0>"
+#title ""
+#lines 0
+#links 0
+
+#case 64
+#data "<body><?m-0 data>"
+#title ""
+#lines 0
+#links 0
+
+#case 65
+#data "<body><?xml>"
+#title ""
+#lines 0
+#links 0
+
+#case 66
+#data "<body><?xml-stylesheet>"
+#title ""
+#lines 0
+#links 0
+
+#case 67
+#data "<body><?XML>"
+#title ""
+#lines 0
+#links 0
+
+#case 68
+#data "<body><?XML-stylesheet>"
+#title ""
+#lines 0
+#links 0
+
+#case 69
+#data "<body><?xML>"
+#title ""
+#lines 0
+#links 0
+
+#case 70
+#data "<body><?xml-STYLesheet>"
+#title ""
+#lines 0
+#links 0
+
+#case 71
+#data "<body><?1st-place>"
+#title ""
+#lines 0
+#links 0
+
+#case 72
+#data "<body><?2-factor>"
+#title ""
+#lines 0
+#links 0
+
+#case 73
+#data "<body><?99-problems>"
+#title ""
+#lines 0
+#links 0
+
+#case 74
+#data "<body><?٥-star>"
+#title ""
+#lines 0
+#links 0
+
+#case 75
+#data "<body><?-prefix>"
+#title ""
+#lines 0
+#links 0
+
+#case 76
+#data "<body><?--internal>"
+#title ""
+#lines 0
+#links 0
+
+#case 77
+#data "<body><?-data->"
+#title ""
+#lines 0
+#links 0
+
+#case 78
+#data "<body><?-100>"
+#title ""
+#lines 0
+#links 0
+
+#case 79
+#data "<body><?·middle-dot>"
+#title ""
+#lines 0
+#links 0
+
+#case 80
+#data "<body><?͵greek-numeral>"
+#title ""
+#lines 0
+#links 0
+
+#case 81
+#data "<body><?\u{301}accent-start>"
+#title ""
+#lines 0
+#links 0
+
+#case 82
+#data "<body><?price$value>"
+#title ""
+#lines 0
+#links 0
+
+#case 83
+#data "<body><?user@domain>"
+#title ""
+#lines 0
+#links 0
+
+#case 84
+#data "<body><?tag#id>"
+#title ""
+#lines 0
+#links 0
+
+#case 85
+#data "<body><?a+b>"
+#title ""
+#lines 0
+#links 0
+
+#case 86
+#data "<body><?100%>"
+#title ""
+#lines 0
+#links 0
+
+#case 87
+#data "<body><?data.v1>"
+#title ""
+#lines 0
+#links 0
+
+#case 88
+#data "<body><?namespace:tag>"
+#title ""
+#lines 0
+#links 0
+
+#case 89
+#data "<body><?error!code>"
+#title ""
+#lines 0
+#links 0
+
+#case 90
+#data "<body><?x=y>"
+#title ""
+#lines 0
+#links 0
+
+#case 91
+#data "<body><?a<b>"
+#title ""
+#lines 0
+#links 0
+
+#case 92
+#data "<body><?true&false>"
+#title ""
+#lines 0
+#links 0
+
+#case 93
+#data "<body><?not|or>"
+#title ""
+#lines 0
+#links 0
+
+#case 94
+#data "<body><?lit$123456789>"
+#title ""
+#lines 0
+#links 0
+
+#case 95
+#data "<body><?lit$$4x>"
+#title ""
+#lines 0
+#links 0
+
+#case 96
+#data "<body><?🚀-launch>"
+#title ""
+#lines 0
+#links 0
+
+#case 97
+#data "<body><?error-⚠\u{fe0f}>"
+#title ""
+#lines 0
+#links 0
+
+#case 98
+#data "<body><?fire-🔥>"
+#title ""
+#lines 0
+#links 0
+
+#case 99
+#data "<body><?v1-✅>"
+#title ""
+#lines 0
+#links 0
+
+#case 100
+#data "<body><?start"
+#title ""
+#lines 0
+#links 0
+
+#case 101
+#data "<body><?start?"
+#title ""
+#lines 0
+#links 0
+
+#case 102
+#data "<body><?start "
+#title ""
+#lines 0
+#links 0
+
+#case 103
+#data "<body><?start data"
+#title ""
+#lines 0
+#links 0
+
+#case 104
+#data "<body><?start ? ?"
+#title ""
+#lines 0
+#links 0
+
+#case 105
+#data "<body><?"
+#title ""
+#lines 0
+#links 0
+
+#case 106
+#data "<body><? "
+#title ""
+#lines 0
+#links 0
+
+#case 107
+#data "<div><?something></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 108
+#data "<div><?something good></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 109
+#data "<table><?something></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 110
+#data "<table><tr><?something></tr></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 111
+#data "<script><?something></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 112
+#data "<style><?something></style>"
+#title ""
+#lines 0
+#links 0
+
+#case 113
+#data "<?something>"
+#title ""
+#lines 0
+#links 0
+
+#case 114
+#data "<head><?something>"
+#title ""
+#lines 0
+#links 0
+
+#case 115
+#data "<html><?something><head>"
+#title ""
+#lines 0
+#links 0
+
+#case 116
+#data "<html><head></head><?something><body>"
+#title ""
+#lines 0
+#links 0
+
+#case 117
+#data "<html><body></body><?something>"
+#title ""
+#lines 0
+#links 0
+
+#case 118
+#data "<html><body></body></html><?something>"
+#title ""
+#lines 0
+#links 0
+
+#case 119
+#data "<body><template><?something></template>"
+#title ""
+#lines 0
+#links 0
+
+#case 120
+#data "<body><textarea><?something></textarea>"
+#title ""
+#lines 1
+"<?something>"
+#links 0
+
+#case 121
+#data "<body><title><?something></title>"
+#title "<?something>"
+#lines 0
+#links 0
+
+#case 122
+#data "<noscript><?pi>"
+#title ""
+#lines 0
+#links 0
+
+#case 123
+#data "<template><?pi>"
+#title ""
+#lines 0
+#links 0
+
