@@ -1,0 +1,144 @@
+#case 0
+#data "<!DOCTYPE html><body><a href='#1'><nobr>1<nobr></a><br><a href='#2'><nobr>2<nobr></a><br><a href='#3'><nobr>3<nobr></a>"
+#title ""
+#lines 3
+"1[1]"
+"[2]2[3]"
+"[4]3[5]"
+#links 5
+1 "#1"
+2 "#2"
+3 "#2"
+4 "#3"
+5 "#3"
+
+#case 1
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><i><nobr>2<nobr></i>3"
+#title ""
+#lines 1
+"123"
+#links 0
+
+#case 2
+#data "<!DOCTYPE html><body><b><nobr>1<table><nobr></b><i><nobr>2<nobr></i>3"
+#title ""
+#lines 1
+"123"
+#links 0
+
+#case 3
+#data "<!DOCTYPE html><body><b><nobr>1<table><tr><td><nobr></b><i><nobr>2<nobr></i>3"
+#title ""
+#lines 2
+"1"
+"23"
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><body><b><nobr>1<div><nobr></b><i><nobr>2<nobr></i>3"
+#title ""
+#lines 2
+"1"
+"23"
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><div><i><nobr>2<nobr></i>3"
+#title ""
+#lines 2
+"1"
+"23"
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><body><b><nobr>1<nobr><ins></b><i><nobr>"
+#title ""
+#lines 1
+"1"
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><body><b><nobr>1<ins><nobr></b><i>2"
+#title ""
+#lines 1
+"12"
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><body><b>1<nobr></b><i><nobr>2</i>"
+#title ""
+#lines 1
+"12"
+#links 0
+
+#case 9
+#data "<p><code x</code></p>\n"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><svg><foreignObject><p><i></p>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject><p><i></p>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><math><mtext><p><i></p>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 13
+#data "<!DOCTYPE html><table><tr><td><math><mtext><p><i></p>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 14
+#data "<!DOCTYPE html><body><div><!/div>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 15
+#data "<button><p><button>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<svg></p><foo>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<svg></br><foo>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<math></p><foo>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<math></br><foo>"
+#title ""
+#lines 0
+#links 0
+

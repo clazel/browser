@@ -1,0 +1,42 @@
+#case 0
+#data "<!DOCTYPE html><html><body><xyz:abc></xyz:abc>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!DOCTYPE html><html><body><xyz:abc></xyz:abc><span></span>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!DOCTYPE html><html><html abc:def=gh><xyz:abc></xyz:abc>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!DOCTYPE html><html xml:lang=bar><html xml:lang=foo>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><html 123=456>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><html 123=456><html 789=012>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><html><body 789=012>"
+#title ""
+#lines 0
+#links 0
+

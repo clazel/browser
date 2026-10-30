@@ -1,0 +1,37 @@
+#case 0
+#data "<p><font size=4><font color=red><font size=4><font size=4><font size=4><font size=4><font size=4><font color=red><p>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 1
+#data "<p><font size=4><font size=4><font size=4><font size=4><p>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 2
+#data "<p><font size=4><font size=4><font size=4><font size=\"5\"><font size=4><p>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 3
+#data "<p><font size=4 id=a><font size=4 id=b><font size=4><font size=4><p>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 4
+#data "<p><b id=a><b id=a><b id=a><b><object><b id=a><b id=a>X</object><p>Y"
+#title ""
+#lines 3
+"X"
+""
+"Y"
+#links 0
+

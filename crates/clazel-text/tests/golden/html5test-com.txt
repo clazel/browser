@@ -1,0 +1,200 @@
+#case 0
+#data "<div<div>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<div foo<bar=''>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<div foo=`bar`>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<div \\\"foo=''>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<a href='\\nbar'></a>"
+#title ""
+#lines 1
+"[1]"
+#links 1
+1 "\\nbar"
+
+#case 5
+#data "<!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "&lang;&rang;"
+#title ""
+#lines 1
+"⟨⟩"
+#links 0
+
+#case 7
+#data "&apos;"
+#title ""
+#lines 1
+"'"
+#links 0
+
+#case 8
+#data "&ImaginaryI;"
+#title ""
+#lines 1
+"ⅈ"
+#links 0
+
+#case 9
+#data "&Kopf;"
+#title ""
+#lines 1
+"𝕂"
+#links 0
+
+#case 10
+#data "&notinva;"
+#title ""
+#lines 1
+"∉"
+#links 0
+
+#case 11
+#data "<?import namespace=\"foo\" implementation=\"#bar\">"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!--foo--bar-->"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<svg><title><![CDATA[x]]>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 14
+#data "<svg><foreignobject><![CDATA[x]]>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 15
+#data "<svg><foreignobject><p><![CDATA[x]]>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<math><![CDATA[x]]>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 17
+#data "<math><mtext><![CDATA[x]]>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 18
+#data "<math><mtext><i><![CDATA[x]]>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<![CDATA[x]]>"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<textarea><!--</textarea>--></textarea>"
+#title ""
+#lines 1
+"<!---->"
+#links 0
+
+#case 21
+#data "<textarea><!--</textarea>-->"
+#title ""
+#lines 1
+"<!---->"
+#links 0
+
+#case 22
+#data "<style><!--</style>--></style>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 23
+#data "<style><!--</style>-->"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 24
+#data "<ul><li>A </li> <li>B</li></ul>"
+#title ""
+#lines 2
+"* A"
+"* B"
+#links 0
+
+#case 25
+#data "<table><form><input type=hidden><input></form><div></div></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<i>A<b>B<p></i>C</b>D"
+#title ""
+#lines 3
+"AB"
+""
+"CD"
+#links 0
+
+#case 27
+#data "<div></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<svg></svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<math></math>"
+#title ""
+#lines 0
+#links 0
+

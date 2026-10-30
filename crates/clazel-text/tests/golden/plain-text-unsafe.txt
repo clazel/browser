@@ -1,0 +1,281 @@
+#case 0
+#data "FOO&#x000D;ZOO"
+#title ""
+#lines 1
+"FOO ZOO"
+#links 0
+
+#case 1
+#data "<html>\0<frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<html> \0 <frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<html>a\0a<frameset></frameset>"
+#title ""
+#lines 1
+"aa"
+#links 0
+
+#case 4
+#data "<html>\0\0<frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<html>\0\n<frameset></frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<html><select>\0"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "\0"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<body>\0"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<plaintext>\0filler\0text\0"
+#title ""
+#lines 1
+"�filler�text�"
+#links 0
+
+#case 10
+#data "<svg><![CDATA[\0filler\0text\0]]>"
+#title ""
+#lines 1
+"�filler�text�"
+#links 0
+
+#case 11
+#data "<body><!\0>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<body><!\0filler\0text>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<body><svg><foreignObject>\0filler\0text"
+#title ""
+#lines 1
+"fillertext"
+#links 0
+
+#case 14
+#data "<svg>\0filler\0text"
+#title ""
+#lines 1
+"�filler�text"
+#links 0
+
+#case 15
+#data "<svg>\0<frameset>"
+#title ""
+#lines 1
+"�"
+#links 0
+
+#case 16
+#data "<svg>\0 <frameset>"
+#title ""
+#lines 1
+"�"
+#links 0
+
+#case 17
+#data "<svg>\0a<frameset>"
+#title ""
+#lines 1
+"�a"
+#links 0
+
+#case 18
+#data "<svg>\0</svg><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<svg>\0 </svg><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<svg>\0a</svg><frameset>"
+#title ""
+#lines 1
+"�a"
+#links 0
+
+#case 21
+#data "<svg><![CDATA[\0]]></svg><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<svg><foreignObject><![CDATA[\0]]></foreignObject></svg><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<svg>\0&#xFFFD;</svg><frameset>"
+#title ""
+#lines 1
+"��"
+#links 0
+
+#case 24
+#data "<!DOCTYPE html><body>a<\0b"
+#title ""
+#lines 1
+"a<b"
+#links 0
+
+#case 25
+#data "<svg><foreignObject><![CDATA[a\0b]]>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 26
+#data "<svg><path></path></svg><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<svg><p><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<!DOCTYPE html><pre>\r\n\r\nA</pre>"
+#title ""
+#lines 2
+""
+"A"
+#links 0
+
+#case 29
+#data "<!DOCTYPE html><pre>\r\rA</pre>"
+#title ""
+#lines 2
+""
+"A"
+#links 0
+
+#case 30
+#data "<!DOCTYPE html><pre>\rA</pre>"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 31
+#data "<!DOCTYPE html><table><tr><td><math><mtext>\0a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 32
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject>\0a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 33
+#data "<!DOCTYPE html><math><mi>a\0b"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 34
+#data "<!DOCTYPE html><math><mo>a\0b"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 35
+#data "<!DOCTYPE html><math><mn>a\0b"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 36
+#data "<!DOCTYPE html><math><ms>a\0b"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 37
+#data "<!DOCTYPE html><math><mtext>a\0b"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 38
+#data "<math>\0filler\0text"
+#title ""
+#lines 1
+"�filler�text"
+#links 0
+
+#case 39
+#data "<math><![CDATA[\0filler\0text\0]]>"
+#title ""
+#lines 1
+"�filler�text�"
+#links 0
+
+#case 40
+#data "<math><annotation-xml>\0x"
+#title ""
+#lines 1
+"�x"
+#links 0
+
+#case 41
+#data "<math><annotation-xml encoding=\"text/html\">\0x"
+#title ""
+#lines 1
+"x"
+#links 0
+

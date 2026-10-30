@@ -1,0 +1,109 @@
+#case 0
+#data "FOO<!-- BAR -->BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 1
+#data "FOO<!-- BAR --!>BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 2
+#data "FOO<!-- BAR --! >BAZ"
+#title ""
+#lines 1
+"FOO"
+#links 0
+
+#case 3
+#data "FOO<!-- BAR --!\n>BAZ"
+#title ""
+#lines 1
+"FOO"
+#links 0
+
+#case 4
+#data "FOO<!-- BAR --   >BAZ"
+#title ""
+#lines 1
+"FOO"
+#links 0
+
+#case 5
+#data "FOO<!-- BAR -- <QUX> -- MUX -->BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 6
+#data "FOO<!-- BAR -- <QUX> -- MUX --!>BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 7
+#data "FOO<!-- BAR -- <QUX> -- MUX -- >BAZ"
+#title ""
+#lines 1
+"FOO"
+#links 0
+
+#case 8
+#data "FOO<!---->BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 9
+#data "FOO<!--->BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 10
+#data "FOO<!-->BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 11
+#data "<?xml version=\"1.0\">Hi"
+#title ""
+#lines 1
+"Hi"
+#links 0
+
+#case 12
+#data "<?xml version=\"1.0\">"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<?xml version"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "FOO<!----->BAZ"
+#title ""
+#lines 1
+"FOOBAZ"
+#links 0
+
+#case 15
+#data "<html><!-- comment --><title>Comment before head</title>"
+#title "Comment before head"
+#lines 0
+#links 0
+

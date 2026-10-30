@@ -1,0 +1,410 @@
+#case 0
+#data "<!DOCTYPE html>Test"
+#title ""
+#lines 1
+"Test"
+#links 0
+
+#case 1
+#data "<textarea>test</div>test"
+#title ""
+#lines 1
+"test</div>test"
+#links 0
+
+#case 2
+#data "<table><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<table><td>test</tbody></table>"
+#title ""
+#lines 1
+"test"
+#links 0
+
+#case 4
+#data "<frame>test"
+#title ""
+#lines 1
+"test"
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><frameset>test"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><frameset> te st"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><frameset></frameset> te st"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><frameset><!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<!DOCTYPE html><font><p><b>test</font>"
+#title ""
+#lines 1
+"test"
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><dt><div><dd>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<script></x"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<table><plaintext><td>"
+#title ""
+#lines 1
+"<td>"
+#links 0
+
+#case 13
+#data "<plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 14
+#data "<!DOCTYPE html><table><tr>TEST"
+#title ""
+#lines 1
+"TEST"
+#links 0
+
+#case 15
+#data "<!DOCTYPE html><body t1=1><body t2=2><body t3=3 t4=4>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "</b test"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<!DOCTYPE html></b test<b &=&amp>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 18
+#data "<!doctypehtml><scrIPt type=text/x-foobar;baz>X</SCRipt"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "&"
+#title ""
+#lines 1
+"&"
+#links 0
+
+#case 20
+#data "&#"
+#title ""
+#lines 1
+"&#"
+#links 0
+
+#case 21
+#data "&#X"
+#title ""
+#lines 1
+"&#X"
+#links 0
+
+#case 22
+#data "&#x"
+#title ""
+#lines 1
+"&#x"
+#links 0
+
+#case 23
+#data "&#45"
+#title ""
+#lines 1
+"-"
+#links 0
+
+#case 24
+#data "&x-test"
+#title ""
+#lines 1
+"&x-test"
+#links 0
+
+#case 25
+#data "<!doctypehtml><p><li>"
+#title ""
+#lines 1
+"*"
+#links 0
+
+#case 26
+#data "<!doctypehtml><p><dt>"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<!doctypehtml><p><dd>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<!doctypehtml><p><form>"
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<!DOCTYPE html><p></P>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 30
+#data "&AMP"
+#title ""
+#lines 1
+"&"
+#links 0
+
+#case 31
+#data "&AMp;"
+#title ""
+#lines 1
+"&AMp;"
+#links 0
+
+#case 32
+#data "<!DOCTYPE html><html><head></head><body><thisISasillyTESTelementNameToMakeSureCrazyTagNamesArePARSEDcorrectLY>"
+#title ""
+#lines 0
+#links 0
+
+#case 33
+#data "<!DOCTYPE html>X</body>X"
+#title ""
+#lines 1
+"XX"
+#links 0
+
+#case 34
+#data "<!DOCTYPE html><!-- X"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<!DOCTYPE html><table><caption>test TEST</caption><td>test"
+#title ""
+#lines 2
+"test TEST"
+"test"
+#links 0
+
+#case 36
+#data "<!DOCTYPE html><select><option><optgroup>"
+#title ""
+#lines 0
+#links 0
+
+#case 37
+#data "<!DOCTYPE html><select><optgroup><option></optgroup><option><select><option>"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<!DOCTYPE html><select><optgroup><option><optgroup>"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<!DOCTYPE html><datalist><option>foo</datalist>bar"
+#title ""
+#lines 1
+"bar"
+#links 0
+
+#case 40
+#data "<!DOCTYPE html><font><input><input></font>"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<!DOCTYPE html><!-- XXX - XXX -->"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<!DOCTYPE html><!-- XXX - XXX"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<!DOCTYPE html><!-- XXX - XXX - XXX -->"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<!DOCTYPE html> <!DOCTYPE html>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "test\ntest"
+#title ""
+#lines 1
+"test test"
+#links 0
+
+#case 46
+#data "<!DOCTYPE html><body><title>test</body></title>"
+#title "test</body>"
+#lines 0
+#links 0
+
+#case 47
+#data "<!DOCTYPE html><body><title>X</title><meta name=z><link rel=foo><style>\nx { content:\"</style\" } </style>"
+#title "X"
+#lines 0
+#links 0
+
+#case 48
+#data "<!DOCTYPE html><select><optgroup></optgroup></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data " \n "
+#title ""
+#lines 0
+#links 0
+
+#case 50
+#data "<!DOCTYPE html>  <html>"
+#title ""
+#lines 0
+#links 0
+
+#case 51
+#data "<!DOCTYPE html><script>\n</script>  <title>x</title>  </head>"
+#title "x"
+#lines 0
+#links 0
+
+#case 52
+#data "<!DOCTYPE html><html><body><html id=x>"
+#title ""
+#lines 0
+#links 0
+
+#case 53
+#data "<!DOCTYPE html>X</body><html id=\"x\">"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 54
+#data "<!DOCTYPE html><head><html id=x>"
+#title ""
+#lines 0
+#links 0
+
+#case 55
+#data "<!DOCTYPE html>X</html>X"
+#title ""
+#lines 1
+"XX"
+#links 0
+
+#case 56
+#data "<!DOCTYPE html>X</html> "
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 57
+#data "<!DOCTYPE html>X</html><p>X"
+#title ""
+#lines 3
+"X"
+""
+"X"
+#links 0
+
+#case 58
+#data "<!DOCTYPE html>X<p/x/y/z>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 59
+#data "<!DOCTYPE html><!--x--"
+#title ""
+#lines 0
+#links 0
+
+#case 60
+#data "<!DOCTYPE html><table><tr><td></p></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 61
+#data "<!DOCTYPE <!DOCTYPE HTML>><!--<!--x-->-->"
+#title ""
+#lines 1
+">-->"
+#links 0
+
+#case 62
+#data "<!doctype html><div><form></form><div></div></div>"
+#title ""
+#lines 0
+#links 0
+

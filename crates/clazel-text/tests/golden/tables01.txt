@@ -1,0 +1,124 @@
+#case 0
+#data "<table><th>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<table><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<table><col foo='bar'>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<table><colgroup></html>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 4
+#data "<table></table><p>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 5
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<table><select><option>3</select></table>"
+#title ""
+#lines 1
+"3"
+#links 0
+
+#case 7
+#data "<table><select><table></table></select></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<table><select></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<table><select><option>A<tr><td>B</td></tr></table>"
+#title ""
+#lines 2
+"A"
+"B"
+#links 0
+
+#case 10
+#data "<table><td></body></caption></col></colgroup></html>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 11
+#data "<table><td>A</table>B"
+#title ""
+#lines 2
+"A"
+"B"
+#links 0
+
+#case 12
+#data "<table><tr><caption>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<table><tr></body></caption></col></colgroup></html></td></th><td>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 14
+#data "<table><td><tr>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<table><td><button><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<table><tr><td><svg><desc><td>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<div><table><svg><foreignObject><select><table><s>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<table>a<!doctype html>"
+#title ""
+#lines 1
+"a"
+#links 0
+

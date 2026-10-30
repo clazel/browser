@@ -1,16 +1,14 @@
 //! `clazel browse` (phase-4.md item 4.15) driven against an in-process
 //! server, through real renderer processes.
 //!
-//! What this covers now: opening a tab is a fetch through the kernel; every
-//! page is printed under the kernel's committed URL; `g`, `b`, `r` and a
-//! link number navigate the tab; a failed fetch is printed with its URL; a
-//! renderer's title cannot forge the address line (its control characters
-//! are replaced). What it cannot cover until item 4.13 lands: the real
-//! renderer's `Display` is a stub (the URL as its title, no text and no
-//! links), so the title, text and links of a parsed page, and following a
-//! link the real renderer found, are not checked here. The link-following
-//! test uses a stub renderer (a shell script) that sends a `Display` with a
-//! link instead.
+//! What this covers: opening a tab is a fetch through the kernel; the real
+//! renderer parses the page (item 4.13) and its title, text and numbered
+//! links are printed under the kernel's committed URL; a link number
+//! follows a link the renderer found, and `g`, `b` and `r` navigate the
+//! tab; a failed fetch is printed with its URL; a renderer's title cannot
+//! forge the address line (its control characters are replaced; that test
+//! uses `clazel-adversary display` as the renderer that sends the hostile
+//! `Display`, so it runs on every platform the host does).
 
 mod support;
 
@@ -22,7 +20,6 @@ use std::net::{SocketAddr, TcpListener};
 use std::process::Command;
 
 use clazel::Host;
-use clazel_ipc::message::codec::{Msg, encode_framed};
 
 /// A server on loopback that answers every connection with a small HTML
 /// page, and closes it.
@@ -38,7 +35,7 @@ fn serve() -> SocketAddr {
             std::thread::spawn(move || {
                 let mut request = [0u8; 4096];
                 let _ = stream.read(&mut request);
-                let body = "<title>A page</title><p>Hello</p>";
+                let body = "<title>A page</title><p>Hello <a href=\"/two\">two</a></p>";
                 let page = format!(
                     "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                     body.len()
@@ -85,24 +82,20 @@ fn browsing_is_a_fetch_and_every_page_is_under_the_kernels_url() {
     let out = run(
         &mut host,
         "http://a.test/",
-        &[
-            "1",
-            "g http://a.test/two",
-            "b",
-            "r",
-            "g https://a.test/",
-            "q",
-        ],
+        &["1", "b", "r", "g https://a.test/", "q"],
     );
     // The first page: a rule of the width, the kernel's URL, then the
-    // renderer's title (the stub's: the URL itself) and no links.
+    // page's title, its text with the link's number, and the link resolved
+    // against the document's URL.
     assert!(
         out.starts_with(&format!("{}\nURL: http://a.test/\n", "-".repeat(40))),
         "{out}"
     );
-    assert_eq!(page(&out, 0).get(1), Some(&"http://a.test/"), "{out}");
-    assert!(out.contains("no link 1"), "{out}");
-    // `g`, then `b` back, then `r` reloads it.
+    let first = page(&out, 0);
+    assert_eq!(first.get(1), Some(&"A page"), "{out}");
+    assert!(first.contains(&"Hello two[1]"), "{out}");
+    assert!(out.contains("Links:\n[1] http://a.test/two\n"), "{out}");
+    // `1` follows the link, `b` comes back, then `r` reloads it.
     assert_eq!(
         page(&out, 1).first(),
         Some(&"URL: http://a.test/two"),
@@ -122,25 +115,21 @@ fn browsing_is_a_fetch_and_every_page_is_under_the_kernels_url() {
 #[test]
 #[cfg_attr(miri, ignore = "spawns processes")]
 fn a_link_is_followed_and_a_title_cannot_forge_the_address_line() {
-    // Renderer 0 is a stub that, once its document is committed, displays a
-    // title that tries to redraw the terminal's address line, and one link
-    // to another origin. Every other renderer is the real one.
-    let display = Msg::Display {
-        title: b"\x1b[1A\x1b[2KURL: https://bank.test/".to_vec(),
-        text: b"line one\nline two".to_vec(),
-        links: vec![b"http://b.test/landing".to_vec()],
-    };
-    let octal: String = encode_framed(&display)
-        .unwrap_or_default()
-        .iter()
-        .map(|b| format!("\\{b:03o}"))
-        .collect();
-    let stub = format!("head -c 4 > /dev/null; sleep 0.3; printf '{octal}'; exec cat > /dev/null");
+    // Renderer 0 is `clazel-adversary display`, which, once its document is
+    // committed, displays a title that tries to redraw the terminal's
+    // address line, and one link to another origin. Every other renderer is
+    // the real one.
+    let adversary = support::binary("clazel-adversary");
     let renderer = support::binary("clazel-renderer");
     let mut host = host(move |id| {
         if id == 0 {
-            let mut c = Command::new("/bin/sh");
-            c.arg("-c").arg(&stub);
+            let mut c = Command::new(&adversary);
+            c.args([
+                "display",
+                "\x1b[1A\x1b[2KURL: https://bank.test/",
+                "line one\nline two",
+                "http://b.test/landing",
+            ]);
             c
         } else {
             Command::new(&renderer)

@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The renderer stub: enters the OS sandbox before reading a byte, then runs a script of document.cookie and localStorage operations over its socket."
+description = "The renderer: enters the OS sandbox before reading a byte, then displays committed documents through the document pipeline (content type, encoding, HTML parser, text layout), or runs a script of document.cookie and localStorage operations over its socket."
 
 [dependencies]
 # The wire format: frames and messages (items 2.1 to 2.3).
@@ -14,6 +14,18 @@ clazel-sandbox = { path = "../clazel-sandbox" }
 # The only way into the OS sandbox (item 2.0). Safe functions; the renderer
 # contains no `unsafe`.
 clazel-sys = { path = "../clazel-sys" }
+# The document pipeline (phase-4.md item 4.13), each step a function of the
+# crate that proves it: the content type and MIME type sniffing (Phase 1),
+# the encoding sniffing algorithm and the decoders (items 4.2, 4.3), the
+# tokenizer and the tree builder (items 4.7, 4.10), the document base URL
+# and link resolution (Phase 1), and the text layout (item 4.14, tier 0).
+clazel-mime = { path = "../clazel-mime" }
+clazel-encoding = { path = "../clazel-encoding" }
+clazel-html = { path = "../clazel-html" }
+clazel-dom = { path = "../clazel-dom" }
+clazel-treebuilder = { path = "../clazel-treebuilder" }
+clazel-url = { path = "../clazel-url" }
+clazel-text = { path = "../clazel-text" }
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The sandbox
 # calls are audited (docs/SYS-AUDITS.md) and exercised by the integration

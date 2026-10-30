@@ -341,9 +341,16 @@ dependencies = [
 name = "clazel-renderer"
 version = "0.0.0"
 dependencies = [
+ "clazel-dom",
+ "clazel-encoding",
+ "clazel-html",
  "clazel-ipc",
+ "clazel-mime",
  "clazel-sandbox",
  "clazel-sys",
+ "clazel-text",
+ "clazel-treebuilder",
+ "clazel-url",
 ]
 
 [[package]]
@@ -355,6 +362,14 @@ name = "clazel-sys"
 version = "0.0.0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "clazel-text"
+version = "0.0.0"
+dependencies = [
+ "clazel-dom",
+ "clazel-treebuilder",
 ]
 
 [[package]]

@@ -1,0 +1,304 @@
+#case 0
+#data "<foo bar=qux/>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<p id=\"status\"><noscript><strong>A</strong></noscript><span>B</span></p>"
+#title ""
+#lines 1
+"AB"
+#links 0
+
+#case 2
+#data "<p id=\"status\"><noscript><strong>A</strong></noscript><span>B</span></p>"
+#title ""
+#lines 1
+"AB"
+#links 0
+
+#case 3
+#data "<div><sarcasm><div></div></sarcasm></div>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<html><body><img src=\"\" border=\"0\" alt=\"><div>A</div></body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<table><td></tbody>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 6
+#data "<table><td></thead>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 7
+#data "<table><td></tfoot>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 8
+#data "<table><thead><td></tbody>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 9
+#data "<legend>test</legend>"
+#title ""
+#lines 1
+"test"
+#links 0
+
+#case 10
+#data "<table><input>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<b><em><foo><foo><aside></b>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<b><em><foo><foo><aside></b></em>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<b><em><foo><foo><foo><aside></b>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<b><em><foo><foo><foo><aside></b></em>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<svg><foreignObject><div>foo</div><plaintext></foreignObject></svg><div>bar</div>"
+#title ""
+#lines 2
+"foo"
+"</foreignObject></svg><div>bar</div>"
+#links 0
+
+#case 20
+#data "<svg><foreignObject></foreignObject><title></svg>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 21
+#data "</foreignObject><plaintext><div>foo</div>"
+#title ""
+#lines 1
+"<div>foo</div>"
+#links 0
+
+#case 22
+#data "<svg xml:base xml:lang xml:space xml:baaah definitionurl>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<math definitionurl xlink:title xlink:show>"
+#title ""
+#lines 0
+#links 0
+
+#case 24
+#data "<math DEFINITIONURL>"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<select><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 26
+#data "<select><option><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 27
+#data "<select><optgroup><option><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 28
+#data "<select><optgroup><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 29
+#data "<select><option><optgroup><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 30
+#data "<table><tr><td><select><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 31
+#data "<table><tr><td><select><option><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 32
+#data "<table><tr><td><select><optgroup><option><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 33
+#data "<table><tr><td><select><optgroup><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 34
+#data "<table><tr><td><select><option><optgroup><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 35
+#data "<select><div><i></div><option>option"
+#title ""
+#lines 1
+"option"
+#links 0
+
+#case 36
+#data "<div><i></div><option>option"
+#title ""
+#lines 1
+"option"
+#links 0
+
+#case 37
+#data "<select><div>div 1</div><button>button</button><div>div 2</div><datalist><option>option</option></datalist><div>div 3</div></select>"
+#title ""
+#lines 4
+"div 1"
+"button"
+"div 2"
+"div 3"
+#links 0
+
+#case 38
+#data "<select><button>button</select>"
+#title ""
+#lines 1
+"button"
+#links 0
+
+#case 39
+#data "<select><datalist>datalist</select>"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<select><button><select></select></button></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<select><button><div><select></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<select><div><option><img>option</option></div></select>"
+#title ""
+#lines 1
+"[image]option"
+#links 0
+
+#case 43
+#data "<select><input>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<select><button><selectedcontent></button><option>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 45
+#data "<select><button><selectedcontent></button><option>x<i>i<b>ib</i>b"
+#title ""
+#lines 1
+"xiibb"
+#links 0
+
+#case 46
+#data "<select><button><selectedcontent></button><option>X<option>Y"
+#title ""
+#lines 1
+"XY"
+#links 0
+
+#case 47
+#data "<select><button><selectedcontent></button><option>X<option selected>Y"
+#title ""
+#lines 1
+"XY"
+#links 0
+
+#case 48
+#data "<font><select><option>a</option></font></select>"
+#title ""
+#lines 1
+"a"
+#links 0
+

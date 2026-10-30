@@ -1,0 +1,1214 @@
+#case 0
+#data "<!doctype html><script>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!doctype html><script>a"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!doctype html><script><"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html><script></"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!doctype html><script></S"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!doctype html><script></SC"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!doctype html><script></SCR"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<!doctype html><script></SCRI"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<!doctype html><script></SCRIP"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<!doctype html><script></SCRIPT"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<!doctype html><script></SCRIPT "
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<!doctype html><script></s"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!doctype html><script></sc"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<!doctype html><script></scr"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<!doctype html><script></scri"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<!doctype html><script></scrip"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<!doctype html><script></script"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<!doctype html><script></script "
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<!doctype html><script><!"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<!doctype html><script><!a"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<!doctype html><script><!-"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<!doctype html><script><!-a"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<!doctype html><script><!--"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<!doctype html><script><!--a"
+#title ""
+#lines 0
+#links 0
+
+#case 24
+#data "<!doctype html><script><!--<"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<!doctype html><script><!--<a"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<!doctype html><script><!--</"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<!doctype html><script><!--</script"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<!doctype html><script><!--</script "
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<!doctype html><script><!--<s"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<!doctype html><script><!--<script"
+#title ""
+#lines 0
+#links 0
+
+#case 31
+#data "<!doctype html><script><!--<script "
+#title ""
+#lines 0
+#links 0
+
+#case 32
+#data "<!doctype html><script><!--<script <"
+#title ""
+#lines 0
+#links 0
+
+#case 33
+#data "<!doctype html><script><!--<script <a"
+#title ""
+#lines 0
+#links 0
+
+#case 34
+#data "<!doctype html><script><!--<script </"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<!doctype html><script><!--<script </s"
+#title ""
+#lines 0
+#links 0
+
+#case 36
+#data "<!doctype html><script><!--<script </script"
+#title ""
+#lines 0
+#links 0
+
+#case 37
+#data "<!doctype html><script><!--<script </scripta"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<!doctype html><script><!--<script </script "
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<!doctype html><script><!--<script </script>"
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<!doctype html><script><!--<script </script/"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<!doctype html><script><!--<script </script <"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<!doctype html><script><!--<script </script <a"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<!doctype html><script><!--<script </script </"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<!doctype html><script><!--<script </script </script"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "<!doctype html><script><!--<script </script </script "
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<!doctype html><script><!--<script </script </script/"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<!doctype html><script><!--<script </script </script>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "<!doctype html><script><!--<script -"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data "<!doctype html><script><!--<script -a"
+#title ""
+#lines 0
+#links 0
+
+#case 50
+#data "<!doctype html><script><!--<script -<"
+#title ""
+#lines 0
+#links 0
+
+#case 51
+#data "<!doctype html><script><!--<script --"
+#title ""
+#lines 0
+#links 0
+
+#case 52
+#data "<!doctype html><script><!--<script --a"
+#title ""
+#lines 0
+#links 0
+
+#case 53
+#data "<!doctype html><script><!--<script --<"
+#title ""
+#lines 0
+#links 0
+
+#case 54
+#data "<!doctype html><script><!--<script -->"
+#title ""
+#lines 0
+#links 0
+
+#case 55
+#data "<!doctype html><script><!--<script --><"
+#title ""
+#lines 0
+#links 0
+
+#case 56
+#data "<!doctype html><script><!--<script --></"
+#title ""
+#lines 0
+#links 0
+
+#case 57
+#data "<!doctype html><script><!--<script --></script"
+#title ""
+#lines 0
+#links 0
+
+#case 58
+#data "<!doctype html><script><!--<script --></script "
+#title ""
+#lines 0
+#links 0
+
+#case 59
+#data "<!doctype html><script><!--<script --></script/"
+#title ""
+#lines 0
+#links 0
+
+#case 60
+#data "<!doctype html><script><!--<script --></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 61
+#data "<!doctype html><script><!--<script><\\/script>--></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 62
+#data "<!doctype html><script><!--<script></scr'+'ipt>--></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 63
+#data "<!doctype html><script><!--<script></script><script></script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 64
+#data "<!doctype html><script><!--<script></script><script></script>--><!--</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 65
+#data "<!doctype html><script><!--<script></script><script></script>-- ></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 66
+#data "<!doctype html><script><!--<script></script><script></script>- -></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 67
+#data "<!doctype html><script><!--<script></script><script></script>- - ></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 68
+#data "<!doctype html><script><!--<script></script><script></script>-></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 69
+#data "<!doctype html><script><!--<script>--!></script>X"
+#title ""
+#lines 0
+#links 0
+
+#case 70
+#data "<!doctype html><script><!--<scr'+'ipt></script>--></script>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 71
+#data "<!doctype html><script><!--<script></scr'+'ipt></script>X"
+#title ""
+#lines 0
+#links 0
+
+#case 72
+#data "<!doctype html><style><!--<style></style>--></style>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 73
+#data "<!doctype html><style><!--</style>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 74
+#data "<!doctype html><style><!--...</style>...--></style>"
+#title ""
+#lines 1
+"...-->"
+#links 0
+
+#case 75
+#data "<!doctype html><style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 76
+#data "<!doctype html><style><!--...<style><!--...--!></style>--></style>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 77
+#data "<!doctype html><style><!--...</style><!-- --><style>@import ...</style>"
+#title ""
+#lines 0
+#links 0
+
+#case 78
+#data "<!doctype html><style>...<style><!--...</style><!-- --></style>"
+#title ""
+#lines 0
+#links 0
+
+#case 79
+#data "<!doctype html><style>...<!--[if IE]><style>...</style>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 80
+#data "<!doctype html><title><!--<title></title>--></title>"
+#title "<!--<title>"
+#lines 1
+"-->"
+#links 0
+
+#case 81
+#data "<!doctype html><title>&lt;/title></title>"
+#title "</title>"
+#lines 0
+#links 0
+
+#case 82
+#data "<!doctype html><title>foo/title><link></head><body>X"
+#title "foo/title><link></head><body>X"
+#lines 0
+#links 0
+
+#case 83
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 84
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 85
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 86
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 87
+#data "<!doctype html><noscript><iframe></noscript>X"
+#title ""
+#lines 0
+#links 0
+
+#case 88
+#data "<!doctype html><noscript><iframe></noscript>X"
+#title ""
+#lines 0
+#links 0
+
+#case 89
+#data "<!doctype html><noframes><!--<noframes></noframes>--></noframes>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 90
+#data "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 91
+#data "<!doctype html><textarea><!--<textarea></textarea>--></textarea>"
+#title ""
+#lines 1
+"<!--<textarea>-->"
+#links 0
+
+#case 92
+#data "<!doctype html><textarea>&lt;/textarea></textarea>"
+#title ""
+#lines 1
+"</textarea>"
+#links 0
+
+#case 93
+#data "<!doctype html><textarea>&lt;</textarea>"
+#title ""
+#lines 1
+"<"
+#links 0
+
+#case 94
+#data "<!doctype html><textarea>a&lt;b</textarea>"
+#title ""
+#lines 1
+"a<b"
+#links 0
+
+#case 95
+#data "<!doctype html><iframe><!--<iframe></iframe>--></iframe>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 96
+#data "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>"
+#title ""
+#lines 0
+#links 0
+
+#case 97
+#data "<!doctype html><xmp><!--<xmp></xmp>--></xmp>"
+#title ""
+#lines 2
+"<!--<xmp>"
+"-->"
+#links 0
+
+#case 98
+#data "<!doctype html><noembed><!--<noembed></noembed>--></noembed>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 99
+#data "<script>"
+#title ""
+#lines 0
+#links 0
+
+#case 100
+#data "<script>a"
+#title ""
+#lines 0
+#links 0
+
+#case 101
+#data "<script><"
+#title ""
+#lines 0
+#links 0
+
+#case 102
+#data "<script></"
+#title ""
+#lines 0
+#links 0
+
+#case 103
+#data "<script></S"
+#title ""
+#lines 0
+#links 0
+
+#case 104
+#data "<script></SC"
+#title ""
+#lines 0
+#links 0
+
+#case 105
+#data "<script></SCR"
+#title ""
+#lines 0
+#links 0
+
+#case 106
+#data "<script></SCRI"
+#title ""
+#lines 0
+#links 0
+
+#case 107
+#data "<script></SCRIP"
+#title ""
+#lines 0
+#links 0
+
+#case 108
+#data "<script></SCRIPT"
+#title ""
+#lines 0
+#links 0
+
+#case 109
+#data "<script></SCRIPT "
+#title ""
+#lines 0
+#links 0
+
+#case 110
+#data "<script></s"
+#title ""
+#lines 0
+#links 0
+
+#case 111
+#data "<script></sc"
+#title ""
+#lines 0
+#links 0
+
+#case 112
+#data "<script></scr"
+#title ""
+#lines 0
+#links 0
+
+#case 113
+#data "<script></scri"
+#title ""
+#lines 0
+#links 0
+
+#case 114
+#data "<script></scrip"
+#title ""
+#lines 0
+#links 0
+
+#case 115
+#data "<script></script"
+#title ""
+#lines 0
+#links 0
+
+#case 116
+#data "<script></script "
+#title ""
+#lines 0
+#links 0
+
+#case 117
+#data "<script><!"
+#title ""
+#lines 0
+#links 0
+
+#case 118
+#data "<script><!a"
+#title ""
+#lines 0
+#links 0
+
+#case 119
+#data "<script><!-"
+#title ""
+#lines 0
+#links 0
+
+#case 120
+#data "<script><!-a"
+#title ""
+#lines 0
+#links 0
+
+#case 121
+#data "<script><!--"
+#title ""
+#lines 0
+#links 0
+
+#case 122
+#data "<script><!--a"
+#title ""
+#lines 0
+#links 0
+
+#case 123
+#data "<script><!--<"
+#title ""
+#lines 0
+#links 0
+
+#case 124
+#data "<script><!--<a"
+#title ""
+#lines 0
+#links 0
+
+#case 125
+#data "<script><!--</"
+#title ""
+#lines 0
+#links 0
+
+#case 126
+#data "<script><!--</script"
+#title ""
+#lines 0
+#links 0
+
+#case 127
+#data "<script><!--</script "
+#title ""
+#lines 0
+#links 0
+
+#case 128
+#data "<script><!--<s"
+#title ""
+#lines 0
+#links 0
+
+#case 129
+#data "<script><!--<script"
+#title ""
+#lines 0
+#links 0
+
+#case 130
+#data "<script><!--<script "
+#title ""
+#lines 0
+#links 0
+
+#case 131
+#data "<script><!--<script <"
+#title ""
+#lines 0
+#links 0
+
+#case 132
+#data "<script><!--<script <a"
+#title ""
+#lines 0
+#links 0
+
+#case 133
+#data "<script><!--<script </"
+#title ""
+#lines 0
+#links 0
+
+#case 134
+#data "<script><!--<script </s"
+#title ""
+#lines 0
+#links 0
+
+#case 135
+#data "<script><!--<script </script"
+#title ""
+#lines 0
+#links 0
+
+#case 136
+#data "<script><!--<script </scripta"
+#title ""
+#lines 0
+#links 0
+
+#case 137
+#data "<script><!--<script </script "
+#title ""
+#lines 0
+#links 0
+
+#case 138
+#data "<script><!--<script </script>"
+#title ""
+#lines 0
+#links 0
+
+#case 139
+#data "<script><!--<script </script/"
+#title ""
+#lines 0
+#links 0
+
+#case 140
+#data "<script><!--<script </script <"
+#title ""
+#lines 0
+#links 0
+
+#case 141
+#data "<script><!--<script </script <a"
+#title ""
+#lines 0
+#links 0
+
+#case 142
+#data "<script><!--<script </script </"
+#title ""
+#lines 0
+#links 0
+
+#case 143
+#data "<script><!--<script </script </script"
+#title ""
+#lines 0
+#links 0
+
+#case 144
+#data "<script><!--<script </script </script "
+#title ""
+#lines 0
+#links 0
+
+#case 145
+#data "<script><!--<script </script </script/"
+#title ""
+#lines 0
+#links 0
+
+#case 146
+#data "<script><!--<script </script </script>"
+#title ""
+#lines 0
+#links 0
+
+#case 147
+#data "<script><!--<script -"
+#title ""
+#lines 0
+#links 0
+
+#case 148
+#data "<script><!--<script -a"
+#title ""
+#lines 0
+#links 0
+
+#case 149
+#data "<script><!--<script --"
+#title ""
+#lines 0
+#links 0
+
+#case 150
+#data "<script><!--<script --a"
+#title ""
+#lines 0
+#links 0
+
+#case 151
+#data "<script><!--<script -->"
+#title ""
+#lines 0
+#links 0
+
+#case 152
+#data "<script><!--<script --><"
+#title ""
+#lines 0
+#links 0
+
+#case 153
+#data "<script><!--<script --></"
+#title ""
+#lines 0
+#links 0
+
+#case 154
+#data "<script><!--<script --></script"
+#title ""
+#lines 0
+#links 0
+
+#case 155
+#data "<script><!--<script --></script "
+#title ""
+#lines 0
+#links 0
+
+#case 156
+#data "<script><!--<script --></script/"
+#title ""
+#lines 0
+#links 0
+
+#case 157
+#data "<script><!--<script --></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 158
+#data "<script><!--<script><\\/script>--></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 159
+#data "<script><!--<script></scr'+'ipt>--></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 160
+#data "<script><!--<script></script><script></script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 161
+#data "<script><!--<script></script><script></script>--><!--</script>"
+#title ""
+#lines 0
+#links 0
+
+#case 162
+#data "<script><!--<script></script><script></script>-- ></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 163
+#data "<script><!--<script></script><script></script>- -></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 164
+#data "<script><!--<script></script><script></script>- - ></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 165
+#data "<script><!--<script></script><script></script>-></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 166
+#data "<script><!--<script>--!></script>X"
+#title ""
+#lines 0
+#links 0
+
+#case 167
+#data "<script><!--<scr'+'ipt></script>--></script>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 168
+#data "<script><!--<script></scr'+'ipt></script>X"
+#title ""
+#lines 0
+#links 0
+
+#case 169
+#data "<style><!--<style></style>--></style>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 170
+#data "<style><!--</style>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 171
+#data "<style><!--...</style>...--></style>"
+#title ""
+#lines 1
+"...-->"
+#links 0
+
+#case 172
+#data "<style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 173
+#data "<style><!--...<style><!--...--!></style>--></style>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 174
+#data "<style><!--...</style><!-- --><style>@import ...</style>"
+#title ""
+#lines 0
+#links 0
+
+#case 175
+#data "<style>...<style><!--...</style><!-- --></style>"
+#title ""
+#lines 0
+#links 0
+
+#case 176
+#data "<style>...<!--[if IE]><style>...</style>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 177
+#data "<title><!--<title></title>--></title>"
+#title "<!--<title>"
+#lines 1
+"-->"
+#links 0
+
+#case 178
+#data "<title>&lt;/title></title>"
+#title "</title>"
+#lines 0
+#links 0
+
+#case 179
+#data "<title>foo/title><link></head><body>X"
+#title "foo/title><link></head><body>X"
+#lines 0
+#links 0
+
+#case 180
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 181
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 182
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 183
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+#title ""
+#lines 0
+#links 0
+
+#case 184
+#data "<noscript><iframe></noscript>X"
+#title ""
+#lines 0
+#links 0
+
+#case 185
+#data "<noscript><iframe></noscript>X"
+#title ""
+#lines 0
+#links 0
+
+#case 186
+#data "<noframes><!--<noframes></noframes>--></noframes>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 187
+#data "<noframes><body><script><!--...</script></body></noframes></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 188
+#data "<textarea><!--<textarea></textarea>--></textarea>"
+#title ""
+#lines 1
+"<!--<textarea>-->"
+#links 0
+
+#case 189
+#data "<textarea>&lt;/textarea></textarea>"
+#title ""
+#lines 1
+"</textarea>"
+#links 0
+
+#case 190
+#data "<iframe><!--<iframe></iframe>--></iframe>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 191
+#data "<iframe>...<!--X->...<!--/X->...</iframe>"
+#title ""
+#lines 0
+#links 0
+
+#case 192
+#data "<xmp><!--<xmp></xmp>--></xmp>"
+#title ""
+#lines 2
+"<!--<xmp>"
+"-->"
+#links 0
+
+#case 193
+#data "<noembed><!--<noembed></noembed>--></noembed>"
+#title ""
+#lines 1
+"-->"
+#links 0
+
+#case 194
+#data "<!doctype html><table>\n"
+#title ""
+#lines 0
+#links 0
+
+#case 195
+#data "<!doctype html><table><td><span><font></span><span>"
+#title ""
+#lines 0
+#links 0
+
+#case 196
+#data "<!doctype html><form><table></form><form></table></form>"
+#title ""
+#lines 0
+#links 0
+

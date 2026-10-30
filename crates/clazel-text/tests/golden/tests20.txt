@@ -1,0 +1,392 @@
+#case 0
+#data "<!doctype html><p><button><button>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!doctype html><p><button><address>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!doctype html><p><button><article>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html><p><button><aside>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!doctype html><p><button><blockquote>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!doctype html><p><button><center>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!doctype html><p><button><details>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<!doctype html><p><button><dialog>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<!doctype html><p><button><dir>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<!doctype html><p><button><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<!doctype html><p><button><dl>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<!doctype html><p><button><fieldset>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!doctype html><p><button><figcaption>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<!doctype html><p><button><figure>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<!doctype html><p><button><footer>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<!doctype html><p><button><header>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<!doctype html><p><button><hgroup>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<!doctype html><p><button><main>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<!doctype html><p><button><menu>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<!doctype html><p><button><nav>"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<!doctype html><p><button><ol>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<!doctype html><p><button><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<!doctype html><p><button><search>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<!doctype html><p><button><section>"
+#title ""
+#lines 0
+#links 0
+
+#case 24
+#data "<!doctype html><p><button><summary>"
+#title ""
+#lines 0
+#links 0
+
+#case 25
+#data "<!doctype html><p><button><ul>"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<!doctype html><p><button><h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 27
+#data "<!doctype html><p><button><h6>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<!doctype html><p><button><listing>"
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<!doctype html><p><button><pre>"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<!doctype html><p><button><form>"
+#title ""
+#lines 0
+#links 0
+
+#case 31
+#data "<!doctype html><p><button><li>"
+#title ""
+#lines 1
+"*"
+#links 0
+
+#case 32
+#data "<!doctype html><p><button><dd>"
+#title ""
+#lines 0
+#links 0
+
+#case 33
+#data "<!doctype html><p><button><dt>"
+#title ""
+#lines 0
+#links 0
+
+#case 34
+#data "<!doctype html><p><button><plaintext>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<!doctype html><p><button><table>"
+#title ""
+#lines 0
+#links 0
+
+#case 36
+#data "<!doctype html><p><button><hr>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 37
+#data "<!doctype html><p><button><xmp>"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<!doctype html><p><button></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<!doctype html><button><p></button>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 40
+#data "<!doctype html><address><button></address>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 41
+#data "<p><table></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<!doctype html><svg>"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<!doctype html><p><figcaption>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<!doctype html><p><summary>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "<!doctype html><form><table><form>"
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<!doctype html><table><form><form>"
+#title ""
+#lines 0
+#links 0
+
+#case 47
+#data "<!doctype html><table><form></table><form>"
+#title ""
+#lines 0
+#links 0
+
+#case 48
+#data "<!doctype html><svg><foreignObject><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 49
+#data "<!doctype html><svg><title>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 50
+#data "<option><span><option>"
+#title ""
+#lines 0
+#links 0
+
+#case 51
+#data "<option><option>"
+#title ""
+#lines 0
+#links 0
+
+#case 52
+#data "<math><annotation-xml><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 53
+#data "<math><annotation-xml encoding=\"application/svg+xml\"><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 54
+#data "<math><annotation-xml encoding=\"application/xhtml+xml\"><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 55
+#data "<math><annotation-xml encoding=\"aPPlication/xhtmL+xMl\"><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 56
+#data "<math><annotation-xml encoding=\"text/html\"><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 57
+#data "<math><annotation-xml encoding=\"Text/htmL\"><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 58
+#data "<math><annotation-xml encoding=\" text/html \"><div>"
+#title ""
+#lines 0
+#links 0
+
+#case 59
+#data "<math><annotation-xml> </annotation-xml>"
+#title ""
+#lines 0
+#links 0
+
+#case 60
+#data "<math><annotation-xml>c</annotation-xml>"
+#title ""
+#lines 1
+"c"
+#links 0
+
+#case 61
+#data "<math><annotation-xml><!--foo-->"
+#title ""
+#lines 0
+#links 0
+
+#case 62
+#data "<math><annotation-xml></svg>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 63
+#data "<math><annotation-xml><svg>x"
+#title ""
+#lines 1
+"x"
+#links 0
+

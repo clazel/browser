@@ -1,0 +1,35 @@
+#case 0
+#data "<a><b><big><em><strong><div>X</a>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 1
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8>A</a>"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 2
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8><div id=9>A</a>"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 3
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8><div id=9><div id=10>A</a>"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 4
+#data "<cite><b><cite><i><cite><i><cite><i><div>X</b>TEST"
+#title ""
+#lines 1
+"XTEST"
+#links 0
+

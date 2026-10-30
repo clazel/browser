@@ -45,14 +45,17 @@ fn renderer() -> Result<PathBuf, String> {
     Ok(path)
 }
 
-/// `clazel browse URL` on standard input and output, `$COLUMNS` (or 80)
-/// wide.
-fn browse_stdio(mut host: clazel::Host, url: &str) -> ExitCode {
-    let width = std::env::var("COLUMNS")
+/// The terminal width: `$COLUMNS`, or 80.
+fn columns() -> usize {
+    std::env::var("COLUMNS")
         .ok()
         .and_then(|c| c.trim().parse::<usize>().ok())
         .filter(|w| *w > 0)
-        .unwrap_or(80);
+        .unwrap_or(80)
+}
+
+/// `clazel browse URL` on standard input and output, `width` columns wide.
+fn browse_stdio(mut host: clazel::Host, url: &str, width: usize) -> ExitCode {
     let mut out = std::io::stdout().lock();
     match browse::browse(&mut host, url, std::io::stdin().lock(), &mut out, width) {
         Ok(()) => ExitCode::SUCCESS,
@@ -77,10 +80,16 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let mut host = clazel::Host::new(move |_| Command::new(&renderer));
+    // Renderers lay documents out at the terminal's width (item 4.13).
+    let width = columns();
+    let mut host = clazel::Host::new(move |_| {
+        let mut c = Command::new(&renderer);
+        c.args(["--width", &width.to_string()]);
+        c
+    });
     match (args.get(1).map(String::as_str), args.get(2)) {
         (Some("demo"), None) => demo::run(host),
-        (Some("browse"), Some(url)) => browse_stdio(host, url),
+        (Some("browse"), Some(url)) => browse_stdio(host, url, width),
         (Some(url), Some(script)) => {
             host.open_tab(url, script);
             if host.live() > 0 && host.run(Duration::from_secs(30)) {

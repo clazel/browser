@@ -1,0 +1,131 @@
+#case 0
+#data "<menuitem>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "</menuitem>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!DOCTYPE html><body><menuitem>A"
+#title ""
+#lines 1
+"A"
+#links 0
+
+#case 3
+#data "<!DOCTYPE html><body><menuitem>A<menuitem>B"
+#title ""
+#lines 1
+"AB"
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><body><menuitem>A<menu>B</menu>"
+#title ""
+#lines 2
+"A"
+"B"
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><body><menuitem>A<hr>B"
+#title ""
+#lines 3
+"A"
+"--------------------------------------------------------------------------------"
+"B"
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><li><menuitem><li>"
+#title ""
+#lines 1
+"* *"
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><menuitem><p></menuitem>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><p><b></p><menuitem>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<!DOCTYPE html><menuitem><asdf></menuitem>x"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 10
+#data "<!DOCTYPE html></menuitem>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><html></menuitem>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><head></menuitem>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<!DOCTYPE html><select><menuitem></select>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<!DOCTYPE html><option><menuitem>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<!DOCTYPE html><menuitem><option>"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<!DOCTYPE html><menuitem></body>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<!DOCTYPE html><menuitem></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<!DOCTYPE html><menuitem><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<!DOCTYPE html><menuitem><li>"
+#title ""
+#lines 1
+"*"
+#links 0
+
