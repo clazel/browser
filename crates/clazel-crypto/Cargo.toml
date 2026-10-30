@@ -4,7 +4,7 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "The libcrux providers for clazel-tls's cryptographic parameters: SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519 and CertificateVerify signatures."
+description = "The libcrux providers for clazel-tls's cryptographic parameters: SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519 and CertificateVerify signatures; certificate-chain link signatures and the production chain validation for clazel-tls."
 
 [dependencies]
 clazel-tls = { path = "../clazel-tls" }
