@@ -27,7 +27,11 @@ fn renderer() -> Result<PathBuf, String> {
     if let Some(path) = std::env::var_os("CLAZEL_RENDERER") {
         return Ok(path.into());
     }
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    // Resolve symlinks: an install links `bin/clazel` to the binary next to
+    // the renderer, and macOS reports the link's path, not its target.
+    let exe = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .map_err(|e| e.to_string())?;
     let path = exe.with_file_name(format!("clazel-renderer{}", std::env::consts::EXE_SUFFIX));
     if !path.exists() {
         eprintln!("clazel: building clazel-renderer ...");
