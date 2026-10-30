@@ -46,6 +46,7 @@ pub proof fn lemma_open_update_keeps(p: Parser, i: int, e: Elem)
         !cell_pred()(e),
         in_cell(p) ==> i > last_cell(p.open),
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
+        !p.stopped ==> super::doc::after_ctx(p, e),
     ensures
         keeps(p, Parser { open: p.open.update(i, e), ..p }),
         in_cell(p) ==> last_cell(p.open.update(i, e)) == last_cell(p.open),
@@ -94,6 +95,7 @@ pub proof fn lemma_open_insert_keeps(p: Parser, i: int, e: Elem)
         !cell_pred()(e),
         in_cell(p) ==> i > last_cell(p.open),
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, e),
+        !p.stopped ==> super::doc::after_ctx(p, e),
     ensures
         keeps(p, Parser { open: p.open.insert(i, e), ..p }),
 {
@@ -277,18 +279,21 @@ pub proof fn lemma_inner_replace_keeps(
     reveal(inner_replace);
     let k = fmt_index_of(p1.formatting, p1.formatting.len() as int, node_id);
     let token = p1.formatting[k]->Entry_token;
+    if !p1.stopped {
+        crate::exec::modes::adoption::lemma_fmt_index_of(p1.formatting, p1.formatting.len() as int, node_id);
+        lemma_fmt_entries_fresh(p1, k);
+    }
     lemma_ceft_keeps(p1, token, Namespace::Html, ca.id);
     let (p2, new_element) = create_element_for_token(p1, token, Namespace::Html, ca.id);
     if p1.stopped || p2.stopped {
         return;
     }
-    crate::exec::modes::adoption::lemma_fmt_index_of(p1.formatting, p1.formatting.len() as int, node_id);
-    lemma_fmt_entries_fresh(p1, k);
     let x = Fmt::Entry { elem: new_element, token };
     let pa = Parser { formatting: p2.formatting.update(k, x), ..p2 };
     assert(fmt_fresh(p2, x));
     lemma_fmt_update_keeps(p2, k, x);
     assert(pa.open == p1.open);
+    super::doc::lemma_fresh_after_ctx(p1, new_element);
     lemma_open_update_keeps(pa, i, new_element);
     let p3 = Parser { formatting: p2.formatting.update(k, x), open: p2.open.update(i, new_element), ..p2 };
     assert(p3 == Parser { open: pa.open.update(i, new_element), ..pa });
@@ -439,6 +444,7 @@ pub proof fn lemma_mid_stack_keeps(p: Parser, fe_id: NodeId, fb_id: NodeId, ne: 
         !is_html(ne, Tag::Table),
         !cell_pred()(ne),
         !p.stopped ==> crate::exec::frame::elem_ok(p.doc, ne),
+        !p.stopped ==> super::doc::after_ctx(p, ne),
         !p.stopped ==> {
             &&& 1 <= fe_idx < p.open.len()
             &&& p.open[fe_idx].id == fe_id
@@ -494,13 +500,15 @@ pub proof fn lemma_finish_mid_keeps(p2: Parser, fe: Elem, fb_id: NodeId, bm: Boo
     reveal(finish_mid);
     let fi = fmt_index_of(p2.formatting, p2.formatting.len() as int, fe.id);
     let token = p2.formatting[fi]->Entry_token;
+    if !p2.stopped {
+        crate::exec::modes::adoption::lemma_fmt_index_of(p2.formatting, p2.formatting.len() as int, fe.id);
+        lemma_fmt_entries_fresh(p2, fi);
+    }
     lemma_ceft_keeps(p2, token, Namespace::Html, fb_id);
     let (p3, new_element) = create_element_for_token(p2, token, Namespace::Html, fb_id);
     if p2.stopped || p3.stopped {
         return;
     }
-    crate::exec::modes::adoption::lemma_fmt_index_of(p2.formatting, p2.formatting.len() as int, fe.id);
-    lemma_fmt_entries_fresh(p2, fi);
     let entry = Fmt::Entry { elem: new_element, token };
     assert(fmt_fresh(p3, entry));
     super::doc::lemma_dinv(p2);
@@ -514,6 +522,7 @@ pub proof fn lemma_finish_mid_keeps(p2: Parser, fe: Elem, fb_id: NodeId, bm: Boo
     let pb = Parser { formatting: f2, ..p3 };
     lemma_mid_list_keeps(p3, fi, entry, bm);
     lemma_keeps_trans(p2, p3, pb);
+    super::doc::lemma_fresh_after_ctx(p2, new_element);
     lemma_mid_stack_keeps(pb, fe.id, fb_id, new_element, fe_idx);
     let p4 = Parser { open: crate::exec::modes::adoption::mid_stack(pb, fe.id, fb_id, new_element), ..pb };
     lemma_keeps_trans(p2, pb, p4);
@@ -547,6 +556,7 @@ pub proof fn lemma_finish_end_keeps(p4: Parser, fb_id: NodeId, ne_id: NodeId)
         super::doc::lemma_dinv(p4);
         if p5 != p4 {
             crate::exec::modes::adoption::lemma_reparent_extends(p4.doc, fb_id, ne_id);
+            super::doc::lemma_reparent_plain(p4.doc, fb_id, ne_id, p4.context);
         } else {
             crate::exec::modes::in_body_start_lemmas::lemma_doc_extends_refl(p4.doc);
         }
@@ -674,6 +684,7 @@ pub proof fn lemma_in_body_adoption_keeps(p: Parser, tt: TagTok)
     requires
         live(p),
         tok_tagged(tt),
+        crate::independent::equivalence_body::attrs_plain(tt.attrs),
         tt.tag != Tag::Html,
         tt.tag != Tag::Td && tt.tag != Tag::Th,
     ensures
