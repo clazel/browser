@@ -1065,4 +1065,112 @@ pub proof fn lemma_add(
     }
 }
 
+/// SEC 1 §2.2.1's `kP`, by the shared MSB-first double-and-add over the two
+/// group laws, is the same product, and reachable.
+pub proof fn lemma_scalar_mul(
+    c: Curve,
+    d: crate::independent::Curve,
+    k: nat,
+    q: crate::independent::EcPoint,
+)
+    requires
+        corresponds(c, d),
+        field_ok(c),
+        good(c, pt(q)),
+    ensures
+        scalar_mul(c, k, pt(q)) == opt_pt(crate::independent::scalar_mul(d, k, q)),
+        match scalar_mul(c, k, pt(q)) {
+            Some(r) => good(c, r),
+            None => true,
+        },
+    decreases k,
+{
+    if k > 0 {
+        lemma_scalar_mul(c, d, k / 2, q);
+        match crate::independent::scalar_mul(d, k / 2, q) {
+            None => {},
+            Some(a) => {
+                lemma_add(c, d, a, a);
+                match crate::independent::add(d, a, a) {
+                    None => {},
+                    Some(dd) => {
+                        if k % 2 == 1 {
+                            lemma_add(c, d, dd, q);
+                        }
+                    },
+                }
+            },
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// FIPS 186-5 §6.4.2 and SEC 1 §4.1.4.
+// ---------------------------------------------------------------------
+
+/// The two verifications agree on every input, for any two corresponding
+/// curves over an odd prime field ([`field_ok`]) whose `n` exceeds 1 and
+/// whose base point is on the curve.
+pub proof fn lemma_verify_equal(
+    c: Curve,
+    d: crate::independent::Curve,
+    h: Seq<u8>,
+    r: nat,
+    s: nat,
+    q: Seq<u8>,
+)
+    requires
+        corresponds(c, d),
+        field_ok(c),
+        c.n > 1,
+        good(c, base_point(c)),
+    ensures
+        crate::independent::ecdsa_verify(d, h, r, s, q) == ecdsa_verify(c, h, r, s, q),
+{
+    lemma_decode_public_key(c, d, q);
+    match crate::independent::decode_public_key(d, q) {
+        None => {},
+        Some(qu) => {
+            if 1 <= r && r <= c.n - 1 && 1 <= s && s <= c.n - 1 {
+                lemma_derive_e_equal(c, d, h);
+                lemma_inv(c.n, s);
+                if inv(c.n, s) is Some {
+                    let w = inv(c.n, s)->Some_0;
+                    let e = derive_e(c, h);
+                    let u1 = e * w % c.n;
+                    let u2 = r * w % c.n;
+                    let g = crate::independent::EcPoint::Aff { x: d.gx, y: d.gy };
+                    assert(pt(g) == base_point(c));
+                    lemma_scalar_mul(c, d, u1, g);
+                    lemma_scalar_mul(c, d, u2, qu);
+                    match (
+                        crate::independent::scalar_mul(d, u1, g),
+                        crate::independent::scalar_mul(d, u2, qu),
+                    ) {
+                        (Some(a), Some(b)) => {
+                            lemma_add(c, d, a, b);
+                        },
+                        _ => {},
+                    }
+                }
+            }
+        },
+    }
+}
+
+/// The two P-384 records correspond, and P-384 meets the other conditions
+/// of [`lemma_verify_equal`] but Euclid's lemma.
+pub proof fn lemma_p384_corresponds()
+    ensures
+        corresponds(p384(), crate::independent::p384()),
+        p384().p > 2,
+        p384().p % 2 == 1,
+        p384().n > 1,
+        good(p384(), base_point(p384())),
+{
+    assert(crate::independent::field_octets(crate::independent::p384()) == 48) by (compute_only);
+    assert(p384().p > 2 && p384().p % 2 == 1 && p384().n > 1) by (compute_only);
+    assert(good(p384(), base_point(p384()))) by (compute_only);
+}
+
 } // verus!
