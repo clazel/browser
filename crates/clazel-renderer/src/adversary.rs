@@ -13,6 +13,11 @@
 //! - `clazel-adversary control ATTEMPT TARGET`: the same attempt without the
 //!   sandbox, which the tests use to show that the target is reachable, so
 //!   that a denial is the sandbox's.
+//! - `clazel-adversary display TITLE`: wait for its document to be
+//!   committed, then send a `Display` whose title is TITLE and whose text and
+//!   only link claim to be that URL (phase-4.md item 4.16: a renderer that
+//!   tries to show its page under another tab's address), then wait to be
+//!   killed or for the socket to close.
 //! - `clazel-adversary idle`: not sandboxed; block until its standard input
 //!   closes. The `ptrace-attach` test starts one as the sibling to attach to
 //!   (a plain binary of this build, which the OS lets a same-user process
@@ -21,10 +26,11 @@
 //! Exit codes: 71 a sandbox layer failed (as for the real renderer), 64
 //! usage, 70 the socket failed.
 
-use std::io;
+use std::io::{self, Read, Write};
 use std::process::ExitCode;
 
-use clazel_renderer::{escape, hostile, sandbox};
+use clazel_ipc::message::codec::{Msg, encode_framed};
+use clazel_renderer::{escape, hostile, next_document, sandbox};
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
@@ -42,6 +48,7 @@ fn main() -> ExitCode {
             let _ = io::Read::read_to_end(&mut io::stdin().lock(), &mut sink);
             ExitCode::SUCCESS
         }
+        (Some("display"), Some(title), None) => display_mode(title),
         (Some("hostile"), Some(seed), None) => match seed.parse::<u64>() {
             Ok(seed) => hostile_mode(seed),
             Err(_) => usage(),
@@ -88,7 +95,38 @@ fn hostile_mode(seed: u64) -> ExitCode {
     }
 }
 
+/// After the first committed document, a `Display` that names `title` as
+/// its title, its text and its one link.
+fn display_mode(title: &str) -> ExitCode {
+    let (mut input, mut output) = (io::stdin().lock(), io::stdout().lock());
+    match next_document(&mut input) {
+        Ok(Some(_)) => {}
+        Ok(None) => return ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("display: {e}");
+            return ExitCode::from(70);
+        }
+    }
+    let display = Msg::Display {
+        title: title.as_bytes().to_vec(),
+        text: format!("URL: {title}").into_bytes(),
+        links: vec![title.as_bytes().to_vec()],
+    };
+    let sent = encode_framed(&display).is_some_and(|frame| {
+        output
+            .write_all(&frame)
+            .and_then(|()| output.flush())
+            .is_ok()
+    });
+    eprintln!("display: sent a Display titled {title:?}: {sent}");
+    let mut sink = Vec::new();
+    let _ = input.read_to_end(&mut sink);
+    ExitCode::SUCCESS
+}
+
 fn usage() -> ExitCode {
-    eprintln!("usage: clazel-adversary hostile SEED | escape|control ATTEMPT TARGET | idle");
+    eprintln!(
+        "usage: clazel-adversary hostile SEED | display TITLE | escape|control ATTEMPT TARGET | idle"
+    );
     ExitCode::from(64)
 }
