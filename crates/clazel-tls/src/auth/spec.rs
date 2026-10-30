@@ -18,15 +18,19 @@
 //! - Chain/name/time validation and signature verification are parameters.
 //!   A successful chain result is an opaque end-entity verification key.
 //!   No X.509 implementation, crypto axiom or production provider is added.
-//! - The clock and target host are captured at start. The validator's pure
-//!   functions capture the trust store. Signature algorithms are strictly
+//! - The clock and target host are captured at start. The host is typed
+//!   (`crate::host::spec::Host`, a DNS name or an IP address; design Q2),
+//!   so the validator receives the reference identity's type and never
+//!   re-parses host text. The validator's pure functions capture the trust
+//!   store. Signature algorithms are strictly
 //!   restricted to the client's offered, supported TLS 1.3 algorithms.
 //! - A SendFinished acknowledgement means the I/O driver sent the exact
 //!   pending handshake flight. Application delivery also waits for this ack.
 //! - KeyUpdate, tickets and post-handshake authentication are not dispatched
 //!   here: this is the initial authentication flight and application gate.
 //! - Limits are inherited from transcript and body parsing; key handles are
-//!   at most 16 KiB, host identifiers at most 253 bytes, offers at most 64.
+//!   at most 16 KiB, hosts as `crate::host::spec::host_ok` bounds them,
+//!   offers at most 64.
 //! - RFC prose/equations have no numbered steps; comments name the clause.
 
 #[allow(unused_imports)]
@@ -91,8 +95,8 @@ pub enum Phase {
 }
 /// Captured negotiation context; the Hello layer must supply the actual offers.
 pub struct Config {
-    /// Canonical host identity for certificate validation.
-    pub host: Seq<u8>,
+    /// The typed target host, for certificate validation (design Q2).
+    pub host: crate::host::spec::Host,
     /// Clock reading used by certificate validity policy.
     pub now: u64,
     /// Server handshake traffic secret (not the client secret).
@@ -192,7 +196,7 @@ pub open spec fn certificate_extensions_offered(entries: Seq<crate::spec::Certif
 }
 /// Captured parameter bounds and supported profile.
 pub open spec fn config_ok(c: Config) -> bool {
-    0 < c.host.len() <= 253 && c.server_secret.len() == 32 && c.client_secret.len() == 32
+    crate::host::spec::host_ok(c.host) && c.server_secret.len() == 32 && c.client_secret.len() == 32
         && 0 < c.signatures.len() <= 64 && c.extensions.len() <= 64 && profile_extensions(c.extensions)
 }
 /// Authentication gate invariant; no claim about the validator's cryptography.

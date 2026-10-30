@@ -5,7 +5,8 @@
 //! Modelling choices:
 //! - Fixed TLS 1.3, ChaCha20-Poly1305/SHA-256 and X25519 profile, matching
 //!   hello::spec. No PSK, early data, ALPN, padding or client identity.
-//! - Entropy, the clock, canonical host and an X25519 public input are
+//! - Entropy, the clock, the typed host (`crate::host::spec::Host`, a DNS
+//!   name or an IP address; design Q2) and an X25519 public input are
 //!   explicit configuration. Entropy sourcing remains external; the key-
 //!   exchange join checks the private/public binding after this controller.
 //! - send_sni is supplied by the URL layer (DNS host versus IP address).
@@ -34,8 +35,8 @@ verus! {
 pub const MAX_COOKIE: usize = 4098;
 /// Captured configuration; a production key-exchange join supplies the share.
 pub struct Config {
-    /// Canonical target identity for later authentication.
-    pub host: Seq<u8>,
+    /// The typed target host, for server_name and later authentication.
+    pub host: crate::host::spec::Host,
     /// Captured validity-check time.
     pub now: u64,
     /// Fresh random from the entropy source.
@@ -49,7 +50,7 @@ pub struct Config {
 }
 /// Local inputs representable by this client profile.
 pub open spec fn config_ok(c: Config) -> bool {
-    1 <= c.host.len() <= 253 && c.random.len() == 32
+    crate::host::spec::host_ok(c.host) && c.random.len() == 32
         && c.session_id.len() <= 32 && c.public_key.len() == 32
 }
 /// §4.2.3: schemes offered for CV and certificate signatures.
@@ -64,7 +65,8 @@ pub open spec fn cookie_ok(cookie: Seq<u8>) -> bool {
 /// §4.2, RFC 6066 §3: the exact ordered extensions put on the wire.
 pub open spec fn extensions(c: Config, cookie: Seq<u8>) -> Seq<crate::spec::Ext> {
     (if c.send_sni { seq![crate::spec::Ext { etype: 0,
-        data: crate::spec::write_server_name_ch(seq![crate::spec::ServerName { host_name: c.host }]) }] }
+        data: crate::spec::write_server_name_ch(seq![crate::spec::ServerName { host_name:
+            match c.host { crate::host::spec::Host::Dns(name) => name, crate::host::spec::Host::Ip(address) => address } }]) }] }
         else { seq![] })
     + seq![crate::spec::Ext { etype: 43, data: seq![2u8, 3u8, 4u8] },
         crate::spec::Ext { etype: 13, data: crate::spec::write_signature_schemes(signatures()) },

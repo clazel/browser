@@ -16,7 +16,8 @@
 //! providers to authentication. [`traffic`] installs handshake secrets in the
 //! correct record directions and owns non-wrapping send/receive epochs. The
 //! connection-I/O driver, production cryptography (3.5f), entropy sourcing and
-//! X.509 validation remain to be built.
+//! X.509 validation remain to be built. [`host`] is the typed target host
+//! (a DNS name or an IP address) that both read.
 //!
 //! - [`spec`]: a step-by-step transcription of the standard. Its header
 //!   lists every modelling choice.
@@ -45,6 +46,7 @@ pub mod examples_hs;
 pub mod extension;
 pub mod handshake;
 pub mod hello;
+pub mod host;
 pub mod independent;
 pub mod lemmas_ext;
 pub mod lemmas_hs;
