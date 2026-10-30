@@ -8,9 +8,9 @@ pub trait Verifier {
     /// Pure functions implemented by this validator for its configured trust store.
     spec fn functions(&self) -> super::spec::Verification;
 
-    /// RFC 8446 §4.4.2: validate this chain for exactly this host and time;
-    /// return its end-entity key or a typed certificate error.
-    fn chain(&self, host: &[u8], now: u64, certificate_body: &[u8]) -> (out: Result<Vec<u8>, super::spec::CertificateError>)
+    /// RFC 8446 §4.4.2: validate this chain for exactly this typed host and
+    /// time; return its end-entity key or a typed certificate error.
+    fn chain(&self, host: &crate::host::exec::Host, now: u64, certificate_body: &[u8]) -> (out: Result<Vec<u8>, super::spec::CertificateError>)
         ensures match out {
             Ok(key) => (self.functions().chain)(host@, now, certificate_body@) == Ok(key@),
             Err(error) => (self.functions().chain)(host@, now, certificate_body@) == Err(error),

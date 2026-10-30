@@ -60,8 +60,10 @@ pub open spec fn certificate_alert(error: CertificateError) -> u8 {
         CertificateError::Unsupported => 43,
     }
 }
-/// Chain/name/time validation parameter, returning an opaque end-entity key.
-pub type ChainValidation = spec_fn(Seq<u8>, u64, Seq<u8>) -> Result<Seq<u8>, CertificateError>;
+/// Chain/name/time validation parameter: the typed target host (the
+/// reference identity, design Q2), the captured clock in Unix seconds and
+/// the Certificate message body (§4.4.2), returning an opaque end-entity key.
+pub type ChainValidation = spec_fn(crate::host::spec::Host, u64, Seq<u8>) -> Result<Seq<u8>, CertificateError>;
 /// Signature-verification parameter bound to an end-entity key and TLS scheme.
 pub type SignatureVerification = spec_fn(Seq<u8>, u16, Seq<u8>, Seq<u8>) -> bool;
 /// Pure verification parameters, not assumptions about real cryptography.
