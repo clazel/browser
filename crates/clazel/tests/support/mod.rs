@@ -27,5 +27,5 @@ fn binaries() -> &'static Path {
 
 /// The binary `name` (`clazel-renderer` or `clazel-adversary`).
 pub fn binary(name: &str) -> PathBuf {
-    binaries().join(name)
+    binaries().join(format!("{name}{}", std::env::consts::EXE_SUFFIX))
 }

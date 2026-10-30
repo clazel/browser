@@ -82,8 +82,27 @@ pub fn parse(text: &str) -> Result<Vec<Row>, String> {
     Ok(rows)
 }
 
-/// SHA-256 of a file, via the system's `sha256sum` or `shasum`.
+/// SHA-256 of a file, via the system's `sha256sum` or `shasum`, or on Windows
+/// `certutil -hashfile`.
 pub fn sha256(path: &Path) -> Result<String, String> {
+    if cfg!(windows)
+        && let Ok(out) = Command::new("certutil")
+            .arg("-hashfile")
+            .arg(path)
+            .arg("SHA256")
+            .output()
+        && out.status.success()
+    {
+        // Line 1 names the file, line 2 is the hash (older versions space
+        // the bytes), line 3 is the status.
+        let text = String::from_utf8_lossy(&out.stdout);
+        if let Some(line) = text.lines().nth(1) {
+            let hash: String = line.split_whitespace().collect();
+            if hash.len() == 64 {
+                return Ok(hash.to_ascii_lowercase());
+            }
+        }
+    }
     let attempts: [(&str, &[&str]); 2] = [("sha256sum", &[]), ("shasum", &["-a", "256"])];
     for (tool, args) in attempts {
         if let Ok(out) = Command::new(tool).args(args).arg(path).output()

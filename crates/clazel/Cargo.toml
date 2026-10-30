@@ -7,6 +7,9 @@ publish.workspace = true
 description = "The kernel host shell: one socket pair and one sandboxed renderer process per tab, driven by the proven kernel step."
 
 [dependencies]
+# Starts a renderer and holds its channel (`launch`): a socket pair on Unix,
+# an AppContainer and pipes on Windows.
+clazel-renderer = { path = "../clazel-renderer" }
 # `step_real`, the proven kernel step with the real URL parser (items 2.12
 # and 2.13), and its state, event and output records.
 clazel-kernel = { path = "../clazel-kernel" }
@@ -29,7 +32,6 @@ path = "cli/main.rs"
 # workspace crates the kernel's own conformance tests use, and generate the
 # hostile frames with the renderer crate.
 [dev-dependencies]
-clazel-renderer = { path = "../clazel-renderer", version = "=0.0.0" }
 clazel-cookie = { path = "../clazel-cookie", version = "=0.0.0" }
 clazel-origin = { path = "../clazel-origin", version = "=0.0.0" }
 clazel-url = { path = "../clazel-url", version = "=0.0.0" }

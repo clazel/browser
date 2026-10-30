@@ -354,9 +354,17 @@ pub fn relative(path: &Path) -> String {
     let rel = std::env::current_dir()
         .ok()
         .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_path_buf));
-    rel.unwrap_or_else(|| path.to_path_buf())
+    let text = rel
+        .unwrap_or_else(|| path.to_path_buf())
         .display()
-        .to_string()
+        .to_string();
+    // Repo-relative names are written with `/` on every platform: they are
+    // hashed (the `clazel-sys` audit) and compared with the docs.
+    if cfg!(windows) {
+        text.replace('\\', "/")
+    } else {
+        text
+    }
 }
 
 /// Theorems listed in `[package.metadata.clazel] theorems` that no `proof fn`

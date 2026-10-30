@@ -57,6 +57,29 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     "fork",
     "_exit",
     "ptrace",
+    // Windows (`clazel-sys/src/windows.rs`): start a process inside an
+    // AppContainer and a Job Object, check the token, and one escape attempt
+    // (`OpenProcess`, the analogue of `ptrace` attach). Each is documented on
+    // Microsoft Learn, cited as `docs <function>`.
+    "CreateAppContainerProfile",
+    "DeriveAppContainerSidFromAppContainerName",
+    "GetLengthSid",
+    "CopySid",
+    "FreeSid",
+    "InitializeProcThreadAttributeList",
+    "UpdateProcThreadAttribute",
+    "DeleteProcThreadAttributeList",
+    "CreateProcessW",
+    "CloseHandle",
+    "CreateJobObjectW",
+    "SetInformationJobObject",
+    "SetHandleInformation",
+    "WaitForSingleObject",
+    "GetExitCodeProcess",
+    "TerminateProcess",
+    "OpenProcess",
+    "OpenProcessToken",
+    "GetTokenInformation",
 ];
 
 /// The system call numbers `syscall` may be given (names as in `libc`).
@@ -406,8 +429,23 @@ fn require_safety_comment(lines: &[&str], line: usize, file: &mut File) {
     }
 }
 
-/// The text contains `man <section digit> <name>`.
+/// The text contains `man <section digit> <name>`, or (Windows has no man
+/// pages) `docs <FunctionName>`, a Win32 function on Microsoft Learn.
 fn cites_man_page(text: &str) -> bool {
+    cites_win32_docs(text) || cites_unix_man(text)
+}
+
+/// `docs CreateProcessW`: `docs`, a space, then an identifier starting with
+/// an uppercase letter.
+fn cites_win32_docs(text: &str) -> bool {
+    text.match_indices("docs ").any(|(i, _)| {
+        text.get(i.saturating_add(5)..)
+            .and_then(|rest| rest.chars().next())
+            .is_some_and(|c| c.is_ascii_uppercase())
+    })
+}
+
+fn cites_unix_man(text: &str) -> bool {
     text.match_indices("man ").any(|(i, _)| {
         let mut rest = text.get(i.saturating_add(4)..).unwrap_or("").chars();
         rest.next().is_some_and(|c| c.is_ascii_digit())
@@ -596,6 +634,14 @@ pub fn source_hash(dir: &Path) -> Result<(String, Vec<String>), String> {
 
 /// SHA-256 of `data`, via the system's `sha256sum` or `shasum`.
 fn sha256_bytes(data: &[u8]) -> Result<String, String> {
+    if cfg!(windows) {
+        // `certutil` hashes files only.
+        let path = std::env::temp_dir().join(format!("clazel-xtask-{}.sha", std::process::id()));
+        std::fs::write(&path, data).map_err(|e| format!("{}: {e}", path.display()))?;
+        let hash = crate::reviews::sha256(&path);
+        let _ = std::fs::remove_file(&path);
+        return hash;
+    }
     let attempts: [(&str, &[&str]); 2] = [("sha256sum", &[]), ("shasum", &["-a", "256"])];
     for (tool, args) in attempts {
         let Ok(mut child) = Command::new(tool)

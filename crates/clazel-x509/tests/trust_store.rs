@@ -14,8 +14,7 @@
 //!   rather than through the generator's issuer-and-serial join.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Write as _;
-use std::process::{Command, Stdio};
+use std::process::Command;
 
 use clazel_x509::certificate::exec::parse_certificate;
 use clazel_x509::extensions::exec::parse_extensions;
@@ -150,7 +149,33 @@ fn distrust_after_is_carried() {
 }
 
 /// SHA-256 through the system's tool, so no hash code of ours is trusted.
+/// Windows has no `sha256sum`; `certutil -hashfile` reads a file.
+#[cfg(windows)]
 fn system_sha256(data: &[u8]) -> Option<String> {
+    let path = std::env::temp_dir().join(format!(
+        "clazel-sha256-{}-{:?}.bin",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    std::fs::write(&path, data).ok()?;
+    let out = Command::new("certutil")
+        .arg("-hashfile")
+        .arg(&path)
+        .arg("SHA256")
+        .output();
+    let _ = std::fs::remove_file(&path);
+    let text = String::from_utf8(out.ok()?.stdout).ok()?;
+    // Line 1 names the file, line 2 is the hash (older versions space the
+    // bytes), line 3 is the status.
+    let hash: String = text.lines().nth(1)?.split_whitespace().collect();
+    Some(hash)
+}
+
+#[cfg(not(windows))]
+fn system_sha256(data: &[u8]) -> Option<String> {
+    use std::io::Write as _;
+    use std::process::Stdio;
+
     for (program, args) in [("sha256sum", &[][..]), ("shasum", &["-a", "256"][..])] {
         let Ok(mut child) = Command::new(program)
             .args(args)
