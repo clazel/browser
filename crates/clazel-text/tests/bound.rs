@@ -92,7 +92,8 @@ impl Lcg {
 fn bound_holds_on_generated_documents() {
     let mut rng = Lcg(0x5eed);
     let mut failures: Vec<String> = Vec::new();
-    // Fewer documents under Miri, which interprets every step.
+    // Under Miri, which interprets every step, a sample of 10 documents;
+    // the full 400 run in the normal test job.
     let docs: u32 = if cfg!(miri) { 10 } else { 400 };
     for doc_no in 0..docs {
         let len = usize::try_from(rng.next() % 120).unwrap_or(0);
