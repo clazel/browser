@@ -23,7 +23,14 @@
 //! - ECDSA: only id-ecPublicKey with the namedCurve secp256r1 parameter
 //!   (RFC 5480 §2.1.1.1; explicit curve parameters are refused) and only the
 //!   uncompressed point 0x04 || X || Y (RFC 5480 §2.2 requires support for
-//!   it; the compressed form is optional and refused). The signature is one
+//!   it; the compressed form is optional and refused). Since the key
+//!   classification moved into `clazel_x509::spki` (so that certificate
+//!   path validation and CertificateVerify share one key decoder),
+//!   `p256_point` reads the `EcP256` class that `parse_subject_public_key_info`
+//!   returns. `p256_point_direct` is the earlier definition, straight from
+//!   the key's fields; it is not used by `verify`, and
+//!   `lemmas::lemma_p256_point_unchanged` proves `p256_point` equal to it on
+//!   every parsed key, so the meaning of `verify` is unchanged. The signature is one
 //!   DER Ecdsa-Sig-Value with nothing after it; r and s are non-negative
 //!   DER INTEGERs of at most 32 magnitude octets, left-padded to 32. Their
 //!   range 1..n-1 and the point's validity are checked by libcrux.
@@ -107,8 +114,19 @@ pub open spec fn pad32(m: Seq<u8>) -> Seq<u8> {
     Seq::new((32 - m.len()) as nat, |i: int| 0u8) + m
 }
 
-/// RFC 5480 §2.2: the X || Y of a secp256r1 key in uncompressed form.
+/// RFC 5480 §2.2: the X || Y of a secp256r1 key in uncompressed form, as
+/// classified by `clazel_x509::spki` (RFC 5480 §2.1.1, §2.2).
 pub open spec fn p256_point(spki: clazel_x509::spki::spec::SubjectPublicKeyInfo) -> Option<Seq<u8>> {
+    match spki.public_key {
+        clazel_x509::spki::spec::PublicKey::EcP256(point) => Some(point),
+        _ => None,
+    }
+}
+
+/// Lemma-only: `p256_point` as it was before the classification moved into
+/// `clazel_x509::spki`, read straight from the key's fields. Not used by
+/// `verify`; see `lemmas::lemma_p256_point_unchanged`.
+pub open spec fn p256_point_direct(spki: clazel_x509::spki::spec::SubjectPublicKeyInfo) -> Option<Seq<u8>> {
     let bits = spki.subject_public_key_bits;
     if is_ec_public_key(spki.algorithm.oid)
         && spki.algorithm.parameters_der == Some(secp256r1_parameter())

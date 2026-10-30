@@ -21,6 +21,74 @@ fn is_rsa_oid(oid: &[u64]) -> (result: bool)
         && oid.get(6) == Some(&1)
 }
 
+/// RFC 5480 §2.1.1 id-ecPublicKey OID 1.2.840.10045.2.1.
+fn is_id_ec_oid(oid: &[u64]) -> (result: bool)
+    ensures result == super::spec::is_id_ec_public_key(der::nats(oid@))
+{
+    oid.len() == 6
+        && oid.first() == Some(&1)
+        && oid.get(1) == Some(&2)
+        && oid.get(2) == Some(&840)
+        && oid.get(3) == Some(&10045)
+        && oid.get(4) == Some(&2)
+        && oid.get(5) == Some(&1)
+}
+
+/// RFC 5480 §2.1.1.1: the namedCurve parameter secp256r1, 1.2.840.10045.3.1.7.
+fn is_secp256r1_parameter(p: &[u8]) -> (result: bool)
+    ensures result == (p@ =~= super::spec::secp256r1_parameter())
+{
+    p.len() == 10
+        && p.first() == Some(&0x06)
+        && p.get(1) == Some(&0x08)
+        && p.get(2) == Some(&0x2a)
+        && p.get(3) == Some(&0x86)
+        && p.get(4) == Some(&0x48)
+        && p.get(5) == Some(&0xce)
+        && p.get(6) == Some(&0x3d)
+        && p.get(7) == Some(&0x03)
+        && p.get(8) == Some(&0x01)
+        && p.get(9) == Some(&0x07)
+}
+
+/// RFC 5480 §2.1.1.1: the namedCurve parameter secp384r1, 1.3.132.0.34.
+fn is_secp384r1_parameter(p: &[u8]) -> (result: bool)
+    ensures result == (p@ =~= super::spec::secp384r1_parameter())
+{
+    p.len() == 7
+        && p.first() == Some(&0x06)
+        && p.get(1) == Some(&0x05)
+        && p.get(2) == Some(&0x2b)
+        && p.get(3) == Some(&0x81)
+        && p.get(4) == Some(&0x04)
+        && p.get(5) == Some(&0x00)
+        && p.get(6) == Some(&0x22)
+}
+
+/// RFC 5480 §2.1.1 and §2.2: classify a non-RSA key as an uncompressed
+/// secp256r1 or secp384r1 EC key, or Unsupported.
+fn classify_ec_public_key<'a>(algorithm: &AlgorithmIdentifier<'a>, unused: u8, bits: &'a [u8])
+    -> (result: PublicKey<'a>)
+    ensures result@ == super::spec::classify_ec_public_key(
+        crate::certificate::contract::view_algorithm_identifier(algorithm), unused, bits@)
+{
+    if !is_id_ec_oid(&algorithm.oid) || unused != 0 || bits.first() != Some(&0x04) {
+        return PublicKey::Unsupported;
+    }
+    match algorithm.parameters_der {
+        Some(p) => {
+            if is_secp256r1_parameter(p) && bits.len() == 65 {
+                PublicKey::EcP256(vstd::slice::slice_subrange(bits, 1, 65))
+            } else if is_secp384r1_parameter(p) && bits.len() == 97 {
+                PublicKey::EcP384(bits)
+            } else {
+                PublicKey::Unsupported
+            }
+        }
+        None => PublicKey::Unsupported,
+    }
+}
+
 /// Test whether the magnitude bytes contain any nonzero octet.
 fn magnitude_nonzero(input: &[u8], start: usize, end: usize) -> (result: bool)
     requires start <= end, end <= input.len()
@@ -115,10 +183,14 @@ impl View for RsaPublicKey<'_> {
     }
 }
 
-/// Supported RSA syntax or explicit unsupported-algorithm marker.
+/// Supported RSA or EC key, or explicit unsupported-algorithm marker.
 pub enum PublicKey<'a> {
     /// rsaEncryption key syntax.
     Rsa(RsaPublicKey<'a>),
+    /// secp256r1 uncompressed point: the 64 octets X || Y.
+    EcP256(&'a [u8]),
+    /// secp384r1 uncompressed point: the complete 97-octet ECPoint.
+    EcP384(&'a [u8]),
     /// Algorithm outside this module's implemented profile.
     Unsupported,
 }
@@ -128,6 +200,8 @@ impl View for PublicKey<'_> {
     open spec fn view(&self) -> Self::V {
         match self {
             PublicKey::Rsa(key) => super::spec::PublicKey::Rsa(key@),
+            PublicKey::EcP256(point) => super::spec::PublicKey::EcP256(point@),
+            PublicKey::EcP384(point) => super::spec::PublicKey::EcP384(point@),
             PublicKey::Unsupported => super::spec::PublicKey::Unsupported,
         }
     }
@@ -206,7 +280,8 @@ pub open spec fn view_spki_result(result: Option<SubjectPublicKeyInfo<'_>>) -> O
 }
 
 /// RFC 5280 §4.1.2.7: parse one SPKI SEQUENCE with exactly an AlgorithmIdentifier
-/// and BIT STRING. RSA uses the RFC 3279 §2.3.1 NULL-parameter profile.
+/// and BIT STRING. RSA uses the RFC 3279 §2.3.1 NULL-parameter profile; EC keys
+/// are classified by RFC 5480 §2.1.1 and §2.2.
 pub fn parse_subject_public_key_info(input: &[u8]) -> (result: Option<SubjectPublicKeyInfo<'_>>)
     ensures super::contract::parse_subject_public_key_info_ensures(input@, super::contract::view_result(result))
 {
@@ -250,7 +325,7 @@ pub fn parse_subject_public_key_info(input: &[u8]) -> (result: Option<SubjectPub
         let rsa = parse_rsa_public_key(subject_public_key_bits)?;
         PublicKey::Rsa(rsa)
     } else {
-        PublicKey::Unsupported
+        classify_ec_public_key(&algorithm, unused_bits, subject_public_key_bits)
     };
     let result = SubjectPublicKeyInfo {
         algorithm,

@@ -11,19 +11,6 @@ use vstd::prelude::*;
 
 verus! {
 
-/// id-ecPublicKey, 1.2.840.10045.2.1 (RFC 5480 §2.1.1).
-fn is_ec_oid(oid: &[u64]) -> (r: bool)
-    ensures r == crate::signature::spec::is_ec_public_key(der::nats(oid@)),
-{
-    oid.len() == 6
-        && oid.first() == Some(&1)
-        && oid.get(1) == Some(&2)
-        && oid.get(2) == Some(&840)
-        && oid.get(3) == Some(&10045)
-        && oid.get(4) == Some(&2)
-        && oid.get(5) == Some(&1)
-}
-
 /// id-Ed25519, 1.3.101.112 (RFC 8410 §3).
 fn is_ed25519_oid(oid: &[u64]) -> (r: bool)
     ensures r == crate::signature::spec::is_ed25519(der::nats(oid@)),
@@ -33,23 +20,6 @@ fn is_ed25519_oid(oid: &[u64]) -> (r: bool)
         && oid.get(1) == Some(&3)
         && oid.get(2) == Some(&101)
         && oid.get(3) == Some(&112)
-}
-
-/// The namedCurve secp256r1 parameter (RFC 5480 §2.1.1.1).
-fn is_secp256r1_parameter(p: &[u8]) -> (r: bool)
-    ensures r == (p@ =~= crate::signature::spec::secp256r1_parameter()),
-{
-    p.len() == 10
-        && p.first() == Some(&0x06)
-        && p.get(1) == Some(&0x08)
-        && p.get(2) == Some(&0x2a)
-        && p.get(3) == Some(&0x86)
-        && p.get(4) == Some(&0x48)
-        && p.get(5) == Some(&0xce)
-        && p.get(6) == Some(&0x3d)
-        && p.get(7) == Some(&0x03)
-        && p.get(8) == Some(&0x01)
-        && p.get(9) == Some(&0x07)
 }
 
 /// `m` left-padded with zeros to 32 octets.
@@ -74,7 +44,8 @@ fn pad32(m: &[u8]) -> (out: Vec<u8>)
     out
 }
 
-/// RFC 5480 §2.2: the X || Y of an uncompressed secp256r1 key.
+/// RFC 5480 §2.2: the X || Y of an uncompressed secp256r1 key, as
+/// classified by `clazel_x509::spki`.
 fn p256_point<'a>(spki: &SubjectPublicKeyInfo<'a>) -> (out: Option<&'a [u8]>)
     ensures
         match out {
@@ -82,17 +53,9 @@ fn p256_point<'a>(spki: &SubjectPublicKeyInfo<'a>) -> (out: Option<&'a [u8]>)
             None => crate::signature::spec::p256_point(spki@) is None,
         },
 {
-    let bits = spki.subject_public_key_bits;
-    let params_ok = match spki.algorithm.parameters_der {
-        Some(p) => is_secp256r1_parameter(p),
-        None => false,
-    };
-    if is_ec_oid(spki.algorithm.oid.as_slice()) && params_ok
-        && spki.subject_public_key_unused_bits == 0
-        && bits.len() == 65 && bits.first() == Some(&0x04) {
-        Some(vstd::slice::slice_subrange(bits, 1, 65))
-    } else {
-        None
+    match &spki.public_key {
+        PublicKey::EcP256(point) => Some(*point),
+        _ => None,
     }
 }
 
@@ -124,6 +87,7 @@ fn ecdsa_sig_value(signature: &[u8]) -> (out: Option<(Vec<u8>, Vec<u8>)>)
 
 /// ecdsa_secp256r1_sha256 (0x0403).
 fn ecdsa_p256_sha256(spki: &SubjectPublicKeyInfo, input: &[u8], signature: &[u8]) -> (out: bool)
+    requires clazel_x509::spki::lemmas::ec_lengths_ok(spki@),
     ensures out == crate::signature::spec::ecdsa_p256_sha256(spki@, input@, signature@),
 {
     match (p256_point(spki), ecdsa_sig_value(signature)) {
@@ -163,7 +127,7 @@ fn rsa_pss_rsae(spki: &SubjectPublicKeyInfo, hash: Hash, input: &[u8], signature
             };
             axioms::rsa_pss_verify(hash, n, input, salt_len, signature)
         },
-        PublicKey::Unsupported => false,
+        _ => false,
     }
 }
 
@@ -290,13 +254,15 @@ pub fn verify(key: &[u8], scheme: u16, input: &[u8], signature: &[u8]) -> (out: 
 {
     match clazel_x509::spki::exec::parse_subject_public_key_info(key) {
         None => false,
-        Some(spki) =>
+        Some(spki) => {
+            proof { clazel_x509::spki::lemmas::lemma_parse_ec_lengths(key@, spki@); }
             if scheme == 0x0403 { ecdsa_p256_sha256(&spki, input, signature) }
             else if scheme == 0x0804 { rsa_pss_rsae(&spki, Hash::Sha256, input, signature) }
             else if scheme == 0x0805 { rsa_pss_rsae(&spki, Hash::Sha384, input, signature) }
             else if scheme == 0x0806 { rsa_pss_rsae(&spki, Hash::Sha512, input, signature) }
             else if scheme == 0x0807 { ed25519(&spki, input, signature) }
-            else { false },
+            else { false }
+        },
     }
 }
 
