@@ -197,6 +197,68 @@ it evidently means. Each entry records what we specified instead.
 - **Reported upstream:** not yet (RFC 9110, which obsoletes RFC 7230, already
   states the corrected rule).
 
+## RFC 8446 §5 and §5.1: a compatibility CCS inside a fragmented handshake message
+
+- **Spec:** RFC 8446 (August 2018), §5 "Record Protocol" and §5.1 "Record
+  Layer", <https://www.rfc-editor.org/rfc/rfc8446#section-5>
+- **Text:** §5: "An implementation may receive an unencrypted record of type
+  change_cipher_spec consisting of the single byte value 0x01 at any time
+  after the first ClientHello message has been sent or received and before
+  the peer's Finished message has been received and MUST simply drop it
+  without further processing." §5.1: "Handshake messages MUST NOT be
+  interleaved with other record types. That is, if a handshake message is
+  split over two or more records, there MUST NOT be any other records
+  between them."
+- **Problem:** a CCS record between two fragments of one handshake message
+  is covered by both. §5 says drop it; §5.1 says the peer may not send it.
+  The CCS exists only for middlebox compatibility (Appendix D.4), which has
+  the server send it immediately after its first handshake message, so it
+  evidently never needs to fall inside one. Implementations differ:
+  BoringSSL and NSS refuse a CCS inside a fragmented ServerHello, and after
+  ServerHello both drop one without checking for a message boundary.
+- **We specify:** the §5 drop applies only at a handshake message boundary;
+  inside a fragmented message a CCS is fatal with `unexpected_message`. See
+  `receive` in `crates/clazel-tls/src/hello/bootstrap_spec.rs` (plaintext
+  ServerHello/HRR) and `compatibility_ccs_dropped` in
+  `crates/clazel-tls/src/connection/dispatcher_spec.rs` (protected
+  handshake).
+- **Reported upstream:** not yet.
+
+## FIPS 186-5 §6.4.2 step 3 numbers its two sub-steps "a." and "a."
+
+- **Spec:** FIPS 186-5, *Digital Signature Standard (DSS)*, published
+  3 February 2023 (PDF SHA-256
+  `fbb9c7c2ba442f03c57b63b43c888311903c9d0f29f89b06efdebd9b619140c5`),
+  §6.4.2 "ECDSA Signature Verification Algorithm", printed page 25,
+  <https://doi.org/10.6028/NIST.FIPS.186-5>
+- **Text:** step 3 "Derive the integer e from H as follows:", then "a. If
+  ⌈log2(n)⌉ ≥ hashlen, set E = H. Otherwise, set E equal to the leftmost
+  ⌈log2(n)⌉ bits of H." and then again "a. Convert the bit string E to the
+  integer e as specified in Appendix B.2.1."
+- **Problem:** two sub-steps carry the label "a." (the signing algorithm,
+  §6.4.1 step 2, labels them "a." and "b."). A citation "step 3a" is
+  ambiguous.
+- **We specify:** the second sub-step is 3b, and the first is 3a. See
+  `derive_e` in `crates/clazel-p384/src/spec.rs`.
+- **Reported upstream:** not yet.
+
+## FIPS 186-5 §6.4 says "the leftmost n bits" of a long hash, where n is the order
+
+- **Spec:** as above, §6.4 "ECDSA Digital Signature Generation and
+  Verification", printed page 23.
+- **Text:** "When the length of the output of the hash function (or XOF) is
+  greater than the bit length of n, then the leftmost n bits of the hash
+  function (or XOF) output block shall be used in any calculation using the
+  hash function (or XOF) output".
+- **Problem:** the symbol n is the order of the base point, a number of 384
+  bits for P-384 (SP 800-186 §3.2.1.4), so "the leftmost n bits" read
+  literally asks for about 2^384 bits. The same paragraph's first clause
+  says "the bit length of n", §6.1.1 says "the leftmost len(n) bits", and
+  §6.4.2 step 3a says "the leftmost ⌈log2(n)⌉ bits".
+- **We specify:** the leftmost `⌈log2 n⌉` bits, which for a prime n > 2 is
+  `len(n)`, as in §6.4.2 step 3a and SEC 1 §4.1.4 step 3.2. See `derive_e`
+  in `crates/clazel-p384/src/spec.rs`.
+
 ## HTML §13.2.6.4.10 "in table text" with an empty pending list
 
 - **Spec:** HTML Standard, Living Standard (`source` at commit
@@ -252,6 +314,28 @@ it evidently means. Each entry records what we specified instead.
   including the current input character (its modelling choice 15). The
   crate implements the living standard, whose named character reference
   state reconsumes that character first (§13.2.5.77, §13.2.5.78).
+- **Reported upstream:** not yet.
+
+## RFC 5937 §3.2: the anchor's pathLenConstraint is set before RFC 5280 §6.1.2 (k) resets it
+
+- **Spec:** RFC 5937, August 2010, <https://www.rfc-editor.org/rfc/rfc5937.txt>
+  (SHA-256 `6424a9b13e2ea7accfed71e0adef806309851909775aea74471187910f861f01`),
+  §3.2; with RFC 5280 §6.1.2 (k).
+- **Text:** RFC 5937 §3.2: "These steps (or equivalent) MUST be performed
+  prior to initialization steps described in RFC 5280." Its last step: "If a
+  basic constraints extension is associated with the trust anchor and
+  contains a pathLenConstraint value, set the max_path_length state variable
+  equal to the pathLenConstraint value from the basic constraints
+  extension." RFC 5280 §6.1.2 (k): "max_path_length: this integer is
+  initialized to n".
+- **Problem:** the other §3.2 steps set *inputs* (§6.1.1) that §6.1.2 then
+  reads, so performing them first is right. max_path_length is not an input
+  but a §6.1.2 state variable. Read literally, the order makes §6.1.2 (k)
+  overwrite the anchor's value with n, and the step has no effect.
+- **We specify:** max_path_length starts at the anchor's pathLenConstraint
+  when it has one, and at n otherwise. See `initialization` in
+  `crates/clazel-x509/src/path/spec.rs`. (No RFC 5937 erratum was found on
+  2026-10-29.)
 - **Reported upstream:** not yet.
 
 ## HTML "get an XML encoding" reads bytes that may not exist

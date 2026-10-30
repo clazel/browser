@@ -12,15 +12,26 @@
 //! - This profile accepts only the DER DEFAULT form for `minimum` (omitted,
 //!   interpreted as zero) and requires `maximum` absent. Any encoded distance
 //!   field is outside this decoder's profile and is rejected.
-//! - dNSName constraints preserve nonempty IA5 bytes; leading-dot and DNS
-//!   matching semantics are not interpreted here.
+//! - dNSName constraints preserve IA5 bytes, including the empty string: CA/B
+//!   Baseline Requirements v2.3.1 §7.1.2.5.2 uses a zero-length dNSName in
+//!   excludedSubtrees to exclude every DNS name, and both Chrome and Firefox
+//!   accept it. Leading-dot and DNS matching semantics are not interpreted
+//!   here (`matching/spec.rs` does that).
+//! - rfc822Name constraints preserve IA5 bytes, possibly empty; their mailbox,
+//!   host or domain shape is checked by the matcher, which refuses a malformed
+//!   one.
+//! - directoryName constraints are `[4] EXPLICIT Name` (§4.2.1.6's
+//!   GeneralName, explicitly tagged because Name is a CHOICE), so the field's
+//!   contents are one Name TLV. They are preserved as those bytes; the matcher
+//!   parses them with this crate's own Name decoder (`crate::name::spec`) and
+//!   refuses one that does not parse.
 //! - iPAddress constraints split 8/32 octets into 4/16 address and mask bytes.
 //!   Network matching and mask semantics are out of scope.
-//! - Other context-specific GeneralName choices with the RFC-required
-//!   primitive/constructed form are preserved as complete TLVs and marked
-//!   `Unsupported`. A caller processing a critical NameConstraints extension
-//!   must reject or fully implement those forms; this parser does not silently
-//!   treat them as effective constraints.
+//! - The remaining context-specific GeneralName choices (otherName,
+//!   x400Address, ediPartyName, uniformResourceIdentifier, registeredID) with
+//!   the RFC-required primitive/constructed form are preserved as complete
+//!   TLVs and marked `Unsupported`. This decoder gives them no meaning; the
+//!   matcher decides what a constraint of such a form does.
 //! - This is syntax and typed extraction only, not path validation, trust,
 //!   name-constraint matching, or critical-extension processing.
 
@@ -31,8 +42,13 @@ verus! {
 
 /// A GeneralName subtree base accepted or explicitly preserved by the parser.
 pub enum GeneralNameConstraint {
-    /// RFC 5280 dNSName constraint IA5 bytes.
+    /// RFC 5280 dNSName constraint IA5 bytes, possibly empty.
     DnsName(Seq<u8>),
+    /// RFC 5280 rfc822Name constraint IA5 bytes, possibly empty.
+    Rfc822Name(Seq<u8>),
+    /// RFC 5280 directoryName constraint: the contents of the explicit `[4]`
+    /// field, which a well-formed constraint holds as one Name TLV.
+    DirectoryName(Seq<u8>),
     /// RFC 5280 iPAddress constraint, split into address and network mask.
     IpAddress {
         /// Address octets (4 or 16 bytes).
@@ -40,7 +56,8 @@ pub enum GeneralNameConstraint {
         /// Network mask octets, matching the address width.
         mask: Seq<u8>,
     },
-    /// A syntactically framed but unsupported GeneralName alternative.
+    /// A syntactically framed GeneralName alternative that this decoder does
+    /// not interpret: otherName, x400Address, ediPartyName, URI, registeredID.
     Unsupported {
         /// Context-specific GeneralName tag number.
         tag: u32,
@@ -64,8 +81,8 @@ pub struct NameConstraints {
     pub excluded_subtrees: Option<Seq<GeneralSubtree>>,
 }
 
-/// `true` when `base` is an alternative this syntax-only profile does not
-/// apply. A caller handling a critical extension must not ignore it.
+/// `true` when `base` is an alternative this decoder does not interpret
+/// (`Unsupported`).
 pub open spec fn base_is_unsupported(base: GeneralNameConstraint) -> bool {
     match base {
         GeneralNameConstraint::Unsupported { .. } => true,
@@ -81,7 +98,7 @@ pub open spec fn has_unsupported_from(items: Seq<GeneralSubtree>, i: int) -> boo
     i < items.len() && (base_is_unsupported(items[i].base) || has_unsupported_from(items, i + 1))
 }
 
-/// Explicit support indicator for an outer criticality policy.
+/// Whether no base is `Unsupported`.
 pub open spec fn all_bases_supported(value: NameConstraints) -> bool {
     match value.permitted_subtrees {
         Some(items) if has_unsupported_from(items, 0) => false,
@@ -95,7 +112,7 @@ pub open spec fn all_bases_supported(value: NameConstraints) -> bool {
 /// id-ce-nameConstraints `{ 2 5 29 30 }`.
 pub open spec fn name_constraints_oid() -> Seq<nat> { seq![2nat, 5, 29, 30] }
 
-/// Parse an RFC 5280 GeneralName choice, retaining unsupported choices whole.
+/// Parse an RFC 5280 GeneralName choice, retaining uninterpreted choices whole.
 pub open spec fn parse_base(input: Seq<u8>, pos: nat, end: nat) -> Option<(GeneralNameConstraint, nat)> {
     match clazel_der::spec::read_tlv(input, pos, end) {
         None => None,
@@ -105,9 +122,15 @@ pub open spec fn parse_base(input: Seq<u8>, pos: nat, end: nat) -> Option<(Gener
         {
             let value = input.subrange(tlv.cstart as int, tlv.cend as int);
             if tlv.tag.number == 2 {
-                if value.len() > 0 && crate::extensions::spec::ia5_bytes(value, 0) {
+                if crate::extensions::spec::ia5_bytes(value, 0) {
                     Some((GeneralNameConstraint::DnsName(value), tlv.cend))
                 } else { None }
+            } else if tlv.tag.number == 1 {
+                if crate::extensions::spec::ia5_bytes(value, 0) {
+                    Some((GeneralNameConstraint::Rfc822Name(value), tlv.cend))
+                } else { None }
+            } else if tlv.tag.number == 4 {
+                Some((GeneralNameConstraint::DirectoryName(value), tlv.cend))
             } else if tlv.tag.number == 7 {
                 if value.len() == 8 {
                     Some((GeneralNameConstraint::IpAddress {

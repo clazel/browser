@@ -9,9 +9,9 @@
 //!
 //! 1. Runs the decoders on every distinct certificate of the corpus
 //!    (leaves, intermediates and trust anchors): envelope, TBS, SPKI,
-//!    extensions, and the SAN, BasicConstraints, KeyUsage, ExtendedKeyUsage
-//!    and NameConstraints extension decoders, plus signature-algorithm
-//!    classification. None may panic, and the number of certificates each
+//!    extensions, and the SAN, BasicConstraints, KeyUsage, ExtendedKeyUsage,
+//!    NameConstraints and PolicyConstraints extension decoders, plus
+//!    signature-algorithm classification. None may panic, and the number of certificates each
 //!    stage accepts is pinned in `DECODE_COUNTS`, so a decoder change that
 //!    moves it is noticed.
 //! 2. Pins the one outcome limbo's expectations decide for a decoder: a
@@ -36,6 +36,8 @@ use clazel_x509::{
     leaf::exec::{LeafPolicy, check_leaf_certificate},
     matcher::ReferenceIdentity,
     name_constraints::exec::parse_name_constraints,
+    path::parsed::exec::{anchor_from_root, parse_path_cert},
+    policy_constraints::exec::parse_policy_constraints,
     signature_algorithm::exec::classify,
     spki::exec::parse_subject_public_key_info,
     tbs::exec::parse_tbs_certificate,
@@ -96,6 +98,7 @@ const KEY_USAGE: &[u64] = &[2, 5, 29, 15];
 const BASIC_CONSTRAINTS: &[u64] = &[2, 5, 29, 19];
 const NAME_CONSTRAINTS: &[u64] = &[2, 5, 29, 30];
 const EXTENDED_KEY_USAGE: &[u64] = &[2, 5, 29, 37];
+const POLICY_CONSTRAINTS: &[u64] = &[2, 5, 29, 36];
 
 /// For each decoder stage of `STAGES`, how many corpus certificates it applied
 /// to and how many it accepted, as of this commit's decoders.
@@ -110,6 +113,7 @@ const DECODE_COUNTS: &[(usize, usize)] = &[
     (30369, 30368),
     (9818, 9817),
     (9458, 9453),
+    (1, 1),
 ];
 
 /// Decoder stages, in the order of `DECODE_COUNTS`. Each counts how many
@@ -125,6 +129,7 @@ const STAGES: &[&str] = &[
     "keyUsage",
     "extKeyUsage",
     "nameConstraints",
+    "policyConstraints",
 ];
 
 /// Run every decoder on one certificate. Entry `i` is `None` when stage `i`
@@ -172,6 +177,8 @@ fn decode(der: &[u8]) -> Vec<Option<bool>> {
             set(8, parse_extended_key_usage(e.value).is_some());
         } else if oid == NAME_CONSTRAINTS {
             set(9, parse_name_constraints(e.value).is_some());
+        } else if oid == POLICY_CONSTRAINTS {
+            set(10, parse_policy_constraints(e.value).is_some());
         }
     }
     out
@@ -362,4 +369,67 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
     }
     problems.truncate(40);
     assert!(problems.is_empty(), "limbo: {}", problems.join("\n"));
+}
+
+/// How many corpus certificates `parse_path_cert` accepts, of how many.
+/// Every distinct certificate of the corpus (30,379) is offered to it. The
+/// 566 it refuses are 553 whose subjectAltName does not decode, 5 whose
+/// nameConstraints, 4 whose TBS, and one each whose Extensions, keyUsage,
+/// extKeyUsage or signature-algorithm pairing does not; no new rule refuses any.
+const PATH_CERT_COUNTS: (usize, usize) = (29813, 30379);
+
+/// How many certificates that some testcase lists as a trust anchor
+/// `anchor_from_root` (with no distrust-after) turns into an `Anchor`, of
+/// how many such certificates there are. The 10 it refuses: four with a
+/// critical extension it does not read (limbo's canary OID twice, a critical
+/// AKI, a critical SKI), two whose nameConstraints, one whose keyUsage and
+/// one whose TBS does not decode, one with an empty subject and one without
+/// basicConstraints.
+const ANCHOR_COUNTS: (usize, usize) = (218, 228);
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn limbo_corpus_path_cert_and_anchor_counts_are_pinned() {
+    let mut parsed = 0usize;
+    let mut total = 0usize;
+    // The certificates that parse to a `PathCert`, by what the first decoder
+    // to refuse the others was.
+    let mut refused_by: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    for i in 0..CERT_SPANS.len() {
+        let Some(der) = cert(i) else { continue };
+        total = total.saturating_add(1);
+        if parse_path_cert(der).is_some() {
+            parsed = parsed.saturating_add(1);
+            continue;
+        }
+        let outcome = decode(der);
+        let stage = outcome
+            .iter()
+            .position(|o| *o == Some(false))
+            .and_then(|k| STAGES.get(k))
+            .copied()
+            .unwrap_or("signature algorithms disagree");
+        let slot = refused_by.entry(stage).or_insert(0);
+        *slot = slot.saturating_add(1);
+    }
+    println!("limbo path certs: parsed {parsed} of {total}; refused by {refused_by:?}");
+
+    let mut anchors = std::collections::BTreeSet::new();
+    for c in CASES {
+        anchors.extend(c.trusted.iter().copied());
+    }
+    let mut made = 0usize;
+    for &i in &anchors {
+        if cert(i).is_some_and(|der| anchor_from_root(der, None).is_some()) {
+            made = made.saturating_add(1);
+        }
+    }
+    println!("limbo anchors: {made} of {}", anchors.len());
+
+    assert_eq!((parsed, total), PATH_CERT_COUNTS, "parse_path_cert counts");
+    assert_eq!(
+        (made, anchors.len()),
+        ANCHOR_COUNTS,
+        "anchor_from_root counts"
+    );
 }

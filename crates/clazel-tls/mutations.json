@@ -1,0 +1,2636 @@
+{
+  "mutations": [
+    {
+      "id": "len-width-one-byte",
+      "file": "src/spec.rs",
+      "find": "if ceil <= 255 {\n        1",
+      "replace": "if ceil <= 254 {\n        1",
+      "expect": "killed",
+      "reason": "A ceiling of 255 needs a two-byte length field: lemma_len_width_table (len_width(255) == 1) is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_len_width_table()",
+        "witness": "len_width(255) != 1"
+      }
+    },
+    {
+      "id": "len-width-two-bytes",
+      "file": "src/spec.rs",
+      "find": "} else if ceil <= 65535 {\n        2",
+      "replace": "} else if ceil <= 65534 {\n        2",
+      "expect": "killed",
+      "reason": "A ceiling of 65535 needs a three-byte length field: lemma_len_width_table (len_width(65535) == 2) is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_len_width_table()",
+        "witness": "len_width(65535) != 2"
+      }
+    },
+    {
+      "id": "vec-ceiling-inclusive",
+      "file": "src/spec.rs",
+      "find": "if n < floor || n > ceil || r.len() < n {",
+      "replace": "if n < floor || n >= ceil || r.len() < n {",
+      "expect": "killed",
+      "reason": "A vector of exactly `ceiling` bytes is refused: lemma_read_vec_bounds is false at [3, 1, 2, 3, 9] with ceiling 3.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_read_vec_bounds()",
+        "witness": "read_vec(seq![3u8, 1, 2, 3, 9], 0, 3) != Some((seq![1u8, 2, 3], seq![9u8]))"
+      }
+    },
+    {
+      "id": "vec-floor-inclusive",
+      "file": "src/spec.rs",
+      "find": "if n < floor || n > ceil || r.len() < n {",
+      "replace": "if n <= floor || n > ceil || r.len() < n {",
+      "expect": "killed",
+      "reason": "A vector of exactly `floor` bytes is refused: lemma_read_vec_bounds is false at [3, 1, 2, 3] with floor 3.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_read_vec_bounds()",
+        "witness": "read_vec(seq![3u8, 1, 2, 3], 3, 255) != Some((seq![1u8, 2, 3], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "vec-truncated-allowed",
+      "file": "src/spec.rs",
+      "find": "if n < floor || n > ceil || r.len() < n {",
+      "replace": "if n < floor || n > ceil || r.len() <= n {",
+      "expect": "killed",
+      "reason": "A vector that ends exactly at the end of the input is refused: lemma_read_vec_bounds is false at [1, 9].",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_read_vec_bounds()",
+        "witness": "read_vec(seq![1u8, 9], 0, 3) != Some((seq![9u8], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "uint-needs-spare-byte",
+      "file": "src/spec.rs",
+      "find": "if b.len() < w {\n        None",
+      "replace": "if b.len() <= w {\n        None",
+      "expect": "killed",
+      "reason": "A number that fills the input is refused: lemma_read_u16s_multiple is false at [0, 1, 3, 4].",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_read_u16s_multiple()",
+        "witness": "read_u16s(seq![0u8, 1, 3, 4]) != Some(seq![1u16, 772])"
+      }
+    },
+    {
+      "id": "plaintext-limit-high",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_PLAINTEXT: usize = 16384;",
+      "replace": "pub const MAX_PLAINTEXT: usize = 16385;",
+      "expect": "killed",
+      "reason": "A record of 2^14 + 1 bytes is accepted: lemma_plaintext_limit is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_plaintext_limit()",
+        "witness": "read_record(seq![22u8, 3, 3, 0x40, 0x01], false) != Read::<Frame>::Fail(ErrKind::RecordOverflow)"
+      }
+    },
+    {
+      "id": "plaintext-limit-low",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_PLAINTEXT: usize = 16384;",
+      "replace": "pub const MAX_PLAINTEXT: usize = 16383;",
+      "expect": "killed",
+      "reason": "A record of exactly 2^14 bytes is refused: lemma_plaintext_limit is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_plaintext_limit()",
+        "witness": "read_record(seq![22u8, 3, 3, 0x40, 0x00], false) != Read::<Frame>::NeedMore"
+      }
+    },
+    {
+      "id": "ciphertext-limit-high",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_CIPHERTEXT: usize = 16640;",
+      "replace": "pub const MAX_CIPHERTEXT: usize = 16641;",
+      "expect": "killed",
+      "reason": "A TLSCiphertext of 2^14 + 257 bytes is accepted: lemma_ciphertext_limit is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ciphertext_limit()",
+        "witness": "read_record(seq![23u8, 3, 3, 0x41, 0x01], true) != Read::<Frame>::Fail(ErrKind::RecordOverflow)"
+      }
+    },
+    {
+      "id": "ciphertext-limit-low",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_CIPHERTEXT: usize = 16640;",
+      "replace": "pub const MAX_CIPHERTEXT: usize = 16639;",
+      "expect": "killed",
+      "reason": "A TLSCiphertext of exactly 2^14 + 256 bytes is refused: lemma_ciphertext_limit is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ciphertext_limit()",
+        "witness": "read_record(seq![23u8, 3, 3, 0x41, 0x00], true) != Read::<Frame>::NeedMore"
+      }
+    },
+    {
+      "id": "version-0301-only-protected",
+      "file": "src/spec.rs",
+      "find": "v == 0x0303 || (!protected && v == 0x0301)",
+      "replace": "v == 0x0303 || (protected && v == 0x0301)",
+      "expect": "killed",
+      "reason": "0x0301 is refused on an unprotected record: lemma_record_versions is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_record_versions()",
+        "witness": "read_record(seq![22u8, 3, 1, 0, 1, 7], false) != Read::<Frame>::Done(Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }), Seq::<u8>::empty())"
+      }
+    },
+    {
+      "id": "version-0303-changed",
+      "file": "src/spec.rs",
+      "find": "v == 0x0303 || (!protected && v == 0x0301)",
+      "replace": "v == 0x0304 || (!protected && v == 0x0301)",
+      "expect": "killed",
+      "reason": "0x0303 is refused: lemma_record_versions is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_record_versions()",
+        "witness": "read_record(seq![22u8, 3, 3, 0, 1, 7], false) != Read::<Frame>::Done(Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }), Seq::<u8>::empty())"
+      }
+    },
+    {
+      "id": "plaintext-alert-refused",
+      "file": "src/spec.rs",
+      "find": "t == CT_CHANGE_CIPHER_SPEC || t == CT_ALERT || t == CT_HANDSHAKE",
+      "replace": "t == CT_CHANGE_CIPHER_SPEC || t == CT_HANDSHAKE",
+      "expect": "killed",
+      "reason": "An unprotected alert record is refused as an unexpected type: lemma_record_versions is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_record_versions()",
+        "witness": "read_record(seq![21u8, 3, 3, 0, 2, 2, 40, 9], false) != Read::<Frame>::Done(Frame::Plain(Record { ctype: 21, fragment: seq![2u8, 40] }), seq![9u8])"
+      }
+    },
+    {
+      "id": "protected-ccs-refused",
+      "file": "src/spec.rs",
+      "find": "            t == CT_APPLICATION_DATA || t == CT_CHANGE_CIPHER_SPEC\n",
+      "replace": "            t == CT_APPLICATION_DATA\n",
+      "expect": "killed",
+      "reason": "The middlebox-compatibility change_cipher_spec is refused once protected: lemma_change_cipher_spec is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_change_cipher_spec()",
+        "witness": "read_record(seq![20u8, 3, 3, 0, 1, 1], true) != Read::<Frame>::Done(Frame::Ccs, Seq::<u8>::empty())"
+      }
+    },
+    {
+      "id": "zero-length-alert-allowed",
+      "file": "src/spec.rs",
+      "find": "len == 0 && (t == CT_HANDSHAKE || t == CT_ALERT)",
+      "replace": "len == 0 && t == CT_HANDSHAKE",
+      "expect": "killed",
+      "reason": "A zero-length alert fragment is accepted: lemma_zero_length_fragments is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_zero_length_fragments()",
+        "witness": "read_record(seq![21u8, 3, 3, 0, 0], false) != Read::<Frame>::Fail(ErrKind::ZeroLengthFragment)"
+      }
+    },
+    {
+      "id": "ccs-any-single-byte",
+      "file": "src/spec.rs",
+      "find": "if body == seq![1u8] {",
+      "replace": "if body.len() == 1 {",
+      "expect": "killed",
+      "reason": "A change_cipher_spec holding 0x02 is dropped: lemma_change_cipher_spec is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_change_cipher_spec()",
+        "witness": "read_record(seq![20u8, 3, 3, 0, 1, 2], false) != Read::<Frame>::Fail(ErrKind::BadChangeCipherSpec)"
+      }
+    },
+    {
+      "id": "inner-scan-wrong-byte",
+      "file": "src/spec.rs",
+      "find": "} else if p.last() != 0 {",
+      "replace": "} else if p.last() != 1 {",
+      "expect": "killed",
+      "reason": "The scan for the content type stops at 1, not at the first non-zero octet: lemma_inner_plaintext is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_inner_plaintext()",
+        "witness": "split_inner_plaintext(seq![5u8, 22, 0, 0, 0]) != Some((seq![5u8], 22u8))"
+      }
+    },
+    {
+      "id": "all-zero-wrong-error",
+      "file": "src/spec.rs",
+      "find": "None => Res::Err(ErrKind::AllZeroInnerPlaintext),",
+      "replace": "None => Res::Err(ErrKind::Decode),",
+      "expect": "killed",
+      "reason": "An all-zero inner plaintext gives decode_error, not unexpected_message: lemma_open_inner_plaintext is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_open_inner_plaintext()",
+        "witness": "open_inner_plaintext(seq![0u8, 0]) != Res::<Record>::Err(ErrKind::AllZeroInnerPlaintext)"
+      }
+    },
+    {
+      "id": "inner-empty-alert-allowed",
+      "file": "src/spec.rs",
+      "find": "} else if content.len() == 0 && (t == CT_HANDSHAKE || t == CT_ALERT) {",
+      "replace": "} else if content.len() == 0 && t == CT_HANDSHAKE {",
+      "expect": "killed",
+      "reason": "An empty alert inner plaintext is accepted: lemma_open_inner_plaintext is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_open_inner_plaintext()",
+        "witness": "open_inner_plaintext(seq![21u8, 0]) != Res::<Record>::Err(ErrKind::ZeroLengthFragment)"
+      }
+    },
+    {
+      "id": "nonce-or-not-xor",
+      "file": "src/spec.rs",
+      "find": "Seq::new(iv.len(), |i: int| (iv[i] ^ padded[i]) as u8)",
+      "replace": "Seq::new(iv.len(), |i: int| (iv[i] | padded[i]) as u8)",
+      "expect": "killed",
+      "reason": "The sequence number is ORed into the IV instead of XORed: lemma_nonce_examples is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_nonce_examples()",
+        "witness": "per_record_nonce(seq![0xA0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5], 3) != seq![0xA0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6]"
+      }
+    },
+    {
+      "id": "additional-data-version",
+      "file": "src/spec.rs",
+      "find": "write_record_header(CT_APPLICATION_DATA, 0x0303, length)",
+      "replace": "write_record_header(CT_APPLICATION_DATA, 0x0301, length)",
+      "expect": "killed",
+      "reason": "The additional data names version 0x0301: lemma_additional_data is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_additional_data()",
+        "witness": "additional_data(5) != seq![23u8, 3, 3, 0, 5]"
+      }
+    },
+    {
+      "id": "extract-needs-spare-byte",
+      "file": "src/spec.rs",
+      "find": "} else if buf.len() < HANDSHAKE_HEADER + len {",
+      "replace": "} else if buf.len() <= HANDSHAKE_HEADER + len {",
+      "expect": "killed",
+      "reason": "A message that ends exactly at the end of the buffer is held back: lemma_extract_examples is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_extract_examples()",
+        "witness": "extract_messages(seq![1u8, 0, 0, 1, 9]) != Res::<(Seq<Seq<u8>>, Seq<u8>)>::Ok((seq![seq![1u8, 0, 0, 1, 9]], Seq::<u8>::empty()))"
+      }
+    },
+    {
+      "id": "handshake-limit-high",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_HANDSHAKE_BODY: usize = 262144;",
+      "replace": "pub const MAX_HANDSHAKE_BODY: usize = 262145;",
+      "expect": "killed",
+      "reason": "A body of 262145 bytes is accepted: lemma_handshake_limit is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_handshake_limit()",
+        "witness": "extract_messages(seq![1u8, 4, 0, 1]) != Res::<(Seq<Seq<u8>>, Seq<u8>)>::Err(ErrKind::HandshakeTooLarge)"
+      }
+    },
+    {
+      "id": "appdata-interleave",
+      "file": "src/spec.rs",
+      "find": "} else if rec.ctype == CT_APPLICATION_DATA {\n        if st.buf.len() > 0 {",
+      "replace": "} else if rec.ctype == CT_APPLICATION_DATA {\n        if st.buf.len() > 4 {",
+      "expect": "killed",
+      "reason": "Application data inside a handshake message is passed on: lemma_feed_examples is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_feed_examples()",
+        "witness": "feed_record(Reasm { buf: seq![1u8, 0, 0, 5] }, Record { ctype: 23, fragment: seq![1u8] }) != Res::<(Event, Reasm)>::Err(ErrKind::Interleaved)"
+      }
+    },
+    {
+      "id": "alert-interleave",
+      "file": "src/spec.rs",
+      "find": "} else if rec.ctype == CT_ALERT {\n        if st.buf.len() > 0 {",
+      "replace": "} else if rec.ctype == CT_ALERT {\n        if st.buf.len() > 4 {",
+      "expect": "killed",
+      "reason": "An alert inside a handshake message is passed on: lemma_feed_examples is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_feed_examples()",
+        "witness": "feed_record(Reasm { buf: seq![1u8, 0, 0, 5] }, Record { ctype: 21, fragment: seq![2u8, 40] }) != Res::<(Event, Reasm)>::Err(ErrKind::Interleaved)"
+      }
+    },
+    {
+      "id": "ccs-interleave",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn feed_ccs(st: Reasm) -> Res<(Event, Reasm)> {\n    if st.buf.len() > 0 {",
+      "replace": "pub open spec fn feed_ccs(st: Reasm) -> Res<(Event, Reasm)> {\n    if st.buf.len() > 1 {",
+      "expect": "killed",
+      "reason": "A change_cipher_spec inside a handshake message is dropped: lemma_feed_examples is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_feed_examples()",
+        "witness": "feed_ccs(Reasm { buf: seq![1u8] }) != Res::<(Event, Reasm)>::Err(ErrKind::Interleaved)"
+      }
+    },
+    {
+      "id": "alert-longer-than-two",
+      "file": "src/spec.rs",
+      "find": "if b.len() == 2 {\n        Some(Alert { level: b[0], description: b[1] })",
+      "replace": "if b.len() >= 2 {\n        Some(Alert { level: b[0], description: b[1] })",
+      "expect": "killed",
+      "reason": "An alert record may hold two alerts: lemma_feed_examples is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_feed_examples()",
+        "witness": "feed_record(Reasm { buf: Seq::<u8>::empty() }, Record { ctype: 21, fragment: seq![2u8, 40, 2, 40] }) != Res::<(Event, Reasm)>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "handshake-zero-length-allowed",
+      "file": "src/spec.rs",
+      "find": "        if rec.fragment.len() == 0 {\n            Res::Err(ErrKind::ZeroLengthFragment)\n        } else {\n            match extract_messages",
+      "replace": "        if rec.fragment.len() > 99 {\n            Res::Err(ErrKind::ZeroLengthFragment)\n        } else {\n            match extract_messages",
+      "expect": "killed",
+      "reason": "A zero-length handshake fragment is accepted: lemma_feed_examples is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_feed_examples()",
+        "witness": "feed_record(Reasm { buf: Seq::<u8>::empty() }, Record { ctype: 22, fragment: Seq::<u8>::empty() }) != Res::<(Event, Reasm)>::Err(ErrKind::ZeroLengthFragment)"
+      }
+    },
+    {
+      "id": "alert-duplicate-extension",
+      "file": "src/spec.rs",
+      "find": "ErrKind::DuplicateExtension => ILLEGAL_PARAMETER,",
+      "replace": "ErrKind::DuplicateExtension => UNEXPECTED_MESSAGE,",
+      "expect": "killed",
+      "reason": "A duplicate extension maps to unexpected_message: lemma_alert_mapping is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_alert_mapping()",
+        "witness": "alert_of(ErrKind::DuplicateExtension) != 47"
+      }
+    },
+    {
+      "id": "alert-decode",
+      "file": "src/spec.rs",
+      "find": "ErrKind::Decode => DECODE_ERROR,",
+      "replace": "ErrKind::Decode => ILLEGAL_PARAMETER,",
+      "expect": "killed",
+      "reason": "A syntax error maps to illegal_parameter: lemma_alert_mapping is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_alert_mapping()",
+        "witness": "alert_of(ErrKind::Decode) != 50"
+      }
+    },
+    {
+      "id": "alert-record-overflow",
+      "file": "src/spec.rs",
+      "find": "ErrKind::RecordOverflow => RECORD_OVERFLOW,",
+      "replace": "ErrKind::RecordOverflow => DECODE_ERROR,",
+      "expect": "killed",
+      "reason": "A record that is too long maps to decode_error: lemma_alert_mapping is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_alert_mapping()",
+        "witness": "alert_of(ErrKind::RecordOverflow) != 22"
+      }
+    },
+    {
+      "id": "alert-missing-extension",
+      "file": "src/spec.rs",
+      "find": "ErrKind::MissingExtension => MISSING_EXTENSION,",
+      "replace": "ErrKind::MissingExtension => UNSUPPORTED_EXTENSION,",
+      "expect": "killed",
+      "reason": "A missing extension maps to unsupported_extension: lemma_alert_mapping is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_alert_mapping()",
+        "witness": "alert_of(ErrKind::MissingExtension) != 109"
+      }
+    },
+    {
+      "id": "alert-closure-any-level",
+      "file": "src/spec.rs",
+      "find": "a.description == CLOSE_NOTIFY || a.description == USER_CANCELED",
+      "replace": "a.description == CLOSE_NOTIFY || (a.description == USER_CANCELED && a.level == LEVEL_WARNING)",
+      "expect": "killed",
+      "reason": "Restores the old warning-only rule (TLS 1.3 §6.1 ignores the level): a fatal user_canceled is no longer a closure, so lemma_alert_closure is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_alert_closure()",
+        "witness": "!alert_is_closure(Alert { level: 2, description: 90 })"
+      }
+    },
+    {
+      "id": "table-row-server-name",
+      "file": "src/spec.rs",
+      "find": "if t == EXT_SERVER_NAME {\n        m is Ch || m is Ee",
+      "replace": "if t == EXT_SERVER_NAME {\n        m is Ch",
+      "expect": "killed",
+      "reason": "The §4.2 table row `server_name` is changed: lemma_ext_row_server_name is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_server_name()",
+        "witness": "!extension_allowed(0, MsgKind::Ee)"
+      }
+    },
+    {
+      "id": "table-row-status-request",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_STATUS_REQUEST {\n        m is Ch || m is Cr || m is Ct",
+      "replace": "} else if t == EXT_STATUS_REQUEST {\n        m is Ch || m is Cr",
+      "expect": "killed",
+      "reason": "The §4.2 table row `status_request` is changed: lemma_ext_row_status_request is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_status_request()",
+        "witness": "!extension_allowed(5, MsgKind::Ct)"
+      }
+    },
+    {
+      "id": "table-row-signature-algorithms",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_SIGNATURE_ALGORITHMS {\n        m is Ch || m is Cr",
+      "replace": "} else if t == EXT_SIGNATURE_ALGORITHMS {\n        m is Ch || m is Cr || m is Sh",
+      "expect": "killed",
+      "reason": "The §4.2 table row `signature_algorithms` is changed: lemma_ext_row_signature_algorithms is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_signature_algorithms()",
+        "witness": "extension_allowed(13, MsgKind::Sh)"
+      }
+    },
+    {
+      "id": "table-row-padding",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_PADDING {\n        m is Ch",
+      "replace": "} else if t == EXT_PADDING {\n        m is Ch || m is Ee",
+      "expect": "killed",
+      "reason": "The §4.2 table row `padding` is changed: lemma_ext_row_padding is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_padding()",
+        "witness": "extension_allowed(21, MsgKind::Ee)"
+      }
+    },
+    {
+      "id": "table-row-key-share",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_KEY_SHARE {\n        m is Ch || m is Sh || m is Hrr",
+      "replace": "} else if t == EXT_KEY_SHARE {\n        m is Ch || m is Sh",
+      "expect": "killed",
+      "reason": "The §4.2 table row `key_share` is changed: lemma_ext_row_key_share is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_key_share()",
+        "witness": "!extension_allowed(51, MsgKind::Hrr)"
+      }
+    },
+    {
+      "id": "table-row-cookie",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_COOKIE {\n        m is Ch || m is Hrr",
+      "replace": "} else if t == EXT_COOKIE {\n        m is Ch || m is Hrr || m is Sh",
+      "expect": "killed",
+      "reason": "The §4.2 table row `cookie` is changed: lemma_ext_row_cookie is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_cookie()",
+        "witness": "extension_allowed(44, MsgKind::Sh)"
+      }
+    },
+    {
+      "id": "table-row-early-data",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_EARLY_DATA {\n        m is Ch || m is Ee || m is Nst",
+      "replace": "} else if t == EXT_EARLY_DATA {\n        m is Ch || m is Ee",
+      "expect": "killed",
+      "reason": "The §4.2 table row `early_data` is changed: lemma_ext_row_early_data is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_early_data()",
+        "witness": "!extension_allowed(42, MsgKind::Nst)"
+      }
+    },
+    {
+      "id": "table-row-oid-filters",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_OID_FILTERS {\n        m is Cr",
+      "replace": "} else if t == EXT_OID_FILTERS {\n        m is Cr || m is Ch",
+      "expect": "killed",
+      "reason": "The §4.2 table row `oid_filters` is changed: lemma_ext_row_oid_filters is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_oid_filters()",
+        "witness": "extension_allowed(48, MsgKind::Ch)"
+      }
+    },
+    {
+      "id": "table-row-supported-versions",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_SUPPORTED_VERSIONS {\n        m is Ch || m is Sh || m is Hrr",
+      "replace": "} else if t == EXT_SUPPORTED_VERSIONS {\n        m is Ch || m is Hrr",
+      "expect": "killed",
+      "reason": "The §4.2 table row `supported_versions` is changed: lemma_ext_row_supported_versions is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_supported_versions()",
+        "witness": "!extension_allowed(43, MsgKind::Sh)"
+      }
+    },
+    {
+      "id": "table-row-pre-shared-key",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_PRE_SHARED_KEY {\n        m is Ch || m is Sh",
+      "replace": "} else if t == EXT_PRE_SHARED_KEY {\n        m is Ch || m is Sh || m is Hrr",
+      "expect": "killed",
+      "reason": "The §4.2 table row `pre_shared_key` is changed: lemma_ext_row_pre_shared_key is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_pre_shared_key()",
+        "witness": "extension_allowed(41, MsgKind::Hrr)"
+      }
+    },
+    {
+      "id": "table-row-signed-certificate-timestamp",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_SCT {\n        m is Ch || m is Cr || m is Ct",
+      "replace": "} else if t == EXT_SCT {\n        m is Ch || m is Ct",
+      "expect": "killed",
+      "reason": "The §4.2 table row `signed_certificate_timestamp` is changed: lemma_ext_row_signed_certificate_timestamp is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_signed_certificate_timestamp()",
+        "witness": "!extension_allowed(18, MsgKind::Cr)"
+      }
+    },
+    {
+      "id": "table-row-certificate-authorities",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_CERTIFICATE_AUTHORITIES {\n        m is Ch || m is Cr",
+      "replace": "} else if t == EXT_CERTIFICATE_AUTHORITIES {\n        m is Ch",
+      "expect": "killed",
+      "reason": "The §4.2 table row `certificate_authorities` is changed: lemma_ext_row_certificate_authorities is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_certificate_authorities()",
+        "witness": "!extension_allowed(47, MsgKind::Cr)"
+      }
+    },
+    {
+      "id": "table-row-signature-algorithms-cert",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_SIGNATURE_ALGORITHMS_CERT {\n        m is Ch || m is Cr",
+      "replace": "} else if t == EXT_SIGNATURE_ALGORITHMS_CERT {\n        m is Ch || m is Cr || m is Ct",
+      "expect": "killed",
+      "reason": "The §4.2 table row `signature_algorithms_cert` is changed: lemma_ext_row_signature_algorithms_cert is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_signature_algorithms_cert()",
+        "witness": "extension_allowed(50, MsgKind::Ct)"
+      }
+    },
+    {
+      "id": "table-row-alpn",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_ALPN {\n        m is Ch || m is Ee",
+      "replace": "} else if t == EXT_ALPN {\n        m is Ch",
+      "expect": "killed",
+      "reason": "The §4.2 table row `alpn` is changed: lemma_ext_row_alpn is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_alpn()",
+        "witness": "!extension_allowed(16, MsgKind::Ee)"
+      }
+    },
+    {
+      "id": "table-row-supported-groups",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_SUPPORTED_GROUPS {\n        m is Ch || m is Ee",
+      "replace": "} else if t == EXT_SUPPORTED_GROUPS {\n        m is Ch || m is Ee || m is Sh",
+      "expect": "killed",
+      "reason": "The §4.2 table row `supported_groups` is changed: lemma_ext_row_supported_groups is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_supported_groups()",
+        "witness": "extension_allowed(10, MsgKind::Sh)"
+      }
+    },
+    {
+      "id": "table-row-psk-key-exchange-modes",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_PSK_KEY_EXCHANGE_MODES {\n        m is Ch",
+      "replace": "} else if t == EXT_PSK_KEY_EXCHANGE_MODES {\n        m is Ch || m is Cr",
+      "expect": "killed",
+      "reason": "The §4.2 table row `psk_key_exchange_modes` is changed: lemma_ext_row_psk_key_exchange_modes is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_psk_key_exchange_modes()",
+        "witness": "extension_allowed(45, MsgKind::Cr)"
+      }
+    },
+    {
+      "id": "table-row-post-handshake-auth",
+      "file": "src/spec.rs",
+      "find": "} else if t == EXT_POST_HANDSHAKE_AUTH {\n        m is Ch",
+      "replace": "} else if t == EXT_POST_HANDSHAKE_AUTH {\n        m is Ch || m is Ee",
+      "expect": "killed",
+      "reason": "The §4.2 table row `post_handshake_auth` is changed: lemma_ext_row_post_handshake_auth is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_row_post_handshake_auth()",
+        "witness": "extension_allowed(49, MsgKind::Ee)"
+      }
+    },
+    {
+      "id": "table-known-types",
+      "file": "src/spec.rs",
+      "find": "|| t == 47 || t == 48 || t == 49 || t == 50 || t == 51",
+      "replace": "|| t == 47 || t == 48 || t == 49 || t == 50",
+      "expect": "killed",
+      "reason": "key_share is no longer a row of the table: lemma_ext_unknown_rows is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_ext_unknown_rows()",
+        "witness": "!extension_known(51)"
+      }
+    },
+    {
+      "id": "dup-not-detected",
+      "file": "src/spec.rs",
+      "find": "!has_ext(es.skip(1), es[0].etype) && exts_unique(es.skip(1))",
+      "replace": "true && exts_unique(es.skip(1))",
+      "expect": "killed",
+      "reason": "Two extensions of one type are allowed: lemma_extension_checks is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_extension_checks()",
+        "witness": "check_extensions(seq![Ext { etype: 43, data: seq![3u8, 4] }, Ext { etype: 43, data: seq![3u8, 4] }], MsgKind::Sh) != Some(ErrKind::DuplicateExtension)"
+      }
+    },
+    {
+      "id": "allowed-only-first",
+      "file": "src/spec.rs",
+      "find": "es.len() == 0 || (extension_allowed(es[0].etype, m) && all_allowed(es.skip(1), m))",
+      "replace": "es.len() == 0 || extension_allowed(es[0].etype, m)",
+      "expect": "killed",
+      "reason": "Only the first extension is checked against the table: lemma_extension_checks is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_extension_checks()",
+        "witness": "check_extensions(seq![Ext { etype: 43, data: seq![3u8, 4] }, Ext { etype: 0, data: seq![] }], MsgKind::Sh) != Some(ErrKind::ExtensionNotAllowed)"
+      }
+    },
+    {
+      "id": "bodies-only-first",
+      "file": "src/spec.rs",
+      "find": "es.len() == 0 || (ext_body_ok(es[0], m) && all_bodies_ok(es.skip(1), m))",
+      "replace": "es.len() == 0 || ext_body_ok(es[0], m)",
+      "expect": "killed",
+      "reason": "Only the first extension's data is checked: lemma_extension_checks is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_extension_checks()",
+        "witness": "check_extensions(seq![Ext { etype: 43, data: seq![3u8, 4] }, Ext { etype: 44, data: seq![0u8] }], MsgKind::Hrr) != Some(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "legacy-server-hello-extensions-without-supported-versions",
+      "file": "src/spec.rs",
+      "find": "Some((es, rest)) => rest.len() == 0 && !has_ext(es, 43),",
+      "replace": "Some((es, rest)) => rest.len() == 0 && false,",
+      "expect": "killed",
+      "reason": "A ServerHello with a nonempty extension list lacking supported_versions is no longer recognised as legacy and falls to the generic parser, so it is not reported as protocol_version: lemma_legacy_server_hello_extensions_without_supported_versions is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_legacy_server_hello_extensions_without_supported_versions()",
+        "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_with_extensions(seq![0u8, 0, 0, 0])) != Err(crate::spec::PROTOCOL_VERSION)"
+      }
+    },
+    {
+      "id": "has-ext-first-only",
+      "file": "src/spec.rs",
+      "find": "es[0].etype == t || has_ext(es.skip(1), t)",
+      "replace": "es[0].etype == t",
+      "expect": "killed",
+      "reason": "has_ext sees only the first extension, so a supported_versions after another extension is missed and the message is misclassified as a legacy ServerHello: lemma_supported_versions_found_after_other_extension is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_supported_versions_found_after_other_extension()",
+        "witness": "crate::spec::legacy_server_hello_without_supported_versions(super::certificates::legacy_server_hello_with_extensions(seq![0x12u8, 0x34, 0, 1, 9, 0, 0x2b, 0, 2, 3, 4]))"
+      }
+    },
+    {
+      "id": "sv-body-version",
+      "file": "src/spec.rs",
+      "find": "match read_vec(data, 2, 254) {",
+      "replace": "match read_vec(data, 0, 254) {",
+      "expect": "killed",
+      "reason": "supported_versions<2..254> may be empty: lemma_extension_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_extension_bodies()",
+        "witness": "read_supported_versions_ch(seq![0u8]) is Some"
+      }
+    },
+    {
+      "id": "cookie-floor",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn read_cookie(data: Seq<u8>) -> Option<Seq<u8>> {\n    match read_vec(data, 1, 65535) {",
+      "replace": "pub open spec fn read_cookie(data: Seq<u8>) -> Option<Seq<u8>> {\n    match read_vec(data, 0, 65535) {",
+      "expect": "killed",
+      "reason": "cookie<1..2^16-1> may be empty: lemma_extension_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_extension_bodies()",
+        "witness": "read_cookie(seq![0u8, 0]) is Some"
+      }
+    },
+    {
+      "id": "server-name-ee-nonempty",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn server_name_ee_ok(data: Seq<u8>) -> bool {\n    data.len() == 0",
+      "replace": "pub open spec fn server_name_ee_ok(data: Seq<u8>) -> bool {\n    data.len() <= 1",
+      "expect": "killed",
+      "reason": "The server_name of EncryptedExtensions may hold a byte: lemma_extension_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_extension_bodies()",
+        "witness": "server_name_ee_ok(seq![0u8])"
+      }
+    },
+    {
+      "id": "handshake-type-24",
+      "file": "src/spec.rs",
+      "find": "t == 20 || t == 24\n",
+      "replace": "t == 20\n",
+      "expect": "killed",
+      "reason": "key_update is not a handshake type: lemma_handshake_header is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_handshake_header()",
+        "witness": "!handshake_type_known(24)"
+      }
+    },
+    {
+      "id": "handshake-length-exact",
+      "file": "src/spec.rs",
+      "find": "} else if msg.len() != HANDSHAKE_HEADER + len {",
+      "replace": "} else if msg.len() < HANDSHAKE_HEADER + len {",
+      "expect": "killed",
+      "reason": "Bytes after a message's length are accepted: lemma_finished is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_finished()",
+        "witness": "parse_handshake(seq![20u8, 0, 0, 2, 7, 8, 9], 3) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "key-update-enum",
+      "file": "src/spec.rs",
+      "find": "if r == UPDATE_NOT_REQUESTED || r == UPDATE_REQUESTED {",
+      "replace": "if r <= 2 {",
+      "expect": "killed",
+      "reason": "request_update 2 is accepted: lemma_handshake_header is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_handshake_header()",
+        "witness": "parse_handshake(seq![24u8, 0, 0, 1, 2], 32) != Res::<HsMsg>::Err(ErrKind::InvalidEnum)"
+      }
+    },
+    {
+      "id": "key-update-length",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn read_key_update(b: Seq<u8>) -> Option<u8> {\n    if b.len() == 1 {",
+      "replace": "pub open spec fn read_key_update(b: Seq<u8>) -> Option<u8> {\n    if b.len() >= 1 {",
+      "expect": "killed",
+      "reason": "A KeyUpdate of two bytes is accepted: lemma_handshake_header is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_handshake_header()",
+        "witness": "parse_handshake(seq![24u8, 0, 0, 2, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "finished-length",
+      "file": "src/spec.rs",
+      "find": "pub open spec fn read_finished(b: Seq<u8>, hash_len: nat) -> Option<Seq<u8>> {\n    if b.len() == hash_len {",
+      "replace": "pub open spec fn read_finished(b: Seq<u8>, hash_len: nat) -> Option<Seq<u8>> {\n    if b.len() >= hash_len {",
+      "expect": "killed",
+      "reason": "A Finished longer than the hash is accepted: lemma_finished is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_finished()",
+        "witness": "parse_handshake(seq![20u8, 0, 0, 3, 7, 8, 9], 2) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "server-hello-compression",
+      "file": "src/spec.rs",
+      "find": "if sh.compression != 0 {",
+      "replace": "if sh.compression > 1 {",
+      "expect": "killed",
+      "reason": "legacy_compression_method 1 is accepted: lemma_server_hello is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_hello()",
+        "witness": "parse_handshake_body(2, super::examples_hs::sh_body(super::examples_hs::z32(), 1, seq![0u8, 6] + super::examples_hs::sv_ext()), 32) != Res::<HsMsg>::Err(ErrKind::InvalidEnum)"
+      }
+    },
+    {
+      "id": "client-hello-compression",
+      "file": "src/spec.rs",
+      "find": "if ch.compression != seq![0u8] {",
+      "replace": "if ch.compression.len() > 2 {",
+      "expect": "killed",
+      "reason": "A ClientHello with compression method 1 is accepted: lemma_client_hello_compression is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_client_hello_compression()",
+        "witness": "parse_handshake_body(1, seq![3u8, 3] + super::examples_hs::z32() + seq![0u8] + seq![0u8, 2, 0x13, 3] + seq![1u8, 1] + seq![0u8, 15] + seq![0u8, 0x2b, 0, 3, 2, 3, 4] + seq![0u8, 13, 0, 4, 0, 2, 4, 3], 32) != Res::<HsMsg>::Err(ErrKind::InvalidEnum)"
+      }
+    },
+    {
+      "id": "hrr-kind-swapped",
+      "file": "src/spec.rs",
+      "find": "if is_hello_retry_request(sh) {\n        MsgKind::Hrr",
+      "replace": "if !is_hello_retry_request(sh) {\n        MsgKind::Hrr",
+      "expect": "killed",
+      "reason": "A HelloRetryRequest is checked as a ServerHello (cookie refused): lemma_server_hello is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_hello()",
+        "witness": "parse_handshake_body(2, super::examples_hs::sh_body(hrr_random(), 0, seq![0u8, 13] + super::examples_hs::sv_ext() + seq![0u8, 0x2c, 0, 3, 0, 1, 7]), 32) is Err"
+      }
+    },
+    {
+      "id": "hrr-random-byte",
+      "file": "src/spec.rs",
+      "find": "0xCFu8, 0x21, 0xAD",
+      "replace": "0xCEu8, 0x21, 0xAD",
+      "expect": "killed",
+      "reason": "The first byte of the HelloRetryRequest Random is wrong: lemma_server_hello is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_hello()",
+        "witness": "!is_hello_retry_request(ServerHello { legacy_version: 0x0303, random: seq![0xCFu8, 0x21, 0xAD, 0x74, 0xE5, 0x9A, 0x61, 0x11, 0xBE, 0x1D, 0x8C, 0x02, 0x1E, 0x65, 0xB8, 0x91, 0xC2, 0xA2, 0x11, 0x16, 0x7A, 0xBB, 0x8C, 0x5E, 0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C], session_id_echo: Seq::<u8>::empty(), cipher_suite: 0x1303, compression: 0, extensions: Seq::<Ext>::empty() })"
+      }
+    },
+    {
+      "id": "client-hello-suites-floor",
+      "file": "src/spec.rs",
+      "find": "match read_vec(r3, 2, 65534) {",
+      "replace": "match read_vec(r3, 0, 65534) {",
+      "expect": "killed",
+      "reason": "A ClientHello with no cipher suites is read: lemma_client_hello_fields is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_client_hello_fields()",
+        "witness": "read_client_hello(seq![3u8, 3] + super::examples_hs::z32() + seq![0u8] + seq![0u8, 0] + seq![1u8, 0, 0, 15] + seq![0u8, 0x2b, 0, 3, 2, 3, 4] + seq![0u8, 13, 0, 4, 0, 2, 4, 3]) is Some"
+      }
+    },
+    {
+      "id": "client-hello-compression-floor",
+      "file": "src/spec.rs",
+      "find": "match read_vec(r4, 1, 255) {",
+      "replace": "match read_vec(r4, 0, 255) {",
+      "expect": "killed",
+      "reason": "A ClientHello with no compression methods is read: lemma_client_hello_fields is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_client_hello_fields()",
+        "witness": "read_client_hello(seq![3u8, 3] + super::examples_hs::z32() + seq![0u8] + seq![0u8, 2, 0x13, 3] + seq![0u8] + seq![0u8, 15] + seq![0u8, 0x2b, 0, 3, 2, 3, 4] + seq![0u8, 13, 0, 4, 0, 2, 4, 3]) is Some"
+      }
+    },
+    {
+      "id": "client-hello-extensions-floor",
+      "file": "src/spec.rs",
+      "find": "match read_exts(r5, 8, 65535) {",
+      "replace": "match read_exts(r5, 7, 65535) {",
+      "expect": "killed",
+      "reason": "A ClientHello whose extension block is 7 bytes is read: lemma_client_hello_fields is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_client_hello_fields()",
+        "witness": "read_client_hello(seq![3u8, 3] + super::examples_hs::z32() + seq![0u8] + seq![0u8, 2, 0x13, 3] + seq![1u8, 0] + seq![0u8, 7] + seq![0u8, 0x2b, 0, 3, 2, 3, 4]) is Some"
+      }
+    },
+    {
+      "id": "server-hello-extensions-floor",
+      "file": "src/spec.rs",
+      "find": "                                            match read_exts(r5, 0, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
+      "replace": "                                            match read_exts(r5, 6, 65535) {\n                                                None => None,\n                                                Some((exts, r6)) => {",
+      "expect": "killed",
+      "reason": "Raising the floor to 6 makes an empty extension vector a decode error: lemma_server_hello (an empty extension vector parses) is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_hello()",
+        "witness": "!(parse_handshake_body(2, super::examples_hs::sh_body(super::examples_hs::z32(), 0, seq![0u8, 0]), 32) is Ok)"
+      }
+    },
+    {
+      "id": "certificate-entry-floor",
+      "file": "src/spec.rs",
+      "find": "match read_vec(b, 1, 16777215) {",
+      "replace": "match read_vec(b, 0, 16777215) {",
+      "expect": "killed",
+      "reason": "A certificate with no bytes is read: lemma_server_messages is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_messages()",
+        "witness": "parse_handshake(seq![11u8, 0, 0, 9, 0, 0, 0, 5, 0, 0, 0, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "ticket-floor",
+      "file": "src/spec.rs",
+      "find": "match read_vec(r3, 1, 65535) {",
+      "replace": "match read_vec(r3, 0, 65535) {",
+      "expect": "killed",
+      "reason": "A NewSessionTicket with an empty ticket is read: lemma_server_messages is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_messages()",
+        "witness": "parse_handshake(seq![4u8, 0, 0, 13, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "certificate-request-floor",
+      "file": "src/spec.rs",
+      "find": "match read_exts(r1, 2, 65535) {",
+      "replace": "match read_exts(r1, 0, 65535) {",
+      "expect": "killed",
+      "reason": "A CertificateRequest with no extensions is read: lemma_server_messages is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_messages()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 3, 0, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "schedule-prefix-space",
+      "file": "src/schedule/spec.rs",
+      "find": "seq![116u8, 108u8, 115u8, 49u8, 51u8, 32u8]",
+      "replace": "seq![116u8, 108u8, 115u8, 49u8, 51u8, 0u8]",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-output-length",
+      "file": "src/schedule/spec.rs",
+      "find": "crate::spec::write_u16(length)",
+      "replace": "crate::spec::write_u16(0)",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-omit-prefix",
+      "file": "src/schedule/spec.rs",
+      "find": "prefix() + label",
+      "replace": "label",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-omit-context",
+      "file": "src/schedule/spec.rs",
+      "find": "crate::spec::write_vec(context, 255)",
+      "replace": "crate::spec::write_vec(Seq::empty(), 255)",
+      "expect": "killed",
+      "reason": "The concrete label witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label()",
+        "witness": "hkdf_label(seq![1u8], seq![2u8], 258) != seq![1u8, 2u8, 7u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 1u8, 1u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-expand-arguments",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.expand)(secret, hkdf_label(label_bytes(label), context, length), length as nat)",
+      "replace": "(c.expand)(hkdf_label(label_bytes(label), context, length), secret, length as nat)",
+      "expect": "killed",
+      "reason": "The concrete derive witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_derive()",
+        "witness": "derive_secret(super::examples::fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
+      }
+    },
+    {
+      "id": "schedule-derive-unhashed-transcript",
+      "file": "src/schedule/spec.rs",
+      "find": "expand_label(c, secret, label, (c.hash)(messages), HASH_LEN as u16)",
+      "replace": "expand_label(c, secret, label, messages, HASH_LEN as u16)",
+      "expect": "killed",
+      "reason": "The concrete derive witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_derive()",
+        "witness": "derive_secret(super::examples::fixture_crypto(), seq![1u8], Label::ClientHandshake, seq![2u8]) != seq![88u8, 1u8, 0u8, 32u8, 18u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 2u8, 72u8, 2u8, 0u8, 32u8]"
+      }
+    },
+    {
+      "id": "schedule-empty-early-ikm",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.extract)(zeros(), zeros())",
+      "replace": "(c.extract)(zeros(), Seq::empty())",
+      "expect": "killed",
+      "reason": "The concrete early witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_early()",
+        "witness": "early_secret(super::examples::fixture_crypto()) != seq![69u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
+      }
+    },
+    {
+      "id": "schedule-handshake-skips-derived",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.extract)(derive_secret(c, early, Label::Derived, Seq::empty()), dhe)",
+      "replace": "(c.extract)(early, dhe)",
+      "expect": "killed",
+      "reason": "The concrete handshake witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_handshake()",
+        "witness": "handshake_secret(super::examples::fixture_crypto(), seq![1u8], seq![2u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-master-empty-ikm",
+      "file": "src/schedule/spec.rs",
+      "find": "(c.extract)(derive_secret(c, handshake, Label::Derived, Seq::empty()), zeros())",
+      "replace": "(c.extract)(derive_secret(c, handshake, Label::Derived, Seq::empty()), Seq::empty())",
+      "expect": "killed",
+      "reason": "The concrete master witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_master()",
+        "witness": "master_secret(super::examples::fixture_crypto(), seq![1u8]) != seq![69u8, 88u8, 1u8, 0u8, 32u8, 13u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8, 1u8, 72u8, 0u8, 32u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8]"
+      }
+    },
+    {
+      "id": "schedule-finished-unhashed-transcript",
+      "file": "src/schedule/spec.rs",
+      "find": "        (c.hash)(messages))",
+      "replace": "        messages)",
+      "expect": "killed",
+      "reason": "The concrete finished witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_finished()",
+        "witness": "finished(super::examples::fixture_crypto(), seq![1u8], seq![2u8]) != seq![77u8, 88u8, 1u8, 0u8, 32u8, 14u8, 116u8, 108u8, 115u8, 49u8, 51u8, 32u8, 102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8, 0u8, 0u8, 32u8, 72u8, 2u8]"
+      }
+    },
+    {
+      "id": "schedule-label-derived",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Derived => seq![100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8]",
+      "replace": "Label::Derived => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_derived witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_derived()",
+        "witness": "label_bytes(Label::Derived) != seq![100u8, 101u8, 114u8, 105u8, 118u8, 101u8, 100u8]"
+      }
+    },
+    {
+      "id": "schedule-label-clienthandshake",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ClientHandshake => seq![99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ClientHandshake => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_clienthandshake witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_clienthandshake()",
+        "witness": "label_bytes(Label::ClientHandshake) != seq![99u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-serverhandshake",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ServerHandshake => seq![115u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ServerHandshake => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_serverhandshake witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_serverhandshake()",
+        "witness": "label_bytes(Label::ServerHandshake) != seq![115u8, 32u8, 104u8, 115u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-clientapplication",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ClientApplication => seq![99u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ClientApplication => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_clientapplication witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_clientapplication()",
+        "witness": "label_bytes(Label::ClientApplication) != seq![99u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-serverapplication",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::ServerApplication => seq![115u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]",
+      "replace": "Label::ServerApplication => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_serverapplication witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_serverapplication()",
+        "witness": "label_bytes(Label::ServerApplication) != seq![115u8, 32u8, 97u8, 112u8, 32u8, 116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8]"
+      }
+    },
+    {
+      "id": "schedule-label-finished",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Finished => seq![102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8]",
+      "replace": "Label::Finished => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_finished witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_finished()",
+        "witness": "label_bytes(Label::Finished) != seq![102u8, 105u8, 110u8, 105u8, 115u8, 104u8, 101u8, 100u8]"
+      }
+    },
+    {
+      "id": "schedule-label-update",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Update => seq![116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 32u8, 117u8, 112u8, 100u8]",
+      "replace": "Label::Update => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_update witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_update()",
+        "witness": "label_bytes(Label::Update) != seq![116u8, 114u8, 97u8, 102u8, 102u8, 105u8, 99u8, 32u8, 117u8, 112u8, 100u8]"
+      }
+    },
+    {
+      "id": "schedule-label-key",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Key => seq![107u8, 101u8, 121u8]",
+      "replace": "Label::Key => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_key witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_key()",
+        "witness": "label_bytes(Label::Key) != seq![107u8, 101u8, 121u8]"
+      }
+    },
+    {
+      "id": "schedule-label-iv",
+      "file": "src/schedule/spec.rs",
+      "find": "Label::Iv => seq![105u8, 118u8]",
+      "replace": "Label::Iv => seq![119u8, 114u8, 111u8, 110u8, 103u8]",
+      "expect": "killed",
+      "reason": "The concrete label_iv witness detects the changed RFC 8446 equation.",
+      "module": "schedule::examples",
+      "certificate": {
+        "file": "src/schedule/certificates.rs",
+        "lemma": "super::examples::lemma_label_iv()",
+        "witness": "label_bytes(Label::Iv) != seq![105u8, 118u8]"
+      }
+    },
+    {
+      "id": "transcript-initial-header",
+      "file": "src/transcript/spec.rs",
+      "find": "messages: crate::spec::write_handshake(1, client_hello)",
+      "replace": "messages: client_hello",
+      "expect": "killed",
+      "reason": "The start witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_start()",
+        "witness": "start(seq![7u8]) != Ok(super::examples::initial())"
+      }
+    },
+    {
+      "id": "transcript-initial-phase",
+      "file": "src/transcript/spec.rs",
+      "find": "phase: Phase::FirstServerHello, retried: false",
+      "replace": "phase: Phase::Handshake, retried: false",
+      "expect": "killed",
+      "reason": "The start witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_start()",
+        "witness": "start(seq![7u8]) != Ok(super::examples::initial())"
+      }
+    },
+    {
+      "id": "transcript-retry-wire-type",
+      "file": "src/transcript/spec.rs",
+      "find": "Kind::ServerHello | Kind::HelloRetryRequest => 2",
+      "replace": "Kind::ServerHello | Kind::HelloRetryRequest => 6",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-retry-synthetic-type",
+      "file": "src/transcript/spec.rs",
+      "find": "crate::spec::write_handshake(254, hash(s.messages))",
+      "replace": "crate::spec::write_handshake(2, hash(s.messages))",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-retry-hashes-body",
+      "file": "src/transcript/spec.rs",
+      "find": "hash(s.messages)",
+      "replace": "hash(body)",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-retry-retains-clienthello",
+      "file": "src/transcript/spec.rs",
+      "find": "crate::spec::write_handshake(254, hash(s.messages)) + message",
+      "replace": "s.messages + crate::spec::write_handshake(254, hash(s.messages)) + message",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-ordinary-drops-prefix",
+      "file": "src/transcript/spec.rs",
+      "find": "s.messages + message",
+      "replace": "message",
+      "expect": "killed",
+      "reason": "The ordinary witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_ordinary()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::ServerHello, seq![8u8]) != Ok(State { messages: seq![1u8, 0u8, 0u8, 1u8, 7u8, 2u8, 0u8, 0u8, 1u8, 8u8], phase: Phase::Handshake, retried: false })"
+      }
+    },
+    {
+      "id": "transcript-retry-flag",
+      "file": "src/transcript/spec.rs",
+      "find": "retried: s.retried || kind == Kind::HelloRetryRequest",
+      "replace": "retried: s.retried",
+      "expect": "killed",
+      "reason": "The retry witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_retry()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::initial(), Kind::HelloRetryRequest, seq![8u8]) != Ok(super::examples::retried())"
+      }
+    },
+    {
+      "id": "transcript-second-retry",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::SecondClientHello => match kind {\n            Kind::ClientHello => Some(Phase::SecondServerHello),",
+      "replace": "Phase::SecondClientHello => match kind {\n            Kind::HelloRetryRequest => Some(Phase::SecondClientHello),\n            Kind::ClientHello => Some(Phase::SecondServerHello),",
+      "expect": "killed",
+      "reason": "The repeat witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_repeat()",
+        "witness": "step(|s: Seq<u8>| super::examples::hash(s), super::examples::retried(), Kind::HelloRetryRequest, seq![8u8]) != Err(Error::UnexpectedMessage)"
+      }
+    },
+    {
+      "id": "transcript-auth-before-serverhello",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::FirstServerHello => match kind {",
+      "replace": "Phase::FirstServerHello => match kind {\n            Kind::Certificate => Some(Phase::Handshake),",
+      "expect": "killed",
+      "reason": "The first_order witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_first_order()",
+        "witness": "next_phase(Phase::FirstServerHello, Kind::Certificate) != None"
+      }
+    },
+    {
+      "id": "transcript-skip-second-clienthello",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::SecondClientHello => match kind {",
+      "replace": "Phase::SecondClientHello => match kind {\n            Kind::ServerHello => Some(Phase::Handshake),",
+      "expect": "killed",
+      "reason": "The second_client witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_second_client()",
+        "witness": "next_phase(Phase::SecondClientHello, Kind::ServerHello) != None"
+      }
+    },
+    {
+      "id": "transcript-repeat-second-clienthello",
+      "file": "src/transcript/spec.rs",
+      "find": "Phase::SecondServerHello => match kind {",
+      "replace": "Phase::SecondServerHello => match kind {\n            Kind::ClientHello => Some(Phase::SecondServerHello),",
+      "expect": "killed",
+      "reason": "The second_server witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_second_server()",
+        "witness": "next_phase(Phase::SecondServerHello, Kind::ClientHello) != None"
+      }
+    },
+    {
+      "id": "transcript-signature-pad-length",
+      "file": "src/transcript/spec.rs",
+      "find": "Seq::new(64, |i: int| 32u8)",
+      "replace": "Seq::new(63, |i: int| 32u8)",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-pad-byte",
+      "file": "src/transcript/spec.rs",
+      "find": "Seq::new(64, |i: int| 32u8)",
+      "replace": "Seq::new(64, |i: int| 0u8)",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-separator",
+      "file": "src/transcript/spec.rs",
+      "find": "context(server) + seq![0u8]",
+      "replace": "context(server) + seq![1u8]",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-omits-hash",
+      "file": "src/transcript/spec.rs",
+      "find": "+ transcript_hash",
+      "replace": "+ Seq::empty()",
+      "expect": "killed",
+      "reason": "The server_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_server_input()",
+        "witness": "certificate_verify_input(true, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 115u8, 101u8, 114u8, 118u8, 101u8, 114u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "transcript-signature-context-swapped",
+      "file": "src/transcript/spec.rs",
+      "find": "if server {",
+      "replace": "if !server {",
+      "expect": "killed",
+      "reason": "The client_input witness contradicts the changed RFC 8446 rule.",
+      "module": "transcript::examples",
+      "certificate": {
+        "file": "src/transcript/certificates.rs",
+        "lemma": "super::examples::lemma_client_input()",
+        "witness": "certificate_verify_input(false, seq![1u8]) != seq![32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 32u8, 84u8, 76u8, 83u8, 32u8, 49u8, 46u8, 51u8, 44u8, 32u8, 99u8, 108u8, 105u8, 101u8, 110u8, 116u8, 32u8, 67u8, 101u8, 114u8, 116u8, 105u8, 102u8, 105u8, 99u8, 97u8, 116u8, 101u8, 86u8, 101u8, 114u8, 105u8, 102u8, 121u8, 0u8, 1u8]"
+      }
+    },
+    {
+      "id": "auth-deliver-before-ready",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Ready { (s, Action::Deliver(bytes)) }",
+      "replace": "if true { (s, Action::Deliver(bytes)) }",
+      "expect": "killed",
+      "reason": "The early_data authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_early_data()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), super::examples::initial(), Input::Application(seq![1u8])).1 != Action::Fail(10u8)"
+      }
+    },
+    {
+      "id": "auth-ack-before-send",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::SendFinished { (State { phase: Phase::Ready, client_sent: true, ..s }, Action::Ready) }",
+      "replace": "if true { (State { phase: Phase::Ready, client_sent: true, ..s }, Action::Ready) }",
+      "expect": "killed",
+      "reason": "The early_ack authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_early_ack()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), super::examples::initial(), Input::SentFinished).1 != Action::Fail(80u8)"
+      }
+    },
+    {
+      "id": "auth-ignore-chain-failure",
+      "file": "src/auth/spec.rs",
+      "find": "Err(error) => fail(s, certificate_alert(error)),",
+      "replace": "Err(error) => record(c, State { key: seq![17u8], chain_checked: true, ..s }, crate::transcript::spec::Kind::Certificate, body, Phase::CertificateVerify),",
+      "expect": "killed",
+      "reason": "The bad_chain authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_bad_chain()",
+        "witness": "super::examples::rejected_chain() != Action::Fail(45u8)"
+      }
+    },
+    {
+      "id": "auth-ignore-signature-failure",
+      "file": "src/auth/spec.rs",
+      "find": "if !(v.signature)(s.key, algorithm, input, signature)",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "The bad_signature authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_bad_signature()",
+        "witness": "super::examples::rejected_signature() != Action::Fail(51u8)"
+      }
+    },
+    {
+      "id": "auth-ignore-finished-failure",
+      "file": "src/auth/spec.rs",
+      "find": "if verify_data != crate::schedule::spec::finished(c, s.config.server_secret, s.transcript.messages)",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "The bad_finished authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_bad_finished()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_signature(), 20, Seq::new(32, |i: int| 0u8)).1 != Action::Fail(51u8)"
+      }
+    },
+    {
+      "id": "auth-server-mac-client-secret",
+      "file": "src/auth/spec.rs",
+      "find": "crate::schedule::spec::finished(c, s.config.server_secret, s.transcript.messages)",
+      "replace": "crate::schedule::spec::finished(c, s.config.client_secret, s.transcript.messages)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-client-mac-server-secret",
+      "file": "src/auth/spec.rs",
+      "find": "crate::schedule::spec::finished(c, s2.config.client_secret, s2.transcript.messages)",
+      "replace": "crate::schedule::spec::finished(c, s2.config.server_secret, s2.transcript.messages)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-client-cv-context",
+      "file": "src/auth/spec.rs",
+      "find": "crate::transcript::spec::certificate_verify_input(true, (c.hash)(s.transcript.messages))",
+      "replace": "crate::transcript::spec::certificate_verify_input(false, (c.hash)(s.transcript.messages))",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-wrong-cv-key",
+      "file": "src/auth/spec.rs",
+      "find": "(v.signature)(s.key, algorithm, input, signature)",
+      "replace": "(v.signature)(Seq::empty(), algorithm, input, signature)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-wrong-chain-time",
+      "file": "src/auth/spec.rs",
+      "find": "(v.chain)(s.config.host, s.config.now, body)",
+      "replace": "(v.chain)(s.config.host, 0, body)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-wrong-chain-host",
+      "file": "src/auth/spec.rs",
+      "find": "(v.chain)(s.config.host, s.config.now, body)",
+      "replace": "(v.chain)(crate::host::spec::Host::Dns(Seq::empty()), s.config.now, body)",
+      "expect": "killed",
+      "reason": "The client_flight authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_client_flight()",
+        "witness": "super::examples::accepted().1 != Action::Send(seq![20u8, 0u8, 0u8, 32u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8, 111u8])"
+      }
+    },
+    {
+      "id": "auth-unoffered-signature",
+      "file": "src/auth/spec.rs",
+      "find": "!signature_scheme(algorithm) || !member(s.config.signatures, algorithm)",
+      "replace": "!signature_scheme(algorithm)",
+      "expect": "killed",
+      "reason": "The unoffered_signature authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_unoffered_signature()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_certificate(), 15, seq![8u8, 7u8, 0u8, 1u8, 9u8]).1 != Action::Fail(47u8)"
+      }
+    },
+    {
+      "id": "auth-send-becomes-ready",
+      "file": "src/auth/spec.rs",
+      "find": "record(c, s2, crate::transcript::spec::Kind::Finished, own, Phase::SendFinished)",
+      "replace": "record(c, s2, crate::transcript::spec::Kind::Finished, own, Phase::Ready)",
+      "expect": "killed",
+      "reason": "The send_phase authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_send_phase()",
+        "witness": "super::examples::accepted().0.phase != Phase::SendFinished"
+      }
+    },
+    {
+      "id": "auth-checkpoint-after-client-finished",
+      "file": "src/auth/spec.rs",
+      "find": "(s3, Action::Send(certificate + crate::spec::write_handshake(20, own)))",
+      "replace": "(State { application_hash: (c.hash)(s3.transcript.messages), ..s3 }, Action::Send(certificate + crate::spec::write_handshake(20, own)))",
+      "expect": "killed",
+      "reason": "The checkpoint authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_checkpoint()",
+        "witness": "super::examples::accepted().0.application_hash != Seq::new(32, |i: int| 75u8)"
+      }
+    },
+    {
+      "id": "auth-application-before-send-ack",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Ready { (s, Action::Deliver(bytes)) }",
+      "replace": "if s.phase == Phase::Ready || s.phase == Phase::SendFinished { (s, Action::Deliver(bytes)) }",
+      "expect": "killed",
+      "reason": "The no_ack authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_no_ack()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), super::examples::accepted().0, Input::Application(seq![1u8])).1 != Action::Fail(10u8)"
+      }
+    },
+    {
+      "id": "auth-failed-not-absorbing",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Failed || s.phase == Phase::Closed",
+      "replace": "if s.phase == Phase::Closed",
+      "expect": "killed",
+      "reason": "The failed_absorbs authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_failed_absorbs()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), State { phase: Phase::Failed, ..super::examples::initial() }, Input::Application(seq![1u8])).1 != Action::None"
+      }
+    },
+    {
+      "id": "auth-closed-not-absorbing",
+      "file": "src/auth/spec.rs",
+      "find": "if s.phase == Phase::Failed || s.phase == Phase::Closed",
+      "replace": "if s.phase == Phase::Failed",
+      "expect": "killed",
+      "reason": "The closed_absorbs authentication witness contradicts the modified RFC 8446 rule.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_closed_absorbs()",
+        "witness": "step(super::examples::crypto(), super::examples::verifier(), State { phase: Phase::Closed, ..super::examples::initial() }, Input::Application(seq![1u8])).1 != Action::None"
+      }
+    },
+    {
+      "id": "hello-legacy",
+      "file": "src/hello/spec.rs",
+      "find": "else if sh.session_id_echo != session_id",
+      "replace": "else if sh.legacy_version != 0x0303 || sh.session_id_echo != session_id",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_legacy()",
+        "witness": "parameters(crate::spec::ServerHello { legacy_version: 0x0304, ..super::examples::server() }, seq![7u8]) is Some"
+      }
+    },
+    {
+      "id": "hello-session",
+      "file": "src/hello/spec.rs",
+      "find": "sh.session_id_echo != session_id || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_session()",
+        "witness": "parameters(super::examples::server(), seq![8u8]) != Some(47u8)"
+      }
+    },
+    {
+      "id": "hello-cipher",
+      "file": "src/hello/spec.rs",
+      "find": "sh.cipher_suite != 0x1303\n                    || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_cipher()",
+        "witness": "parameters(crate::spec::ServerHello { cipher_suite: 0x1301, ..super::examples::server() }, seq![7u8]) != Some(47u8)"
+      }
+    },
+    {
+      "id": "hello-version",
+      "file": "src/hello/spec.rs",
+      "find": "version != 0x0304",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_version()",
+        "witness": "parameters(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 43, data: seq![3u8, 3u8] }], ..super::examples::server() }, seq![7u8]) != Some(47u8)"
+      }
+    },
+    {
+      "id": "hello-second-retry",
+      "file": "src/hello/spec.rs",
+      "find": "if retried { Err(10) }",
+      "replace": "if false { Err(10) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_checks()",
+        "witness": "retry(super::examples::request(), true) != Err(10u8)"
+      }
+    },
+    {
+      "id": "hello-redundant-retry-share",
+      "file": "src/hello/spec.rs",
+      "find": "else if extension(sh.extensions, 51) is Some { Err(47) }",
+      "replace": "else if false { Err(47) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_redundant_retry_share()",
+        "witness": "retry(crate::spec::ServerHello { extensions: super::examples::request().extensions.push(crate::spec::Ext { etype: 51, data: seq![0u8, 29u8] }), ..super::examples::request() }, false) != Err(47u8)"
+      }
+    },
+    {
+      "id": "hello-unsolicited",
+      "file": "src/hello/spec.rs",
+      "find": "es[0].etype == 43 || es[0].etype == 51",
+      "replace": "true || es[0].etype == 51",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_unsolicited()",
+        "witness": "offered(seq![crate::spec::Ext { etype: 65000, data: seq![] }], false)"
+      }
+    },
+    {
+      "id": "hello-group",
+      "file": "src/hello/spec.rs",
+      "find": "key.group != 29 || ",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_group()",
+        "witness": "share(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 23u8, 0u8, 32u8] + Seq::new(32, |i: int| 8u8) }], ..super::examples::server() }) != Err(47u8)"
+      }
+    },
+    {
+      "id": "hello-key-length",
+      "file": "src/hello/spec.rs",
+      "find": " || key.key_exchange.len() != 32",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_key_length()",
+        "witness": "share(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 51, data: seq![0u8, 29u8, 0u8, 1u8, 8u8] }], ..super::examples::server() }) != Err(47u8)"
+      }
+    },
+    {
+      "id": "hello-cookie-echo",
+      "file": "src/hello/spec.rs",
+      "find": "Some(_) => Ok(Selection::Retry(data))",
+      "replace": "Some(cookie) => Ok(Selection::Retry(cookie))",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 server-selection witness contradicts this changed acceptance rule.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_checks()",
+        "witness": "retry(super::examples::request(), false) != Ok(Selection::Retry(seq![0u8, 1u8, 9u8]))"
+      }
+    },
+    {
+      "id": "client-cipher",
+      "file": "src/hello/client_spec.rs",
+      "find": "cipher_suites: seq![0x1303u16]",
+      "replace": "cipher_suites: seq![0x1301u16]",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_cipher()",
+        "witness": "!(super::client_spec::client_hello(super::client_examples::config(), seq![]).cipher_suites == seq![0x1303u16])"
+      }
+    },
+    {
+      "id": "client-public-share",
+      "file": "src/hello/client_spec.rs",
+      "find": "group: 29, key_exchange: c.public_key",
+      "replace": "group: 29, key_exchange: Seq::new(32, |i: int| 0u8)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_public_share()",
+        "witness": "!(super::client_spec::extensions(super::client_examples::config(), seq![])[4].data == seq![0u8,36u8,0u8,29u8,0u8,32u8] + Seq::new(32, |i: int| 5u8))"
+      }
+    },
+    {
+      "id": "client-cookie",
+      "file": "src/hello/client_spec.rs",
+      "find": "+ (if cookie.len() == 0 { seq![] } else { seq![crate::spec::Ext { etype: 44, data: cookie }] })",
+      "replace": "+ seq![]",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_cookie()",
+        "witness": "!(super::client_spec::extensions(super::client_examples::config(), seq![0u8,1u8,9u8]).len() == 6)"
+      }
+    },
+    {
+      "id": "join-key-binding",
+      "file": "src/hello/join_spec.rs",
+      "find": " || (k.public_key)(private_key) != config.public_key",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_key_binding()",
+        "witness": "!(super::client_examples::attempt(super::client_spec::Config { public_key: Seq::new(32, |i: int| 6u8), ..super::client_examples::config() }, Seq::new(32, |i: int| 17u8)) == Err(80u8))"
+      }
+    },
+    {
+      "id": "join-zero-secret",
+      "file": "src/hello/join_spec.rs",
+      "find": " || !nonzero(shared)",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_zero_secret()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 5u8)) == Err(47u8))"
+      }
+    },
+    {
+      "id": "join-checks-shared-not-peer",
+      "file": "src/hello/join_spec.rs",
+      "find": "!nonzero(shared)",
+      "replace": "!nonzero(peer_key)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_checks_shared_not_peer()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 0u8)) is Ok)"
+      }
+    },
+    {
+      "id": "join-server-label",
+      "file": "src/hello/join_spec.rs",
+      "find": "crate::schedule::spec::Label::ServerHandshake, transcript.messages",
+      "replace": "crate::schedule::spec::Label::ClientHandshake, transcript.messages",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_server_label()",
+        "witness": "!(super::join_spec::auth_config(super::client_examples::crypto(), super::client_examples::config(), super::client_examples::transcript(), Seq::new(32, |i: int| 112u8)).server_secret == Seq::new(32, |i: int| 9u8))"
+      }
+    },
+    {
+      "id": "join-client-label",
+      "file": "src/hello/join_spec.rs",
+      "find": "crate::schedule::spec::Label::ClientHandshake, transcript.messages",
+      "replace": "crate::schedule::spec::Label::ServerHandshake, transcript.messages",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_client_label()",
+        "witness": "!(super::join_spec::auth_config(super::client_examples::crypto(), super::client_examples::config(), super::client_examples::transcript(), Seq::new(32, |i: int| 112u8)).client_secret == Seq::new(32, |i: int| 25u8))"
+      }
+    },
+    {
+      "id": "join-transcript",
+      "file": "src/hello/join_spec.rs",
+      "find": "crate::schedule::spec::Label::ServerHandshake, transcript.messages",
+      "replace": "crate::schedule::spec::Label::ServerHandshake, seq![]",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_transcript()",
+        "witness": "!(super::join_spec::auth_config(super::client_examples::crypto(), super::client_examples::config(), super::client_examples::transcript(), Seq::new(32, |i: int| 112u8)).server_secret == Seq::new(32, |i: int| 9u8))"
+      }
+    },
+    {
+      "id": "join-master-source",
+      "file": "src/hello/join_spec.rs",
+      "find": "let master = crate::schedule::spec::master_secret(c, handshake);",
+      "replace": "let master = crate::schedule::spec::master_secret(c, early);",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_master_source()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().1 == Seq::new(32, |i: int| 20u8))"
+      }
+    },
+    {
+      "id": "join-host",
+      "file": "src/hello/join_spec.rs",
+      "find": "host: config.host, now: config.now",
+      "replace": "host: crate::host::spec::Host::Dns(seq![120u8]), now: config.now",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_host()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.host == crate::host::spec::Host::Dns(seq![104u8]))"
+      }
+    },
+    {
+      "id": "join-time",
+      "file": "src/hello/join_spec.rs",
+      "find": "host: config.host, now: config.now",
+      "replace": "host: config.host, now: 0",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 construction/key-handoff witness contradicts this changed rule.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_join_time()",
+        "witness": "!(super::client_examples::attempt(super::client_examples::config(), Seq::new(32, |i: int| 17u8)).unwrap().0.config.now == 7)"
+      }
+    },
+    {
+      "id": "traffic-start-zero",
+      "file": "src/traffic/spec.rs",
+      "find": "next: Some(0), failed: false",
+      "replace": "next: Some(1), failed: false",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_start_zero()",
+        "witness": "!(super::examples::initial().next == Some(0u64))"
+      }
+    },
+    {
+      "id": "traffic-iv-label",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::schedule::spec::Label::Iv, seq![], 12",
+      "replace": "crate::schedule::spec::Label::Key, seq![], 12",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_iv_label()",
+        "witness": "!(super::examples::initial().iv == Seq::new(12, |i: int| 88u8))"
+      }
+    },
+    {
+      "id": "traffic-empty-context",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::schedule::spec::Label::Key, seq![], 32",
+      "replace": "crate::schedule::spec::Label::Key, (c.hash)(seq![]), 32",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_empty_context()",
+        "witness": "!(super::examples::initial().key == Seq::new(32, |i: int| 90u8))"
+      }
+    },
+    {
+      "id": "traffic-advance",
+      "file": "src/traffic/spec.rs",
+      "find": "Some((n as int + 1) as u64)",
+      "replace": "Some(n)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_advance()",
+        "witness": "!(super::spec::advance(super::examples::initial()).next == Some(1u64))"
+      }
+    },
+    {
+      "id": "traffic-no-wrap",
+      "file": "src/traffic/spec.rs",
+      "find": "if n == u64::MAX { None }",
+      "replace": "if n == u64::MAX { Some(0) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_no_wrap()",
+        "witness": "!(super::spec::advance(super::spec::State { next: Some(u64::MAX), ..super::examples::initial() }).next is None)"
+      }
+    },
+    {
+      "id": "traffic-failed-send",
+      "file": "src/traffic/spec.rs",
+      "find": "if s.failed { (s, Err(80)) }",
+      "replace": "if false { (s, Err(80)) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_failed_send()",
+        "witness": "!(super::spec::send(super::examples::seal(), super::spec::failed(super::examples::initial()), 23, seq![42u8], 0).1 == Err(80u8))"
+      }
+    },
+    {
+      "id": "traffic-failed-receive",
+      "file": "src/traffic/spec.rs",
+      "find": "if s.failed { (s, Read::Fail(80)) }",
+      "replace": "if false { (s, Read::Fail(80)) }",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_failed_receive()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::spec::failed(super::examples::initial()), super::examples::wire()).1 == super::spec::Read::Fail(80))"
+      }
+    },
+    {
+      "id": "traffic-incomplete-counter",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::spec::Read::NeedMore => (s, Read::NeedMore)",
+      "replace": "crate::spec::Read::NeedMore => (advance(s), Read::NeedMore)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_incomplete_counter()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::examples::initial(), seq![23u8,3u8,3u8,0u8,18u8]).0 == super::examples::initial())"
+      }
+    },
+    {
+      "id": "traffic-received-counter",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::spec::Res::Ok(record) => (advance(s), Read::Record",
+      "replace": "crate::spec::Res::Ok(record) => (s, Read::Record",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_received_counter()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::examples::initial(), super::examples::wire()).0.next == Some(1u64))"
+      }
+    },
+    {
+      "id": "traffic-mac-terminal",
+      "file": "src/traffic/spec.rs",
+      "find": "crate::spec::Res::Err(error) => (failed(s), Read::Fail",
+      "replace": "crate::spec::Res::Err(error) => (s, Read::Fail",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_mac_terminal()",
+        "witness": "!(super::spec::receive(super::examples::open(), super::examples::initial(), seq![23u8,3u8,3u8,0u8,1u8,0u8]).0.failed)"
+      }
+    },
+    {
+      "id": "traffic-padding-inner-bound",
+      "file": "src/traffic/spec.rs",
+      "find": "content.len() + 1 + padding > crate::spec::MAX_PLAINTEXT + 1",
+      "replace": "content.len() + 1 > crate::spec::MAX_PLAINTEXT + 1",
+      "expect": "killed",
+      "reason": "Ignoring padding admits a full inner plaintext above RFC 8446 section 5.4's 16385-byte bound.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_padding_inner_bound()",
+        "witness": "super::spec::send_error(23, seq![42u8], 16384) != Some(22u8)"
+      }
+    },
+    {
+      "id": "traffic-plaintext-bound",
+      "file": "src/traffic/spec.rs",
+      "find": "content.len() + 1 + padding > crate::spec::MAX_PLAINTEXT + 1",
+      "replace": "content.len() + 1 + padding > crate::spec::MAX_PLAINTEXT + 2",
+      "expect": "killed",
+      "reason": "Raising the full inner-plaintext limit admits an extra content byte. The previous separate content limit is implied by the correct full-inner bound.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_plaintext_bound()",
+        "witness": "!(super::spec::send_error(23, Seq::new(16385, |i: int| 42u8), 0) == Some(22u8))"
+      }
+    },
+    {
+      "id": "traffic-no-protected-ccs",
+      "file": "src/traffic/spec.rs",
+      "find": "!(typ == 21 || typ == 22 || typ == 23)",
+      "replace": "!(typ == 20 || typ == 21 || typ == 22 || typ == 23)",
+      "expect": "killed",
+      "reason": "The concrete RFC 8446 traffic-epoch witness contradicts this modified record/key rule.",
+      "module": "traffic::examples",
+      "certificate": {
+        "file": "src/traffic/certificates.rs",
+        "lemma": "super::examples::lemma_traffic_no_protected_ccs()",
+        "witness": "!(super::spec::send_error(20, seq![1u8], 0) == Some(10u8))"
+      }
+    },
+    {
+      "id": "handshake-client-write-key",
+      "file": "src/traffic/handshake_spec.rs",
+      "find": "super::spec::start(c, auth_config.client_secret)",
+      "replace": "super::spec::start(c, auth_config.server_secret)",
+      "expect": "killed",
+      "reason": "The RFC 8446 section 7.3 direction witness distinguishes client and server traffic keys.",
+      "module": "traffic::handshake_lemmas",
+      "certificate": {
+        "file": "src/traffic/handshake_certificates.rs",
+        "lemma": "super::handshake_lemmas::lemma_client_write_key()",
+        "witness": "super::handshake_lemmas::handoff().1.key != Seq::new(32, |i: int| 114u8)"
+      }
+    },
+    {
+      "id": "handshake-server-read-key",
+      "file": "src/traffic/handshake_spec.rs",
+      "find": "super::spec::start(c, auth_config.server_secret)",
+      "replace": "super::spec::start(c, auth_config.client_secret)",
+      "expect": "killed",
+      "reason": "The RFC 8446 section 7.3 direction witness distinguishes client and server traffic keys.",
+      "module": "traffic::handshake_lemmas",
+      "certificate": {
+        "file": "src/traffic/handshake_certificates.rs",
+        "lemma": "super::handshake_lemmas::lemma_server_read_key()",
+        "witness": "super::handshake_lemmas::handoff().2.key != Seq::new(32, |i: int| 98u8)"
+      }
+    },
+    {
+      "id": "inner-full-length-padding",
+      "file": "src/spec.rs",
+      "find": "if p.len() > MAX_PLAINTEXT + 1",
+      "replace": "if false",
+      "expect": "killed",
+      "reason": "A 16386-byte inner plaintext with only one padding byte must be refused even though its content and ciphertext lengths fit their separate bounds.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_inner_full_length()",
+        "witness": "open_inner_plaintext(Seq::new(16384, |i: int| 42u8) + seq![23u8, 0u8]) != Res::<Record>::Err(ErrKind::RecordOverflow)"
+      }
+    },
+    {
+      "id": "dispatcher-key-update-request-bound",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "if request > 1 || (is_response && request != 0)",
+      "replace": "if request > 2 || (is_response && request != 0)",
+      "expect": "killed",
+      "reason": "RFC 8446 §4.6.3 restricts request_update to 0 or 1; the dispatcher must not queue an out-of-range KeyUpdate.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_request_is_bounded()",
+        "witness": "super::dispatcher_spec::prepare_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::ciphers(), super::dispatcher_certificates::sample_ready_state(), 2, false) != super::dispatcher_certificates::sample_ready_state()"
+      }
+    },
+    {
+      "id": "bootstrap-ccs-dropped-mid-message",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "PeerEvent::Ccs => if crate::spec::at_message_boundary(s.reassembly) {",
+      "replace": "PeerEvent::Ccs => if true {",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1 forbids interleaving a handshake message with another record type: a CCS between two fragments of one ServerHello must be refused with unexpected_message, not dropped (docs/ERRATA.md).",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_ccs_fatal_mid_message()",
+        "witness": "super::bootstrap_spec::receive(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::awaiting_with_buffer(seq![1u8]), super::bootstrap_spec::PeerEvent::Ccs).1 == super::bootstrap_spec::Action::None"
+      }
+    },
+    {
+      "id": "dispatcher-ccs-dropped-mid-message",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "        && crate::spec::at_message_boundary(reassembly)\n}",
+      "replace": "        && true\n}",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1 forbids interleaving a handshake message with another record type: a compatibility CCS between two fragments of one handshake message must be refused, not dropped.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_compatibility_ccs_not_dropped_mid_message()",
+        "witness": "super::dispatcher_spec::compatibility_ccs_dropped(super::dispatcher_spec::Mode::Handshake, Some(crate::auth::spec::Phase::Finished), crate::spec::Reasm { buf: seq![1u8] })"
+      }
+    },
+    {
+      "id": "dispatcher-peer-update-epoch-construction-failure",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "// A derived secret that cannot form a new epoch must not leave a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => failed(),",
+      "replace": "// A derived secret that cannot form a new epoch must not leave a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => s,",
+      "expect": "killed",
+      "reason": "If a derived peer traffic secret cannot construct its receive epoch, the dispatcher model must not retain the old receiver with the new secret.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_epoch_start_failure_is_terminal()",
+        "witness": "super::dispatcher_spec::receive_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::sample_ready_state(), 0) != super::dispatcher_spec::failed()"
+      }
+    },
+    {
+      "id": "dispatcher-local-update-epoch-construction-failure",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "// Never advance the traffic secret while retaining old keys.\n                Err(_) => failed(),",
+      "replace": "// Never advance the traffic secret while retaining old keys.\n                Err(_) => s,",
+      "expect": "killed",
+      "reason": "If a locally acknowledged KeyUpdate secret cannot construct its send epoch, the dispatcher model must fail instead of retaining old keys.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_epoch_start_failure_is_terminal()",
+        "witness": "super::dispatcher_spec::acknowledge_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::sample_bad_update_state(), seq![7u8]) != super::dispatcher_spec::failed()"
+      }
+    },
+    {
+      "id": "auth-initial-server-certificate-empty-context",
+      "file": "src/auth/spec.rs",
+      "find": "pub open spec fn initial_certificate_context_valid(context: Seq<u8>) -> bool {\n    context.len() == 0",
+      "replace": "pub open spec fn initial_certificate_context_valid(context: Seq<u8>) -> bool {\n    true",
+      "expect": "killed",
+      "reason": "RFC 8446 §4.4.2 requires the server Certificate context to be empty during initial server authentication; nonempty client contexts remain supported by the generic parser.",
+      "module": "auth::certificates",
+      "certificate": {
+        "file": "src/auth/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_nonempty_server_certificate_context_is_rejected()",
+        "witness": "initial_certificate_context_valid(seq![7u8])"
+      }
+    },
+    {
+      "id": "hello-classify-absent-legacy-extension-field",
+      "file": "src/hello/spec.rs",
+      "find": "else if crate::spec::legacy_server_hello_without_supported_versions(body) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "RFC 5246 §7.4.1.3 allows the legacy ServerHello extension field to be absent; a complete pre-TLS-1.3 response maps to protocol_version, while the strict generic TLS 1.3 parser would report decode_error.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_absent_legacy_extension_field_uses_protocol_version()",
+        "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_without_extension_field()) == Err(crate::spec::DECODE_ERROR)"
+      }
+    },
+    {
+      "id": "hello-legacy-server-hello-protocol-version",
+      "file": "src/hello/spec.rs",
+      "find": "None => Some(crate::spec::PROTOCOL_VERSION),",
+      "replace": "None => Some(crate::spec::MISSING_EXTENSION),",
+      "expect": "killed",
+      "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_legacy_server_hello_uses_protocol_version()",
+        "witness": "parameters(crate::spec::ServerHello { legacy_version: 0x0303, random: Seq::empty(), session_id_echo: Seq::empty(), cipher_suite: 0x002f, compression: 0, extensions: Seq::empty() }, Seq::empty()) == Some(crate::spec::MISSING_EXTENSION)"
+      }
+    },
+    {
+      "id": "connection-alert-level-ignored-for-user-canceled",
+      "file": "src/spec.rs",
+      "find": "a.description == CLOSE_NOTIFY || a.description == USER_CANCELED",
+      "replace": "a.description == CLOSE_NOTIFY || (a.description == USER_CANCELED && a.level == LEVEL_WARNING)",
+      "expect": "killed",
+      "reason": "RFC 8446 §6 says TLS 1.3 receivers MUST ignore the alert level; user_canceled is recognized by description at either level.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "crate::examples::lemma_alert_closure()",
+        "witness": "!crate::spec::alert_is_closure(crate::spec::Alert { level: 2, description: crate::spec::USER_CANCELED })"
+      }
+    },
+    {
+      "id": "connection-peer-close-preserves-local-write-direction",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "else { State { peer_write_closed: true, ..s } }",
+      "replace": "else { closed() }",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.1 says receiving close_notify closes only the peer's write direction; it must not discard local sending state.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_peer_close_is_directional()",
+        "witness": "super::dispatcher_spec::receive_close_notify(super::dispatcher_certificates::sample_ready_state()).application_sender != super::dispatcher_certificates::sample_ready_state().application_sender"
+      }
+    },
+    {
+      "id": "auth-unoffered-certificate-extension",
+      "file": "src/auth/spec.rs",
+      "find": "else if !entries_offered { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }",
+      "replace": "else if false { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }",
+      "expect": "killed",
+      "reason": "RFC 8446 §4.4.2: Certificate entry extensions must correspond to ClientHello offers; an unoffered status_request is refused with unsupported_extension.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_unoffered_certificate_extension()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_extensions(), 11, super::examples::certificate_with_status_request()).1 != Action::Fail(110u8)"
+      }
+    },
+    {
+      "id": "auth-certificate-extensions-not-checked",
+      "file": "src/auth/spec.rs",
+      "find": "            certificate_extensions_offered(certificate.entries, s.config.extensions)),",
+      "replace": "            true),",
+      "expect": "killed",
+      "reason": "Dispatch must pass the offered-extension check of the received Certificate's entries, not a constant.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_unoffered_certificate_extension()",
+        "witness": "receive(super::examples::crypto(), super::examples::verifier(), super::examples::after_extensions(), 11, super::examples::certificate_with_status_request()).1 != Action::Fail(110u8)"
+      }
+    },
+    {
+      "id": "dispatcher-key-update-response-after-close",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "response_due: s.response_due || (request == 1 && write_open(s)),",
+      "replace": "response_due: s.response_due || request == 1,",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.1 and §4.6.3: after our close_notify there is no next record, so update_requested must not make a KeyUpdate response due.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_key_update_after_close_owes_no_response()",
+        "witness": "super::dispatcher_spec::receive_key_update(super::dispatcher_certificates::passthrough_crypto(), super::dispatcher_certificates::sample_write_closed_state(), 1).response_due"
+      }
+    },
+    {
+      "id": "host-dns-max-254",
+      "file": "src/host/spec.rs",
+      "find": "1 <= name.len() <= 253",
+      "replace": "1 <= name.len() <= 254",
+      "expect": "killed",
+      "reason": "A 254-octet DNS name is accepted: lemma_host_bounds (!host_ok of a 254-octet name) is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "host_ok(Host::Dns(super::examples::name_of(254)))"
+      }
+    },
+    {
+      "id": "host-trailing-dot",
+      "file": "src/host/spec.rs",
+      "find": " && name.last() != 0x2eu8",
+      "replace": "",
+      "expect": "killed",
+      "reason": "A name ending in a dot is accepted (RFC 6066 §3: \"without a trailing dot\"): lemma_host_bounds is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8]))"
+      }
+    },
+    {
+      "id": "host-no-ipv6",
+      "file": "src/host/spec.rs",
+      "find": "address.len() == 4 || address.len() == 16",
+      "replace": "address.len() == 4",
+      "expect": "killed",
+      "reason": "A 16-octet IPv6 address is refused: lemma_host_bounds (host_ok of 16 octets) is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "!host_ok(Host::Ip(super::examples::address_of(16)))"
+      }
+    },
+    {
+      "id": "host-ip-any-length",
+      "file": "src/host/spec.rs",
+      "find": "address.len() == 4 || address.len() == 16",
+      "replace": "address.len() >= 4",
+      "expect": "killed",
+      "reason": "A 5-octet address is accepted: lemma_host_bounds is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_host_bounds()",
+        "witness": "host_ok(Host::Ip(super::examples::address_of(5)))"
+      }
+    },
+    {
+      "id": "sni-for-ip",
+      "file": "src/host/spec.rs",
+      "find": "Host::Ip(_) => None,",
+      "replace": "Host::Ip(address) => Some(address),",
+      "expect": "killed",
+      "reason": "An IP address becomes a HostName (RFC 6066 §3: \"Literal IPv4 and IPv6 addresses are not permitted\"): lemma_sni_host_name is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_sni_host_name()",
+        "witness": "sni_host_name(Host::Ip(seq![192u8, 0, 2, 10])) is Some"
+      }
+    },
+    {
+      "id": "hello-ip-server-name",
+      "file": "src/hello/client_spec.rs",
+      "find": "None => seq![],",
+      "replace": "None => seq![crate::spec::Ext { etype: 0, data: seq![] }],",
+      "expect": "killed",
+      "reason": "An IP host's ClientHello carries a server_name extension: lemma_ip_no_server_name is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_ip_no_server_name()",
+        "witness": "super::client_spec::extensions(super::client_examples::ip_config(), seq![]).len() == 5"
+      }
+    },
+    {
+      "id": "join-ip-offers-server-name",
+      "file": "src/hello/join_spec.rs",
+      "find": "is Some { seq![0u16] }",
+      "replace": "is None { seq![0u16] }",
+      "expect": "killed",
+      "reason": "The offers auth checks EncryptedExtensions against list server_name for an IP host and not for a DNS host: lemma_ip_no_server_name is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_ip_no_server_name()",
+        "witness": "super::join_spec::extension_types(super::client_examples::ip_config(), false).len() == 5"
+      }
+    },
+    {
+      "id": "hello-host-unchecked",
+      "file": "src/hello/client_spec.rs",
+      "find": "crate::host::spec::host_ok(c.host) && c.random.len() == 32",
+      "replace": "c.random.len() == 32",
+      "expect": "killed",
+      "reason": "A host outside host_ok (an empty name) starts a ClientHello: lemma_bad_host_refused is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_bad_host_refused()",
+        "witness": "super::client_spec::start(super::client_examples::bad_host_config()) is Ok"
+      }
+    },
+    {
+      "id": "auth-host-unchecked",
+      "file": "src/auth/spec.rs",
+      "find": "crate::host::spec::host_ok(c.host) && c.server_secret.len() == 32",
+      "replace": "c.server_secret.len() == 32",
+      "expect": "killed",
+      "reason": "A host outside host_ok (an empty name) starts authentication: lemma_start_refuses_bad_host is false.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_start_refuses_bad_host()",
+        "witness": "start(Config { host: crate::host::spec::Host::Dns(seq![]), ..super::examples::initial().config }, super::examples::initial().transcript) is Ok"
+      }
+    }
+  ]
+}

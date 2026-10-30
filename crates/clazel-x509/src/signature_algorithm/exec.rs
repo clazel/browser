@@ -27,6 +27,29 @@ pub open spec fn view_hash(value: RsaPkcs1v15Hash) -> super::spec::RsaPkcs1v15Ha
     }
 }
 
+/// SHA-2 hash selection for the supported ECDSA signatures (RFC 5758 §3.2).
+#[derive(Clone, Copy)]
+pub enum EcdsaHash {
+    /// ecdsa-with-SHA256.
+    Sha256,
+    /// ecdsa-with-SHA384.
+    Sha384,
+}
+
+pub open spec fn view_ecdsa_hash(value: EcdsaHash) -> super::spec::EcdsaHash {
+    match value {
+        EcdsaHash::Sha256 => super::spec::EcdsaHash::Sha256,
+        EcdsaHash::Sha384 => super::spec::EcdsaHash::Sha384,
+    }
+}
+
+fn same_ecdsa_hash(first: EcdsaHash, second: EcdsaHash) -> (result: bool)
+    ensures result == (view_ecdsa_hash(first) == view_ecdsa_hash(second))
+{
+    matches!((first, second),
+        (EcdsaHash::Sha256, EcdsaHash::Sha256) | (EcdsaHash::Sha384, EcdsaHash::Sha384))
+}
+
 fn same_hash(first: RsaPkcs1v15Hash, second: RsaPkcs1v15Hash) -> (result: bool)
     ensures result == (view_hash(first) == view_hash(second))
 {
@@ -41,6 +64,8 @@ fn same_hash(first: RsaPkcs1v15Hash, second: RsaPkcs1v15Hash) -> (result: bool)
 pub enum AlgorithmClass {
     /// An implemented RSA PKCS #1 v1.5 SHA-2 profile.
     Supported(RsaPkcs1v15Hash),
+    /// ecdsa-with-SHA256 or ecdsa-with-SHA384 with absent parameters.
+    Ecdsa(EcdsaHash),
     /// An algorithm whose profile is not implemented here.
     Unsupported,
 }
@@ -48,6 +73,7 @@ pub enum AlgorithmClass {
 pub open spec fn view_class(value: AlgorithmClass) -> super::spec::AlgorithmClass {
     match value {
         AlgorithmClass::Supported(hash) => super::spec::AlgorithmClass::Supported(view_hash(hash)),
+        AlgorithmClass::Ecdsa(hash) => super::spec::AlgorithmClass::Ecdsa(view_ecdsa_hash(hash)),
         AlgorithmClass::Unsupported => super::spec::AlgorithmClass::Unsupported,
     }
 }
@@ -131,6 +157,34 @@ fn is_sha512_oid(oid: &[u64]) -> (result: bool)
         && oid.get(6) == Some(&13)
 }
 
+/// RFC 5758 §3.2: identify the ecdsa-with-SHA256 OID, 1.2.840.10045.4.3.2.
+fn is_ecdsa_sha256_oid(oid: &[u64]) -> (result: bool)
+    ensures result == super::spec::is_ecdsa_with_sha256(clazel_der::decode::nats(oid@))
+{
+    oid.len() == 7
+        && oid.first() == Some(&1)
+        && oid.get(1) == Some(&2)
+        && oid.get(2) == Some(&840)
+        && oid.get(3) == Some(&10045)
+        && oid.get(4) == Some(&4)
+        && oid.get(5) == Some(&3)
+        && oid.get(6) == Some(&2)
+}
+
+/// RFC 5758 §3.2: identify the ecdsa-with-SHA384 OID, 1.2.840.10045.4.3.3.
+fn is_ecdsa_sha384_oid(oid: &[u64]) -> (result: bool)
+    ensures result == super::spec::is_ecdsa_with_sha384(clazel_der::decode::nats(oid@))
+{
+    oid.len() == 7
+        && oid.first() == Some(&1)
+        && oid.get(1) == Some(&2)
+        && oid.get(2) == Some(&840)
+        && oid.get(3) == Some(&10045)
+        && oid.get(4) == Some(&4)
+        && oid.get(5) == Some(&3)
+        && oid.get(6) == Some(&3)
+}
+
 /// Read a safely bounded octet of an optional AlgorithmIdentifier parameter.
 fn parameter_octet(input: &[u8], index: usize) -> (result: u8)
     ensures index < input.len() ==> result == input@[index as int]
@@ -169,7 +223,18 @@ fn is_null_or_absent(parameters: Option<&[u8]>) -> (result: bool)
     }
 }
 
-/// RFC 5280 §4.1.1.2 and RFC 4055 §5: decode a supported SHA-2 RSA profile.
+/// RFC 5758 §3.2: the parameters field must be absent.
+fn is_absent(parameters: Option<&[u8]>) -> (result: bool)
+    ensures result == super::spec::ecdsa_parameters(match parameters {
+        Some(bytes) => Some(bytes@),
+        None => None,
+    })
+{
+    parameters.is_none()
+}
+
+/// RFC 5280 §4.1.1.2, RFC 4055 §5 and RFC 5758 §3.2: decode a supported
+/// SHA-2 RSA or ECDSA profile.
 pub fn classify(algorithm: &AlgorithmIdentifier) -> (result: Option<AlgorithmClass>)
     ensures super::contract::classify_ensures(
         crate::certificate::contract::view_algorithm_identifier(algorithm),
@@ -187,6 +252,14 @@ pub fn classify(algorithm: &AlgorithmIdentifier) -> (result: Option<AlgorithmCla
     } else if is_sha512_oid(&algorithm.oid) {
         if is_null_or_absent(algorithm.parameters_der) {
             Some(AlgorithmClass::Supported(RsaPkcs1v15Hash::Sha512))
+        } else { None }
+    } else if is_ecdsa_sha256_oid(&algorithm.oid) {
+        if is_absent(algorithm.parameters_der) {
+            Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha256))
+        } else { None }
+    } else if is_ecdsa_sha384_oid(&algorithm.oid) {
+        if is_absent(algorithm.parameters_der) {
+            Some(AlgorithmClass::Ecdsa(EcdsaHash::Sha384))
         } else { None }
     } else {
         Some(AlgorithmClass::Unsupported)
@@ -310,6 +383,10 @@ pub fn prepare_signature_input<'a>(
         (AlgorithmClass::Supported(tbs_hash), AlgorithmClass::Supported(outer_hash)) => {
             if !same_hash(tbs_hash, outer_hash) || signature_unused_bits != 0 { return None; }
             AlgorithmClass::Supported(tbs_hash)
+        }
+        (AlgorithmClass::Ecdsa(tbs_hash), AlgorithmClass::Ecdsa(outer_hash)) => {
+            if !same_ecdsa_hash(tbs_hash, outer_hash) || signature_unused_bits != 0 { return None; }
+            AlgorithmClass::Ecdsa(tbs_hash)
         }
         (AlgorithmClass::Unsupported, AlgorithmClass::Unsupported) => {
             if !unsupported_identifiers_equal(tbs_algorithm, outer_algorithm) { return None; }

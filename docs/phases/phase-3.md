@@ -1027,6 +1027,158 @@ private keys and randoms injected, so the derived secrets and every
 encrypted record match byte for byte; RFC 8448 is the independent
 transcription's evidence too.
 
+**Key schedule as built (2026-10-25):** `clazel-tls/src/schedule/` now
+contains the SHA-256, non-PSK key schedule: separate spec and contracts
+(committed before implementation), HkdfLabel encoding, HKDF-Expand-Label,
+Derive-Secret, early/handshake/master secrets, client/server traffic-secret
+labels, Finished verify_data, traffic updates and ChaCha20's write key/IV.
+The executable code refines the RFC equations over a `Crypto` trait; it
+adds no axioms and no shipped dependency. All 448 TLS proof obligations
+pass locally. RFC 8448 §3 and §5 supply 40 passing key-schedule operations
+(including both Finished values and the HelloRetryRequest transcript),
+using a test-only RFC 5869 provider over RustCrypto SHA-256; RFC 5869
+Appendix A.1 checks that provider. The traces use AES-128-GCM/SHA-256, so
+16-byte key vectors exercise generic Expand-Label, not the ChaCha20 helper.
+Nineteen new mutation witnesses cover label spelling, HKDF framing,
+argument order, zero IKM, derived salts and transcript hashing.
+Still missing: the transcript-owning handshake state machine and its
+security theorems, CertificateVerify inputs, the libcrux provider and the
+end-to-end encrypted traces. The crate remains tier 0; local proof and
+vector results do not replace CI's full verification.
+
+**Transcript construction as built (2026-10-25):**
+`clazel-tls/src/transcript/` accumulates classified handshake bodies with
+their handshake headers, implements §4.4.1's synthetic message_hash rewrite
+for HelloRetryRequest, and enforces the first/second Hello progression.
+It proves exact append/retry encodings, at most one accepted retry,
+a 4 MiB retained-byte bound, and preservation of the accumulator on error.
+The §4.4.3 CertificateVerify input builder adds the pad, the server/client
+context string, the separator and transcript hash. All 480 TLS obligations
+pass locally. Tests construct live transcripts from RFC 8448 §3/§5's 16
+messages and match all 12 hash/Finished checkpoints; RFC 8446's explicit
+signature-input example passes. The 95 existing mutation certificates now
+all pass (the six missing fixture references were fixed); 17 transcript
+witnesses are added and require certification by the mutation checker. Authentication
+message ordering, server negotiation, signature verification and Finished
+verification as state transitions remain for the handshake state machine.
+No tier is raised, and full verification is still pending.
+
+**Initial authentication as built (2026-10-25):** `clazel-tls/src/auth/`
+now implements the initial client certificate-authentication transducer after
+final ServerHello, not just transcript bookkeeping. Specifications/contracts
+were committed before implementation. It accepts EncryptedExtensions only
+for the stated non-PSK profile's actual offers, allows one CertificateRequest,
+validates a nonempty server chain for the captured target/time, checks
+CertificateVerify with the validated leaf key and offered TLS 1.3 scheme,
+and compares server Finished over the correct transcript using the server
+handshake secret. It builds the client's Finished with the client secret,
+preceded by an empty Certificate when requested, and releases application
+data only after the exact-send acknowledgement. It captures the application
+traffic-secret transcript hash immediately after server Finished.
+
+All 532 TLS obligations pass locally, including executable refinement,
+finite-trace application gating, terminal absorption and validation-input
+binding lemmas. The cheaper test subagent contributed eight tests with
+input-sensitive mock providers; the parent reviewed them, and all eight pass
+under Miri. Seventeen authentication mutation witnesses are added; their
+expanded run subsequently certified all 129 mutations, locally and in CI.
+No validator/crypto axiom was introduced.
+The X.509/name/time validator, signature verifier and timing-safe Finished
+comparison are explicit parameters with no production implementation yet.
+Remaining: Hello negotiation, X.509/libcrux joins, protected record-I/O
+integration, post-handshake dispatch, independent evidence for the full
+client and full verification on both platforms. The crate remains tier 0.
+
+**ServerHello/HRR acceptance (2026-10-25).** `clazel-tls::hello` checks
+the fixed TLS 1.3/ChaCha20-Poly1305/X25519 profile's server response and
+exact session echo. Version selection follows `supported_versions`, ignoring
+the legacy field as §4.2.1 requires. It rejects unsolicited responses,
+unoffered groups, wrong share lengths, repeat/no-op retries and retry share
+replacement (the sole supported group already has an initial share).
+Cookie-only retries return the exact cookie extension_data to echo.
+Contracts were committed before implementation. All 557 TLS proof obligations
+pass locally; eight server-selection tests pass under Miri. Ten new mutation
+certificates are added; their expanded run is pending. ClientHello generation,
+binding this stateless checker to the actual offers and retry history,
+X25519/shared-secret validation, secret/transcript handoff and record I/O
+remain. This does not establish a complete or production TLS client.
+
+The authentication CI run passed base and every crate job, but its final
+assembly failed solely because the TLS branch retained the obsolete check
+that a generated README table must already match. Main's existing fix
+(`10a47d6`, cherry-picked here) aligns that check with the current contributor
+policy: report a stale table and let CI update it on main. The table was not
+edited. A new full run is still required; no tier is raised.
+
+**Owned Hello exchange and authentication handoff (2026-10-25).**
+`hello::client` generates the fixed-profile ClientHello and retains the actual
+configuration and transcript. Server validation uses the captured session ID
+and retry state. A cookie-only HRR yields a second ClientHello with the original
+random/session/cipher/groups/signatures/share and only the cookie extension
+added, capped at 4098 bytes of extension_data as a documented resource policy.
+The transcript retains the message_hash/HRR/CH2/final-SH sequence.
+`hello::join` binds a borrowed private scalar to the public share actually sent,
+uses the exact private/peer inputs, rejects provider failure/all-zero shared
+secrets, derives client/server handshake secrets over the final-SH prefix,
+and starts authentication with the original host/time/offers/transcript.
+The caller retains scalar ownership; no erasure guarantee is claimed.
+
+Contracts were committed before implementation. All 595 TLS obligations pass
+locally, including offer/configuration binding and nonzero-test equivalence.
+Four builder/controller and six key-handoff/mock-authentication tests pass
+under Miri. The cheaper subagent supplied these tests and a read-only review;
+the parent reviewed the tests. Twelve further mutation certificates cover
+construction, key binding, zero rejection, traffic labels/transcript, master
+secret source and captured host/time. The expanded full run remains required.
+No production crypto, X.509/trust store, entropy source, protected record-I/O
+driver or post-handshake dispatcher is joined yet. No tier is raised.
+
+**Protected record epochs and handshake key directions (2026-10-25).**
+`clazel-tls::traffic` derives the §7.3 key/IV from an actual traffic secret
+and binds the derived key to an owned, parameterized AEAD. Separate send and
+receive objects own their own counters, beginning at zero; a successful
+record consumes one counter, the last u64 value becomes explicitly exhausted,
+and no reset/clone API is supplied. Partial wire input preserves state and
+is retained/resubmitted by the caller. Complete malformed or unauthenticated
+records permanently disable that epoch. Size/type/padding bounds and exact
+header additional-data binding use the existing proven record functions.
+
+`Established::into_record_auth` shares the existing checked Hello derivation,
+installs the client handshake secret for sending and server handshake secret
+for receiving, and returns those epochs with Auth and the master secret.
+The existing `into_auth` handoff is preserved. Contracts were committed before
+implementation. All 632 TLS obligations pass locally, including counter,
+terminal-state and direction-binding lemmas. Seven traffic/handoff tests pass
+under Miri; six existing Hello/authentication-join tests also pass after the
+derivation refactor. The cheaper subagent contributed tests and a read-only
+review, with the parent reviewing the tests. Thirteen epoch and two direction
+mutation certificates were checked individually in isolated copies; the full
+expanded run remains required. Strict clippy and all TLS package tests pass.
+
+**Initial connection dispatcher as built (2026-10-26).** `connection::framing`
+and `connection::exec` now add a bounded initial record dispatcher on top of
+the proved traffic epochs and Auth machine. It buffers partial records, consumes
+one complete record prefix at a time, leaves a coalesced suffix to its caller,
+drops compatibility CCS only in the pre-server-Finished window, reassembles
+and authenticates handshake messages, requires server Finished to end the
+record/message flight, protects the exact client flight, and waits for its send
+acknowledgement before installing application epochs from Auth's captured
+checkpoint. Fatal record/Auth errors drop both directions and partial state;
+application data reaches Auth only in Ready. Ready also handles KeyUpdate:
+receive epochs rotate independently, requested updates queue a KeyUpdate(0)
+response, and send epochs rotate only after exact I/O acknowledgement. It parses
+and discards valid NewSessionTicket messages because this profile does not offer
+PSK modes or cache tickets; malformed tickets retain parser alerts and duplicate
+extensions are rejected. Focused Verus verification of `connection::exec`
+passes (29 verified, 0 errors); ten deterministic-provider dispatcher tests
+pass locally and under Miri, and strict clippy passes. These providers are not
+production crypto or certificate validation.
+
+This does not add socket I/O, post-handshake client authentication, ticket
+caching/resumption, 0-RTT, or production AEAD. The no-wrap guarantee remains
+per owned epoch and the future transport still owns I/O/timeout policy. Full
+combined PR verification remains required and the crate stays tier 0.
+
 #### 3.5f The cryptography and the join (M)
 
 The `shipped` rows for libcrux (`libcrux-chacha20poly1305`,
@@ -1056,6 +1208,25 @@ checked; and a local measurement, documented not asserted, of which of the
 top sites refuse a ChaCha20-only, X25519-only client (run locally, like
 the demo). **Raise `clazel-der`, `clazel-x509`, `clazel-pkcs1` and
 `clazel-tls` to tier 2** as each earns it.
+
+**Real-certificate compatibility measurement:** vendor a reproducible corpus
+of complete, original DER chains, with collection date, source, licence and
+SHA-256 fingerprints. Deduplicate certificates by fingerprint, retain their
+leaf/intermediate/root role, and report both certificate and chain totals.
+Measure explicit `Extension.critical = FALSE` separately from malformed
+BOOLEANs and other DER errors: our current X.690 §11.5 profile rejects that
+explicit DEFAULT. Report affected certificates, extension OIDs and chains,
+including how many chains fail solely for this encoding. Compare the same
+original bytes against the independent certificate engine(s) used by the
+conformance suite; record their versions and acceptance differences.
+
+Keep explicit-FALSE fixtures for the strict result and any compatibility
+result. Decide whether to retain strict rejection or introduce a documented
+certificate-profile exception only after recording those measurements and
+the interoperability rationale. Any exception needs its own spec, proofs
+and negative cases; it must preserve the original signed TBS bytes and must
+not relax the general DER decoder. **This measurement and decision are
+pending; no real-certificate prevalence or compatibility result is claimed.**
 
 ### 3.6 The client state machine (L)
 
@@ -1278,16 +1449,16 @@ half does not wait on TLS.
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). `clazel-http` raised to tier 2 on 2026-10-25 |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | on `main`; tier 2 (see As built) |
-| 3.5b X.509 and path validation | not started (after 3.5a) |
+| 3.5b X.509 and path validation | standalone RFC 9525 DNS/IP matching and a bounded RFC 5280 certificate-envelope parser are in progress (the x509 crate is on `main` at tier 0; this branch adds `from_unix_seconds`, proven against the spec); path building, constraints, trust store and TLS integration remain unimplemented |
 | 3.5c RSA PKCS#1 v1.5 | on `main`; tier 2 (see As built) |
-| 3.5d TLS record and handshake formats | built, but moved off `main` to the `phase3/tls` branch (2026-10-24) because it fails CI; see its **As built** paragraph there |
-| 3.5e Key schedule and handshake state machine | not started (after 3.5d) |
-| 3.5f Cryptography and the join | not started |
+| 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
+| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters. Production providers, socket I/O and post-handshake dispatch remain; tier 0, combined full verification pending |
+| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; production libcrux/X.509 joins not started |
 | 3.5g TLS conformance and trust store | not started |
-| 3.6 Client state machine | built, `http://` only (branch `phase3/fetch-cookies`): transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored) |
-| 3.7 Kernel integration | built, joined to 3.6 (branch `claude/phase3-kernel-join-a-d56e97`, see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. Open: `https:` (3.5), the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel |
-| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Not yet: TLS, the http-state and WPT server tests, the line count in the README table. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
-| 3.9 Status and README | not started |
+| 3.6 Client state machine | on `main` (#3, #5), `http://` only: transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored) |
+| 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. Open: `https:` (3.5), the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
+| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function. Not yet: TLS. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
+| 3.9 Status and README | non-TLS part done (2026-10-29): README.md's Phase 3 note, `cargo xtask report` writes the network shell's line count next to the host shell's (CI's `table` job puts it in the README), this table and ROADMAP.md. Left for when TLS lands: the `https://` demo in the README, the 3.5 rows and marking the phase done |
 
 ## Risks
 

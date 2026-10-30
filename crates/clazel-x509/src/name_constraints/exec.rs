@@ -11,8 +11,12 @@ verus! {
 /// A borrowed GeneralName subtree base.
 #[derive(Clone, Copy)]
 pub enum GeneralNameConstraint<'a> {
-    /// dNSName constraint bytes, validated as nonempty IA5 only.
+    /// dNSName constraint bytes, validated as IA5 only (possibly empty).
     DnsName(&'a [u8]),
+    /// rfc822Name constraint bytes, validated as IA5 only (possibly empty).
+    Rfc822Name(&'a [u8]),
+    /// directoryName constraint: the contents of the explicit `[4]` field.
+    DirectoryName(&'a [u8]),
     /// iPAddress subnet split into its address and mask octets.
     IpAddress {
         /// Address octets (4 or 16 bytes).
@@ -20,7 +24,8 @@ pub enum GeneralNameConstraint<'a> {
         /// Network mask octets, matching the address width.
         mask: &'a [u8],
     },
-    /// Other GeneralName choice, preserved as its complete DER TLV.
+    /// otherName, x400Address, ediPartyName, URI or registeredID, preserved
+    /// as its complete DER TLV.
     Unsupported {
         /// Context-specific GeneralName tag number.
         tag: u32,
@@ -34,13 +39,13 @@ impl View for GeneralNameConstraint<'_> {
     closed spec fn view(&self) -> Self::V { view_general_name_constraint(self) }
 }
 
-/// Whether this decoder implements the base semantics. Callers processing a
-/// critical extension must reject `false` unless another processor handles it.
+/// Whether this decoder interprets the base (it is not `Unsupported`).
 pub fn general_name_constraint_supported(base: GeneralNameConstraint<'_>) -> (result: bool)
     ensures result == !nc_spec::base_is_unsupported(view_general_name_constraint(&base))
 {
     match base {
-        GeneralNameConstraint::DnsName(_) | GeneralNameConstraint::IpAddress { .. } => true,
+        GeneralNameConstraint::DnsName(_) | GeneralNameConstraint::Rfc822Name(_)
+        | GeneralNameConstraint::DirectoryName(_) | GeneralNameConstraint::IpAddress { .. } => true,
         GeneralNameConstraint::Unsupported { .. } => false,
     }
 }
@@ -49,6 +54,8 @@ pub fn general_name_constraint_supported(base: GeneralNameConstraint<'_>) -> (re
 pub open spec fn view_general_name_constraint(value: &GeneralNameConstraint<'_>) -> nc_spec::GeneralNameConstraint {
     match value {
         GeneralNameConstraint::DnsName(bytes) => nc_spec::GeneralNameConstraint::DnsName(bytes@),
+        GeneralNameConstraint::Rfc822Name(bytes) => nc_spec::GeneralNameConstraint::Rfc822Name(bytes@),
+        GeneralNameConstraint::DirectoryName(bytes) => nc_spec::GeneralNameConstraint::DirectoryName(bytes@),
         GeneralNameConstraint::IpAddress { address, mask } => nc_spec::GeneralNameConstraint::IpAddress {
             address: address@, mask: mask@,
         },
@@ -157,8 +164,13 @@ fn parse_base(input: &[u8], pos: usize, end: usize) -> (result: Option<(GeneralN
     let value = input.get(tlv.cstart..tlv.cend)?;
     let raw = input.get(pos..tlv.cend)?;
     let parsed = if tlv.tag.number == 2 {
-        if value.is_empty() || !ia5_bytes(value, 0) { return None; }
+        if !ia5_bytes(value, 0) { return None; }
         GeneralNameConstraint::DnsName(value)
+    } else if tlv.tag.number == 1 {
+        if !ia5_bytes(value, 0) { return None; }
+        GeneralNameConstraint::Rfc822Name(value)
+    } else if tlv.tag.number == 4 {
+        GeneralNameConstraint::DirectoryName(value)
     } else if tlv.tag.number == 7 {
         if value.len() == 8 {
             GeneralNameConstraint::IpAddress { address: value.get(0..4)?, mask: value.get(4..8)? }
