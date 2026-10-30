@@ -1,0 +1,162 @@
+#case 0
+#data "<head></head><style></style>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<head></head><script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<head></head><!-- --><style></style><!-- --><script></script>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<head></head><!-- -->x<style></style><!-- --><script></script>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 4
+#data "<!DOCTYPE html><html><head></head><body><pre>\n</pre></body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!DOCTYPE html><html><head></head><body><pre>\nfoo</pre></body></html>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 6
+#data "<!DOCTYPE html><html><head></head><body><pre>\n\nfoo</pre></body></html>"
+#title ""
+#lines 2
+""
+"foo"
+#links 0
+
+#case 7
+#data "<!DOCTYPE html><html><head></head><body><pre>\nfoo\n</pre></body></html>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 8
+#data "<!DOCTYPE html><html><head></head><body><pre>x</pre><span>\n</span></body></html>"
+#title ""
+#lines 1
+"x"
+#links 0
+
+#case 9
+#data "<!DOCTYPE html><html><head></head><body><pre>x\ny</pre></body></html>"
+#title ""
+#lines 2
+"x"
+"y"
+#links 0
+
+#case 10
+#data "<!DOCTYPE html><html><head></head><body><pre>x<div>\ny</pre></body></html>"
+#title ""
+#lines 3
+"x"
+""
+"y"
+#links 0
+
+#case 11
+#data "<!DOCTYPE html><pre>&#x0a;&#x0a;A</pre>"
+#title ""
+#lines 2
+""
+"A"
+#links 0
+
+#case 12
+#data "<!DOCTYPE html><HTML><META><HEAD></HEAD></HTML>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<!DOCTYPE html><HTML><HEAD><head></HEAD></HTML>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<textarea>foo<span>bar</span><i>baz"
+#title ""
+#lines 1
+"foo<span>bar</span><i>baz"
+#links 0
+
+#case 15
+#data "<title>foo<span>bar</em><i>baz"
+#title "foo<span>bar</em><i>baz"
+#lines 0
+#links 0
+
+#case 16
+#data "<!DOCTYPE html><textarea>\n</textarea>"
+#title ""
+#lines 0
+#links 0
+
+#case 17
+#data "<!DOCTYPE html><textarea>\nfoo</textarea>"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 18
+#data "<!DOCTYPE html><textarea>\n\nfoo</textarea>"
+#title ""
+#lines 2
+""
+"foo"
+#links 0
+
+#case 19
+#data "<!DOCTYPE html><html><head></head><body><ul><li><div><p><li></ul></body></html>"
+#title ""
+#lines 1
+"* *"
+#links 0
+
+#case 20
+#data "<!doctype html><nobr><nobr><nobr>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<!doctype html><nobr><nobr></nobr><nobr>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<!doctype html><html><body><p><table></table></body></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<p><table></table>"
+#title ""
+#lines 0
+#links 0
+

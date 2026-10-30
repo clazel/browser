@@ -4,25 +4,34 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "WHATWG HTML Standard: input preprocessing (§13.2.3.5), the tokenizer (§13.2.4, §13.2.5) and character references (§13.5)."
+description = "WHATWG HTML Standard: the encoding sniffing algorithm (§13.2.3.2), input preprocessing (§13.2.3.5), the tokenizer (§13.2.4, §13.2.5) and character references (§13.5)."
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
+clazel-encoding = { path = "../clazel-encoding" }
+clazel-mime = { path = "../clazel-mime" }
 
 # Test-only reference engine for the differential test in
 # tests/conformance_tokenizer.rs (class `test` in docs/DEPENDENCIES.md:
 # never shipped). Without default features it has no dependencies.
 [dev-dependencies]
 html5gum = { version = "=0.8.4", default-features = false }
+# Firefox's label resolution, the oracle for the labels the sniffer reads in
+# tests/conformance_sniff.rs.
+encoding_rs = "=0.8.35"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (the
-# HTML tokenizer state machine is on the Tier 2 list). The crate stays at
-# tier 0 until CI's full verification is green on a run that proves every
-# exec function against its contract, with the independent transcription,
-# certified mutations and conformance tests (Phase 4 items 4.5 to 4.7).
+# HTML tokenizer state machine is on the Tier 2 list). Tier 2: every exec
+# state function, `next_token` and `tokenize` are proven against the spec
+# (src/tokenizer/spec.rs, src/charref/spec.rs); independent.rs (W3C HTML
+# 5.2 §8.2.4) is proven equal to the spec on every input with no `&`, no
+# `<?` and no `[CDATA[`, where the texts describe the same steps
+# (theorem_w3c_equivalent); every mutation is certified killed; and
+# tests/conformance_tokenizer.rs runs html5lib-tests and a differential
+# test against html5gum.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]

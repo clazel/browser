@@ -51,7 +51,7 @@ use clazel_fetch::transducer::types::InputBuf;
 use clazel_ipc::message::codec::Msg;
 use clazel_kernel::exec::records::EventRecord;
 use cookie_store::CookieStore;
-use support::{Kernel, Out, code_points};
+use support::{Doc, Kernel, Out, code_points};
 
 /// Answer the network outputs among `out` as a server with an empty page
 /// would: `Connected` for a `Connect`, a whole response for a `Send`, nothing
@@ -195,19 +195,17 @@ struct Tab {
 /// spawned renderer (and, if `old` is given, the kill of that renderer first).
 fn spawn_and_commit(out: &[Out], old: Option<u64>, url: &str) -> Option<u64> {
     match (old, out) {
-        (
-            None,
-            [
-                Out::Spawn(new),
-                Out::To(to, Msg::Commit { url: committed, .. }),
-            ],
-        ) if new == to && committed == url.as_bytes() => Some(*new),
+        (None, [Out::Spawn(new), Out::Commit(to, Doc { url: committed, .. })])
+            if new == to && committed == url.as_bytes() =>
+        {
+            Some(*new)
+        }
         (
             Some(old),
             [
                 Out::Kill(killed),
                 Out::Spawn(new),
-                Out::To(to, Msg::Commit { url: committed, .. }),
+                Out::Commit(to, Doc { url: committed, .. }),
             ],
         ) if *killed == old && new == to && committed == url.as_bytes() => Some(*new),
         _ => None,
@@ -278,7 +276,7 @@ fn trace(seed: u64, now: u64) -> Option<String> {
                 }
                 if same_origin {
                     match out.as_slice() {
-                        [Out::To(to, Msg::Commit { url: committed, .. })]
+                        [Out::Commit(to, Doc { url: committed, .. })]
                             if *to == tab.renderer && committed == target.as_bytes() => {}
                         _ => return fail(&format!("same-origin navigation outputs {out:?}"), &log),
                     }

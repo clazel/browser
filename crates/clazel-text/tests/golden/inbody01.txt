@@ -1,0 +1,31 @@
+#case 0
+#data "<button>1</foo>"
+#title ""
+#lines 1
+"1"
+#links 0
+
+#case 1
+#data "<foo>1<p>2</foo>"
+#title ""
+#lines 3
+"1"
+""
+"2"
+#links 0
+
+#case 2
+#data "<dd>1</foo>"
+#title ""
+#lines 1
+"1"
+#links 0
+
+#case 3
+#data "<foo>1<dd>2</foo>"
+#title ""
+#lines 2
+"1"
+"2"
+#links 0
+

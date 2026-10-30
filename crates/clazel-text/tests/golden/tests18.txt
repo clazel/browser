@@ -1,0 +1,243 @@
+#case 0
+#data "<plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 1
+#data "<!doctype html><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 2
+#data "<!doctype html><html><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 3
+#data "<!doctype html><head><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 4
+#data "<!doctype html><html><noscript><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 5
+#data "<!doctype html></head><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 6
+#data "<!doctype html><body><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 7
+#data "<!doctype html><table><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 8
+#data "<!doctype html><table><tbody><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 9
+#data "<!doctype html><table><tbody><tr><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 10
+#data "<!doctype html><table><td><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 11
+#data "<!doctype html><table><caption><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 12
+#data "<!doctype html><table><colgroup><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 13
+#data "<!doctype html><select><plaintext></plaintext>X"
+#title ""
+#lines 1
+"</plaintext>X"
+#links 0
+
+#case 14
+#data "<!doctype html><table><select><plaintext>a<caption>b"
+#title ""
+#lines 1
+"a<caption>b"
+#links 0
+
+#case 15
+#data "<!doctype html><template><plaintext>a</template>b"
+#title ""
+#lines 0
+#links 0
+
+#case 16
+#data "<!doctype html><body></body><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 17
+#data "<!doctype html><frameset><plaintext></plaintext>"
+#title ""
+#lines 0
+#links 0
+
+#case 18
+#data "<!doctype html><frameset></frameset><plaintext></plaintext>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<!doctype html><body></body></html><plaintext></plaintext>"
+#title ""
+#lines 1
+"</plaintext>"
+#links 0
+
+#case 20
+#data "<!doctype html><frameset></frameset></html><plaintext></plaintext>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<!doctype html><svg><plaintext>a</plaintext>b"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 22
+#data "<!doctype html><svg><title><plaintext>a</plaintext>b"
+#title ""
+#lines 1
+"a</plaintext>b"
+#links 0
+
+#case 23
+#data "<!doctype html><table><tr><style></script></style>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 24
+#data "<!doctype html><table><tr><script></style></script>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 25
+#data "<!doctype html><table><caption><style></script></style>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 26
+#data "<!doctype html><table><td><style></script></style>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 27
+#data "<!doctype html><select><script></style></script>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 28
+#data "<!doctype html><table><select><script></style></script>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 29
+#data "<!doctype html><table><tr><select><script></style></script>abc"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 30
+#data "<!doctype html><frameset></frameset><noframes>abc"
+#title ""
+#lines 0
+#links 0
+
+#case 31
+#data "<!doctype html><frameset></frameset><noframes>abc</noframes><!--abc-->"
+#title ""
+#lines 0
+#links 0
+
+#case 32
+#data "<!doctype html><frameset></frameset></html><noframes>abc"
+#title ""
+#lines 0
+#links 0
+
+#case 33
+#data "<!doctype html><frameset></frameset></html><noframes>abc</noframes><!--abc-->"
+#title ""
+#lines 0
+#links 0
+
+#case 34
+#data "<!doctype html><table><tr></tbody><tfoot>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<!doctype html><table><td><svg></svg>abc<td>"
+#title ""
+#lines 1
+"abc  "
+#links 0
+

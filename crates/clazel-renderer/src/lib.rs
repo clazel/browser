@@ -1,18 +1,32 @@
-//! The renderer stub (phase-2.md item 2.15).
+//! The renderer (phase-2.md item 2.15; the document pipeline of phase-4.md
+//! item 4.13).
 //!
 //! The binary's first act is [`sandbox::enter`], before it reads a byte;
 //! then it reads frames from its socket (standard input, with the same
-//! socket as standard output), waits for a `Commit`, and runs the script in
-//! it ([`script`]): for each operation it sends the renderer-to-kernel
-//! message and reads the kernel's reply. It prints nothing about the
-//! results: the host shell sees every request and reply on the socket and
-//! prints them, so the renderer needs no channel besides the one the kernel
-//! also reads. It exits when the script is done; the host sees the socket
-//! close.
+//! socket as standard output) and waits for a committed document: a
+//! `Commit`, its `Body` frames and `BodyEnd` (phase-4.md item 4.12).
+//!
+//! - Kind 1, a user script (the Phase 2 path): it runs the script in the
+//!   body ([`script`]): for each operation it sends the renderer-to-kernel
+//!   message and reads the kernel's reply. It prints nothing about the
+//!   results: the host shell sees every request and reply on the socket and
+//!   prints them, so the renderer needs no channel besides the one the
+//!   kernel also reads. It exits when the script is done; the host sees the
+//!   socket close.
+//! - Kind 0, a document: the document pipeline ([`pipeline`]: content
+//!   type, encoding, the HTML parser, the document base URL and the text
+//!   layout) gives one `Display`, made to fit one frame ([`pipeline::fit`]);
+//!   then the renderer waits for the next document (a same-origin
+//!   navigation commits into the same renderer). The socket closing while
+//!   it waits is the end of the tab, not an error.
+//!
+//! An `Error` while it waits (a navigation that failed, item 3.7) changes
+//! nothing: the renderer keeps its document and waits on.
 
 pub mod escape;
 pub mod hostile;
 pub mod launch;
+pub mod pipeline;
 pub mod sandbox;
 pub mod script;
 
@@ -63,6 +77,61 @@ fn read_message<R: Read>(r: &mut R) -> Result<Msg, RunError> {
     decode_framed(&frame).ok_or(RunError::Protocol("frame does not decode"))
 }
 
+/// The most body octets a renderer takes: `clazel-http`'s 64 MiB limit on a
+/// response body, which the kernel never exceeds.
+pub const MAX_BODY: usize = 64 * 1024 * 1024;
+
+/// A committed document: its URL, content type, kind and body.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Document {
+    /// The committed URL, UTF-8.
+    pub url: Vec<u8>,
+    /// The content type, possibly empty.
+    pub content_type: Vec<u8>,
+    /// 0 a document, 1 a user script.
+    pub kind: u64,
+    /// The body.
+    pub body: Vec<u8>,
+}
+
+/// Wait for the next committed document: skip `Error`s, take a `Commit`,
+/// then its `Body` frames up to `BodyEnd`. `None` if the socket closes
+/// before a `Commit`.
+pub fn next_document<R: Read>(r: &mut R) -> Result<Option<Document>, RunError> {
+    let (url, content_type, kind) = loop {
+        match read_message(r) {
+            Ok(Msg::Commit {
+                url,
+                content_type,
+                kind,
+            }) => break (url, content_type, kind),
+            Ok(Msg::Error { .. }) => {}
+            Ok(_) => return Err(RunError::Protocol("expected Commit")),
+            Err(RunError::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+            Err(e) => return Err(e),
+        }
+    };
+    let mut body = Vec::new();
+    loop {
+        match read_message(r)? {
+            Msg::Body { bytes } => {
+                if body.len().saturating_add(bytes.len()) > MAX_BODY {
+                    return Err(RunError::Protocol("body over 64 MiB"));
+                }
+                body.extend_from_slice(&bytes);
+            }
+            Msg::BodyEnd => break,
+            _ => return Err(RunError::Protocol("expected Body or BodyEnd")),
+        }
+    }
+    Ok(Some(Document {
+        url,
+        content_type,
+        kind,
+        body,
+    }))
+}
+
 fn send<W: Write>(w: &mut W, m: &Msg) -> Result<(), RunError> {
     let frame = encode_framed(m).ok_or(RunError::Protocol("message over MAX_FRAME"))?;
     w.write_all(&frame)?;
@@ -70,13 +139,44 @@ fn send<W: Write>(w: &mut W, m: &Msg) -> Result<(), RunError> {
     Ok(())
 }
 
-/// Wait for `Commit`, then run its script: send each operation and read its
-/// reply. Returns the number of operations run.
+/// The width [`run`] lays documents out at: the terminal width most hosts
+/// have when `$COLUMNS` says nothing.
+pub const DEFAULT_WIDTH: usize = 80;
+
+/// [`run_with_width`] at [`DEFAULT_WIDTH`].
 pub fn run<R: Read, W: Write>(r: &mut R, w: &mut W) -> Result<usize, RunError> {
-    let Msg::Commit { script, .. } = read_message(r)? else {
-        return Err(RunError::Protocol("expected Commit first"));
-    };
-    let ops = script::parse(&script).map_err(RunError::Script)?;
+    run_with_width(r, w, DEFAULT_WIDTH)
+}
+
+/// Take committed documents until a script (kind 1) is run or the socket
+/// closes: a document (kind 0) goes through the pipeline and is displayed
+/// `width` columns wide (0: no wrapping), a script's operations are each
+/// sent and their replies read. Returns the number of operations run.
+pub fn run_with_width<R: Read, W: Write>(
+    r: &mut R,
+    w: &mut W,
+    width: usize,
+) -> Result<usize, RunError> {
+    loop {
+        let Some(doc) = next_document(r)? else {
+            return Ok(0);
+        };
+        match doc.kind {
+            1 => return run_script(r, w, &doc.body),
+            0 => {
+                let shown = pipeline::render(&doc.url, &doc.content_type, &doc.body, width);
+                // The body and its tree are gone; only the page is kept.
+                drop(doc);
+                send(w, &pipeline::fit(shown))?;
+            }
+            _ => return Err(RunError::Protocol("unknown document kind")),
+        }
+    }
+}
+
+/// Run a script: send each operation and read its reply.
+fn run_script<R: Read, W: Write>(r: &mut R, w: &mut W, script: &[u8]) -> Result<usize, RunError> {
+    let ops = script::parse(script).map_err(RunError::Script)?;
     for op in &ops {
         send(w, &op.to_message())?;
         match op {
@@ -106,16 +206,25 @@ mod tests {
             .collect()
     }
 
-    fn commit(script: &str) -> Msg {
-        Msg::Commit {
+    /// The frames that commit `body` of `kind` at a fixed URL, the body in
+    /// pieces of `piece` octets.
+    fn commit(kind: u64, body: &[u8], piece: usize) -> Vec<Msg> {
+        let mut m = vec![Msg::Commit {
             url: b"https://a.example/".to_vec(),
-            script: script.as_bytes().to_vec(),
-        }
+            content_type: Vec::new(),
+            kind,
+        }];
+        m.extend(
+            body.chunks(piece.max(1))
+                .map(|c| Msg::Body { bytes: c.to_vec() }),
+        );
+        m.push(Msg::BodyEnd);
+        m
     }
 
     /// Run a script against the kernel's `replies`; the frames it sent.
     fn exchange(script: &str, replies: Vec<Msg>) -> Result<Vec<u8>, RunError> {
-        let mut input = vec![commit(script)];
+        let mut input = commit(1, script.as_bytes(), 3);
         input.extend(replies);
         let mut sent = Vec::new();
         run(&mut Cursor::new(frames(&input)), &mut sent)?;
@@ -182,10 +291,47 @@ mod tests {
     }
 
     #[test]
+    fn a_document_is_displayed_and_the_renderer_waits_for_the_next() -> Result<(), RunError> {
+        // Item 4.13: each document goes through the pipeline. No content
+        // type: the first is sniffed as HTML, the empty one as text.
+        let mut input = vec![Msg::Error { code: 5 }];
+        input.extend(commit(0, b"<title>T</title><p>page <a href=b>x</a></p>", 4));
+        input.extend(commit(0, b"", 4));
+        let mut sent = Vec::new();
+        assert_eq!(run(&mut Cursor::new(frames(&input)), &mut sent)?, 0);
+        assert_eq!(
+            sent,
+            frames(&[
+                Msg::Display {
+                    title: b"T".to_vec(),
+                    text: b"page x[1]".to_vec(),
+                    links: vec![b"https://a.example/b".to_vec()],
+                },
+                Msg::Display {
+                    title: Vec::new(),
+                    text: Vec::new(),
+                    links: Vec::new(),
+                }
+            ])
+        );
+        Ok(())
+    }
+
+    #[test]
     fn protocol_violations_stop_the_script() {
         assert!(matches!(
             exchange("cookie-get", vec![]),
             Err(RunError::Io(_))
+        ));
+        // A document whose body does not end.
+        let mut unended = commit(0, b"x", 1);
+        unended.pop();
+        unended.push(Msg::CookieValue {
+            cookie_string: Vec::new(),
+        });
+        assert!(matches!(
+            run(&mut Cursor::new(frames(&unended)), &mut Vec::new()),
+            Err(RunError::Protocol(_))
         ));
         assert!(matches!(
             exchange("nonsense", vec![]),

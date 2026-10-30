@@ -1,0 +1,84 @@
+#case 0
+#data "<b><p>Bold </b> Not bold</p>\nAlso not bold."
+#title ""
+#lines 3
+"Bold Not bold"
+""
+"Also not bold."
+#links 0
+
+#case 1
+#data "<html>\n<font color=red><i>Italic and Red<p>Italic and Red </font> Just italic.</p> Italic only.</i> Plain\n<p>I should not be red. <font color=red>Red. <i>Italic and red.</p>\n<p>Italic and red. </i> Red.</font> I should not be red.</p>\n<b>Bold <i>Bold and italic</b> Only Italic </i> Plain"
+#title ""
+#lines 11
+"Italic and Red"
+""
+"Italic and Red Just italic."
+""
+"Italic only. Plain"
+""
+"I should not be red. Red. Italic and red."
+""
+"Italic and red. Red. I should not be red."
+""
+"Bold Bold and italic Only Italic Plain"
+#links 0
+
+#case 2
+#data "<html><body>\n<p><font size=\"7\">First paragraph.</p>\n<p>Second paragraph.</p></font>\n<b><p><i>Bold and Italic</b> Italic</p>"
+#title ""
+#lines 5
+"First paragraph."
+""
+"Second paragraph."
+""
+"Bold and Italic Italic"
+#links 0
+
+#case 3
+#data "<html>\n<dl>\n<dt><b>Boo\n<dd>Goo?\n</dl>\n</html>"
+#title ""
+#lines 2
+"Boo"
+"Goo?"
+#links 0
+
+#case 4
+#data "<html><body>\n<label><a><div>Hello<div>World</div></a></label>  \n</body></html>"
+#title ""
+#lines 2
+"Hello"
+"World"
+#links 0
+
+#case 5
+#data "<table><center> <font>a</center> <img> <tr><td> </td> </tr> </table>"
+#title ""
+#lines 2
+"a"
+"[image]"
+#links 0
+
+#case 6
+#data "<table><tr><p><a><p>You should see this text."
+#title ""
+#lines 1
+"You should see this text."
+#links 0
+
+#case 7
+#data "<TABLE>\n<TR>\n<CENTER><CENTER><TD></TD></TR><TR>\n<FONT>\n<TABLE><tr></tr></TABLE>\n</P>\n<a></font><font></a>\nThis page contains an insanely badly-nested tag sequence."
+#title ""
+#lines 1
+"This page contains an insanely badly-nested tag sequence."
+#links 0
+
+#case 8
+#data "<html>\n<body>\n<b><nobr><div>This text is in a div inside a nobr</nobr>More text that should not be in the nobr, i.e., the\nnobr should have closed the div inside it implicitly. </b><pre>A pre tag outside everything else.</pre>\n</body>\n</html>"
+#title ""
+#lines 3
+"This text is in a div inside a nobrMore text that should not be in the nobr,"
+"i.e., the nobr should have closed the div inside it implicitly."
+"A pre tag outside everything else."
+#links 0
+

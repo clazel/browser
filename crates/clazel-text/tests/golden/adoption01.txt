@@ -1,0 +1,123 @@
+#case 0
+#data "<a><p></a></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<a>1<p>2</a>3</p>"
+#title ""
+#lines 3
+"1"
+""
+"23"
+#links 0
+
+#case 2
+#data "<a>1<button>2</a>3</button>"
+#title ""
+#lines 1
+"123"
+#links 0
+
+#case 3
+#data "<a>1<b>2</a>3</b>"
+#title ""
+#lines 1
+"123"
+#links 0
+
+#case 4
+#data "<a>1<div>2<div>3</a>4</div>5</div>"
+#title ""
+#lines 4
+"1"
+"2"
+"34"
+"5"
+#links 0
+
+#case 5
+#data "<table><a>1<p>2</a>3</p>"
+#title ""
+#lines 3
+"1"
+""
+"23"
+#links 0
+
+#case 6
+#data "<b><b><a><p></a>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<b><a><b><p></a>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<a><b><b><p></a>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<p>1<s id=\"A\">2<b id=\"B\">3</p>4</s>5</b>"
+#title ""
+#lines 3
+"123"
+""
+"45"
+#links 0
+
+#case 10
+#data "<table><a>1<td>2</td>3</table>"
+#title ""
+#lines 2
+"13"
+"2"
+#links 0
+
+#case 11
+#data "<table>A<td>B</td>C</table>"
+#title ""
+#lines 2
+"AC"
+"B"
+#links 0
+
+#case 12
+#data "<a><svg><tr><input></a>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<div><a><b><div><div><div><div><div><div><div><div><div><div></a>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<div><a><b><u><i><code><div></a>"
+#title ""
+#lines 0
+#links 0
+
+#case 15
+#data "<b><b><b><b>x</b></b></b></b>y"
+#title ""
+#lines 1
+"xy"
+#links 0
+
+#case 16
+#data "<p><b><b><b><b><p>x"
+#title ""
+#lines 1
+"x"
+#links 0
+

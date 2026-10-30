@@ -1,0 +1,25 @@
+#case 0
+#data "<isindex>"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<isindex name=\"A\" action=\"B\" prompt=\"C\" foo=\"D\">"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<form><isindex>"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html><isindex>x</isindex>x"
+#title ""
+#lines 1
+"xx"
+#links 0
+

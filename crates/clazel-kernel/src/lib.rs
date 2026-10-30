@@ -14,20 +14,26 @@
 //! - `exec`: the executable kernel (item 2.12): exec state, events and
 //!   outputs with views to the spec's, and `step_exec`, proven to meet
 //!   [`contract`] for any implementation of the URL functions.
+//! - [`display_theorems`]: item 4.12's theorems about what the user sees and
+//!   what a committed renderer is given; [`commit_theorems`]: a renderer is
+//!   committed only after the kernel sent it a commit.
 //! - [`urls`]: the URL functions of the shipped kernel (item 2.13), built from
 //!   the real URL parser; [`exec::real_urls`] is their executable
 //!   implementation and `step_real`, the function the host shell calls;
 //!   [`real_theorems`] states the isolation theorems for them.
 
+pub mod commit_theorems;
 pub mod contract;
 pub mod cookie_theorems;
 pub mod counterexamples;
+pub mod display_theorems;
 pub mod domain;
 pub mod exec;
 pub mod independent;
 pub mod independent_equivalence;
 pub mod invariant;
 pub mod lock;
+pub mod mutation_examples;
 pub mod mutation_lemmas;
 pub mod net_rel;
 pub mod net_theorems;

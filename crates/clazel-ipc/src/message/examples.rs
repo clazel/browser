@@ -85,9 +85,108 @@ pub proof fn lemma_example_error()
 /// An unknown tag is rejected.
 pub proof fn lemma_reject_unknown_tag()
     ensures
-        decode_message(seq![0x81u8, 0x0A]) is None,
+        decode_message(seq![0x81u8, 0x0B]) is None,
 {
-    assert(decode_message(seq![0x81u8, 0x0A]) is None) by (compute_only);
+    assert(decode_message(seq![0x81u8, 0x0B]) is None) by (compute_only);
+}
+
+/// `Commit("x", "t", 0)` is `[101, "x", h'74', 0]`.
+pub proof fn lemma_example_commit()
+    ensures
+        decode_message(seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x41, 0x74, 0x00]) == Some(Message::Commit { url: seq![0x78u8], content_type: seq![0x74u8], kind: 0 }),
+        encode_message(Message::Commit { url: seq![0x78u8], content_type: seq![0x74u8], kind: 0 }) == seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x41, 0x74, 0x00],
+{
+    assert(decode_message(seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x41, 0x74, 0x00]) == Some(Message::Commit { url: seq![0x78u8], content_type: seq![0x74u8], kind: 0 })) by (compute_only);
+    assert(encode_message(Message::Commit { url: seq![0x78u8], content_type: seq![0x74u8], kind: 0 }) == seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x41, 0x74, 0x00]) by (compute_only);
+}
+
+/// The content type is a byte string: a text string there is rejected.
+pub proof fn lemma_reject_commit_text_content_type()
+    ensures
+        decode_message(seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x61, 0x74, 0x00]) is None,
+{
+    assert(decode_message(seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x61, 0x74, 0x00]) is None) by (compute_only);
+}
+
+/// `Body(h'0102')` is `[106, h'0102']`; `BodyEnd` is `[107]`.
+pub proof fn lemma_example_body()
+    ensures
+        decode_message(seq![0x82u8, 0x18, 0x6A, 0x42, 0x01, 0x02]) == Some(Message::Body { bytes: seq![0x01u8, 0x02] }),
+        encode_message(Message::Body { bytes: seq![0x01u8, 0x02] }) == seq![0x82u8, 0x18, 0x6A, 0x42, 0x01, 0x02],
+        decode_message(seq![0x81u8, 0x18, 0x6B]) == Some(Message::BodyEnd),
+        encode_message(Message::BodyEnd) == seq![0x81u8, 0x18, 0x6B],
+{
+    assert(decode_message(seq![0x82u8, 0x18, 0x6A, 0x42, 0x01, 0x02]) == Some(Message::Body { bytes: seq![0x01u8, 0x02] })) by (compute_only);
+    assert(encode_message(Message::Body { bytes: seq![0x01u8, 0x02] }) == seq![0x82u8, 0x18, 0x6A, 0x42, 0x01, 0x02]) by (compute_only);
+    assert(decode_message(seq![0x81u8, 0x18, 0x6B]) == Some(Message::BodyEnd)) by (compute_only);
+    assert(encode_message(Message::BodyEnd) == seq![0x81u8, 0x18, 0x6B]) by (compute_only);
+}
+
+/// `Display("t", "x", ["a", "b"])` is `[10, "t", "x", ["a", "b"]]`, and the
+/// kernel's decoder accepts it.
+pub proof fn lemma_example_display()
+    ensures
+        decode_renderer_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x82, 0x61, 0x61, 0x61, 0x62]) == Some(
+            Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8], seq![0x62u8]] },
+        ),
+        encode_message(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8], seq![0x62u8]] }) == seq![
+            0x84u8,
+            0x0A,
+            0x61,
+            0x74,
+            0x61,
+            0x78,
+            0x82,
+            0x61,
+            0x61,
+            0x61,
+            0x62,
+        ],
+        decode_message(seq![0x84u8, 0x0A, 0x60, 0x60, 0x80]) == Some(Message::Display { title: Seq::<u8>::empty(), text: Seq::<u8>::empty(), links: Seq::<Seq<u8>>::empty() }),
+{
+    assert(decode_renderer_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x82, 0x61, 0x61, 0x61, 0x62]) == Some(
+        Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8], seq![0x62u8]] },
+    )) by (compute_only);
+    assert(encode_message(Message::Display { title: seq![0x74u8], text: seq![0x78u8], links: seq![seq![0x61u8], seq![0x62u8]] }) == seq![
+        0x84u8,
+        0x0A,
+        0x61,
+        0x74,
+        0x61,
+        0x78,
+        0x82,
+        0x61,
+        0x61,
+        0x61,
+        0x62,
+    ]) by (compute_only);
+    assert(decode_message(seq![0x84u8, 0x0A, 0x60, 0x60, 0x80]) == Some(Message::Display { title: Seq::<u8>::empty(), text: Seq::<u8>::empty(), links: Seq::<Seq<u8>>::empty() })) by (compute_only);
+}
+
+/// `Display` is rejected with a link that is not a text string, with links
+/// that are not an array, or with a field missing.
+pub proof fn lemma_reject_display()
+    ensures
+        decode_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x81, 0x01]) is None,
+        decode_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x61, 0x61]) is None,
+        decode_message(seq![0x83u8, 0x0A, 0x61, 0x74, 0x61, 0x78]) is None,
+{
+    assert(decode_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x81, 0x01]) is None) by (compute_only);
+    assert(decode_message(seq![0x84u8, 0x0A, 0x61, 0x74, 0x61, 0x78, 0x61, 0x61]) is None) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x0A, 0x61, 0x74, 0x61, 0x78]) is None) by (compute_only);
+}
+
+/// The kernel's decoder rejects the kernel-to-renderer messages of a
+/// document: `Commit`, `Body` and `BodyEnd`.
+pub proof fn lemma_reject_document_from_renderer()
+    ensures
+        decode_renderer_message(seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x41, 0x74, 0x00]) is None,
+        decode_renderer_message(seq![0x82u8, 0x18, 0x6A, 0x42, 0x01, 0x02]) is None,
+        decode_renderer_message(seq![0x81u8, 0x18, 0x6B]) is None,
+{
+    assert(decode_renderer_message(seq![0x84u8, 0x18, 0x65, 0x61, 0x78, 0x41, 0x74, 0x00]) is None) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x18, 0x6A, 0x42, 0x01, 0x02]) is None) by (compute_only);
+    assert(decode_renderer_message(seq![0x81u8, 0x18, 0x6B]) is None) by (compute_only);
 }
 
 /// A tag with the wrong fields is rejected: `Navigate` with a number.

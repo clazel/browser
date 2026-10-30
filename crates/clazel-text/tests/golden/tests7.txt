@@ -1,0 +1,216 @@
+#case 0
+#data "<!doctype html><body><title>X</title>"
+#title "X"
+#lines 0
+#links 0
+
+#case 1
+#data "<!doctype html><table><title>X</title></table>"
+#title "X"
+#lines 0
+#links 0
+
+#case 2
+#data "<!doctype html><head></head><title>X</title>"
+#title "X"
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html></head><title>X</title>"
+#title "X"
+#lines 0
+#links 0
+
+#case 4
+#data "<!doctype html></head><base>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 5
+#data "<!doctype html></head><basefont>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 6
+#data "<!doctype html></head><bgsound>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 7
+#data "<!doctype html><table><meta></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<!doctype html><table>X<tr><td><table> <meta></table></table>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 9
+#data "<!doctype html><html> <head>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<!doctype html> <head>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<!doctype html><table><style> <tr>x </style> </table>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!doctype html><table><TBODY><script> <tr>x </script> </table>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<!doctype html><p><applet><p>X</p></applet>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 14
+#data "<!doctype html><p><object type=\"application/x-non-existant-plugin\"><p>X</p></object>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 15
+#data "<!doctype html><listing>\nX</listing>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 16
+#data "<!doctype html><select><input>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 17
+#data "<!doctype html><select><select>X"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 18
+#data "<!doctype html><table><input type=hidDEN></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<!doctype html><table>X<input type=hidDEN></table>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 20
+#data "<!doctype html><table>  <input type=hidDEN></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<!doctype html><table>  <input type='hidDEN'></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 22
+#data "<!doctype html><table><input type=\" hidden\"><input type=hidDEN></table>"
+#title ""
+#lines 0
+#links 0
+
+#case 23
+#data "<!doctype html><table><select>X<tr>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 24
+#data "<!doctype html><select>X</select>"
+#title ""
+#lines 1
+"X"
+#links 0
+
+#case 25
+#data "<!DOCTYPE hTmL><html></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<!DOCTYPE HTML><html></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<div><p>a</x> b"
+#title ""
+#lines 1
+"a b"
+#links 0
+
+#case 29
+#data "<table><tr><td><code></code> </table>"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<table><b><tr><td>aaa</td></tr>bbb</table>ccc"
+#title ""
+#lines 3
+"bbb"
+"aaa"
+"ccc"
+#links 0
+
+#case 31
+#data "A<table><tr> B</tr> B</table>"
+#title ""
+#lines 1
+"A B B"
+#links 0
+
+#case 32
+#data "A<table><tr> B</tr> </em>C</table>"
+#title ""
+#lines 1
+"A BC"
+#links 0
+
+#case 33
+#data "<select><keygen>"
+#title ""
+#lines 0
+#links 0
+

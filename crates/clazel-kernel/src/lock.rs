@@ -98,7 +98,7 @@ pub proof fn lemma_stable_update(urls: UrlFns, rs: Seq<Renderer>, next_id: nat, 
 
 /// The renderers after a `navigate_tab` keep the lock of every id that
 /// survives.
-pub proof fn lemma_navigate_tab_stable(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Seq<u8>)
+pub proof fn lemma_navigate_tab_stable(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, script: Document)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
@@ -114,9 +114,9 @@ pub proof fn lemma_navigate_tab_stable(urls: UrlFns, s: State, tab: nat, url: Se
         if let Some(lock) = lock_of_url(urls, url, s.next_id) {
             let old = s.renderers[i];
             if lock is Tuple && lock == old.lock {
-                lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { url, pending: None, ..old });
+                lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { url, pending: None, committed: true, ..old });
             } else {
-                lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { id: s.next_id, tab, url, lock, pending: None });
+                lemma_stable_update(urls, s.renderers, s.next_id, i, Renderer { committed: true, id: s.next_id, tab, url, lock, pending: None });
             }
         }
     }
@@ -156,7 +156,7 @@ pub proof fn lemma_carry_out_stable(urls: UrlFns, s: State, tab: nat, partition:
                 },
             },
             clazel_fetch::transducer::spec::Action::Done { url, response } => {
-                lemma_commit_stable(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response.body);
+                lemma_commit_stable(urls, s, tab, clazel_url::url::spec::url_serializer(url, false), response_document(response));
             },
             clazel_fetch::transducer::spec::Action::Fail(_) => {
                 lemma_abort_stable(urls, s, tab, error_fetch());
@@ -179,7 +179,7 @@ pub proof fn lemma_update_same_id_lock(rs: Seq<Renderer>, i: int, r: Renderer)
 }
 
 /// `commit_navigation` keeps the lock of every surviving id.
-pub proof fn lemma_commit_stable(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Seq<u8>)
+pub proof fn lemma_commit_stable(urls: UrlFns, s: State, tab: nat, href: Seq<u32>, body: Document)
     requires
         crate::invariant::renderers_wf(urls, s.renderers, s.next_id),
     ensures
@@ -327,7 +327,7 @@ pub proof fn lemma_step_renderers_shape(rules: Seq<clazel_psl::spec::Rule>, urls
             crate::invariant::lemma_find_by_id(s.renderers, id, 0);
             if let Some(i) = find_by_id(s.renderers, id, 0) {
                 let r = s.renderers[i];
-                match decode_renderer_frame(bytes) {
+                match accepted_message(r, bytes) {
                     None => {
                         assert(step(rules, urls, fetch, s, e).0.renderers == s.renderers.remove(i));
                     },
@@ -375,18 +375,7 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
         match e {
             Event::OpenTab { url, script } => {
                 if let Some(lock) = lock_of_url(urls, url, s.next_id) {
-                    let rn = Renderer { id: s.next_id, tab: s.next_id, url, lock, pending: None };
-                    assert forall|i: int, j: int|
-                        0 <= i < s.renderers.len() && 0 <= j < s1.renderers.len() && (#[trigger] s.renderers[i]).id == (#[trigger] s1.renderers[j]).id implies s.renderers[i].lock
-                        == s1.renderers[j].lock by {
-                        if j < s.renderers.len() {
-                            assert(s1.renderers[j] == s.renderers[j]);
-                            lemma_ids_distinct(urls, s.renderers, s.next_id, i, j);
-                        } else {
-                            assert(s1.renderers[j] == rn);
-                            assert(s.renderers[i].id < s.next_id);
-                        }
-                    }
+                    lemma_open_tab_stable(rules, urls, fetch, s, url, script, lock);
                 }
             },
             Event::NavigateTab { tab, url } => {
@@ -399,7 +388,7 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                 crate::invariant::lemma_find_by_id(s.renderers, id, 0);
                 if let Some(i) = find_by_id(s.renderers, id, 0) {
                     let r = s.renderers[i];
-                    if let Some(clazel_ipc::message::spec::Message::Navigate { url }) = decode_renderer_frame(bytes) {
+                    if let Some(clazel_ipc::message::spec::Message::Navigate { url }) = accepted_message(r, bytes) {
                         if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                             if let Some(resolved) = (urls.resolve)(r.url, relative) {
                                 if lock_of_url(urls, resolved, s.next_id) is Some {
@@ -411,6 +400,54 @@ pub proof fn theorem_lock_set_only_by_navigation(rules: Seq<clazel_psl::spec::Ru
                 }
             },
             _ => {},
+        }
+    }
+}
+
+/// `OpenTab` keeps the lock of every renderer: it adds one, with a new id,
+/// and without a script starts its tab's fetch (item 4.12), which keeps
+/// every lock (`lemma_begin_stable`).
+proof fn lemma_open_tab_stable(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    url: Seq<u32>,
+    script: Option<Seq<u8>>,
+    lock: clazel_origin::spec::Origin,
+)
+    requires
+        crate::invariant::kernel_wf(rules, urls, s),
+        lock_of_url(urls, url, s.next_id) == Some(lock),
+    ensures
+        ({
+            let s1 = step(rules, urls, fetch, s, Event::OpenTab { url, script }).0;
+            forall|i: int, j: int|
+                0 <= i < s.renderers.len() && 0 <= j < s1.renderers.len() && (#[trigger] s.renderers[i]).id == (#[trigger] s1.renderers[j]).id ==> s.renderers[i].lock
+                    == s1.renderers[j].lock
+        }),
+{
+    let s1 = step(rules, urls, fetch, s, Event::OpenTab { url, script }).0;
+    let rn = Renderer { committed: script is Some, id: s.next_id, tab: s.next_id, url, lock, pending: None };
+    let sp = State { renderers: s.renderers.push(rn), next_id: s.next_id + 1, ..s };
+    assert forall|i: int, j: int|
+        0 <= i < s.renderers.len() && 0 <= j < sp.renderers.len() && (#[trigger] s.renderers[i]).id == (#[trigger] sp.renderers[j]).id implies s.renderers[i].lock
+        == sp.renderers[j].lock by {
+        if j < s.renderers.len() {
+            assert(sp.renderers[j] == s.renderers[j]);
+            lemma_ids_distinct(urls, s.renderers, s.next_id, i, j);
+        } else {
+            assert(sp.renderers[j] == rn);
+            assert(s.renderers[i].id < s.next_id);
+        }
+    }
+    if script is None {
+        crate::invariant::lemma_open_tab_push_wf(rules, urls, s, url, lock, false);
+        lemma_begin_stable(rules, urls, fetch, sp, s.next_id, url);
+        assert forall|i: int, j: int|
+            0 <= i < s.renderers.len() && 0 <= j < s1.renderers.len() && (#[trigger] s.renderers[i]).id == (#[trigger] s1.renderers[j]).id implies s.renderers[i].lock
+            == s1.renderers[j].lock by {
+            assert(sp.renderers[i] == s.renderers[i]);
         }
     }
 }

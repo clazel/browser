@@ -1,0 +1,688 @@
+#case 0
+#data "<!doctype html><math><mn DefinitionUrl=\"foo\">"
+#title ""
+#lines 0
+#links 0
+
+#case 1
+#data "<!doctype html><html></p><!--foo-->"
+#title ""
+#lines 0
+#links 0
+
+#case 2
+#data "<!doctype html><head></head></p><!--foo-->"
+#title ""
+#lines 0
+#links 0
+
+#case 3
+#data "<!doctype html><body><p><pre>"
+#title ""
+#lines 0
+#links 0
+
+#case 4
+#data "<!doctype html><body><p><listing>"
+#title ""
+#lines 0
+#links 0
+
+#case 5
+#data "<!doctype html><p><plaintext>"
+#title ""
+#lines 0
+#links 0
+
+#case 6
+#data "<!doctype html><p><h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 7
+#data "<!doctype html><isindex type=\"hidden\">"
+#title ""
+#lines 0
+#links 0
+
+#case 8
+#data "<!doctype html><ruby><p><rp>"
+#title ""
+#lines 0
+#links 0
+
+#case 9
+#data "<!doctype html><ruby><div><span><rp>"
+#title ""
+#lines 0
+#links 0
+
+#case 10
+#data "<!doctype html><ruby><div><p><rp>"
+#title ""
+#lines 0
+#links 0
+
+#case 11
+#data "<!doctype html><ruby><p><rt>"
+#title ""
+#lines 0
+#links 0
+
+#case 12
+#data "<!doctype html><ruby><div><span><rt>"
+#title ""
+#lines 0
+#links 0
+
+#case 13
+#data "<!doctype html><ruby><div><p><rt>"
+#title ""
+#lines 0
+#links 0
+
+#case 14
+#data "<html><ruby>a<rb>b<rt></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 15
+#data "<html><ruby>a<rp>b<rt></ruby></html>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 16
+#data "<html><ruby>a<rt>b<rt></ruby></html>"
+#title ""
+#lines 1
+"ab"
+#links 0
+
+#case 17
+#data "<html><ruby>a<rtc>b<rt>c<rb>d</ruby></html>"
+#title ""
+#lines 1
+"abcd"
+#links 0
+
+#case 18
+#data "<!doctype html><math/><foo>"
+#title ""
+#lines 0
+#links 0
+
+#case 19
+#data "<!doctype html><svg/><foo>"
+#title ""
+#lines 0
+#links 0
+
+#case 20
+#data "<!doctype html><div></body><!--foo-->"
+#title ""
+#lines 0
+#links 0
+
+#case 21
+#data "<!doctype html><h1><div><h3><span></h1>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 22
+#data "<!doctype html><p></h3>foo"
+#title ""
+#lines 1
+"foo"
+#links 0
+
+#case 23
+#data "<!doctype html><h3><li>abc</h2>foo"
+#title ""
+#lines 3
+"* abc"
+""
+"foo"
+#links 0
+
+#case 24
+#data "<!doctype html><table>abc<!--foo-->"
+#title ""
+#lines 1
+"abc"
+#links 0
+
+#case 25
+#data "<!doctype html><table>  <!--foo-->"
+#title ""
+#lines 0
+#links 0
+
+#case 26
+#data "<!doctype html><table> b <!--foo-->"
+#title ""
+#lines 1
+"b"
+#links 0
+
+#case 27
+#data "<!doctype html><select><option><option>"
+#title ""
+#lines 0
+#links 0
+
+#case 28
+#data "<!doctype html><select><option></optgroup>"
+#title ""
+#lines 0
+#links 0
+
+#case 29
+#data "<!doctype html><dd><optgroup><dd>"
+#title ""
+#lines 0
+#links 0
+
+#case 30
+#data "<!doctype html><p><math><mi><p><h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 31
+#data "<!doctype html><p><math><mo><p><h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 32
+#data "<!doctype html><p><math><mn><p><h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 33
+#data "<!doctype html><p><math><ms><p><h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 34
+#data "<!doctype html><p><math><mtext><p><h1>"
+#title ""
+#lines 0
+#links 0
+
+#case 35
+#data "<!doctype html><frameset></noframes>"
+#title ""
+#lines 0
+#links 0
+
+#case 36
+#data "<!doctype html><html c=d><body></html><html a=b>"
+#title ""
+#lines 0
+#links 0
+
+#case 37
+#data "<!doctype html><html c=d><frameset></frameset></html><html a=b>"
+#title ""
+#lines 0
+#links 0
+
+#case 38
+#data "<!doctype html><html><frameset></frameset></html><!--foo-->"
+#title ""
+#lines 0
+#links 0
+
+#case 39
+#data "<!doctype html><html><frameset></frameset></html>  "
+#title ""
+#lines 0
+#links 0
+
+#case 40
+#data "<!doctype html><html><frameset></frameset></html>abc"
+#title ""
+#lines 0
+#links 0
+
+#case 41
+#data "<!doctype html><html><frameset></frameset></html><p>"
+#title ""
+#lines 0
+#links 0
+
+#case 42
+#data "<!doctype html><html><frameset></frameset></html></p>"
+#title ""
+#lines 0
+#links 0
+
+#case 43
+#data "<html><frameset></frameset></html><!doctype html>"
+#title ""
+#lines 0
+#links 0
+
+#case 44
+#data "<!doctype html><body><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 45
+#data "<!doctype html><p><frameset><frame>"
+#title ""
+#lines 0
+#links 0
+
+#case 46
+#data "<!doctype html><p>a<frameset>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 47
+#data "<!doctype html>�<frameset><frame>"
+#title ""
+#lines 1
+"�"
+#links 0
+
+#case 48
+#data "<!doctype html>&#xFFFD;<frameset><frame>"
+#title ""
+#lines 1
+"�"
+#links 0
+
+#case 49
+#data "<!doctype html>&#0;<frameset><frame>"
+#title ""
+#lines 1
+"�"
+#links 0
+
+#case 50
+#data "<!doctype html><svg>&#xFFFD;</svg><frameset><frame>"
+#title ""
+#lines 1
+"�"
+#links 0
+
+#case 51
+#data "<!doctype html><p> <frameset><frame>"
+#title ""
+#lines 0
+#links 0
+
+#case 52
+#data "<!doctype html><pre><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 53
+#data "<!doctype html><listing><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 54
+#data "<!doctype html><li><frameset>"
+#title ""
+#lines 1
+"*"
+#links 0
+
+#case 55
+#data "<!doctype html><dd><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 56
+#data "<!doctype html><dt><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 57
+#data "<!doctype html><button><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 58
+#data "<!doctype html><applet><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 59
+#data "<!doctype html><marquee><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 60
+#data "<!doctype html><object><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 61
+#data "<!doctype html><table><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 62
+#data "<!doctype html><area><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 63
+#data "<!doctype html><basefont><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 64
+#data "<!doctype html><bgsound><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 65
+#data "<!doctype html><br><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 66
+#data "<!doctype html><embed><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 67
+#data "<!doctype html><img><frameset>"
+#title ""
+#lines 1
+"[image]"
+#links 0
+
+#case 68
+#data "<!doctype html><input><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 69
+#data "<!doctype html><keygen><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 70
+#data "<!doctype html><wbr><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 71
+#data "<!doctype html><hr><frameset>"
+#title ""
+#lines 1
+"--------------------------------------------------------------------------------"
+#links 0
+
+#case 72
+#data "<!doctype html><textarea></textarea><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 73
+#data "<!doctype html><xmp></xmp><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 74
+#data "<!doctype html><iframe></iframe><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 75
+#data "<!doctype html><select></select><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 76
+#data "<!doctype html><svg></svg><frameset><frame>"
+#title ""
+#lines 0
+#links 0
+
+#case 77
+#data "<!doctype html><math></math><frameset><frame>"
+#title ""
+#lines 0
+#links 0
+
+#case 78
+#data "<!doctype html><svg><foreignObject><div> <frameset><frame>"
+#title ""
+#lines 0
+#links 0
+
+#case 79
+#data "<!doctype html><svg>a</svg><frameset><frame>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 80
+#data "<!doctype html><svg> </svg><frameset><frame>"
+#title ""
+#lines 0
+#links 0
+
+#case 81
+#data "<html>aaa<frameset></frameset>"
+#title ""
+#lines 1
+"aaa"
+#links 0
+
+#case 82
+#data "<html> a <frameset></frameset>"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 83
+#data "<!doctype html><div><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 84
+#data "<!doctype html><div><body><frameset>"
+#title ""
+#lines 0
+#links 0
+
+#case 85
+#data "<!doctype html><p><math></p>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 86
+#data "<!doctype html><p><math><mn><span></p>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 87
+#data "<!doctype html><math></html>"
+#title ""
+#lines 0
+#links 0
+
+#case 88
+#data "<!doctype html><meta charset=\"ascii\">"
+#title ""
+#lines 0
+#links 0
+
+#case 89
+#data "<!doctype html><meta http-equiv=\"content-type\" content=\"text/html;charset=ascii\">"
+#title ""
+#lines 0
+#links 0
+
+#case 90
+#data "<!doctype html><head><!--aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa--><meta charset=\"utf8\">"
+#title ""
+#lines 0
+#links 0
+
+#case 91
+#data "<!doctype html><html a=b><head></head><html c=d>"
+#title ""
+#lines 0
+#links 0
+
+#case 92
+#data "<!doctype html><image/>"
+#title ""
+#lines 1
+"[image]"
+#links 0
+
+#case 93
+#data "<!doctype html>a<i>b<table>c<b>d</i>e</b>f"
+#title ""
+#lines 1
+"abcdef"
+#links 0
+
+#case 94
+#data "<!doctype html><table><i>a<b>b<div>c<a>d</i>e</b>f"
+#title ""
+#lines 2
+"ab"
+"cdef"
+#links 0
+
+#case 95
+#data "<!doctype html><i>a<b>b<div>c<a>d</i>e</b>f"
+#title ""
+#lines 2
+"ab"
+"cdef"
+#links 0
+
+#case 96
+#data "<!doctype html><table><i>a<b>b<div>c</i>"
+#title ""
+#lines 2
+"ab"
+"c"
+#links 0
+
+#case 97
+#data "<!doctype html><table><i>a<div>b<tr>c<b>d</i>e"
+#title ""
+#lines 3
+"a"
+"b"
+"cde"
+#links 0
+
+#case 98
+#data "<!doctype html><table><td><table><i>a<div>b<b>c</i>d"
+#title ""
+#lines 2
+"a"
+"bcd"
+#links 0
+
+#case 99
+#data "<!doctype html><body><bgsound>"
+#title ""
+#lines 0
+#links 0
+
+#case 100
+#data "<!doctype html><body><basefont>"
+#title ""
+#lines 0
+#links 0
+
+#case 101
+#data "<!doctype html><a><b></a><basefont>"
+#title ""
+#lines 0
+#links 0
+
+#case 102
+#data "<!doctype html><a><b></a><bgsound>"
+#title ""
+#lines 0
+#links 0
+
+#case 103
+#data "<!doctype html><figcaption><article></figcaption>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 104
+#data "<!doctype html><summary><article></summary>a"
+#title ""
+#lines 1
+"a"
+#links 0
+
+#case 105
+#data "<!doctype html><p><a><plaintext>b"
+#title ""
+#lines 1
+"b"
+#links 0
+
+#case 106
+#data "<!DOCTYPE html><div>a<a></div>b<p>c</p>d"
+#title ""
+#lines 6
+"a"
+"b"
+""
+"c"
+""
+"d"
+#links 0
+

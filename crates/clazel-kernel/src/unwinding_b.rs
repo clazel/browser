@@ -27,7 +27,8 @@ pub proof fn lemma_b_sender(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d:
 }
 
 /// A step of a renderer of another domain, that does not navigate, only
-/// addresses its sender (the only renderer it can name).
+/// addresses its sender (the only renderer it can name), and shows only on
+/// its tab (item 4.12).
 pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
     requires
         find_by_id(s.renderers, id, 0) is Some,
@@ -35,13 +36,17 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     ensures
         forall|k: int|
             0 <= k < step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1.len() && crate::noninterference::renderer_bound(#[trigger] step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k])
-                ==> crate::domain::output_id(step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]) == id,
+                ==> if step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k] is Show {
+                step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]->Show_tab == s.renderers[find_by_id(s.renderers, id, 0)->Some_0].tab
+            } else {
+                crate::domain::output_id(step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1[k]) == id
+            },
 {
     crate::unwind_base::lemma_found_contained(s, id);
     let i = find_by_id(s.renderers, id, 0)->Some_0;
     let r = s.renderers[i];
     let out = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes }).1;
-    if let Some(m) = decode_renderer_frame(bytes) {
+    if let Some(m) = accepted_message(r, bytes) {
         crate::lock::lemma_storage_call_frame(s, r, m);
         crate::net_theorems::lemma_handle_message_conns(rules, urls, fetch, s, r, m);
         if let clazel_ipc::message::spec::Message::Navigate { url } = m {
@@ -77,7 +82,7 @@ pub proof fn lemma_local_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns,
     crate::unwind_base::lemma_found_contained(s, id);
     let i = find_by_id(s.renderers, id, 0)->Some_0;
     let r = s.renderers[i];
-    if let Some(m) = decode_renderer_frame(bytes) {
+    if let Some(m) = accepted_message(r, bytes) {
         crate::lock::lemma_storage_call_frame(s, r, m);
         if let clazel_ipc::message::spec::Message::Navigate { url } = m {
             if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
@@ -115,13 +120,22 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
     assert forall|k: int| 0 <= k < out1.len() implies !crate::noninterference::addressed_to(rules, d, s1, s1b, #[trigger] out1[k]) by {
         if crate::noninterference::addressed_to(rules, d, s1, s1b, out1[k]) {
             assert(crate::noninterference::renderer_bound(out1[k]));
-            let q = choose|q: Renderer| (s1.renderers.contains(q) || s1b.renderers.contains(q)) && q.id == crate::domain::output_id(out1[k]) && crate::domain::domain_of_renderer(rules, q) == d;
+            let q = choose|q: Renderer|
+                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show {
+                    q.tab == out1[k]->Show_tab
+                } else {
+                    q.id == crate::domain::output_id(out1[k])
+                }) && crate::domain::domain_of_renderer(rules, q) == d;
             if s1b.renderers == s1.renderers.remove(i1) {
                 crate::unwind_base::lemma_remove_contains(urls, s1.renderers, s1.next_id, i1, q);
             }
             assert(s1.renderers.contains(q));
             assert(s1.renderers.contains(r));
-            crate::unwind_base::lemma_same_id_same_renderer(urls, s1.renderers, s1.next_id, q, r);
+            if out1[k] is Show {
+                crate::unwind_base::lemma_same_tab_same_renderer(urls, s1.renderers, s1.next_id, q, r);
+            } else {
+                crate::unwind_base::lemma_same_id_same_renderer(urls, s1.renderers, s1.next_id, q, r);
+            }
         }
     }
     crate::unwind_base::lemma_filter_none(out1, |o: Output| crate::noninterference::addressed_to(rules, d, s1, s1b, o));
@@ -140,14 +154,14 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         }
         assert(s1b.jar == s1.jar && s1b.storage == s1.storage && s1b.now == s1.now && s1b.next_id == s1.next_id);
         assert(s1b.conns == without_tab(s1.conns, r.tab)) by {
-            assert(decode_renderer_frame(bytes) is None);
+            assert(accepted_message(r, bytes) is None);
         }
         crate::net_rel::lemma_rel_conn_exit_first(rules, urls, s1, s2, i1);
         crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2);
     } else {
         // The renderers are as before; only the jar or the storage may change.
         assert(s1b.renderers == s1.renderers);
-        if let Some(m) = decode_renderer_frame(bytes) {
+        if let Some(m) = accepted_message(r, bytes) {
             crate::lock::lemma_storage_call_frame(s1, r, m);
             crate::cookie_theorems::lemma_storage_call_local(s1, s1, r, r, m);
             assert(s1b.next_id == s1.next_id && s1b.now == s1.now);
@@ -178,7 +192,7 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
             }
         }
         assert forall|o: clazel_origin::spec::Origin| o is Tuple && crate::domain::domain_of_lock(rules, o) == d implies storage_of(s1b, o) == storage_of(s2, o) by {
-            if let Some(m) = decode_renderer_frame(bytes) {
+            if let Some(m) = accepted_message(r, bytes) {
                 if crate::statements::is_storage_message(m) && r.lock is Tuple {
                     assert(crate::domain::domain_of_lock(rules, r.lock) == d2);
                     assert(o != r.lock);

@@ -1,0 +1,66 @@
+#case 0
+#data "<!doctype html><p>foo<search>bar<p>baz"
+#title ""
+#lines 5
+"foo"
+""
+"bar"
+""
+"baz"
+#links 0
+
+#case 1
+#data "<!doctype html><search><p>foo</search>bar"
+#title ""
+#lines 3
+"foo"
+""
+"bar"
+#links 0
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><search><b>"
+#title ""
+#lines 1
+"xxx"
+#links 0
+
+#case 3
+#data "<!doctype html><a><search>x</a>y"
+#title ""
+#lines 1
+"xy"
+#links 0
+
+#case 4
+#data "<!doctype html><a><search>x<p>y<a>z"
+#title ""
+#lines 3
+"x"
+""
+"yz"
+#links 0
+
+#case 5
+#data "<!doctype html><li>a<search><li>b"
+#title ""
+#lines 2
+"* a"
+"* b"
+#links 0
+
+#case 6
+#data "<!doctype html><dd>a<search><dt>b"
+#title ""
+#lines 2
+"a"
+"b"
+#links 0
+
+#case 7
+#data "<!doctype html><x><search></x>y"
+#title ""
+#lines 1
+"y"
+#links 0
+

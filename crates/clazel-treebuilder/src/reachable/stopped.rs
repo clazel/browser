@@ -161,6 +161,7 @@ pub proof fn lemma_dispatch_stop(env: EncFns, p: Parser, token: Token)
     }
     let t = classify(token);
     super::run::lemma_classify_ok(token);
+    crate::theorems::equivalence::lemma_classify_plain(token);
     let r = dispatcher(p1, t);
     assert(reachable_inv(p1));
     super::run::lemma_dispatch_inv(p1, t);
