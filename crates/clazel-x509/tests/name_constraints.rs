@@ -96,7 +96,7 @@ fn extracts_ipv4_and_ipv6_address_mask_pairs() {
 
 #[test]
 fn permits_ordered_fields_and_preserves_unsupported_general_name() {
-    let unsupported_base = [0xa4, 0x00]; // directoryName choice, preserved whole.
+    let unsupported_base = [0x86, 0x00]; // uniformResourceIdentifier, preserved whole.
     let unsupported_subtree = subtree(&unsupported_base, &[]);
     let permitted = tlv(0xa0, &unsupported_subtree);
     let excluded_base = tlv(0x82, b"blocked.test");
@@ -112,7 +112,7 @@ fn permits_ordered_fields_and_preserves_unsupported_general_name() {
         return;
     };
     match items.first().map(|item| item.base) {
-        Some(base @ GeneralNameConstraint::Unsupported { tag: 4, der }) => {
+        Some(base @ GeneralNameConstraint::Unsupported { tag: 6, der }) => {
             assert_eq!(der, &unsupported_base);
             assert!(!general_name_constraint_supported(base));
         }
@@ -164,4 +164,47 @@ fn rejects_field_reordering_trailing_bytes_and_bad_outer_consumption() {
     assert!(parse_name_constraints(&trailing).is_none());
 
     assert!(parse_name_constraints(&[0x30, 0x00]).is_some());
+}
+
+#[test]
+fn extracts_zero_length_dns_rfc822_and_directory_name_bases() {
+    // CA/B BR 7.1.2.5.2: a zero-length dNSName in excludedSubtrees.
+    let empty_dns = subtree(&tlv(0x82, b""), &[]);
+    let encoded = name_constraints(&tlv(0xa1, &empty_dns));
+    let parsed = parse_name_constraints(&encoded);
+    assert!(parsed.is_some());
+    let Some(parsed) = parsed else { return };
+    let first = parsed
+        .excluded_subtrees
+        .as_ref()
+        .and_then(|items| items.first())
+        .map(|item| item.base);
+    assert!(matches!(first, Some(GeneralNameConstraint::DnsName(bytes)) if bytes.is_empty()));
+
+    let email = subtree(&tlv(0x81, b".example.com"), &[]);
+    let name = [
+        0x30, 0x0e, 0x31, 0x0c, 0x30, 0x0a, 0x06, 0x03, 0x55, 0x04, 0x03, 0x0c, 0x03, b'f', b'o',
+        b'o',
+    ];
+    let directory = subtree(&tlv(0xa4, &name), &[]);
+    let mut both = email;
+    both.extend_from_slice(&directory);
+    let encoded = name_constraints(&tlv(0xa0, &both));
+    let parsed = parse_name_constraints(&encoded);
+    assert!(parsed.is_some());
+    let Some(parsed) = parsed else { return };
+    let items = parsed.permitted_subtrees.unwrap_or_default();
+    let first = items.first().map(|item| item.base);
+    assert!(
+        matches!(first, Some(GeneralNameConstraint::Rfc822Name(bytes)) if bytes == b".example.com")
+    );
+    if let Some(base) = first {
+        assert!(general_name_constraint_supported(base));
+    }
+    let second = items.get(1).map(|item| item.base);
+    assert!(matches!(second, Some(GeneralNameConstraint::DirectoryName(bytes)) if bytes == name));
+
+    // An rfc822Name must still be IA5.
+    let non_ia5 = subtree(&tlv(0x81, &[0xc3, 0xa9]), &[]);
+    assert!(parse_name_constraints(&name_constraints(&tlv(0xa0, &non_ia5))).is_none());
 }

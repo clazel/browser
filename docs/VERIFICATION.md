@@ -179,7 +179,40 @@ We list this openly. Proofs are only as good as their assumptions.
 - `clazel-sys`, the one crate with `unsafe` (see "The `unsafe` exception"
   below): a handful of foreign calls that enter the OS sandbox, and `libc`,
   its only shipped dependency, for struct layouts and constants
-- Cryptography, which comes from formally verified libraries (libcrux / HACL\*), not our own code
+- Cryptographic primitives, which come from formally verified libraries (libcrux / HACL\*, and
+  fiat-crypto for P-384's field arithmetic), not our own code.
+  What that trusts, precisely: HACL\*'s F\* proofs; the toolchain that
+  translates the verified code to the Rust libcrux ships (in the TCB, not
+  itself proven); libcrux's hand-written, unverified glue around that code
+  (each crate's `impl_hacl.rs` and macros, such as `libcrux-hkdf`'s
+  `impl_hkdf!`); and libcrux's `pre-verification` support crates
+  (`libcrux-hacl-rs`, `-secrets`, `-traits`, `-macros`). Every call into
+  libcrux is one axiom in `crates/clazel-crypto/src/axioms.rs`, stating only
+  libcrux's documented types, output lengths and failure cases: the output
+  is an uninterpreted function of exactly those inputs, named for the
+  standard's algorithm, and that it is that algorithm is HACL\*'s proof.
+  The axioms cover TLS (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519 and
+  the CertificateVerify signatures) and certificate-chain links (SHA-384
+  and SHA-512 digests for RSA PKCS#1 v1.5, and ECDSA P-256 with SHA-384).
+  RSA PKCS#1 v1.5 itself is not trusted: it is `clazel-pkcs1`, our own
+  proven code, over those digests
+- fiat-crypto 0.3.0, for the field arithmetic of `clazel-p384` (`mul`, `add`
+  and `sub` modulo P-384's p and n). What that trusts, precisely: the Coq
+  kernel; Coq's extraction to OCaml and the OCaml compiler that runs the
+  synthesizer; fiat's unverified printer from its intermediate representation
+  to Rust text (the Rust it ships is not itself proven), including the
+  pre- and postcondition comments it prints above each function, which are
+  taken to state the Coq theorem; rustc's fixed-width integer arithmetic
+  (`u128`, `i128`, `u64`, `i8`) and `as` casts, which the generated code
+  relies on and whose freedom from overflow comes from fiat's bounds
+  analysis; and that the published 0.3.0 crate is the synthesizer's output
+  (`Cargo.lock` pins the tarball's checksum, not a regeneration). Every call
+  into fiat is one of six axioms in `crates/clazel-p384/src/axioms.rs`, each
+  stating only the postcondition fiat prints above that function. The
+  conversions into and out of the Montgomery domain, the octet-string
+  conversions, exponentiation and inversion are our own code, proven over
+  those axioms; the ECDSA group law and verification steps will be too, but
+  are not written yet
 - That each spec matches the standard it transcribes. No proof can check
   this, because the standard is English. It is backed by machine-checked
   evidence instead of a reviewer (next section), and that evidence is only as

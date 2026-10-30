@@ -48,7 +48,9 @@ crypto from libcrux (decided in phase-3.md item 3.0; rustls was not taken).
 *Exit:* a verified `curl` clone.
 Detailed plan: [phases/phase-3.md](phases/phase-3.md).
 **Status: in progress (started 2026-10-23). The TLS decision (3.0) is
-taken: option B.**
+taken: option B. Everything but TLS is on `main` (HTTP, DNS, the fetch
+client with redirects and cookies, the kernel join, and the `http://` half
+of the `curl` clone); TLS (3.5) is on open pull requests.**
 
 ## Phase 4: HTML and DOM
 WHATWG tokenizer (proven total and panic-free), tree builder, DOM.
