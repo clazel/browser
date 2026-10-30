@@ -55,7 +55,7 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | proc-macro2 | 1.0.107 | proof | Token streams for Verus's macros. Also used by `xtask` (with `span-locations`) to lex source files. |
 | quote | 1.0.47 | proof | Token generation for Verus's macros. Also locked under `serde_derive` (tooling). |
 | unicode-ident | 1.0.27 | proof | Identifier rules for `proc-macro2`. |
-| encoding_rs | 0.8.35 | test | Firefox's Encoding Standard implementation: the reference engine in `clazel-encoding`'s differential test (`tests/conformance_utf8.rs`). Pinned to 0.8.35, whose only dependency is `cfg-if`; later releases add five more. |
+| encoding_rs | 0.8.35 | test | Firefox's Encoding Standard implementation: the reference engine in `clazel-encoding`'s differential tests (`tests/conformance_utf8.rs`, `tests/conformance_legacy.rs`: labels, the legacy decoders and the single-byte encoder) and for the labels `clazel-html`'s sniffer resolves (`tests/conformance_sniff.rs`). Pinned to 0.8.35, whose only dependency is `cfg-if`; later releases add five more. |
 | base64 | 0.22.1 | test | RFC 4648 base64 implementation (rust-base64): the reference engine in `clazel-base64`'s differential test (`tests/conformance_base64.rs`). No dependencies. |
 | mime | 0.3.17 | test | hyperium's media type parser (used by `hyper` and `reqwest`): the reference engine in `clazel-mime`'s differential test (`tests/conformance_mime_types.rs`). No dependencies. |
 | infer | 0.19.0 | test | A file-type detector by magic numbers (bojand/infer), written without the WHATWG standard: the reference in `clazel-mime`'s sniffing differential test (`tests/conformance_sniffing.rs`). Used without default features, so it has no dependencies (`cfb` is optional). |
