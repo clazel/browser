@@ -91,19 +91,33 @@ verus! {
 /// `b` of `y^2 = x^3 + a x + b`, the base point `G = (gx, gy)`, its order
 /// `n` and the cofactor `h`.
 pub struct Curve {
+    /// The prime `p` of the field Fp.
     pub p: nat,
+    /// The coefficient `a`, in `[0, p-1]`.
     pub a: nat,
+    /// The coefficient `b`, in `[0, p-1]`.
     pub b: nat,
+    /// The x-coordinate of the base point `G`.
     pub gx: nat,
+    /// The y-coordinate of the base point `G`.
     pub gy: nat,
+    /// The order `n` of `G`.
     pub n: nat,
+    /// The cofactor `h`.
     pub h: nat,
 }
 
 /// An elliptic curve point: the point at infinity `O`, or `(x, y)`.
 pub enum EcPoint {
+    /// The point at infinity.
     O,
-    Aff { x: nat, y: nat },
+    /// The point `(x, y)`, both coordinates in `[0, p-1]`.
+    Aff {
+        /// The x-coordinate.
+        x: nat,
+        /// The y-coordinate.
+        y: nat,
+    },
 }
 
 /// SP 800-186 §3.2.1.4, P-384: `h = 1`, `a = -3`, and the hex values of
