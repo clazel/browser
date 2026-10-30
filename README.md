@@ -79,6 +79,7 @@ verification passes, so it shows the last such push and can lag behind
 ⁴ Measured by the run: passing / total units per vendored suite, as each `tests/conformance*.rs` reports them. Expected failures are counted separately and never as passes. See [docs/VERIFICATION.md](docs/VERIFICATION.md#honesty-metrics).
 ⁵ Counted by `cargo xtask check`: `unsafe` blocks (and `unsafe extern` blocks), with the lines from the `unsafe` keyword to the closing brace. Only `clazel-sys` may have any; the rule and its audits are in [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/SYS-AUDITS.md](docs/SYS-AUDITS.md).
 ⁶ The host shell (`crates/clazel/src`, item 2.15) is 276 lines, counted as `wc -l` counts them over its Rust files; the plan's limit is 300. The command line and the demo (`crates/clazel/cli`, item 2.16) are not counted: they only call the shell's public functions.
+⁷ The network shell (`crates/clazel-net/src`, item 3.8: the resolver's sockets, TCP connections and the loop that drives the fetch transducer) is 1827 lines, counted the same way. It is Tier 0 and makes no protocol decisions: every parser and decision on its path is a proven function of the crates it calls.
 <!-- END STATUS -->
 
 **Phase 2 process tests: where they have run.** The demo (`cargo run -p clazel
