@@ -9,8 +9,11 @@
 //!   name or an IP address; design Q2) and an X25519 public input are
 //!   explicit configuration. Entropy sourcing remains external; the key-
 //!   exchange join checks the private/public binding after this controller.
-//! - send_sni is supplied by the URL layer (DNS host versus IP address).
-//!   The captured host is retained unchanged for future certificate checks.
+//! - server_name follows the host's type (RFC 6066 §3, "Literal IPv4 and
+//!   IPv6 addresses are not permitted in "HostName""): a DNS host sends one
+//!   host_name entry, an IP host sends no server_name extension at all, as
+//!   Chrome and Firefox do. The captured host is retained unchanged for the
+//!   certificate check.
 //! - Caller entropy/random and public input are exactly 32 bytes. Session ID
 //!   is at most 32 bytes; a nonempty ID requests middlebox compatibility.
 //!   The record driver must implement Appendix D.4's dummy CCS rules later.
@@ -45,8 +48,6 @@ pub struct Config {
     pub session_id: Seq<u8>,
     /// X25519 public input, not a shared secret.
     pub public_key: Seq<u8>,
-    /// Whether the URL layer classified the target as a DNS name.
-    pub send_sni: bool,
 }
 /// Local inputs representable by this client profile.
 pub open spec fn config_ok(c: Config) -> bool {
@@ -62,12 +63,15 @@ pub open spec fn signatures() -> Seq<u16> {
 pub open spec fn cookie_ok(cookie: Seq<u8>) -> bool {
     cookie.len() == 0 || (cookie.len() <= MAX_COOKIE && crate::spec::read_cookie(cookie) is Some)
 }
-/// §4.2, RFC 6066 §3: the exact ordered extensions put on the wire.
+/// §4.2, RFC 6066 §3: the exact ordered extensions put on the wire. A DNS
+/// host sends server_name with its one host_name; an IP host sends none
+/// ("Literal IPv4 and IPv6 addresses are not permitted in "HostName"").
 pub open spec fn extensions(c: Config, cookie: Seq<u8>) -> Seq<crate::spec::Ext> {
-    (if c.send_sni { seq![crate::spec::Ext { etype: 0,
-        data: crate::spec::write_server_name_ch(seq![crate::spec::ServerName { host_name:
-            match c.host { crate::host::spec::Host::Dns(name) => name, crate::host::spec::Host::Ip(address) => address } }]) }] }
-        else { seq![] })
+    (match crate::host::spec::sni_host_name(c.host) {
+        Some(name) => seq![crate::spec::Ext { etype: 0,
+            data: crate::spec::write_server_name_ch(seq![crate::spec::ServerName { host_name: name }]) }],
+        None => seq![],
+    })
     + seq![crate::spec::Ext { etype: 43, data: seq![2u8, 3u8, 4u8] },
         crate::spec::Ext { etype: 13, data: crate::spec::write_signature_schemes(signatures()) },
         crate::spec::Ext { etype: 10, data: seq![0u8, 2u8, 0u8, 29u8] },
