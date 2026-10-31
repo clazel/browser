@@ -405,9 +405,16 @@ fn a_large_body_is_split_into_body_frames_and_read_back_whole() {
     let id = open(&mut k, "http://example.test/");
     k.navigate(id, "http://example.test/big");
     k.net(0, InputBuf::Connected);
-    // Three pieces: two of MAX_BODY_CHUNK octets and a short one.
+    // Three pieces: two of MAX_BODY_CHUNK octets and a short one. Under
+    // Miri only the short one: the 2 MiB body took 1,054 s there (about
+    // 500 s per MiB), and a body over one chunk cannot fit in a minute, so
+    // Miri sees the framing of a single Body frame and the split itself is
+    // checked by the normal test job.
     let chunk = clazel_ipc::message::codec::MAX_BODY_CHUNK;
-    let body: Vec<u8> = (0..2 * chunk + 17).map(|i| (i % 251) as u8).collect();
+    let full_chunks = if cfg!(miri) { 0 } else { 2 };
+    let body: Vec<u8> = (0..full_chunks * chunk + 17)
+        .map(|i| (i % 251) as u8)
+        .collect();
     let mut raw = Vec::new();
     // The raw write, to count the frames in it.
     if let Some(s) = k.state.take() {
@@ -427,9 +434,14 @@ fn a_large_body_is_split_into_body_frames_and_read_back_whole() {
     }
     let out = support::split_frames(&raw);
     let msgs = out.unwrap_or_default();
-    assert_eq!(msgs.len(), 5, "Commit, three Body frames, BodyEnd");
-    assert!(matches!(msgs.get(1), Some(Msg::Body { bytes }) if bytes.len() == chunk));
-    assert!(matches!(msgs.get(3), Some(Msg::Body { bytes }) if bytes.len() == 17));
+    if cfg!(miri) {
+        assert_eq!(msgs.len(), 3, "Commit, one Body frame, BodyEnd");
+        assert!(matches!(msgs.get(1), Some(Msg::Body { bytes }) if bytes.len() == 17));
+    } else {
+        assert_eq!(msgs.len(), 5, "Commit, three Body frames, BodyEnd");
+        assert!(matches!(msgs.get(1), Some(Msg::Body { bytes }) if bytes.len() == chunk));
+        assert!(matches!(msgs.get(3), Some(Msg::Body { bytes }) if bytes.len() == 17));
+    }
     let doc = support::read_doc(msgs);
     assert_eq!(doc.map(|d| d.body), Some(body));
 }

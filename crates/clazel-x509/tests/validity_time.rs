@@ -167,7 +167,15 @@ fn unix_seconds_never_second_60() {
         fields(from_unix_seconds(1_483_228_800)),
         Some((2017, 1, 1, 0, 0, 0))
     );
-    for t in (0..253_402_300_800u64).step_by(86_399 * 7 + 13) {
+    // About 419,000 instants. Miri takes every 300th of them (1,397,
+    // about 55 s there; every 100th took 161 s), as it looks for undefined
+    // behaviour in the paths they exercise; the normal job runs them all.
+    let step = if cfg!(miri) {
+        (86_399 * 7 + 13) * 300
+    } else {
+        86_399 * 7 + 13
+    };
+    for t in (0..253_402_300_800u64).step_by(step) {
         assert!(from_unix_seconds(t).is_some_and(|t| t.second <= 59));
     }
 }

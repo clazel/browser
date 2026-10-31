@@ -247,7 +247,11 @@ fn differential_for_label() {
     }
     let mut total = 0usize;
     let mut failures = Vec::new();
-    for l in &labels {
+    // Miri checks every other label (all of them took 101 s there): it
+    // looks for undefined behaviour in the paths they exercise, and the
+    // normal test job checks every label.
+    let stride = if cfg!(miri) { 2 } else { 1 };
+    for l in labels.iter().step_by(stride) {
         // A label with a quote, `>` or `;` would end the attribute early,
         // and one with bytes up to 0x20 is not an XML encoding; keep the
         // shapes simple.
@@ -318,10 +322,12 @@ fn differential_for_label() {
         }
     }
     let fail = failures.len();
-    println!(
-        "clazel-conformance: suite=\"encoding_rs for_label through the sniffer\" pass={} xfail=0 fail={fail} total={total}",
-        total.saturating_sub(fail)
-    );
+    if !cfg!(miri) {
+        println!(
+            "clazel-conformance: suite=\"encoding_rs for_label through the sniffer\" pass={} xfail=0 fail={fail} total={total}",
+            total.saturating_sub(fail)
+        );
+    }
     failures.retain(|f| !f.is_empty());
     assert!(fail == 0, "{}", failures.join("\n"));
 }
