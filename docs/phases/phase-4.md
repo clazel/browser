@@ -432,6 +432,13 @@ differences), WPT `legacy-mb-*` suites, and `encoding_rs` on random bytes
 data is the same). Until this item lands, 4.0(b)'s fail-closed notice
 applies.
 
+**Slipped to Phase 8 (2026-10-31), as 4.0(b) allows.** Nothing of this
+item is built: `clazel-encoding` ships no multi-byte decoder, and a page
+whose sniffed encoding is one of the seven multi-byte encodings is not
+rendered; the renderer shows "encoding `<name>` is not supported" and
+extracts no links. The item moves to Phase 8 (ROADMAP.md) unchanged, with
+the WPT `legacy-mb-*` suites of 4.1.
+
 ### 4.5 Character references and the entity table (S)
 
 `clazel-html`, module `charref/`: HTML §13.5 named character references as
@@ -1118,23 +1125,123 @@ and 4.12 to 4.15, not the tree builder's proof or tier.
 | Item | State |
 |------|-------|
 | 4.0 Decisions | done (2026-10-28): A, tier 2 for the tree builder and DOM; 4.3 in phase and 4.4 may slip; byte strings and `Body` frames; the forward-design additions folded in. Decided (2026-10-30), by the maintainer: `html5ever` with `markup5ever_rcdom` is the tree builder's second engine (4.11's differential), as test-only dependencies (`[dev-dependencies]` of `clazel-treebuilder`, 22 `test` rows in DEPENDENCIES.md), not a pinned binary outside the workspace |
-| 4.1 Test data and tables | tokenizer suite and entity table done (`clazel-html`); WPT tree-construction suite vendored with its converter (`clazel-treebuilder`); encoding data done: `encodings.json` and `indexes.json` vendored and generated (`cargo xtask tables`), the single-byte indexes checked against the Unicode mapping files (Apple's not vendored: no redistribution grant), WPT `encoding/` labels, single-byte, fatal single-byte and UTF-16 cases, html5lib-tests `encoding/`; `legacy-mb-*` with 4.4 |
-| 4.2 Encoding labels and sniffing | done locally: get an encoding, BOM sniff and decode proven (`clazel-encoding`, tier 2) with both lemmas; the sniffing algorithm, prescan and change the encoding proven (`clazel-html` `sniff/`), Encoding's decode proven to agree with its first steps; WPT labels, html5lib-tests `encoding/` (75 pass, 7 expected failures needing the parser's restart, 1 scripted not run) and `encoding_rs` differentials; mutations certified; a same-text second transcription of the prescan proven equal on every input; waiting for CI's full run |
-| 4.3 Single-byte, UTF-16, replacement, x-user-defined | done locally: every decoder and the single-byte encoder proven, with the three lemmas and same-text independent transcriptions; WPT and `encoding_rs` conformance; tables checked against the Unicode mapping files; mutations per step and per table certified; waiting for CI's full run |
-| 4.4 Multi-byte encodings | not started |
-| 4.5 Character references | done: spec, contracts, proof, examples, mutations |
-| 4.6 Tokenizer spec and contracts | done: 84 states (the standard now has 84, not 80); total, output bounded, two faces equal |
-| 4.7 Tokenizer implementation and evidence | done locally: proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain; `tier = 2` raised in PR `phase4/tier2-html-dom-treebuilder`, awaiting CI's full verification (real only once it is green) |
-| 4.8 DOM | proofs, mutations and independent transcription done (merged); `crates/clazel-dom/tests/conformance_dom.rs` exists (html5lib tree-construction trees read back into the arena and printed again; differential against `markup5ever_rcdom` 0.39.0 on random operation sequences); `tier = 2` is declared in PR `phase4/dom-conformance-tier2` and becomes real only when that PR's full CI verification is green |
-| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers (`parser_wf` of every reachable parser, stopped or not: `theorem_reachable_stopped`), `theorem_reachable_parser_inv` (`parser_inv` of every reachable parser until it stops), `theorem_open_distinct` (distinct elements on the stack of every reachable parser), and `theorem_reachable_w3c_facts`, `theorem_reachable_foreign_content`, `theorem_reachable_frameset_cell` and `theorem_reachable_in_body_table`, which discharge the W3C equivalences' state preconditions that are facts of reachable states (`element_plain` of `html` and `body` included); `clazel-treebuilder` raised to `tier = 2` in PR `phase4/tier2-html-dom-treebuilder` (with 4.9 to 4.11), awaiting CI's full verification (real only once it is green) |
-| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified; `clazel-treebuilder` raised to `tier = 2` in PR `phase4/tier2-html-dom-treebuilder` (with 4.9 to 4.11), awaiting CI's full verification (real only once it is green) |
-| 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential against `html5ever` 0.39.0 (`markup5ever_rcdom`, `tests/conformance_html5ever.rs`): on the suite's inputs (3,898 parses, a case naming no scripting flag run with both), 3,699 trees agree and 199 differ in five listed classes, in each of which ours is the suite's tree and html5ever is behind our pinned standard or departs from it (processing instructions 175, `search` special 10, frameset-ok after head 6, "parsing template contents" for `form` 6, `input` in a `select` fragment 2); on 10,000 random tag-soup inputs, 9,991 agree and 9 differ by the same rules (`search` 3, `select` fragment 5, and html5ever's "in table body" scope test lacking `thead` 1, seen only there); no failure, no bug found in ours; `clazel-treebuilder` raised to `tier = 2` in PR `phase4/tier2-html-dom-treebuilder` (with 4.9 to 4.11), awaiting CI's full verification (real only once it is green) |
-| 4.12 IPC schema and kernel | done locally: schema (Commit, Body, BodyEnd, Display), kernel commit protocol and Show, `theorem_show_only_own_tab`, `theorem_address_bar_integrity`, `theorem_body_is_the_response` proven, `theorem_committed_only_after_commit` proven, Phase 2 and 3 theorems restated; both crates stay at tier 2; waiting for CI's full run |
-| 4.13 Renderer pipeline | done locally on branch `phase4/renderer-pipeline`, CI not yet run: `clazel-renderer` (tier 0) runs content type, MIME sniffing, encoding sniffing, decode, parse, one restart on "change the encoding", document base URL, link resolution and the text layout, and sends one `Display` cut to fit a frame; unit tests per rule; html5lib-tests `encoding/` through the pipeline 82 of 82 (the 7 restart cases included); `clazel browse` shows a parsed page and follows its link through the sandboxed renderer; the memory bound is stated in the crate README and not yet measured (4.16) |
-| 4.14 Text layout | done locally on branch `claude/phase4-text-layout`, CI not yet run: `clazel-text` (tier 0), every rule unit-tested; golden test of the 1,761 html5lib document cases at width 80; the bound (`T + A + 80·N` characters, `T + A + 82·N` lines) checked on them and on generated documents |
-| 4.15 `clazel browse` | done locally: the loop, tested against an in-process server through real renderers; with 4.13 it prints parsed pages (title, text, numbered links) and follows their links; the host passes its width to the renderers |
-| 4.16 Demo and hostile pages | done locally on branch `phase4/exit-demo`, CI not yet run (local verification deliberately not run; the named test files below were run on macOS arm64). **Demo:** `clazel browse` on `http://example.com/` (title, text; the page has no links today), `http://info.cern.ch/` (link 1 followed to `TheProject.html`, 25 links, `b` back), `http://neverssl.com/` and `http://textfiles.com/` (link 8 followed; link 2 is `https:`, printed as a fetch failure until 3.5 joins this branch); every address line was the kernel's committed URL; no glue fix was needed. **Through real processes** (`crates/clazel/tests/pages.rs`): the 1,761 html5lib tree-construction document cases served and visited in one tab, each printed exactly as the in-process pipeline gives it (1,761 of 1,761, one renderer); a page with links (numbers, address line, same-origin commit, cross-origin kill and spawn, its `Set-Cookie` in the jar and sent back to its origin only); the WPT `cookies/` `httpCookieTest` rows through the kernel's `Set-Cookie` path, `Cookie` field and `document.cookie` both checked: 157 pass, 10 expected failures (9 `secure.https.html`, no TLS on this branch; 1 `value.html` LF case, the response is rejected). **Hostile pages** (`crates/clazel/tests/hostile_pages.rs`, 12 tests, about 90 s), each through a real sandboxed renderer with no panic, the address line the kernel's and the peak memory within 4.13's terms (numbers in `crates/clazel-renderer/README.md`): 20,000 nested `<div>`s, the formatting list reconstructed (604,305 nodes, under 4.9's per-token bound), a 64 MiB body, 1 MiB of `&amp;`, references without semicolons, `<meta charset>` at byte 1025 (restart), lying content types, invalid bytes in six encodings, one `<plaintext>`, a title and `<base href>` mimicking the address bar, a page over `max_nodes` (notice shown), a sandboxed `clazel-adversary display` titling its page with another tab's URL (shown under its own tab). **Ignored, with reasons:** a million nested `<div>`s (quadratic in depth: the tree builder's insertion walks the parent chain, `clazel-treebuilder` `exec/insert.rs`; hours in a debug build) and 64 MiB of `&amp;` (each named reference scans all 2,231 names in `clazel-html` `charref::exec::longest_match_exec`; passed when run, 872 s, peak 675 MiB). Both are performance findings in proven crates, reported and not patched. **Phase 2 kept:** `demo.rs`, `clazel-renderer`'s `escape.rs`, `conformance_wpt_cookies.rs` (11 + 166 pass, 1 expected failure), `adversarial.rs` and `browse.rs` pass |
-| 4.17 Status and README | not started |
+| 4.1 Test data and tables | done, merged into `main`: tokenizer suite and entity table (`clazel-html`) at `7c2ba4c` (PR #33); WPT tree-construction suite at `feebc0f` (PR #35); encoding data at `d33e767` (PR #50). In detail: tokenizer suite and entity table done (`clazel-html`); WPT tree-construction suite vendored with its converter (`clazel-treebuilder`); encoding data done: `encodings.json` and `indexes.json` vendored and generated (`cargo xtask tables`), the single-byte indexes checked against the Unicode mapping files (Apple's not vendored: no redistribution grant), WPT `encoding/` labels, single-byte, fatal single-byte and UTF-16 cases, html5lib-tests `encoding/`; `legacy-mb-*` moves to Phase 8 with 4.4 |
+| 4.2 Encoding labels and sniffing | done, merged into `main` at `d33e767` (PR #50): get an encoding, BOM sniff and decode proven (`clazel-encoding`, tier 2) with both lemmas; the sniffing algorithm, prescan and change the encoding proven (`clazel-html` `sniff/`), Encoding's decode proven to agree with its first steps; WPT labels, html5lib-tests `encoding/` (75 pass, 7 expected failures needing the parser's restart, 1 scripted not run) and `encoding_rs` differentials; mutations certified; a same-text second transcription of the prescan proven equal on every input |
+| 4.3 Single-byte, UTF-16, replacement, x-user-defined | done, merged into `main` at `d33e767` (PR #50): every decoder and the single-byte encoder proven, with the three lemmas and same-text independent transcriptions; WPT and `encoding_rs` conformance; tables checked against the Unicode mapping files; mutations per step and per table certified |
+| 4.4 Multi-byte encodings | **slipped to Phase 8** (2026-10-31), as 4.0(b) allows: not built; a page in a multi-byte encoding shows "encoding `<name>` is not supported" and is not rendered (`clazel-renderer` `pipeline.rs`) |
+| 4.5 Character references | done, merged into `main` at `7c2ba4c` (PR #33): spec, contracts, proof, examples, mutations |
+| 4.6 Tokenizer spec and contracts | done, merged into `main` at `7c2ba4c` (PR #33): 84 states (the standard now has 84, not 80); total, output bounded, two faces equal |
+| 4.7 Tokenizer implementation and evidence | done, merged into `main`: the tokenizer at `7c2ba4c` (PR #33), `tier = 2` at `56cc929` (PR #64, `phase4/tier2-html-dom-treebuilder`; PR #52 at `aee74dd` updated the manifest's comment): proof, conformance, differential, 118 certified mutations, W3C transcription proven equivalent on its stated domain |
+| 4.8 DOM | proofs, mutations and independent transcription done, merged into `main` at `feebc0f` (PR #35). In-crate conformance evidence added in PR #78 (`phase4/dom-conformance-tier2`): `crates/clazel-dom/tests/conformance_dom.rs` reads every html5lib tree-construction expected tree back into the arena with its own operations, re-checks `wf` through the readers and prints it again (1,967 of 1,967 agree), and runs a seeded differential of random tree operations against `markup5ever_rcdom` 0.39.0 (3,000 of 3,000 sequences agree); `tier = 2` is declared in that PR and becomes real only when its full CI verification is green |
+| 4.9 Tree builder spec and contracts | spec done (21 modes); all five planned theorems proven, plus `theorem_reachable` and `theorem_reachable_wf`, which removes the hypotheses of the three document theorems for reachable parsers (`parser_wf` of every reachable parser, stopped or not: `theorem_reachable_stopped`), `theorem_reachable_parser_inv` (`parser_inv` of every reachable parser until it stops), `theorem_open_distinct` (distinct elements on the stack of every reachable parser), and `theorem_reachable_w3c_facts`, `theorem_reachable_foreign_content`, `theorem_reachable_frameset_cell` and `theorem_reachable_in_body_table`, which discharge the W3C equivalences' state preconditions that are facts of reachable states (`element_plain` of `html` and `body` included); built at `feebc0f` (PR #35) and `clazel-treebuilder` raised to `tier = 2` at `56cc929` (PR #64, with 4.9 to 4.11 and the `html5ever` differential), merged into `main` |
+| 4.10 Tree builder implementation | every mode proven equal to the spec; `step` equal to `dispatch` for every reachable state; 48 mutations, all 48 certified; built at `feebc0f` (PR #35) and `clazel-treebuilder` raised to `tier = 2` at `56cc929` (PR #64, with 4.9 to 4.11 and the `html5ever` differential), merged into `main` |
+| 4.11 Tree builder evidence | conformance through `clazel-html`'s tokenizer (`exec::driver`, proven equal to the spec's `parse` and `parse_fragment` with that tokenizer): 1,963 of 1,967 pass, the 4 `selectedcontent` cases listed; W3C transcription proven equal for 21 of 23 modes (the other two, "in select", are not in the living standard); differential against `html5ever` 0.39.0 (`markup5ever_rcdom`, `tests/conformance_html5ever.rs`): on the suite's inputs (3,898 parses, a case naming no scripting flag run with both), 3,699 trees agree and 199 differ in five listed classes, in each of which ours is the suite's tree and html5ever is behind our pinned standard or departs from it (processing instructions 175, `search` special 10, frameset-ok after head 6, "parsing template contents" for `form` 6, `input` in a `select` fragment 2); on 10,000 random tag-soup inputs, 9,991 agree and 9 differ by the same rules (`search` 3, `select` fragment 5, and html5ever's "in table body" scope test lacking `thead` 1, seen only there); no failure, no bug found in ours; built at `feebc0f` (PR #35) and `clazel-treebuilder` raised to `tier = 2` at `56cc929` (PR #64, with 4.9 to 4.11 and the `html5ever` differential), merged into `main` |
+| 4.12 IPC schema and kernel | done, merged into `main` at `d1170d5` (PR #51): schema (Commit, Body, BodyEnd, Display), kernel commit protocol and Show, `theorem_show_only_own_tab`, `theorem_address_bar_integrity`, `theorem_body_is_the_response` proven, `theorem_committed_only_after_commit` proven, Phase 2 and 3 theorems restated; both crates stay at tier 2 |
+| 4.13 Renderer pipeline | done, merged into `main` at `60f8292` (PR #69, `phase4/renderer-pipeline`): `clazel-renderer` (tier 0) runs content type, MIME sniffing, encoding sniffing, decode, parse, one restart on "change the encoding", document base URL, link resolution and the text layout, and sends one `Display` cut to fit a frame; unit tests per rule; html5lib-tests `encoding/` through the pipeline 82 of 82 (the 7 restart cases included); `clazel browse` shows a parsed page and follows its link through the sandboxed renderer; the memory bound is stated in the crate README and measured by 4.16's hostile pages |
+| 4.14 Text layout | done, merged into `main` at `60f8292` (PR #69, which carried `claude/phase4-text-layout`): `clazel-text` (tier 0), every rule unit-tested; golden test of the 1,761 html5lib document cases at width 80; the bound (`T + A + 80·N` characters, `T + A + 82·N` lines) checked on them and on generated documents |
+| 4.15 `clazel browse` | done, merged into `main` at `d1170d5` (PR #51): the loop, tested against an in-process server through real renderers; with 4.13 it prints parsed pages (title, text, numbered links) and follows their links; the host passes its width to the renderers |
+| 4.16 Demo and hostile pages | done, merged into `main` at `9f776b2` (PR #66, `phase4/exit-demo`). The demo below was run locally on macOS arm64 (no Internet in CI); the test files below run in CI's Linux and macOS base jobs. **Demo:** `clazel browse` on `http://example.com/` (title, text; the page has no links today), `http://info.cern.ch/` (link 1 followed to `TheProject.html`, 25 links, `b` back), `http://neverssl.com/` and `http://textfiles.com/` (link 8 followed; link 2 is `https:`, printed as a fetch failure: TLS (3.5) is on `main` but not yet wired into the kernel's fetch); every address line was the kernel's committed URL; no glue fix was needed. **Through real processes** (`crates/clazel/tests/pages.rs`): the 1,761 html5lib tree-construction document cases served and visited in one tab, each printed exactly as the in-process pipeline gives it (1,761 of 1,761, one renderer); a page with links (numbers, address line, same-origin commit, cross-origin kill and spawn, its `Set-Cookie` in the jar and sent back to its origin only); the WPT `cookies/` `httpCookieTest` rows through the kernel's `Set-Cookie` path, `Cookie` field and `document.cookie` both checked: 157 pass, 10 expected failures (9 `secure.https.html`, no TLS in the kernel yet; 1 `value.html` LF case, the response is rejected). **Hostile pages** (`crates/clazel/tests/hostile_pages.rs`, 12 tests, about 90 s), each through a real sandboxed renderer with no panic, the address line the kernel's and the peak memory within 4.13's terms (numbers in `crates/clazel-renderer/README.md`): 20,000 nested `<div>`s, the formatting list reconstructed (604,305 nodes, under 4.9's per-token bound), a 64 MiB body, 1 MiB of `&amp;`, references without semicolons, `<meta charset>` at byte 1025 (restart), lying content types, invalid bytes in six encodings, one `<plaintext>`, a title and `<base href>` mimicking the address bar, a page over `max_nodes` (notice shown), a sandboxed `clazel-adversary display` titling its page with another tab's URL (shown under its own tab). **Ignored, with reasons:** a million nested `<div>`s (quadratic in depth: the tree builder's insertion walks the parent chain, `clazel-treebuilder` `exec/insert.rs`; hours in a debug build) and 64 MiB of `&amp;` (each named reference scans all 2,231 names in `clazel-html` `charref::exec::longest_match_exec`; passed when run, 872 s, peak 675 MiB). Both are performance findings in proven crates, reported and not patched. **Phase 2 kept:** `demo.rs`, `clazel-renderer`'s `escape.rs`, `conformance_wpt_cookies.rs` (11 + 166 pass, 1 expected failure), `adversarial.rs` and `browse.rs` pass |
+| 4.17 Status and README | this file's Status and exit criteria, ROADMAP.md (Phase 4, and 4.4 in Phase 8), README.md's prose (not the generated table) and VERIFICATION.md's TCB list; branch `phase4/status-readme` |
+
+Every branch of the phase is merged into `main`; the last Phase 4 merge is
+`9f776b2` (PR #66, 2026-10-30), and `main`'s head when this was written is
+`e29265d`. CI's full verification on `e29265d` ([run 41140621041](https://github.com/clazel/browser/actions/runs/41140621041),
+2026-10-31) did **not** pass. Of its 34 jobs, 30 are green: the static
+checks, the release build, the base jobs on Linux x86-64, macOS arm64 and
+Windows, and all 25 per-crate jobs (`clazel-html`, `clazel-treebuilder`,
+`clazel-dom`, `clazel-encoding`, `clazel-ipc` and `clazel-kernel` among
+them); "Approve the proofs" is skipped, as on every push. `Verify (Miri)`
+was cancelled at its 360-minute limit, so `Full verification` failed at its
+step "Every job passed" and the README table job was skipped. The overrun
+predates Phase 4: `main`'s Miri job at `9c9a694` (the Phase 3 TLS handover,
+before any Phase 4 merge) ran 2 h 41 min without finishing before that run
+was cancelled. It is traced to the Phase 3 TLS tests, and the fix is open
+as PR #75 (`ci/miri-budget`).
+
+### The exit criteria, one by one
+
+1. **Tiers: holds except for `clazel-dom`.** `tier = 2` in the manifests
+   of `clazel-html` (raised at `56cc929`), `clazel-treebuilder` (`56cc929`),
+   `clazel-encoding`, `clazel-ipc` and `clazel-kernel`, each with its
+   `mutations.json`, `tests/conformance*.rs` and `independent.rs`, and
+   `cargo xtask check` accepts them. `clazel-encoding` ships only decoders
+   that landed with their proofs (4.2, 4.3); the multi-byte ones are not
+   shipped (4.4, below). **Not yet:** `clazel-dom` is `tier = 0, target-tier
+   = 2`: its proofs, mutations and independent transcription are done, but
+   `cargo xtask check` requires a `tests/conformance*.rs` in the crate
+   itself, which PR #78 (`phase4/dom-conformance-tier2`) adds with the tier
+   raise (row 4.8).
+2. **Suites: holds.** `clazel-html`'s `tests/conformance_tokenizer.rs` runs
+   every html5lib-tests `tokenizer/*.test` file (7,050 of 7,053, 3 expected
+   failures listed); `clazel-treebuilder`'s
+   `tests/conformance_tree_construction.rs` runs the WPT tree-construction
+   suite through the proven tokenizer and tree builder, fragments through
+   the fragment algorithm and each case with the scripting flag it names
+   (1,963 of 1,967, the 4 `selectedcontent` cases listed); `clazel-html`'s `tests/conformance_sniff.rs` runs html5lib-tests
+   `encoding/` through the sniffer (75 pass, 7 expected failures that need
+   the parser's restart, which the renderer's pipeline test passes, 82 of
+   82; the one `scripted/` case is not run and is counted). Each is a
+   `tests/conformance*.rs` whose counts CI's `table` job writes into the
+   README table.
+3. **Demo: holds for `http://`.** Row 4.16: `clazel browse` on four
+   `http://` sites, links followed, every address line the kernel's
+   committed URL; `crates/clazel/tests/pages.rs` checks the same against an
+   in-process server. **Not yet for `https://`:** Phase 3's TLS (3.5) is on
+   `main` but not wired into the kernel's fetch, so an `https:` link prints
+   a fetch failure. The criterion allows this until TLS lands in the
+   kernel; it is Phase 3's work, not this phase's.
+4. **Kernel theorems: hold.** `theorem_show_only_own_tab`,
+   `theorem_address_bar_integrity` and `theorem_body_is_the_response`
+   (`crates/clazel-kernel/src/display_theorems.rs`) and
+   `theorem_committed_only_after_commit` (`commit_theorems.rs`) are proof
+   functions named in the crate's `theorems` list, which `cargo xtask check`
+   enforces, beside the Phase 2 and 3 theorems, restated over the new
+   events (4.12).
+5. **Hostile pages: hold for the pages run.** The 12 tests of
+   `crates/clazel/tests/hostile_pages.rs` that are not ignored run through
+   real sandboxed renderers with no panic, within 4.13's bound, and the
+   address line unchanged; the Phase 2 demo, escape tests and WPT
+   `cookies/` through processes still pass. Two pages are `#[ignore]`d for
+   time, not for failure: a million nested `<div>`s (never run to the end)
+   and 64 MiB of `&amp;` (passed when run, 872 s). See "Follow-up" below.
+6. **`scripts/verify.sh` and the table: not yet.** CI's full
+   verification failed on run 41140621041 (Miri cancelled at its limit,
+   every other job green), so no green run exists and the README table has
+   no rows yet for the crates added since its last rewrite. VERIFICATION.md's "Tier 2
+   required" list names the tree builder and the DOM operations it uses,
+   as 4.0 decided, and its TCB list now names the Tier 0 code on a page's
+   path.
+
+**Item 4.4 (multi-byte encodings) slipped to Phase 8**, as 4.0(b) allows
+without blocking the exit: a page in one of those encodings shows "encoding
+`<name>` is not supported" and is not rendered.
+
+### Follow-up (performance, not Phase 4 blockers)
+
+Both were found by 4.16's hostile pages, in proven crates, and are reported,
+not patched; neither is a correctness or safety finding, and the renderer
+holds its memory bound on both.
+
+- **The tree builder's insertion check is O(depth).** Inserting a node
+  walks its parent chain (`clazel-treebuilder` `exec/insert.rs`), so a page
+  of n nested elements costs O(n²): 20,000 nested `<div>`s take about 9 s
+  in a debug build, a million would take hours. A depth (or ancestor) field
+  kept in the arena would make the check O(1); its proof touches the DOM's
+  `wf`.
+- **The character-reference match is a linear scan.** Each named reference
+  scans all 2,231 names (`clazel-html` `charref::exec::longest_match_exec`),
+  so 64 MiB of `&amp;` takes 872 s (peak 675 MiB). The first-character
+  index that `charref/index.rs` already proves against the rows could
+  narrow the scan.
+
+**Phase 4: built (2026-10-31), every job but Miri green on run
+41140621041; not complete.** Miri overran its limit, traced to the Phase 3
+TLS tests; the fix is open as PR #75 (`ci/miri-budget`). Complete needs a
+green full CI run on `main` and `clazel-dom` at tier 2 (exit criterion 1,
+PR #78, `phase4/dom-conformance-tier2`).
+
+<!-- Once both hold, replace the paragraph above with this line, filling in the date, sha and run id: -->
+<!-- **Phase 4 complete (YYYY-MM-DD)** after CI's green run at `<sha>` ([run <id>](https://github.com/clazel/browser/actions/runs/<id>)). -->
 
 ## Risks
 

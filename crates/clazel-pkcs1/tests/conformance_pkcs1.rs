@@ -29,10 +29,18 @@
 //!    in-range signature cannot decrypt to the same block).
 //!
 //! Under Miri (about 50 times slower than a debug build, which is itself
-//! 14 times slower than release) only the exponent 3 vectors of the
-//! Wycheproof files, the hand-built cases with `e <= 3`, and nothing else
-//! run; the summary lines are printed only by a native run, which is the one
-//! `cargo xtask verify` reads.
+//! 14 times slower than release) even one exponentiation is too slow: the
+//! three exponent-3 Wycheproof vectors took 1,824 s of Miri time and the
+//! three hand-built `e = 3` cases 1,336 s, about 450 s per 2048-bit
+//! verification, over the 300 s per test that `xtask` allows. So under Miri
+//! only inputs that `verify` rejects before exponentiating run (see
+//! [`refused_early`]): 3 invalid Wycheproof vectors per file (its 2
+//! signatures of the wrong length, about 0.4 s each, and its first
+//! signature not below n, 9 s at 2048 bits; 12 in all, as all 24 such
+//! vectors took 293 s) and 12 hand-built cases (e below 3, the wrong length,
+//! not below n, a modulus out of range; 34 s). No valid signature runs
+//! under Miri; every vector runs natively. The summary lines are printed
+//! only by a native run, which is the one `cargo xtask verify` reads.
 //!
 //! No differential against the `rsa` crate: its dependency tree is 35
 //! packages with default features off, far over the ten the task allows.
@@ -141,6 +149,40 @@ fn verdict(c: &Case) -> Option<bool> {
     Some(verify(&hex(k.modulus), e, &digest(h, &msg), h, &hex(c.sig)))
 }
 
+/// How `verify` refuses inputs before its modular exponentiation, by the
+/// checks before RFC 8017 §8.2.2 step 2.(c).
+enum Early {
+    /// `e` below 3, a modulus outside 2048 to 8192 bits, or a signature
+    /// whose length is not the modulus's (step 1): refused at once.
+    Shape,
+    /// A signature not below n (RSAVP1 step 1): refused after reading both
+    /// numbers.
+    NotBelowN,
+}
+
+/// Whether, and how, `verify` refuses these inputs before exponentiating;
+/// `None` if it would exponentiate. Miri runs only refused inputs (see the
+/// module comment). It reads the lower-case hex strings of the tables
+/// without decoding them: decoding every vector's modulus and signature to
+/// choose took 947 s under Miri.
+fn refused_early(n_hex: &str, e: u64, sig_hex: &str) -> Option<Early> {
+    let mut n = n_hex;
+    while let Some(rest) = n.strip_prefix("00") {
+        n = rest;
+    }
+    let octets = n.len() / 2;
+    let in_range = (octets > 256 && octets <= 1024) || (octets == 256 && n >= "80");
+    if e < 3 || !in_range || sig_hex.len() != n.len() {
+        Some(Early::Shape)
+    } else if sig_hex >= n {
+        // Equal lengths of lower-case hex, so comparing the strings
+        // compares the numbers.
+        Some(Early::NotBelowN)
+    } else {
+        None
+    }
+}
+
 fn suite_name(file: &str) -> String {
     let first = KEYS.iter().find(|k| k.file == file);
     let (bits, sha) = first.map_or((0, "?"), |k| (k.key_size, k.sha));
@@ -152,18 +194,22 @@ fn wycheproof_vectors() {
     let mut failures = Vec::new();
     for (file, declared) in NUMBER_OF_TESTS {
         let (mut pass, mut xfail, mut fail) = (0usize, 0usize, 0usize);
+        let mut not_below_n_run = false;
         for c in CASES
             .iter()
             .filter(|c| KEYS.get(c.key).is_some_and(|k| k.file == *file))
         {
-            // Keep Miri's workload to the exponent-3 subset documented above;
-            // native runs still check every vector and report the full totals.
-            if cfg!(miri)
-                && !KEYS
-                    .get(c.key)
-                    .is_some_and(|k| exponent(k.exponent) == Some(3))
-            {
-                continue;
+            // Under Miri only the vectors of the wrong shape and the first
+            // not below n (module comment); native runs check every vector.
+            if cfg!(miri) {
+                let early = KEYS.get(c.key).and_then(|k| {
+                    refused_early(k.modulus, exponent(k.exponent).unwrap_or(0), c.sig)
+                });
+                match early {
+                    Some(Early::Shape) => {}
+                    Some(Early::NotBelowN) if !not_below_n_run => not_below_n_run = true,
+                    _ => continue,
+                }
             }
             let got = verdict(c);
             let ok = match (c.result, got) {
@@ -189,7 +235,9 @@ fn wycheproof_vectors() {
                 }
             }
         }
-        if !cfg!(miri) {
+        if cfg!(miri) {
+            assert_eq!(pass, 3, "{file}: vectors run under Miri");
+        } else {
             println!(
                 "clazel-conformance: suite=\"{}\" pass={pass} xfail={xfail} fail={fail} total={declared}",
                 suite_name(file)
@@ -220,7 +268,9 @@ fn hand_built_cases() {
     let mut failures = Vec::new();
     let (mut pass, mut fail) = (0usize, 0usize);
     for c in handbuilt::CASES {
-        if cfg!(miri) && c.e > 3 {
+        // Under Miri only the cases refused before exponentiating (module
+        // comment); native runs check every case.
+        if cfg!(miri) && refused_early(c.n, c.e, c.sig).is_none() {
             continue;
         }
         let d = digest(c.hash, c.msg);
@@ -235,7 +285,9 @@ fn hand_built_cases() {
             ));
         }
     }
-    if !cfg!(miri) {
+    if cfg!(miri) {
+        assert_eq!(pass, 12, "hand-built cases run under Miri");
+    } else {
         println!(
             "clazel-conformance: suite=\"Hand-built cases (OpenSSL signatures, malformed encodings, forgeries, ranges)\" pass={pass} xfail=0 fail={fail} total={}",
             handbuilt::CASES.len()
