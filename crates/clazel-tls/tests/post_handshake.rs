@@ -66,7 +66,11 @@ impl Crypto for Reference {
     }
 
     fn hmac(&self, key: &[u8], message: &[u8]) -> Vec<u8> {
-        let mut padded = if key.len() > 64 { self.hash(key) } else { key.to_vec() };
+        let mut padded = if key.len() > 64 {
+            self.hash(key)
+        } else {
+            key.to_vec()
+        };
         padded.resize(64, 0);
         let inner_pad: Vec<u8> = padded.iter().map(|b| b ^ 0x36).collect();
         let outer_pad: Vec<u8> = padded.iter().map(|b| b ^ 0x5c).collect();
@@ -276,23 +280,42 @@ impl Harness {
 fn sends(actions: &[Action]) -> Vec<&Vec<u8>> {
     actions
         .iter()
-        .filter_map(|a| if let Action::Send(w) = a { Some(w) } else { None })
+        .filter_map(|a| {
+            if let Action::Send(w) = a {
+                Some(w)
+            } else {
+                None
+            }
+        })
         .collect()
 }
 
 fn delivered(actions: &[Action]) -> Vec<u8> {
     actions
         .iter()
-        .filter_map(|a| if let Action::Deliver(d) = a { Some(d.clone()) } else { None })
+        .filter_map(|a| {
+            if let Action::Deliver(d) = a {
+                Some(d.clone())
+            } else {
+                None
+            }
+        })
         .flatten()
         .collect()
 }
 
 #[test]
-fn application_data_is_delivered_in_order_across_coalescing_and_fragmentation() -> Result<(), String> {
+fn application_data_is_delivered_in_order_across_coalescing_and_fragmentation() -> Result<(), String>
+{
     let mut h = Harness::new()?;
     let first = h.server_record(CT_APPLICATION_DATA, b"hello ");
-    let second = protect(&h.server_secret, h.server_seq, CT_APPLICATION_DATA, b"world", 40);
+    let second = protect(
+        &h.server_secret,
+        h.server_seq,
+        CT_APPLICATION_DATA,
+        b"world",
+        40,
+    );
     h.server_seq = h.server_seq.saturating_add(1);
     let mut joined = first.clone();
     joined.extend_from_slice(&second);
@@ -312,7 +335,10 @@ fn application_data_is_delivered_in_order_across_coalescing_and_fragmentation() 
         assert_eq!((consumed, actions), (0, vec![]), "prefix of {cut} bytes");
     }
     let (consumed, actions) = h.client.step(Input::Bytes(&third));
-    assert_eq!((consumed, actions), (third.len(), vec![Action::Deliver(b"!".to_vec())]));
+    assert_eq!(
+        (consumed, actions),
+        (third.len(), vec![Action::Deliver(b"!".to_vec())])
+    );
     Ok(())
 }
 
@@ -339,7 +365,10 @@ fn new_session_ticket_is_parsed_then_ignored() -> Result<(), String> {
     let record = h.server_record(CT_HANDSHAKE, &two);
     assert_eq!(h.feed(&record), vec![]);
     let data = h.server_record(CT_APPLICATION_DATA, b"after tickets");
-    assert_eq!(h.feed(&data), vec![Action::Deliver(b"after tickets".to_vec())]);
+    assert_eq!(
+        h.feed(&data),
+        vec![Action::Deliver(b"after tickets".to_vec())]
+    );
     // A ticket fragmented over two records is reassembled, then ignored.
     let (a, b) = ticket.split_at(50);
     let r1 = h.server_record(CT_HANDSHAKE, a);
@@ -385,8 +414,14 @@ fn key_update_not_requested_moves_the_read_keys_only() -> Result<(), String> {
     assert_eq!(h.feed(&after), vec![Action::Deliver(b"two".to_vec())]);
     // The client's write keys did not move: its next record is at sequence 1 of the first epoch.
     let sent = h.client.send_application(b"reply");
-    let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
-    assert_eq!(h.server_reads(&wire), Some((CT_APPLICATION_DATA, b"reply".to_vec())));
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"reply".to_vec()))
+    );
     assert_eq!(h.client_seq, 1);
     Ok(())
 }
@@ -403,31 +438,50 @@ fn old_read_keys_do_not_open_records_after_a_key_update() -> Result<(), String> 
 }
 
 #[test]
-fn key_update_requested_is_answered_under_the_old_keys_then_the_write_keys_move() -> Result<(), String> {
+fn key_update_requested_is_answered_under_the_old_keys_then_the_write_keys_move()
+-> Result<(), String> {
     let mut h = Harness::new()?;
     // Spend some client sequence numbers first so a reset is visible.
     for i in 0..3u8 {
         let sent = h.client.send_application(&[i]);
-        let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
+        let wire = sends(&sent)
+            .first()
+            .map(|w| (*w).clone())
+            .ok_or("no send")?;
         assert_eq!(h.server_reads(&wire), Some((CT_APPLICATION_DATA, vec![i])));
     }
     assert_eq!(h.client_seq, 3);
     let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
     let actions = h.feed(&update);
     assert_eq!(actions.len(), 1);
-    let reply = sends(&actions).first().map(|w| (*w).clone()).ok_or("no reply")?;
+    let reply = sends(&actions)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no reply")?;
     // The reply is KeyUpdate(update_not_requested) under the OLD client keys, sequence 3.
-    assert_eq!(h.server_reads(&reply), Some((CT_HANDSHAKE, key_update_message(0))));
+    assert_eq!(
+        h.server_reads(&reply),
+        Some((CT_HANDSHAKE, key_update_message(0)))
+    );
     h.client_rotated();
     // The next client record is under the new keys at sequence 0.
     let sent = h.client.send_application(b"fresh");
-    let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
-    assert_eq!(h.server_reads(&wire), Some((CT_APPLICATION_DATA, b"fresh".to_vec())));
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"fresh".to_vec()))
+    );
     assert_eq!(h.client_seq, 1);
     // The read side moved too, independently.
     h.server_rotates();
     let data = h.server_record(CT_APPLICATION_DATA, b"server fresh");
-    assert_eq!(h.feed(&data), vec![Action::Deliver(b"server fresh".to_vec())]);
+    assert_eq!(
+        h.feed(&data),
+        vec![Action::Deliver(b"server fresh".to_vec())]
+    );
     Ok(())
 }
 
@@ -437,16 +491,31 @@ fn client_initiated_key_update_with_and_without_a_request() -> Result<(), String
         let mut h = Harness::new()?;
         let sent = h.client.update_keys(request_peer);
         assert_eq!(sent.len(), 1);
-        let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
-        assert_eq!(h.server_reads(&wire), Some((CT_HANDSHAKE, key_update_message(byte))));
+        let wire = sends(&sent)
+            .first()
+            .map(|w| (*w).clone())
+            .ok_or("no send")?;
+        assert_eq!(
+            h.server_reads(&wire),
+            Some((CT_HANDSHAKE, key_update_message(byte)))
+        );
         h.client_rotated();
         let sent = h.client.send_application(b"x");
-        let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
-        assert_eq!(h.server_reads(&wire), Some((CT_APPLICATION_DATA, b"x".to_vec())));
+        let wire = sends(&sent)
+            .first()
+            .map(|w| (*w).clone())
+            .ok_or("no send")?;
+        assert_eq!(
+            h.server_reads(&wire),
+            Some((CT_APPLICATION_DATA, b"x".to_vec()))
+        );
         assert_eq!(h.client_seq, 1, "write sequence number reset by the update");
         // The read keys did not move.
         let data = h.server_record(CT_APPLICATION_DATA, b"still old read keys");
-        assert_eq!(h.feed(&data), vec![Action::Deliver(b"still old read keys".to_vec())]);
+        assert_eq!(
+            h.feed(&data),
+            vec![Action::Deliver(b"still old read keys".to_vec())]
+        );
     }
     Ok(())
 }
@@ -458,8 +527,14 @@ fn several_key_updates_in_a_row() -> Result<(), String> {
         let update = h.server_record(CT_HANDSHAKE, &key_update_message(round % 2));
         let actions = h.feed(&update);
         if round % 2 == 1 {
-            let reply = sends(&actions).first().map(|w| (*w).clone()).ok_or("no reply")?;
-            assert_eq!(h.server_reads(&reply), Some((CT_HANDSHAKE, key_update_message(0))));
+            let reply = sends(&actions)
+                .first()
+                .map(|w| (*w).clone())
+                .ok_or("no reply")?;
+            assert_eq!(
+                h.server_reads(&reply),
+                Some((CT_HANDSHAKE, key_update_message(0)))
+            );
             h.client_rotated();
         } else {
             assert_eq!(actions, vec![]);
@@ -526,7 +601,10 @@ fn other_handshake_messages_after_the_handshake_are_unexpected_message() -> Resu
     let kinds = [
         ("ClientHello", post_handshake_vectors::CLIENT_HELLO),
         ("ServerHello", post_handshake_vectors::SERVER_HELLO),
-        ("EncryptedExtensions", post_handshake_vectors::ENCRYPTED_EXTENSIONS),
+        (
+            "EncryptedExtensions",
+            post_handshake_vectors::ENCRYPTED_EXTENSIONS,
+        ),
         ("Certificate", post_handshake_vectors::CERTIFICATE),
         ("Finished", post_handshake_vectors::SERVER_FINISHED),
         ("EndOfEarlyData", post_handshake_vectors::END_OF_EARLY_DATA),
@@ -535,11 +613,20 @@ fn other_handshake_messages_after_the_handshake_are_unexpected_message() -> Resu
         let mut h = Harness::new()?;
         let record = h.server_record(CT_HANDSHAKE, &hex(vector));
         let actions = h.feed(&record);
-        assert_eq!(actions.last(), Some(&Action::Fail(UNEXPECTED_MESSAGE)), "{name}");
+        assert_eq!(
+            actions.last(),
+            Some(&Action::Fail(UNEXPECTED_MESSAGE)),
+            "{name}"
+        );
         check_fatal_alert(&mut h, &actions, UNEXPECTED_MESSAGE)?;
     }
     // The type decides before the body is read: a bogus body of a forbidden type, and an unknown type.
-    for message in [vec![1u8, 0, 0, 0], vec![13, 0, 0, 1, 0], vec![99, 0, 0, 0], vec![0, 0, 0, 0]] {
+    for message in [
+        vec![1u8, 0, 0, 0],
+        vec![13, 0, 0, 1, 0],
+        vec![99, 0, 0, 0],
+        vec![0, 0, 0, 0],
+    ] {
         let mut h = Harness::new()?;
         let record = h.server_record(CT_HANDSHAKE, &message);
         let actions = h.feed(&record);
@@ -573,8 +660,14 @@ fn close_notify_is_answered_and_ends_delivery() -> Result<(), String> {
     assert_eq!(consumed, alert.len());
     assert_eq!(actions.len(), 2);
     assert_eq!(actions.last(), Some(&Action::Close));
-    let reply = sends(&actions).first().map(|w| (*w).clone()).ok_or("no close_notify")?;
-    assert_eq!(h.server_reads(&reply), Some((CT_ALERT, vec![1, CLOSE_NOTIFY])));
+    let reply = sends(&actions)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no close_notify")?;
+    assert_eq!(
+        h.server_reads(&reply),
+        Some((CT_ALERT, vec![1, CLOSE_NOTIFY]))
+    );
     assert!(!h.client.is_open());
     // Data after the closure alert is ignored (§6.1): consumed, nothing delivered.
     let (consumed, actions) = h.client.step(Input::Bytes(&late));
@@ -596,7 +689,11 @@ fn every_other_alert_is_fatal_and_is_not_answered() -> Result<(), String> {
         let alert = h.server_record(CT_ALERT, &[level, description]);
         let (consumed, actions) = h.client.step(Input::Bytes(&alert));
         assert_eq!(consumed, alert.len());
-        assert_eq!(actions, vec![Action::Fail(description)], "level {level} description {description}");
+        assert_eq!(
+            actions,
+            vec![Action::Fail(description)],
+            "level {level} description {description}"
+        );
         assert!(!h.client.is_open());
         let data = h.server_record(CT_APPLICATION_DATA, b"after");
         let (consumed, actions) = h.client.step(Input::Bytes(&data));
@@ -624,7 +721,11 @@ fn a_handshake_message_may_not_be_interleaved_with_other_records() -> Result<(),
         let mut h = Harness::new()?;
         let first = h.server_record(CT_HANDSHAKE, a);
         assert_eq!(h.feed(&first), vec![]);
-        let content: &[u8] = if interleaved == CT_ALERT { &[1, CLOSE_NOTIFY] } else { b"data" };
+        let content: &[u8] = if interleaved == CT_ALERT {
+            &[1, CLOSE_NOTIFY]
+        } else {
+            b"data"
+        };
         let record = h.server_record(interleaved, content);
         let actions = h.feed(&record);
         check_fatal_alert(&mut h, &actions, UNEXPECTED_MESSAGE)?;
@@ -699,13 +800,25 @@ fn the_transport_closing_before_close_notify_is_a_failure_with_no_alert() -> Res
 fn the_client_can_close_and_nothing_is_delivered_afterwards() -> Result<(), String> {
     let mut h = Harness::new()?;
     let sent = h.client.send_application(b"request");
-    let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
-    assert_eq!(h.server_reads(&wire), Some((CT_APPLICATION_DATA, b"request".to_vec())));
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"request".to_vec()))
+    );
     let closing = h.client.close();
     assert_eq!(closing.len(), 2);
     assert_eq!(closing.last(), Some(&Action::Close));
-    let wire = sends(&closing).first().map(|w| (*w).clone()).ok_or("no close_notify")?;
-    assert_eq!(h.server_reads(&wire), Some((CT_ALERT, vec![1, CLOSE_NOTIFY])));
+    let wire = sends(&closing)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no close_notify")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_ALERT, vec![1, CLOSE_NOTIFY]))
+    );
     // The server's reply is ignored; so is anything else.
     let reply = h.server_record(CT_ALERT, &[1, CLOSE_NOTIFY]);
     assert_eq!(h.client.step(Input::Bytes(&reply)), (reply.len(), vec![]));
@@ -717,7 +830,10 @@ fn application_data_longer_than_a_record_fails_with_record_overflow() -> Result<
     let mut h = Harness::new()?;
     let ok = vec![7u8; 16384];
     let sent = h.client.send_application(&ok);
-    let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
     assert_eq!(h.server_reads(&wire), Some((CT_APPLICATION_DATA, ok)));
     let sent = h.client.send_application(&vec![7u8; 16385]);
     assert_eq!(sent, vec![Action::Fail(RECORD_OVERFLOW)]);
@@ -737,7 +853,10 @@ fn client_records_carry_increasing_sequence_numbers_under_one_key() -> Result<()
     let mut previous: Option<Vec<u8>> = None;
     for i in 0..5u8 {
         let sent = h.client.send_application(&[i]);
-        let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
+        let wire = sends(&sent)
+            .first()
+            .map(|w| (*w).clone())
+            .ok_or("no send")?;
         // The same plaintext at a different sequence number is a different record.
         assert_ne!(previous.as_ref(), Some(&wire));
         assert_eq!(h.server_reads(&wire), Some((CT_APPLICATION_DATA, vec![i])));
