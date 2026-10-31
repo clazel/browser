@@ -9,6 +9,15 @@ description = "The DOM node tree as an arena (DOM §4.2, §4.4 to §4.14, the pa
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
 
+[dev-dependencies]
+# The independent engine of the differential test (`tests/conformance_dom.rs`,
+# Phase 4 item 4.11): html5ever's reference-counted tree and the parser types it
+# is built from. Test-only (docs/DEPENDENCIES.md, class `test`), at the
+# versions `clazel-treebuilder` uses. markup5ever_rcdom's version is
+# 0.39.0+unofficial; Cargo ignores the build metadata in a requirement.
+html5ever = "=0.39.0"
+markup5ever_rcdom = "=0.39.0"
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (Phase 4
 # item 4.0, option A). Tier 0 until CI's full verification is green on the
