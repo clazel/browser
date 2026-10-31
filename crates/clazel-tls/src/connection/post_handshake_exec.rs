@@ -139,15 +139,19 @@ impl Out {
     fn then(self, other: Out) -> (o: Out)
         ensures o@ == spec::then(self@, other@),
     {
+        let ghost first = self@;
+        let ghost second = other@;
+        let ghost first_wires = self.wires@;
+        let ghost second_wires = other.wires@;
         let mut wires = self.wires;
         let mut more = other.wires;
         wires.append(&mut more);
         let o = Out { wires, delivered: other.delivered, end: other.end };
         proof {
-            let a = crate::reassemble::views_bytes(self.wires@);
-            let b = crate::reassemble::views_bytes(other.wires@);
-            assert(crate::reassemble::views_bytes(self.wires@ + other.wires@) =~= a + b);
-            assert(o@ =~= spec::then(self@, other@));
+            let a = crate::reassemble::views_bytes(first_wires);
+            let b = crate::reassemble::views_bytes(second_wires);
+            assert(crate::reassemble::views_bytes(first_wires + second_wires) =~= a + b);
+            assert(o@ =~= spec::then(first, second));
         }
         o
     }
