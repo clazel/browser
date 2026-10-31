@@ -14,7 +14,9 @@
 //! ServerHello/HRR selections for the fixed TLS 1.3/X25519 profile, generates
 //! ClientHello, retains retry/transcript state, and joins explicit key-exchange
 //! providers to authentication. [`traffic`] installs handshake secrets in the
-//! correct record directions and owns non-wrapping send/receive epochs. The
+//! correct record directions and owns non-wrapping send/receive epochs.
+//! [`connection`] holds the initial dispatcher and, in `post_handshake_*`, the
+//! application-traffic transducer (NewSessionTicket, KeyUpdate, alerts). The
 //! connection-I/O driver, production cryptography (3.5f), entropy sourcing and
 //! X.509 validation remain to be built. [`host`] is the typed target host
 //! (a DNS name or an IP address) that both read.
