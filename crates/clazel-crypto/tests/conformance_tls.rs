@@ -655,17 +655,14 @@ fn application_round_trip(cert: &ServerCert) -> TestResult {
     Ok(())
 }
 
-#[test]
 fn ecdsa_chain_full_handshake_and_application_data() -> TestResult {
     application_round_trip(&ecdsa_chain())
 }
 
-#[test]
 fn rsa_chain_full_handshake_and_application_data() -> TestResult {
     application_round_trip(&rsa_chain())
 }
 
-#[test]
 fn client_can_request_a_key_update() -> TestResult {
     let (mut client, mut server) = connect(&ecdsa_chain())?;
     let wire = match client.conn()?.request_key_update(true) {
@@ -840,7 +837,6 @@ fn last_event(events: &[Event]) -> Option<&Event> {
     events.last()
 }
 
-#[test]
 fn scripted_server_control_completes_the_handshake() -> TestResult {
     for cert in [ecdsa_chain(), rsa_chain()] {
         let (events, _client, mut server) = run_scripted(&cert, |_| Ok(()))?;
@@ -857,7 +853,6 @@ fn scripted_server_control_completes_the_handshake() -> TestResult {
 // Hostile servers
 // ---------------------------------------------------------------------------
 
-#[test]
 fn wrong_finished_is_decrypt_error() -> TestResult {
     let (events, mut client, _) = run_scripted(&ecdsa_chain(), |f| f.flip_last_byte(20))?;
     assert_eq!(
@@ -871,7 +866,6 @@ fn wrong_finished_is_decrypt_error() -> TestResult {
     Ok(())
 }
 
-#[test]
 fn wrong_certificate_verify_is_decrypt_error() -> TestResult {
     let (events, _, _) = run_scripted(&ecdsa_chain(), |f| f.flip_last_byte(15))?;
     assert_eq!(
@@ -899,7 +893,6 @@ fn refused_with(cert: &ServerCert, alert: u8) -> TestResult {
     Ok(())
 }
 
-#[test]
 fn certificate_for_another_name_is_bad_certificate() -> TestResult {
     refused_with(
         &ServerCert {
@@ -910,7 +903,6 @@ fn certificate_for_another_name_is_bad_certificate() -> TestResult {
     )
 }
 
-#[test]
 fn expired_leaf_is_bad_certificate() -> TestResult {
     // The search's first candidate fails the leaf profile, which covers the
     // leaf's validity, so an expired leaf is bad_certificate (42), not
@@ -927,7 +919,6 @@ fn expired_leaf_is_bad_certificate() -> TestResult {
     )
 }
 
-#[test]
 fn expired_intermediate_is_certificate_expired() -> TestResult {
     refused_with(
         &ServerCert {
@@ -938,7 +929,6 @@ fn expired_intermediate_is_certificate_expired() -> TestResult {
     )
 }
 
-#[test]
 fn self_signed_leaf_is_unknown_ca() -> TestResult {
     refused_with(
         &ServerCert {
@@ -949,7 +939,6 @@ fn self_signed_leaf_is_unknown_ca() -> TestResult {
     )
 }
 
-#[test]
 fn missing_intermediate_is_unknown_ca() -> TestResult {
     refused_with(
         &ServerCert {
@@ -960,7 +949,6 @@ fn missing_intermediate_is_unknown_ca() -> TestResult {
     )
 }
 
-#[test]
 fn empty_trust_store_refuses_a_valid_chain() -> TestResult {
     let mut server = Server::new(&ecdsa_chain())?;
     let (mut client, hello) = Client::start(ChainVerifier::new(&[]))?;
@@ -990,7 +978,6 @@ fn application_record_of(len: usize) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
-#[test]
 fn oversized_records_are_record_overflow() -> TestResult {
     // RFC 8446 §5.1: a plaintext record over 2^14 octets.
     let (mut client, _) = Client::start(anchors())?;
@@ -1057,7 +1044,6 @@ fn server_hello_without(flight: &Flight, extension_type: u16) -> Result<Vec<u8>,
     plain_record(22, &new_message)
 }
 
-#[test]
 fn tls12_server_hello_is_refused() -> TestResult {
     // A ServerHello without supported_versions is a TLS 1.2 (or lower)
     // selection (RFC 8446 §4.2.1); the client offered only 1.3.
@@ -1077,7 +1063,6 @@ fn tls12_server_hello_is_refused() -> TestResult {
     Ok(())
 }
 
-#[test]
 fn downgrade_sentinel_is_protocol_version() -> TestResult {
     // RFC 8446 §4.1.3: ServerHello.random ends in "DOWNGRD\x01" (a TLS 1.2
     // selection by a server that supports 1.3), which a client that supports
@@ -1109,7 +1094,6 @@ fn downgrade_sentinel_is_protocol_version() -> TestResult {
 
 const CCS: [u8; 6] = [20, 3, 3, 0, 1, 1];
 
-#[test]
 fn change_cipher_spec_in_the_wrong_place_is_unexpected_message() -> TestResult {
     // RFC 8446 §5: a CCS must be the single octet 0x01; anything else is
     // unexpected_message.
@@ -1178,7 +1162,6 @@ fn change_cipher_spec_in_the_wrong_place_is_unexpected_message() -> TestResult {
     Ok(())
 }
 
-#[test]
 fn compatibility_change_cipher_spec_where_rfc_8446_allows_it_is_dropped() -> TestResult {
     // The control for the CCS cases above: rustls's own CCS after the
     // ServerHello is dropped (§5), and so is one before the ServerHello.
@@ -1187,4 +1170,116 @@ fn compatibility_change_cipher_spec_where_rfc_8446_allows_it_is_dropped() -> Tes
     let (events, _, _) = run_scripted(&ecdsa_chain(), |f| f.insert(3, Item::Plain(CCS.to_vec())))?;
     assert!(events.contains(&Event::Ready), "{events:?}");
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// The runner (xtask/src/conformance.rs: one summary line per suite)
+// ---------------------------------------------------------------------------
+
+type Case = (&'static str, fn() -> TestResult);
+
+const SUCCESS: &[Case] = &[
+    (
+        "ecdsa_chain_full_handshake_and_application_data",
+        ecdsa_chain_full_handshake_and_application_data,
+    ),
+    (
+        "rsa_chain_full_handshake_and_application_data",
+        rsa_chain_full_handshake_and_application_data,
+    ),
+    (
+        "client_can_request_a_key_update",
+        client_can_request_a_key_update,
+    ),
+    (
+        "scripted_server_control_completes_the_handshake",
+        scripted_server_control_completes_the_handshake,
+    ),
+    (
+        "compatibility_change_cipher_spec_where_rfc_8446_allows_it_is_dropped",
+        compatibility_change_cipher_spec_where_rfc_8446_allows_it_is_dropped,
+    ),
+];
+
+const HOSTILE: &[Case] = &[
+    (
+        "wrong_finished_is_decrypt_error",
+        wrong_finished_is_decrypt_error,
+    ),
+    (
+        "wrong_certificate_verify_is_decrypt_error",
+        wrong_certificate_verify_is_decrypt_error,
+    ),
+    (
+        "certificate_for_another_name_is_bad_certificate",
+        certificate_for_another_name_is_bad_certificate,
+    ),
+    (
+        "expired_leaf_is_bad_certificate",
+        expired_leaf_is_bad_certificate,
+    ),
+    (
+        "expired_intermediate_is_certificate_expired",
+        expired_intermediate_is_certificate_expired,
+    ),
+    (
+        "self_signed_leaf_is_unknown_ca",
+        self_signed_leaf_is_unknown_ca,
+    ),
+    (
+        "missing_intermediate_is_unknown_ca",
+        missing_intermediate_is_unknown_ca,
+    ),
+    (
+        "empty_trust_store_refuses_a_valid_chain",
+        empty_trust_store_refuses_a_valid_chain,
+    ),
+    (
+        "oversized_records_are_record_overflow",
+        oversized_records_are_record_overflow,
+    ),
+    (
+        "tls12_server_hello_is_refused",
+        tls12_server_hello_is_refused,
+    ),
+    (
+        "downgrade_sentinel_is_protocol_version",
+        downgrade_sentinel_is_protocol_version,
+    ),
+    (
+        "change_cipher_spec_in_the_wrong_place_is_unexpected_message",
+        change_cipher_spec_in_the_wrong_place_is_unexpected_message,
+    ),
+];
+
+/// Run a suite; a panic or an `Err` is a failure, reported by name.
+fn run_suite(name: &str, cases: &[Case]) -> Vec<String> {
+    let mut failed = Vec::new();
+    for (case, run) in cases {
+        match std::panic::catch_unwind(run) {
+            Ok(Ok(())) => {}
+            Ok(Err(message)) => failed.push(format!("{case}: {message}")),
+            Err(_) => failed.push(format!("{case}: panicked")),
+        }
+    }
+    println!(
+        "clazel-conformance: suite=\"{name}\" pass={} xfail=0 fail={} total={}",
+        cases.len().saturating_sub(failed.len()),
+        failed.len(),
+        cases.len()
+    );
+    failed
+}
+
+#[test]
+fn tls_1_3_end_to_end() {
+    let mut failed = run_suite(
+        "TLS 1.3 client against rustls (ring), ECDSA and RSA chains, scripted control",
+        SUCCESS,
+    );
+    failed.extend(run_suite(
+        "TLS 1.3 hostile servers, RFC 8446 section 6.2 alerts",
+        HOSTILE,
+    ));
+    assert!(failed.is_empty(), "failed: {failed:#?}");
 }
