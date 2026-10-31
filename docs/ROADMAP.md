@@ -74,6 +74,8 @@ CSS parsing and cascade, block, inline and table layout, font parsing and
 shaping, raster, and a native window on macOS and Linux.
 *Exit:* **renders news.ycombinator.com correctly**, so the Show HN post can be
 read in the browser it announces.
+Detailed plan: [phases/phase-5.md](phases/phase-5.md).
+**Status: planned (2026-10-31); decisions in item 5.0 pending.**
 
 ## Phase 6: Images and forms
 PNG, JPEG, GIF and WebP decoders (Tier 1, written in the style of WUFFS), plus
