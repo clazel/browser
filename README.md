@@ -22,12 +22,32 @@ v1.5 verification (`clazel-pkcs1`) are at Tier 2. The kernel
 (`clazel-kernel`, still Tier 2) runs the fetch client itself: connections are
 kernel state, every request, redirect and cookie is its decision, and its
 Phase 2 theorems still hold with network events. The network shell
-(`clazel-net`) only carries bytes. `clazel fetch URL` resolves the host,
-follows redirects and keeps cookies across them, for `http://` only. TLS is
-not done yet: X.509 decoding and name matching (`clazel-x509`) are on `main`
-at Tier 0, and path validation, the TLS 1.3 handshake and its cryptography
-(libcrux) are on open pull requests. What remains is listed in
-[docs/phases/phase-3.md](docs/phases/phase-3.md#status).
+(`clazel-net`) only carries bytes. TLS is not done yet: X.509, the TLS 1.3
+handshake and the libcrux join are partly built on `main` at Tier 0 and not
+yet joined to the kernel, so the browser speaks only `http://`. What
+remains is listed in [docs/phases/phase-3.md](docs/phases/phase-3.md#status).
+
+Phase 4 (HTML and DOM) is built but not yet complete: every CI job but
+Miri passed at `e29265d`, and `clazel-dom` is not at Tier 2 yet. `cargo run -p clazel -- browse URL`
+is a text-mode browser in the style of Lynx: the kernel fetches the page,
+a sandboxed renderer parses it and prints the title, the text and numbered
+links, and typing a link's number navigates the tab through the kernel,
+under an address line that is always the kernel's committed URL. Every
+parser on the page's path is proven: the encoding sniffing algorithm
+(`clazel-html`) and the decoders (`clazel-encoding`), the tokenizer, proven
+total and panic-free, with its character references (`clazel-html`), and
+the tree builder (`clazel-treebuilder`), all at Tier 2. The DOM operations
+(`clazel-dom`) are proven too, but the crate stays at Tier 0 until it has a
+conformance test of its own. The kernel proves that what a renderer
+displays is shown for its own tab, labelled with the URL the kernel
+committed there (`theorem_show_only_own_tab`,
+`theorem_address_bar_integrity`), and that a renderer receives the fetched
+body whole (`theorem_body_is_the_response`). The text layout (`clazel-text`)
+and the renderer's glue are Tier 0. Pages in the seven legacy multi-byte
+encodings (Shift_JIS, GBK, Big5 and others) are not rendered yet: the page
+says "encoding `<name>` is not supported" (moved to Phase 8). See
+[docs/phases/phase-4.md](docs/phases/phase-4.md#status).
+
 Recheck every proof yourself, on Linux x86-64, with:
 
 ```sh
@@ -92,6 +112,18 @@ it, and so does the release tarball's `install.sh` (see item 2.16 in
 `fork` and `ptrace` of a sibling. Where Yama restricts `ptrace` on Linux, the
 `ptrace` result shows less than it does on macOS.
 
+**Phase 4 process tests: where they have run.** `crates/clazel/tests/pages.rs`
+(the 1,761 html5lib document cases and a page with links, visited through
+real renderers, and the WPT `cookies/` rows through the kernel's
+`Set-Cookie` path) and `crates/clazel/tests/hostile_pages.rs` (12 hostile
+pages, each through a real sandboxed renderer, checked for panics, the
+memory bound and the address line) run in CI's base jobs on Linux x86-64
+(`ubuntu-24.04`) and macOS arm64, as do the Phase 2 tests, and passed there
+at `e29265d`; they are Unix only, so not on Windows. Two hostile pages are ignored for time, not for
+failure: a million nested `<div>`s and 64 MiB of `&amp;` (see item 4.16 in
+[docs/phases/phase-4.md](docs/phases/phase-4.md)). The `browse` demo on
+real sites runs locally only, since CI has no Internet.
+
 Formalizing the standards has already found one spec bug: see
 [docs/ERRATA.md](docs/ERRATA.md).
 
@@ -116,6 +148,16 @@ target/release/clazel fetch http://example.com/           # http:// GET, redirec
 client: it builds each request, frames each response with the proven HTTP/1.1
 parser, follows redirects and keeps the cookies they set for the rest of the
 run. It needs the Internet, and speaks only `http://` until TLS lands.
+
+```sh
+target/release/clazel browse http://info.cern.ch/         # text-mode browser: title, text, numbered links
+```
+
+`browse` shows a page as text, with its links numbered: type a number to
+follow a link, `g URL` to go elsewhere, `b` to go back, `q` to quit. The
+kernel fetches every page and the page is parsed in a sandboxed renderer,
+one per origin; the address line is the kernel's, whatever the page says.
+It speaks only `http://` until TLS is joined to the kernel.
 
 Each GitHub release has a Linux x86-64 tarball with both binaries and an
 installer: unpack it and run `sudo ./install.sh` (or `PREFIX=... ./install.sh`).
@@ -156,16 +198,16 @@ and much of it is work only a person can do.
 - **Add test suites.** Every Tier 2 crate is tested against official suites
   and independent engines (`tests/conformance*.rs`). Point us at suites we have
   not vendored, or at engines worth differential testing against.
-- **Run it where we have not.** The Phase 2 process tests (the sandbox, the
-  hostile renderer) run in CI on `ubuntu-24.04` and macOS arm64 only. Other
-  Linux distributions and kernels are untested.
+- **Run it where we have not.** The Phase 2 and 4 process tests (the sandbox,
+  the hostile renderer, the hostile pages) run in CI on `ubuntu-24.04` and
+  macOS arm64 only. Other Linux distributions and kernels are untested.
 - **Read `clazel-sys`.** It is the only crate with `unsafe`: 38 blocks that
   enter the OS sandbox. Every change is audited by a second model
   ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person reading it too is
   welcome.
 - **Build the next phases.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md)
-  and the detailed plans in [docs/phases/](docs/phases/). The TLS work is on
-  open pull requests until it passes CI. Contributions go through the same
+  and the detailed plans in [docs/phases/](docs/phases/). TLS is partly
+  built and not yet joined to the kernel. Contributions go through the same
   machine checks as everything else, whoever (or whatever) wrote them: read
   [CLAUDE.md](CLAUDE.md) first, and expect `cargo xtask verify --changed` and
   CI's full verification to be the bar.
