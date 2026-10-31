@@ -1209,6 +1209,62 @@ top sites refuse a ChaCha20-only, X25519-only client (run locally, like
 the demo). **Raise `clazel-der`, `clazel-x509`, `clazel-pkcs1` and
 `clazel-tls` to tier 2** as each earns it.
 
+**As built, first part (2026-10-31, local run, not yet CI-verified):**
+`crates/clazel-crypto/tests/conformance_tls.rs`, 17 tests, drives our client
+(`Bootstrap`, `Established::into_record_auth`, `Connection`, over the libcrux
+providers and `join::exec::ChainVerifier`) against rustls 0.23.46 over an
+in-memory byte pipe. The server uses rustls's `ring` provider, configured for
+TLS 1.3, `TLS_CHACHA20_POLY1305_SHA256` and X25519 only; that adds no package
+(`ring` was already a `test` dependency; docs/DEPENDENCIES.md). The
+certificates are pre-generated, not `rcgen`: `tests/fixtures/tls` with a
+`SOURCE.md` (a test root and intermediate, RSA, signed with PKCS#1 v1.5
+SHA-256; leaves for ECDSA P-256 and RSA, the latter with CertificateVerify in
+RSA-PSS; for `test.example`). The client's trust store is the test root,
+through `ChainVerifier::new`'s anchor parameter; production still uses
+`roots::ROOTS` (`join::exec::mozilla`). The client's X25519 scalar,
+ClientHello random and session id (and the server's scalar) come from a
+fixed, test-only seed through SHA-256.
+- *Passing:* a full handshake for the ECDSA chain and for the RSA chain, then
+  application data both ways (five 3000-octet records each way after the
+  first exchange), a client-requested KeyUpdate, and close_notify both ways.
+  rustls sends no NewSessionTicket to this client (it offers no
+  `psk_key_exchange_modes`), so ticket handling is covered only by the
+  dispatcher's own tests.
+- *Hostile servers:* the real rustls flight, decrypted with the handshake
+  keys, changed in one place and re-encrypted (the control, unchanged,
+  completes the handshake). Each gives the client's `Fail` with the alert in
+  parentheses, and the connection is `Failed`: a wrong `Finished` (51) and a
+  wrong CertificateVerify, ECDSA and RSA (51); a certificate for another name
+  (42); an expired leaf (42, see below) and an expired intermediate (45); a
+  self-signed leaf, a leaf without its intermediate and an empty trust store
+  (48); a plaintext record over 2^14 (22), and protected records of 2^14 + 257
+  and 65535 octets (22), while one of exactly 2^14 + 256 reaches the AEAD
+  (20); a ServerHello without `supported_versions` (70), with and without the
+  `DOWNGRD\x01` sentinel; `change_cipher_spec` with a payload other than
+  0x01, with a length other than 1, between the two fragments of a
+  ServerHello, as the inner type of a protected record, and after the
+  server's Finished (each 10), while the permitted dummy CCS before the
+  ServerHello and after it is dropped.
+- *Two behaviours the test pins that differ from the RFC's letter or its
+  likeliest reading, left as they are because both alerts are fatal:* an
+  expired leaf gives `bad_certificate` (the leaf profile covers validity,
+  `join::spec::certificate_error`; an expired intermediate gives
+  `certificate_expired`); and a ServerHello that selects TLS 1.2 is always
+  `protocol_version`, so RFC 8446 §4.1.3's downgrade-sentinel check
+  (`illegal_parameter`) is never reached.
+- *Not done:* no HelloRetryRequest, a PSK or a client-certificate request is
+  exercised (the rustls server never sends one for this client; a scripted
+  HRR would need a second key share); no truncated or fragmented-in-flight
+  server flight against a real server beyond the dispatcher's own tests;
+  no X25519 or ChaCha20 independent of ours on the server side (the server's
+  key share uses our libcrux X25519 with a fixed scalar, so that the
+  scripted server can derive the handshake keys; the AEAD, signatures and
+  hashes of rustls's side are ring's, and agree with ours on every record);
+  no socket, no `clazel-net` TLS loop, no `tls: true` in the fetch transducer,
+  no kernel `https:`; the Mozilla root table is not regenerated here; the
+  local measurement of top sites and the real-certificate corpus below are
+  **not run, and no result is claimed**; no crate is raised to tier 2.
+
 **Real-certificate compatibility measurement:** vendor a reproducible corpus
 of complete, original DER chains, with collection date, source, licence and
 SHA-256 fingerprints. Deduplicate certificates by fingerprint, retain their
@@ -1453,8 +1509,8 @@ half does not wait on TLS.
 | 3.5c RSA PKCS#1 v1.5 | on `main`; tier 2 (see As built) |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
 | 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters. Production providers, socket I/O and post-handshake dispatch remain; tier 0, combined full verification pending |
-| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; production libcrux/X.509 joins not started |
-| 3.5g TLS conformance and trust store | not started |
+| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. No randomness source (the caller supplies the scalar, ClientHello random and session id; one needs `clazel-sys`) |
+| 3.5g TLS conformance and trust store | first part built (2026-10-31, local run, CI not yet): `clazel-crypto/tests/conformance_tls.rs`, 17 tests: full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the two behaviours it pins). Not done: the Mozilla root table check, the local top-site measurement and the real-certificate corpus (no result claimed), HelloRetryRequest and ticket paths against a real server, the tier 2 raises |
 | 3.6 Client state machine | on `main` (#3, #5), `http://` only: transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored) |
 | 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. Open: `https:` (3.5), the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
 | 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function. Not yet: TLS. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |

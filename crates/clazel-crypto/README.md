@@ -83,10 +83,49 @@ the self-signatures of Mozilla's 118 roots, and x509-limbo chains in
 limbo's order through `clazel-x509`'s candidate verdict
 (`tests/chain_limbo.rs`).
 
+## The chain validation and the end-to-end test
+
+`join::exec::ChainVerifier` is the production `auth::verify::Verifier`
+(path-validation P9 and P16): `clazel-x509`'s chain search with the links of
+`chain`, CertificateVerify by `signature` and Finished by `compare`. Its
+trust anchors are a parameter (`ChainVerifier::new(&[Root])`);
+`join::exec::mozilla()` passes `clazel_x509::roots::ROOTS`, the only
+production use.
+
+`tests/conformance_tls.rs` runs our client against a real server for the first
+time (phase-3.md 3.5g, first part). The client is `Bootstrap`,
+`Established::into_record_auth` and `Connection` over this crate's providers
+and `ChainVerifier` with the test root of `tests/fixtures/tls` as its only
+anchor. The server is rustls 0.23.46 (ring provider; a `test` dependency, no
+new package) limited to TLS 1.3, `TLS_CHACHA20_POLY1305_SHA256` and X25519, in
+the same process, over an in-memory byte pipe. It checks:
+
+- a full handshake for an ECDSA P-256 chain and for an RSA chain (leaf signed
+  by PKCS#1 v1.5 SHA-256, CertificateVerify in RSA-PSS), then application
+  data both ways (several records, so the sequence numbers advance), a client
+  KeyUpdate and close_notify both ways;
+- hostile servers, each ending in the dispatcher's `Fail` with the RFC 8446
+  §6.2 alert and no panic: a wrong `Finished` and a wrong CertificateVerify
+  (decrypt_error), a certificate for another name (bad_certificate), an
+  expired leaf (bad_certificate, by `join::spec::certificate_error`'s design)
+  and an expired intermediate (certificate_expired), a self-signed leaf and a
+  missing intermediate (unknown_ca), an empty trust store, records over the
+  limit (record_overflow), a TLS 1.2 ServerHello with and without the
+  downgrade sentinel (protocol_version), and `change_cipher_spec` in the wrong
+  place (unexpected_message). The hostile flights are the real rustls flight,
+  decrypted with the handshake keys, changed in one place and re-encrypted
+  ("scripted server"); an unchanged flight completes the handshake.
+
+Randomness in that test (the client's X25519 scalar, ClientHello random and
+legacy_session_id, and the server's scalar) is a fixed test seed through
+SHA-256: test-only. The test is `#![cfg(not(miri))]` (ring is C and assembly).
+
 ## Not here
-- The `auth::verify::Verifier` implementation itself. Its `chain` half is
-  certificate path validation (3.5b): the chain search (P9) and the
-  `ChainValidation` join (P16) are still to come.
-- Randomness: the caller supplies the X25519 private scalar.
+- Randomness: the caller supplies the X25519 private scalar and the
+  ClientHello random and session id. A source needs `clazel-sys`.
+- Any socket I/O, the TLS loop in `clazel-net`, `tls: true` in the fetch
+  transducer and the kernel's `https:` path (phase-3.md 3.6 to 3.8).
+- A measurement against public servers (3.5g's local item) and the
+  real-certificate corpus: not run, no result claimed.
 - Any side-channel claim beyond HACL\*'s. libcrux's README makes none for the
   extracted Rust, and this crate adds no secret-dependent branches.

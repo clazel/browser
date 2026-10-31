@@ -610,8 +610,8 @@ fn connect(cert: &ServerCert) -> Result<(Client, Server), String> {
 
 fn application_round_trip(cert: &ServerCert) -> TestResult {
     let (mut client, mut server) = connect(cert)?;
-    // The server's first application data; post-handshake tickets that rustls
-    // sent after the client's Finished were already consumed by `connect`.
+    // The server's first application data. (rustls sends no NewSessionTicket
+    // to this client: it offers no psk_key_exchange_modes, RFC 8446 §4.2.9.)
     server.write_plaintext(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok")?;
     let from_server = server.take()?;
     let events = client.receive(&from_server)?;
