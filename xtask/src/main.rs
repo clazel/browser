@@ -564,18 +564,51 @@ fn miri(r: &mut Runner, pins: &Pins, only: Option<&[Crate]>) {
         }
         Some(cs) => args.extend(cs.iter().flat_map(|c| ["-p", c.name.as_str()])),
     }
-    let res = run_streamed(NAME, Command::new("cargo").args(&args)).map(|out| {
+    // libtest then prints each test's time as `test name ... ok <12.345s>`,
+    // measured on Miri's virtual clock, so independent of the machine's load.
+    args.extend(["--", "-Z", "unstable-options", "--report-time"]);
+    let res = run_streamed(NAME, Command::new("cargo").args(&args)).and_then(|out| {
         let passed: u64 = out
             .lines()
             .filter_map(|l| l.strip_prefix("test result: ok. "))
             .filter_map(|l| l.split(' ').next()?.parse::<u64>().ok())
             .sum();
-        vec![format!(
+        let slow = slow_miri_tests(&out);
+        if !slow.is_empty() {
+            return Err(format!(
+                "{} tests took {MIRI_TEST_LIMIT_SECS} s or more each under Miri; run \
+                 each suite at a fixed stride under `cfg!(miri)` (docs/VERIFICATION.md, \
+                 Miri):\n  {}",
+                slow.len(),
+                slow.join("\n  ")
+            ));
+        }
+        Ok(vec![format!(
             "{passed} tests passed under Miri ({})",
             nightly.trim_start_matches('+')
-        )]
+        )])
     });
     r.step(NAME, from_result(res));
+}
+
+/// The most Miri time one test may take. Under Miri a conformance suite runs
+/// a fixed stride sized to finish in about a minute, so a test over this has
+/// lost its stride or gained slow cases; without the limit such a test shows
+/// up only as CI's Miri job running out of time hours later.
+const MIRI_TEST_LIMIT_SECS: u64 = 300;
+
+/// The tests in libtest `--report-time` output (`test name ... ok <12.345s>`)
+/// that took [`MIRI_TEST_LIMIT_SECS`] or more, each as `name (seconds s)`.
+fn slow_miri_tests(out: &str) -> Vec<String> {
+    out.lines()
+        .filter_map(|l| {
+            let rest = l.strip_prefix("test ")?.strip_suffix("s>")?;
+            let (head, secs) = rest.rsplit_once(" <")?;
+            let (name, _) = head.split_once(" ... ")?;
+            let whole: u64 = secs.split('.').next()?.parse().ok()?;
+            (whole >= MIRI_TEST_LIMIT_SECS).then(|| format!("{name} ({secs} s)"))
+        })
+        .collect()
 }
 
 fn kani(r: &mut Runner, crates: &[Crate], pins: &Pins) {
@@ -1297,5 +1330,21 @@ mod tests {
         assert_eq!(ok.as_deref(), Ok("a\nb\n"));
         let failed = super::run_streamed("t", Command::new("sh").args(["-c", "exit 3"]));
         assert!(failed.is_err());
+    }
+
+    /// Only the tests whose reported Miri time reaches the limit are named.
+    #[test]
+    fn slow_miri_tests_are_named() {
+        let out = "running 4 tests\n\
+                   test a::fast ... ok <12.345s>\n\
+                   test b::slow ... ok <300.002s>\n\
+                   test c::failed ... FAILED <4000.5s>\n\
+                   test d::skipped ... ignored, too slow\n\
+                   test result: ok. 2 passed; 1 failed; 1 ignored; finished in 4314.85s\n";
+        assert_eq!(
+            super::slow_miri_tests(out),
+            ["b::slow (300.002 s)", "c::failed (4000.5 s)"]
+        );
+        assert!(super::slow_miri_tests("test x ... ok <299.999s>\n").is_empty());
     }
 }
