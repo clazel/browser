@@ -210,8 +210,28 @@ fn rows() -> (usize, Vec<Row>) {
     ROWS.get_or_init(parse_rows).clone()
 }
 
+/// The JSON to read: the whole file, or under Miri only its first
+/// `MIRI_OBJECTS` objects. `Reader` walks the file char by char, and under
+/// Miri reading all of it (896 objects) took about 300 s of Miri time, more
+/// than every row it yields; the normal test job reads the whole file.
+fn test_data() -> String {
+    const MIRI_OBJECTS: usize = 120;
+    if !cfg!(miri) {
+        return URLTESTDATA.to_owned();
+    }
+    // Objects start on their own line at an indent of two spaces; cut before
+    // the first one not kept, and close the array.
+    let cut = URLTESTDATA
+        .match_indices("\n  {")
+        .nth(MIRI_OBJECTS)
+        .map_or(URLTESTDATA.len(), |(i, _)| i);
+    let head = URLTESTDATA.get(..cut).unwrap_or(URLTESTDATA);
+    format!("{}\n]", head.trim_end().trim_end_matches(','))
+}
+
 fn parse_rows() -> (usize, Vec<Row>) {
-    let mut reader = Reader::new(URLTESTDATA);
+    let text = test_data();
+    let mut reader = Reader::new(&text);
     let Some(Json::Array(items)) = reader.value() else {
         return (0, Vec::new());
     };
@@ -231,8 +251,9 @@ fn parse_rows() -> (usize, Vec<Row>) {
             });
         }
     }
-    // Under Miri, every 23rd row: parsing each URL there is slow.
-    let step = if cfg!(miri) { 23 } else { 1 };
+    // Under Miri, every 3rd row of the first 120 objects (see
+    // `test_data`): parsing each URL there is slow.
+    let step = if cfg!(miri) { 3 } else { 1 };
     let out = out.into_iter().step_by(step).collect();
     (total_objects, out)
 }

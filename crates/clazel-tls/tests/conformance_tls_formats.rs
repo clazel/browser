@@ -443,7 +443,11 @@ fn check_record(r: &rfc8448::Record) -> Result<(), String> {
 fn rfc8448_records() {
     let mut failures = Vec::new();
     let mut failed = 0usize;
-    for r in RECORDS {
+    // Miri checks every 3rd record (14 of 41; all of them took 165 s
+    // there): it looks for undefined behaviour in the paths they exercise,
+    // and the normal test job checks every record.
+    let stride = if cfg!(miri) { 3 } else { 1 };
+    for r in RECORDS.iter().step_by(stride) {
         if let Err(why) = check_record(r) {
             failed = failed.saturating_add(1);
             failures.push(format!(
@@ -452,11 +456,13 @@ fn rfc8448_records() {
             ));
         }
     }
-    println!(
-        "clazel-conformance: suite=\"RFC 8448 records (sections 3 to 7)\" pass={} xfail=0 fail={failed} total={}",
-        RECORDS.len().saturating_sub(failed),
-        RECORDS.len()
-    );
+    if !cfg!(miri) {
+        println!(
+            "clazel-conformance: suite=\"RFC 8448 records (sections 3 to 7)\" pass={} xfail=0 fail={failed} total={}",
+            RECORDS.len().saturating_sub(failed),
+            RECORDS.len()
+        );
+    }
     assert_eq!(
         RECORDS.len(),
         41,
@@ -533,7 +539,11 @@ fn rfc8448_reassembly() {
         .collect();
     let mut failures = Vec::new();
     let mut failed = 0usize;
-    for r in &flights {
+    // Miri checks every other flight (all of them took 120 s there): it
+    // looks for undefined behaviour in the paths they exercise, and the
+    // normal test job checks every flight.
+    let stride = if cfg!(miri) { 2 } else { 1 };
+    for r in flights.iter().step_by(stride) {
         if let Err(why) = check_reassembly(r) {
             failed = failed.saturating_add(1);
             failures.push(format!(
@@ -542,11 +552,13 @@ fn rfc8448_reassembly() {
             ));
         }
     }
-    println!(
-        "clazel-conformance: suite=\"RFC 8448 handshake payloads through the reassembler\" pass={} xfail=0 fail={failed} total={}",
-        flights.len().saturating_sub(failed),
-        flights.len()
-    );
+    if !cfg!(miri) {
+        println!(
+            "clazel-conformance: suite=\"RFC 8448 handshake payloads through the reassembler\" pass={} xfail=0 fail={failed} total={}",
+            flights.len().saturating_sub(failed),
+            flights.len()
+        );
+    }
     assert!(!flights.is_empty());
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

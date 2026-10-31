@@ -983,7 +983,11 @@ fn check_rfc(c: &Rfc) -> Result<(), String> {
 fn rfc_9112_examples() {
     let cases = rfc_cases();
     let mut failed = 0usize;
-    for c in &cases {
+    // Miri checks every 8th case (all of them took 385 s there): it looks
+    // for undefined behaviour in the paths they exercise, and the normal
+    // test job checks every case.
+    let stride = if cfg!(miri) { 8 } else { 1 };
+    for c in cases.iter().step_by(stride) {
         if let Err(e) = check_rfc(c) {
             failed = failed.saturating_add(1);
             println!("FAIL {}: {e}\n  input {:?}", c.label, show(&c.input));
@@ -997,13 +1001,15 @@ fn rfc_9112_examples() {
     }
     let total = cases.len().saturating_add(serialize_cases.len());
     let fail = failed.saturating_add(serialize_failed);
-    summary(
-        "RFC 9112 7.1 and 11 examples",
-        total.saturating_sub(fail),
-        0,
-        fail,
-        total,
-    );
+    if !cfg!(miri) {
+        summary(
+            "RFC 9112 7.1 and 11 examples",
+            total.saturating_sub(fail),
+            0,
+            fail,
+            total,
+        );
+    }
     assert_eq!(fail, 0);
 }
 

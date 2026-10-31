@@ -344,13 +344,19 @@ fn garbage_is_a_bad_certificate() -> Result<(), String> {
         Err(CertificateError::BadCertificate)
     );
     // A garbage pool entry is dropped from the pool (design §2.6 step 3),
-    // so the path through the real intermediate is still found.
-    let mut garbage_pool = presented(c)?;
-    garbage_pool.insert(1, b"not a certificate either");
-    assert_eq!(
-        verifier.validate(&host, now, &body_of(&garbage_pool)),
-        Ok(leaf_spki(c)?)
-    );
+    // so the path through the real intermediate is still found. Not under
+    // Miri: finding it verifies every signature of the chain, which took
+    // over 300 s there (the tests above that validate whole chains are
+    // ignored under Miri for the same reason); the refusals above stop
+    // before any signature and still run.
+    if !cfg!(miri) {
+        let mut garbage_pool = presented(c)?;
+        garbage_pool.insert(1, b"not a certificate either");
+        assert_eq!(
+            verifier.validate(&host, now, &body_of(&garbage_pool)),
+            Ok(leaf_spki(c)?)
+        );
+    }
     Ok(())
 }
 

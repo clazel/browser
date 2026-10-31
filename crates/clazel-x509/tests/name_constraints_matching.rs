@@ -961,5 +961,10 @@ fn comparison_bound_counts_every_set_in_the_state() {
 
 #[test]
 fn an_empty_state_costs_nothing() {
-    accepted(run(&[], &[cert(&many_entries(5000))]));
+    // 5,000 names, more than the 4,096-comparison bound if names alone
+    // counted. Miri takes 100, which no longer tests the bound: 5,000 took
+    // over 300 s there, and Miri looks for undefined behaviour, which the
+    // same code paths show at 100. The normal test job runs all 5,000.
+    let count = if cfg!(miri) { 100 } else { 5000 };
+    accepted(run(&[], &[cert(&many_entries(count))]));
 }

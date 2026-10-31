@@ -65,6 +65,14 @@ harnesses), and it reports every crate whose `tier` is below its
   audit and the sandbox integration tests (Phase 2, items 2.15 and 2.16). Miri sees only code paths the tests run, so it is evidence, not
   proof. (Smoke test: an out-of-bounds read and a use-after-free that plain
   `cargo test` passes are both reported.)
+  Under Miri a conformance suite runs a fixed stride of its cases, stated
+  with its reason in the test (`if cfg!(miri) { 40 } else { 1 }`) and sized
+  to finish in about a minute: Miri is there to find undefined behaviour in
+  the code paths the tests exercise, and the full suites run in the normal
+  test job. A test is ignored under Miri only if it opens files, sockets or
+  processes, which Miri's isolation forbids, or if even one of its cases
+  takes minutes there. `xtask`'s Miri step passes libtest's `--report-time`
+  and fails, naming them, if any test takes 300 s or more of Miri's time.
 
 Pinned versions (proofs must be reproducible). The source of truth is
 `scripts/toolchains.env`; `verify.sh` fails if installed tools differ.
