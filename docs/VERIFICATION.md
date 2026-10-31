@@ -213,6 +213,16 @@ We list this openly. Proofs are only as good as their assumptions.
   conversions, exponentiation and inversion are our own code, proven over
   those axioms; the ECDSA group law and verification steps will be too, but
   are not written yet
+- The Tier 0 code on a page's path, small and tested rather than proven
+  ([Phase 4](phases/phase-4.md#what-is-proven-and-what-is-assumed)): the
+  text layout (`clazel-text`, replaced by Phase 5's layout), the renderer's
+  pipeline glue (`clazel-renderer`: read the frames, call the proven
+  functions in order, send the result), and the host's command loop and
+  shell (`clazel`, with the network shell `clazel-net`, which only carries
+  bytes). The layout and the glue run inside the sandbox, so a bug there
+  can mis-render or kill one tab but not break the kernel's theorems; their
+  evidence is the hostile-page and process tests
+  (`crates/clazel/tests/hostile_pages.rs`, `pages.rs`)
 - That each spec matches the standard it transcribes. No proof can check
   this, because the standard is English. It is backed by machine-checked
   evidence instead of a reviewer (next section), and that evidence is only as
