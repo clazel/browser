@@ -144,8 +144,8 @@ content, which is Tier 0 code with a test, not a theorem.
 
 | Crate | Tier (target) | Standard | Contents |
 |-------|---------------|----------|----------|
-| `clazel-css` | 0 (2, per 5.0(a)) | CSS Syntax 3 §3 to §5, §8†; CSSOM "serialize" for tests | input decoding for style sheets, the tokenizer, the parser's entry points and algorithms, component values, An+B, serialization of tokens |
-| `clazel-selectors` | 0 (2, per 5.0(a)) | Selectors 4 §3 to §7, §9, §15, §16, specificity, grammar† | parse a selector list, match against `clazel-dom`'s arena, specificity, serialization |
+| `clazel-css` | 0 (2, per 5.0(a)) | CSS Syntax 3 §3 to §6, §9 (all †); CSSOM "serialize" for tests | input decoding for style sheets, the tokenizer, the parser's entry points and algorithms, component values, An+B, serialization of tokens |
+| `clazel-selectors` | 0 (2, per 5.0(a)) | Selectors 4 §3 to §7, §9, §15 to §17, grammar, API hooks (all †) | parse a selector list, match against `clazel-dom`'s arena, specificity, serialization |
 | `clazel-style` | 0 (1) | CSS Cascade 4 §4, §6, §7; CSS 2.1 §6; CSS Values 4; CSS Color 4; CSS Fonts 3 §3; Media Queries 4 (subset); CSS Style Attributes; HTML §15.2 to §15.5; Quirks Mode | property value grammars of the subset, shorthands, the user agent style sheet, presentational hints, the cascade, inheritance, computed values as a side table keyed by node id |
 | `clazel-font` | 0 (1) | OpenType 1.9† (font file, collections, `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `loca`, `glyf`, `name`, `OS/2`, `post`, `kern`, `GPOS` type 2; `CFF` per 5.0(c)); Apple TrueType Reference Manual (second text) | the table directory, each table's parser, glyph outlines as quadratic contours, advances, kerning lookups |
 | `clazel-layout` | 0 (0) | CSS 2.1 §8 to §11, §16, §17, Appendix E; CSS Text 3; CSS Tables 3 (auto layout)†; UAX #14; HTML §15.3, §15.4; Quirks Mode §3 | the box tree, block, inline and table formatting, white space, line breaking, font matching and the shaping glue, hit testing, the display list. **Replaces `clazel-text`** (5.0(g)) |
