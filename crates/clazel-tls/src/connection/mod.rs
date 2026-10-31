@@ -12,3 +12,5 @@ pub mod post_handshake_contract;
 pub mod post_handshake_spec;
 pub mod post_handshake_exec;
 pub mod post_handshake_lemmas;
+pub mod post_handshake_certificates;
+pub mod post_handshake_examples;
