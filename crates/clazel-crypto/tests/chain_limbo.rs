@@ -63,6 +63,14 @@ include!("../../clazel-x509/tests/generated/x509_limbo.rs");
 
 static CERTS: &[u8] = include_bytes!("../../clazel-x509/tests/generated/x509_limbo_certs.bin");
 
+/// Whether the testcase's key-usage and extended-key-usage expectations are
+/// ones the profile always meets: digitalSignature, and serverAuth for a
+/// server (the profile requires both whenever the certificate states them).
+fn usage_expectations_are_the_profiles(case: &Case) -> bool {
+    case.key_usage.iter().all(|k| *k == "digitalSignature")
+        && case.extended_key_usage.iter().all(|e| *e == "serverAuth")
+}
+
 fn need<T>(value: Option<T>, what: &str) -> Result<T, String> {
     value.ok_or_else(|| what.to_owned())
 }
@@ -106,7 +114,10 @@ fn copy(time: &CertificateTime) -> CertificateTime {
 /// be drawn here (a leaf or chain that does not parse, no anchor by name,
 /// an intermediate left out, or no single peer name).
 fn limbo_verdict<L: LinkVerifier>(case: &Case, link: &L) -> Option<Result<(), PathError>> {
-    if case.kind != "SERVER" || !case.peer_names.is_empty() {
+    if case.kind != "SERVER"
+        || !case.peer_names.is_empty()
+        || !usage_expectations_are_the_profiles(case)
+    {
         return None;
     }
     let anchors: Vec<Anchor<'static>> = case
@@ -173,7 +184,9 @@ fn limbo_verdict<L: LinkVerifier>(case: &Case, link: &L) -> Option<Result<(), Pa
     let environment = Environment {
         link,
         revoked: &NotRevoked,
-        max_intermediates: 6,
+        max_intermediates: case
+            .max_chain_depth
+            .map_or(6, |d| usize::try_from(d).unwrap_or(6)),
     };
     Some(
         candidate_verdict(

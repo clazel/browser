@@ -54,6 +54,14 @@ include!("generated/x509_limbo.rs");
 
 static CERTS: &[u8] = include_bytes!("generated/x509_limbo_certs.bin");
 
+/// Whether the testcase's key-usage and extended-key-usage expectations are
+/// ones the profile always meets: digitalSignature, and serverAuth for a
+/// server (the profile requires both whenever the certificate states them).
+fn usage_expectations_are_the_profiles(case: &Case) -> bool {
+    case.key_usage.iter().all(|k| *k == "digitalSignature")
+        && case.extended_key_usage.iter().all(|e| *e == "serverAuth")
+}
+
 fn cert(index: usize) -> Option<&'static [u8]> {
     let &(offset, length) = CERT_SPANS.get(index)?;
     let start = usize::try_from(offset).ok()?;
@@ -165,6 +173,10 @@ fn limbo_server_cases_through_verify_server_chain() {
             let n = tally.skipped.entry(reason).or_insert(0);
             *n = n.saturating_add(1);
         };
+        if !usage_expectations_are_the_profiles(case) {
+            skip("usage expectation");
+            continue;
+        }
         let Some(now) = case_time(case) else {
             skip("time");
             continue;

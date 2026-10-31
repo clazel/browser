@@ -511,12 +511,19 @@ fn survey_name_constraint_testcases() {
     }
     let selected = || CASES.iter().filter(|c| is_name_constraint_case(c.id));
     println!(
-        "  selected testcases: {} SERVER, {} with several peer names, {} with features, {} of importance 'undetermined'",
+        "  selected testcases: {} SERVER, {} with several peer names, {} with features, {} of importance 'undetermined', {} stating a depth or usage expectation",
         selected().filter(|c| c.kind == "SERVER").count(),
         selected().filter(|c| !c.peer_names.is_empty()).count(),
         selected().filter(|c| !c.features.is_empty()).count(),
         selected()
             .filter(|c| c.importance == "undetermined")
+            .count(),
+        selected()
+            .filter(|c| {
+                c.max_chain_depth.is_some()
+                    || !c.key_usage.is_empty()
+                    || !c.extended_key_usage.is_empty()
+            })
             .count(),
     );
     // Only that the survey ran everything it should: no verdict is pinned.
