@@ -358,3 +358,34 @@ it evidently means. Each entry records what we specified instead.
   value names no encoding. See `get_xml_encoding` in
   `crates/clazel-html/src/sniff/spec.rs`.
 - **Reported upstream:** not yet.
+
+## X.509 §12.5 ignores self-signed certificates, including the end entity
+
+- **Spec:** Recommendation ITU-T X.509 (10/2019) | ISO/IEC 9594-8:2020,
+  <https://www.itu.int/rec/T-REC-X.509-201910-I/en> (SHA-256
+  `1f4ea2939ecc31a3433c499084d485e770f9b8dcee55a0ba9fe4c27128822e8c`),
+  §12.5.1 and §12.5.2, with §9.1.5.
+- **Text:** §12.5.1: "Self-signed certificates, if encountered in the path,
+  are ignored." (repeated at the start of §12.5.2). §9.1.5: "self-issued
+  certificates of category a) are self-signed certificates ..., and if they
+  are encountered in the path, they shall be ignored" and, for category b),
+  "may only appear as end-entity public-key certificates in a path, and shall
+  be processed as end-entity public-key certificates", then "If self-issued
+  certificates of category b) are encountered within a path, they shall be
+  ignored."
+- **Problem:** §12.5: "The last public-key certificate is considered to be the
+  end-entity public-key certificate" and the checks apply to it. Read
+  literally, a self-signed end-entity certificate is ignored, so a path made
+  of one self-signed certificate passes every check with nothing verified
+  under the trust anchor's key, and any self-signed certificate would be
+  accepted. §9.1.5 also says category b) certificates are both processed as
+  end-entity certificates and ignored, and a path cannot tell categories b)
+  and c) apart (both are self-issued and not self-signed).
+- **We specify:** a self-signed certificate (self-issued, and its signature
+  verifies under its own key, §3.5.69) is removed from the path unless it is
+  the last certificate, and the rest is processed with the previous kept
+  certificate as issuer. The last certificate is always processed. A
+  self-issued certificate that is not self-signed is processed as §12.5's
+  "intermediate self-issued" rules say, or as the end entity if last. See
+  `drop_ignored` in `crates/clazel-x509/src/path/independent.rs`.
+- **Reported upstream:** not yet.
