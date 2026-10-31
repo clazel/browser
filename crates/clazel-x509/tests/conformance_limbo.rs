@@ -1,42 +1,55 @@
-//! x509-limbo conformance (docs/phases/phase-3.md item 3.5b), as far as
-//! clazel-x509 goes today.
+//! x509-limbo conformance (docs/phases/phase-3.md item 3.5b).
 //!
-//! clazel-x509 has no path validation yet, so limbo's chain verdicts are not
-//! run. What this file does with the corpus (C2SP/x509-limbo, Apache-2.0,
-//! vendored in full under `tests/data/x509-limbo/` and reduced by
-//! `cargo xtask testdata` to `tests/generated/x509_limbo.rs`, the testcase
-//! index, and `x509_limbo_certs.bin`, every distinct certificate as DER):
+//! The corpus (C2SP/x509-limbo, Apache-2.0) is vendored in full under
+//! `tests/data/x509-limbo/` and reduced by `cargo xtask testdata` to
+//! `tests/generated/x509_limbo.rs`, the testcase index, and
+//! `x509_limbo_certs.bin`, every distinct certificate as DER. This file:
 //!
 //! 1. Runs the decoders on every distinct certificate of the corpus
 //!    (leaves, intermediates and trust anchors): envelope, TBS, SPKI,
 //!    extensions, and the SAN, BasicConstraints, KeyUsage, ExtendedKeyUsage,
 //!    NameConstraints and PolicyConstraints extension decoders, plus
-//!    signature-algorithm classification. None may panic, and the number of certificates each
-//!    stage accepts is pinned in `DECODE_COUNTS`, so a decoder change that
-//!    moves it is noticed.
-//! 2. Pins the one outcome limbo's expectations decide for a decoder: a
-//!    `SERVER` testcase that expects `SUCCESS` for a DNS or IP peer name has
-//!    a leaf that `check_leaf_certificate` (envelope, TBS, extensions, the
-//!    RFC 9525 SAN match, validity at the testcase's time, EKU, key usage
-//!    and BasicConstraints leaf role) accepts for that name at that time.
-//! 3. Accounts for every other testcase in `NOT_YET_SUPPORTED`
-//!    (`tests/limbo/not_yet_supported.rs`), by id, with a reason. The test
-//!    fails if a corpus id is neither pinned nor listed, if a listed id is not
-//!    in the corpus, if a listed testcase now passes its pin, or if a pinned
-//!    testcase fails and is not listed. The list shrinks as path validation
-//!    lands; limbo's `FAILURE` verdicts cannot be pinned before then, since
-//!    most rest on chain building, trust, policy or CRLs, not on one decoder.
+//!    signature-algorithm classification. None may panic, and the number of
+//!    certificates each stage accepts is pinned in `DECODE_COUNTS`, so a
+//!    decoder change that moves it is noticed.
+//! 2. Runs every `SERVER` testcase that names a DNS or IP peer through
+//!    `path::search::exec::verify_server_chain` (RFC 5280 section 6.1 with
+//!    the browser profile, over limbo's presented chain and trusted
+//!    certificates, at limbo's validation time and with limbo's
+//!    `max_chain_depth` as `max_intermediates`) and compares the verdict
+//!    with limbo's `SUCCESS` or `FAILURE`.
+//!    - **Signatures are not checked here.** The link verifier is a stand-in
+//!      that accepts every signature: the real one (`CertificateLinks`) is in
+//!      `clazel-crypto`, which depends on this crate. Limbo's `SUCCESS`
+//!      chains have valid signatures, so the stand-in is exact for them; a
+//!      `FAILURE` that rests on a signature is accepted here and is listed
+//!      as such (`clazel-crypto/tests/chain_limbo.rs` pins those with the
+//!      real links).
+//!    - A `FAILURE` that this run refuses counts as agreeing whatever the
+//!      reason (the error is not compared).
+//! 3. Accounts for every testcase that disagrees or is not run (`CLIENT`
+//!    cases, a `SERVER` case without a DNS or IP name) in
+//!    `EXPECTED_FAILURES` (`tests/limbo/expected_failures.rs`), by id, with a
+//!    reason. The test fails if a corpus id is neither agreeing nor listed,
+//!    if a listed id is not in the corpus, if a listed testcase now agrees
+//!    (remove it), or if a testcase that disagrees is not listed.
+//! 4. Checks that no certificate of a `SUCCESS` testcase is rejected by a
+//!    decoder.
 
 use std::net::IpAddr;
 
 use clazel_x509::{
-    certificate::exec::parse_certificate,
+    certificate::exec::{AlgorithmIdentifier, parse_certificate},
     constraints::exec::{parse_basic_constraints, parse_extended_key_usage, parse_key_usage},
     extensions::exec::{parse_extensions, parse_subject_alt_name},
-    leaf::exec::{LeafPolicy, check_leaf_certificate},
     matcher::ReferenceIdentity,
     name_constraints::exec::parse_name_constraints,
-    path::parsed::exec::{anchor_from_root, parse_path_cert},
+    path::{
+        contract::{LinkVerifier, RevocationOracle},
+        exec::Environment,
+        parsed::exec::{Anchor, PathCert, anchor_from_root, parse_path_cert},
+        search::exec::verify_server_chain,
+    },
     policy_constraints::exec::parse_policy_constraints,
     signature_algorithm::exec::classify,
     spki::exec::parse_subject_public_key_info,
@@ -65,8 +78,8 @@ struct Case {
 // `TESTCASE_COUNT`, `CERT_SPANS` and `CASES`, generated from the vendored file.
 include!("generated/x509_limbo.rs");
 
-// `NOT_YET_SUPPORTED`: (testcase id, reason), checked in by hand.
-include!("limbo/not_yet_supported.rs");
+// `EXPECTED_FAILURES`: (testcase id, reason), checked in by hand.
+include!("limbo/expected_failures.rs");
 
 static CERTS: &[u8] = include_bytes!("generated/x509_limbo_certs.bin");
 
@@ -187,51 +200,134 @@ fn decode(der: &[u8]) -> Vec<Option<bool>> {
     out
 }
 
-/// What the pin says about a testcase.
-enum Pin {
-    /// Limbo's expectations decide nothing for the decoders.
-    None,
-    /// The leaf must be accepted for this peer at this time.
-    Accept,
-}
+/// Accepts every signature: the stand-in for `clazel-crypto`'s real link
+/// verifier (see the module docs).
+struct AcceptAll;
 
-fn pin_of(case: &Case) -> Pin {
-    let named = matches!(case.peer.0, "DNS" | "IP");
-    if case.kind == "SERVER" && case.expected == "SUCCESS" && named {
-        Pin::Accept
-    } else {
-        Pin::None
+impl LinkVerifier for AcceptAll {
+    fn verify(&self, _: &[u8], _: &AlgorithmIdentifier<'_>, _: &[u8], _: &[u8]) -> bool {
+        true
     }
 }
 
-/// Whether `check_leaf_certificate` accepts the testcase's leaf for its peer
-/// name at its validation time. `None` when the testcase gives no usable
-/// name, or a time that does not parse.
-fn leaf_accepted(case: &Case) -> Option<bool> {
-    let der = cert(case.leaf)?;
-    // Limbo leaves the time out of some testcases (`time` is empty); the leaf
-    // is then checked at its own notBefore, which its validity includes.
-    let now = if case.time.is_empty() {
-        let envelope = parse_certificate(der)?;
-        parse_tbs_certificate(envelope.tbs_certificate_der)?.not_before
-    } else {
-        parse_time(case.time)?
-    };
-    let policy = LeafPolicy {
-        allow_any_extended_key_usage: false,
-    };
-    let accepted = |reference: ReferenceIdentity<'_>| {
-        check_leaf_certificate(der, reference, &now, policy)
-            .is_some_and(|r| r.identity_matched && r.valid_at_captured_time)
-    };
-    Some(match case.peer {
-        ("DNS", name) => accepted(ReferenceIdentity::Dns(name.as_bytes())),
-        ("IP", text) => match text.parse::<IpAddr>().ok()? {
-            IpAddr::V4(a) => accepted(ReferenceIdentity::Ip(&a.octets())),
-            IpAddr::V6(a) => accepted(ReferenceIdentity::Ip(&a.octets())),
+/// Nothing is revoked (the production oracle; CRLs are Phase 8).
+struct NotRevoked;
+
+impl RevocationOracle for NotRevoked {
+    fn is_revoked(&self, _: &PathCert<'_>) -> bool {
+        false
+    }
+}
+
+/// Production `max_intermediates`, used when the testcase gives no
+/// `max_chain_depth`.
+const DEFAULT_MAX_INTERMEDIATES: usize = 6;
+
+/// Unix seconds of a UTC time (proleptic Gregorian, days from civil).
+fn unix_seconds(t: &CertificateTime) -> Option<u64> {
+    let (m, d) = (i64::from(t.month), i64::from(t.day));
+    let y = i64::from(t.year).checked_sub(i64::from(m <= 2))?;
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let mp = m.checked_add(9)?.checked_rem(12)?;
+    let doy = mp
+        .checked_mul(153)?
+        .checked_add(2)?
+        .checked_div(5)?
+        .checked_add(d)?
+        .checked_sub(1)?;
+    let doe = yoe
+        .checked_mul(365)?
+        .checked_add(yoe / 4)?
+        .checked_sub(yoe / 100)?
+        .checked_add(doy)?;
+    let days = era
+        .checked_mul(146_097)?
+        .checked_add(doe)?
+        .checked_sub(719_468)?;
+    let clock = i64::from(t.hour)
+        .checked_mul(3600)?
+        .checked_add(i64::from(t.minute).checked_mul(60)?)?
+        .checked_add(i64::from(t.second))?;
+    u64::try_from(days.checked_mul(86_400)?.checked_add(clock)?).ok()
+}
+
+/// What running a testcase gave.
+enum Outcome {
+    /// Our verdict is limbo's.
+    Agrees,
+    /// Our verdict is not limbo's: `accepted` is ours.
+    Disagrees { accepted: bool },
+    /// Not run, and why.
+    NotRun(&'static str),
+}
+
+/// The testcase's validation time as Unix seconds. Limbo leaves the time out
+/// of some testcases (`time` is empty): the leaf is then judged at its own
+/// notBefore, which its validity includes. A leaf that does not decode gives
+/// 0: the chain is refused whatever the time.
+fn case_time(case: &Case) -> Option<u64> {
+    if case.time.is_empty() {
+        let decoded = cert(case.leaf)
+            .and_then(parse_certificate)
+            .and_then(|e| parse_tbs_certificate(e.tbs_certificate_der));
+        return match decoded {
+            Some(tbs) => unix_seconds(&tbs.not_before),
+            None => Some(0),
+        };
+    }
+    unix_seconds(&parse_time(case.time)?)
+}
+
+/// Run one testcase through `verify_server_chain`.
+fn run(case: &Case) -> Outcome {
+    if case.kind != "SERVER" {
+        return Outcome::NotRun("not a SERVER testcase");
+    }
+    let ip;
+    let reference = match case.peer {
+        ("DNS", name) => ReferenceIdentity::Dns(name.as_bytes()),
+        ("IP", text) => match text.parse::<IpAddr>() {
+            Ok(IpAddr::V4(a)) => {
+                ip = a.octets().to_vec();
+                ReferenceIdentity::Ip(&ip)
+            }
+            Ok(IpAddr::V6(a)) => {
+                ip = a.octets().to_vec();
+                ReferenceIdentity::Ip(&ip)
+            }
+            Err(_) => return Outcome::NotRun("peer address does not parse"),
         },
-        _ => return None,
-    })
+        _ => return Outcome::NotRun("no DNS or IP peer name"),
+    };
+    let Some(now) = case_time(case) else {
+        return Outcome::NotRun("validation time does not parse");
+    };
+    let anchors: Vec<Anchor<'_>> = case
+        .trusted
+        .iter()
+        .filter_map(|&i| cert(i).and_then(|der| anchor_from_root(der, None)))
+        .collect();
+    let presented: Option<Vec<&[u8]>> = std::iter::once(case.leaf)
+        .chain(case.intermediates.iter().copied())
+        .map(cert)
+        .collect();
+    let Some(presented) = presented else {
+        return Outcome::NotRun("certificate index out of range");
+    };
+    let environment = Environment {
+        link: &AcceptAll,
+        revoked: &NotRevoked,
+        max_intermediates: case.max_chain_depth.map_or(DEFAULT_MAX_INTERMEDIATES, |d| {
+            usize::try_from(d).unwrap_or(DEFAULT_MAX_INTERMEDIATES)
+        }),
+    };
+    let accepted = verify_server_chain(&environment, &anchors, &presented, reference, now).is_ok();
+    if accepted == (case.expected == "SUCCESS") {
+        Outcome::Agrees
+    } else {
+        Outcome::Disagrees { accepted }
+    }
 }
 
 #[test]
@@ -294,48 +390,44 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
             }
         }
     }
-    // 2 and 3. Pins and the not-yet-supported list.
+    // 2 and 3. The chain verdicts and the expected-failure list.
     let mut listed: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
-    for (id, reason) in NOT_YET_SUPPORTED {
+    for (id, reason) in EXPECTED_FAILURES {
         if listed.insert(id, reason).is_some() {
             problems.push(format!("{id}: listed twice"));
         }
     }
     let mut seen = std::collections::BTreeSet::new();
-    let (mut pinned_pass, mut listed_count, mut case_fail) = (0usize, 0usize, 0usize);
+    let (mut agreeing, mut listed_count, mut case_fail) = (0usize, 0usize, 0usize);
     for c in CASES {
         if !seen.insert(c.id) {
             problems.push(format!("{}: duplicate id in the corpus", c.id));
         }
         let is_listed = listed.contains_key(c.id);
         listed_count = listed_count.saturating_add(usize::from(is_listed));
-        match pin_of(c) {
-            Pin::None if !is_listed => {
+        match run(c) {
+            Outcome::Agrees if is_listed => problems.push(format!(
+                "{}: listed as an expected failure, but verify_server_chain now agrees with limbo ({}): remove it from the list",
+                c.id, c.expected
+            )),
+            Outcome::Agrees => agreeing = agreeing.saturating_add(1),
+            Outcome::Disagrees { .. } | Outcome::NotRun(_) if is_listed => {}
+            Outcome::Disagrees { accepted } => {
                 case_fail = case_fail.saturating_add(1);
                 problems.push(format!(
-                    "{}: new testcase: neither pinned nor in NOT_YET_SUPPORTED",
+                    "{}: limbo expects {}, verify_server_chain {} it, and the testcase is not in EXPECTED_FAILURES",
+                    c.id,
+                    c.expected,
+                    if accepted { "accepts" } else { "refuses" }
+                ));
+            }
+            Outcome::NotRun(why) => {
+                case_fail = case_fail.saturating_add(1);
+                problems.push(format!(
+                    "{}: not run ({why}) and not in EXPECTED_FAILURES",
                     c.id
                 ));
             }
-            Pin::None => {}
-            Pin::Accept => match leaf_accepted(c) {
-                Some(true) if is_listed => {
-                    // Counted below as listed; the stale entry fails the run.
-                    problems.push(format!(
-                        "{}: listed as not yet supported, but its pin now passes: remove it from the list",
-                        c.id
-                    ));
-                }
-                Some(true) => pinned_pass = pinned_pass.saturating_add(1),
-                Some(false) | None if is_listed => {}
-                Some(false) | None => {
-                    case_fail = case_fail.saturating_add(1);
-                    problems.push(format!(
-                        "{}: limbo expects SUCCESS for {:?} at {}, but the leaf is rejected",
-                        c.id, c.peer, c.time
-                    ));
-                }
-            },
         }
     }
     for id in listed.keys() {
@@ -344,20 +436,20 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
         }
     }
     println!(
-        "limbo: {} testcases, {pinned_pass} pinned and passing, {listed_count} not yet supported",
+        "limbo: {} testcases, {agreeing} agree with verify_server_chain (accept-all links), {listed_count} expected failures",
         CASES.len()
     );
-    // One unit per testcase: a pin that passes, a listed testcase (an
-    // expected failure, with its reason in NOT_YET_SUPPORTED), or a
+    // One unit per testcase: an agreeing verdict, a listed testcase (an
+    // expected failure, with its reason in EXPECTED_FAILURES), or a
     // testcase that is neither (xtask/src/conformance.rs).
     println!(
-        "clazel-conformance: suite=\"x509-limbo leaf checks\" pass={pinned_pass} xfail={listed_count} fail={case_fail} total={}",
+        "clazel-conformance: suite=\"x509-limbo path validation (accept-all links)\" pass={agreeing} xfail={listed_count} fail={case_fail} total={}",
         CASES.len()
     );
     let reasons: std::collections::BTreeSet<&&str> = listed.values().collect();
     for r in reasons {
         let n = listed.values().filter(|v| *v == r).count();
-        println!("limbo not yet supported: {n}: {r}");
+        println!("limbo expected failures: {n}: {r}");
     }
     // The index's other fields have the shapes the converter promises.
     for c in CASES {
@@ -366,6 +458,20 @@ fn limbo_corpus_decodes_without_panic_and_pins_what_it_decides() {
             .iter()
             .all(|(k, _)| matches!(*k, "DNS" | "IP" | "RFC822"));
         let known = matches!(c.importance, "undetermined" | "low" | "high" | "critical");
+        // The profile always requires digitalSignature (if keyUsage is
+        // present) and serverAuth for a server, so the only expectations a
+        // testcase can state are these, and the profile meets them.
+        let usage_ok = c.key_usage.iter().all(|k| *k == "digitalSignature")
+            && c.extended_key_usage.iter().all(|e| {
+                *e == if c.kind == "SERVER" {
+                    "serverAuth"
+                } else {
+                    "clientAuth"
+                }
+            });
+        if !usage_ok || c.max_chain_depth.is_some_and(|d| d > 255) {
+            problems.push(format!("{}: unexpected usage or depth expectation", c.id));
+        }
         if !names_ok || !known || c.features.iter().any(|f| f.is_empty()) {
             problems.push(format!("{}: unexpected index fields", c.id));
         }
