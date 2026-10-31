@@ -56,9 +56,18 @@ of the `curl` clone); TLS (3.5) is on open pull requests.**
 WHATWG tokenizer (proven total and panic-free), tree builder, DOM.
 *Exit:* a text-mode browser (Lynx-style) that browses real sites.
 Detailed plan: [phases/phase-4.md](phases/phase-4.md).
-**Status: planned (2026-10-28).** The decisions in item 4.0 are taken
-(tree builder and DOM at tier 2, single-byte legacy encodings in the phase,
-the body chunked to the renderer); nothing is built.
+**Status: built (2026-10-31), not complete.** Every item but 4.4 is merged
+into `main` (the last at `9f776b2`): `clazel-html` (tokenizer, character
+references, encoding sniffing) and `clazel-treebuilder` are at tier 2, the
+kernel's display theorems are proven, and `clazel browse` runs on `http://`
+sites. CI's full verification at `e29265d`
+([run 41140621041](https://github.com/clazel/browser/actions/runs/41140621041)) had every job
+green but Miri, which overran its 360-minute limit (traced to the Phase 3
+TLS tests; fix open as PR #75). Left: a green full run, and `clazel-dom` at
+tier 2 (`phase4/dom-conformance-tier2`). Item 4.4 (multi-byte encodings)
+moved to Phase 8.
+<!-- Once both hold, replace the paragraph above with this line, filling in the date, sha and run id: -->
+<!-- **Status: complete (YYYY-MM-DD).** CI's full verification passed at `<sha>` ([run <id>](https://github.com/clazel/browser/actions/runs/<id>)). -->
 
 ## Phase 5: CSS, layout, graphics (the Show HN milestone)
 CSS parsing and cascade, block, inline and table layout, font parsing and
@@ -77,4 +86,8 @@ in safe Rust. DOM bindings.
 
 ## Phase 8: Windows port, compatibility grind
 Windows CI and proofs (the AppContainer backend exists, see Platforms). WPT score tracking, CSS breadth,
-Web APIs, performance.
+Web APIs, performance. Also the legacy multi-byte encodings (gb18030 and
+GBK, Big5, ISO-2022-JP, Shift_JIS, EUC-JP, EUC-KR), slipped from Phase 4
+item 4.4 as its item 4.0 allows; until then a page in one of them is not
+rendered and says "encoding `<name>` is not supported"
+([phases/phase-4.md](phases/phase-4.md#44-legacy-multi-byte-encodings-l-may-slip-to-phase-8-per-40)).
