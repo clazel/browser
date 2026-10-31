@@ -163,10 +163,15 @@ pub struct Out {
     pub end: End,
 }
 
+/// One `Send` per record, in order.
+pub open spec fn sends(wires: Seq<Seq<u8>>) -> Seq<Action> {
+    Seq::new(wires.len(), |i: int| Action::Send(wires[i]))
+}
+
 /// The effects of [`Out`] as the sequence of actions: every `Send`, then the
 /// `Deliver` if there is plaintext, then `Close` or `Fail`.
 pub open spec fn actions(o: Out) -> Seq<Action> {
-    o.wires.map_values(|w: Seq<u8>| Action::Send(w))
+    sends(o.wires)
         + (if o.delivered.len() > 0 { seq![Action::Deliver(o.delivered)] } else { seq![] })
         + (match o.end {
             End::Continue => seq![],
