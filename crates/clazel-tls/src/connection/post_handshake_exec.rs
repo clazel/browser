@@ -78,8 +78,11 @@ impl View for Action {
 /// constructors wherever `View` is visible, which Verus refuses for a
 /// private type.
 pub enum End {
+    /// The connection goes on.
     Continue,
+    /// `close_notify`.
     Close,
+    /// Fatal, with this alert description.
     Fail(u8),
 }
 impl View for End {
@@ -95,8 +98,11 @@ impl View for End {
 
 /// [`spec::Out`]: records, plaintext, end. Public for the reason `End` is.
 pub struct Out {
+    /// Protected records to send, in order.
     pub wires: Vec<Vec<u8>>,
+    /// Plaintext to deliver; empty means no `Deliver` action.
     pub delivered: Vec<u8>,
+    /// Whether the connection ended.
     pub end: End,
 }
 impl View for Out {
