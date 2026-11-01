@@ -207,12 +207,11 @@ what is proven today is stated below, not implied by the tier.
   protected alert and then `Fail`. Not here: joining it to the dispatcher (which
   holds the application secrets), socket I/O, post-handshake client
   authentication, 0-RTT, record padding on send, fragmentation of long sends
-  (more than 2^14 bytes is `record_overflow`). **Written without a Verus run:**
-  its spec, contracts, executable proofs, lemmas, 20 witnesses and 18 mutation
-  certificates are unverified, and the 25 tests in `tests/post_handshake.rs`
-  (against an independent model of the server, with a test-only AEAD) are
-  the only evidence run so far that the executable follows the spec. They
-  do not reach the sequence-number wrap, which no API can position.
+  (more than 2^14 bytes is `record_overflow`). Its executable proofs, lemmas,
+  20 witnesses and 19 mutation certificates verify (see Verification); the 25
+  tests in `tests/post_handshake.rs` run it against an independent model of
+  the server, with a test-only AEAD. They do not reach the sequence-number
+  wrap, which no API can position; only the spec's lemma covers it.
 
 Out of scope: socket I/O, post-handshake client authentication, PSK ticket
 caching/resumption and 0-RTT (Appendix A), production cryptography, certificate
@@ -225,7 +224,7 @@ no network I/O is included.
 Tier 0, target tier 2. The current numbers are in the
 [status table](../../README.md#verification-status).
 
-- **Proven (Verus, `cargo verus verify`: 632 verified, 0 errors):** the
+- **Proven (Verus, `cargo verus verify`: 814 verified, 0 errors):** the
   executable functions of `reader`, `writer`, `record`, `reassemble`,
   `extension`, `handshake` and `encode` meet the contracts in
   `contract.rs`, which are the spec's functions in `spec.rs`. About the
@@ -266,11 +265,10 @@ Tier 0, target tier 2. The current numbers are in the
   Each `killed` entry requires a certificate that Verus checks; the
   certificate must pass on the mutant and fail on the real spec.
   Full workspace and CI verification remain required before tier promotion.
-  The 20 `ph-*` entries for the post-handshake transducer (18 `killed` with
-  certificates, 2 equivalent mutants that `survive`, each explained in its
-  reason) have **not been run**: Verus is not installed on the machine they
-  were written on, so no certificate is known to verify.
-- **Post-handshake transducer proofs (not run).** `post_handshake_lemmas.rs`
+  The 20 `ph-*` entries for the post-handshake transducer (19 `killed` with
+  certificates, one equivalent mutant that `survives`, explained in its
+  reason) pass in a local run of CI's per-crate job.
+- **Post-handshake transducer proofs.** `post_handshake_lemmas.rs`
   states: a record that failed to open (or was incomplete) delivers nothing, and
   what is delivered is an `application_data` record's content; a step that
   ends the connection leaves it not open, and a connection that is not open
@@ -278,10 +276,12 @@ Tier 0, target tier 2. The current numbers are in the
   a message the transducer chose, under the next sequence number; the
   receive and send epochs are replaced by fresh ones at sequence number 0 exactly
   on a key update, while an application data record leaves the send epoch and
-  both secrets alone; the last sequence number rekeys. The executable's
-  contracts say each operation equals its spec function. None of this has
-  been through Verus yet, so the Verus count above does not include it and some
-  of it will need repair.
+  both secrets alone; the last sequence number rekeys, under one hypothesis:
+  the epoch started from the next client secret is well formed (key and IV of
+  the lengths expanded). The spec leaves HKDF-Expand's output length
+  unconstrained, so this cannot follow from it; the executable checks it when
+  it builds the epoch. The executable's contracts say each operation equals
+  its spec function. All of it is in the Verus count above.
 - **Conformance** (`tests/conformance_tls_formats.rs`, through the proven
   code): RFC 8448 sections 3 to 7: all 40 handshake messages (39 read and
   written back byte for byte, one expected failure: a ClientHello shown

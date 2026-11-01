@@ -74,16 +74,17 @@ impl View for Action {
     }
 }
 
-enum End {
+/// [`spec::End`]. Public, as `Action` is: the open `View` body names its
+/// constructors wherever `View` is visible, which Verus refuses for a
+/// private type.
+pub enum End {
     Continue,
     Close,
     Fail(u8),
 }
 impl View for End {
     type V = spec::End;
-    // Closed: `End` is private to this module, and an open body would name
-    // its constructors wherever `View` is visible.
-    closed spec fn view(&self) -> spec::End {
+    open spec fn view(&self) -> spec::End {
         match self {
             End::Continue => spec::End::Continue,
             End::Close => spec::End::Close,
@@ -92,16 +93,15 @@ impl View for End {
     }
 }
 
-/// [`spec::Out`]: records, plaintext, end.
-struct Out {
-    wires: Vec<Vec<u8>>,
-    delivered: Vec<u8>,
-    end: End,
+/// [`spec::Out`]: records, plaintext, end. Public for the reason `End` is.
+pub struct Out {
+    pub wires: Vec<Vec<u8>>,
+    pub delivered: Vec<u8>,
+    pub end: End,
 }
 impl View for Out {
     type V = spec::Out;
-    // Closed, as `End`'s: `Out` and its fields are private to this module.
-    closed spec fn view(&self) -> spec::Out {
+    open spec fn view(&self) -> spec::Out {
         spec::Out {
             wires: crate::reassemble::views_bytes(self.wires@),
             delivered: self.delivered@,
@@ -114,7 +114,10 @@ impl Out {
         ensures o@ == spec::quiet(),
     {
         let o = Out { wires: Vec::new(), delivered: Vec::new(), end: End::Continue };
-        proof { assert(o@ =~= spec::quiet()); }
+        proof {
+            assert(crate::reassemble::views_bytes(o.wires@) =~= seq![]);
+            assert(o@ =~= spec::quiet());
+        }
         o
     }
 
@@ -122,7 +125,10 @@ impl Out {
         ensures o@ == (spec::Out { wires: seq![], delivered: seq![], end: end@ }),
     {
         let o = Out { wires: Vec::new(), delivered: Vec::new(), end };
-        proof { assert(o@ =~= (spec::Out { wires: seq![], delivered: seq![], end: end@ })); }
+        proof {
+            assert(crate::reassemble::views_bytes(o.wires@) =~= seq![]);
+            assert(o@ =~= (spec::Out { wires: seq![], delivered: seq![], end: end@ }));
+        }
         o
     }
 
@@ -533,8 +539,11 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).cipher_functions() == old(self).cipher_functions(),
             match out {
+                // The new epoch is `traffic::spec::wf`, as `Encryptor::new`
+                // proves; the spec alone cannot say so of the derived lengths.
                 Ok(_) => spec::rotated_sender(old(self).crypto_functions(), old(self)@)
-                    == Ok::<spec::State, u8>(final(self)@),
+                    == Ok::<spec::State, u8>(final(self)@)
+                    && match final(self)@.sender { Some(tx) => crate::traffic::spec::wf(tx), None => false },
                 Err(a) => spec::rotated_sender(old(self).crypto_functions(), old(self)@)
                     == Err::<spec::State, u8>(a) && final(self)@ == old(self)@,
             },
@@ -562,8 +571,10 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).cipher_functions() == old(self).cipher_functions(),
             match out {
+                // As `rotate_sender`'s: the new epoch is `traffic::spec::wf`.
                 Ok(_) => spec::rotated_receiver(old(self).crypto_functions(), old(self)@)
-                    == Ok::<spec::State, u8>(final(self)@),
+                    == Ok::<spec::State, u8>(final(self)@)
+                    && match final(self)@.receiver { Some(rx) => crate::traffic::spec::wf(rx), None => false },
                 Err(a) => spec::rotated_receiver(old(self).crypto_functions(), old(self)@)
                     == Err::<spec::State, u8>(a) && final(self)@ == old(self)@,
             },
@@ -611,7 +622,12 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             Ok(wire) => {
                 proof { lemma_start_fresh(self.crypto_functions(), self.client_secret@); }
                 match self.rotate_sender() {
-                    Ok(_) => Out::one(wire, End::Continue),
+                    Ok(_) => {
+                        // The fresh epoch is unfailed at sequence number 0
+                        // from a 32-byte secret: `wf` of the rotated state.
+                        proof { lemma_start_fresh(self.crypto_functions(), self@.client_secret); }
+                        Out::one(wire, End::Continue)
+                    },
                     Err(a) => {
                         self.terminal(Phase::Failed);
                         Out::one(wire, End::Fail(a))
@@ -716,7 +732,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
     /// §4.6.3, §5.1: a valid KeyUpdate that must end its record at a message
     /// boundary; the read keys move on and a requested reply goes out.
     fn key_update_received(&mut self, request: u8, last: bool) -> (out: Out)
-        requires old(self).wf(),
+        requires old(self).wf(), old(self)@.phase == spec::Phase::Open,
         ensures
             out@ == spec::key_update_received(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, request, last).0,
@@ -746,7 +762,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
 
     /// §4.6: one complete handshake message after the handshake.
     fn message(&mut self, m: &[u8], last: bool) -> (out: Out)
-        requires old(self).wf(),
+        requires old(self).wf(), old(self)@.phase == spec::Phase::Open,
         ensures
             out@ == spec::message(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, m@, last).0,
@@ -773,7 +789,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
 
     /// The complete messages of one record from index `i`, in order.
     fn messages(&mut self, ms: &Vec<Vec<u8>>, i: usize) -> (out: Out)
-        requires old(self).wf(), i <= ms.len(),
+        requires old(self).wf(), old(self)@.phase == spec::Phase::Open, i <= ms.len(),
         ensures
             out@ == spec::messages(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, crate::reassemble::views_bytes(ms@).skip(i as int)).0,
@@ -804,7 +820,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
 
     /// §5.1, §6: what one authenticated record does.
     fn record(&mut self, typ: u8, content: &[u8]) -> (out: Out)
-        requires old(self).wf(), content.len() <= crate::spec::MAX_PLAINTEXT,
+        requires old(self).wf(), old(self)@.phase == spec::Phase::Open, content.len() <= crate::spec::MAX_PLAINTEXT,
         ensures
             out@ == spec::record(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, typ, content@).0,
@@ -821,7 +837,10 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             },
             Ok(ReassemblyEvent::AppData(data)) => {
                 let o = Out { wires: Vec::new(), delivered: data, end: End::Continue };
-                proof { assert(o@ =~= (spec::Out { wires: seq![], delivered: o.delivered@, end: spec::End::Continue })); }
+                proof {
+                    assert(crate::reassemble::views_bytes(o.wires@) =~= seq![]);
+                    assert(o@ =~= (spec::Out { wires: seq![], delivered: o.delivered@, end: spec::End::Continue }));
+                }
                 o
             },
             Ok(ReassemblyEvent::Alert(a)) => {
@@ -841,7 +860,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
     /// §5.1–§5.3: authenticate and open the first record of `wire`, and act
     /// on it. Returns what it did and how many input bytes it consumed.
     fn receive(&mut self, wire: &[u8]) -> (r: (Out, usize))
-        requires old(self).wf(),
+        requires old(self).wf(), old(self)@.phase == spec::Phase::Open,
         ensures
             r.0@ == spec::receive(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, wire@).0,

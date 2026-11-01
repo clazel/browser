@@ -87,17 +87,20 @@ pub proof fn lemma_ticket_ignored()
 /// §4.6: "If the server ... sends any other message after the handshake" the
 /// type is wrong: any handshake message but NewSessionTicket and KeyUpdate is
 /// `unexpected_message` (10), before its body is read: ClientHello,
-/// EndOfEarlyData, Certificate, an unknown type, and an empty message.
+/// EndOfEarlyData (empty, and with a body that would be a `decode_error`),
+/// Certificate, an unknown type, and an empty message.
 pub proof fn lemma_other_handshake_messages_unexpected()
     ensures
         msg(seq![1u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8),
         msg(seq![5u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8),
+        msg(seq![5u8, 0, 0, 1, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8),
         msg(seq![11u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8),
         msg(seq![99u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8),
         msg(seq![], true).0.end == super::post_handshake_spec::End::Fail(10u8),
 {
     assert(msg(seq![1u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
     assert(msg(seq![5u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
+    assert(msg(seq![5u8, 0, 0, 1, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
     assert(msg(seq![11u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
     assert(msg(seq![99u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
     assert(msg(seq![], true).0.end == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
@@ -149,6 +152,7 @@ pub proof fn lemma_key_update_requested_is_answered()
         msg(ku(1), true).0.end == super::post_handshake_spec::End::Continue,
         msg(ku(1), true).1.client_secret
             == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret),
+        msg(ku(1), true).1.client_secret != ready().client_secret,
         msg(ku(1), true).1.sender.unwrap().next == Some(0u64),
         msg(ku(1), true).1.server_secret
             == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret),
@@ -157,6 +161,7 @@ pub proof fn lemma_key_update_requested_is_answered()
     assert(msg(ku(1), true).0.end == super::post_handshake_spec::End::Continue) by (compute_only);
     assert(msg(ku(1), true).1.client_secret
         == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret)) by (compute_only);
+    assert(msg(ku(1), true).1.client_secret != ready().client_secret) by (compute_only);
     assert(msg(ku(1), true).1.sender.unwrap().next == Some(0u64)) by (compute_only);
     assert(msg(ku(1), true).1.server_secret
         == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret)) by (compute_only);

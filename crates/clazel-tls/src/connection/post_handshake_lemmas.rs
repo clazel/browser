@@ -409,6 +409,14 @@ pub proof fn lemma_last_sequence_number_rekeys(c: crate::schedule::spec::Crypto,
         data.len() <= crate::spec::MAX_PLAINTEXT,
         super::post_handshake_spec::send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED).0.end
             == super::post_handshake_spec::End::Continue,
+        // The key and IV derived from the next secret have the lengths they
+        // were expanded to. `schedule::spec::Crypto` makes no assumption
+        // about HKDF-Expand's output length, so this is a hypothesis here;
+        // the executable `Encryptor::new` establishes it for the real epoch.
+        match crate::traffic::spec::start(c, crate::schedule::spec::next_traffic_secret(c, s.client_secret)) {
+            Ok(ep) => crate::traffic::spec::wf(ep),
+            Err(_) => true,
+        },
     ensures ({
         let r = super::post_handshake_spec::send_application(c, f, s, data);
         r.0.wires.len() == 2

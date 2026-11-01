@@ -2665,8 +2665,14 @@
       "file": "src/connection/post_handshake_spec.rs",
       "find": "|| m[0] == crate::spec::HS_KEY_UPDATE)",
       "replace": "|| m[0] == crate::spec::HS_KEY_UPDATE || m[0] == crate::spec::HS_END_OF_EARLY_DATA)",
-      "expect": "survives",
-      "reason": "Equivalent: EndOfEarlyData then parses, and the arm for every other parsed message is also unexpected_message, so the type check is belt and braces for a type the parser knows. The type check is what refuses the ones it does not (ClientHello, whose body would be a decode_error, is killed by ph-client-hello-allowed)."
+      "expect": "killed",
+      "reason": "An EndOfEarlyData after the handshake is read instead of refused by its type (RFC 8446 4.6, 6.2): an empty one still ends in unexpected_message, but one with a body is a decode_error, and lemma_other_handshake_messages_unexpected is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_other_handshake_messages_unexpected()",
+        "witness": "super::post_handshake_examples::msg(seq![5u8, 0, 0, 1, 0], true).0.end == super::post_handshake_spec::End::Fail(50u8)"
+      }
     },
     {
       "id": "ph-other-parsed-message-ignored",

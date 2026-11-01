@@ -1235,20 +1235,20 @@ sequence number; read and write sequence numbers are replaced by fresh epochs
 exactly on a key update, and an application data record leaves the send epoch and
 both secrets alone; the last sequence number rekeys. `post_handshake_examples.rs`
 holds 20 concrete lemmas (one per rule, `compute_only`), and `mutations.json`
-has 20 new entries (18 `killed` with certificates, 2 `survives`, equivalent
-mutants explained in their reason).
+has 20 new entries (19 `killed` with certificates, one `survives`, an
+equivalent mutant explained in its reason).
 
-**Not proven, and not checked.** This work was done on a Windows machine without
-Verus or Kani. Nothing in `post_handshake_*` has been through Verus: the spec,
-contracts, the executable's proofs, the 20 lemmas in `post_handshake_examples`,
-the lemmas of `post_handshake_lemmas` and the 18 mutation certificates are
-written but unverified, and some will need repair; the Verus count for the crate
-(632 before this work) is not updated. What did run: `cargo build`, strict
-`cargo clippy --all-targets -D warnings`, `cargo xtask check`, and 25 new
-integration tests (`tests/post_handshake.rs`) against an independent model of
-the server, all passing (not under Miri, which is not installed here). The
-executable is not proven equal to the spec if Verus rejects its refinement
-proofs; the tests are then the only evidence that the two agree. The send side's
+**Proven, locally.** The spec, contracts, the executable's refinement proofs,
+the 20 example lemmas and the lemmas of `post_handshake_lemmas` verify
+(`clazel-tls` 814 verified, 0 errors, up from 632), and all 19 certificates
+pass, in a local run of CI's per-crate job; CI's own run on the pull request is
+pending. One lemma carries a hypothesis: the last-sequence-number rekey holds
+when the epoch started from the next client secret is well formed (key and IV
+of the lengths expanded). `schedule::spec::Crypto` deliberately leaves
+HKDF-Expand's output length unconstrained, so the spec cannot supply this; the
+executable establishes it when it builds the epoch. The 25 integration tests
+(`tests/post_handshake.rs`) run the executable against an independent model of
+the server. The send side's
 wrap rule (rekey on the last sequence number) is witnessed in the spec but is
 not exercised by a test, because no API positions a counter near 2^64 - 1. RFC
 8448's records are AES-128-GCM and cannot be opened by this profile, so its
@@ -1528,7 +1528,7 @@ half does not wait on TLS.
 | 3.5b X.509 and path validation | standalone RFC 9525 DNS/IP matching and a bounded RFC 5280 certificate-envelope parser are in progress (the x509 crate is on `main` at tier 0; this branch adds `from_unix_seconds`, proven against the spec); path building, constraints, trust store and TLS integration remain unimplemented |
 | 3.5c RSA PKCS#1 v1.5 | on `main`; tier 2 (see As built) |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
-| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters, and (on `phase3/tls-post-handshake`) a post-handshake transducer: spec, contracts, executable, lemmas, 20 witnesses, 20 mutations and 25 passing integration tests, with its Verus proofs and mutation certificates written but not run. Production providers, socket I/O, the join of the transducer to the dispatcher and any Verus result for the new module remain; tier 0, combined full verification pending |
+| 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters, and (on `phase3/tls-post-handshake`) a post-handshake transducer: spec, contracts, executable, lemmas, 20 witnesses, 20 mutations and 25 passing integration tests, its proofs and 19 certificates passing locally (CI's run pending). Production providers, socket I/O and the join of the transducer to the dispatcher remain; tier 0, combined full verification pending |
 | 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; production libcrux/X.509 joins not started |
 | 3.5g TLS conformance and trust store | not started |
 | 3.6 Client state machine | on `main` (#3, #5), `http://` only: transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored) |
