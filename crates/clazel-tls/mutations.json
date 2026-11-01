@@ -2631,6 +2631,280 @@
         "lemma": "super::examples::lemma_start_refuses_bad_host()",
         "witness": "start(Config { host: crate::host::spec::Host::Dns(seq![]), ..super::examples::initial().config }, super::examples::initial().transcript) is Ok"
       }
+    },
+    {
+      "id": "ph-ticket-fatal",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => (quiet(), s),",
+      "replace": "crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
+      "expect": "killed",
+      "reason": "A NewSessionTicket is refused instead of parsed and ignored (RFC 8446 4.6.1): lemma_ticket_ignored is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_ticket_ignored()",
+        "witness": "!(super::post_handshake_examples::msg(super::post_handshake_examples::ticket(), true).0 == super::post_handshake_spec::quiet())"
+      }
+    },
+    {
+      "id": "ph-client-hello-allowed",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "|| m[0] == crate::spec::HS_KEY_UPDATE)",
+      "replace": "|| m[0] == crate::spec::HS_KEY_UPDATE || m[0] == crate::spec::HS_CLIENT_HELLO)",
+      "expect": "killed",
+      "reason": "A ClientHello after the handshake is read instead of refused by its type (RFC 8446 4.6, 6.2): its empty body is a decode_error, not unexpected_message, and lemma_other_handshake_messages_unexpected is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_other_handshake_messages_unexpected()",
+        "witness": "super::post_handshake_examples::msg(seq![1u8, 0, 0, 0], true).0.end == super::post_handshake_spec::End::Fail(50u8)"
+      }
+    },
+    {
+      "id": "ph-end-of-early-data-allowed",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "|| m[0] == crate::spec::HS_KEY_UPDATE)",
+      "replace": "|| m[0] == crate::spec::HS_KEY_UPDATE || m[0] == crate::spec::HS_END_OF_EARLY_DATA)",
+      "expect": "killed",
+      "reason": "An EndOfEarlyData after the handshake is read instead of refused by its type (RFC 8446 4.6, 6.2): an empty one still ends in unexpected_message, but one with a body is a decode_error, and lemma_other_handshake_messages_unexpected is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_other_handshake_messages_unexpected()",
+        "witness": "super::post_handshake_examples::msg(seq![5u8, 0, 0, 1, 0], true).0.end == super::post_handshake_spec::End::Fail(50u8)"
+      }
+    },
+    {
+      "id": "ph-other-parsed-message-ignored",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "crate::spec::Res::Ok(_) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
+      "replace": "crate::spec::Res::Ok(_) => (quiet(), s),",
+      "expect": "survives",
+      "reason": "Equivalent: the type check before the parse lets only NewSessionTicket and KeyUpdate through, and both have their own arms, so this arm is unreachable."
+    },
+    {
+      "id": "ph-key-update-keeps-read-secret",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "server_secret: next, ..s",
+      "replace": "server_secret: s.server_secret, ..s",
+      "expect": "killed",
+      "reason": "The server traffic secret does not move on a KeyUpdate (RFC 8446 7.2): lemma_key_update_rotates_read_keys is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_rotates_read_keys()",
+        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(0), true).1.server_secret == super::post_handshake_examples::ready().server_secret"
+      }
+    },
+    {
+      "id": "ph-key-update-keeps-write-secret",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "client_secret: next, ..s",
+      "replace": "client_secret: s.client_secret, ..s",
+      "expect": "killed",
+      "reason": "The client traffic secret does not move after the reply to an update_requested KeyUpdate (RFC 8446 4.6.3, 7.2): lemma_key_update_requested_is_answered is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
+        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).1.client_secret == super::post_handshake_examples::ready().client_secret"
+      }
+    },
+    {
+      "id": "ph-key-update-request-unanswered",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "Ok(s1) => if request == crate::spec::UPDATE_REQUESTED {",
+      "replace": "Ok(s1) => if request == 7 {",
+      "expect": "killed",
+      "reason": "An update_requested KeyUpdate gets no reply (RFC 8446 4.6.3): lemma_key_update_requested_is_answered is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
+        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires.len() == 0"
+      }
+    },
+    {
+      "id": "ph-key-update-reply-asks-again",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "send_key_update(c, f, s1, crate::spec::UPDATE_NOT_REQUESTED)",
+      "replace": "send_key_update(c, f, s1, crate::spec::UPDATE_REQUESTED)",
+      "expect": "killed",
+      "reason": "The reply asks the server to update again, so two peers would update forever (RFC 8446 4.6.3: the reply is update_not_requested): lemma_key_update_answer_does_not_ask_again is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_answer_does_not_ask_again()",
+        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires[0][9] == 1u8"
+      }
+    },
+    {
+      "id": "ph-key-update-boundary-unchecked",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "if !last || !crate::spec::at_message_boundary(s.reassembly) {",
+      "replace": "if !last {",
+      "expect": "killed",
+      "reason": "A KeyUpdate is accepted while a handshake message is unfinished, so the message spans the key change (RFC 8446 5.1): lemma_key_update_must_end_its_record is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_must_end_its_record()",
+        "witness": "super::post_handshake_examples::ku_rx(0, true, super::post_handshake_examples::mid_message()).0.end == super::post_handshake_spec::End::Continue"
+      }
+    },
+    {
+      "id": "ph-key-update-last-unchecked",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "if !last || !crate::spec::at_message_boundary(s.reassembly) {",
+      "replace": "if !crate::spec::at_message_boundary(s.reassembly) {",
+      "expect": "killed",
+      "reason": "A KeyUpdate is accepted with messages after it in the same record, which would be read under the old keys (RFC 8446 5.1): lemma_key_update_must_end_its_record is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_must_end_its_record()",
+        "witness": "super::post_handshake_examples::ku_rx(0, false, super::post_handshake_examples::ready()).0.end == super::post_handshake_spec::End::Continue"
+      }
+    },
+    {
+      "id": "ph-user-canceled-benign",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "if a.description == crate::spec::CLOSE_NOTIFY { close_connection(f, s) }",
+      "replace": "if a.description == crate::spec::CLOSE_NOTIFY || a.description == crate::spec::USER_CANCELED { close_connection(f, s) }",
+      "expect": "killed",
+      "reason": "user_canceled ends the connection in order instead of failing it, although this phase treats every alert but close_notify as fatal: lemma_other_alerts_are_fatal is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_other_alerts_are_fatal()",
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 90]).0.end == super::post_handshake_spec::End::Close"
+      }
+    },
+    {
+      "id": "ph-close-notify-fatal",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "CLOSE_NOTIFY { close_connection(f, s) }",
+      "replace": "CLOSE_NOTIFY { die(a.description) }",
+      "expect": "killed",
+      "reason": "close_notify fails the connection instead of ending it in order (RFC 8446 6.1): lemma_close_notify_closes is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_close_notify_closes()",
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 0]).0.end == super::post_handshake_spec::End::Fail(0u8)"
+      }
+    },
+    {
+      "id": "ph-close-notify-unanswered",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "Out { wires: seq![wire], delivered: seq![], end: End::Close },",
+      "replace": "Out { wires: seq![], delivered: seq![], end: End::Close },",
+      "expect": "killed",
+      "reason": "The peer's close_notify is not answered with our own (RFC 8446 6.1: MUST respond): lemma_close_notify_closes is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_close_notify_closes()",
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 0]).0.wires.len() == 0"
+      }
+    },
+    {
+      "id": "ph-truncation-is-clean",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "consuming(die(crate::spec::INTERNAL_ERROR), 0)",
+      "replace": "(Out { wires: seq![], delivered: seq![], end: End::Close }, closed(), 0)",
+      "expect": "killed",
+      "reason": "The transport closing before close_notify is an orderly close instead of a truncation (RFC 8446 6.1): lemma_transport_closing is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_transport_closing()",
+        "witness": "super::post_handshake_spec::step(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(), super::post_handshake_examples::ready(), super::post_handshake_spec::Input::Closed).0.end == super::post_handshake_spec::End::Close"
+      }
+    },
+    {
+      "id": "ph-no-rekey-at-last-number",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "} else if needs_rekey(s) {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "reason": "A data record goes out on the last sequence number with no KeyUpdate, so the counter would wrap on the next one (RFC 8446 5.3): lemma_last_sequence_number_rekeys_example is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_last_sequence_number_rekeys_example()",
+        "witness": "super::post_handshake_spec::send_application(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(), super::post_handshake_examples::at_last_number(), seq![5u8]).0.wires.len() == 1"
+      }
+    },
+    {
+      "id": "ph-rekey-asks-peer",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "match send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED) {",
+      "replace": "match send_key_update(c, f, s, crate::spec::UPDATE_REQUESTED) {",
+      "expect": "killed",
+      "reason": "The KeyUpdate that precedes the last sequence number asks the peer to update too, which the rekey does not need (RFC 8446 4.6.3): lemma_last_sequence_number_rekeys_example is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_last_sequence_number_rekeys_example()",
+        "witness": "super::post_handshake_spec::send_application(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(), super::post_handshake_examples::at_last_number(), seq![5u8]).0.wires[0][9] == 1u8"
+      }
+    },
+    {
+      "id": "ph-data-after-end-processed",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "if s.phase == Phase::Open { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }",
+      "replace": "receive(c, f, s, wire)",
+      "expect": "killed",
+      "reason": "Bytes after the connection ended are processed instead of ignored (RFC 8446 6.1): lemma_data_after_the_end_is_ignored is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_data_after_the_end_is_ignored()",
+        "witness": "super::post_handshake_spec::step(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(), super::post_handshake_spec::closed(), super::post_handshake_spec::Input::Bytes(seq![1u8, 2, 3])).0.end == super::post_handshake_spec::End::Fail(80u8)"
+      }
+    },
+    {
+      "id": "ph-fatal-alert-not-sent",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "Out { wires: seq![wire], delivered: seq![], end: End::Fail(alert) },",
+      "replace": "Out { wires: seq![], delivered: seq![], end: End::Fail(alert) },",
+      "expect": "killed",
+      "reason": "A locally detected fatal error sends no alert (RFC 8446 6.2): lemma_invalid_request_update is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_invalid_request_update()",
+        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(2), true).0.wires.len() == 0"
+      }
+    },
+    {
+      "id": "ph-application-data-dropped",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "Out { wires: seq![], delivered: d, end: End::Continue },",
+      "replace": "Out { wires: seq![], delivered: seq![], end: End::Continue },",
+      "expect": "killed",
+      "reason": "Application data is not delivered (RFC 8446 5): lemma_application_data_is_delivered is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_application_data_is_delivered()",
+        "witness": "super::post_handshake_examples::rec(23, seq![5u8, 6]).0.delivered.len() == 0"
+      }
+    },
+    {
+      "id": "ph-deliver-action-dropped",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "+ (if o.delivered.len() > 0 { seq![Action::Deliver(o.delivered)] } else { seq![] })",
+      "replace": "+ (if false { seq![Action::Deliver(o.delivered)] } else { seq![] })",
+      "expect": "killed",
+      "reason": "The Deliver action is left out of a step's actions: lemma_actions_order is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_actions_order()",
+        "witness": "super::post_handshake_spec::actions(super::post_handshake_spec::Out { wires: seq![seq![1u8], seq![2u8]], delivered: seq![3u8], end: super::post_handshake_spec::End::Fail(40u8) }).len() == 3"
+      }
     }
   ]
 }
