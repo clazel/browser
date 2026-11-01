@@ -358,3 +358,45 @@ it evidently means. Each entry records what we specified instead.
   value names no encoding. See `get_xml_encoding` in
   `crates/clazel-html/src/sniff/spec.rs`.
 - **Reported upstream:** not yet.
+
+## BR §7.1.2.2.5 omits two rows of §7.1.2.10.6
+
+- **Spec:** CA/Browser Forum, Baseline Requirements for the Issuance and
+  Management of Publicly-Trusted TLS Server Certificates, version 2.3.1
+  (4 October 2026; `docs/BR.md` at commit
+  `3574ae809e5f909b58ee4c26b7bac4a3b9e78421` of cabforum/servercert),
+  <https://cabforum.org/working-groups/server/baseline-requirements/documents/>
+- **Text:** §7.1.2.2.5, "Table: TLS Cross-Certified Subordinate CA EKU" lists
+  `id-kp-serverAuth` (MUST be present), `id-kp-clientAuth` (MAY),
+  `id-kp-emailProtection`, `id-kp-codeSigning`, `id-kp-timeStamping` and
+  `anyExtendedKeyUsage` (MUST NOT), and "Any other value" (NOT
+  RECOMMENDED). The table of §7.1.2.10.6, which the other TLS subordinate CA
+  profiles use, has the same rows and two more, `id-kp-OCSPSigning` and the
+  "Precertificate Signing Certificate" purpose (1.3.6.1.4.1.11129.2.4.4),
+  both MUST NOT.
+- **Problem:** read literally, a restricted cross-certified TLS subordinate CA
+  may carry OCSPSigning or the precertificate-signing purpose next to
+  serverAuth ("any other value" is only NOT RECOMMENDED), while a TLS
+  subordinate CA that is not a cross-certificate may not. Nothing in the
+  document gives a reason for the difference, and a relying party cannot tell
+  the two kinds apart from the certificate.
+- **We specify:** §7.1.2.10.6's table for every subordinate CA, cross-certified
+  or not. See `ca_eku_table_ok` in
+  `crates/clazel-x509/src/path/independent_profile.rs`.
+- **Reported upstream:** not yet.
+
+## BR §7.1.2.7.6 makes keyUsage "SHOULD" but §7.1.2.7.11 says "MUST" be set
+
+- **Spec:** as above, §7.1.2.7.6 and §7.1.2.7.11.
+- **Text:** §7.1.2.7.6 lists the subscriber `keyUsage` extension with
+  presence "SHOULD". The Note under §7.1.2.7.11's RSA table says "At least
+  one Key Usage MUST be set for RSA Public Keys", and the ECC table has
+  `digitalSignature` as required "MUST".
+- **Problem:** a subscriber certificate with no keyUsage extension has no key
+  usage bits set, so read literally it breaks the Note's "MUST" and the ECC
+  table's "MUST", which makes the extension's own "SHOULD" meaningless.
+- **We specify:** the extension is optional, as §7.1.2.7.6 says. A
+  certificate without it is accepted. When it is present, the tables'
+  "MUST"s apply to its bits. See `subscriber_key_usage_ok` in
+  `crates/clazel-x509/src/path/independent_profile.rs`.
+- **Reported upstream:** not yet.
