@@ -674,6 +674,9 @@ struct Case {
     time: &'static str,
     features: &'static [&'static str],
     importance: &'static str,
+    max_chain_depth: Option<u32>,
+    key_usage: &'static [&'static str],
+    extended_key_usage: &'static [&'static str],
     trusted: &'static [usize],
     intermediates: &'static [usize],
     leaf: usize,
@@ -706,6 +709,14 @@ fn parse_time(text: &str) -> Option<CertificateTime> {
         second: c.next()?.split('.').next()?.parse().ok()?,
     };
     (d.next().is_none() && c.next().is_none()).then_some(time)
+}
+
+/// Whether the testcase's key-usage and extended-key-usage expectations are
+/// ones the profile always meets: digitalSignature, and serverAuth for a
+/// server (the profile requires both whenever the certificate states them).
+fn usage_expectations_are_the_profiles(case: &Case) -> bool {
+    case.key_usage.iter().all(|k| *k == "digitalSignature")
+        && case.extended_key_usage.iter().all(|e| *e == "serverAuth")
 }
 
 /// The testcases run here. `Some(reason)` marks one where this verifier's
@@ -824,7 +835,9 @@ fn limbo_verdict(case: &Case) -> Result<Result<Vec<u8>, PathError>, String> {
     let environment = Environment {
         link: &AcceptAll,
         revoked: &NotRevoked,
-        max_intermediates: 6,
+        max_intermediates: case
+            .max_chain_depth
+            .map_or(6, |d| usize::try_from(d).unwrap_or(6)),
     };
     Ok(candidate_verdict(
         &environment,
@@ -860,6 +873,7 @@ fn limbo_chains_in_limbo_order_get_the_expected_verdict() -> Result<(), String> 
     for &(id, divergence) in LIMBO_CASES {
         let case = need(CASES.iter().find(|c| c.id == id), id)?;
         assert!(case.kind == "SERVER" && case.peer_names.is_empty(), "{id}");
+        assert!(usage_expectations_are_the_profiles(case), "{id}");
         let accepted = (case.expected == "SUCCESS") != divergence.is_some();
         let verdict = limbo_verdict(case)?;
         if verdict.is_ok() != accepted {

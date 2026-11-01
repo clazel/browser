@@ -1,14 +1,16 @@
 //! Every x509-limbo `SERVER` testcase through the full
-//! `path::search::exec::verify_server_chain` (P9), reported, not pinned:
-//! the limbo pin lists of `conformance_limbo.rs` are P12's and are not
-//! touched here.
+//! `path::search::exec::verify_server_chain` (P9), reported by error class
+//! and family. The verdicts are pinned, testcase by testcase, in
+//! `conformance_limbo.rs` (with `tests/limbo/expected_failures.rs`); this
+//! file is the diagnostic view of the same run, and it does not compare
+//! with the list.
 //!
 //! - **Signatures are not checked.** clazel-x509 has no signature verifier
 //!   of its own (P11 supplies the real one, in `clazel-crypto`, which depends
 //!   on this crate), so the link verifier accepts every link. A limbo
 //!   `FAILURE` that rests on a bad signature is therefore accepted here.
-//! - **Depth** is the production `max_intermediates` 6: the generated index
-//!   does not carry limbo's `max_chain_depth` yet (P12).
+//! - **Depth** is limbo's `max_chain_depth` as `max_intermediates` when the
+//!   testcase gives one, else the production 6.
 //! - **Inputs**: `presented` is the leaf then limbo's intermediates in
 //!   order; the anchors are limbo's trusted certificates that
 //!   `anchor_from_root` accepts; the time is limbo's validation time, or the
@@ -39,6 +41,9 @@ struct Case {
     time: &'static str,
     features: &'static [&'static str],
     importance: &'static str,
+    max_chain_depth: Option<u32>,
+    key_usage: &'static [&'static str],
+    extended_key_usage: &'static [&'static str],
     trusted: &'static [usize],
     intermediates: &'static [usize],
     leaf: usize,
@@ -48,6 +53,14 @@ struct Case {
 include!("generated/x509_limbo.rs");
 
 static CERTS: &[u8] = include_bytes!("generated/x509_limbo_certs.bin");
+
+/// Whether the testcase's key-usage and extended-key-usage expectations are
+/// ones the profile always meets: digitalSignature, and serverAuth for a
+/// server (the profile requires both whenever the certificate states them).
+fn usage_expectations_are_the_profiles(case: &Case) -> bool {
+    case.key_usage.iter().all(|k| *k == "digitalSignature")
+        && case.extended_key_usage.iter().all(|e| *e == "serverAuth")
+}
 
 fn cert(index: usize) -> Option<&'static [u8]> {
     let &(offset, length) = CERT_SPANS.get(index)?;
@@ -160,6 +173,10 @@ fn limbo_server_cases_through_verify_server_chain() {
             let n = tally.skipped.entry(reason).or_insert(0);
             *n = n.saturating_add(1);
         };
+        if !usage_expectations_are_the_profiles(case) {
+            skip("usage expectation");
+            continue;
+        }
         let Some(now) = case_time(case) else {
             skip("time");
             continue;
@@ -202,7 +219,9 @@ fn limbo_server_cases_through_verify_server_chain() {
         let environment = Environment {
             link: &AcceptAll,
             revoked: &NotRevoked,
-            max_intermediates: 6,
+            max_intermediates: case
+                .max_chain_depth
+                .map_or(6, |d| usize::try_from(d).unwrap_or(6)),
         };
         let out = verify_server_chain(&environment, &anchors, &presented, reference, now);
         match (case.expected, out) {
@@ -231,7 +250,7 @@ fn limbo_server_cases_through_verify_server_chain() {
     let refusals: usize = tally.false_refusals.values().sum();
     let accepts: usize = tally.false_accepts.values().sum();
     println!(
-        "limbo SERVER through verify_server_chain (accept-all links, depth 6): \
+        "limbo SERVER through verify_server_chain (accept-all links, limbo's depth or 6): \
          agree {} SUCCESS + {} FAILURE; expected SUCCESS but refused {refusals}; \
          expected FAILURE but accepted {accepts}; skipped {:?}",
         tally.agree_success, tally.agree_failure, tally.skipped
