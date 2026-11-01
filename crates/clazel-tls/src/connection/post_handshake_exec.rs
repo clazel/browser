@@ -81,7 +81,9 @@ enum End {
 }
 impl View for End {
     type V = spec::End;
-    open spec fn view(&self) -> spec::End {
+    // Closed: `End` is private to this module, and an open body would name
+    // its constructors wherever `View` is visible.
+    closed spec fn view(&self) -> spec::End {
         match self {
             End::Continue => spec::End::Continue,
             End::Close => spec::End::Close,
@@ -98,7 +100,8 @@ struct Out {
 }
 impl View for Out {
     type V = spec::Out;
-    open spec fn view(&self) -> spec::Out {
+    // Closed, as `End`'s: `Out` and its fields are private to this module.
+    closed spec fn view(&self) -> spec::Out {
         spec::Out {
             wires: crate::reassemble::views_bytes(self.wires@),
             delivered: self.delivered@,
