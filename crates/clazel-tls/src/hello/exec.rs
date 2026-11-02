@@ -73,12 +73,46 @@ fn offered(es: &[Extension<'_>], retry: bool) -> (out: bool)
     proof { assert(all.skip(i as int) =~= Seq::empty()); }
     true
 }
+/// RFC 8446 §4.1.3: whether the last 8 bytes of a 32-byte Random are
+/// "44 4F 57 4E 47 52 44 01" or "44 4F 57 4E 47 52 44 00".
+fn downgrade_sentinel(random: &[u8]) -> (out: bool)
+    ensures out == super::spec::downgrade_sentinel(random@),
+{
+    if random.len() != 32 { return false; }
+    let last = vstd::slice::slice_subrange(random, 24, 32);
+    let tls12 = downgrade_tls12();
+    let tls11 = downgrade_tls11();
+    crate::handshake::bytes_eq(last, tls12.as_slice()) || crate::handshake::bytes_eq(last, tls11.as_slice())
+}
+/// RFC 8446 §4.1.3: "44 4F 57 4E 47 52 44 01" ([`super::spec::downgrade_tls12`]).
+fn downgrade_tls12() -> (v: Vec<u8>)
+    ensures v@ == super::spec::downgrade_tls12(),
+{
+    let v: Vec<u8> = vec![0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x01];
+    proof { assert(v@ =~= super::spec::downgrade_tls12()); }
+    v
+}
+/// RFC 8446 §4.1.3: "44 4F 57 4E 47 52 44 00" ([`super::spec::downgrade_tls11`]).
+fn downgrade_tls11() -> (v: Vec<u8>)
+    ensures v@ == super::spec::downgrade_tls11(),
+{
+    let v: Vec<u8> = vec![0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00];
+    proof { assert(v@ =~= super::spec::downgrade_tls11()); }
+    v
+}
+/// RFC 8446 §4.1.3: the alert for a ServerHello indicating TLS 1.2 or
+/// below; the sentinel ("MUST abort ... illegal_parameter") comes first.
+fn below_tls13(random: &[u8]) -> (out: u8)
+    ensures out == super::spec::below_tls13(random@),
+{
+    if downgrade_sentinel(random) { crate::spec::ILLEGAL_PARAMETER } else { crate::spec::PROTOCOL_VERSION }
+}
 /// §4.2.1 selected version first; §4.1.3 session echo, cipher and compression.
 fn parameters(sh: &ServerHello<'_>, session_id: &[u8]) -> (out: Option<u8>)
     ensures out == super::spec::parameters(sh@, session_id@),
 {
     match extension(sh.extensions.as_slice(), 43) {
-        None => Some(crate::spec::PROTOCOL_VERSION),
+        None => Some(below_tls13(sh.random)),
         Some(data) => match crate::extension::supported_versions_sh(data) {
             None => Some(50),
             Some(version) => {
@@ -136,7 +170,13 @@ pub fn validate<'a>(session_id: &[u8], retried: bool, body: &'a [u8]) -> (out: R
     hide(crate::spec::parse_handshake_body);
     if session_id.len() > 32 || body.len() > crate::transcript::spec::MAX_BODY { return Err(80); }
     if crate::handshake::legacy_server_hello_without_supported_versions(body) {
-        return Err(crate::spec::PROTOCOL_VERSION);
+        // RFC 8446 §4.1.3: this ServerHello indicates TLS 1.2 or below, so its
+        // Random (body bytes 2..34) is checked for the downgrade sentinels
+        // before the missing version is reported. The preflight accepts only
+        // complete bodies, so the short branch matches the spec's empty
+        // server_random and is never taken.
+        if body.len() < 34 { return Err(crate::spec::PROTOCOL_VERSION); }
+        return Err(below_tls13(vstd::slice::slice_subrange(body, 2, 34)));
     }
     match crate::handshake::parse_handshake_body(2, body, 32) {
         Err(error) => Err(crate::encode::alert_for(error).description),
