@@ -42,6 +42,9 @@ struct Case {
     time: &'static str,
     features: &'static [&'static str],
     importance: &'static str,
+    max_chain_depth: Option<u32>,
+    key_usage: &'static [&'static str],
+    extended_key_usage: &'static [&'static str],
     trusted: &'static [usize],
     intermediates: &'static [usize],
     leaf: usize,
@@ -65,12 +68,25 @@ fn limbo_cert(index: usize) -> Result<&'static [u8], String> {
     need(CERTS.get(start..end), "certificate span")
 }
 
+/// Whether the testcase's key-usage and extended-key-usage expectations are
+/// ones the profile always meets: digitalSignature, and serverAuth for a
+/// server (the profile requires both whenever the certificate states them).
+fn usage_expectations_are_the_profiles(case: &Case) -> bool {
+    case.key_usage.iter().all(|k| *k == "digitalSignature")
+        && case.extended_key_usage.iter().all(|e| *e == "serverAuth")
+}
+
 fn case(id: &str) -> Result<&'static Case, String> {
     assert_eq!(CASES.len(), TESTCASE_COUNT);
     let c = need(CASES.iter().find(|c| c.id == id), id)?;
     // A server testcase with one peer name (the host).
     assert_eq!(c.kind, "SERVER", "{id}");
     assert!(c.peer_names.is_empty(), "{id}");
+    // The join builds the production environment: the default depth.
+    assert!(
+        c.max_chain_depth.is_none() && usage_expectations_are_the_profiles(c),
+        "{id}"
+    );
     Ok(c)
 }
 
