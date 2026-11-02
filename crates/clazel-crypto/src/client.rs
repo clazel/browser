@@ -626,10 +626,11 @@ impl<'r> Client<'r> {
         match action {
             ConnAction::None | ConnAction::Ignored | ConnAction::Cancelled => {}
             ConnAction::Send(wire) => {
+                // Whatever `Connection` sends first is the client Finished,
+                // which takes sequence number 0 of the client handshake
+                // epoch: from here the copy must never seal.
+                shadow = None;
                 let ack = if conn.mode() == Mode::AwaitClientFlight {
-                    // The client Finished takes sequence number 0 of the
-                    // client handshake epoch: the copy must never seal.
-                    shadow = None;
                     conn.acknowledge_client_flight(&wire)
                 } else {
                     conn.acknowledge_key_update(&wire)
