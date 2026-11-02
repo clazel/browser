@@ -10,6 +10,7 @@ pub mod contract;
 pub mod examples;
 pub mod exec;
 pub mod independent_profile;
+pub mod independent_profile_equivalence;
 pub mod lemmas;
 pub mod mutation_certificates;
 pub mod parsed;
