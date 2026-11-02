@@ -110,8 +110,9 @@ the same process, over an in-memory byte pipe. It checks:
   expired leaf (bad_certificate, by `join::spec::certificate_error`'s design)
   and an expired intermediate (certificate_expired), a self-signed leaf and a
   missing intermediate (unknown_ca), an empty trust store, records over the
-  limit (record_overflow), a TLS 1.2 ServerHello with and without the
-  downgrade sentinel (protocol_version), and `change_cipher_spec` in the wrong
+  limit (record_overflow), a TLS 1.2 ServerHello without the RFC 8446
+  §4.1.3 downgrade sentinel (protocol_version) and with either sentinel
+  (illegal_parameter), and `change_cipher_spec` in the wrong
   place (unexpected_message). The hostile flights are the real rustls flight,
   decrypted with the handshake keys, changed in one place and re-encrypted
   ("scripted server"); an unchanged flight completes the handshake.
