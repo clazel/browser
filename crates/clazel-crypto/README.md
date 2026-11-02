@@ -120,11 +120,59 @@ Randomness in that test (the client's X25519 scalar, ClientHello random and
 legacy_session_id, and the server's scalar) is a fixed test seed through
 SHA-256: test-only. The test is `#![cfg(not(miri))]` (ring is C and assembly).
 
+## The client driver
+
+`client::Client` is the socket-free TLS 1.3 client that the network shell
+drives (phase-3.md 3.5f, "the `clazel-tls` public API the shell drives"). It
+owns `Bootstrap`, the key exchange handoff (`traffic::handshake::start`, what
+`Established::into_record_auth` calls) and `Connection`, with this crate's
+providers and a `ChainVerifier`, and it carries no I/O, clock or randomness of
+its own:
+
+- `Client::connect(host, now, verifier, random) -> (Client, Output)`: `random`
+  is a caller-supplied `&mut dyn FnMut(&mut [u8])`, called three times for 32
+  octets each (the X25519 scalar, the ClientHello random, the
+  legacy_session_id). The output's `send` is the ClientHello record.
+- `receive(octets)`, `receive_eof()`, `send(data)` (records of at most 2^14
+  octets; `Err(NotOpen)` unless `Open`) and `close()` each return an `Output`:
+  octets to send, plaintext delivered and the `State`.
+- `State`: `Handshaking`, `Open`, `Closing` (our close_notify sent), `Closed`,
+  `Failed(Failure { alert, origin })`, where `alert` is the RFC 8446 §6.2
+  description and `origin` is `Sent` (the client's alert is in `send`),
+  `NotSent`, `Peer` (the server's alert) or `Truncated` (end of stream before
+  close_notify).
+
+Neither `Bootstrap` nor `Connection` sends an alert itself, so the driver
+does, once: a plaintext fatal alert before the handshake keys, and during the
+server's protected flight an alert sealed under the client handshake epoch at
+sequence number 0, from a second copy of that epoch that the driver derives
+with the verified `hello::join::derive` and drops unused when the client
+Finished is produced. A copy of the server epoch, decrypting the flight in step
+with `Connection`, tells the server's alert (never answered) from a local
+failure. After the client Finished nothing is sent on failure: `Connection`
+drops its application keys when it fails and reports a received alert and a
+local error alike, so the alert there needs a change in `clazel-tls`. The
+server's close_notify is answered with ours.
+
+The driver is plain safe Rust outside `verus!` (tier 0, shell glue). Its tests
+are in `src/client.rs` (bytes that are not TLS, a plaintext alert, close_notify
+and end of stream before the ServerHello) and `tests/client.rs`, against the
+same rustls server as `tests/conformance_tls.rs` with ring's own X25519:
+handshakes for the ECDSA and the RSA chain, a request, a 40000-octet response,
+a 20000-octet upload, close_notify both ways; the server's close_notify
+answered; another name (bad_certificate) and an empty trust store
+(unknown_ca), each alert sealed and read by rustls; truncation after the
+handshake. `tests/conformance_tls.rs` still assembles the client by hand and
+should move to this driver.
+
 ## Not here
-- Randomness: the caller supplies the X25519 private scalar and the
-  ClientHello random and session id. A source needs `clazel-sys`.
-- Any socket I/O, the TLS loop in `clazel-net`, `tls: true` in the fetch
-  transducer and the kernel's `https:` path (phase-3.md 3.6 to 3.8).
+- Randomness: the caller supplies it (`Client::connect`'s `random`); there
+  is no production source. One needs `clazel-sys` and its own audit. Tests
+  use a fixed seed through SHA-256.
+- Socket I/O: `clazel-net`'s `TlsConnection` runs the driver over TCP. Not
+  yet used by `clazel-fetch` (`tls: true` in its transducer), the kernel's
+  `https:` path or `clazel fetch https://` (phase-3.md 3.6 to 3.8).
+- An alert after the client Finished (see "The client driver").
 - A measurement against public servers (3.5g's local item) and the
   real-certificate corpus: not run, no result claimed.
 - Any side-channel claim beyond HACL\*'s. libcrux's README makes none for the

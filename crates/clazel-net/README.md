@@ -8,8 +8,10 @@ This crate **carries bytes and decides nothing about them.** It does not parse
 HTTP, does not build requests, and never touches the cookie jar. Every
 decision about a byte is made by a proven function in another crate; this
 crate owns the sockets, the clocks, the random query ID and the order in which
-things are tried. Only the `http://` half exists: TLS is parked (Phase 3
-item 3.0).
+things are tried. `fetch` is `http://` only. `TlsConnection` carries a TLS
+1.3 connection, but nothing uses it yet: `clazel-fetch`'s transducer, the
+kernel and `clazel fetch` have no `https:` path, and there is no production
+randomness source for it (the caller supplies one).
 
 ## What it is
 
@@ -30,9 +32,24 @@ item 3.0).
   peer closes. It returns `Finish::Closed` or `Finish::Stopped`: the caller's
   parser needs to know about a close. `run_with` takes the `Timeouts`
   (connect, and idle per read or write; default 30 s).
+- **`TlsConnection::open(addrs, port, timeouts, host, now, verifier,
+  random)`**, then `send`, `read` and `close`, as `Connection`: TLS 1.3 over
+  TCP. Every protocol decision is `clazel_crypto::client::Client`'s (the
+  driver over `clazel-tls`'s machines, with the libcrux providers and a
+  `ChainVerifier` holding the caller's trust anchors). The shell writes what
+  the driver sends, hands it what arrives and the end of the stream, and keeps
+  delivered plaintext until it is read. `read` returns `None` once both
+  close_notify alerts have been seen; `close` sends ours and does not wait for
+  the server's. A read or write that times out before the handshake completes
+  is `Timeout(Stage::Handshake)`.
 - **`NetError`**: `Resolve(ResolveError)`, `Connect(ErrorKind)`,
-  `Io(ErrorKind)`, `Timeout(Stage)`. No panics: the workspace lints that deny
-  `unwrap`, `expect`, indexing and unchecked arithmetic apply.
+  `Io(ErrorKind)`, `Timeout(Stage)`, and `Tls(Failure)`: the RFC 8446 §6.2
+  alert and its origin (sent by us, sent by the server, not sent, or the
+  stream truncated before close_notify), displayed by name, e.g. `tls:
+  bad_certificate (42), sent to the server`. A close_notify from the server
+  during the handshake is `Tls` with alert 0 from the server. No panics: the
+  workspace lints that deny `unwrap`, `expect`, indexing and unchecked
+  arithmetic apply.
 
 ## Choices that are ours
 
@@ -63,4 +80,12 @@ body, chunk sizes of 2^64 and 2^64-1, an over-long field line, 300 field
 lines, an immediate close, a partial head, silence, a short Content-Length)
 and requires an error, never a panic or a hang; one case, a chunked body that
 never ends, is `#[ignore]`d because it does not return in 20 s today.
-`cargo test -p clazel-net`.
+`tests/tls.rs` runs `TlsConnection` against an in-process rustls server (a
+`test` dependency; TLS 1.3, ChaCha20-Poly1305, X25519) on a loopback socket,
+with the test root of `clazel-crypto/tests/fixtures/tls` as the trust store
+and a fixed test seed as the randomness: ECDSA and RSA handshakes with a
+request, a response and close_notify both ways, a 100000-octet response read
+until the server's close_notify, a server that closes during the handshake
+(truncation), one that stalls (the handshake timeout), a certificate for
+another name (bad_certificate, which rustls reads), and bytes that are not
+TLS (a plaintext alert on the wire). `cargo test -p clazel-net`.
