@@ -65,6 +65,14 @@ harnesses), and it reports every crate whose `tier` is below its
   audit and the sandbox integration tests (Phase 2, items 2.15 and 2.16). Miri sees only code paths the tests run, so it is evidence, not
   proof. (Smoke test: an out-of-bounds read and a use-after-free that plain
   `cargo test` passes are both reported.)
+  Under Miri a conformance suite runs a fixed stride of its cases, stated
+  with its reason in the test (`if cfg!(miri) { 40 } else { 1 }`) and sized
+  to finish in about a minute: Miri is there to find undefined behaviour in
+  the code paths the tests exercise, and the full suites run in the normal
+  test job. A test is ignored under Miri only if it opens files, sockets or
+  processes, which Miri's isolation forbids, or if even one of its cases
+  takes minutes there. `xtask`'s Miri step passes libtest's `--report-time`
+  and fails, naming them, if any test takes 300 s or more of Miri's time.
 
 Pinned versions (proofs must be reproducible). The source of truth is
 `scripts/toolchains.env`; `verify.sh` fails if installed tools differ.
@@ -213,6 +221,16 @@ We list this openly. Proofs are only as good as their assumptions.
   conversions, exponentiation and inversion are our own code, proven over
   those axioms; the ECDSA group law and verification steps will be too, but
   are not written yet
+- The Tier 0 code on a page's path, small and tested rather than proven
+  ([Phase 4](phases/phase-4.md#what-is-proven-and-what-is-assumed)): the
+  text layout (`clazel-text`, replaced by Phase 5's layout), the renderer's
+  pipeline glue (`clazel-renderer`: read the frames, call the proven
+  functions in order, send the result), and the host's command loop and
+  shell (`clazel`, with the network shell `clazel-net`, which only carries
+  bytes). The layout and the glue run inside the sandbox, so a bug there
+  can mis-render or kill one tab but not break the kernel's theorems; their
+  evidence is the hostile-page and process tests
+  (`crates/clazel/tests/hostile_pages.rs`, `pages.rs`)
 - That each spec matches the standard it transcribes. No proof can check
   this, because the standard is English. It is backed by machine-checked
   evidence instead of a reviewer (next section), and that evidence is only as

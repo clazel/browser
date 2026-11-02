@@ -481,20 +481,37 @@ mod tests {
         Ok(())
     }
 
+    /// A loopback port that is free over both TCP and UDP: a nameserver
+    /// answers both on one port, so the truncation test needs the pair.
+    ///
+    /// The protocol that picks the port alternates. Windows allocates
+    /// ephemeral ports sequentially and keeps separate excluded ranges per
+    /// protocol, so letting TCP pick every time can land fifty consecutive
+    /// ports in a block UDP may not bind ("no free port pair" on its CI
+    /// runner); a port UDP picked is at least free for UDP.
+    fn same_port_pair() -> Option<(TcpListener, UdpSocket, u16)> {
+        for attempt in 0..200u32 {
+            if attempt % 2 == 0 {
+                if let Ok(udp) = UdpSocket::bind("127.0.0.1:0")
+                    && let Ok(addr) = udp.local_addr()
+                    && let Ok(tcp) = TcpListener::bind(("127.0.0.1", addr.port()))
+                {
+                    return Some((tcp, udp, addr.port()));
+                }
+            } else if let Ok(tcp) = TcpListener::bind("127.0.0.1:0")
+                && let Ok(addr) = tcp.local_addr()
+                && let Ok(udp) = UdpSocket::bind(("127.0.0.1", addr.port()))
+            {
+                return Some((tcp, udp, addr.port()));
+            }
+        }
+        None
+    }
+
     #[test]
     #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_truncated_reply_is_retried_over_tcp() -> T {
-        // The same port over UDP and TCP.
-        let mut pair = None;
-        for _ in 0..50 {
-            let tcp = TcpListener::bind("127.0.0.1:0")?;
-            let port = tcp.local_addr()?.port();
-            if let Ok(udp) = UdpSocket::bind(("127.0.0.1", port)) {
-                pair = Some((tcp, udp, port));
-                break;
-            }
-        }
-        let (tcp, udp, port) = pair.ok_or("no free port pair")?;
+        let (tcp, udp, port) = same_port_pair().ok_or("no free port pair")?;
         udp.set_read_timeout(Some(Duration::from_secs(3)))?;
         let uh = thread::spawn(move || {
             let mut buf = [0u8; 600];

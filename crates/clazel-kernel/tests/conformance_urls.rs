@@ -257,8 +257,28 @@ fn rows() -> Vec<Row> {
     ROWS.get_or_init(parse_rows).clone()
 }
 
+/// The JSON to read: the whole file, or under Miri only its first
+/// `MIRI_OBJECTS` objects. `Reader` walks the file char by char, and under
+/// Miri reading all of it (896 objects) took about 300 s of Miri time, more
+/// than every row it yields; the normal test job reads the whole file.
+fn test_data() -> String {
+    const MIRI_OBJECTS: usize = 80;
+    if !cfg!(miri) {
+        return URLTESTDATA.to_owned();
+    }
+    // Objects start on their own line at an indent of two spaces; cut before
+    // the first one not kept, and close the array.
+    let cut = URLTESTDATA
+        .match_indices("\n  {")
+        .nth(MIRI_OBJECTS)
+        .map_or(URLTESTDATA.len(), |(i, _)| i);
+    let head = URLTESTDATA.get(..cut).unwrap_or(URLTESTDATA);
+    format!("{}\n]", head.trim_end().trim_end_matches(','))
+}
+
 fn parse_rows() -> Vec<Row> {
-    let mut reader = Reader::new(URLTESTDATA);
+    let text = test_data();
+    let mut reader = Reader::new(&text);
     let Some(Json::Array(items)) = reader.value() else {
         return Vec::new();
     };
@@ -277,7 +297,8 @@ fn parse_rows() -> Vec<Row> {
             });
         }
     }
-    let step = if cfg!(miri) { 29 } else { 1 };
+    // Under Miri every 5th of the first 80 objects (see `test_data`).
+    let step = if cfg!(miri) { 5 } else { 1 };
     out.into_iter().step_by(step).collect()
 }
 
@@ -528,7 +549,8 @@ fn the_guards_never_fire() {
     let mut cases: Vec<(String, Option<String>)> =
         rows().into_iter().map(|r| (r.input, r.base)).collect();
     let mut rng = Rng(0x2013);
-    let n: usize = if cfg!(miri) { 50 } else { 2000 };
+    // Miri: 25 fuzz cases (with the rows, 50 took 125 s there).
+    let n: usize = if cfg!(miri) { 25 } else { 2000 };
     for i in 0..n {
         let input = fuzz(&mut rng);
         let base = if i % 3 == 0 {

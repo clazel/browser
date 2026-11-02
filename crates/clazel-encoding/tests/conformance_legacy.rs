@@ -112,7 +112,11 @@ fn wpt_labels() {
     let mut pass = 0usize;
     let mut failures = Vec::new();
     let mut not_counted = 0usize;
-    for case in LABELS {
+    // Miri checks every 5th label (46 of 229; all of them took 258 s
+    // there): it looks for undefined behaviour in the paths they exercise,
+    // and the normal test job checks every label.
+    let stride = if cfg!(miri) { 5 } else { 1 };
+    for case in LABELS.iter().step_by(stride) {
         let bad: Vec<String> = variants(case.label)
             .into_iter()
             .filter(|v| ours(v).as_deref() != Some(case.name))
@@ -136,6 +140,10 @@ fn wpt_labels() {
                 bad.join(", ")
             ));
         }
+    }
+    if cfg!(miri) {
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
+        return;
     }
     let total = LABELS.iter().filter(|c| c.in_wpt).count();
     println!(
@@ -204,7 +212,11 @@ fn differential_for_label() {
     }
     let mut pass = 0usize;
     let mut failures = Vec::new();
-    for input in &inputs {
+    // Miri compares every 7th input (591 of 4,133; all of them took 374 s
+    // there): it looks for undefined behaviour in the paths they exercise,
+    // and the normal test job compares every input.
+    let stride = if cfg!(miri) { 7 } else { 1 };
+    for input in inputs.iter().step_by(stride) {
         let (a, b) = (ours(input), theirs(input));
         if a == b {
             pass = pass.saturating_add(1);
@@ -212,11 +224,13 @@ fn differential_for_label() {
             failures.push(format!("{input:02X?}: ours {a:?}, encoding_rs {b:?}"));
         }
     }
-    let fail = inputs.len().saturating_sub(pass);
-    println!(
-        "clazel-conformance: suite=\"encoding_rs for_label differential\" pass={pass} xfail=0 fail={fail} total={}",
-        inputs.len()
-    );
+    if !cfg!(miri) {
+        let fail = inputs.len().saturating_sub(pass);
+        println!(
+            "clazel-conformance: suite=\"encoding_rs for_label differential\" pass={pass} xfail=0 fail={fail} total={}",
+            inputs.len()
+        );
+    }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
@@ -424,7 +438,8 @@ fn differential_decode() {
 #[test]
 fn differential_single_byte_encode() {
     let mut rng = Rng(0x0004_0004);
-    let per = if cfg!(miri) { 20 } else { 2000 };
+    // Miri: 10 strings per encoding (20 took 106 s there).
+    let per = if cfg!(miri) { 10 } else { 2000 };
     let mut total = 0usize;
     let mut failures = Vec::new();
     for n in 1..=28u8 {

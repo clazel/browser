@@ -16,8 +16,11 @@
 //! dependency of xtask). The converter checks the shape it relies on, that
 //! testcase ids are unique, that every PEM has exactly one CERTIFICATE block
 //! with canonical padded base64, and that every DER starts with a SEQUENCE.
-//! A null `validation_time` becomes the empty string in the index. Fields the harness does not use (`peer_certificate_key`, CRLs, signature
-//! algorithm lists) are not carried over.
+//! A null `validation_time` becomes the empty string in the index, a null
+//! `max_chain_depth` becomes `None`. `max_chain_depth`, `key_usage` and
+//! `extended_key_usage` are carried because a verdict needs them. Fields the
+//! harness does not use (`peer_certificate_key`, CRLs, signature algorithm
+//! lists) are not carried over.
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -43,6 +46,9 @@ struct Case {
     time: String,
     features: Vec<String>,
     importance: String,
+    max_chain_depth: Option<u32>,
+    key_usage: Vec<String>,
+    extended_key_usage: Vec<String>,
     trusted: Vec<usize>,
     intermediates: Vec<usize>,
     leaf: usize,
@@ -227,6 +233,16 @@ fn load(dir: &Path) -> Result<Loaded, String> {
             },
             features: strings(t, "features", &at)?,
             importance: text(t, "importance", &at)?.to_owned(),
+            max_chain_depth: match t.get("max_chain_depth") {
+                Some(Value::Null) | None => None,
+                Some(v) => Some(
+                    v.as_u64()
+                        .and_then(|n| u32::try_from(n).ok())
+                        .ok_or_else(|| format!("{at}: max_chain_depth is not a u32"))?,
+                ),
+            },
+            key_usage: strings(t, "key_usage", &at)?,
+            extended_key_usage: strings(t, "extended_key_usage", &at)?,
             id,
             kind,
             expected,
@@ -282,10 +298,22 @@ pub fn convert(dir: &Path) -> Result<String, String> {
             .map(|f| format!("{f:?}"))
             .collect::<Vec<_>>()
             .join(", ");
+        let quoted = |items: &[String]| {
+            items
+                .iter()
+                .map(|f| format!("{f:?}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let depth = match c.max_chain_depth {
+            Some(n) => format!("Some({n})"),
+            None => "None".to_owned(),
+        };
         writeln!(
             out,
-            "    Case {{ id: {:?}, kind: {:?}, expected: {:?}, peer: ({:?}, {:?}), peer_names: &[{}], time: {:?}, features: &[{}], importance: {:?}, trusted: &[{}], intermediates: &[{}], leaf: {} }},",
+            "    Case {{ id: {:?}, kind: {:?}, expected: {:?}, peer: ({:?}, {:?}), peer_names: &[{}], time: {:?}, features: &[{}], importance: {:?}, max_chain_depth: {}, key_usage: &[{}], extended_key_usage: &[{}], trusted: &[{}], intermediates: &[{}], leaf: {} }},",
             c.id, c.kind, c.expected, c.peer.0, c.peer.1, names, c.time, features, c.importance,
+            depth, quoted(&c.key_usage), quoted(&c.extended_key_usage),
             list(&c.trusted), list(&c.intermediates), c.leaf
         )
         .map_err(|e| e.to_string())?;

@@ -35,12 +35,12 @@ Rust source holds 41.8 MB of literals:
 - `tests/generated/x509_limbo_certs.bin`: the distinct certificates as DER,
   concatenated; the index gives each one's offset and length.
 
-Both are read by `tests/conformance_limbo.rs`, which does not run limbo's
-validation verdicts: clazel-x509 has no path validation yet. See the crate
-README for what it does cover.
+Both are read by `tests/conformance_limbo.rs`, which runs every `SERVER`
+testcase through `verify_server_chain` with accept-all signature links and
+compares limbo's verdict. See the crate README for what it covers.
 
 To update, download `limbo.json` and `LICENSE` from a newer commit into an
 empty directory, copy them here, change the commit, size and hashes above, run
-`cargo xtask testdata`, and update `NOT_YET_SUPPORTED` in
-`tests/conformance_limbo.rs` (the test names every id that appeared or
+`cargo xtask testdata`, and update `EXPECTED_FAILURES` in
+`tests/limbo/expected_failures.rs` (the test names every id that appeared or
 vanished).

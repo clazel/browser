@@ -9,7 +9,8 @@ This covers phase-3.md item 3.5d and the SHA-256 key schedule from 3.5e.
 The initial Hello/authentication flow is built over explicit validator,
 key-exchange and crypto parameters for the fixed TLS 1.3/X25519/ChaCha20-Poly1305
 profile. Protected traffic-key epochs, the handshake record-key handoff, and
-an initial byte-stream connection dispatcher are built. **Socket I/O, entropy
+an initial byte-stream connection dispatcher are built, and so is a
+post-handshake transducer (not yet through Verus; see below). **Socket I/O, entropy
 sourcing and the production cryptography provider (items 3.5e and 3.5f) remain**,
 as do X.509 certificate interpretation and path validation (3.5b). The crate stays at
 `tier = 0` with `target-tier = 2` until they are, and until CI's full run
@@ -182,6 +183,36 @@ what is proven today is stated below, not implied by the tier.
   They do not prove production crypto, certificate path validation, timing
   behavior or socket I/O.
 
+- **Post-handshake transducer** (§4.6, §5, §5.3, §6.1, §7.2/§7.3,
+  `connection::post_handshake_*`): the client's application-traffic phase as
+  `step(state, input) -> (actions, state)`, with inputs `Bytes` and `Closed` and
+  actions `Send`, `Deliver`, `Close` and `Fail`. It starts from the two
+  application traffic secrets and owns both epochs, both secrets and the
+  handshake reassembler. Each step handles the first record of its input and
+  says how many bytes it consumed. `application_data` is delivered as plaintext
+  in order; NewSessionTicket is parsed and then ignored (**no resumption** in
+  this phase: no PSK is derived or cached); KeyUpdate updates the server secret
+  and read keys for the next record and, when `update_requested`, sends
+  KeyUpdate(`update_not_requested`) under the old write keys and then updates
+  the write keys; `update_keys` is the client-initiated update. A KeyUpdate has
+  to be the last message of its record and leave no unfinished message (§5.1).
+  Any other handshake message after the handshake, an unprotected or protected
+  `change_cipher_spec`, and a handshake message interleaved with another record
+  type are `unexpected_message`; an invalid `request_update` is
+  `illegal_parameter`; `close_notify` is answered with the client's own and
+  ends the connection; every other alert, `user_canceled` included, is fatal and
+  not answered. Sequence numbers close or rekey and never wrap: the receive side
+  closes when its epoch is exhausted, and the send side sends KeyUpdate before
+  using the last sequence number. A locally detected fatal error sends the
+  protected alert and then `Fail`. Not here: joining it to the dispatcher (which
+  holds the application secrets), socket I/O, post-handshake client
+  authentication, 0-RTT, record padding on send, fragmentation of long sends
+  (more than 2^14 bytes is `record_overflow`). Its executable proofs, lemmas,
+  20 witnesses and 19 mutation certificates verify (see Verification); the 25
+  tests in `tests/post_handshake.rs` run it against an independent model of
+  the server, with a test-only AEAD. They do not reach the sequence-number
+  wrap, which no API can position; only the spec's lemma covers it.
+
 Out of scope: socket I/O, post-handshake client authentication, PSK ticket
 caching/resumption and 0-RTT (Appendix A), production cryptography, certificate
 path validation, and `pre_shared_key` and other extensions kept opaque. Client
@@ -193,7 +224,7 @@ no network I/O is included.
 Tier 0, target tier 2. The current numbers are in the
 [status table](../../README.md#verification-status).
 
-- **Proven (Verus, `cargo verus verify`: 632 verified, 0 errors):** the
+- **Proven (Verus, `cargo verus verify`: 814 verified, 0 errors):** the
   executable functions of `reader`, `writer`, `record`, `reassemble`,
   `extension`, `handshake` and `encode` meet the contracts in
   `contract.rs`, which are the spec's functions in `spec.rs`. About the
@@ -234,6 +265,23 @@ Tier 0, target tier 2. The current numbers are in the
   Each `killed` entry requires a certificate that Verus checks; the
   certificate must pass on the mutant and fail on the real spec.
   Full workspace and CI verification remain required before tier promotion.
+  The 20 `ph-*` entries for the post-handshake transducer (19 `killed` with
+  certificates, one equivalent mutant that `survives`, explained in its
+  reason) pass in a local run of CI's per-crate job.
+- **Post-handshake transducer proofs.** `post_handshake_lemmas.rs`
+  states: a record that failed to open (or was incomplete) delivers nothing, and
+  what is delivered is an `application_data` record's content; a step that
+  ends the connection leaves it not open, and a connection that is not open
+  sends and delivers nothing for later input; every `Send` is the encryption of
+  a message the transducer chose, under the next sequence number; the
+  receive and send epochs are replaced by fresh ones at sequence number 0 exactly
+  on a key update, while an application data record leaves the send epoch and
+  both secrets alone; the last sequence number rekeys, under one hypothesis:
+  the epoch started from the next client secret is well formed (key and IV of
+  the lengths expanded). The spec leaves HKDF-Expand's output length
+  unconstrained, so this cannot follow from it; the executable checks it when
+  it builds the epoch. The executable's contracts say each operation equals
+  its spec function. All of it is in the Verus count above.
 - **Conformance** (`tests/conformance_tls_formats.rs`, through the proven
   code): RFC 8448 sections 3 to 7: all 40 handshake messages (39 read and
   written back byte for byte, one expected failure: a ClientHello shown
