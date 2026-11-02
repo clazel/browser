@@ -284,10 +284,13 @@ name = "clazel-net"
 version = "0.0.0"
 dependencies = [
  "clazel-cookie",
+ "clazel-crypto",
  "clazel-dns",
  "clazel-fetch",
  "clazel-http",
+ "clazel-tls",
  "clazel-url",
+ "rustls",
 ]
 
 [[package]]

@@ -22,6 +22,7 @@ mod error;
 mod fetch;
 mod frames;
 mod resolve;
+mod tls;
 
 pub use conn::{Connection, Finish, Flow, Timeouts, connect, run, run_with};
 pub use driver::{Driver, InputBuf, Op, Report};
@@ -29,3 +30,4 @@ pub use error::{NetError, ResolveError, Stage};
 pub use fetch::{FetchError, fetch, fetch_jar, fetch_with, now_1601};
 pub use frames::read_frames;
 pub use resolve::resolve;
+pub use tls::TlsConnection;
