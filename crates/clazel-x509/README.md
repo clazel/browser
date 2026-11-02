@@ -83,16 +83,65 @@ by `cargo xtask testdata` to a testcase index and a binary file of DER
 certificates under `tests/generated/` (`cargo xtask check` fails if either is
 stale).
 
-What the harness covers: every distinct certificate goes through every decoder
-(envelope, signature algorithm, TBS, SPKI, extensions, SAN, BasicConstraints,
-KeyUsage, ExtendedKeyUsage, NameConstraints) without panicking, with the
-accepted counts pinned; every `SERVER` testcase that expects `SUCCESS` for a DNS
-or IP name has a leaf that `check_leaf_certificate` accepts (RFC 9525 match,
-validity, EKU, key usage), and none of its certificates is rejected by a decoder.
+What the harness covers:
 
-What it does not cover: limbo's chain-validation verdicts. There is no path
-validation yet, so every other testcase is listed by id, with a reason, in
-`tests/limbo/not_yet_supported.rs`; the test fails if an id appears or vanishes,
-or if a listed case starts passing. Two server-leaf cases (`rfc5280::ca-as-leaf`,
-`pathlen::validation-ignores-pathlen-in-leaf`) are listed because the leaf
-policy rejects a CA certificate as an end entity, where limbo follows RFC 5280.
+- Every distinct certificate goes through every decoder (envelope, signature
+  algorithm, TBS, SPKI, extensions, SAN, BasicConstraints, KeyUsage,
+  ExtendedKeyUsage, NameConstraints, PolicyConstraints) without panicking,
+  with the accepted counts pinned.
+- **Every `SERVER` testcase with a DNS or IP peer name goes through
+  `path::search::exec::verify_server_chain`** (RFC 5280 section 6.1, the
+  browser profile and the bounded chain search): limbo's presented chain, its
+  trusted certificates as anchors, its validation time (the leaf's notBefore
+  when it gives none) and its `max_chain_depth` as `max_intermediates` (6
+  when it gives none). Limbo's `SUCCESS` or `FAILURE` is compared with the
+  verdict, not the reason. **9,737 of 9,802 testcases agree** (923 `SUCCESS`,
+  8,814 `FAILURE`); the other 65 are listed by id, with a reason, in
+  `tests/limbo/expected_failures.rs`, and the test fails if an id appears or
+  vanishes, if a listed case starts to agree, or if a case that disagrees is
+  not listed. (The conformance line reads `pass=9737 xfail=65 fail=0`.)
+- None of the certificates of a `SUCCESS` testcase is rejected by a decoder.
+- `tests/path_search_limbo.rs` prints the same run by error class and
+  family; it pins nothing.
+
+**Signatures are not checked in this crate's run.** The link verifier is a
+stand-in that accepts every signature, because the real one
+(`CertificateLinks`) is in `clazel-crypto`, which depends on this crate.
+That is exact for limbo's `SUCCESS` chains (their signatures are valid) but
+means a `FAILURE` that rests on a signature is accepted here. `clazel-crypto`'s
+`tests/chain_limbo.rs` runs the signature-related cases with the real links.
+Revocation is not checked either (no CRL or OCSP: Phase 8).
+
+The 65 listed testcases, by reason:
+
+| Count | Reason |
+|------:|--------|
+| 10 | `CLIENT` testcases (client-certificate validation does not exist) |
+| 10 | CRL checking (Phase 8) |
+| 4 | needs signature verification (3.5f, P11): `invalid::invalid-issuer-key`, the weak-RSA, P-192 and explicit-curve roots |
+| 3 | ML-DSA (RFC 9881), not in the algorithm set |
+| 1 | `SUCCESS` with no DNS or IP peer name (a directoryName constraint) |
+| 3 | deliberate browser-profile refusals of what limbo (RFC 5280 only) accepts: a CA certificate as the target (2), no extKeyUsage on the target (1) |
+| 5 | the issuer must include authorityKeyIdentifier or subjectKeyIdentifier (RFC 5280 4.2.1.1, 4.2.1.2): a CA obligation no section 6.1 step reads |
+| 3 | the issuer must mark nameConstraints, policyConstraints or a root's basicConstraints critical: section 6.1 processes them whatever the flag |
+| 1 | zero serial number (RFC 5280 4.1.2.2) |
+| 2 | subjectAltName criticality against the subject (RFC 5280 4.1.2.6, BR 7.1.2.7.12) |
+| 6 | CA/Browser Forum rules on a root's contents (BR 7.1.2.1.2, 7.1.2.1.3) |
+| 2 | CA/Browser Forum rules on a subscriber's extra or critical extKeyUsage (BR 7.1.2.7.6, 7.1.2.7.10) |
+| 9 | CA/Browser Forum rule on the subject commonName (BR 7.1.4.3); the commonName is never read |
+| 1 | malformed authorityInfoAccess, a non-critical extension kept opaque |
+| 4 | no profile rule on the target's key type or size (BR 6.1.5, p192, DSA, weak RSA, modulus not a multiple of 8) |
+| 1 | a root with a 2052-bit RSA key, accepted by the real links as Chrome, Firefox and webpki do according to `clazel-crypto` |
+
+None of the 65 is a known defect of the section 6.1 code. The profile
+refusals and the missing profile rules are choices: `src/path/profile.rs`
+names each, and whether both browsers refuse the cases of the key-type row
+and the zero serial is unconfirmed. Running the whole corpus found no
+disagreement that was a bug in the validation, so this work changed no
+specification or proof. All 9,572 `bettertls` testcases agree.
+
+## Updating the corpus
+
+See `tests/data/x509-limbo/SOURCE.md`: vendor the new file, run
+`cargo xtask testdata`, and the test names every id that appeared or vanished
+or changed its verdict.

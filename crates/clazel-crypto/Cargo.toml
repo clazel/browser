@@ -27,6 +27,13 @@ libcrux-ecdsa = { version = "=0.0.9", default-features = false }
 libcrux-rsa = { version = "=0.0.9", default-features = false }
 libcrux-ed25519 = { version = "=0.0.10", default-features = false }
 
+# Test-only TLS 1.3 server for tests/conformance_tls.rs (class `test` in
+# docs/DEPENDENCIES.md: never shipped). rustls with its `ring` provider (ring
+# is already a test dependency of clazel-p384), which the test restricts to
+# TLS 1.3, TLS_CHACHA20_POLY1305_SHA256 and X25519.
+[dev-dependencies]
+rustls = { version = "=0.23.46", default-features = false, features = ["std", "ring"] }
+
 # Verification tier (docs/VERIFICATION.md). The crate parses nothing; its
 # adapters are checked by Verus against clazel-tls's provider contracts, and
 # everything it claims about the cryptography rests on src/axioms.rs.

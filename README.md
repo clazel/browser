@@ -22,12 +22,32 @@ v1.5 verification (`clazel-pkcs1`) are at Tier 2. The kernel
 (`clazel-kernel`, still Tier 2) runs the fetch client itself: connections are
 kernel state, every request, redirect and cookie is its decision, and its
 Phase 2 theorems still hold with network events. The network shell
-(`clazel-net`) only carries bytes. `clazel fetch URL` resolves the host,
-follows redirects and keeps cookies across them, for `http://` only. TLS is
-not done yet: X.509 decoding and name matching (`clazel-x509`) are on `main`
-at Tier 0, and path validation, the TLS 1.3 handshake and its cryptography
-(libcrux) are on open pull requests. What remains is listed in
-[docs/phases/phase-3.md](docs/phases/phase-3.md#status).
+(`clazel-net`) only carries bytes. TLS is not done yet: X.509, the TLS 1.3
+handshake and the libcrux join are partly built on `main` at Tier 0 and not
+yet joined to the kernel, so the browser speaks only `http://`. What
+remains is listed in [docs/phases/phase-3.md](docs/phases/phase-3.md#status).
+
+Phase 4 (HTML and DOM) is built but not yet complete: every CI job but
+Miri passed at `e29265d`, and `clazel-dom` is not at Tier 2 yet. `cargo run -p clazel -- browse URL`
+is a text-mode browser in the style of Lynx: the kernel fetches the page,
+a sandboxed renderer parses it and prints the title, the text and numbered
+links, and typing a link's number navigates the tab through the kernel,
+under an address line that is always the kernel's committed URL. Every
+parser on the page's path is proven: the encoding sniffing algorithm
+(`clazel-html`) and the decoders (`clazel-encoding`), the tokenizer, proven
+total and panic-free, with its character references (`clazel-html`), and
+the tree builder (`clazel-treebuilder`), all at Tier 2. The DOM operations
+(`clazel-dom`) are proven too, but the crate stays at Tier 0 until it has a
+conformance test of its own. The kernel proves that what a renderer
+displays is shown for its own tab, labelled with the URL the kernel
+committed there (`theorem_show_only_own_tab`,
+`theorem_address_bar_integrity`), and that a renderer receives the fetched
+body whole (`theorem_body_is_the_response`). The text layout (`clazel-text`)
+and the renderer's glue are Tier 0. Pages in the seven legacy multi-byte
+encodings (Shift_JIS, GBK, Big5 and others) are not rendered yet: the page
+says "encoding `<name>` is not supported" (moved to Phase 8). See
+[docs/phases/phase-4.md](docs/phases/phase-4.md#status).
+
 Recheck every proof yourself, on Linux x86-64, with:
 
 ```sh
@@ -49,28 +69,32 @@ verification passes, so it shows the last such push and can lag behind
 | clazel | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | WPT cookies/ domCookieTest, document.cookie set and get through real processes: 11 / 11<br>WPT cookies/ httpCookieTest, document.cookie read through real processes: 166 / 167 (1 expected failures) | no spec files |
 | clazel-base64 | 2 (2) | 80 verified, 0 errors | no harnesses | 0 | 0 (0) | 665 / 758 / 173 | 23 / 0 / 0 of 23 | WPT fetch/data-urls base64: 80 / 80 | 0 of 3 files current |
 | clazel-cookie | 2 (2) | 424 verified, 0 errors | no harnesses | 0 | 0 (0) | 4066 / 4061 / 1676 | 43 / 0 / 0 of 43 | WPT cookies/ httpCookieTest and domCookieTest tables: 177 / 178 (1 expected failures)<br>cookie_store differential, random set and get sequences: 3000 / 3000<br>http-state dates/: 70 / 70<br>http-state parser corpus: 195 / 222 (27 expected failures) | 0 of 9 files current |
+| clazel-crypto | 0 (0) | 81 verified, 0 errors | no harnesses | 15 | 0 (0) | 795 / 402 / 418 | 57 / 9 / 0 of 66 | TLS 1.3 client against rustls (ring), ECDSA and RSA chains, scripted control: 5 / 5<br>TLS 1.3 hostile servers, RFC 8446 section 6.2 alerts: 12 / 12 | 0 of 7 files current |
 | clazel-der | 2 (2) | 241 verified, 0 errors | no harnesses | 0 | 0 (0) | 2321 / 1946 / 631 | 59 / 0 / 0 of 59 | DER hand-built cases (X.690, Kaliski, one per rule): 63 / 63<br>RFC 8017 9.2 DigestInfo prefixes (SHA-256, SHA-384, SHA-512): 3 / 3<br>der 0.8.2 differential, mutated bytes: 54648 / 57490 (2842 expected failures)<br>der 0.8.2 differential, random valid values (der writes, we read; we write, der reads): 5801 / 5801 | 0 of 3 files current |
 | clazel-dns | 2 (2) | 242 verified, 0 errors | no harnesses | 0 | 0 (0) | 1979 / 1668 / 869 | 163 / 0 / 0 of 163 | captured DNS responses: 12 / 12<br>hand-built DNS messages: 24 / 24<br>resolv.conf nameserver lines: 10 / 10<br>simple-dns differential: mutated messages: 58731 / 60000 (1269 expected failures)<br>simple-dns differential: our queries: 4000 / 4000<br>simple-dns differential: random messages: 8000 / 8000 | 0 of 5 files current |
 | clazel-dom | 0 (2) | 138 verified, 0 errors | no harnesses | 0 | 0 (0) | 1531 / 1818 / 377 | 5 / 0 / 0 of 5 | none | 0 of 3 files current |
-| clazel-encoding | 2 (2) | 81 verified, 0 errors | no harnesses | 0 | 0 (0) | 764 / 485 / 205 | 22 / 0 / 0 of 22 | WPT encoding/ UTF-8 decode: 57 / 57<br>WPT encoding/ UTF-8 encode (decode cases reversed): 8 / 8 | 0 of 3 files current |
+| clazel-encoding | 2 (2) | 365 verified, 0 errors | no harnesses | 0 | 0 (0) | 2688 / 1580 / 1909 | 80 / 0 / 0 of 80 | WPT encoding/ UTF-16 surrogates: 5 / 5<br>WPT encoding/ UTF-8 decode: 57 / 57<br>WPT encoding/ UTF-8 encode (decode cases reversed): 8 / 8<br>WPT encoding/ fatal single-byte: 7168 / 7168<br>WPT encoding/ labels: 222 / 222<br>WPT encoding/ single-byte decoder: 168 / 168<br>encoding_rs decode differential: 262361 / 262361<br>encoding_rs for_label differential: 53916 / 53916<br>encoding_rs single-byte encode differential: 56000 / 56000 | 0 of 15 files current |
 | clazel-fetch | 2 (2) | 164 verified, 0 errors | no harnesses | 0 | 0 (0) | 1500 / 1108 / 595 | 64 / 0 / 0 of 64 | http-state parser corpus (through the client): 195 / 222 (27 expected failures)<br>url and cookie_store differential, random redirect chains: 1500 / 1500 | 0 of 5 files current |
-| clazel-html | 0 (2) | 860 verified, 0 errors | no harnesses | 0 | 0 (0) | 8687 / 4422 / 4979 | 118 / 0 / 0 of 118 | html5gum differential: 33792 / 33878 (86 expected failures)<br>html5lib-tests tokenizer: 7050 / 7053 (3 expected failures) | 0 of 5 files current |
+| clazel-html | 2 (2) | 1056 verified, 0 errors | no harnesses | 0 | 0 (0) | 10301 / 5606 / 5683 | 152 / 0 / 0 of 152 | encoding_rs for_label through the sniffer: 12496 / 12496<br>html5gum differential: 33792 / 33878 (86 expected failures)<br>html5lib-tests encoding/: 75 / 82 (7 expected failures)<br>html5lib-tests tokenizer: 7050 / 7053 (3 expected failures) | 0 of 7 files current |
 | clazel-http | 2 (2) | 407 verified, 0 errors | no harnesses | 0 | 0 (0) | 3364 / 3188 / 1734 | 150 / 0 / 0 of 150 | RFC 9112 7.1 and 11 examples: 122 / 122<br>framing by construction: random bodies: 3000 / 3000<br>httparse differential: handcrafted heads: 29 / 44 (15 expected failures)<br>httparse differential: llhttp corpus heads: 124 / 136 (12 expected failures)<br>httparse differential: mutated responses: 53915 / 60000 (6085 expected failures)<br>httparse differential: random responses: 6000 / 6000<br>llhttp test/response and framing cases: 109 / 136 (27 expected failures) | 0 of 5 files current |
 | clazel-idna | 2 (2) | 375 verified, 0 errors | no harnesses | 0 | 0 (0) | 2406 / 2887 / 17549 | 69 / 0 / 0 of 69 | RFC 3492 section 7.1 samples: 19 / 19<br>WPT url/ IdnaTestV2.json: 2675 / 2675<br>WPT url/ toascii.json: 87 / 87 | 0 of 5 files current |
-| clazel-ipc | 2 (2) | 177 verified, 0 errors | no harnesses | 0 | 0 (0) | 1240 / 1076 / 545 | 69 / 0 / 0 of 69 | RFC 8949 Appendix A (cbor/test-vectors): 82 / 82<br>minicbor differential: random and mutated bytes: 60000 / 60000<br>minicbor differential: random items: 20000 / 20000 | 0 of 7 files current |
-| clazel-kernel | 2 (2) | 503 verified, 0 errors | no harnesses | 0 | 0 (0) | 4802 / 7118 / 1388 | 40 / 0 / 0 of 40 | WPT cookies/ domCookieTest tables, document.cookie set and get through the kernel: 11 / 11<br>WPT cookies/ httpCookieTest tables, document.cookie read through the kernel: 166 / 167 (1 expected failures)<br>WPT url/ urltestdata.json navigation (rows with a base): 336 / 336<br>WPT url/ urltestdata.json origin_of and path_of (rows without a base): 560 / 560<br>WPT webstorage/ localStorage calls: 24 / 24<br>cookie_store differential, random multi-renderer document.cookie traces: 3000 / 3000<br>scalar and ASCII guards never fire (WPT urltestdata.json and fuzz): 2896 / 2896 | 0 of 3 files current |
+| clazel-ipc | 2 (2) | 201 verified, 0 errors | no harnesses | 0 | 0 (0) | 1394 / 1325 / 654 | 80 / 0 / 0 of 80 | RFC 8949 Appendix A (cbor/test-vectors): 82 / 82<br>minicbor differential: random and mutated bytes: 60000 / 60000<br>minicbor differential: random items: 20000 / 20000 | 0 of 7 files current |
+| clazel-kernel | 2 (2) | 565 verified, 0 errors | no harnesses | 0 | 0 (0) | 5378 / 8220 / 1505 | 47 / 0 / 0 of 47 | WPT cookies/ domCookieTest tables, document.cookie set and get through the kernel: 11 / 11<br>WPT cookies/ httpCookieTest tables, document.cookie read through the kernel: 166 / 167 (1 expected failures)<br>WPT url/ urltestdata.json navigation (rows with a base): 336 / 336<br>WPT url/ urltestdata.json origin_of and path_of (rows without a base): 560 / 560<br>WPT webstorage/ localStorage calls: 24 / 24<br>cookie_store differential, random multi-renderer document.cookie traces: 3000 / 3000<br>scalar and ASCII guards never fire (WPT urltestdata.json and fuzz): 2896 / 2896 | 0 of 3 files current |
 | clazel-mime | 2 (2) | 288 verified, 0 errors | no harnesses | 0 | 0 (0) | 2584 / 2122 / 1640 | 35 / 0 / 0 of 35 | WPT mimesniff/media: 6 / 7 (1 expected failures)<br>WPT mimesniff/mime-types: 955 / 955<br>WPT mimesniff/sniffing feeds: 2 / 2<br>WPT mimesniff/sniffing mislabeled binary: 3 / 3 | 0 of 5 files current |
 | clazel-net | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 | clazel-origin | 2 (2) | 43 verified, 0 errors | no harnesses | 0 | 0 (0) | 495 / 209 / 284 | 31 / 0 / 0 of 31 | HTML 7.1.1 example tables (same origin, same site): 11 / 11<br>WPT url/ urltestdata.json origin: 414 / 414<br>differential vs rust-url Url::origin(): 403 / 414 (11 expected failures) | 0 of 3 files current |
+| clazel-p384 | 0 (2) | 282 verified, 0 errors | no harnesses | 6 | 0 (0) | 2028 / 2401 / 696 | 53 / 0 / 0 of 53 | CAVP 186-4 SigVer P-384: 75 / 75<br>Differential vs ring 0.17.14 P-384 SHA-384: 14000 / 14000<br>Wycheproof ecdsa_secp384r1_sha256: 472 / 472<br>Wycheproof ecdsa_secp384r1_sha384: 504 / 504<br>Wycheproof ecdsa_secp384r1_sha512: 542 / 542 | 0 of 6 files current |
 | clazel-percent | 2 (2) | 54 verified, 0 errors | no harnesses | 0 | 0 (0) | 520 / 297 / 173 | 34 / 0 / 0 of 34 | WPT url/ percent-encoding: 23 / 32 (9 expected failures) | 0 of 3 files current |
 | clazel-pkcs1 | 2 (2) | 170 verified, 0 errors | 7 successfully verified harnesses, 0 failures, 7 total | 0 | 0 (0) | 978 / 1749 / 300 | 54 / 0 / 0 of 54 | Hand-built cases (OpenSSL signatures, malformed encodings, forgeries, ranges): 35 / 35<br>Wycheproof RSASSA-PKCS1-v1_5 2048-bit SHA-256 (rsa_signature_2048_sha256_test.json): 258 / 259 (1 expected failures)<br>Wycheproof RSASSA-PKCS1-v1_5 2048-bit SHA-384 (rsa_signature_2048_sha384_test.json): 257 / 258 (1 expected failures)<br>Wycheproof RSASSA-PKCS1-v1_5 3072-bit SHA-256 (rsa_signature_3072_sha256_test.json): 258 / 259 (1 expected failures)<br>Wycheproof RSASSA-PKCS1-v1_5 4096-bit SHA-512 (rsa_signature_4096_sha512_test.json): 258 / 259 (1 expected failures) | 0 of 5 files current |
 | clazel-psl | 2 (2) | 201 verified, 0 errors | no harnesses | 0 | 0 (0) | 1063 / 1840 / 45824 | 23 / 0 / 0 of 23 | differential vs publicsuffix 2.3.0: 49685 / 49685<br>publicsuffix tests.txt checkPublicSuffix: 78 / 78 | 0 of 3 files current |
-| clazel-renderer | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
+| clazel-renderer | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | html5lib-tests encoding/ through the pipeline: 82 / 82 | no spec files |
 | clazel-sandbox | 1 (1) | not used | 8 successfully verified harnesses, 0 failures, 8 total | 0 | 0 (0) | — | — | none | no spec files |
 | clazel-sys | 0 (0) | not used | no harnesses | 0 | 38 (136) | — | — | none | no spec files |
-| clazel-treebuilder | 0 (2) | 1684 verified, 0 errors | no harnesses | 0 | 0 (0) | 16644 / 19937 / 6692 | 48 / 0 / 0 of 48 | html5lib tree construction (WPT): 1963 / 1967 (4 expected failures) | 0 of 2 files current |
+| clazel-text | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
+| clazel-tls | 0 (2) | 814 verified, 0 errors | no harnesses | 0 | 0 (0) | 7350 / 5494 / 3825 | 207 / 0 / 1 of 208 | RFC 5869 Appendix A.1 reference provider: 1 / 1<br>RFC 8446 section 4.4.3 signature input example: 1 / 1<br>RFC 8448 handshake messages (sections 3 to 7): 39 / 40 (1 expected failures)<br>RFC 8448 handshake payloads through the reassembler: 24 / 24<br>RFC 8448 key schedule sections 3 and 5: 40 / 40<br>RFC 8448 live transcripts sections 3 and 5: 12 / 12<br>RFC 8448 records (sections 3 to 7): 41 / 41<br>hand-built cases, one or more per error rule of RFC 8446 sections 4 to 6: 68 / 68<br>rustls alerts (all 65536 two-byte payloads) and change_cipher_spec: 65796 / 65796<br>rustls enum numbers (content, handshake, alert, extension types): 79 / 79<br>rustls fragmenter (RFC 8448 payloads, 7 sizes): 168 / 168<br>rustls handshake message acceptance (RFC 8448 messages and 400 mutations each): 15959 / 16040 (81 expected failures) | 0 of 14 files current |
+| clazel-treebuilder | 2 (2) | 1703 verified, 0 errors | no harnesses | 0 | 0 (0) | 16900 / 20297 / 6692 | 48 / 0 / 0 of 48 | html5ever 0.39.0 differential, WPT tree-construction inputs: 3699 / 3898 (199 expected failures)<br>html5ever 0.39.0 differential, random tag soup: 9991 / 10000 (9 expected failures)<br>html5lib tree construction (WPT): 1963 / 1967 (4 expected failures) | 0 of 2 files current |
 | clazel-url | 2 (2) | 565 verified, 0 errors | no harnesses | 0 | 0 (0) | 5725 / 5260 / 2026 | 144 / 0 / 0 of 144 | WPT url/ setters_tests.json: 278 / 278<br>WPT url/ toascii.json: 87 / 87<br>WPT url/ urltestdata.json: 896 / 896<br>WPT url/ urltestdata.json hosts: 359 / 359 | 0 of 7 files current |
-| clazel-x509 | 0 (2) | 227 verified, 0 errors | no harnesses | 0 | 0 (0) | 2465 / 1611 / 2009 | 33 / 0 / 0 of 33 | x509-limbo leaf checks: 927 / 9802 (8875 expected failures) | 0 of 23 files current |
+| clazel-x509 | 0 (2) | 878 verified, 0 errors | no harnesses | 0 | 0 (0) | 7223 / 6029 / 4070 | 273 / 0 / 0 of 273 | x509-limbo leaf checks: 927 / 9802 (8875 expected failures) | 0 of 33 files current |
 | xtask | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 
 ¹ From Verus's `line_count`; only code inside `verus!` is counted, and type definitions count as exec.
@@ -78,8 +102,8 @@ verification passes, so it shows the last such push and can lag behind
 ³ Optional human reviews of specs, contracts, axioms and mutation labels, unchanged since review. They gate nothing; see [docs/SPEC-REVIEWS.md](docs/SPEC-REVIEWS.md).
 ⁴ Measured by the run: passing / total units per vendored suite, as each `tests/conformance*.rs` reports them. Expected failures are counted separately and never as passes. See [docs/VERIFICATION.md](docs/VERIFICATION.md#honesty-metrics).
 ⁵ Counted by `cargo xtask check`: `unsafe` blocks (and `unsafe extern` blocks), with the lines from the `unsafe` keyword to the closing brace. Only `clazel-sys` may have any; the rule and its audits are in [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/SYS-AUDITS.md](docs/SYS-AUDITS.md).
-⁶ The host shell (`crates/clazel/src`, item 2.15) is 276 lines, counted as `wc -l` counts them over its Rust files; the plan's limit is 300. The command line and the demo (`crates/clazel/cli`, item 2.16) are not counted: they only call the shell's public functions.
-⁷ The network shell (`crates/clazel-net/src`, item 3.8: the resolver's sockets, TCP connections and the loop that drives the fetch transducer) is 1827 lines, counted the same way. It is Tier 0 and makes no protocol decisions: every parser and decision on its path is a proven function of the crates it calls.
+⁶ The host shell (`crates/clazel/src`, item 2.15) is 274 lines, counted as `wc -l` counts them over its Rust files; the plan's limit is 300. The command line and the demo (`crates/clazel/cli`, item 2.16) are not counted: they only call the shell's public functions.
+⁷ The network shell (`crates/clazel-net/src`, item 3.8: the resolver's sockets, TCP connections and the loop that drives the fetch transducer) is 1844 lines, counted the same way. It is Tier 0 and makes no protocol decisions: every parser and decision on its path is a proven function of the crates it calls.
 <!-- END STATUS -->
 
 **Phase 2 process tests: where they have run.** The demo (`cargo run -p clazel
@@ -91,6 +115,18 @@ it, and so does the release tarball's `install.sh` (see item 2.16 in
 [docs/phases/phase-2.md](docs/phases/phase-2.md)). The escape attempts include
 `fork` and `ptrace` of a sibling. Where Yama restricts `ptrace` on Linux, the
 `ptrace` result shows less than it does on macOS.
+
+**Phase 4 process tests: where they have run.** `crates/clazel/tests/pages.rs`
+(the 1,761 html5lib document cases and a page with links, visited through
+real renderers, and the WPT `cookies/` rows through the kernel's
+`Set-Cookie` path) and `crates/clazel/tests/hostile_pages.rs` (12 hostile
+pages, each through a real sandboxed renderer, checked for panics, the
+memory bound and the address line) run in CI's base jobs on Linux x86-64
+(`ubuntu-24.04`) and macOS arm64, as do the Phase 2 tests, and passed there
+at `e29265d`; they are Unix only, so not on Windows. Two hostile pages are ignored for time, not for
+failure: a million nested `<div>`s and 64 MiB of `&amp;` (see item 4.16 in
+[docs/phases/phase-4.md](docs/phases/phase-4.md)). The `browse` demo on
+real sites runs locally only, since CI has no Internet.
 
 Formalizing the standards has already found one spec bug: see
 [docs/ERRATA.md](docs/ERRATA.md).
@@ -116,6 +152,16 @@ target/release/clazel fetch http://example.com/           # http:// GET, redirec
 client: it builds each request, frames each response with the proven HTTP/1.1
 parser, follows redirects and keeps the cookies they set for the rest of the
 run. It needs the Internet, and speaks only `http://` until TLS lands.
+
+```sh
+target/release/clazel browse http://info.cern.ch/         # text-mode browser: title, text, numbered links
+```
+
+`browse` shows a page as text, with its links numbered: type a number to
+follow a link, `g URL` to go elsewhere, `b` to go back, `q` to quit. The
+kernel fetches every page and the page is parsed in a sandboxed renderer,
+one per origin; the address line is the kernel's, whatever the page says.
+It speaks only `http://` until TLS is joined to the kernel.
 
 Each GitHub release has a Linux x86-64 tarball with both binaries and an
 installer: unpack it and run `sudo ./install.sh` (or `PREFIX=... ./install.sh`).
@@ -156,16 +202,16 @@ and much of it is work only a person can do.
 - **Add test suites.** Every Tier 2 crate is tested against official suites
   and independent engines (`tests/conformance*.rs`). Point us at suites we have
   not vendored, or at engines worth differential testing against.
-- **Run it where we have not.** The Phase 2 process tests (the sandbox, the
-  hostile renderer) run in CI on `ubuntu-24.04` and macOS arm64 only. Other
-  Linux distributions and kernels are untested.
+- **Run it where we have not.** The Phase 2 and 4 process tests (the sandbox,
+  the hostile renderer, the hostile pages) run in CI on `ubuntu-24.04` and
+  macOS arm64 only. Other Linux distributions and kernels are untested.
 - **Read `clazel-sys`.** It is the only crate with `unsafe`: 38 blocks that
   enter the OS sandbox. Every change is audited by a second model
   ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person reading it too is
   welcome.
 - **Build the next phases.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md)
-  and the detailed plans in [docs/phases/](docs/phases/). The TLS work is on
-  open pull requests until it passes CI. Contributions go through the same
+  and the detailed plans in [docs/phases/](docs/phases/). TLS is partly
+  built and not yet joined to the kernel. Contributions go through the same
   machine checks as everything else, whoever (or whatever) wrote them: read
   [CLAUDE.md](CLAUDE.md) first, and expect `cargo xtask verify --changed` and
   CI's full verification to be the bar.

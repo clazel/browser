@@ -126,7 +126,13 @@ fn wpt_tree_construction() {
     let mut known_hit: Vec<&str> = Vec::new();
     let mut stale: Vec<&str> = Vec::new();
     let mut default_scripting = 0usize;
-    for case in CASES {
+    // Miri runs every 40th case (50 of 1,968; the whole suite took over
+    // 300 s there): it looks for undefined behaviour in the paths the cases
+    // exercise, and the full suite runs in the normal test job.
+    let stride = if cfg!(miri) { 40 } else { 1 };
+    let mut run_count = 0usize;
+    for case in CASES.iter().step_by(stride) {
+        run_count = run_count.saturating_add(1);
         let id = format!("{}:{}", case.file, case.index);
         if case.scripting.is_none() {
             default_scripting += 1;
@@ -148,6 +154,18 @@ fn wpt_tree_construction() {
                 case.data, case.fragment, case.scripting, case.document, tree
             ));
         }
+    }
+    if cfg!(miri) {
+        for f in &failed {
+            println!("MISMATCH {f}\n");
+        }
+        assert!(
+            stale.is_empty(),
+            "listed as mismatches but now pass: {stale:?}"
+        );
+        assert!(failed.is_empty(), "{} unexpected mismatches", failed.len());
+        assert_eq!(pass + xfail + failed.len(), run_count);
+        return;
     }
     println!(
         "tree construction: {} cases run with scripting off (no #script-on/#script-off)",
