@@ -2,8 +2,7 @@
 //! (`name_constraints::matching::exec`) against x509-limbo's name-constraint
 //! testcases, to see how far its verdicts agree with limbo's expectations
 //! before path validation (P9, P12) exists. Nothing here fixes a verdict;
-//! `NOT_YET_SUPPORTED` in `conformance_limbo.rs` is unchanged, and pinning
-//! is piece P12. Run it with
+//! the pin is `conformance_limbo.rs` (piece P12), over the whole path. Run it with
 //!
 //! ```text
 //! cargo test -p clazel-x509 --test name_constraints_limbo_survey -- --nocapture
@@ -56,6 +55,9 @@ struct Case {
     time: &'static str,
     features: &'static [&'static str],
     importance: &'static str,
+    max_chain_depth: Option<u32>,
+    key_usage: &'static [&'static str],
+    extended_key_usage: &'static [&'static str],
     trusted: &'static [usize],
     intermediates: &'static [usize],
     leaf: usize,
@@ -509,12 +511,19 @@ fn survey_name_constraint_testcases() {
     }
     let selected = || CASES.iter().filter(|c| is_name_constraint_case(c.id));
     println!(
-        "  selected testcases: {} SERVER, {} with several peer names, {} with features, {} of importance 'undetermined'",
+        "  selected testcases: {} SERVER, {} with several peer names, {} with features, {} of importance 'undetermined', {} stating a depth or usage expectation",
         selected().filter(|c| c.kind == "SERVER").count(),
         selected().filter(|c| !c.peer_names.is_empty()).count(),
         selected().filter(|c| !c.features.is_empty()).count(),
         selected()
             .filter(|c| c.importance == "undetermined")
+            .count(),
+        selected()
+            .filter(|c| {
+                c.max_chain_depth.is_some()
+                    || !c.key_usage.is_empty()
+                    || !c.extended_key_usage.is_empty()
+            })
             .count(),
     );
     // Only that the survey ran everything it should: no verdict is pinned.
