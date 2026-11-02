@@ -290,4 +290,250 @@ pub open spec fn thm_p15_domain_inhabited() -> bool {
     exists|certs: Seq<PathCert>| p15_domain(certs) && ours_usage(certs) && theirs(certs) && certs.len() == 2
 }
 
+// ---------------------------------------------------------------------
+// The proofs.
+// ---------------------------------------------------------------------
+
+/// A certificate `parse_path_cert` builds has `fields_consistent`.
+pub proof fn lemma_parsed_consistent(der: Seq<u8>)
+    ensures
+        super::parsed::spec::parse_path_cert(der) matches Some(c) ==> fields_consistent(c),
+{
+}
+
+/// The transcription's `oid_listed` is the decoder's `oid_in`.
+pub proof fn lemma_oid_listed(purposes: Seq<Seq<nat>>, oid: Seq<nat>, i: int)
+    requires 0 <= i <= purposes.len(),
+    ensures super::independent_profile::oid_listed(purposes, oid, i) == crate::constraints::spec::oid_in(purposes, oid, i),
+    decreases purposes.len() - i
+{
+    if i < purposes.len() {
+        lemma_oid_listed(purposes, oid, i + 1);
+    }
+}
+
+/// `lemma_oid_listed` for the eight purposes the BR tables name. Each
+/// transcription OID is the same literal as ours.
+pub proof fn lemma_eku_lists(e: crate::constraints::spec::ExtendedKeyUsage)
+    ensures
+        super::independent_profile::eku_lists(e, super::independent_profile::id_kp_server_auth())
+            == crate::constraints::spec::oid_in(e.purposes, crate::constraints::spec::server_auth_oid(), 0),
+        super::independent_profile::eku_lists(e, super::independent_profile::id_kp_code_signing())
+            == crate::constraints::spec::oid_in(e.purposes, seq![1nat, 3, 6, 1, 5, 5, 7, 3, 3], 0),
+        super::independent_profile::eku_lists(e, super::independent_profile::id_kp_email_protection())
+            == crate::constraints::spec::oid_in(e.purposes, seq![1nat, 3, 6, 1, 5, 5, 7, 3, 4], 0),
+        super::independent_profile::eku_lists(e, super::independent_profile::id_kp_time_stamping())
+            == crate::constraints::spec::oid_in(e.purposes, seq![1nat, 3, 6, 1, 5, 5, 7, 3, 8], 0),
+        super::independent_profile::eku_lists(e, super::independent_profile::id_kp_ocsp_signing())
+            == crate::constraints::spec::oid_in(e.purposes, seq![1nat, 3, 6, 1, 5, 5, 7, 3, 9], 0),
+        super::independent_profile::eku_lists(e, super::independent_profile::any_extended_key_usage())
+            == crate::constraints::spec::oid_in(e.purposes, crate::constraints::spec::any_extended_key_usage_oid(), 0),
+        super::independent_profile::eku_lists(e, super::independent_profile::precertificate_signing())
+            == crate::constraints::spec::oid_in(e.purposes, seq![1nat, 3, 6, 1, 4, 1, 11129, 2, 4, 4], 0),
+{
+    let p = e.purposes;
+    lemma_oid_listed(p, super::independent_profile::id_kp_server_auth(), 0);
+    lemma_oid_listed(p, super::independent_profile::id_kp_code_signing(), 0);
+    lemma_oid_listed(p, super::independent_profile::id_kp_email_protection(), 0);
+    lemma_oid_listed(p, super::independent_profile::id_kp_time_stamping(), 0);
+    lemma_oid_listed(p, super::independent_profile::id_kp_ocsp_signing(), 0);
+    lemma_oid_listed(p, super::independent_profile::any_extended_key_usage(), 0);
+    lemma_oid_listed(p, super::independent_profile::precertificate_signing(), 0);
+}
+
+/// The target: on domain conditions 1 to 3, ours and BR §7.1.2.7 agree.
+pub proof fn lemma_leaf(leaf: PathCert)
+    requires leaf_in_domain(leaf),
+    ensures
+        ours_leaf_usage(leaf)
+            == super::independent_profile::subscriber_ok(super::independent_profile::view_of(leaf)),
+{
+    if let Some(e) = leaf.eku {
+        lemma_eku_lists(e);
+    }
+}
+
+/// An intermediate: on domain conditions 4 and 5, ours and the transcription
+/// with unrestricted cross-certificate EKUs allowed agree.
+pub proof fn lemma_intermediate(cert: PathCert)
+    requires intermediate_in_domain(cert),
+    ensures
+        ours_intermediate_usage(cert)
+            == super::independent_profile::subordinate_ca_ok(super::independent_profile::view_of(cert), true),
+{
+    // Compare keyUsage bits as atoms, without the arithmetic inside
+    // `key_usage_has`.
+    hide(crate::constraints::spec::key_usage_has);
+    let view = super::independent_profile::view_of(cert);
+    if let Some(e) = cert.eku {
+        lemma_eku_lists(e);
+        // anyExtendedKeyUsage alone lists anyExtendedKeyUsage, which
+        // condition 5 excludes: the unrestricted form never applies here.
+        if super::independent_profile::unrestricted_eku(e) {
+            assert(e.purposes[0] =~= crate::constraints::spec::any_extended_key_usage_oid());
+            assert(crate::constraints::spec::oid_in(e.purposes, crate::constraints::spec::any_extended_key_usage_oid(), 0));
+        }
+    }
+    // extKeyUsage half.
+    assert(super::independent_profile::ca_eku_ok(view.eku, true) == match cert.eku {
+        Some(e) => crate::constraints::spec::eku_allows_server_auth(e, false),
+        None => true,
+    });
+    // keyUsage half: the same bits on both sides.
+    assert(super::independent_profile::ca_key_usage_ok(view.key_usage) == match cert.key_usage {
+        Some(u) => crate::constraints::spec::key_usage_has(u, KeyUsageBit::KeyCertSign),
+        None => false,
+    });
+}
+
+/// `subordinate_cas_ok` from `i` is the conjunction over the views from `i`.
+pub proof fn lemma_subordinate_cas(views: Seq<super::independent_profile::CertView>, i: int, allow: bool)
+    requires 0 <= i <= views.len(),
+    ensures
+        super::independent_profile::subordinate_cas_ok(views, i, allow) <==> forall|j: int| i <= j < views.len()
+            ==> #[trigger] super::independent_profile::subordinate_ca_ok(views[j], allow),
+    decreases views.len() - i
+{
+    if i < views.len() {
+        lemma_subordinate_cas(views, i + 1, allow);
+    }
+}
+
+/// Intermediate `i` of `certs` is view `n - 1 - i` of the transcription's path.
+pub proof fn lemma_index(certs: Seq<PathCert>, i: int)
+    requires p15_domain(certs), 0 <= i < certs.len() - 1,
+    ensures
+        ours_intermediate_usage(certs[i]) == super::independent_profile::subordinate_ca_ok(
+            super::independent_profile::views_of(certs.reverse())[certs.len() - 1 - i], true),
+{
+    assert(intermediate_in_domain(certs[i]));
+    lemma_intermediate(certs[i]);
+    assert(super::independent_profile::views_of(certs.reverse())[certs.len() - 1 - i]
+        == super::independent_profile::view_of(certs[i]));
+}
+
+/// `theorems`-style proof of `thm_p15_equivalence`.
+pub proof fn lemma_p15_equivalence(certs: Seq<PathCert>)
+    ensures thm_p15_equivalence(certs),
+{
+    let n = certs.len();
+    let views = super::independent_profile::views_of(certs.reverse());
+    assert(views.len() == n);
+    if p15_domain(certs) && n >= 1 {
+        assert(views[0] == super::independent_profile::view_of(certs.last()));
+        lemma_leaf(certs.last());
+        lemma_subordinate_cas(views, 1, true);
+        if ours_usage(certs) {
+            assert forall|j: int| 1 <= j < n implies #[trigger] super::independent_profile::subordinate_ca_ok(views[j], true) by {
+                lemma_index(certs, n - 1 - j);
+            }
+        }
+        if theirs(certs) {
+            assert forall|i: int| 0 <= i < n - 1 implies ours_intermediate_usage(#[trigger] certs[i]) by {
+                lemma_index(certs, i);
+                assert(super::independent_profile::subordinate_ca_ok(views[n - 1 - i], true));
+            }
+        }
+    }
+}
+
+/// `thm_p15_ours_usage_necessary`, from `thm_cas` and `thm_leaf_profile`.
+pub proof fn lemma_p15_ours_usage_necessary(
+    link: super::spec::LinkFn, revoked: super::spec::RevokedFn, anchor: super::parsed::spec::Anchor,
+    certs: Seq<PathCert>, reference: crate::spec::ReferenceIdentity,
+    now: crate::time::spec::CertificateTime,
+)
+    ensures thm_p15_ours_usage_necessary(link, revoked, anchor, certs, reference, now),
+{
+    if super::theorems::accepts(link, revoked, anchor, certs, reference, now)
+        && certs.len() >= 1 && fields_consistent(certs.last())
+    {
+        super::lemmas::lemma_thm_cas(link, revoked, anchor, certs, reference, now);
+        super::lemmas::lemma_thm_leaf_profile(link, revoked, anchor, certs, reference, now);
+        let leaf = certs.last();
+        assert(crate::leaf::spec::check_extensions(leaf.extensions, leaf.tbs, reference, now,
+            super::profile::leaf_policy()) is Some);
+        assert(ours_leaf_usage(leaf));
+        assert forall|i: int| 0 <= i < certs.len() - 1 implies ours_intermediate_usage(#[trigger] certs[i]) by {
+            assert(certs[i] == certs[i]);
+        }
+    }
+}
+
+/// `profile.rs`'s intermediate checks pass from `k` on.
+pub proof fn lemma_intermediates_profile(certs: Seq<PathCert>, k: int)
+    requires
+        0 <= k,
+        forall|i: int| k <= i < certs.len() - 1 ==> ours_intermediate_usage(#[trigger] certs[i]),
+    ensures super::profile::intermediates_profile_from(certs, k) is Ok,
+    decreases certs.len() - k
+{
+    if k < certs.len() - 1 {
+        assert(ours_intermediate_usage(certs[k]));
+        lemma_intermediates_profile(certs, k + 1);
+    }
+}
+
+/// `thm_p15_ours_usage_sufficient`.
+pub proof fn lemma_p15_ours_usage_sufficient(certs: Seq<PathCert>)
+    ensures thm_p15_ours_usage_sufficient(certs),
+{
+    if ours_usage(certs) && fields_consistent(certs.last()) {
+        lemma_intermediates_profile(certs, 0);
+        assert forall|i: int| 0 <= i < certs.len() - 1 implies match (#[trigger] certs[i]).key_usage {
+            Some(u) => crate::constraints::spec::key_usage_has(u, KeyUsageBit::KeyCertSign),
+            None => true,
+        } by {
+            assert(ours_intermediate_usage(certs[i]));
+        }
+    }
+}
+
+/// keyCertSign and cRLSign (0x06), the example intermediate's keyUsage.
+pub open spec fn example_ca_key_usage() -> crate::constraints::spec::KeyUsage {
+    crate::constraints::spec::KeyUsage { bits: seq![0x06u8], bit_count: 7 }
+}
+
+/// serverAuth alone.
+pub open spec fn example_eku() -> crate::constraints::spec::ExtendedKeyUsage {
+    crate::constraints::spec::ExtendedKeyUsage { purposes: seq![crate::constraints::spec::server_auth_oid()] }
+}
+
+/// An intermediate with keyCertSign, cRLSign and serverAuth; its other
+/// fields play no part.
+pub open spec fn example_ca() -> PathCert {
+    PathCert { key_usage: Some(example_ca_key_usage()), eku: Some(example_eku()), ..vstd::pervasive::arbitrary() }
+}
+
+/// A target with serverAuth and no keyUsage; its other fields play no part.
+pub open spec fn example_leaf() -> PathCert {
+    PathCert { key_usage: None, eku: Some(example_eku()), ..vstd::pervasive::arbitrary() }
+}
+
+/// `thm_p15_domain_inhabited`, on `seq![example_ca(), example_leaf()]`.
+pub proof fn lemma_domain_inhabited()
+    ensures thm_p15_domain_inhabited(),
+{
+    assert({
+        &&& ku_set(example_ca_key_usage(), KeyUsageBit::KeyCertSign)
+        &&& ku_set(example_ca_key_usage(), KeyUsageBit::CrlSign)
+        &&& !ku_set(example_ca_key_usage(), KeyUsageBit::ContentCommitment)
+        &&& !ku_set(example_ca_key_usage(), KeyUsageBit::KeyEncipherment)
+        &&& !ku_set(example_ca_key_usage(), KeyUsageBit::DataEncipherment)
+        &&& !ku_set(example_ca_key_usage(), KeyUsageBit::KeyAgreement)
+        &&& !ku_set(example_ca_key_usage(), KeyUsageBit::EncipherOnly)
+        &&& !ku_set(example_ca_key_usage(), KeyUsageBit::DecipherOnly)
+    }) by (compute_only);
+    assert(!eku_lists_forbidden(example_eku())) by (compute_only);
+    assert(crate::constraints::spec::eku_allows_server_auth(example_eku(), false)) by (compute_only);
+    let certs = seq![example_ca(), example_leaf()];
+    assert(certs.last() == example_leaf());
+    assert(certs[0] == example_ca());
+    assert(p15_domain(certs));
+    assert(ours_usage(certs));
+    lemma_p15_equivalence(certs);
+    assert(theirs(certs));
+    assert(p15_domain(certs) && ours_usage(certs) && theirs(certs) && certs.len() == 2);
+}
+
 } // verus!
