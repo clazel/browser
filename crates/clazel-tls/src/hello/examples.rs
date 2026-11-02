@@ -43,6 +43,21 @@ pub proof fn lemma_legacy()
 {
     assert(parameters(crate::spec::ServerHello { legacy_version: 0x0304, ..server() }, seq![7u8]) is None) by (compute_only);
 }
+/// §4.1.3: a server Random ending in the TLS 1.2 downgrade sentinel.
+pub open spec fn sentinel_random() -> Seq<u8> {
+    Seq::new(24, |i: int| 0u8) + downgrade_tls12()
+}
+/// §4.1.3: without supported_versions the sentinel gives illegal_parameter;
+/// a ServerHello selecting TLS 1.3 does not indicate TLS 1.2 or below, so
+/// its Random is not checked.
+pub proof fn lemma_sentinel_only_below_tls13()
+    ensures
+        parameters(crate::spec::ServerHello { random: sentinel_random(), extensions: Seq::empty(), ..server() }, seq![7u8]) == Some(47u8),
+        parameters(crate::spec::ServerHello { random: sentinel_random(), ..server() }, seq![7u8]) is None,
+{
+    assert(parameters(crate::spec::ServerHello { random: sentinel_random(), extensions: Seq::empty(), ..server() }, seq![7u8]) == Some(47u8)) by (compute_only);
+    assert(parameters(crate::spec::ServerHello { random: sentinel_random(), ..server() }, seq![7u8]) is None) by (compute_only);
+}
 /// §4.2.1: selected_version must be TLS 1.3.
 pub proof fn lemma_version()
     ensures parameters(crate::spec::ServerHello { extensions: seq![crate::spec::Ext { etype: 43, data: seq![3u8, 3u8] }], ..server() }, seq![7u8]) == Some(47u8),
