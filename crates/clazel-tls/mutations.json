@@ -2467,10 +2467,10 @@
     {
       "id": "hello-legacy-server-hello-protocol-version",
       "file": "src/hello/spec.rs",
-      "find": "None => Some(crate::spec::PROTOCOL_VERSION),",
+      "find": "None => Some(below_tls13(sh.random)),",
       "replace": "None => Some(crate::spec::MISSING_EXTENSION),",
       "expect": "killed",
-      "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version.",
+      "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version (illegal_parameter only when its random carries a downgrade sentinel), not missing_extension.",
       "module": "hello::certificates",
       "certificate": {
         "file": "src/hello/mutation_certificates.rs",
