@@ -11,9 +11,9 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use clazel::Host;
-use clazel_net::{ChainVerifier, Root};
 use clazel_ipc::frame::codec::payload_length;
 use clazel_ipc::message::codec::{Msg, decode_framed};
+use clazel_net::{ChainVerifier, Root};
 
 const LONG: Duration = Duration::from_secs(20);
 
@@ -433,7 +433,10 @@ fn an_https_navigation_goes_through_the_kernel_and_tls() {
     host.trust(test_root);
     host.open_tab("https://test.example/", "");
     host.navigate_tab(0, "https://test.example/other");
-    wait_log(&mut host, "renderer 0 <- commit \"https://test.example/other\"");
+    wait_log(
+        &mut host,
+        "renderer 0 <- commit \"https://test.example/other\"",
+    );
     // The kernel asked for TLS to the default https port, wrote the request
     // on it and closed it once the response was complete.
     let position = |needle: &str| host.log.iter().position(|l| l.contains(needle));

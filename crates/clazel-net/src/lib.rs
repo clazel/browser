@@ -26,6 +26,9 @@ mod frames;
 mod resolve;
 mod tls;
 
+/// The certificate verifier `TlsConnection` and `Driver` take, and the
+/// trust anchors it is built from.
+pub use clazel_crypto::join::exec::{ChainVerifier, Root};
 pub use conn::{Connection, Finish, Flow, Timeouts, connect, run, run_with};
 pub use driver::{Driver, InputBuf, Op, Report, TlsEnd};
 pub use error::{NetError, ResolveError, Stage};
@@ -33,6 +36,3 @@ pub use fetch::{FetchError, fetch, fetch_jar, fetch_jar_verified, fetch_with, no
 pub use frames::read_frames;
 pub use resolve::resolve;
 pub use tls::TlsConnection;
-/// The certificate verifier `TlsConnection` and `Driver` take, and the
-/// trust anchors it is built from.
-pub use clazel_crypto::join::exec::{ChainVerifier, Root};
