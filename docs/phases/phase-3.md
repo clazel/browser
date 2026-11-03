@@ -1273,6 +1273,38 @@ functions' specs (the libraries' functions are axiomatised by their
 documented input/output types only, in `axioms.rs` with `// AXIOM:`
 lines, and counted in the README).
 
+**As built, the driver (2026-11-02, on `phase3/tls-net-loop`, local run, not
+yet CI-verified).** `clazel_crypto::client::Client` is the public API the
+shell drives. It sits in `clazel-crypto`, not `clazel-tls`, because it fixes
+the providers (libcrux) and the verifier (`ChainVerifier`), which are this
+crate's and which `clazel-tls` cannot depend on. `Client::connect(host, now,
+verifier, random)` returns the ClientHello; `receive`, `receive_eof`, `send`
+and `close` return the octets to send, the plaintext delivered and the state
+(`Handshaking`, `Open`, `Closing`, `Closed`, or `Failed` with the §6.2 alert
+and its origin: sent by us, sent by the server, not sent, or truncated). It
+owns `Bootstrap`, the key exchange handoff (`traffic::handshake::start`,
+which is what `Established::into_record_auth` calls) and `Connection`.
+Randomness is a caller-supplied `&mut dyn FnMut(&mut [u8])` (the scalar, the
+ClientHello random, the session id); **there is no production source** (it
+needs `clazel-sys` and its own audit), and the tests use a fixed seed.
+Neither machine sends alerts, so the driver does: in plaintext before the
+handshake keys, and during the server's flight sealed under a second copy of
+the client handshake epoch at sequence number 0 (derived with the verified
+`hello::join::derive`, dropped unused when the client Finished takes that
+number). A copy of the server epoch, decrypting the flight in step with
+`Connection`, tells the server's alert, which is never answered, from a local
+failure. **Not done:** after the client Finished, `Connection` drops its keys
+when it fails and reports the server's alert and a local error alike, so no
+alert is sent there; that needs `clazel-tls` to seal the alert first (its
+post-handshake transducer does, but is not joined to the dispatcher). The
+driver is tier 0 plain Rust outside `verus!`; "the joined machine equals
+3.5e's" is not proven. Tests: 7 unit tests in `src/client.rs` and 6 in
+`tests/client.rs` against rustls (ECDSA and RSA handshakes, data both ways
+over several records, close_notify both ways, bad_certificate and unknown_ca
+sealed and read by rustls, truncation). `tests/conformance_tls.rs` still
+assembles the client by hand; it should move to the driver once PR #83 (which
+edits it) merges.
+
 #### 3.5g TLS conformance and the trust store (M)
 
 `tests/conformance_tls.rs`: an in-process rustls server (a `test` row, with
@@ -1565,6 +1597,25 @@ a redirect loop, a chunk size of 2^64) that must give `Fail` and never a
 panic or unbounded memory. The demo (`fetch https://example.com/`) needs the
 Internet and is run locally, like the Phase 2 demo.
 
+**As built, the TLS loop (2026-11-02, on `phase3/tls-net-loop`, local run, not
+yet CI-verified).** `clazel_net::TlsConnection` (`src/tls.rs`): `open(addrs,
+port, timeouts, host, now, verifier, random)` connects, runs the handshake
+through 3.5f's driver with the existing timeouts, and `send`, `read` and
+`close` mirror `Connection`. The shell writes what the driver sends, feeds it
+what arrives and the end of the stream, and keeps delivered plaintext until it
+is read; it makes no protocol decision. A TLS end is `NetError::Tls(Failure)`
+(the §6.2 alert and its origin, displayed by name); a timeout before the
+handshake completes is `Timeout(Stage::Handshake)`. `tests/tls.rs`, 7 cases
+against an in-process rustls server on a loopback socket (test root as the
+trust store, a fixed test seed as randomness): ECDSA and RSA handshakes with a
+request, a response and close_notify both ways; a 100000-octet response; a
+server that closes during the handshake (truncation, alert 80, nothing sent);
+one that stalls (handshake timeout); a certificate for another name (alert 42,
+sent and read by rustls); bytes that are not TLS (a plaintext alert on the
+wire). **Not yet:** a production randomness source, `tls: true` in 3.6's
+transducer, `https:` in the kernel (3.7), `clazel fetch https://` and the
+demo; nothing calls `TlsConnection` outside its tests.
+
 ### 3.9 Status and README (S)
 
 `cargo xtask report --write`, the network shell's line count next to the
@@ -1601,11 +1652,11 @@ half does not wait on TLS.
 | 3.5c RSA PKCS#1 v1.5 | on `main`; tier 2 (see As built) |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
 | 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters, and (on `phase3/tls-post-handshake`) a post-handshake transducer: spec, contracts, executable, lemmas, 20 witnesses, 20 mutations and 25 passing integration tests, its proofs and 19 certificates passing locally (CI's run pending). Production providers, socket I/O and the join of the transducer to the dispatcher remain; tier 0, combined full verification pending |
-| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. No randomness source (the caller supplies the scalar, ClientHello random and session id; one needs `clazel-sys`) |
+| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. No randomness source (the caller supplies the scalar, ClientHello random and session id; one needs `clazel-sys`). The client driver `clazel_crypto::client::Client` (on `phase3/tls-net-loop`, 2026-11-02, local run, CI not yet): connect/receive/send/close over `Bootstrap`, the key exchange and `Connection`, alerts put on the wire before the client Finished (plaintext, then sealed under a copy of the client handshake epoch), 13 passing tests (6 against rustls); after the client Finished no alert is sent (needs `clazel-tls`), and the join is not proven equal to 3.5e's machine |
 | 3.5g TLS conformance and trust store | first part built (2026-10-31, local run, CI not yet): `clazel-crypto/tests/conformance_tls.rs`, 17 cases in two suites (5 success and control, 12 hostile): full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello without and with the §4.1.3 downgrade sentinel, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the behaviour it pins); the downgrade sentinel is checked (`illegal_parameter`, 2026-11-02, CI not yet). Not done: the Mozilla root table check, the local top-site measurement and the real-certificate corpus (no result claimed), HelloRetryRequest and ticket paths against a real server, the tier 2 raises |
 | 3.6 Client state machine | on `main` (#3, #5), `http://` only: transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). Not yet: TLS, other request contexts, WPT fetch suites (none vendored) |
 | 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. Open: `https:` (3.5), the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
-| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function. Not yet: TLS. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
+| 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function. TLS loop built (on `phase3/tls-net-loop`, 2026-11-02, local run, CI not yet): `TlsConnection` over 3.5f's driver, `NetError::Tls` with the §6.2 alert, `Timeout(Stage::Handshake)`, `tests/tls.rs` 7 passing against rustls on loopback (ECDSA, RSA, a 100000-octet response, close during the handshake, a stall, another name, bytes that are not TLS). Not yet: a production randomness source, and `https:` in fetch, the kernel and `clazel fetch`; nothing uses `TlsConnection` outside its tests. The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | non-TLS part done (2026-10-29): README.md's Phase 3 note, `cargo xtask report` writes the network shell's line count next to the host shell's (CI's `table` job puts it in the README), this table and ROADMAP.md. Left for when TLS lands: the `https://` demo in the README, the 3.5 rows and marking the phase done |
 
 ## Risks

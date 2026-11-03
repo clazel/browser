@@ -1,5 +1,6 @@
 //! The errors of the shell.
 
+use clazel_crypto::client::Failure;
 use std::fmt;
 use std::io;
 
@@ -14,6 +15,8 @@ pub enum Stage {
     Write,
     /// Waiting for a nameserver.
     Resolve,
+    /// Running the TLS handshake (any read or write before it completes).
+    Handshake,
 }
 
 /// Why a host name was not resolved.
@@ -49,6 +52,10 @@ pub enum NetError {
     Io(io::ErrorKind),
     /// A timeout fired.
     Timeout(Stage),
+    /// TLS ended the connection: the RFC 8446 §6.2 alert, and whether the
+    /// server sent it, the client sent it, neither, or the stream was
+    /// truncated (`clazel_crypto::client::Failure`).
+    Tls(Failure),
 }
 
 impl fmt::Display for NetError {
@@ -58,6 +65,7 @@ impl fmt::Display for NetError {
             NetError::Connect(k) => write!(f, "connect: {k}"),
             NetError::Io(k) => write!(f, "i/o: {k}"),
             NetError::Timeout(s) => write!(f, "timeout: {s:?}"),
+            NetError::Tls(failure) => write!(f, "tls: {failure}"),
         }
     }
 }

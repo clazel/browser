@@ -17,6 +17,9 @@
 //! - [`chain`]: certificate-chain link signatures, the production
 //!   `clazel_x509::path` `LinkVerifier` (path-validation P11): RSA PKCS#1
 //!   v1.5 by `clazel-pkcs1` over libcrux SHA-2, and ECDSA P-256 by libcrux.
+//! - [`client`]: the socket-free TLS 1.3 client driver the network shell
+//!   runs (3.5f): `Bootstrap`, the key exchange, `Connection`, and the
+//!   alerts they leave to their caller.
 //! - [`join`]: the production chain validation and `Verifier` for
 //!   `clazel-tls`'s authentication machine (path-validation P16):
 //!   `clazel_x509::path`'s chain verifier with [`chain`]'s links and
@@ -29,6 +32,7 @@
 
 pub mod axioms;
 pub mod chain;
+pub mod client;
 pub mod compare;
 pub mod join;
 pub mod provider;
