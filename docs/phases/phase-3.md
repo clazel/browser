@@ -1992,6 +1992,95 @@ last updated 2026-10-19).
   durability beyond what `fsync` gives on the platform, and a private
   browsing mode.
 
+**3.10a.0 Design note: proposed 2026-11-03, waiting for the maintainer.**
+No code until it is accepted. Each choice below is followed by what it
+costs.
+
+- **Layout: an append-only log per bucket, compacted by rewriting.**
+  - *How it works.* Each commit appends one record that holds the whole
+    transaction. Opening the store replays the records in order.
+    Compaction writes the live state as a new log and renames it over the
+    old one.
+  - *Why a log.* Recovery is then a fold over a list of records, which is
+    a short proof. A B-tree changes pages in place, so it needs a
+    write-ahead log anyway, plus proofs of page splits and merges.
+  - *The cost.* A store this size keeps its whole index in memory: about
+    6 MB for the revocation set plus small amounts for the rest. That is
+    no problem in Phase 3. An HTTP cache in gigabytes will need values
+    read from disk by offset, and the record format allows that (each
+    value is one octet string at a known position). The design leaves
+    room for it but doesn't build it.
+  - *Precedent, unchecked here.* Chromium keeps `localStorage` and
+    IndexedDB in LevelDB, which is log-structured; Firefox uses SQLite.
+    Neither is a dependency we may take (rule 8), and neither shapes the
+    proof.
+- **Granularity: one log file per bucket.**
+  - The Storage Standard scopes every endpoint to a bucket (§4.5), and
+    IndexedDB transactions never cross a bucket. So no transaction needs
+    two files, and the recovery theorem is about a single file.
+  - Clearing a site's data deletes its files, and a damaged file loses one
+    bucket, not the whole store.
+  - The file is named by the SHA-256 of its encoded bucket identity (the
+    storage key, or the browser bucket's name, plus the bucket name). The
+    identity is repeated in the header, and a file whose header doesn't
+    match its name is refused.
+  - *The cost.* One file per origin that stores anything, and one `fsync`
+    per bucket that commits.
+- **Records: DER through `clazel-der`.**
+  - `clazel-der` is already tier 2, and its TLV round trip is proven in
+    both directions (`lemma_read_tlv_encode_tlv`,
+    `lemma_encode_tlv_read_tlv`), as is never reading past the input
+    (`lemma_read_tlv_no_overread`). Lengths go up to 2^64.
+  - Whatever the new crate encodes reuses those proofs. A format of our
+    own would need all of them proven again.
+  - The header is
+    `SEQUENCE { magic OCTET STRING "clazel-store", version INTEGER 1, identity OCTET STRING }`.
+  - Each record is
+    `SEQUENCE { commit INTEGER, ops SEQUENCE OF Op, check OCTET STRING (4) }`,
+    where `Op` is one of three context-tagged choices:
+    - `put [0] { bottle, key, value }`;
+    - `delete [1] { bottle, key }`;
+    - `clear [2] { bottle }`.
+
+    `commit` increases by exactly 1 from record to record.
+  - *The cost.* DER spends a few octets of framing per field. A record's
+    length must be known before it is written, which is fine for a
+    transaction that is already built.
+- **Torn writes: a CRC-32C per record, the Castagnoli polynomial
+  `0x11edc6f41` (RFC 3720 §12.1, with its test vectors in §B.4).**
+  - A crash can leave the tail of the file truncated, or on some file
+    systems holding octets that were never written. The `check` field
+    covers the record's other contents.
+  - Recovery takes the longest run of records, from the header on, that
+    decode, check correctly, and number their commits in sequence. It
+    stops at the first record that fails any of these.
+  - CRC-32C is specified exactly in the spec and proven against it. No
+    cryptographic function is assumed.
+  - *The cost, a modelling choice to list.* Damaged octets that happen to
+    form a valid record with a matching CRC (about 1 in 2^32 for each
+    damaged tail) are taken as a commit. That isn't a defence against an
+    attacker, and none is claimed (see "Not claimed").
+  - If recovery drops any octets, the shell keeps the original file beside
+    the new one and says how much was dropped.
+- **Large values: kept inline, one octet string per value, at most 64 MiB
+  per record.**
+  - The revocation set is one value of about 6 MB.
+  - A value too large for one record is refused, not split. Splitting
+    belongs to the later cache, with values read by offset.
+- **The theorems this gives, in the spec's terms.** Let `state(file)` be
+  the fold of the recovered records over the empty state.
+  1. For every list of transactions `ts` and every prefix `p` of the file
+     written from `ts`, `state(p)` is the state after the first `k`
+     transactions of `ts`, for some `k`.
+  2. When `p` is the whole file, `k` is the length of `ts`.
+  3. Compacting gives a file with the same `state`.
+  4. A transaction that would take a bucket over its quota is refused
+     whole.
+- **The crate:** `clazel-store`, tier 0 with target tier 2. Its spec and
+  contracts come first, in a commit of their own (rule 3). It depends on
+  `clazel-der` and `vstd` only, with SHA-256 for file names taken from the
+  shell's existing crypto, not from the store's spec.
+
 #### 3.10b The first consumers (M, after 3.10a)
 
 - **The kernel decides what is written.**
