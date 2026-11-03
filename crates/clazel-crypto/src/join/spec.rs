@@ -56,7 +56,7 @@
 //!   builds them once, when it is made (`exec::ChainVerifier::new`), and
 //!   its spec function is this one over exactly the anchors it built.
 //! - **(=) Revocation:** nothing is revoked ([`not_revoked`]; design Q4 and
-//!   P7: revocation and CT are Phase 8). **(=) Links:** P11's
+//!   P7: revocation is phase-3.md item 3.5h; CT is Phase 8). **(=) Links:** P11's
 //!   `crate::chain::spec::production_link`. **(=) Depth:** 6 intermediates,
 //!   mozilla::pkix `MAX_SUBCA_COUNT` (`path::verifier::default_max_intermediates`).
 //! - **The key** returned is the leaf's complete SubjectPublicKeyInfo DER
