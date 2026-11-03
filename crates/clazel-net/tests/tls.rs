@@ -21,10 +21,11 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use clazel_cookie::storage::exec::CookieRecord;
 use clazel_crypto::client::{Failure, Origin};
 use clazel_crypto::join::exec::{ChainVerifier, Root};
 use clazel_crypto::provider::Sha256Suite;
-use clazel_net::{NetError, Stage, Timeouts, TlsConnection};
+use clazel_net::{FetchError, NetError, Stage, Timeouts, TlsConnection, fetch_jar_verified};
 use clazel_tls::host::exec::Host;
 use clazel_tls::schedule::crypto::Crypto;
 use rustls::crypto::ring::{cipher_suite::TLS13_CHACHA20_POLY1305_SHA256, default_provider};
@@ -444,5 +445,164 @@ fn os_randomness_differs_between_connections() -> T {
     let seeded_a = client_hello(open)?;
     let seeded_b = client_hello(open)?;
     assert_eq!(seeded_a, seeded_b);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------
+// `fetch` over TLS: an `https:` URL through `clazel-fetch`'s transducer,
+// which asks for `Connect { tls: true }`, and this crate's
+// `TlsConnection`, with OS randomness (the production path).
+// ---------------------------------------------------------------------
+
+/// [`NOW`] in seconds since 1601, as `fetch_jar` takes the time.
+const NOW_1601: u64 = NOW + 11_644_473_600;
+
+/// The resolver of the fetch tests: every name is 127.0.0.1.
+fn local(_: &[u8]) -> Result<Vec<IpAddr>, NetError> {
+    Ok(LOCAL.to_vec())
+}
+
+/// The request heads an [`https_server`] read, when it is done.
+type Heads = JoinHandle<Result<Vec<Vec<u8>>, String>>;
+
+/// A fetch's status and body, and the jar after it.
+type Fetched = (Result<(u16, Vec<u8>), FetchError>, Vec<CookieRecord>);
+
+/// A TLS server that accepts `n` connections in turn, each with the
+/// certificate `leaf`, reads one request head, answers with what `reply`
+/// gives for it and sends its close_notify. It reports each request head.
+fn https_server(
+    n: usize,
+    leaf: &'static [u8],
+    key: &'static [u8],
+    reply: fn(&[u8]) -> &'static [u8],
+) -> Result<(u16, Heads), String> {
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    let handle = thread::spawn(move || {
+        let mut heads = Vec::new();
+        for _ in 0..n {
+            let (socket, _) = listener.accept().map_err(|e| e.to_string())?;
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .map_err(|e| e.to_string())?;
+            let mut tls = rustls(socket, leaf, key)?;
+            let head = read_until(&mut tls, b"\r\n\r\n")?;
+            tls.write_all(reply(&head)).map_err(|e| e.to_string())?;
+            tls.conn.send_close_notify();
+            // The client may have closed already once the response was
+            // complete.
+            let _ = tls.flush();
+            heads.push(head);
+        }
+        Ok(heads)
+    });
+    Ok((port, handle))
+}
+
+fn fetch_https(url: &str) -> Fetched {
+    let (r, jar) = fetch_jar_verified(
+        url,
+        Vec::new(),
+        NOW_1601,
+        timeouts(Duration::from_secs(5)),
+        local,
+        verifier,
+    );
+    (r.map(|r| (r.status_line.status, r.body)), jar)
+}
+
+/// RFC 9110 §4.2.2: an `https:` URL is fetched over TLS, with the same
+/// request an `http:` URL gets, and the response read through the
+/// transducer.
+#[test]
+fn an_https_fetch_over_tls() -> T {
+    let (port, handle) = https_server(1, LEAF_ECDSA, KEY_ECDSA, |_| {
+        b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok"
+    })?;
+    let (r, _) = fetch_https(&format!("https://test.example:{port}/a?b"));
+    assert_eq!(r, Ok((200, b"ok".to_vec())));
+    let heads = join(handle)?;
+    let expected = format!(
+        "GET /a?b HTTP/1.1\r\nHost: test.example:{port}\r\nConnection: close\r\nAccept: */*\r\nUser-Agent: clazel\r\n\r\n"
+    );
+    assert_eq!(heads, [expected.into_bytes()]);
+    Ok(())
+}
+
+/// A certificate for another name fails the fetch with the TLS alert, and
+/// no request is sent.
+#[test]
+fn an_https_fetch_to_a_server_with_another_name_fails() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_OTHER, KEY_OTHER)?;
+        Ok(read_until(&mut tls, b"\r\n\r\n").err())
+    })?;
+    let (r, _) = fetch_https(&format!("https://test.example:{port}/"));
+    let failure = Failure {
+        alert: 42,
+        origin: Origin::Sent,
+    };
+    assert_eq!(r, Err(FetchError::Net(NetError::Tls(failure))));
+    assert!(join(handle)?.is_some());
+    Ok(())
+}
+
+/// A response delimited by the connection closing (RFC 9112 §6.3 step 8)
+/// whose TCP stream ends without the server's close_notify is a
+/// truncation, so the fetch fails rather than taking what arrived as the
+/// whole body.
+#[test]
+fn an_https_body_cut_off_without_close_notify_fails() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_ECDSA, KEY_ECDSA)?;
+        read_until(&mut tls, b"\r\n\r\n")?;
+        tls.write_all(b"HTTP/1.1 200 OK\r\n\r\nthe whole body?")
+            .map_err(|e| e.to_string())?;
+        tls.flush().map_err(|e| e.to_string())?;
+        // Close the socket without a close_notify.
+        tls.sock
+            .shutdown(std::net::Shutdown::Both)
+            .map_err(|e| e.to_string())
+    })?;
+    let (r, _) = fetch_https(&format!("https://test.example:{port}/"));
+    assert!(
+        matches!(
+            r,
+            Err(FetchError::Net(NetError::Tls(Failure {
+                origin: Origin::Truncated,
+                ..
+            })))
+        ),
+        "{r:?}"
+    );
+    join(handle)?;
+    Ok(())
+}
+
+/// RFC 6265bis §5.7 and §5.8.3 over TLS: a `Secure` cookie set by an
+/// `https:` response is stored and sent on the `https:` redirect.
+#[test]
+fn a_secure_cookie_is_stored_and_sent_over_https() -> T {
+    let (port, handle) = https_server(2, LEAF_ECDSA, KEY_ECDSA, |head| {
+        if head.starts_with(b"GET /set ") {
+            b"HTTP/1.1 302 Found\r\nSet-Cookie: s=1; Secure\r\nLocation: /echo\r\nContent-Length: 0\r\n\r\n"
+        } else {
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+        }
+    })?;
+    let (r, jar) = fetch_https(&format!("https://test.example:{port}/set"));
+    assert_eq!(r, Ok((200, Vec::new())));
+    assert_eq!(jar.len(), 1);
+    let heads = join(handle)?;
+    let second = heads
+        .get(1)
+        .map(|h| String::from_utf8_lossy(h).into_owned());
+    assert!(
+        second
+            .as_deref()
+            .is_some_and(|h| h.contains("\r\nCookie: s=1\r\n")),
+        "{second:?}"
+    );
     Ok(())
 }

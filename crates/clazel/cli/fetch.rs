@@ -1,4 +1,4 @@
-//! `clazel fetch URL`: one `http://` GET through `clazel_net::fetch`,
+//! `clazel fetch URL`: one `http://` or `https://` GET through `clazel_net::fetch`,
 //! printing the status line, the header fields and the body as received.
 
 use std::io::Write;

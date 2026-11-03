@@ -1,10 +1,18 @@
-//! `fetch`: an `http://` GET with its redirects, driven end to end. Every
-//! decision is made by `clazel-fetch`'s proven transducer
+//! `fetch`: an `http://` or `https://` GET with its redirects, driven end
+//! to end. Every decision is made by `clazel-fetch`'s proven transducer
 //! (`clazel_fetch::transducer`): which host and port to connect to, the
 //! request bytes, when a response is complete, interim responses, which
 //! redirects to follow and when to stop. The URL is parsed by
 //! `clazel-url`. This module only carries out the transducer's actions on
 //! sockets and reports back what happened, without looking at the bytes.
+//!
+//! A `Connect` with `tls` opens a [`TlsConnection`]: TLS 1.3 to the host the
+//! transducer names, its certificates validated against the trust anchors
+//! of [`fetch_jar_verified`]'s verifier (Mozilla's, for [`fetch`]). Any TLS
+//! failure, a certificate that does not validate included, is an `Error`
+//! for the transducer, so the fetch fails and it uses nothing read on that
+//! connection. The end of the stream without the server's close_notify is
+//! such a failure too (a truncation), not `Closed`.
 
 use std::collections::VecDeque;
 use std::net::IpAddr;
@@ -17,17 +25,21 @@ use clazel_fetch::transducer::types::{ActionBuf, InputBuf};
 use clazel_http::message::types::ResponseBuf;
 use clazel_url::url::parse::basic_url_parser;
 
+use clazel_crypto::join::exec::{ChainVerifier, mozilla};
+use clazel_tls::host::exec::Host;
+
 use crate::conn::{Connection, Timeouts};
 use crate::error::NetError;
 use crate::resolve::resolve;
+use crate::tls::TlsConnection;
 
 /// Why a fetch gave no response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FetchError {
     /// The URL does not parse.
     Url,
-    /// A URL this client does not fetch (not `http:`, userinfo, …), also
-    /// as the target of a redirect.
+    /// A URL this client does not fetch (not `http:` or `https:`,
+    /// userinfo, …), also as the target of a redirect.
     NotFetched,
     /// The network failed.
     Net(NetError),
@@ -49,7 +61,9 @@ impl std::fmt::Display for FetchError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FetchError::Url => write!(f, "not a URL"),
-            FetchError::NotFetched => write!(f, "only http: URLs without userinfo are fetched"),
+            FetchError::NotFetched => {
+                write!(f, "only http: and https: URLs without userinfo are fetched")
+            }
             FetchError::Net(e) => write!(f, "{e}"),
             FetchError::Invalid => write!(f, "the server sent an invalid HTTP response"),
             FetchError::Unsupported => write!(
@@ -103,8 +117,6 @@ pub fn fetch_with(
 /// 1601-01-01T00:00:00Z, kept within the range its functions accept (the
 /// end of year 9999).
 pub fn now_1601() -> u64 {
-    // Seconds from 1601-01-01 to 1970-01-01.
-    const EPOCH_GAP: u64 = 11_644_473_600;
     // The end of year 9999, `clazel_cookie::set_cookie::contract::now_in_range`'s limit.
     const LATEST: u64 = 265_046_774_399;
     let unix = std::time::SystemTime::now()
@@ -112,6 +124,9 @@ pub fn now_1601() -> u64 {
         .map_or(0, |d| d.as_secs());
     unix.saturating_add(EPOCH_GAP).min(LATEST)
 }
+
+/// Seconds from 1601-01-01 to 1970-01-01.
+const EPOCH_GAP: u64 = 11_644_473_600;
 
 /// [`fetch_with`] with a cookie jar: `url` is fetched with `jar` at time
 /// `now` (seconds since 1601, see [`now_1601`]), and the jar comes back
@@ -125,6 +140,94 @@ pub fn fetch_jar(
     timeouts: Timeouts,
     resolver: impl Fn(&[u8]) -> Result<Vec<IpAddr>, NetError>,
 ) -> (Result<ResponseBuf, FetchError>, Vec<CookieRecord>) {
+    fetch_jar_verified(url, jar, now, timeouts, resolver, mozilla)
+}
+
+/// The TLS host for the transducer's `host` (the URL host serializer's
+/// output): an IP address literal (an IPv6 one in brackets) is an address,
+/// anything else a DNS name without its trailing dot, if it has one (RFC
+/// 6066 §3: "The hostname is represented as a byte string using ASCII
+/// encoding without a trailing dot"). `None` if it is not a host the TLS
+/// client takes (`Host::is_ok`).
+fn tls_host(host: &[u8]) -> Option<Host> {
+    let text = std::str::from_utf8(host).ok()?;
+    let literal = text
+        .strip_prefix('[')
+        .and_then(|t| t.strip_suffix(']'))
+        .unwrap_or(text);
+    let tls = match literal.parse::<IpAddr>() {
+        Ok(IpAddr::V4(a)) => Host::Ip(a.octets().to_vec()),
+        Ok(IpAddr::V6(a)) => Host::Ip(a.octets().to_vec()),
+        Err(_) => Host::Dns(host.strip_suffix(b".").unwrap_or(host).to_vec()),
+    };
+    tls.is_ok().then_some(tls)
+}
+
+/// One open connection of a fetch: TCP, or TLS over TCP.
+enum Conn {
+    Plain(Connection),
+    Tls(Box<TlsConnection<'static>>),
+}
+
+impl Conn {
+    fn send(&mut self, bytes: &[u8]) -> Result<(), NetError> {
+        match self {
+            Conn::Plain(c) => c.send(bytes),
+            Conn::Tls(c) => c.send(bytes),
+        }
+    }
+
+    fn read(&mut self, buf: &mut [u8]) -> Result<Option<usize>, NetError> {
+        match self {
+            Conn::Plain(c) => c.read(buf),
+            Conn::Tls(c) => c.read(buf),
+        }
+    }
+
+    /// Closes it; a TLS connection sends its close_notify first.
+    fn close(self) {
+        if let Conn::Tls(c) = self {
+            // The transducer already has what it needs from this
+            // connection, so a failed close_notify changes nothing.
+            let _ = c.close();
+        }
+    }
+}
+
+/// Opens the connection a `Connect` asks for: TLS when `tls`, with the
+/// certificates validated at `now` (seconds since 1601) against the anchors
+/// of `verifier()`.
+fn open(
+    host: &[u8],
+    port: u16,
+    tls: bool,
+    now: u64,
+    timeouts: Timeouts,
+    resolver: &impl Fn(&[u8]) -> Result<Vec<IpAddr>, NetError>,
+    verifier: fn() -> ChainVerifier<'static>,
+) -> Result<Conn, NetError> {
+    if !tls {
+        return resolver(host)
+            .and_then(|addrs| Connection::open(&addrs, port, timeouts))
+            .map(Conn::Plain);
+    }
+    let name = tls_host(host).ok_or(NetError::Io(std::io::ErrorKind::InvalidInput))?;
+    let addrs = resolver(host)?;
+    let unix = now.saturating_sub(EPOCH_GAP);
+    TlsConnection::open(&addrs, port, timeouts, name, unix, verifier())
+        .map(|c| Conn::Tls(Box::new(c)))
+}
+
+/// [`fetch_jar`] with the trust anchors that `verifier` gives instead of
+/// Mozilla's (the tests use their own root).
+pub fn fetch_jar_verified(
+    url: &str,
+    jar: Vec<CookieRecord>,
+    now: u64,
+    timeouts: Timeouts,
+    resolver: impl Fn(&[u8]) -> Result<Vec<IpAddr>, NetError>,
+    verifier: fn() -> ChainVerifier<'static>,
+) -> (Result<ResponseBuf, FetchError>, Vec<CookieRecord>) {
     let input: Vec<u32> = url.chars().map(u32::from).collect();
     let Some(parsed) = basic_url_parser(&input, None) else {
         return (Err(FetchError::Url), jar);
@@ -132,7 +235,7 @@ pub fn fetch_jar(
     let mut jar = jar;
     let (mut state, first) = start(&parsed);
     let mut pending: VecDeque<ActionBuf> = first.into();
-    let mut conn: Option<Connection> = None;
+    let mut conn: Option<Conn> = None;
     let mut net: Option<NetError> = None;
     let mut buf = vec![0u8; crate::conn::READ_BUF];
     loop {
@@ -141,12 +244,10 @@ pub fn fetch_jar(
         let input = match pending.pop_front() {
             Some(action) => match action {
                 ActionBuf::Connect { host, port, tls } => {
-                    conn = None;
-                    let opened = if tls {
-                        Err(NetError::Io(std::io::ErrorKind::Unsupported))
-                    } else {
-                        resolver(&host).and_then(|addrs| Connection::open(&addrs, port, timeouts))
-                    };
+                    if let Some(c) = conn.take() {
+                        c.close();
+                    }
+                    let opened = open(&host, port, tls, now, timeouts, &resolver, verifier);
                     match opened {
                         Ok(c) => {
                             conn = Some(c);
@@ -172,7 +273,9 @@ pub fn fetch_jar(
                     }
                 }
                 ActionBuf::Close => {
-                    conn = None;
+                    if let Some(c) = conn.take() {
+                        c.close();
+                    }
                     continue;
                 }
                 ActionBuf::Done { response, .. } => return (Ok(*response), jar),
@@ -453,7 +556,7 @@ mod tests {
                 .map(|_| ())
         };
         assert_eq!(
-            not_fetched("https://example.com/"),
+            not_fetched("ftp://example.com/"),
             Err(FetchError::NotFetched)
         );
         assert_eq!(
