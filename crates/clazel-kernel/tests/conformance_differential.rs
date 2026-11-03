@@ -263,17 +263,9 @@ fn trace(seed: u64, now: u64) -> Option<String> {
                         url: code_points(&target),
                     })
                 };
+                // `http:` and `https:` URLs are both fetched; the simulated
+                // network answers a TLS connection like any other.
                 let out = settled(&mut kernel, out);
-                // Only `http:` URLs are fetched (TLS is not carried out): a
-                // navigation to an `https:` one fails and the renderer stays.
-                if target.starts_with("https:") {
-                    match out.as_slice() {
-                        [Out::To(to, Msg::Error { code: 5 })] if *to == tab.renderer => {
-                            continue;
-                        }
-                        _ => return fail(&format!("https navigation outputs {out:?}"), &log),
-                    }
-                }
                 if same_origin {
                     match out.as_slice() {
                         [Out::Commit(to, Doc { url: committed, .. })]

@@ -16,15 +16,20 @@
 #![cfg(not(miri))]
 
 use std::io::{self, Read, Write};
-use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, channel};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use clazel_cookie::storage::exec::CookieRecord;
 use clazel_crypto::client::{Failure, Origin};
 use clazel_crypto::join::exec::{ChainVerifier, Root};
 use clazel_crypto::provider::Sha256Suite;
-use clazel_net::{NetError, Stage, Timeouts, TlsConnection};
+use clazel_net::{
+    Driver, FetchError, InputBuf, NetError, Op, Report, Stage, Timeouts, TlsConnection,
+    fetch_jar_verified,
+};
 use clazel_tls::host::exec::Host;
 use clazel_tls::schedule::crypto::Crypto;
 use rustls::crypto::ring::{cipher_suite::TLS13_CHACHA20_POLY1305_SHA256, default_provider};
@@ -444,5 +449,300 @@ fn os_randomness_differs_between_connections() -> T {
     let seeded_a = client_hello(open)?;
     let seeded_b = client_hello(open)?;
     assert_eq!(seeded_a, seeded_b);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------
+// `fetch` over TLS: an `https:` URL through `clazel-fetch`'s transducer,
+// which asks for `Connect { tls: true }`, and this crate's
+// `TlsConnection`, with OS randomness (the production path).
+// ---------------------------------------------------------------------
+
+/// [`NOW`] in seconds since 1601, as `fetch_jar` takes the time.
+const NOW_1601: u64 = NOW + 11_644_473_600;
+
+/// The resolver of the fetch tests: every name is 127.0.0.1.
+fn local(_: &[u8]) -> Result<Vec<IpAddr>, NetError> {
+    Ok(LOCAL.to_vec())
+}
+
+/// The request heads an [`https_server`] read, when it is done.
+type Heads = JoinHandle<Result<Vec<Vec<u8>>, String>>;
+
+/// A fetch's status and body, and the jar after it.
+type Fetched = (Result<(u16, Vec<u8>), FetchError>, Vec<CookieRecord>);
+
+/// A TLS server that accepts `n` connections in turn, each with the
+/// certificate `leaf`, reads one request head, answers with what `reply`
+/// gives for it and sends its close_notify. It reports each request head.
+fn https_server(
+    n: usize,
+    leaf: &'static [u8],
+    key: &'static [u8],
+    reply: fn(&[u8]) -> &'static [u8],
+) -> Result<(u16, Heads), String> {
+    let listener = TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
+    let handle = thread::spawn(move || {
+        let mut heads = Vec::new();
+        for _ in 0..n {
+            let (socket, _) = listener.accept().map_err(|e| e.to_string())?;
+            socket
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .map_err(|e| e.to_string())?;
+            let mut tls = rustls(socket, leaf, key)?;
+            let head = read_until(&mut tls, b"\r\n\r\n")?;
+            tls.write_all(reply(&head)).map_err(|e| e.to_string())?;
+            tls.conn.send_close_notify();
+            // The client may have closed already once the response was
+            // complete.
+            let _ = tls.flush();
+            heads.push(head);
+        }
+        Ok(heads)
+    });
+    Ok((port, handle))
+}
+
+fn fetch_https(url: &str) -> Fetched {
+    let (r, jar) = fetch_jar_verified(
+        url,
+        Vec::new(),
+        NOW_1601,
+        timeouts(Duration::from_secs(5)),
+        local,
+        verifier,
+    );
+    (r.map(|r| (r.status_line.status, r.body)), jar)
+}
+
+/// RFC 9110 §4.2.2: an `https:` URL is fetched over TLS, with the same
+/// request an `http:` URL gets, and the response read through the
+/// transducer.
+#[test]
+fn an_https_fetch_over_tls() -> T {
+    let (port, handle) = https_server(1, LEAF_ECDSA, KEY_ECDSA, |_| {
+        b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok"
+    })?;
+    let (r, _) = fetch_https(&format!("https://test.example:{port}/a?b"));
+    assert_eq!(r, Ok((200, b"ok".to_vec())));
+    let heads = join(handle)?;
+    let expected = format!(
+        "GET /a?b HTTP/1.1\r\nHost: test.example:{port}\r\nConnection: close\r\nAccept: */*\r\nUser-Agent: clazel\r\n\r\n"
+    );
+    assert_eq!(heads, [expected.into_bytes()]);
+    Ok(())
+}
+
+/// A certificate for another name fails the fetch with the TLS alert, and
+/// no request is sent.
+#[test]
+fn an_https_fetch_to_a_server_with_another_name_fails() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_OTHER, KEY_OTHER)?;
+        Ok(read_until(&mut tls, b"\r\n\r\n").err())
+    })?;
+    let (r, _) = fetch_https(&format!("https://test.example:{port}/"));
+    let failure = Failure {
+        alert: 42,
+        origin: Origin::Sent,
+    };
+    assert_eq!(r, Err(FetchError::Net(NetError::Tls(failure))));
+    assert!(join(handle)?.is_some());
+    Ok(())
+}
+
+/// A response delimited by the connection closing (RFC 9112 §6.3 step 8)
+/// whose TCP stream ends without the server's close_notify is a
+/// truncation, so the fetch fails rather than taking what arrived as the
+/// whole body.
+#[test]
+fn an_https_body_cut_off_without_close_notify_fails() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_ECDSA, KEY_ECDSA)?;
+        read_until(&mut tls, b"\r\n\r\n")?;
+        tls.write_all(b"HTTP/1.1 200 OK\r\n\r\nthe whole body?")
+            .map_err(|e| e.to_string())?;
+        tls.flush().map_err(|e| e.to_string())?;
+        // Close the socket without a close_notify.
+        tls.sock
+            .shutdown(std::net::Shutdown::Both)
+            .map_err(|e| e.to_string())
+    })?;
+    let (r, _) = fetch_https(&format!("https://test.example:{port}/"));
+    assert!(
+        matches!(
+            r,
+            Err(FetchError::Net(NetError::Tls(Failure {
+                origin: Origin::Truncated,
+                ..
+            })))
+        ),
+        "{r:?}"
+    );
+    join(handle)?;
+    Ok(())
+}
+
+/// RFC 6265bis §5.7 and §5.8.3 over TLS: a `Secure` cookie set by an
+/// `https:` response is stored and sent on the `https:` redirect.
+#[test]
+fn a_secure_cookie_is_stored_and_sent_over_https() -> T {
+    let (port, handle) = https_server(2, LEAF_ECDSA, KEY_ECDSA, |head| {
+        if head.starts_with(b"GET /set ") {
+            b"HTTP/1.1 302 Found\r\nSet-Cookie: s=1; Secure\r\nLocation: /echo\r\nContent-Length: 0\r\n\r\n"
+        } else {
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n"
+        }
+    })?;
+    let (r, jar) = fetch_https(&format!("https://test.example:{port}/set"));
+    assert_eq!(r, Ok((200, Vec::new())));
+    assert_eq!(jar.len(), 1);
+    let heads = join(handle)?;
+    let second = heads
+        .get(1)
+        .map(|h| String::from_utf8_lossy(h).into_owned());
+    assert!(
+        second
+            .as_deref()
+            .is_some_and(|h| h.contains("\r\nCookie: s=1\r\n")),
+        "{second:?}"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------
+// The kernel's connection driver over TLS: `Driver` carries out
+// `Connect { tls: true }`, `Send` and `Close` as the host does for the
+// kernel, against the same rustls server, with OS randomness.
+// ---------------------------------------------------------------------
+
+/// A connection's id and what its thread reported.
+type Reported = (u64, Report);
+
+/// A driver whose reports arrive on the returned receiver, validating
+/// against the test root.
+fn driver() -> (Driver<Reported>, Receiver<Reported>) {
+    let (tx, rx) = channel();
+    (Driver::with_verifier(tx, |c, r| (c, r), verifier), rx)
+}
+
+/// The next input the driver hands the kernel for a connection it still
+/// wants (reports for connections it no longer wants are dropped, as the
+/// host drops them), or `None` after `wait` with nothing.
+fn next_input(
+    driver: &mut Driver<Reported>,
+    rx: &Receiver<Reported>,
+    wait: Duration,
+) -> Option<(u64, InputBuf)> {
+    let deadline = Instant::now().checked_add(wait)?;
+    loop {
+        let left = deadline.checked_duration_since(Instant::now())?;
+        let (conn, report) = rx.recv_timeout(left).ok()?;
+        if let (Some(input), _) = driver.accept(conn, report) {
+            return Some((conn, input));
+        }
+    }
+}
+
+fn connect_tls(driver: &mut Driver<Reported>, port: u16) {
+    let route = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let (ok, _) = driver.apply(
+        0,
+        Op::Connect {
+            host: b"test.example".to_vec(),
+            port: u64::from(port),
+            tls: true,
+        },
+        Some(route),
+    );
+    assert!(ok);
+}
+
+/// `Connect { tls: true }` runs the handshake, the request goes out after
+/// `Connected`, and the response comes back as `Bytes` until `Closed`
+/// (the server's close_notify).
+#[test]
+fn the_driver_carries_a_tls_connection() -> T {
+    const REPLY: &[u8] = b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok";
+    let (port, handle) = https_server(1, LEAF_ECDSA, KEY_ECDSA, |_| REPLY)?;
+    let (mut driver, rx) = driver();
+    connect_tls(&mut driver, port);
+    let wait = Duration::from_secs(10);
+    assert!(matches!(
+        next_input(&mut driver, &rx, wait),
+        Some((0, InputBuf::Connected))
+    ));
+    let (ok, _) = driver.apply(0, Op::Send(REQUEST.to_vec()), None);
+    assert!(ok);
+    let mut got = Vec::new();
+    loop {
+        match next_input(&mut driver, &rx, wait) {
+            Some((0, InputBuf::Bytes(b))) => got.extend_from_slice(&b),
+            Some((0, InputBuf::Closed)) => break,
+            other => return Err(format!("unexpected {other:?}")),
+        }
+    }
+    assert_eq!(got, REPLY);
+    assert_eq!(join(handle)?, [REQUEST.to_vec()]);
+    Ok(())
+}
+
+/// A certificate for another name is `Error`, with the alert in the log
+/// line, and no `Connected` comes first.
+#[test]
+fn the_driver_refuses_a_certificate_for_another_name() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_OTHER, KEY_OTHER)?;
+        Ok(read_until(&mut tls, b"\r\n\r\n").err())
+    })?;
+    let (mut driver, rx) = driver();
+    connect_tls(&mut driver, port);
+    let (conn, report) = rx
+        .recv_timeout(Duration::from_secs(10))
+        .map_err(|e| e.to_string())?;
+    let (input, note) = driver.accept(conn, report);
+    assert!(matches!(input, Some(InputBuf::Error)), "{input:?}");
+    let note = note.unwrap_or_default();
+    assert!(note.contains("bad_certificate (42)"), "{note}");
+    assert!(join(handle)?.is_some());
+    Ok(())
+}
+
+/// `Close` while the thread is reading: the client's close_notify reaches
+/// the server at once (RFC 8446 §6.1), and nothing more reaches the kernel.
+#[test]
+fn the_driver_closes_a_tls_connection_while_it_reads() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_ECDSA, KEY_ECDSA)?;
+        read_until(&mut tls, b"\r\n\r\n")?;
+        tls.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 1000\r\n\r\npart")
+            .map_err(|e| e.to_string())?;
+        tls.flush().map_err(|e| e.to_string())?;
+        // Wait for the client to go away. rustls reads the client's
+        // close_notify as the end of the stream (`Ok`); a TCP close without
+        // one is an error (`UnexpectedEof`).
+        let started = Instant::now();
+        let ended = read_until(&mut tls, b"never");
+        Ok((started.elapsed(), ended))
+    })?;
+    let (mut driver, rx) = driver();
+    connect_tls(&mut driver, port);
+    let wait = Duration::from_secs(10);
+    assert!(matches!(
+        next_input(&mut driver, &rx, wait),
+        Some((0, InputBuf::Connected))
+    ));
+    driver.apply(0, Op::Send(REQUEST.to_vec()), None);
+    assert!(matches!(
+        next_input(&mut driver, &rx, wait),
+        Some((0, InputBuf::Bytes(_)))
+    ));
+    let (ok, _) = driver.apply(0, Op::Close, None);
+    assert!(ok);
+    let (elapsed, ended) = join(handle)?;
+    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    assert_eq!(ended, Ok(Vec::new()), "the server saw no close_notify");
+    assert!(next_input(&mut driver, &rx, Duration::from_millis(500)).is_none());
     Ok(())
 }

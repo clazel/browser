@@ -19,6 +19,26 @@ use std::net::IpAddr;
 /// handshake.
 const CLOSE_NOTIFY: u8 = 0;
 
+/// The TLS host for the transducer's `host` (the URL host serializer's
+/// output): an IP address literal (an IPv6 one in brackets) is an address,
+/// anything else a DNS name without its trailing dot, if it has one (RFC
+/// 6066 §3: "The hostname is represented as a byte string using ASCII
+/// encoding without a trailing dot"). `None` if it is not a host the TLS
+/// client takes (`Host::is_ok`).
+pub(crate) fn tls_host(host: &[u8]) -> Option<Host> {
+    let text = std::str::from_utf8(host).ok()?;
+    let literal = text
+        .strip_prefix('[')
+        .and_then(|t| t.strip_suffix(']'))
+        .unwrap_or(text);
+    let tls = match literal.parse::<IpAddr>() {
+        Ok(IpAddr::V4(a)) => Host::Ip(a.octets().to_vec()),
+        Ok(IpAddr::V6(a)) => Host::Ip(a.octets().to_vec()),
+        Err(_) => Host::Dns(host.strip_suffix(b".").unwrap_or(host).to_vec()),
+    };
+    tls.is_ok().then_some(tls)
+}
+
 /// One TLS connection, for a caller that decides itself when to send and
 /// read, like [`Connection`]. Dropping it closes the socket without a
 /// close_notify; [`TlsConnection::close`] sends one first.
@@ -162,6 +182,28 @@ impl<'r> TlsConnection<'r> {
             self.conn.send(&out.send)?;
         }
         Ok(())
+    }
+
+    /// Another handle on the TCP socket, for a caller that must shut it
+    /// down while this connection is in use on another thread.
+    pub(crate) fn socket(&self) -> io::Result<std::net::TcpStream> {
+        self.conn.socket()
+    }
+
+    /// Seal our close_notify now and return its record without sending it,
+    /// for a caller that sends nothing more and must be able to close the
+    /// connection from another thread while this one reads. The driver
+    /// then only reads (`Closing`: the server's data is still delivered
+    /// until its close_notify). The caller writes the record when it
+    /// closes, with [`Self::send_sealed`] or on its own handle of the
+    /// socket. Empty unless the connection is open.
+    pub(crate) fn seal_close(&mut self) -> Vec<u8> {
+        self.client.close().send
+    }
+
+    /// Write a record that [`Self::seal_close`] returned.
+    pub(crate) fn send_sealed(&mut self, record: &[u8]) -> Result<(), NetError> {
+        self.conn.send(record)
     }
 
     /// Read once from the socket and give the driver what arrived.

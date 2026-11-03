@@ -322,10 +322,14 @@ fn committed(out: &[Out]) -> Option<&[u8]> {
     found
 }
 
-/// Whether the fetch takes `href`: an `http:` URL without userinfo
-/// (`clazel-fetch`; TLS is not carried out).
+/// Whether the fetch takes `href`: an `http:` or `https:` URL without
+/// userinfo (`clazel-fetch`). The simulated network here answers a TLS
+/// connection like any other.
 fn fetched(href: &str) -> bool {
-    let Some(rest) = href.strip_prefix("http://") else {
+    let Some(rest) = href
+        .strip_prefix("http://")
+        .or_else(|| href.strip_prefix("https://"))
+    else {
         return false;
     };
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
@@ -339,7 +343,7 @@ enum Navigation {
     /// `Error { code: 3 }` and nothing else.
     BadUrl,
     /// `Error { code: 5 }` and nothing else: the fetch does not take the URL
-    /// (only `http:` URLs without userinfo are fetched).
+    /// (only `http:` and `https:` URLs without userinfo are fetched).
     NotFetched,
     /// A commit of these bytes.
     Committed(Vec<u8>),

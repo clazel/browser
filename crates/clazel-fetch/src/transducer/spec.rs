@@ -6,7 +6,8 @@
 //! Sources (pinned; an RFC never changes after publication):
 //! - RFC 9112 "HTTP/1.1", June 2022: §6.3 message body length (step 8:
 //!   a body delimited by the connection closing), §9.6 tear-down;
-//! - RFC 9110 "HTTP Semantics", June 2022: §15.2 informational (1xx)
+//! - RFC 9110 "HTTP Semantics", June 2022: §4.2.2 the `https` URI scheme
+//!   (a secured connection), §15.2 informational (1xx)
 //!   responses, §15.4 redirection (3xx), §10.2.2 `Location`;
 //! - the Fetch Standard, Living Standard last updated 19 October 2026,
 //!   commit `59afe349913d56898c947576216f1c2579308be7`: §2.2.3 "redirect
@@ -85,10 +86,25 @@
 //!   URL parser without first checking it against the `URI-reference`
 //!   grammar: the URL parser decides it (as browsers do), so a value it
 //!   rejects is the failure of step 4.2.
-//! - **Only `http:`.** TLS is not built yet: `Connect.tls` is always false,
-//!   and a URL that [`crate::request::spec::request_bytes`] refuses (any
-//!   other scheme, userinfo, a non-ASCII host) ends the fetch with
-//!   [`Reason::NotFetched`] before anything is sent.
+//! - **`http:` and `https:`.** A URL that
+//!   [`crate::request::spec::request_bytes`] refuses (any other scheme,
+//!   userinfo, a non-ASCII host) ends the fetch with [`Reason::NotFetched`]
+//!   before anything is sent. `Connect.tls` is
+//!   [`crate::request::spec::uses_tls`]: true exactly for `https` (RFC 9110
+//!   §4.2.2: "A client MUST ensure that its HTTP requests for an "https"
+//!   resource are secured, prior to being communicated, and that it only
+//!   accepts secured responses to those requests"). The transducer does not
+//!   see TLS: the shell gives it the plaintext of the connection, and a TLS
+//!   failure (a bad certificate, an alert) is `Error`, so the fetch fails
+//!   with [`Reason::Network`] and nothing from that connection is used.
+//! - **A redirect may change the scheme either way.** Fetch §4.5 step 6
+//!   only requires an HTTP(S) scheme, so `https:` to `http:` is followed
+//!   (on a connection without TLS) as browsers do for a navigation; the
+//!   cookies it carries are then what retrieval gives a request that is not
+//!   secure (no `Secure` cookie). No HSTS (RFC 6797), no upgrade of
+//!   `http:` to `https:` and no mixed-content blocking (which does not
+//!   apply to a top-level navigation): each is a choice of ours, not
+//!   built.
 //! - **The jar is not part of [`State`]** (phase-3.md 3.7: the kernel
 //!   owns one jar for every tab, and two fetches in flight must not each
 //!   hold a copy of it). [`step`] is given the jar as it is at that moment
@@ -150,11 +166,17 @@
 //!   a same-site navigation and does not agree with RFC 6265bis §5.2, so we
 //!   follow §5.2 (we are not sure we read step 3 as intended, so it is not
 //!   an entry of `docs/ERRATA.md`).* The draft's §5.2 has no rule about
-//!   redirect chains of its own.
+//!   redirect chains of its own. "Same site" is HTML §7.1.1.1's, which
+//!   compares schemes (`clazel_origin::spec::same_site`), so a redirect
+//!   between `http:` and `https:` on the same host taints the request: an
+//!   `http:` URL that redirects to its `https:` twin is then sent without its
+//!   SameSite=Strict cookies.
 //! - **Secure.** A connection is "secure" ([`clazel_cookie::storage::spec::url_is_secure`])
-//!   when the URL's scheme is `https`; `Connect.tls` is false exactly when
-//!   the scheme is `http`, which is the only scheme fetched yet, so no
-//!   `Secure` cookie is ever sent. Both change together when TLS arrives.
+//!   when the URL's scheme is `https` (or `wss`, which is never fetched);
+//!   `Connect.tls` is true exactly when the scheme is `https`. So the
+//!   request the cookie functions see as secure is the one sent over TLS
+//!   (`theorem_tls_when_secure`), and a `Secure` cookie, which §5.8.3 gives
+//!   only to a secure request, is only ever sent on a TLS connection.
 //! - **The cookie-string's request URL** is [`request_url`]: the URL's
 //!   scheme, canonicalized host and path (an empty path is `/`, as
 //!   [`crate::request::spec::origin_form`] sends it).
@@ -284,7 +306,8 @@ pub enum Input {
 /// What the shell is asked to do.
 pub enum Action {
     /// Open a connection to `host` (the host serializer's output, for the
-    /// resolver) at `port`, with TLS when `tls` (never, yet).
+    /// resolver and, with TLS, the name the certificate must match) at
+    /// `port`, with TLS when `tls`.
     Connect {
         /// the host
         host: Seq<u8>,
@@ -460,7 +483,7 @@ pub open spec fn begin(url: Url, redirects: nat, tainted: bool) -> (State, Seq<A
     match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes(url)) {
         (Some((host, port)), Some(_)) => (
             State { url: url, redirects: redirects, phase: Phase::Connecting, tainted: tainted },
-            seq![Action::Connect { host: host, port: port, tls: false }],
+            seq![Action::Connect { host: host, port: port, tls: crate::request::spec::uses_tls(url) }],
         ),
         _ => (
             State { url: url, redirects: redirects, phase: Phase::Finished, tainted: tainted },

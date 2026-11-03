@@ -7,7 +7,9 @@ use vstd::prelude::*;
 
 use super::contract::{HttpFnsExec, UrlFnsExec};
 use super::types::{ActionBuf, InputBuf, JarOpBuf, LocationBuf, PhaseBuf, SettledBuf, StateBuf};
-use crate::request::build::{connect_to, is_interim, request_bytes, request_bytes_cookie};
+use crate::request::build::{
+    connect_to, is_interim, request_bytes, request_bytes_cookie, uses_tls,
+};
 use clazel_cookie::storage::exec::{
     CookieRecord, HttpRequestRecord, RequestContextRecord, clone_cookie,
     retrieve_a_cookie_string_exec, store_a_set_cookie_string_exec,
@@ -29,7 +31,8 @@ fn begin_exec(url: ParsedUrl, redirects: u8, tainted: bool) -> (out: (StateBuf, 
 {
     match (connect_to(&url), request_bytes(&url)) {
         (Some((host, port)), Some(_)) => {
-            let a = vec![ActionBuf::Connect { host, port, tls: false }];
+            let tls = uses_tls(&url);
+            let a = vec![ActionBuf::Connect { host, port, tls }];
             assert(super::types::actions_view(a@) =~= begin(url@, redirects as nat, tainted).1);
             (StateBuf { url, redirects, phase: PhaseBuf::Connecting, tainted }, a)
         },

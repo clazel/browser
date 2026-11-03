@@ -521,7 +521,7 @@ pub proof fn lemma_transducer_23()
     assert(outcome(ex_step(None, 0nat, Phase::Reading { received: Seq::<u8>::empty() }, Input::Bytes(seq![0x67u8, 0x61, 0x72, 0x62, 0x61, 0x67, 0x65, 0x0D, 0x0A, 0x0D, 0x0A])).1) == 1003nat) by (compute_only);
 }
 
-/// Fetch §4.5 step 22: a fetch of an http: URL asks for a plain (not TLS) connection to its host and port.
+/// Fetch §4.5 step 22; RFC 9110 §4.2.1: a fetch of an http: URL asks for a plain (not TLS) connection to its host, on port 80 by default.
 pub proof fn lemma_transducer_24()
     ensures
         start(url_a(None)).1 == seq![Action::Connect { host: seq![0x61u8], port: 80nat, tls: false }],
@@ -529,12 +529,12 @@ pub proof fn lemma_transducer_24()
     assert(start(url_a(None)).1 == seq![Action::Connect { host: seq![0x61u8], port: 80nat, tls: false }]) by (compute_only);
 }
 
-/// A URL the client has no request for (https: until TLS is built) ends the fetch as NotFetched before anything is asked for.
+/// RFC 9110 §4.2.2: a fetch of an https: URL asks for a TLS connection to its host, on port 443 by default.
 pub proof fn lemma_transducer_25()
     ensures
-        outcome(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..url_a(None) }).1) == 1001nat,
+        start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..url_a(None) }).1 == seq![Action::Connect { host: seq![0x61u8], port: 443nat, tls: true }],
 {
-    assert(outcome(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..url_a(None) }).1) == 1001nat) by (compute_only);
+    assert(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..url_a(None) }).1 == seq![Action::Connect { host: seq![0x61u8], port: 443nat, tls: true }]) by (compute_only);
 }
 
 /// RFC 9112 §6.3: an incomplete response head leaves the octets received waiting for more.
@@ -551,6 +551,15 @@ pub proof fn lemma_transducer_27()
         ex_step(None, 0nat, Phase::Finished, Input::Bytes(seq![0x61u8])).1.len() == 0nat,
 {
     assert(ex_step(None, 0nat, Phase::Finished, Input::Bytes(seq![0x61u8])).1.len() == 0nat) by (compute_only);
+}
+
+
+/// A URL the client has no request for (ftp:; only HTTP(S) schemes are fetched) ends the fetch as NotFetched before anything is asked for.
+pub proof fn lemma_transducer_28()
+    ensures
+        outcome(start(clazel_url::url::spec::Url { scheme: seq![0x66u32, 0x74, 0x70], ..url_a(None) }).1) == 1001nat,
+{
+    assert(outcome(start(clazel_url::url::spec::Url { scheme: seq![0x66u32, 0x74, 0x70], ..url_a(None) }).1) == 1001nat) by (compute_only);
 }
 
 } // verus!

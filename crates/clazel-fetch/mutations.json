@@ -74,14 +74,28 @@
       "id": "scheme-unchecked",
       "file": "src/request/spec.rs",
       "module": "request::examples",
-      "find": "if url.scheme != clazel_url::url::spec::http_str() || url.username.len() > 0",
+      "find": "if !is_fetched_scheme(url.scheme) || url.username.len() > 0",
       "replace": "if url.username.len() > 0",
       "expect": "killed",
-      "reason": "Fetches any scheme over plain HTTP. lemma_request_05 says https: is refused.",
+      "reason": "Fetches any scheme. lemma_request_05 says ftp: is refused.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_05()",
-        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None)"
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x66u32, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None)"
+      }
+    },
+    {
+      "id": "https-not-fetched",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "scheme == clazel_url::url::spec::http_str() || scheme == clazel_url::url::spec::https_str()",
+      "replace": "scheme == clazel_url::url::spec::http_str()",
+      "expect": "killed",
+      "reason": "Refuses https: (Fetch \u00a72.1 HTTP(S) scheme). lemma_request_20 says an https: request is sent.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_20()",
+        "witness": "!(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is Some)"
       }
     },
     {
@@ -172,14 +186,42 @@
       "id": "default-port-443",
       "file": "src/request/spec.rs",
       "module": "request::examples",
-      "find": "                None => 80,",
-      "replace": "                None => 443,",
+      "find": "        80\n    }\n}",
+      "replace": "        443\n    }\n}",
       "expect": "killed",
       "reason": "Uses the https default for http (RFC 9110 \u00a74.2.1). lemma_request_12 says 80.",
       "certificate": {
         "file": "src/request/contract.rs",
         "lemma": "super::examples::lemma_request_12()",
         "witness": "!(connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 80nat)))"
+      }
+    },
+    {
+      "id": "https-default-port-80",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "        443\n    } else {",
+      "replace": "        80\n    } else {",
+      "expect": "killed",
+      "reason": "Uses the http default for https (RFC 9110 \u00a74.2.2). lemma_request_21 says 443.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_21()",
+        "witness": "!(connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 443nat)))"
+      }
+    },
+    {
+      "id": "tls-for-http",
+      "file": "src/request/spec.rs",
+      "module": "request::examples",
+      "find": "    url.scheme == clazel_url::url::spec::https_str()\n",
+      "replace": "    url.scheme == clazel_url::url::spec::http_str()\n",
+      "expect": "killed",
+      "reason": "Speaks TLS for http: and not for https: (RFC 9110 \u00a74.2.1, \u00a74.2.2). lemma_request_23 says https: speaks TLS.",
+      "certificate": {
+        "file": "src/request/contract.rs",
+        "lemma": "super::examples::lemma_request_23()",
+        "witness": "!(uses_tls(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }))"
       }
     },
     {
@@ -892,8 +934,8 @@
       "id": "connect-with-tls",
       "file": "src/transducer/spec.rs",
       "module": "transducer::examples",
-      "find": "Action::Connect { host: host, port: port, tls: false }",
-      "replace": "Action::Connect { host: host, port: port, tls: true }",
+      "find": "tls: crate::request::spec::uses_tls(url) }",
+      "replace": "tls: true }",
       "expect": "killed",
       "reason": "Asks for TLS on an http: URL. lemma_transducer_24.",
       "certificate": {
@@ -903,17 +945,31 @@
       }
     },
     {
+      "id": "connect-without-tls",
+      "file": "src/transducer/spec.rs",
+      "module": "transducer::examples",
+      "find": "tls: crate::request::spec::uses_tls(url) }",
+      "replace": "tls: false }",
+      "expect": "killed",
+      "reason": "Sends an https: request without TLS (RFC 9110 \u00a74.2.2: \"A client MUST ensure that its HTTP requests for an \\\"https\\\" resource are secured\"). lemma_transducer_25.",
+      "certificate": {
+        "file": "src/transducer/contract.rs",
+        "lemma": "super::examples::lemma_transducer_25()",
+        "witness": "!(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..super::examples::url_a(None) }).1 == seq![Action::Connect { host: seq![0x61u8], port: 443nat, tls: true }])"
+      }
+    },
+    {
       "id": "connect-without-request",
       "file": "src/transducer/spec.rs",
       "module": "transducer::examples",
       "find": "(Some((host, port)), Some(_)) => (",
       "replace": "(Some((host, port)), _) => (",
       "expect": "killed",
-      "reason": "Connects for a URL whose request is refused. lemma_transducer_25.",
+      "reason": "Connects for a URL whose request is refused (ftp:). lemma_transducer_28.",
       "certificate": {
         "file": "src/transducer/contract.rs",
-        "lemma": "super::examples::lemma_transducer_25()",
-        "witness": "!(super::examples::outcome(start(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], ..super::examples::url_a(None) }).1) == 1001nat)"
+        "lemma": "super::examples::lemma_transducer_28()",
+        "witness": "!(super::examples::outcome(start(clazel_url::url::spec::Url { scheme: seq![0x66u32, 0x74, 0x70], ..super::examples::url_a(None) }).1) == 1001nat)"
       }
     },
     {

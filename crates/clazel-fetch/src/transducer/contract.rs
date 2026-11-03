@@ -235,6 +235,36 @@ pub open spec fn sends_are_requests(http: HttpFns, urls: UrlFns, s: State, input
     }
 }
 
+/// Every `Connect` of `actions` is the connection for the current request
+/// of `next` (the state they lead to): `next` waits for it
+/// (`Connecting`), it goes where [`crate::request::spec::connect_to`] says
+/// for that URL, and it speaks TLS exactly when that URL is `https`, which
+/// is exactly when the cookie functions see the request as secure
+/// (`url_is_secure` of [`request_url`], the URL as the shipped join gives
+/// it to them).
+pub open spec fn connects_secure(next: State, actions: Seq<Action>) -> bool {
+    forall|k: int| 0 <= k < actions.len() ==> match #[trigger] actions[k] {
+        Action::Connect { host, port, tls } => next.phase is Connecting
+            && crate::request::spec::connect_to(next.url) == Some((host, port))
+            && tls == crate::request::spec::uses_tls(next.url)
+            && tls == clazel_cookie::storage::spec::url_is_secure(request_url(next.url)),
+        _ => true,
+    }
+}
+
+/// **A connection speaks TLS exactly when its request is secure**
+/// (`theorem_tls_when_secure`): [`connects_secure`] of the first actions
+/// of a fetch and of every step. A `Send` is the request for the current
+/// URL ([`sends_are_requests`]) and is made only while that request's
+/// connection is open (`Connecting` to `Reading`, with the URL unchanged),
+/// so every request for an `https:` URL, and every request a `Secure`
+/// cookie can be sent with, goes over the TLS connection the shell opened
+/// for it (RFC 9110 §4.2.2), and every `http:` request in the clear.
+pub open spec fn tls_when_secure(http: HttpFns, urls: UrlFns, url: Url, s: State, input: Input, jar: Seq<Cookie>, now: int) -> bool {
+    connects_secure(start(url).0, start(url).1)
+        && connects_secure(step(http, urls, s, input, jar, now).0, step(http, urls, s, input, jar, now).1)
+}
+
 /// `bytes` is the serialization of a valid request whose only part derived
 /// from the jar is its `Cookie` field: the request for `url` with
 /// [`crate::request::spec::cookie_field_lines`] of `cookie` appended to

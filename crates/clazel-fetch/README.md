@@ -9,16 +9,18 @@ Phase 3 item 3.6 ([docs/phases/phase-3.md](../../docs/phases/phase-3.md)).
 
 Module `request`:
 
-- the request for an `http:` URL: `GET`, the origin-form target (RFC 9112
+- the request for an `http:` or `https:` URL (the same for both): `GET`, the origin-form target (RFC 9112
   §3.2.1: the URL's serialized path, `/` if empty, and its query; never
   the fragment), and the fields `Host` (RFC 9110 §7.2: the serialized host
   and the port if the URL has one), `Connection: close`, `Accept: */*` and
   `User-Agent: clazel`, and a `Cookie` field last when the cookie-string is
   not empty (Fetch §3.1.1), serialized by `clazel-http`;
-- where to connect: the serialized host and the port (80 by default);
+- where to connect: the serialized host and the port (80 by default, 443
+  for `https`), and whether the connection speaks TLS (for `https`, RFC
+  9110 §4.2.2);
 - which responses are interim (RFC 9110 §15.2: 1xx except 101).
 
-A URL with userinfo, a scheme other than `http`, or a non-ASCII code point
+A URL with userinfo, a scheme other than `http` or `https`, or a non-ASCII code point
 in what would be sent is refused.
 
 Module `transducer`: the client state machine, a pure function the network
@@ -42,10 +44,19 @@ makes it cross-site, so `SameSite=Strict` cookies are withheld), and the
 jar becomes the jar after the retrieval's step 5. Every `Set-Cookie` field
 line of a final response is stored, one by one, by §5.7 as HTTP, before
 the redirect is decided; a 1xx response never reaches the storage. The
-`Secure` requirement is the connection's: `Connect.tls` is false and the
-scheme `http`, so no `Secure` cookie is sent.
+`Secure` requirement is the connection's: `Connect.tls` is true exactly
+for `https`, which is when the cookie functions see the request as secure,
+so a `Secure` cookie is only ever sent over TLS. A redirect may go from
+`https:` to `http:` (Fetch §4.5 allows it); that request is sent in the
+clear without its `Secure` cookies. There is no HSTS and no upgrade of
+`http:` to `https:`. HTML's "same site" compares schemes, so a redirect
+between `http:` and `https:` on one host sets the redirect-taint.
 
-Not built yet: TLS (`https:` is refused), the `Cookie` field and
+The transducer does not see TLS: the shell gives it the plaintext and
+reports any TLS failure as `Error` (`clazel-net`'s `fetch`, over
+`TlsConnection`).
+
+Not built yet: the `Cookie` field and
 `Set-Cookie` of a fetch with a client (a subresource or a cross-site
 initiator: the context is fixed), `SameSite=Lax-allowing-unsafe`, and a
 conformance suite beyond the http-state corpus (see below).
@@ -65,7 +76,10 @@ its `Cookie` field, whose value is §5.8.3's retrieval; `theorem_jar_frame`,
 that the jar after a step is the jar before, or the jar after the
 retrieval's step 5 at `Connected`, or the jar of §5.7 storage of the final
 response's own `Set-Cookie` lines (so `clazel-cookie`'s root lemmas are all
-there is to know about the jar of a fetch). That splitting the bytes differently changes nothing is proven
+there is to know about the jar of a fetch); `theorem_tls_when_secure`, that
+every `Connect` is the current request's connection, goes where
+`connect_to` says, and speaks TLS exactly when the request is `https:`,
+which is when the cookie functions see it as secure. That splitting the bytes differently changes nothing is proven
 for every parser that is `prefix_stable`, and `clazel-http`'s is proven
 `prefix_stable` (`src/transducer/real.rs`). The executable transducer
 feeds each octet once into a `clazel-http` `ResponseParser`, so a fetch is
@@ -76,7 +90,10 @@ Concrete cases are evaluated on the spec by Verus (`src/request/examples.rs`,
 a stand-in URL function), and the mutations in `mutations.json` are each
 killed by an example or a theorem with a certificate. The network shell's
 `fetch` tests (`clazel-net`) run it end to end against local servers,
-redirect chains and the 20-redirect limit included.
+redirect chains and the 20-redirect limit included, and over TLS against a
+rustls server (`clazel-net/tests/tls.rs`: a request and response, a
+certificate for another name, a truncated close-delimited body, a `Secure`
+cookie stored and sent).
 
 `src/transducer/independent.rs` is a second transcription of the Fetch
 Standard (HTTP-redirect fetch steps 3 to 8, 18 and 22, "location URL",
@@ -101,7 +118,10 @@ waiting). Fetch's loop is `indep_fetch`, a recursion over the URL list; the
 transducer's is `tx_fetch`, the transducer driven through the hops with
 `step` and the jar its operations leave. What it shares with `spec.rs` is
 only what the standards themselves call (`clazel-cookie`'s algorithms, the
-URL parser, the field functions, the request serializer).
+URL parser, the field functions, the request serializer). It does not
+transcribe the connection: where to connect and whether to use TLS are
+covered by the examples, the mutations and `theorem_tls_when_secure`, not
+by a second transcription.
 
 Conformance (`tests/conformance_http_state.rs`): the 222 rows of the
 `http-state` parser corpus run through the whole client (the response's

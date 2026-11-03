@@ -168,7 +168,7 @@
 //!   A navigation URL the fetch's parser rejects, though it has a lock, fails
 //!   at once with [`error_bad_url`] (the real parser rejects exactly those
 //!   `origin_of` rejects); one the transducer does not fetch (`start` gives
-//!   `Fail(NotFetched)`, e.g. `https:` until TLS) fails with [`error_fetch`].
+//!   `Fail(NotFetched)`, e.g. `ftp:`) fails with [`error_fetch`].
 //! - **The network is outside every renderer domain.** What a `Net` event
 //!   carries came from a server. A server can echo the cookies it receives
 //!   into a body, and a redirect can hand that body, or a `Location`, to the
