@@ -11,7 +11,7 @@
 //!   mutations and conformance for one crate or several (comma-separated).
 //!   On success it writes what it measured to `<dir>/<name>.json` for each,
 //!   tagged with the commit it ran on.
-//! - `assemble`: static checks, then the README table built from every
+//! - `assemble`: static checks, then the status table and images built from every
 //!   crate's file. It fails if a workspace crate has no file, or a file is
 //!   from another commit, so a part that did not run, or ran on other
 //!   code, cannot be counted.

@@ -130,13 +130,15 @@ six-hour limit (`xtask/src/parts.rs`):
   which fails unless every other job passed (a skipped job included, but
   `approval`, which runs on pull requests only): static checks, then it
   requires a file for every
-  workspace crate from this commit, and reports whether README.md's table
-  matches them.
+  workspace crate from this commit, and reports whether docs/STATUS.md's
+  table and the status images match them.
 - On pushes to `main` only, the `table` job runs the same part with
-  `--write` after `assemble` passed, and commits README.md's regenerated
-  table to `main` as github-actions[bot] if it changed. So the committed
-  table always comes from CI's own measurements of a fully verified commit,
-  and no change has to carry it.
+  `--write` after `assemble` passed, and commits the regenerated table in
+  docs/STATUS.md and the two images drawn from it (`docs/status.svg`,
+  which README.md shows, and `docs/status-detail.svg`) to `main` as
+  github-actions[bot] if they changed. So the committed table and images
+  always come from CI's own measurements of a fully verified commit, and no
+  change has to carry them.
 
 The parts together run exactly the checks of one `cargo xtask verify`, which
 `scripts/verify.sh` and the Docker command in README.md still run on one
@@ -160,15 +162,15 @@ untracked files) with HEAD's merge base with it (`xtask/src/changed.rs`):
 - The run ends in `RESULT: CHANGED CRATES PASSED (n of m crates …)`, never
   `ALL CHECKS PASSED`.
 
-`cargo xtask report --write --changed` updates README.md's table the same
-way. Rows of crates it checked are measured afresh. Rows of the others
-keep their Verus, Kani, line, mutation and conformance cells from the
-committed table, since nothing they depend on changed, and the remaining
-cells (tier, axioms, `unsafe`, reviews) come from the static checks, which
-always cover every crate. If the committed table has another column layout,
-or lacks a row to keep, it refuses and asks for a full run. Its table is a
-preview: the committed one is written by CI on `main`, which re-measures
-every row, so a kept cell that is wrong never reaches it.
+`cargo xtask report --write --changed` updates docs/STATUS.md's table and
+the images the same way. Rows of crates it checked are measured afresh.
+Rows of the others keep their Verus, Kani, line, mutation and conformance
+cells from the committed table, since nothing they depend on changed, and
+the remaining cells (tier, axioms, `unsafe`, reviews) come from the static
+checks, which always cover every crate. If the committed table has another
+column layout, or lacks a row to keep, it refuses and asks for a full run.
+Its table is a preview: the committed one is written by CI on `main`, which
+re-measures every row, so a kept cell that is wrong never reaches it.
 
 What this relies on: that a crate's proofs and tests depend only on its own
 files, the workspace crates it depends on, and the shared files listed
@@ -337,15 +339,27 @@ The format is in `xtask/src/mutate.rs`.
 
 ## Honesty metrics
 
-The README's status table is generated, never typed. For each crate it shows
-the tier and target tier, the Verus result, Kani harness results, the number of
-documented axioms (every other escape hatch is rejected outright), spec / proof /
-exec line counts, the three-way mutation result, and conformance pass rates.
-CI writes the committed table on `main` from the measurements of a commit
-whose every verification part passed (the `table` job). `cargo xtask verify`
-reports a committed table that differs from what it measured, and
-`cargo xtask report --write` and `verify --part assemble --write` refuse to
-write one while any check is failing.
+The status table in [STATUS.md](STATUS.md) is generated, never typed. For
+each crate it shows the tier and target tier, the Verus result, Kani
+harness results, the number of documented axioms (every other escape hatch
+is rejected outright), spec / proof / exec line counts, the three-way
+mutation result, and conformance pass rates. CI writes the committed table
+on `main` from the measurements of a commit whose every verification part
+passed (the `table` job). `cargo xtask verify` reports a committed table
+that differs from what it measured, and `cargo xtask report --write` and
+`verify --part assemble --write` refuse to write one while any check is
+failing.
+
+Two images are drawn from the same rows (`xtask/src/status.rs`), so they
+show exactly what the table shows: a scoreboard of totals and of each
+component's crates by tier, which README.md shows and links to STATUS.md,
+and a detail image at the top of STATUS.md that places every crate in the
+process and component that runs it. Where a crate runs is the one thing in
+them written by hand (`PLACES` in `status.rs`), and `cargo xtask check`
+fails while a workspace crate is missing from it. The images name the tiers
+by what they guarantee: **Proven correct** (Tier 2), **Panic-free**
+(Tier 1) and **Memory safe** (Tier 0). Their note on axioms quotes the
+first sentence of each crate's `axioms.rs` documentation.
 
 The **Conformance** column lists every vendored suite a crate's
 `tests/conformance*.rs` runs (WPT `encoding/`, `url/` percent-encoding,

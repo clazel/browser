@@ -1,4 +1,4 @@
-//! Conformance pass rates for the README table (Phase 1 item 1.12).
+//! Conformance pass rates for the status table (Phase 1 item 1.12).
 //!
 //! Every `tests/conformance*.rs` reports each vendored suite it runs with one
 //! summary line on stdout. This is the only definition of the format:
@@ -31,8 +31,9 @@
 //! `cargo xtask verify` and `cargo xtask report` run each conformance test
 //! target on its own with `--show-output`, read these lines and fail if a
 //! target prints none, if a line is malformed, or if any suite has `fail`
-//! above zero. The numbers go into the README table's "Conformance" column,
-//! so `verify` also fails when the committed table differs from the run.
+//! above zero. The numbers go into the status table's "Conformance" column
+//! (docs/STATUS.md), and `verify` reports when the committed table differs
+//! from the run.
 
 use std::path::PathBuf;
 use std::process::Command;
