@@ -203,7 +203,8 @@ We list this openly. Proofs are only as good as their assumptions.
   the CertificateVerify signatures) and certificate-chain links (SHA-384
   and SHA-512 digests for RSA PKCS#1 v1.5, and ECDSA P-256 with SHA-384).
   RSA PKCS#1 v1.5 itself is not trusted: it is `clazel-pkcs1`, our own
-  proven code, over those digests
+  proven code, over those digests; nor is ECDSA P-384 (design P17), which
+  is `clazel-p384` over the SHA-256 or SHA-384 digest
 - fiat-crypto 0.3.0, for the field arithmetic of `clazel-p384` (`mul`, `add`
   and `sub` modulo P-384's p and n). What that trusts, precisely: the Coq
   kernel; Coq's extraction to OCaml and the OCaml compiler that runs the
