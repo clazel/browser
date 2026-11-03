@@ -2150,16 +2150,14 @@ fn adapter_buffers() -> Suite {
     let mut bad: Option<String> = None;
     for round in 0..2000u32 {
         let mut b = base.clone();
-        for _ in 0..(1 + rng.next() % 8) {
-            let at = usize::try_from(rng.next() % u64::try_from(b.len().max(1)).unwrap_or(1))
-                .unwrap_or(0);
+        for _ in 0..rng.below(8).saturating_add(1) {
+            let at = rng.below(b.len().max(1));
             if let Some(slot) = b.get_mut(at) {
-                *slot = u8::try_from(rng.next() % 256).unwrap_or(0);
+                *slot = rng.byte();
             }
         }
-        if rng.next() % 4 == 0 {
-            let keep = usize::try_from(rng.next() % u64::try_from(b.len().max(1)).unwrap_or(1))
-                .unwrap_or(0);
+        if rng.chance(4) {
+            let keep = rng.below(b.len().max(1));
             b.truncate(keep);
         }
         for a in dns_servers(&b, ADAPTER_BASE) {
