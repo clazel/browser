@@ -21,6 +21,42 @@
 //!   caching, PSK resumption, 0-RTT, and secret-erasure guarantees are not
 //!   modelled. Production transport, cryptography, and X.509 validation are
 //!   also outside this module.
+//! - RFC 8446 §6 and §6.2: a fatal error the client detects itself is
+//!   `Fail(description, wire)` ([`fatal`]). `wire` is the protected record
+//!   of the fatal alert ([`alert_wire`]), computed from the state before
+//!   any key is dropped, so the caller puts it on the wire as the last
+//!   record of the connection. It is sealed under the write epoch the peer
+//!   reads next ([`alert_epoch`]): the client handshake epoch while the
+//!   server's flight is received (`Handshake`), the current client
+//!   application epoch in `Ready`. Its sequence number is that epoch's next
+//!   one (§5.3), which no record has used, and the epoch is dropped with
+//!   every other key ([`failed`]), so nothing is sealed under it afterwards.
+//! - `wire` is `None` where no settled write epoch is held. In
+//!   `AwaitClientFlight` the client Finished is sealed but not acknowledged,
+//!   and the server reads the record after it under the client application
+//!   key, which is not installed. In `Ready` once our close_notify is sealed
+//!   (§6.1: nothing is written after it), or while a KeyUpdate is sealed and
+//!   not acknowledged (the peer moves to the next key when it reads it, so
+//!   the old key's next record would be unreadable). Also when the epoch has
+//!   failed or spent its sequence numbers (`traffic::spec::send` refuses),
+//!   and in `Failed` and `Closed`, which hold no key.
+//! - The transport ending before close_notify (§6.1, truncation) is
+//!   `Fail(internal_error, None)` ([`die`]): the peer has closed the
+//!   connection, so nothing is sent, as in `post_handshake_spec` (choice 6).
+//! - A fatal alert received from the peer (any alert but close_notify and
+//!   user_canceled) is `PeerAlert(description)` ([`receive_fatal_alert`]). It
+//!   is never answered (§6: "Upon receiving an error alert, the TLS
+//!   implementation SHOULD indicate an error to the application and MUST
+//!   NOT allow any further data to be sent or received on the connection"),
+//!   and every key is dropped as for a local failure.
+//! - No compatibility CCS precedes a fatal alert, even while `ccs_pending`:
+//!   Appendix D.4 puts the dummy CCS before the client's second flight, which
+//!   the alert replaces, and §5 makes it optional for the peer (it "MUST
+//!   simply drop it"), so the alert record alone is a valid record stream.
+//! - A close_notify from the peer while the server's flight is received
+//!   ends the connection (`Close`) without a close_notify of ours: during
+//!   the handshake this module seals only fatal alerts. After the handshake
+//!   the caller answers it with `close_write`.
 //! - RFC prose and equations have no numbered algorithm steps.
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -58,8 +94,14 @@ pub enum Action {
     Cancelled,
     /// Local close_notify has been acknowledged; the receive direction remains open.
     WriteClosed,
-    /// Fatal error; caller may send at most one alert and must terminate.
-    Fail(u8),
+    /// RFC 8446 §6.2: a fatal error detected locally, with its alert
+    /// description and the protected fatal alert record to send
+    /// ([`alert_wire`]), or `None` when no settled write epoch is held.
+    /// Every key is dropped.
+    Fail(u8, Option<Seq<u8>>),
+    /// RFC 8446 §6: the peer's fatal alert. It is not answered, and every key
+    /// is dropped.
+    PeerAlert(u8),
     /// Both read and write directions have closed, or the active transport closed.
     Close,
 }
@@ -147,12 +189,12 @@ pub open spec fn compatibility_ccs_dropped(mode: Mode, phase: Option<crate::auth
 
 /// The effect of one valid unprotected compatibility CCS record: dropped with
 /// no state change when permitted, else a fatal unexpected_message.
-pub open spec fn receive_compatibility_ccs(s: State) -> (Action, State) {
+pub open spec fn receive_compatibility_ccs(ciphers: Ciphers, s: State) -> (Action, State) {
     let phase = match s.auth { Some(a) => Some(a.phase), None => None };
     if compatibility_ccs_dropped(s.mode, phase, s.reassembly) {
         (Action::Ignored, s)
     } else {
-        (Action::Fail(crate::spec::UNEXPECTED_MESSAGE), failed())
+        fatal(ciphers, s, crate::spec::UNEXPECTED_MESSAGE)
     }
 }
 
@@ -189,7 +231,8 @@ pub open spec fn action_refines(action: Action, after: State) -> bool {
                 || after.pending_close_wire == wire)),
         Action::Ready => after.mode == Mode::Ready,
         Action::Deliver(_) => after.mode == Mode::Ready,
-        Action::Fail(_) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
+        Action::Fail(_, _) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
+        Action::PeerAlert(_) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
         Action::Close => super::dispatcher_contract::terminal_ensures(after, Mode::Closed),
         Action::PeerClosed => after.mode == Mode::Ready && after.peer_write_closed,
         Action::Cancelled => true,
@@ -428,6 +471,72 @@ pub open spec fn acknowledge_close_notify(s: State, acknowledgement: Seq<u8>) ->
     if s.pending_close_wire.len() == 0 || acknowledgement != s.pending_close_wire { failed() }
     else if s.peer_write_closed { closed() }
     else { State { local_write_closed: true, pending_close_wire: seq![], ..s } }
+}
+
+/// §5.2: the key-explicit AEAD encryption under one epoch's key.
+pub open spec fn seal_with(ciphers: Ciphers, epoch: crate::traffic::spec::State)
+    -> spec_fn(Seq<u8>, Seq<u8>, Seq<u8>) -> Seq<u8>
+{
+    |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| (ciphers.seal)(epoch.key, n, ad, p)
+}
+
+/// §6, §6.1, §5.3: the settled write epoch a fatal alert is sealed under,
+/// the one whose key the peer reads our next record with: the client
+/// handshake epoch during the server's flight, and the client application
+/// epoch after the handshake while our write side is open (no close_notify
+/// sealed) and no KeyUpdate awaits acknowledgement. None in every other
+/// state.
+pub open spec fn alert_epoch(s: State) -> Option<crate::traffic::spec::State> {
+    match s.mode {
+        Mode::Handshake => s.handshake_sender,
+        Mode::Ready => if write_open(s) && s.pending_update_request is None {
+            s.application_sender
+        } else {
+            None
+        },
+        Mode::AwaitClientFlight | Mode::Failed | Mode::Closed => None,
+    }
+}
+
+/// §6, §6.2: the content of a fatal alert record. "All the alerts listed
+/// in Section 6.2 MUST be sent with AlertLevel=fatal".
+pub open spec fn fatal_alert(description: u8) -> Seq<u8> {
+    crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_FATAL, description })
+}
+
+/// §5.2, §5.3, §6.2: the protected record of the fatal alert, under the
+/// next sequence number of [`alert_epoch`]; None when there is no such
+/// epoch or it cannot seal another record.
+pub open spec fn alert_wire(ciphers: Ciphers, s: State, description: u8) -> Option<Seq<u8>> {
+    match alert_epoch(s) {
+        Some(epoch) => match crate::traffic::spec::send(seal_with(ciphers, epoch), epoch,
+            crate::spec::CT_ALERT, fatal_alert(description), 0) {
+            (_, Ok(record)) => Some(record),
+            (_, Err(_)) => None,
+        },
+        None => None,
+    }
+}
+
+/// §6.2: "Whenever an implementation encounters a fatal error condition, it
+/// SHOULD send an appropriate fatal alert and MUST close the connection
+/// without sending or receiving any additional data." The alert is sealed
+/// from the state before the failure; then every key is dropped.
+pub open spec fn fatal(ciphers: Ciphers, s: State, description: u8) -> (Action, State) {
+    (Action::Fail(description, alert_wire(ciphers, s, description)), failed())
+}
+
+/// §6.1: the transport ended before close_notify. The peer has closed the
+/// connection, so no alert is sent.
+pub open spec fn die(description: u8) -> (Action, State) {
+    (Action::Fail(description, None), failed())
+}
+
+/// §6, §6.2: a fatal alert from the peer ends the connection and is not
+/// answered. (The connection's ciphers and state are parameters so that the
+/// answer the RFC rules out could be written here; they are not used.)
+pub open spec fn receive_fatal_alert(_ciphers: Ciphers, _s: State, description: u8) -> (Action, State) {
+    (Action::PeerAlert(description), failed())
 }
 
 /// Drop every secret and partial input after a fatal local or peer error.

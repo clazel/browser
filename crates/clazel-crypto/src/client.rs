@@ -34,60 +34,50 @@
 //! later octets are ignored (§6.1: "Any data received after a closure alert
 //! has been received MUST be ignored").
 //!
-//! **Alerts.** Neither `Bootstrap` nor `Connection` puts an alert on the
-//! wire when it fails ("no alert is sent automatically"), so this driver
-//! does, once, where it can (§6.2: on a fatal error an implementation
-//! "SHOULD send an appropriate fatal alert"; §6: "MUST send alert X if it
-//! sends any alert"):
+//! **Alerts.** On a fatal error the client sends the fatal alert once,
+//! where it can (§6.2: an implementation "SHOULD send an appropriate fatal
+//! alert"; §6: "MUST send alert X if it sends any alert"), and never answers
+//! the server's:
 //!
-//! - Before the handshake keys (phases 1 and 2) it writes a plaintext fatal
-//!   alert record ([`Origin::Sent`]).
-//! - During the server's protected flight it seals the alert under the
-//!   client handshake traffic key at sequence number 0, the first record of
-//!   that epoch. `Connection` holds its own copy of that key and drops it on
-//!   failure, so the driver derives a second copy of the epoch (the verified
-//!   `clazel_tls::hello::join::derive`, then `Encryptor::new`) when the
-//!   ServerHello is accepted. It is dropped, unused, the moment the client
-//!   Finished (which takes sequence number 0) is produced, so it never seals
-//!   a second record under the same nonce.
-//! - After the client Finished, `Connection` drops its application keys
-//!   when it fails and offers no way to seal an alert first, so nothing is
-//!   sent ([`Origin::NotSent`]). Sending the alert there needs `clazel-tls`
-//!   to seal it before dropping its keys (as its post-handshake transducer
-//!   already does, `connection::post_handshake_exec`, not yet joined to the
-//!   dispatcher). There `Connection` also reports a fatal alert from the
-//!   server as `Fail(description)`, so after the handshake `NotSent` covers
-//!   both.
-//! - A fatal alert from the server is never answered ([`Origin::Peer`]
-//!   before the client Finished).
-//!   `Connection` reports a received alert and a local failure alike, as
-//!   `Fail(description)`, so the driver also decrypts each record of the
-//!   server's protected flight with its own copy of the server handshake
-//!   key (the same verified `Decryptor`), in step with `Connection`, and
-//!   treats a failure as the peer's when the record that caused it is an
-//!   alert carrying that description.
+//! - Before the handshake keys (phases 1 and 2) `Bootstrap` puts no alert
+//!   on the wire, so this driver writes a plaintext fatal alert record
+//!   ([`Origin::Sent`]).
+//! - From the ServerHello on, `Connection` seals the alert itself, under the
+//!   write epoch the server reads next (the client handshake epoch during
+//!   the server's flight, the client application epoch after the client
+//!   Finished) at that epoch's next sequence number, before it drops its
+//!   keys, and returns it in `Fail(description, Some(record))`. The driver
+//!   puts that record on the wire as is ([`Origin::Sent`]). It holds no key
+//!   of its own. `Fail(description, None)` means `Connection` held no
+//!   settled write epoch (our close_notify was already sealed, or the epoch
+//!   failed or ran out of sequence numbers): nothing is sent
+//!   ([`Origin::NotSent`]).
+//! - A fatal alert from the server is never answered ([`Origin::Peer`]):
+//!   `Bootstrap` reports it as `Alert`, `Connection` as `PeerAlert`.
 //! - The transport ending before close_notify is [`Origin::Truncated`]
 //!   (alert 80, `internal_error`, as the machines report it); nothing is
 //!   sent.
-//! - A close_notify from the server is answered with ours (§6.1: "Each party
-//!   MUST send a "close_notify" alert before closing its write side of the
-//!   connection, unless it has already sent some error alert").
+//! - A close_notify from the server is answered with ours once the
+//!   handshake has completed (§6.1: "Each party MUST send a "close_notify"
+//!   alert before closing its write side of the connection, unless it has
+//!   already sent some error alert"). During the server's protected flight
+//!   `Connection` seals only fatal alerts, so a close_notify from the server
+//!   there, or [`Client::close`], ends the connection without one: the
+//!   client stops and the caller closes the transport.
 //!
 //! Tier 0, plain safe Rust outside `verus!`: shell glue, tested end to end
 //! against rustls (`tests/client.rs`).
 
 use crate::join::exec::ChainVerifier;
-use crate::provider::{ChaCha20Poly1305, ChaCha20Poly1305Factory, Sha256Suite, X25519};
+use crate::provider::{ChaCha20Poly1305Factory, Sha256Suite, X25519};
 use clazel_tls::connection::exec::{Action as ConnAction, Connection, Mode};
 use clazel_tls::hello::bootstrap::{Action as BootAction, Bootstrap};
 use clazel_tls::hello::client::{Config, Established};
 use clazel_tls::hello::key_exchange::KeyExchange;
 use clazel_tls::host::exec::Host;
 use clazel_tls::spec::{
-    CLOSE_NOTIFY, CT_ALERT, CT_APPLICATION_DATA, INTERNAL_ERROR, LEVEL_FATAL, LEVEL_WARNING,
-    MAX_PLAINTEXT,
+    CLOSE_NOTIFY, CT_ALERT, INTERNAL_ERROR, LEVEL_FATAL, LEVEL_WARNING, MAX_PLAINTEXT,
 };
-use clazel_tls::traffic::exec::{Decryptor, Encryptor, Read};
 use std::fmt;
 
 /// Octets of randomness the client draws per connection: the X25519 scalar
@@ -137,14 +127,18 @@ pub struct Failure {
 /// Where a [`Failure`] came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Origin {
-    /// The client detected it, and the alert record is in [`Output::send`].
+    /// The client detected it, and the fatal alert record is the last
+    /// record in [`Output::send`]: in plaintext before the handshake keys,
+    /// sealed by `Connection` from the ServerHello on, also after the
+    /// handshake.
     Sent,
-    /// No alert was sent. Either the client could not start, or the failure
-    /// came after the client Finished, where `Connection` neither seals an
-    /// alert nor says whether the server sent this one: it is the server's
-    /// alert or a local error.
+    /// The client detected it, but no alert could be sent: the client could
+    /// not start, or `Connection` held no settled write epoch to seal it
+    /// under (our close_notify was already sealed, or the epoch failed or
+    /// ran out of sequence numbers).
     NotSent,
-    /// The server sent this fatal alert.
+    /// The server sent this fatal alert, before or after the handshake. It
+    /// is not answered.
     Peer,
     /// The transport closed before a close_notify (RFC 8446 §6.1
     /// truncation); nothing was sent.
@@ -214,53 +208,6 @@ pub struct Output {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NotOpen(pub State);
 
-/// The driver's copy of the handshake epochs (see the module comment,
-/// "Alerts"). It lives from the ServerHello until the client Finished.
-struct Shadow {
-    /// The client handshake epoch, never used: sequence number 0.
-    sender: Encryptor<ChaCha20Poly1305>,
-    /// The server handshake epoch, in step with `Connection`'s.
-    receiver: Decryptor<ChaCha20Poly1305>,
-    /// Octets `Connection` consumed that do not yet form a whole record.
-    frame: Vec<u8>,
-}
-
-impl Shadow {
-    /// Follow the octets `Connection` just consumed. Returns the inner type
-    /// and content of the last whole record they completed, if it could be
-    /// read.
-    fn track(&mut self, consumed: &[u8]) -> Option<(u8, Vec<u8>)> {
-        self.frame.extend_from_slice(consumed);
-        let mut last = None;
-        // RFC 8446 §5.1: a 5-octet header whose last two octets are the
-        // length of the fragment.
-        while let (Some(&outer), Some(&high), Some(&low)) =
-            (self.frame.first(), self.frame.get(3), self.frame.get(4))
-        {
-            let total = 5usize.saturating_add(usize::from(u16::from_be_bytes([high, low])));
-            let (Some(record), Some(rest)) = (self.frame.get(..total), self.frame.get(total..))
-            else {
-                break;
-            };
-            last = if outer == CT_APPLICATION_DATA {
-                match self.receiver.open(record) {
-                    Read::Record(inner, content, _) => Some((inner, content)),
-                    Read::NeedMore | Read::Fail(_) => None,
-                }
-            } else {
-                Some((outer, record.get(5..).unwrap_or_default().to_vec()))
-            };
-            self.frame = rest.to_vec();
-        }
-        last
-    }
-
-    /// Seal an alert as the first record of the client handshake epoch.
-    fn seal_alert(&mut self, level: u8, description: u8) -> Option<Vec<u8>> {
-        self.sender.seal(CT_ALERT, &[level, description], 0).ok()
-    }
-}
-
 enum Phase<'r> {
     /// Phase 1: through the ServerHello.
     Hello {
@@ -269,10 +216,7 @@ enum Phase<'r> {
         verifier: ChainVerifier<'r>,
     },
     /// Phase 3: the protected flight, then application traffic.
-    Live {
-        conn: Box<Conn<'r>>,
-        shadow: Option<Box<Shadow>>,
-    },
+    Live { conn: Box<Conn<'r>> },
     /// `Closed` or `Failed`.
     Ended,
 }
@@ -379,8 +323,9 @@ impl<'r> Client<'r> {
                 BootAction::Fail(alert) => Some(alert),
                 _ => None,
             },
-            Phase::Live { conn, .. } => match conn.eof() {
-                ConnAction::Fail(alert) => Some(alert),
+            // RFC 8446 §6.1: truncation; `Connection` seals no alert for it.
+            Phase::Live { conn } => match conn.eof() {
+                ConnAction::Fail(alert, _) => Some(alert),
                 _ => None,
             },
             Phase::Ended => None,
@@ -404,12 +349,12 @@ impl<'r> Client<'r> {
             return Err(NotOpen(self.state));
         }
         let mut out = self.output();
-        if let Phase::Live { conn, .. } = &mut self.phase {
+        if let Phase::Live { conn } = &mut self.phase {
             for chunk in data.chunks(MAX_PLAINTEXT) {
                 match conn.send_application(chunk, 0) {
                     ConnAction::Send(wire) => out.send.extend_from_slice(&wire),
-                    ConnAction::Fail(alert) => {
-                        self.fail(alert, Origin::NotSent);
+                    ConnAction::Fail(alert, wire) => {
+                        self.fail_sealed(alert, wire, &mut out);
                         break;
                     }
                     // `None` only while a KeyUpdate awaits its send
@@ -428,8 +373,11 @@ impl<'r> Client<'r> {
 
     /// Close the connection from our side: close_notify once the handshake
     /// has completed (RFC 8446 §6.1), after which the server's remaining
-    /// data is still delivered until its close_notify (`Closing`). During
-    /// the handshake the client sends close_notify and stops (`Closed`).
+    /// data is still delivered until its close_notify (`Closing`). Before
+    /// the ServerHello the client sends a plaintext close_notify and stops
+    /// (`Closed`); during the server's protected flight it stops without
+    /// one, since `Connection` seals only fatal alerts there (see the module
+    /// comment, "Alerts").
     pub fn close(&mut self) -> Output {
         let mut out = self.output();
         match std::mem::replace(&mut self.phase, Phase::Ended) {
@@ -437,24 +385,15 @@ impl<'r> Client<'r> {
                 out.send = plaintext_alert(LEVEL_WARNING, CLOSE_NOTIFY);
                 self.state = State::Closed;
             }
-            Phase::Live {
-                mut conn,
-                mut shadow,
-            } => {
+            Phase::Live { mut conn } => {
                 if conn.mode() == Mode::Ready {
                     if self.state == State::Open {
                         self.close_write(&mut conn, &mut out);
                     }
                     if !self.state.is_final() {
-                        self.phase = Phase::Live { conn, shadow };
+                        self.phase = Phase::Live { conn };
                     }
                 } else {
-                    if let Some(wire) = shadow
-                        .as_mut()
-                        .and_then(|s| s.seal_alert(LEVEL_WARNING, CLOSE_NOTIFY))
-                    {
-                        out.send = wire;
-                    }
                     self.state = State::Closed;
                 }
             }
@@ -475,6 +414,19 @@ impl<'r> Client<'r> {
     fn fail(&mut self, alert: u8, origin: Origin) {
         self.phase = Phase::Ended;
         self.state = State::Failed(Failure { alert, origin });
+    }
+
+    /// A local failure `Connection` reported: its sealed fatal alert, if it
+    /// had a settled write epoch to seal it under, is the last record sent.
+    fn fail_sealed(&mut self, alert: u8, wire: Option<Vec<u8>>, out: &mut Output) {
+        let origin = match wire {
+            Some(record) => {
+                out.send.extend_from_slice(&record);
+                Origin::Sent
+            }
+            None => Origin::NotSent,
+        };
+        self.fail(alert, origin);
     }
 
     /// Feed the inbox to the current phase once; returns octets consumed.
@@ -522,17 +474,9 @@ impl<'r> Client<'r> {
                 }
                 consumed
             }
-            Phase::Live {
-                mut conn,
-                mut shadow,
-            } => {
-                let handshake = conn.mode() == Mode::Handshake;
+            Phase::Live { mut conn } => {
                 let (consumed, action) = conn.feed(&self.inbox);
-                let last = match (&mut shadow, handshake) {
-                    (Some(s), true) => s.track(self.inbox.get(..consumed).unwrap_or_default()),
-                    _ => None,
-                };
-                self.live(conn, shadow, action, last.as_ref(), out);
+                self.live(conn, action, out);
                 consumed
             }
             Phase::Ended => 0,
@@ -555,43 +499,6 @@ impl<'r> Client<'r> {
         out: &mut Output,
     ) {
         let (config, transcript, peer) = established.into_parts();
-        let copy = Config {
-            host: config.host.clone(),
-            now: config.now,
-            random: config.random.clone(),
-            session_id: config.session_id.clone(),
-            public_key: config.public_key.clone(),
-        };
-        // The driver's own copy of the handshake epochs, from the same
-        // inputs and the same verified derivation as the dispatcher's.
-        let shadow = clazel_tls::hello::join::derive(
-            copy,
-            &transcript,
-            peer.clone(),
-            &Sha256Suite,
-            &X25519,
-            scalar,
-        )
-        .ok()
-        .and_then(|(secrets, _master)| {
-            let sender = Encryptor::new(
-                &Sha256Suite,
-                &ChaCha20Poly1305Factory,
-                &secrets.client_secret,
-            )
-            .ok()?;
-            let receiver = Decryptor::new(
-                &Sha256Suite,
-                &ChaCha20Poly1305Factory,
-                &secrets.server_secret,
-            )
-            .ok()?;
-            Some(Box::new(Shadow {
-                sender,
-                receiver,
-                frame: Vec::new(),
-            }))
-        });
         // Exactly `Established::into_record_auth`.
         match clazel_tls::traffic::handshake::start(
             config,
@@ -606,37 +513,24 @@ impl<'r> Client<'r> {
                 let conn = Connection::new(keys, Sha256Suite, ChaCha20Poly1305Factory, verifier);
                 self.phase = Phase::Live {
                     conn: Box::new(conn),
-                    shadow,
                 };
             }
             Err(alert) => self.fail_plaintext(alert, out),
         }
     }
 
-    /// Carry out one `Connection` action. `last` is the inner type and
-    /// content of the record that produced it, during the server's flight.
-    fn live(
-        &mut self,
-        mut conn: Box<Conn<'r>>,
-        mut shadow: Option<Box<Shadow>>,
-        action: ConnAction,
-        last: Option<&(u8, Vec<u8>)>,
-        out: &mut Output,
-    ) {
+    /// Carry out one `Connection` action.
+    fn live(&mut self, mut conn: Box<Conn<'r>>, action: ConnAction, out: &mut Output) {
         match action {
             ConnAction::None | ConnAction::Ignored | ConnAction::Cancelled => {}
             ConnAction::Send(wire) => {
-                // Whatever `Connection` sends first is the client Finished,
-                // which takes sequence number 0 of the client handshake
-                // epoch: from here the copy must never seal.
-                shadow = None;
                 let ack = if conn.mode() == Mode::AwaitClientFlight {
                     conn.acknowledge_client_flight(&wire)
                 } else {
                     conn.acknowledge_key_update(&wire)
                 };
                 out.send.extend_from_slice(&wire);
-                return self.live(conn, shadow, ack, None, out);
+                return self.live(conn, ack, out);
             }
             ConnAction::Ready => self.state = State::Open,
             ConnAction::Deliver(data) => out.deliver.extend_from_slice(&data),
@@ -649,35 +543,22 @@ impl<'r> Client<'r> {
                 }
             }
             ConnAction::WriteClosed => self.state = State::Closing,
-            ConnAction::Close => {
-                if let Some(wire) = shadow
-                    .as_mut()
-                    .and_then(|s| s.seal_alert(LEVEL_WARNING, CLOSE_NOTIFY))
-                {
-                    out.send.extend_from_slice(&wire);
-                }
-                self.state = State::Closed;
+            // Both close_notify alerts have been seen, or the server's came
+            // during its flight, where `Connection` seals no close_notify.
+            ConnAction::Close => self.state = State::Closed,
+            // §6.2: the alert `Connection` sealed before it dropped its keys.
+            ConnAction::Fail(alert, wire) => {
+                self.fail_sealed(alert, wire, out);
+                return;
             }
-            ConnAction::Fail(alert) => {
-                let from_peer = matches!(last, Some((CT_ALERT, content))
-                    if content.get(1) == Some(&alert) && content.len() == 2);
-                let origin = if from_peer {
-                    Origin::Peer
-                } else if let Some(wire) = shadow
-                    .as_mut()
-                    .and_then(|s| s.seal_alert(LEVEL_FATAL, alert))
-                {
-                    out.send.extend_from_slice(&wire);
-                    Origin::Sent
-                } else {
-                    Origin::NotSent
-                };
-                self.fail(alert, origin);
+            // §6: the server's fatal alert is not answered.
+            ConnAction::PeerAlert(alert) => {
+                self.fail(alert, Origin::Peer);
                 return;
             }
         }
         if !self.state.is_final() {
-            self.phase = Phase::Live { conn, shadow };
+            self.phase = Phase::Live { conn };
         } else {
             self.phase = Phase::Ended;
         }
@@ -692,11 +573,12 @@ impl<'r> Client<'r> {
                 match ack {
                     ConnAction::WriteClosed => self.state = State::Closing,
                     ConnAction::Close => self.state = State::Closed,
-                    ConnAction::Fail(alert) => self.fail(alert, Origin::NotSent),
+                    // §6.1: nothing follows our close_notify (no alert either).
+                    ConnAction::Fail(alert, wire) => self.fail_sealed(alert, wire, out),
                     _ => self.fail(INTERNAL_ERROR, Origin::NotSent),
                 }
             }
-            ConnAction::Fail(alert) => self.fail(alert, Origin::NotSent),
+            ConnAction::Fail(alert, wire) => self.fail_sealed(alert, wire, out),
             _ => self.fail(INTERNAL_ERROR, Origin::NotSent),
         }
     }

@@ -2549,6 +2549,118 @@
       }
     },
     {
+      "id": "dispatcher-alert-not-sent-during-flight",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "        Mode::Handshake => s.handshake_sender,",
+      "replace": "        Mode::Handshake => None,",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.2: a fatal error the client detects during the server's flight must send its fatal alert under the client handshake epoch, which it holds; the mutant sends nothing.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_flight_failure_sends_alert()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state(), 42).0 != super::dispatcher_spec::Action::Fail(42u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 42, 21]))"
+      }
+    },
+    {
+      "id": "dispatcher-alert-not-sent-after-handshake",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "        Mode::Ready => if write_open(s) && s.pending_update_request is None {\n            s.application_sender\n",
+      "replace": "        Mode::Ready => if write_open(s) && s.pending_update_request is None {\n            None\n",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.2: after the handshake a local fatal error must send its fatal alert under the current client application epoch; the mutant sends nothing, as the driver's Origin::NotSent did.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_application_failure_sends_alert_at_next_number()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 10).0 != super::dispatcher_spec::Action::Fail(10u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 10, 21]))"
+      }
+    },
+    {
+      "id": "dispatcher-peer-alert-answered",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "    (Action::PeerAlert(description), failed())",
+      "replace": "    fatal(_ciphers, _s, description)",
+      "expect": "killed",
+      "reason": "RFC 8446 §6 and §6.2: a fatal alert received from the peer must not be answered; the mutant seals an alert of its own in reply.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_peer_alert_not_answered(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 40u8)",
+        "witness": "super::dispatcher_spec::receive_fatal_alert(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 40).0 != super::dispatcher_spec::Action::PeerAlert(40u8)"
+      }
+    },
+    {
+      "id": "dispatcher-alert-reuses-sequence-number",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "        Some(epoch) => match crate::traffic::spec::send(seal_with(ciphers, epoch), epoch,",
+      "replace": "        Some(epoch) => match crate::traffic::spec::send(seal_with(ciphers, epoch), crate::traffic::spec::State { next: Some(0u64), ..epoch },",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.3: each record under a key takes the next sequence number, never one already used. The mutant seals the alert at sequence number 0 of the epoch, a nonce the epoch's first record already used.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_application_failure_sends_alert_at_next_number()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 10).0 != super::dispatcher_spec::Action::Fail(10u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 10, 21]))"
+      }
+    },
+    {
+      "id": "dispatcher-alert-wrong-description",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "    (Action::Fail(description, alert_wire(ciphers, s, description)), failed())",
+      "replace": "    (Action::Fail(description, alert_wire(ciphers, s, crate::spec::INTERNAL_ERROR)), failed())",
+      "expect": "killed",
+      "reason": "RFC 8446 §6: the alert sent must be the one the failure reports (\"MUST send alert X if it sends any alert\"); the mutant reports bad_certificate and sends internal_error.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_flight_failure_sends_alert()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state(), 42).0 != super::dispatcher_spec::Action::Fail(42u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 42, 21]))"
+      }
+    },
+    {
+      "id": "dispatcher-alert-level-warning",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "    crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_FATAL, description })",
+      "replace": "    crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description })",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.2: \"All the alerts listed in Section 6.2 MUST be sent with AlertLevel=fatal\"; the mutant sends them at warning level.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_flight_failure_sends_alert()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state(), 42).0 != super::dispatcher_spec::Action::Fail(42u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 42, 21]))"
+      }
+    },
+    {
+      "id": "dispatcher-alert-while-key-update-pending",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "if write_open(s) && s.pending_update_request is None {",
+      "replace": "if write_open(s) {",
+      "expect": "killed",
+      "reason": "While a sealed KeyUpdate awaits acknowledgement the peer's read key is not settled, so no alert may be sealed under the old key; the mutant seals one.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_no_alert_while_update_pending()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_update_pending(), 10).0 != super::dispatcher_spec::Action::Fail(10u8, None)"
+      }
+    },
+    {
+      "id": "dispatcher-alert-after-close-notify",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "if write_open(s) && s.pending_update_request is None {",
+      "replace": "if s.pending_update_request is None {",
+      "expect": "killed",
+      "reason": "RFC 8446 §6.1: nothing is written after our close_notify; the mutant seals a fatal alert after it.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_no_alert_after_close_notify()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_close_sent(), 10).0 != super::dispatcher_spec::Action::Fail(10u8, None)"
+      }
+    },
+    {
       "id": "host-dns-max-254",
       "file": "src/host/spec.rs",
       "find": "1 <= name.len() <= 253",

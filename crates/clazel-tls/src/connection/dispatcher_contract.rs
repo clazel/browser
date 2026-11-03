@@ -52,11 +52,45 @@ pub open spec fn feed_ensures(before: super::dispatcher_spec::State, input: Seq<
 /// RFC 8446 §5.1: a valid unprotected compatibility CCS record, in a state
 /// that still holds authentication, is dropped only at a handshake message
 /// boundary; in the middle of a fragmented handshake message it is fatal.
-pub open spec fn ccs_record_ensures(wire: Seq<u8>, before: super::dispatcher_spec::State,
-    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+pub open spec fn ccs_record_ensures(ciphers: super::dispatcher_spec::Ciphers, wire: Seq<u8>,
+    before: super::dispatcher_spec::State, action: super::dispatcher_spec::Action,
+    after: super::dispatcher_spec::State) -> bool {
     (before.auth is Some && crate::spec::read_record(wire, true) is Done
         && crate::spec::read_record(wire, true)->Done_0 is Ccs)
-        ==> (action, after) == super::dispatcher_spec::receive_compatibility_ccs(before)
+        ==> (action, after) == super::dispatcher_spec::receive_compatibility_ccs(ciphers, before)
+}
+
+/// RFC 8446 §6, §6.2, §5.3: a locally detected fatal error puts out the fatal
+/// alert sealed under the settled write epoch's next sequence number, taken
+/// from the state before the failure, and then holds no key.
+pub open spec fn fail_ensures(ciphers: super::dispatcher_spec::Ciphers,
+    before: super::dispatcher_spec::State, description: u8, action: super::dispatcher_spec::Action,
+    after: super::dispatcher_spec::State) -> bool {
+    (action, after) == super::dispatcher_spec::fatal(ciphers, before, description)
+        && super::dispatcher_spec::wf(after) && super::dispatcher_spec::no_live_secrets(after)
+}
+
+/// RFC 8446 §6, §6.2: a decrypted record that is a fatal alert from the peer
+/// (any alert but close_notify and user_canceled, at either level) ends the
+/// connection without an answer.
+pub open spec fn peer_alert_ensures(ciphers: super::dispatcher_spec::Ciphers,
+    before: super::dispatcher_spec::State, ctype: u8, fragment: Seq<u8>,
+    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    fragment.len() <= crate::spec::MAX_PLAINTEXT ==> match crate::spec::feed_record(before.reassembly,
+        crate::spec::Record { ctype, fragment }) {
+        crate::spec::Res::Ok((crate::spec::Event::Alert(a), _)) => !crate::spec::alert_is_closure(a)
+            ==> (action, after) == super::dispatcher_spec::receive_fatal_alert(ciphers, before, a.description),
+        _ => true,
+    }
+}
+
+/// RFC 8446 §6.1: the end of the transport before the peer's close_notify is
+/// a truncation; it fails the connection and sends nothing.
+pub open spec fn truncation_ensures(before: super::dispatcher_spec::State,
+    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    (before.mode != super::dispatcher_spec::Mode::Failed
+        && before.mode != super::dispatcher_spec::Mode::Closed && !before.peer_write_closed)
+        ==> (action, after) == super::dispatcher_spec::die(crate::spec::INTERNAL_ERROR)
 }
 
 /// A peer close_notify closes only the peer's write direction and preserves
@@ -95,7 +129,7 @@ pub open spec fn prepare_close_ensures(c: crate::schedule::spec::Crypto,
 }
 
 /// Exact send acknowledgement commits local write closure; wrong bytes fail
-/// closed, and an absent pending close is a no-op.
+/// closed, with no alert after the sealed close_notify (§6.1).
 pub open spec fn acknowledge_close_ensures(before: super::dispatcher_spec::State,
     acknowledgement: Seq<u8>, action: super::dispatcher_spec::Action,
     after: super::dispatcher_spec::State) -> bool {
@@ -105,7 +139,7 @@ pub open spec fn acknowledge_close_ensures(before: super::dispatcher_spec::State
                 action is WriteClosed && after.local_write_closed
             })
         && (before.pending_close_wire.len() > 0 && acknowledgement != before.pending_close_wire
-            ==> action == super::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR))
+            ==> action == super::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR, None))
 }
 
 /// A protected client flight remains pending until the exact wire bytes are acknowledged.
@@ -224,7 +258,7 @@ pub open spec fn action_refines_key_update_ack(action: super::dispatcher_spec::A
             && after.pending_update_request is Some && wire == after.pending_update_wire,
         super::dispatcher_spec::Action::None => after.pending_update_request is None
             && after.application_sender is Some && before.application_sender is Some,
-        super::dispatcher_spec::Action::Fail(_) => terminal_ensures(after, super::dispatcher_spec::Mode::Failed),
+        super::dispatcher_spec::Action::Fail(_, _) => terminal_ensures(after, super::dispatcher_spec::Mode::Failed),
         _ => false,
     }
 }

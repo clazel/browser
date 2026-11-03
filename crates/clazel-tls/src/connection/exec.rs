@@ -59,10 +59,20 @@ pub enum Action {
     Cancelled,
     /// The local close_notify send was acknowledged; reads remain open.
     WriteClosed,
-    /// Fatal error; this action does not send an alert automatically.
-    Fail(u8),
+    /// RFC 8446 §6.2: a fatal error detected here, with its alert description
+    /// and, when a settled write epoch could seal it, the protected fatal
+    /// alert record, which the caller sends as the connection's last record.
+    /// Every key has been dropped.
+    Fail(u8, Option<Vec<u8>>),
+    /// RFC 8446 §6: the peer's fatal alert. Nothing is sent in reply, and
+    /// every key has been dropped.
+    PeerAlert(u8),
     /// Peer close_notify or local close.
     Close,
+}
+/// The view of an optional protected record.
+pub open spec fn wire_view(wire: Option<Vec<u8>>) -> Option<Seq<u8>> {
+    match wire { Some(bytes) => Some(bytes@), None => None }
 }
 impl View for Action {
     type V = super::dispatcher_spec::Action;
@@ -76,7 +86,9 @@ impl View for Action {
             Action::PeerClosed => super::dispatcher_spec::Action::PeerClosed,
             Action::Cancelled => super::dispatcher_spec::Action::Cancelled,
             Action::WriteClosed => super::dispatcher_spec::Action::WriteClosed,
-            Action::Fail(alert) => super::dispatcher_spec::Action::Fail(*alert),
+            Action::Fail(alert, wire) => super::dispatcher_spec::Action::Fail(*alert,
+                match wire { Some(bytes) => Some(bytes@), None => None }),
+            Action::PeerAlert(alert) => super::dispatcher_spec::Action::PeerAlert(*alert),
             Action::Close => super::dispatcher_spec::Action::Close,
         }
     }
@@ -214,7 +226,45 @@ fn is_discarded_ticket(message: &[u8]) -> (out: bool)
     out
 }
 
+/// The key-explicit seal function an AEAD object computes is the factory's
+/// function at its key ([`super::dispatcher_spec::seal_with`]).
+proof fn lemma_seal_with(ciphers: super::dispatcher_spec::Ciphers, epoch: crate::traffic::spec::State,
+    g: spec_fn(Seq<u8>, Seq<u8>, Seq<u8>) -> Seq<u8>)
+    requires forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] g(n, ad, p) == (ciphers.seal)(epoch.key, n, ad, p),
+    ensures g == super::dispatcher_spec::seal_with(ciphers, epoch),
+{
+    assert(g =~= super::dispatcher_spec::seal_with(ciphers, epoch));
+}
+
+/// RFC 8446 §5.2, §5.3, §6.2: seal one alert record under `sender`'s next
+/// sequence number; `None` when the epoch refuses (failed or spent).
+fn seal_alert<A: KeyedAead>(sender: &mut Encryptor<A>, Ghost(ciphers): Ghost<super::dispatcher_spec::Ciphers>,
+    content: &[u8]) -> (out: Option<Vec<u8>>)
+    requires old(sender).wf(),
+        forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] old(sender).seal_spec(n, ad, p)
+            == (ciphers.seal)(old(sender)@.key, n, ad, p),
+    ensures wire_view(out) == match crate::traffic::spec::send(super::dispatcher_spec::seal_with(ciphers, old(sender)@),
+            old(sender)@, crate::spec::CT_ALERT, content@, 0).1 {
+            Ok(record) => Some(record),
+            Err(_) => None,
+        },
+{
+    let ghost epoch = sender@;
+    let ghost seal_before = |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| sender.seal_spec(n, ad, p);
+    proof { lemma_seal_with(ciphers, epoch, seal_before); }
+    sender.seal(crate::spec::CT_ALERT, content, 0).ok()
+}
+
 impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: KeyedAead {
+    /// Every send epoch is well formed and bound to the factory's seal
+    /// function at its key: what sealing a fatal alert needs.
+    pub closed spec fn senders_wf(&self) -> bool {
+        (match self.handshake_sender { Some(epoch) => epoch.wf() && forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>|
+            #[trigger] epoch.seal_spec(n, ad, p) == (self.factory.functions().seal)(epoch@.key, n, ad, p), None => true })
+            && (match self.application_sender { Some(epoch) => epoch.wf() && forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>|
+                #[trigger] epoch.seal_spec(n, ad, p) == (self.factory.functions().seal)(epoch@.key, n, ad, p), None => true })
+    }
+
     /// The lifecycle and resource invariant exposed to callers.
     pub closed spec fn wf(&self) -> bool { super::dispatcher_spec::wf(self.state()) }
 
@@ -358,11 +408,111 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         }
     }
 
+    /// RFC 8446 §6, §6.2, §5.3: a fatal error detected here. The fatal alert
+    /// is sealed under the settled write epoch's next sequence number, if
+    /// there is one ([`super::dispatcher_spec::alert_epoch`]), and only then
+    /// is every key dropped.
     fn fail(&mut self, alert: u8) -> (out: Action)
-        ensures final(self).wf(), final(self).resources_wf(), final(self)@ == super::dispatcher_spec::failed(), out@ == super::dispatcher_spec::Action::Fail(alert),
+        requires old(self).senders_wf(),
+        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+            final(self)@ == super::dispatcher_spec::failed(),
+            super::dispatcher_contract::fail_ensures(old(self).cipher_models(), old(self)@, alert, out@, final(self)@),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).cipher_models() == old(self).cipher_models(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
+    {
+        let ghost before = self@;
+        let ghost ciphers = self.cipher_models();
+        let mut content: Vec<u8> = Vec::new();
+        crate::encode::write_alert(&mut content, crate::spec::Alert {
+            level: crate::spec::LEVEL_FATAL,
+            description: alert,
+        });
+        proof {
+            assert(content@ =~= super::dispatcher_spec::fatal_alert(alert));
+            assert(ciphers.seal == self.factory.functions().seal);
+        }
+        // §6.1: nothing is written after close_notify, and a KeyUpdate that
+        // awaits acknowledgement leaves the peer's read key unsettled.
+        let settled = !self.local_write_closed && self.pending_close_wire.is_empty()
+            && self.pending_update_request.is_none();
+        let wire = match self.mode {
+            Mode::Handshake => match self.handshake_sender.as_mut() {
+                Some(sender) => {
+                    let ghost epoch = sender@;
+                    proof { assert(before.handshake_sender == Some(epoch)); }
+                    let sealed = seal_alert(sender, Ghost(ciphers), content.as_slice());
+                    proof {
+                        assert(super::dispatcher_spec::alert_epoch(before) == Some(epoch));
+                        assert(wire_view(sealed) == super::dispatcher_spec::alert_wire(ciphers, before, alert));
+                    }
+                    sealed
+                },
+                None => {
+                    proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                    None
+                },
+            },
+            Mode::Ready => if settled {
+                match self.application_sender.as_mut() {
+                    Some(sender) => {
+                        let ghost epoch = sender@;
+                        proof {
+                            assert(before.application_sender == Some(epoch));
+                            assert(super::dispatcher_spec::write_open(before));
+                            assert(super::dispatcher_spec::alert_epoch(before) == Some(epoch));
+                        }
+                        let sealed = seal_alert(sender, Ghost(ciphers), content.as_slice());
+                        proof {
+                            assert(wire_view(sealed) == super::dispatcher_spec::alert_wire(ciphers, before, alert));
+                        }
+                        sealed
+                    },
+                    None => {
+                        proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                        None
+                    },
+                }
+            } else {
+                proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                None
+            },
+            Mode::AwaitClientFlight | Mode::Failed | Mode::Closed => {
+                proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                None
+            },
+        };
+        let ghost sent = wire_view(wire);
+        proof { assert(sent == super::dispatcher_spec::alert_wire(ciphers, before, alert)); }
+        self.terminal(Mode::Failed);
+        let out = Action::Fail(alert, wire);
+        proof {
+            assert(out@ == super::dispatcher_spec::Action::Fail(alert, sent));
+            assert((out@, self@) == super::dispatcher_spec::fatal(ciphers, before, alert));
+            assert(super::dispatcher_spec::no_live_secrets(self@));
+        }
+        out
+    }
+
+    /// RFC 8446 §6.1: the transport ended before close_notify; nothing is
+    /// sent and every key is dropped.
+    fn die(&mut self, alert: u8) -> (out: Action)
+        ensures final(self).wf(), final(self).resources_wf(),
+            (out@, final(self)@) == super::dispatcher_spec::die(alert),
     {
         self.terminal(Mode::Failed);
-        Action::Fail(alert)
+        Action::Fail(alert, None)
+    }
+
+    /// RFC 8446 §6, §6.2: the peer's fatal alert. It is not answered; every
+    /// key is dropped.
+    fn peer_alert(&mut self, alert: u8) -> (out: Action)
+        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+            (out@, final(self)@) == super::dispatcher_spec::receive_fatal_alert(old(self).cipher_models(),
+                old(self)@, alert),
+    {
+        self.terminal(Mode::Failed);
+        Action::PeerAlert(alert)
     }
 
     fn close(&mut self) -> (out: Action)
@@ -546,7 +696,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 None => return self.fail(crate::spec::INTERNAL_ERROR),
             };
             let action = self.process_one(message.as_slice());
-            if action != Action::None { return action; }
+            if !matches!(action, Action::None) { return action; }
             if !matches!(self.mode, Mode::Handshake) { return self.fail(crate::spec::INTERNAL_ERROR); }
             index = index.saturating_add(1);
         }
@@ -587,9 +737,18 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
         ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
+            super::dispatcher_contract::peer_alert_ensures(old(self).cipher_models(), old(self)@, typ, bytes@,
+                out@, final(self)@),
     {
         if bytes.len() > crate::spec::MAX_PLAINTEXT { return self.fail(crate::spec::RECORD_OVERFLOW); }
-        match self.reassembler.feed_record(typ, bytes) {
+        let ghost before = self@;
+        let fed = self.reassembler.feed_record(typ, bytes);
+        let ghost fed_view = crate::reassemble::res_event(fed, self.reassembler@);
+        proof {
+            assert(fed_view == crate::spec::feed_record(before.reassembly,
+                crate::spec::Record { ctype: typ, fragment: bytes@ }));
+        }
+        match fed {
             Err(error) => self.fail(crate::encode::alert_for(error).description),
             Ok(ReassemblyEvent::Messages(messages)) => {
                 if matches!(self.mode, Mode::Handshake) {
@@ -660,7 +819,15 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 } else if alert.description == crate::spec::USER_CANCELED {
                     Action::Cancelled
                 } else {
-                    self.fail(alert.description)
+                    // RFC 8446 §6, §6.2: the peer's fatal alert is not answered.
+                    let out = self.peer_alert(alert.description);
+                    proof {
+                        assert(!crate::spec::alert_is_closure(alert));
+                        assert(fed_view is Ok);
+                        assert(super::dispatcher_contract::peer_alert_ensures(
+                            old(self).cipher_models(), before, typ, bytes@, out@, self@));
+                    }
+                    out
                 }
             },
             Ok(ReassemblyEvent::Ignored) => Action::Ignored,
@@ -671,7 +838,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
         ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
-            super::dispatcher_contract::ccs_record_ensures(wire@, old(self)@, out@, final(self)@),
+            super::dispatcher_contract::ccs_record_ensures(old(self).cipher_models(), wire@, old(self)@, out@, final(self)@),
     {
         match crate::record::read_record(wire, true) {
             ReadOut::Done(Frame::Ccs, _) => {
@@ -769,7 +936,8 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 },
                 super::dispatcher_spec::Action::Ready => assert(self@.mode == super::dispatcher_spec::Mode::Ready),
                 super::dispatcher_spec::Action::Deliver(_) => assert(self@.mode == super::dispatcher_spec::Mode::Ready),
-                super::dispatcher_spec::Action::Fail(_) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed)),
+                super::dispatcher_spec::Action::Fail(_, _) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed)),
+                super::dispatcher_spec::Action::PeerAlert(_) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed)),
                 super::dispatcher_spec::Action::Close => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Closed)),
                 _ => {},
             }
@@ -1278,6 +1446,11 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 reveal(super::dispatcher_contract::acknowledge_close_ensures);
                 reveal(super::dispatcher_spec::acknowledge_close_notify);
                 assert(final(self)@ == super::dispatcher_spec::failed());
+                // §6.1: once close_notify is sealed no alert follows it.
+                if before.pending_close_wire.len() > 0 {
+                    assert(super::dispatcher_spec::alert_epoch(before) is None);
+                    assert(out@ == super::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR, None));
+                }
                 assert(super::dispatcher_contract::acknowledge_close_ensures(
                     before, sent@, out@, final(self)@));
             }
@@ -1303,13 +1476,16 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
 
     /// EOF before peer close_notify is truncation; after it, only the read
     /// direction is closed and the independent write direction remains live.
+    /// RFC 8446 §6.1: the truncation sends no alert, since the peer has
+    /// closed the connection.
     pub fn eof(&mut self) -> (out: Action)
         requires old(self).wf(),
         ensures final(self).wf(),
+            super::dispatcher_contract::truncation_ensures(old(self)@, out@, final(self)@),
     {
         if matches!(self.mode, Mode::Failed | Mode::Closed) { Action::None }
         else if self.peer_write_closed { Action::PeerClosed }
-        else { self.fail(crate::spec::INTERNAL_ERROR) }
+        else { self.die(crate::spec::INTERNAL_ERROR) }
     }
 }
 } // verus!

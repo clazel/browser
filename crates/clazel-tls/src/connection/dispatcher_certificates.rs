@@ -1,4 +1,4 @@
-//! Concrete KeyUpdate transition facts used by certified mutations.
+//! Concrete KeyUpdate and fatal-alert fixtures used by certified mutations.
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -66,6 +66,62 @@ pub open spec fn sample_bad_update_state() -> super::dispatcher_spec::State {
         pending_update_request: Some(0u8),
         ..sample_ready_state()
     }
+}
+
+/// An AEAD stand-in whose output shows its nonce: the nonce, then the
+/// plaintext. A record sealed with it shows the sequence number it used and
+/// its inner plaintext (content, then content type).
+pub open spec fn nonce_seal(_key: Seq<u8>, nonce: Seq<u8>, _ad: Seq<u8>, plaintext: Seq<u8>) -> Seq<u8> {
+    nonce + plaintext
+}
+
+pub open spec fn alert_ciphers() -> super::dispatcher_spec::Ciphers {
+    super::dispatcher_spec::Ciphers {
+        seal: |key: Seq<u8>, nonce: Seq<u8>, ad: Seq<u8>, plaintext: Seq<u8>| nonce_seal(key, nonce, ad, plaintext),
+        open: |key: Seq<u8>, nonce: Seq<u8>, ad: Seq<u8>, ciphertext: Seq<u8>| dummy_open(key, nonce, ad, ciphertext),
+    }
+}
+
+/// A send epoch with an all-zero IV, so its nonce is the sequence number
+/// (§5.3), at sequence number `next`.
+pub open spec fn alert_epoch_at(next: u64) -> crate::traffic::spec::State {
+    crate::traffic::spec::State {
+        key: Seq::new(32, |_i: int| 7u8),
+        iv: seq![0u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        next: Some(next),
+        failed: false,
+    }
+}
+
+/// The server's flight: the client handshake epoch has sealed nothing yet.
+pub open spec fn sample_flight_state() -> super::dispatcher_spec::State {
+    super::dispatcher_spec::State {
+        mode: super::dispatcher_spec::Mode::Handshake,
+        handshake_sender: Some(alert_epoch_at(0)),
+        handshake_receiver: Some(alert_epoch_at(0)),
+        ..super::dispatcher_spec::failed()
+    }
+}
+
+/// After the handshake, with `next` records sealed under the client
+/// application epoch.
+pub open spec fn sample_ready_at(next: u64) -> super::dispatcher_spec::State {
+    super::dispatcher_spec::State {
+        mode: super::dispatcher_spec::Mode::Ready,
+        application_sender: Some(alert_epoch_at(next)),
+        application_receiver: Some(alert_epoch_at(0)),
+        ..super::dispatcher_spec::failed()
+    }
+}
+
+/// After the handshake, with a KeyUpdate sealed and not yet acknowledged.
+pub open spec fn sample_update_pending() -> super::dispatcher_spec::State {
+    super::dispatcher_spec::State { pending_update_request: Some(0u8), ..sample_ready_at(5) }
+}
+
+/// After the handshake, with our close_notify sent.
+pub open spec fn sample_close_sent() -> super::dispatcher_spec::State {
+    super::dispatcher_spec::State { local_write_closed: true, ..sample_ready_at(5) }
 }
 
 } // verus!
