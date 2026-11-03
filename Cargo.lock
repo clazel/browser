@@ -124,6 +124,7 @@ dependencies = [
  "clazel-origin",
  "clazel-renderer",
  "clazel-url",
+ "rustls",
 ]
 
 [[package]]

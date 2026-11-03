@@ -33,3 +33,6 @@ pub use fetch::{FetchError, fetch, fetch_jar, fetch_jar_verified, fetch_with, no
 pub use frames::read_frames;
 pub use resolve::resolve;
 pub use tls::TlsConnection;
+/// The certificate verifier `TlsConnection` and `Driver` take, and the
+/// trust anchors it is built from.
+pub use clazel_crypto::join::exec::{ChainVerifier, Root};

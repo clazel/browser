@@ -11,6 +11,7 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use clazel::Host;
+use clazel_net::{ChainVerifier, Root};
 use clazel_ipc::frame::codec::payload_length;
 use clazel_ipc::message::codec::{Msg, decode_framed};
 
@@ -331,4 +332,122 @@ fn a_bad_script_is_reported_with_the_renderers_stderr() {
             ),
         "{log}"
     );
+}
+
+// ---------------------------------------------------------------------
+// `https:` through the host and the kernel: the kernel asks for
+// `Connect { tls: true }`, the host's driver runs TLS 1.3 against a
+// rustls server on loopback (TLS 1.3, ChaCha20-Poly1305, X25519 over its
+// ring provider, the certificates of `clazel-crypto/tests/fixtures/tls`),
+// and the page is committed. The host trusts the test root (`trust`).
+// ---------------------------------------------------------------------
+
+static ROOT: &[u8] = include_bytes!("../../clazel-crypto/tests/fixtures/tls/root.der");
+static INTERMEDIATE: &[u8] =
+    include_bytes!("../../clazel-crypto/tests/fixtures/tls/intermediate.der");
+static LEAF: &[u8] = include_bytes!("../../clazel-crypto/tests/fixtures/tls/leaf-ecdsa.der");
+static KEY: &[u8] = include_bytes!("../../clazel-crypto/tests/fixtures/tls/leaf-ecdsa.key.der");
+
+fn test_root() -> ChainVerifier<'static> {
+    ChainVerifier::new(&[Root {
+        der: ROOT,
+        server_distrust_after: None,
+    }])
+}
+
+/// A TLS server on loopback (for the name `test.example`) that answers
+/// every connection with a page whose body is `body`, then its
+/// close_notify. It reports, for each connection, whether the client's
+/// close_notify arrived (rustls reads it as a clean end of stream).
+fn serve_tls(body: &'static str) -> (SocketAddr, std::sync::mpsc::Receiver<bool>) {
+    use rustls::crypto::ring::{cipher_suite::TLS13_CHACHA20_POLY1305_SHA256, default_provider};
+    use rustls::crypto::{CryptoProvider, ring::kx_group::X25519};
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+    use rustls::{ServerConfig, ServerConnection, StreamOwned};
+    use std::sync::Arc;
+
+    let dead = SocketAddr::from(([127, 0, 0, 1], 9));
+    let (tx, rx) = std::sync::mpsc::channel();
+    let provider = CryptoProvider {
+        cipher_suites: vec![TLS13_CHACHA20_POLY1305_SHA256],
+        kx_groups: vec![X25519],
+        ..default_provider()
+    };
+    let chain = vec![
+        CertificateDer::from(LEAF.to_vec()),
+        CertificateDer::from(INTERMEDIATE.to_vec()),
+    ];
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(KEY.to_vec()));
+    let config = ServerConfig::builder_with_provider(Arc::new(provider))
+        .with_protocol_versions(&[&rustls::version::TLS13])
+        .and_then(|b| b.with_no_client_auth().with_single_cert(chain, key));
+    // A failed bind or configuration gives an address nothing listens on:
+    // the test times out.
+    let (Ok(config), Ok(listener)) = (config, TcpListener::bind("127.0.0.1:0")) else {
+        return (dead, rx);
+    };
+    let config = Arc::new(config);
+    let addr = listener.local_addr().unwrap_or(dead);
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { continue };
+            let (config, tx) = (Arc::clone(&config), tx.clone());
+            std::thread::spawn(move || {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+                let Ok(conn) = ServerConnection::new(config) else {
+                    return;
+                };
+                let mut tls = StreamOwned::new(conn, stream);
+                let mut request = Vec::new();
+                let mut buf = [0u8; 4096];
+                while !request.ends_with(b"\r\n\r\n") {
+                    match tls.read(&mut buf) {
+                        Ok(0) | Err(_) => return,
+                        Ok(n) => request.extend_from_slice(buf.get(..n).unwrap_or_default()),
+                    }
+                }
+                let page = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = tls.write_all(page.as_bytes());
+                let _ = tls.flush();
+                // The client closes once the response is decided.
+                let mut rest = Vec::new();
+                let clean = tls.read_to_end(&mut rest).is_ok();
+                tls.conn.send_close_notify();
+                let _ = tls.flush();
+                let _ = tx.send(clean);
+            });
+        }
+    });
+    (addr, rx)
+}
+
+#[test]
+#[cfg_attr(miri, ignore = "spawns processes")]
+fn an_https_navigation_goes_through_the_kernel_and_tls() {
+    let mut host = stub("exec cat > /dev/null".to_owned());
+    let (addr, closes) = serve_tls("cookie-get");
+    host.route = Some(addr);
+    host.trust(test_root);
+    host.open_tab("https://test.example/", "");
+    host.navigate_tab(0, "https://test.example/other");
+    wait_log(&mut host, "renderer 0 <- commit \"https://test.example/other\"");
+    // The kernel asked for TLS to the default https port, wrote the request
+    // on it and closed it once the response was complete.
+    let position = |needle: &str| host.log.iter().position(|l| l.contains(needle));
+    let order = [
+        position("network: connection 0 to test.example:443 (TLS)"),
+        position("network: connection 0 <- "),
+        position("network: connection 0 closed"),
+        position("renderer 0 <- commit \"https://test.example/other\""),
+    ];
+    assert!(
+        order.iter().all(Option::is_some) && order.windows(2).all(|w| matches!(w, [a, b] if a < b)),
+        "{order:?} in {:#?}",
+        host.log
+    );
+    // The Close reached the server as our close_notify (RFC 8446 §6.1).
+    assert_eq!(closes.recv_timeout(LONG), Ok(true), "{:#?}", host.log);
 }

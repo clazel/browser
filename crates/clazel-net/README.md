@@ -16,8 +16,9 @@ failure, a truncation included, as `Error`. The kernel's network driver
 (`Driver`) carries out `Connect { tls: true }` the same way, so `clazel
 browse` opens `https:` pages: each TLS connection's thread owns its
 `TlsConnection` and takes the request over a channel, since one TLS state
-machine serves both directions. A connection the kernel closes is shut
-down without close_notify. Random octets, for the TLS
+machine serves both directions. A connection the kernel closes sends
+close_notify first: the thread seals it right after the request and the
+driver writes it on `Close`. Random octets, for the TLS
 client and the DNS query ID, come from the OS through
 `clazel_sys::fill_random`, the one audited `unsafe` call per OS
 (`docs/SYS-AUDITS.md`).

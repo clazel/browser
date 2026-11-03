@@ -17,7 +17,7 @@ use clazel_ipc::{
 };
 use clazel_kernel::exec::real_urls::{RealFetch, step_real};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
-use clazel_net::{Driver, Op, Report, read_frames};
+use clazel_net::{ChainVerifier, Driver, Op, Report, read_frames};
 use clazel_renderer::launch::{self, Link};
 
 /// What a socket's reader thread reports; the id is the socket's.
@@ -91,6 +91,13 @@ impl Host {
             log: Vec::new(),
             shown: Vec::new(),
         }
+    }
+
+    /// Test hook, like `route`: validate TLS certificates against the
+    /// anchors of `verifier()` instead of Mozilla's. Call it before any
+    /// connection is opened: it replaces the driver.
+    pub fn trust(&mut self, verifier: fn() -> ChainVerifier<'static>) {
+        self.net = Driver::with_verifier(self.tx.clone(), Ev::Net, verifier);
     }
 
     /// Live renderers.
