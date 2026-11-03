@@ -1,4 +1,6 @@
-//! Concrete RFC 8446 KeyUpdate facts used by proofs and mutation certificates.
+//! RFC 8446 KeyUpdate and fatal-alert facts about the dispatcher spec, used
+//! by proofs and mutation certificates: general lemmas, and concrete ones
+//! evaluated on the fixtures of `dispatcher_certificates`.
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -102,5 +104,133 @@ pub proof fn lemma_compatibility_ccs_not_dropped_mid_message()
             Some(crate::auth::spec::Phase::Finished), crate::spec::reasm_new()),
 {
     reveal(crate::spec::reasm_new);
+}
+
+// ---------------------------------------------------------------------------
+// RFC 8446 §5.3, §6, §6.1, §6.2: the fatal alerts the dispatcher sends.
+// ---------------------------------------------------------------------------
+
+/// §5.3, §6.2: a locally detected fatal error sends the fatal alert sealed
+/// under the settled write epoch's next sequence number, the one no record
+/// has used, with the key-explicit AEAD at that epoch's key.
+pub proof fn lemma_alert_uses_next_sequence_number(ciphers: super::dispatcher_spec::Ciphers,
+    s: super::dispatcher_spec::State, description: u8, epoch: crate::traffic::spec::State, n: u64)
+    requires
+        super::dispatcher_spec::alert_epoch(s) == Some(epoch),
+        epoch.next == Some(n),
+        !epoch.failed,
+    ensures
+        super::dispatcher_spec::fatal(ciphers, s, description).0 == super::dispatcher_spec::Action::Fail(
+            description, Some(crate::spec::encrypt_record(super::dispatcher_spec::seal_with(ciphers, epoch), 16,
+                epoch.iv, n, crate::spec::CT_ALERT, super::dispatcher_spec::fatal_alert(description), 0))),
+{
+    assert(super::dispatcher_spec::fatal_alert(description).len() == 2);
+}
+
+/// §5.3, §6.2: the alert is the last record under its key. The state after a
+/// fatal error holds no key at all, so nothing is sealed after the alert
+/// under the sequence number it took, or any other.
+pub proof fn lemma_alert_is_the_last_record(ciphers: super::dispatcher_spec::Ciphers,
+    s: super::dispatcher_spec::State, description: u8)
+    ensures
+        super::dispatcher_spec::fatal(ciphers, s, description).1 == super::dispatcher_spec::failed(),
+        super::dispatcher_spec::no_live_secrets(super::dispatcher_spec::fatal(ciphers, s, description).1),
+        super::dispatcher_spec::alert_epoch(super::dispatcher_spec::fatal(ciphers, s, description).1) is None,
+{}
+
+/// The epoch an alert is sealed under is a write epoch the client holds, in
+/// a phase where the peer reads it next: the handshake epoch during the
+/// server's flight, the application epoch after the handshake while our write
+/// side is open and no KeyUpdate is pending. Awaiting the Finished
+/// acknowledgement, failed and closed, there is none.
+pub proof fn lemma_alert_epoch_is_held(s: super::dispatcher_spec::State)
+    ensures
+        match super::dispatcher_spec::alert_epoch(s) {
+            Some(e) => (s.mode == super::dispatcher_spec::Mode::Handshake && s.handshake_sender == Some(e))
+                || (s.mode == super::dispatcher_spec::Mode::Ready && s.application_sender == Some(e)
+                    && super::dispatcher_spec::write_open(s) && s.pending_update_request is None),
+            None => true,
+        },
+        (s.mode == super::dispatcher_spec::Mode::AwaitClientFlight
+            || s.mode == super::dispatcher_spec::Mode::Failed
+            || s.mode == super::dispatcher_spec::Mode::Closed)
+            ==> super::dispatcher_spec::alert_epoch(s) is None,
+{}
+
+/// If no write key is held and settled, no protected alert is sent.
+pub proof fn lemma_no_write_key_no_alert(ciphers: super::dispatcher_spec::Ciphers,
+    s: super::dispatcher_spec::State, description: u8)
+    requires super::dispatcher_spec::alert_epoch(s) is None,
+    ensures super::dispatcher_spec::fatal(ciphers, s, description).0
+        == super::dispatcher_spec::Action::Fail(description, None),
+{}
+
+/// §6, §6.2: a fatal alert from the peer is never answered, in any state.
+pub proof fn lemma_peer_alert_not_answered(ciphers: super::dispatcher_spec::Ciphers,
+    s: super::dispatcher_spec::State, description: u8)
+    ensures super::dispatcher_spec::receive_fatal_alert(ciphers, s, description)
+        == (super::dispatcher_spec::Action::PeerAlert(description), super::dispatcher_spec::failed()),
+{}
+
+/// §6.1: a truncated connection sends nothing.
+pub proof fn lemma_truncation_sends_nothing(description: u8)
+    ensures super::dispatcher_spec::die(description)
+        == (super::dispatcher_spec::Action::Fail(description, None), super::dispatcher_spec::failed()),
+{}
+
+/// §6.2: during the server's flight, a local error (here bad_certificate, 42)
+/// is sent as a fatal alert, sealed under the client handshake epoch at
+/// sequence number 0. With the fixture AEAD the record is the header
+/// (application_data, 0x0303, 19 octets), the nonce (all zero), then the
+/// inner plaintext: level 2 (fatal), 42, content type 21 (alert).
+pub proof fn lemma_flight_failure_sends_alert()
+    ensures super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_flight_state(), 42).0
+        == super::dispatcher_spec::Action::Fail(42u8, Some(seq![23u8, 3, 3, 0, 19,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 42, 21])),
+{
+    assert(super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_flight_state(), 42).0
+        == super::dispatcher_spec::Action::Fail(42u8, Some(seq![23u8, 3, 3, 0, 19,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 42, 21]))) by (compute_only);
+}
+
+/// §5.3, §6.2: after the handshake, with five records already sent, a local
+/// error (unexpected_message, 10) is sealed under the client application
+/// epoch at sequence number 5, not a number already used: the nonce's last
+/// octet is 5.
+pub proof fn lemma_application_failure_sends_alert_at_next_number()
+    ensures super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_ready_at(5), 10).0
+        == super::dispatcher_spec::Action::Fail(10u8, Some(seq![23u8, 3, 3, 0, 19,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 10, 21])),
+{
+    assert(super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_ready_at(5), 10).0
+        == super::dispatcher_spec::Action::Fail(10u8, Some(seq![23u8, 3, 3, 0, 19,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 10, 21]))) by (compute_only);
+}
+
+/// While a sealed KeyUpdate awaits acknowledgement the peer's read key is not
+/// settled, so no alert is sealed.
+pub proof fn lemma_no_alert_while_update_pending()
+    ensures super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_update_pending(), 10).0
+        == super::dispatcher_spec::Action::Fail(10u8, None),
+{
+    assert(super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_update_pending(), 10).0
+        == super::dispatcher_spec::Action::Fail(10u8, None)) by (compute_only);
+}
+
+/// §6.1: after our close_notify nothing more is written, not even an alert.
+pub proof fn lemma_no_alert_after_close_notify()
+    ensures super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_close_sent(), 10).0
+        == super::dispatcher_spec::Action::Fail(10u8, None),
+{
+    assert(super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_close_sent(), 10).0
+        == super::dispatcher_spec::Action::Fail(10u8, None)) by (compute_only);
 }
 } // verus!
