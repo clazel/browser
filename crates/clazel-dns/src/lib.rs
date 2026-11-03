@@ -10,6 +10,8 @@
 //! - [`contract`]: what the executable functions are proven to satisfy.
 //! - [`resolv`]: the `nameserver` lines of `/etc/resolv.conf` (a grammar of
 //!   our own).
+//! - [`adapters`]: the DNS servers in the buffer Windows' `GetAdaptersAddresses`
+//!   fills (C structures of the Windows SDK, not a standard).
 //! - [`answer`], [`decode`], [`encode`] and [`types`]: the executable
 //!   functions and the types they return.
 //! - [`lemmas`], [`examples`] and [`independent`]: facts proven about the
@@ -42,6 +44,7 @@
 //! assert!(answer_addresses(0x4321, b"example.com", 1, &message).is_none());
 //! ```
 
+pub mod adapters;
 pub mod answer;
 pub mod contract;
 pub mod decode;
