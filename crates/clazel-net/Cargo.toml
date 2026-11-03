@@ -19,6 +19,19 @@ clazel-cookie = { path = "../clazel-cookie" }
 clazel-fetch = { path = "../clazel-fetch" }
 clazel-http = { path = "../clazel-http" }
 
+# `TlsConnection` carries bytes between a socket and the TLS 1.3 client
+# driver, `clazel_crypto::client`, which makes every protocol decision over
+# `clazel-tls`'s proven machines (the host type is `clazel-tls`'s).
+clazel-tls = { path = "../clazel-tls" }
+clazel-crypto = { path = "../clazel-crypto" }
+
+# Test-only TLS 1.3 server for tests/tls.rs (class `test` in
+# docs/DEPENDENCIES.md: never shipped), configured as in clazel-crypto's
+# tests: TLS 1.3, TLS_CHACHA20_POLY1305_SHA256 and X25519 over the `ring`
+# provider, which the `ring` feature brings (no direct `ring` dependency).
+[dev-dependencies]
+rustls = { version = "=0.23.46", default-features = false, features = ["std", "ring"] }
+
 # Verification tier (docs/VERIFICATION.md). Tier 0 and staying there: this
 # crate does I/O (sockets, files, clocks), which no proof here covers. It is
 # small and holds no protocol decisions; what is proven lives in the crates
