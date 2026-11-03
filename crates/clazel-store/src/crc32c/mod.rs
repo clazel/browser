@@ -4,4 +4,5 @@
 //! - [`contract`]: what the executable function will be proven to satisfy.
 
 pub mod contract;
+pub mod examples;
 pub mod spec;
