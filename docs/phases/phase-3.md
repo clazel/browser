@@ -1992,9 +1992,8 @@ last updated 2026-10-19).
   durability beyond what `fsync` gives on the platform, and a private
   browsing mode.
 
-**3.10a.0 Design note: proposed 2026-11-03, waiting for the maintainer.**
-No code until it is accepted. Each choice below is followed by what it
-costs.
+**3.10a.0 Design note: accepted by the maintainer, 2026-11-03.** Each
+choice below is followed by what it costs.
 
 - **Layout: an append-only log per bucket, compacted by rewriting.**
   - *How it works.* Each commit appends one record that holds the whole
