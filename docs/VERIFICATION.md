@@ -241,7 +241,10 @@ We list this openly. Proofs are only as good as their assumptions.
 `unsafe_code` is forbidden workspace-wide (Tier 0) except in
 `crates/clazel-sys`, because entering an OS sandbox needs calls that Rust's
 standard library does not have: `sandbox_init` on macOS, and `prctl`,
-`seccomp`, the `landlock_*` system calls and `unshare` on Linux. The choice,
+`seccomp`, the `landlock_*` system calls and `unshare` on Linux. It also
+holds the one call that reads cryptographically secure random bytes from the
+OS (`fill_random`: `getrandom` on Linux, `getentropy` on macOS,
+`BCryptGenRandom` on Windows), which the TLS client needs. The choice,
 and the options rejected, are in
 [phases/phase-2.md](phases/phase-2.md#20-the-sandbox-and-unsafe-decision-s).
 That crate is trusted, not proven, so what we claim for it is stated

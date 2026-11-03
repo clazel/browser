@@ -3,7 +3,7 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 38 `unsafe` blocks (136 lines) that enter the OS sandbox, machine-checked and audited. Shipped dependencies are `libc` and libcrux.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 41 `unsafe` blocks (141 lines) that enter the OS sandbox, machine-checked and audited. Shipped dependencies are `libc` and libcrux.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Honest about it:** each crate declares its verification tier, and the
@@ -205,10 +205,10 @@ and much of it is work only a person can do.
 - **Run it where we have not.** The Phase 2 and 4 process tests (the sandbox,
   the hostile renderer, the hostile pages) run in CI on `ubuntu-24.04` and
   macOS arm64 only. Other Linux distributions and kernels are untested.
-- **Read `clazel-sys`.** It is the only crate with `unsafe`: 38 blocks that
-  enter the OS sandbox. Every change is audited by a second model
-  ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person reading it too is
-  welcome.
+- **Read `clazel-sys`.** It is the only crate with `unsafe`: 41 blocks that
+  enter the OS sandbox or read the OS random source. Every change is audited
+  by a second model ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person
+  reading it too is welcome.
 - **Build the next phases.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md)
   and the detailed plans in [docs/phases/](docs/phases/). TLS is partly
   built and not yet joined to the kernel. Contributions go through the same
