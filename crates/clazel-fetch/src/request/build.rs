@@ -139,6 +139,30 @@ fn eq32(a: &[u32], b: &[u32]) -> (r: bool)
     true
 }
 
+/// `is_fetched_scheme`: `http` or `https`.
+fn is_fetched_scheme_exec(scheme: &[u32]) -> (r: bool)
+    ensures
+        r == is_fetched_scheme(scheme@),
+{
+    proof {
+        assert(clazel_url::url::spec::http_str() =~= seq![0x68u32, 0x74, 0x74, 0x70]);
+        assert(clazel_url::url::spec::https_str() =~= seq![0x68u32, 0x74, 0x74, 0x70, 0x73]);
+    }
+    eq32(scheme, &[0x68, 0x74, 0x74, 0x70]) || eq32(scheme, &[0x68, 0x74, 0x74, 0x70, 0x73])
+}
+
+/// `uses_tls` (RFC 9110 §4.2.2): whether the connection for `url` speaks
+/// TLS, which is when its scheme is `https`.
+pub fn uses_tls(url: &ParsedUrl) -> (r: bool)
+    ensures
+        super::contract::uses_tls_ensures(url@, r),
+{
+    proof {
+        assert(clazel_url::url::spec::https_str() =~= seq![0x68u32, 0x74, 0x74, 0x70, 0x73]);
+    }
+    eq32(url.scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70, 0x73])
+}
+
 /// A field line from two literals.
 fn line(name: &[u8], value: &[u8]) -> (out: FieldLineBuf)
     ensures
@@ -157,7 +181,7 @@ pub fn request_bytes(url: &ParsedUrl) -> (out: Option<Vec<u8>>)
             None => None,
         }),
 {
-    if !eq32(url.scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70]) || !url.username.is_empty() || !url.password.is_empty() {
+    if !is_fetched_scheme_exec(url.scheme.as_slice()) || !url.username.is_empty() || !url.password.is_empty() {
         return None;
     }
     let target = ascii_octets_exec(origin_form_exec(url).as_slice())?;
@@ -185,7 +209,7 @@ pub fn request_bytes_cookie(url: &ParsedUrl, cookie: &[u8]) -> (out: Option<Vec<
             None => None,
         }),
 {
-    if !eq32(url.scheme.as_slice(), &[0x68, 0x74, 0x74, 0x70]) || !url.username.is_empty() || !url.password.is_empty() {
+    if !is_fetched_scheme_exec(url.scheme.as_slice()) || !url.username.is_empty() || !url.password.is_empty() {
         return None;
     }
     let target = ascii_octets_exec(origin_form_exec(url).as_slice())?;
@@ -208,7 +232,8 @@ pub fn request_bytes_cookie(url: &ParsedUrl, cookie: &[u8]) -> (out: Option<Vec<
     serialize_request(&req)
 }
 
-/// `connect_to`: the host for the resolver and the port.
+/// `connect_to`: the host for the resolver and the port, the URL's or the
+/// scheme's default (443 for `https`, 80 otherwise).
 pub fn connect_to(url: &ParsedUrl) -> (out: Option<(Vec<u8>, u16)>)
     ensures
         super::contract::connect_to_ensures(url@, match out {
@@ -218,7 +243,15 @@ pub fn connect_to(url: &ParsedUrl) -> (out: Option<(Vec<u8>, u16)>)
 {
     let host = url.host.as_ref()?;
     let h = ascii_octets_exec(host.serialize().as_slice())?;
-    Some((h, url.port.unwrap_or(80)))
+    let port = match url.port {
+        Some(p) => p,
+        None => if uses_tls(url) {
+            443
+        } else {
+            80
+        },
+    };
+    Some((h, port))
 }
 
 /// `is_interim` (RFC 9110 §15.2).

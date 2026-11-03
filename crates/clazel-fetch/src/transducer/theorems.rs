@@ -19,6 +19,9 @@
 //!   request's URL and context and the step's time;
 //! - [`theorem_jar_only_in_sends`]: the next state, the jar operations and
 //!   every action but a `Send`'s octets do not depend on the jar;
+//! - [`theorem_tls_when_secure`]: every `Connect` is the current request's
+//!   connection and speaks TLS exactly when that request is `https:`, which
+//!   is when the cookie functions see it as secure;
 //! - [`theorem_split_invariant`]: for a parser that is `prefix_stable`, how
 //!   the bytes are split does not matter. (The real parser is
 //!   prefix-stable: `real::theorem_real_prefix_stable`.)
@@ -674,6 +677,201 @@ pub proof fn theorem_jar_only_in_sends(http: HttpFns, urls: UrlFns, s: State, in
         assert(a.1[0] is Send && b.1[0] is Send);
     } else {
         assert(a == b);
+    }
+}
+
+
+// ===========================================================================
+// TLS and secure requests.
+// ===========================================================================
+
+/// No `Connect` in `a`.
+pub open spec fn no_connects(a: Seq<Action>) -> bool {
+    forall|k: int| 0 <= k < a.len() ==> !(#[trigger] a[k] is Connect)
+}
+
+/// Actions with no `Connect` are [`super::contract::connects_secure`] for
+/// every state.
+pub proof fn lemma_no_connects_secure(next: State, a: Seq<Action>)
+    requires
+        no_connects(a),
+    ensures
+        super::contract::connects_secure(next, a),
+{
+    assert forall|k: int| 0 <= k < a.len() implies !(#[trigger] a[k] is Connect) by {}
+}
+
+/// `close_if(open)` followed by one action that is not a `Connect` has no
+/// `Connect`.
+pub proof fn lemma_no_connects_closing(open: bool, x: Action)
+    requires
+        !(x is Connect),
+    ensures
+        no_connects(close_if(open) + seq![x]),
+{
+    let a = close_if(open) + seq![x];
+    assert forall|k: int| 0 <= k < a.len() implies !(#[trigger] a[k] is Connect) by {
+        if k < close_if(open).len() {
+            assert(a[k] == close_if(open)[k]);
+            assert(close_if(open)[k] == Action::Close);
+        } else {
+            assert(a[k] == x);
+        }
+    }
+}
+
+/// `fail` asks for no connection.
+pub proof fn lemma_fail_secure(next: State, s: State, reason: Reason, open: bool)
+    ensures
+        super::contract::connects_secure(next, fail(s, reason, open).1),
+{
+    lemma_no_connects_closing(open, Action::Fail(reason));
+    lemma_no_connects_secure(next, fail(s, reason, open).1);
+}
+
+/// For a URL this client sends a request for (`http:` or `https:`), TLS
+/// is used exactly when the cookie functions see the request as secure.
+pub proof fn lemma_tls_is_secure(url: Url)
+    requires
+        crate::request::spec::request_bytes(url) is Some,
+    ensures
+        crate::request::spec::uses_tls(url) == clazel_cookie::storage::spec::url_is_secure(request_url(url)),
+{
+    assert(crate::request::spec::request_for(url) is Some);
+    assert(crate::request::spec::is_fetched_scheme(url.scheme));
+    assert(clazel_url::url::spec::http_str() =~= seq![0x68u32, 0x74, 0x74, 0x70]);
+    assert(clazel_url::url::spec::https_str() =~= seq![0x68u32, 0x74, 0x74, 0x70, 0x73]);
+    assert(clazel_cookie::storage::spec::lit_https() =~= seq![0x68u8, 0x74, 0x74, 0x70, 0x73]);
+    assert(clazel_cookie::storage::spec::lit_wss() =~= seq![0x77u8, 0x73, 0x73]);
+    if url.scheme == clazel_url::url::spec::https_str() {
+        assert(cookie_scheme(url) =~= clazel_cookie::storage::spec::lit_https());
+    } else {
+        assert(url.scheme == clazel_url::url::spec::http_str());
+        assert(cookie_scheme(url).len() == 4);
+        assert(cookie_scheme(url) != clazel_cookie::storage::spec::lit_https());
+        assert(cookie_scheme(url) != clazel_cookie::storage::spec::lit_wss());
+    }
+    assert(request_url(url).scheme == cookie_scheme(url));
+}
+
+/// `begin` asks for the connection of the request it starts, with TLS
+/// exactly when that request is secure.
+pub proof fn lemma_begin_secure(url: Url, redirects: nat, tainted: bool)
+    ensures
+        super::contract::connects_secure(begin(url, redirects, tainted).0, begin(url, redirects, tainted).1),
+{
+    let b = begin(url, redirects, tainted);
+    match (crate::request::spec::connect_to(url), crate::request::spec::request_bytes(url)) {
+        (Some((host, port)), Some(_)) => {
+            lemma_tls_is_secure(url);
+            assert(b.1 == seq![Action::Connect { host: host, port: port, tls: crate::request::spec::uses_tls(url) }]);
+            assert(b.0.url == url && b.0.phase is Connecting);
+            assert forall|k: int| 0 <= k < b.1.len() implies match #[trigger] b.1[k] {
+                Action::Connect { host, port, tls } => b.0.phase is Connecting
+                    && crate::request::spec::connect_to(b.0.url) == Some((host, port))
+                    && tls == crate::request::spec::uses_tls(b.0.url)
+                    && tls == clazel_cookie::storage::spec::url_is_secure(request_url(b.0.url)),
+                _ => true,
+            } by {
+                assert(k == 0);
+            }
+        },
+        _ => {
+            assert(b.1 == seq![Action::Fail(Reason::NotFetched)]);
+            assert(no_connects(b.1));
+            lemma_no_connects_secure(b.0, b.1);
+        },
+    }
+}
+
+/// `close_if(open) + rest` is [`super::contract::connects_secure`] if
+/// `rest` is.
+pub proof fn lemma_closing_secure(next: State, open: bool, rest: Seq<Action>)
+    requires
+        super::contract::connects_secure(next, rest),
+    ensures
+        super::contract::connects_secure(next, close_if(open) + rest),
+{
+    let a = close_if(open) + rest;
+    assert forall|k: int| 0 <= k < a.len() implies match #[trigger] a[k] {
+        Action::Connect { host, port, tls } => next.phase is Connecting
+            && crate::request::spec::connect_to(next.url) == Some((host, port))
+            && tls == crate::request::spec::uses_tls(next.url)
+            && tls == clazel_cookie::storage::spec::url_is_secure(request_url(next.url)),
+        _ => true,
+    } by {
+        if k < close_if(open).len() {
+            assert(a[k] == close_if(open)[k]);
+            assert(close_if(open)[k] == Action::Close);
+        } else {
+            assert(a[k] == rest[k - close_if(open).len()]);
+        }
+    }
+}
+
+/// A final response asks for a connection only by a redirect, and that
+/// connection is the new request's.
+pub proof fn lemma_on_final_secure(urls: UrlFns, s: State, response: Response, open: bool, now: int)
+    ensures
+        super::contract::connects_secure(on_final(urls, s, response, open, now).0, on_final(urls, s, response, open, now).1),
+{
+    let r = on_final(urls, s, response, open, now);
+    match location_url(urls, response, s.url) {
+        LocationUrl::Null => {
+            lemma_no_connects_closing(open, Action::Done { url: s.url, response: response });
+            lemma_no_connects_secure(r.0, r.1);
+        },
+        LocationUrl::Failure => lemma_fail_secure(r.0, s, Reason::RedirectLocation, open),
+        LocationUrl::Url(location) => {
+            if !is_http_s_scheme(location.scheme) {
+                lemma_fail_secure(r.0, s, Reason::RedirectScheme, open);
+            } else if s.redirects == max_redirects() {
+                lemma_fail_secure(r.0, s, Reason::RedirectLimit, open);
+            } else {
+                let tainted = s.tainted || !clazel_origin::spec::same_site(urls.rules, (urls.origin)(s.url), (urls.origin)(location));
+                lemma_begin_secure(location, s.redirects + 1, tainted);
+                lemma_closing_secure(begin(location, s.redirects + 1, tainted).0, open, begin(location, s.redirects + 1, tainted).1);
+            }
+        },
+    }
+}
+
+/// **A connection speaks TLS exactly when its request is secure.**
+pub proof fn theorem_tls_when_secure(http: HttpFns, urls: UrlFns, url: Url, s: State, input: Input, jar: Seq<Cookie>, now: int)
+    ensures
+        super::contract::tls_when_secure(http, urls, url, s, input, jar, now),
+{
+    lemma_begin_secure(url, 0, false);
+    let r = step(http, urls, s, input, jar, now);
+    match s.phase {
+        Phase::Finished => lemma_no_connects_secure(r.0, r.1),
+        Phase::Connecting => match input {
+            Input::Connected => match crate::request::spec::request_bytes(s.url) {
+                Some(plain) => {
+                    assert(r.1 == seq![Action::Send(wire_bytes(s.url, cookie_string(urls, s, jar, now), plain))]);
+                    assert(no_connects(r.1));
+                    lemma_no_connects_secure(r.0, r.1);
+                },
+                None => lemma_fail_secure(r.0, s, Reason::NotFetched, true),
+            },
+            Input::Bytes(_) => lemma_fail_secure(r.0, s, Reason::Shell, true),
+            Input::Closed => lemma_fail_secure(r.0, s, Reason::Network, false),
+            Input::Error => lemma_fail_secure(r.0, s, Reason::Network, false),
+        },
+        Phase::Reading { received } => match input {
+            Input::Connected => lemma_fail_secure(r.0, s, Reason::Shell, true),
+            Input::Bytes(bytes) => match settle(http, received + bytes) {
+                Settled::Wait(rest) => lemma_no_connects_secure(r.0, r.1),
+                Settled::Final(response) => lemma_on_final_secure(urls, s, response, true, now),
+                Settled::Bad(reason) => lemma_fail_secure(r.0, s, reason, true),
+            },
+            Input::Closed => match settle_at_close(http, received) {
+                Settled::Final(response) => lemma_on_final_secure(urls, s, response, false, now),
+                Settled::Bad(reason) => lemma_fail_secure(r.0, s, reason, false),
+                Settled::Wait(_) => lemma_fail_secure(r.0, s, Reason::Incomplete, false),
+            },
+            Input::Error => lemma_fail_secure(r.0, s, Reason::Network, true),
+        },
     }
 }
 
