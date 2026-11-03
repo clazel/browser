@@ -1,6 +1,7 @@
 //! The errors of the shell.
 
 use clazel_crypto::client::Failure;
+use clazel_sys::RandomError;
 use std::fmt;
 use std::io;
 
@@ -28,8 +29,6 @@ pub enum ResolveError {
     ResolvConf(io::ErrorKind),
     /// No `nameserver` line, or none usable.
     NoNameservers,
-    /// `/dev/urandom` could not be read for the query ID.
-    Random(io::ErrorKind),
     /// No nameserver gave an acceptable reply.
     NoAnswer,
     /// The name exists but has neither an A nor an AAAA record.
@@ -56,6 +55,9 @@ pub enum NetError {
     /// server sent it, the client sent it, neither, or the stream was
     /// truncated (`clazel_crypto::client::Failure`).
     Tls(Failure),
+    /// The OS random source (`clazel_sys::fill_random`) failed: for a DNS
+    /// query ID, or for a TLS connection before anything was sent.
+    Random(RandomError),
 }
 
 impl fmt::Display for NetError {
@@ -66,6 +68,7 @@ impl fmt::Display for NetError {
             NetError::Io(k) => write!(f, "i/o: {k}"),
             NetError::Timeout(s) => write!(f, "timeout: {s:?}"),
             NetError::Tls(failure) => write!(f, "tls: {failure}"),
+            NetError::Random(e) => write!(f, "random: {e}"),
         }
     }
 }
