@@ -1,5 +1,5 @@
-//! Linux: `prctl`, `seccomp`, Landlock and `unshare`, and the two escape
-//! attempts the sandbox tests make (`fork`, `ptrace`).
+//! Linux: `prctl`, `seccomp`, Landlock and `unshare`, the two escape
+//! attempts the sandbox tests make (`fork`, `ptrace`), and `getrandom`.
 //!
 //! None of these takes a decision: each hands a value to the kernel. The
 //! kernel's rules (a filter needs `no_new_privs` or `CAP_SYS_ADMIN`; Landlock
@@ -8,7 +8,7 @@
 
 use std::fmt;
 
-use crate::Errno;
+use crate::{Errno, RandomError};
 
 /// One classic BPF instruction: `struct sock_filter` of `<linux/filter.h>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -232,6 +232,50 @@ pub fn attempt_ptrace_attach(pid: i32) -> Result<(), Errno> {
     // `libc::SYS_ptrace`, and the call returns 0 or -1.
     let rc = unsafe { libc::syscall(libc::SYS_ptrace, request, target, zero, zero) };
     if rc == 0 { Ok(()) } else { Err(Errno::last()) }
+}
+
+/// The most `getrandom` returns from one call with flags 0 (man 2 getrandom:
+/// "up to 33554431 bytes"); a larger request gets a short read. Buffers are
+/// asked for in chunks of this size, and short reads are continued anyway.
+pub(crate) const RANDOM_MAX_PER_CALL: usize = 33_554_431;
+
+/// `getrandom(buf, len, 0)` until `buf` is full: [`crate::fill_random`] on
+/// Linux. Flags 0 reads the urandom source and blocks until the kernel's
+/// pool has been initialised, once per boot; after that it never blocks. A
+/// call interrupted by a signal (`EINTR`) is repeated.
+pub(crate) fn fill_random(buf: &mut [u8]) -> Result<(), RandomError> {
+    for chunk in buf.chunks_mut(RANDOM_MAX_PER_CALL) {
+        let mut rest: &mut [u8] = chunk;
+        while !rest.is_empty() {
+            let ptr: *mut libc::c_void = rest.as_mut_ptr().cast();
+            let len: libc::size_t = rest.len();
+            let flags: libc::c_uint = 0;
+            // SAFETY: man 2 getrandom: `getrandom(buf, buflen, flags)` writes
+            // at most `buflen` bytes to `buf` and returns how many, or -1 and
+            // sets errno; flags 0 is allowed. The `libc::getrandom(*mut
+            // c_void, size_t, c_uint) -> ssize_t` declaration (gnu and musl)
+            // matches. `ptr` and `len` are the pointer and length of the live
+            // slice `rest`, which this function borrows mutably, so the kernel
+            // writes only bytes this call owns; any byte pattern is a valid
+            // `u8`.
+            let n = unsafe { libc::getrandom(ptr, len, flags) };
+            if n < 0 {
+                let e = Errno::last();
+                if e.0 == libc::EINTR {
+                    continue;
+                }
+                return Err(RandomError::Os(e));
+            }
+            let filled = usize::try_from(n).map_err(|_| RandomError::BadCount)?;
+            if filled == 0 {
+                return Err(RandomError::BadCount);
+            }
+            rest = std::mem::take(&mut rest)
+                .get_mut(filled..)
+                .ok_or(RandomError::BadCount)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
