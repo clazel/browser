@@ -3,7 +3,7 @@
 //! The proofs show the executable functions equal `spec.rs`, and
 //! `independent.rs` (RFC 883) that the decoder equals a second reading of the
 //! wire format. This file checks the spec against the outside world, in
-//! six suites, each printing one `clazel-conformance:` line:
+//! seven suites, each printing one `clazel-conformance:` line:
 //!
 //! 1. `hand-built DNS messages`: messages built octet by octet for every
 //!    rule: truncation (TC=1), NXDOMAIN, CNAME chains, AAAA, every
@@ -24,12 +24,16 @@
 //!    by one of the listed reasons (the `xfail` count), and none may be left
 //!    unexplained.
 //! 6. `resolv.conf nameserver lines`: the grammar on hand-written files.
+//! 7. `GetAdaptersAddresses buffers`: buffers built as Windows lays them out
+//!    (the layout a real buffer had on Windows 11), the cases each modelling
+//!    choice of `adapters/spec.rs` is about, and random damage to them.
 //!
 //! The reference engine is `simple-dns` 0.12.0, which parses and writes whole
 //! messages and has one dependency (`bitflags`); `dnsparse` has none but
 //! parses only the header, questions and answers, and `dns-parser` writes
 //! only queries (docs/DEPENDENCIES.md).
 
+use clazel_dns::adapters::parse::dns_servers;
 use clazel_dns::answer::answer_addresses;
 use clazel_dns::decode::{decode_message, decode_udp};
 use clazel_dns::encode::{
@@ -1957,6 +1961,223 @@ fn resolv_conf() -> Suite {
 }
 
 // ---------------------------------------------------------------------------
+// 7. GetAdaptersAddresses buffers.
+// ---------------------------------------------------------------------------
+
+/// The base address of the built buffers: any address works, since the
+/// reader turns every pointer into an offset from it.
+const ADAPTER_BASE: u64 = 0x16a_94ac_5fd0;
+
+/// An adapter as the probe saw them: its `OperStatus` and its DNS servers'
+/// socket addresses (family, octets).
+struct Adapter {
+    status: u32,
+    servers: Vec<(u16, Vec<u8>)>,
+}
+
+/// A buffer laid out as `GetAdaptersAddresses` laid out the real one: each
+/// adapter a 448-octet `IP_ADAPTER_ADDRESSES_LH`, then its 32-octet server
+/// records, then their socket addresses (16 or 28 octets), all at
+/// increasing offsets.
+fn adapter_buffer(adapters: &[Adapter]) -> Vec<u8> {
+    fn put(b: &mut Vec<u8>, at: usize, v: &[u8]) {
+        let end = at.saturating_add(v.len());
+        if b.len() < end {
+            b.resize(end, 0);
+        }
+        if let Some(slot) = b.get_mut(at..end) {
+            slot.copy_from_slice(v);
+        }
+    }
+    let ptr = |off: usize| ADAPTER_BASE.saturating_add(u64::try_from(off).unwrap_or(0));
+    let mut b: Vec<u8> = Vec::new();
+    let mut previous: Option<usize> = None;
+    for a in adapters {
+        let at = b.len();
+        put(&mut b, at, &448u32.to_le_bytes());
+        put(&mut b, at.saturating_add(104), &a.status.to_le_bytes());
+        put(&mut b, at.saturating_add(447), &[0]);
+        if let Some(p) = previous {
+            put(&mut b, p.saturating_add(8), &ptr(at).to_le_bytes());
+        }
+        previous = Some(at);
+        let mut last_server: Option<usize> = None;
+        for (family, octets) in &a.servers {
+            let rec = b.len();
+            let sockaddr = rec.saturating_add(32);
+            let len: u32 = if *family == 23 { 28 } else { 16 };
+            put(&mut b, rec, &32u32.to_le_bytes());
+            put(&mut b, rec.saturating_add(16), &ptr(sockaddr).to_le_bytes());
+            put(&mut b, rec.saturating_add(24), &len.to_le_bytes());
+            put(&mut b, sockaddr, &family.to_le_bytes());
+            let addr_at = if *family == 23 { 8 } else { 4 };
+            put(&mut b, sockaddr.saturating_add(addr_at), octets);
+            put(
+                &mut b,
+                sockaddr
+                    .saturating_add(usize::try_from(len).unwrap_or(0))
+                    .saturating_sub(1),
+                &[0],
+            );
+            match last_server {
+                Some(p) => put(&mut b, p.saturating_add(8), &ptr(rec).to_le_bytes()),
+                None => put(&mut b, at.saturating_add(48), &ptr(rec).to_le_bytes()),
+            }
+            last_server = Some(rec);
+        }
+    }
+    b
+}
+
+fn sin(a: [u8; 4]) -> (u16, Vec<u8>) {
+    (2, a.to_vec())
+}
+
+fn sin6(a: u128) -> (u16, Vec<u8>) {
+    (23, a.to_be_bytes().to_vec())
+}
+
+/// `fec0:0:0:ffff::1` to `::3`, which Windows lists on every adapter with no
+/// IPv6 DNS server configured.
+fn site_local_defaults() -> Vec<(u16, Vec<u8>)> {
+    (1..=3u128)
+        .map(|n| sin6(0xfec0_0000_0000_ffff_0000_0000_0000_0000 | n))
+        .collect()
+}
+
+fn up(servers: Vec<(u16, Vec<u8>)>) -> Adapter {
+    Adapter { status: 1, servers }
+}
+
+fn down(servers: Vec<(u16, Vec<u8>)>) -> Adapter {
+    Adapter { status: 2, servers }
+}
+
+fn adapter_buffers() -> Suite {
+    let desktop = adapter_buffer(&[
+        up(site_local_defaults()),
+        up(site_local_defaults()),
+        up(site_local_defaults()),
+        up(vec![sin([1, 1, 1, 1]), sin([8, 8, 8, 8])]),
+        down(site_local_defaults()),
+        down(site_local_defaults()),
+        down(vec![sin([192, 168, 0, 1])]),
+        up(site_local_defaults()),
+    ]);
+    let mixed = adapter_buffer(&[up(vec![
+        sin6(0x2001_4860_4860_0000_0000_0000_0000_8888),
+        sin6(0xfe80_0000_0000_0000_0000_0000_0000_0001),
+        sin([192, 168, 1, 1]),
+    ])]);
+    let two = adapter_buffer(&[up(vec![sin([10, 0, 0, 1])]), up(vec![sin([10, 0, 0, 2])])]);
+    let same = adapter_buffer(&[up(vec![sin([9, 9, 9, 9])]), up(vec![sin([9, 9, 9, 9])])]);
+    let other_family = adapter_buffer(&[up(vec![(17, vec![1, 2, 3, 4]), sin([4, 4, 4, 4])])]);
+    let one = adapter_buffer(&[up(vec![sin([1, 0, 0, 1])])]);
+    // The first server's record is at 448: pointing it at itself instead
+    // makes a cycle, which must end the list after one read.
+    let mut cycle = one.clone();
+    if let Some(slot) = cycle.get_mut(456..464) {
+        slot.copy_from_slice(&ADAPTER_BASE.saturating_add(448).to_le_bytes());
+    }
+    let mut below = one.clone();
+    if let Some(slot) = below.get_mut(48..56) {
+        slot.copy_from_slice(&ADAPTER_BASE.saturating_sub(8).to_le_bytes());
+    }
+    let cut = one
+        .get(..one.len().saturating_sub(1))
+        .unwrap_or(&[])
+        .to_vec();
+    let cases: Vec<(&str, Vec<u8>, Vec<Addr>)> = vec![
+        (
+            "a Windows 11 desktop: one adapter with servers, site-local defaults everywhere",
+            desktop,
+            vec![v4(1, 1, 1, 1), v4(8, 8, 8, 8)],
+        ),
+        (
+            "IPv6 and IPv4 servers, link-local dropped",
+            mixed,
+            vec![
+                Addr::V6(0x2001_4860_4860_0000_0000_0000_0000_8888),
+                v4(192, 168, 1, 1),
+            ],
+        ),
+        (
+            "two adapters, in list order",
+            two,
+            vec![v4(10, 0, 0, 1), v4(10, 0, 0, 2)],
+        ),
+        (
+            "the same server on two adapters, kept twice",
+            same,
+            vec![v4(9, 9, 9, 9), v4(9, 9, 9, 9)],
+        ),
+        (
+            "a family other than AF_INET and AF_INET6 skipped",
+            other_family,
+            vec![v4(4, 4, 4, 4)],
+        ),
+        ("no adapters", Vec::new(), vec![]),
+        (
+            "a server list that cycles, read once",
+            cycle,
+            vec![v4(1, 0, 0, 1)],
+        ),
+        ("a pointer below the buffer", below, vec![]),
+        (
+            "a socket address cut off by the end of the buffer",
+            cut,
+            vec![],
+        ),
+    ];
+    let mut suite = Suite::new(
+        "GetAdaptersAddresses buffers",
+        cases.len().saturating_add(1),
+    );
+    for (name, bytes, expected) in &cases {
+        let got = dns_servers(bytes, ADAPTER_BASE);
+        suite.check(
+            name,
+            expect(
+                &got == expected,
+                &format!("got {got:?}, expected {expected:?}"),
+            ),
+        );
+    }
+    // Random damage to the desktop buffer: the reader returns, and returns
+    // only servers that are not scoped.
+    let mut rng = Rng(0x5eed_ad4a);
+    let base = cases.first().map(|c| c.1.clone()).unwrap_or_default();
+    let mut bad: Option<String> = None;
+    for round in 0..2000u32 {
+        let mut b = base.clone();
+        for _ in 0..(1 + rng.next() % 8) {
+            let at = usize::try_from(rng.next() % u64::try_from(b.len().max(1)).unwrap_or(1))
+                .unwrap_or(0);
+            if let Some(slot) = b.get_mut(at) {
+                *slot = u8::try_from(rng.next() % 256).unwrap_or(0);
+            }
+        }
+        if rng.next() % 4 == 0 {
+            let keep = usize::try_from(rng.next() % u64::try_from(b.len().max(1)).unwrap_or(1))
+                .unwrap_or(0);
+            b.truncate(keep);
+        }
+        for a in dns_servers(&b, ADAPTER_BASE) {
+            if let Addr::V6(v) = a
+                && v >> 119 == 0x1fd
+            {
+                bad = Some(format!("round {round}: scoped server {v:#x}"));
+            }
+        }
+    }
+    suite.check(
+        "2000 damaged buffers: no scoped server",
+        bad.map_or(Ok(()), Err),
+    );
+    suite
+}
+
+// ---------------------------------------------------------------------------
 // The tests.
 // ---------------------------------------------------------------------------
 
@@ -1988,4 +2209,9 @@ fn differential_mutated_messages() {
 #[test]
 fn resolv_conf_nameserver_lines() {
     resolv_conf().finish();
+}
+
+#[test]
+fn get_adapters_addresses_buffers() {
+    adapter_buffers().finish();
 }
