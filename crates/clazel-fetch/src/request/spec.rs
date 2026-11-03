@@ -4,7 +4,7 @@
 //! Sources (pinned; an RFC never changes after publication):
 //! - RFC 9112 "HTTP/1.1", June 2022, §3.2.1 origin form;
 //! - RFC 9110 "HTTP Semantics", June 2022, §4.2.1 the `http` URI scheme,
-//!   §4.2.4 deprecated userinfo, §7.2 `Host`, §7.6.1 `Connection`, §12.5.1
+//!   §4.2.2 the `https` URI scheme, §4.2.4 deprecated userinfo, §7.2 `Host`, §7.6.1 `Connection`, §12.5.1
 //!   `Accept`, §10.1.5 `User-Agent`, §15.2 informational responses;
 //! - the URL Standard (as transcribed in `clazel_url`): the URL record,
 //!   the URL path serializer, the host serializer and "serialize an
@@ -12,9 +12,18 @@
 //!
 //! Modelling choices (each a choice of ours or a deviation in form, never
 //! in meaning):
-//! - Only `http:` URLs are fetched (TLS is not built yet), only with GET,
-//!   and one request per connection, so every request carries
-//!   `Connection: close` (§7.6.1) and the response may be close-delimited.
+//! - Only `http:` and `https:` URLs are fetched (Fetch §2.1's "HTTP(S)
+//!   scheme"), only with GET, and one request per connection, so every
+//!   request carries `Connection: close` (§7.6.1) and the response may be
+//!   close-delimited. The request is the same for both schemes (§4.2.2's
+//!   `https-URI` has `http`'s authority, path and query, and "The
+//!   hierarchical path component and optional query component identify the
+//!   target resource within that origin server's namespace"); they differ
+//!   in the default port ([`default_port`]) and in the connection, which
+//!   speaks TLS for `https` ([`uses_tls`]): §4.2.2, "A client MUST ensure
+//!   that its HTTP requests for an "https" resource are secured, prior to
+//!   being communicated". Securing the connection (TLS 1.3 and the
+//!   certificate checks) is the shell's.
 //! - The fields sent, in this order: `Host` (§7.2: "A user agent MUST
 //!   generate a Host header field in a request"), `Connection: close`,
 //!   `Accept: */*` (§12.5.1) and `User-Agent: clazel` (§10.1.5). No
@@ -130,9 +139,15 @@ pub open spec fn lit_get() -> Seq<u8> {
     seq![0x47u8, 0x45, 0x54]
 }
 
+/// The schemes this client fetches: `http` (RFC 9110 §4.2.1) and `https`
+/// (§4.2.2), Fetch §2.1's "HTTP(S) scheme".
+pub open spec fn is_fetched_scheme(scheme: Seq<u32>) -> bool {
+    scheme == clazel_url::url::spec::http_str() || scheme == clazel_url::url::spec::https_str()
+}
+
 /// The request for `url`, or `None` if this client does not fetch it.
 pub open spec fn request_for(url: clazel_url::url::spec::Url) -> Option<clazel_http::message::spec::Request> {
-    if url.scheme != clazel_url::url::spec::http_str() || url.username.len() > 0 || url.password.len() > 0 {
+    if !is_fetched_scheme(url.scheme) || url.username.len() > 0 || url.password.len() > 0 {
         None
     } else {
         match (ascii_octets(origin_form(url)), host_value(url)) {
@@ -206,16 +221,37 @@ pub open spec fn request_bytes(url: clazel_url::url::spec::Url) -> Option<Seq<u8
     }
 }
 
+/// Whether the connection for `url` speaks TLS: exactly when its scheme is
+/// `https` (RFC 9110 §4.2.2: "A client MUST ensure that its HTTP requests
+/// for an "https" resource are secured, prior to being communicated"; an
+/// `http` request is sent in the clear, §4.2.1).
+pub open spec fn uses_tls(url: clazel_url::url::spec::Url) -> bool {
+    url.scheme == clazel_url::url::spec::https_str()
+}
+
+/// The scheme's default port: 443 for `https` (RFC 9110 §4.2.2: "If the
+/// port subcomponent is empty or not given, TCP port 443 (the reserved
+/// port for HTTP over TLS) is the default"), else 80 (§4.2.1: "TCP port 80
+/// ... is the default"). For a
+/// scheme this client does not fetch, [`request_bytes`] is `None`, so the
+/// value is never used.
+pub open spec fn default_port(url: clazel_url::url::spec::Url) -> nat {
+    if uses_tls(url) {
+        443
+    } else {
+        80
+    }
+}
+
 /// Where to connect for `url`: the host as the resolver takes it (the
 /// host serializer's output) and the port, the URL's or the scheme's
-/// default (RFC 9110 §4.2.1: "If the port subcomponent is empty or not
-/// given, TCP port 80 ... is the default").
+/// default ([`default_port`]).
 pub open spec fn connect_to(url: clazel_url::url::spec::Url) -> Option<(Seq<u8>, nat)> {
     match url.host {
         Some(host) => match ascii_octets(clazel_url::host::spec::host_serializer(host)) {
             Some(h) => Some((h, match url.port {
                 Some(p) => p,
-                None => 80,
+                None => default_port(url),
             })),
             None => None,
         },

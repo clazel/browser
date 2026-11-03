@@ -22,6 +22,11 @@ pub open spec fn connect_to_ensures(url: clazel_url::url::spec::Url, output: Opt
     output == connect_to(url)
 }
 
+/// Contract for `uses_tls(&ParsedUrl) -> bool`.
+pub open spec fn uses_tls_ensures(url: clazel_url::url::spec::Url, output: bool) -> bool {
+    output == uses_tls(url)
+}
+
 /// Contract for `is_interim(u16) -> bool`.
 pub open spec fn is_interim_ensures(status: nat, output: bool) -> bool {
     output == is_interim(status)

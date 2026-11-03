@@ -54,12 +54,12 @@ pub proof fn lemma_request_04()
     assert(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: Some(seq![0x66u32]) }) == Some(seq![0x47u8, 0x45, 0x54, 0x20, 0x2F, 0x61, 0x20, 0x48, 0x54, 0x54, 0x50, 0x2F, 0x31, 0x2E, 0x31, 0x0D, 0x0A, 0x48, 0x6F, 0x73, 0x74, 0x3A, 0x20, 0x65, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D, 0x0D, 0x0A, 0x43, 0x6F, 0x6E, 0x6E, 0x65, 0x63, 0x74, 0x69, 0x6F, 0x6E, 0x3A, 0x20, 0x63, 0x6C, 0x6F, 0x73, 0x65, 0x0D, 0x0A, 0x41, 0x63, 0x63, 0x65, 0x70, 0x74, 0x3A, 0x20, 0x2A, 0x2F, 0x2A, 0x0D, 0x0A, 0x55, 0x73, 0x65, 0x72, 0x2D, 0x41, 0x67, 0x65, 0x6E, 0x74, 0x3A, 0x20, 0x63, 0x6C, 0x61, 0x7A, 0x65, 0x6C, 0x0D, 0x0A, 0x0D, 0x0A])) by (compute_only);
 }
 
-/// only http: is fetched.
+/// only http: and https: are fetched (Fetch §2.1): ftp: is not.
 pub proof fn lemma_request_05()
     ensures
-        request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None,
+        request_bytes(clazel_url::url::spec::Url { scheme: seq![0x66u32, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None,
 {
-    assert(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None) by (compute_only);
+    assert(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x66u32, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is None) by (compute_only);
 }
 
 /// RFC 9110 §4.2.4: a username is refused.
@@ -164,6 +164,55 @@ pub proof fn lemma_request_18()
         !is_interim(99nat),
 {
     assert(!is_interim(99nat)) by (compute_only);
+}
+
+
+/// RFC 9110 §4.2.2: an https: request is the same as the http: one (the connection differs, not the request).
+pub proof fn lemma_request_19()
+    ensures
+        request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }),
+{
+    assert(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None })) by (compute_only);
+}
+
+/// an https: request is sent (not None).
+pub proof fn lemma_request_20()
+    ensures
+        request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is Some,
+{
+    assert(request_bytes(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) is Some) by (compute_only);
+}
+
+/// RFC 9110 §4.2.2: port 443 by default for https:.
+pub proof fn lemma_request_21()
+    ensures
+        connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 443nat)),
+{
+    assert(connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 443nat))) by (compute_only);
+}
+
+/// the URL's port when it has one, for https: too.
+pub proof fn lemma_request_22()
+    ensures
+        connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: Some(8443nat), path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 8443nat)),
+{
+    assert(connect_to(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: Some(8443nat), path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }) == Some((seq![0x65u8, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D], 8443nat))) by (compute_only);
+}
+
+/// RFC 9110 §4.2.2: https: speaks TLS.
+pub proof fn lemma_request_23()
+    ensures
+        uses_tls(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }),
+{
+    assert(uses_tls(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70, 0x73], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None })) by (compute_only);
+}
+
+/// RFC 9110 §4.2.1: http: does not.
+pub proof fn lemma_request_24()
+    ensures
+        !uses_tls(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None }),
+{
+    assert(!uses_tls(clazel_url::url::spec::Url { scheme: seq![0x68u32, 0x74, 0x74, 0x70], username: Seq::<u32>::empty(), password: Seq::<u32>::empty(), host: Some(clazel_url::host::spec::Host::Domain(seq![0x65u32, 0x78, 0x61, 0x6D, 0x70, 0x6C, 0x65, 0x2E, 0x63, 0x6F, 0x6D])), port: None, path: clazel_url::url::spec::UrlPath::List(seq![seq![0x61u32]]), query: None, fragment: None })) by (compute_only);
 }
 
 } // verus!
