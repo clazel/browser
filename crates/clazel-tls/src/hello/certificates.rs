@@ -23,6 +23,50 @@ pub proof fn lemma_absent_legacy_extension_field_uses_protocol_version()
     ) == Err(crate::spec::PROTOCOL_VERSION)) by (compute_only);
 }
 
+/// The same legacy ServerHello as [`legacy_server_hello_without_extension_field`]
+/// with `tail` as the last 8 bytes of its Random.
+pub open spec fn legacy_server_hello_with_random_tail(tail: Seq<u8>) -> Seq<u8> {
+    seq![3u8, 3] + crate::examples_hs::z32().take(24) + tail + seq![0u8] + seq![0u8, 0x2f] + seq![0u8]
+}
+
+/// RFC 8446 §4.1.3: a ServerHello indicating TLS 1.2 whose Random ends in
+/// "44 4F 57 4E 47 52 44 01" is `illegal_parameter`, not `protocol_version`.
+pub proof fn lemma_downgrade_sentinel_tls12_is_illegal_parameter()
+    ensures super::spec::validate(
+        Seq::empty(), false, legacy_server_hello_with_random_tail(super::spec::downgrade_tls12()),
+    ) == Err(crate::spec::ILLEGAL_PARAMETER)
+{
+    assert(super::spec::validate(
+        Seq::empty(), false, legacy_server_hello_with_random_tail(super::spec::downgrade_tls12()),
+    ) == Err(crate::spec::ILLEGAL_PARAMETER)) by (compute_only);
+}
+
+/// RFC 8446 §4.1.3: the TLS 1.1-or-below sentinel "44 4F 57 4E 47 52 44 00"
+/// is checked too ("not equal to either of these values").
+pub proof fn lemma_downgrade_sentinel_tls11_is_illegal_parameter()
+    ensures super::spec::validate(
+        Seq::empty(), false, legacy_server_hello_with_random_tail(super::spec::downgrade_tls11()),
+    ) == Err(crate::spec::ILLEGAL_PARAMETER)
+{
+    assert(super::spec::validate(
+        Seq::empty(), false, legacy_server_hello_with_random_tail(super::spec::downgrade_tls11()),
+    ) == Err(crate::spec::ILLEGAL_PARAMETER)) by (compute_only);
+}
+
+/// RFC 8446 §4.1.3: a near-miss tail (last byte 02) is no sentinel, so the
+/// same legacy ServerHello stays `protocol_version`.
+pub proof fn lemma_downgrade_near_miss_is_protocol_version()
+    ensures super::spec::validate(
+        Seq::empty(), false,
+        legacy_server_hello_with_random_tail(seq![0x44u8, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x02]),
+    ) == Err(crate::spec::PROTOCOL_VERSION)
+{
+    assert(super::spec::validate(
+        Seq::empty(), false,
+        legacy_server_hello_with_random_tail(seq![0x44u8, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x02]),
+    ) == Err(crate::spec::PROTOCOL_VERSION)) by (compute_only);
+}
+
 /// A syntactically decoded ServerHello with no extensions identifies no TLS 1.3 version.
 pub proof fn lemma_legacy_server_hello_uses_protocol_version()
     ensures parameters(
