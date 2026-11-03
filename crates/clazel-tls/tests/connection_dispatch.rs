@@ -409,6 +409,42 @@ fn application_secrets(fixture: &Fixture) -> (Vec<u8>, Vec<u8>) {
     )
 }
 
+/// RFC 8446 §6.2, §5.3: the fatal alert `description` as the client must
+/// seal it under `secret`, at sequence number `seq` of that epoch (the
+/// records before it are sealed and discarded). A fresh factory keeps the
+/// fixture's trace of made keys untouched.
+fn client_alert(secret: &[u8], seq: u64, description: u8) -> Result<Vec<u8>, String> {
+    let mut sealer = Encryptor::new(&TestCrypto, &ToyFactory::new(), secret)
+        .map_err(|e| format!("client epoch alert {e}"))?;
+    for _ in 0..seq {
+        sealer
+            .seal(23, b"earlier record", 0)
+            .map_err(|e| format!("earlier record alert {e}"))?;
+    }
+    sealer
+        .seal(21, &[2, description], 0)
+        .map_err(|e| format!("alert seal alert {e}"))
+}
+
+/// The local failure `description`, with its alert sealed under the client
+/// handshake epoch at sequence number 0 (during the server's flight).
+fn handshake_failure(fixture: &Fixture, description: u8) -> Result<Action, String> {
+    Ok(Action::Fail(
+        description,
+        Some(client_alert(&fixture.client_secret, 0, description)?),
+    ))
+}
+
+/// The local failure `description`, with its alert sealed under the client
+/// application epoch at sequence number `seq` (after the handshake).
+fn application_failure(fixture: &Fixture, seq: u64, description: u8) -> Result<Action, String> {
+    let (client_secret, _) = application_secrets(fixture);
+    Ok(Action::Fail(
+        description,
+        Some(client_alert(&client_secret, seq, description)?),
+    ))
+}
+
 #[test]
 fn fragmented_server_flight_gates_client_finished_and_application_keys() -> Result<(), String> {
     let mut fixture = fixture()?;
@@ -598,7 +634,10 @@ fn wrong_finished_and_bad_mac_fail_closed() -> Result<(), String> {
         .seal(22, &wrong_finished_message, 0)
         .map_err(|e| format!("record seal alert {e}"))?;
     let (_, result) = bad_finished.connection.feed(&wrong);
-    assert_eq!(result, Action::Fail(clazel_tls::spec::DECRYPT_ERROR));
+    assert_eq!(
+        result,
+        handshake_failure(&bad_finished, clazel_tls::spec::DECRYPT_ERROR)?
+    );
     assert_eq!(bad_finished.connection.mode(), Mode::Failed);
     assert_eq!(bad_finished.connection.feed(&wrong), (0, Action::None));
 
@@ -612,7 +651,10 @@ fn wrong_finished_and_bad_mac_fail_closed() -> Result<(), String> {
         *last ^= 1;
     }
     let (_, result) = bad_mac.connection.feed(&corrupt);
-    assert_eq!(result, Action::Fail(clazel_tls::spec::BAD_RECORD_MAC));
+    assert_eq!(
+        result,
+        handshake_failure(&bad_mac, clazel_tls::spec::BAD_RECORD_MAC)?
+    );
     assert_eq!(bad_mac.connection.mode(), Mode::Failed);
     assert_eq!(bad_mac.connection.feed(&corrupt), (0, Action::None));
     Ok(())
@@ -634,7 +676,10 @@ fn finished_must_end_at_record_boundary_and_compatibility_ccs_is_dropped() -> Re
         .map_err(|e| format!("record seal alert {e}"))?;
     let (used, result) = trailing_fixture.connection.feed(&trailing_record);
     assert_eq!(used, trailing_record.len());
-    assert_eq!(result, Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE));
+    assert_eq!(
+        result,
+        handshake_failure(&trailing_fixture, clazel_tls::spec::UNEXPECTED_MESSAGE)?
+    );
 
     let ccs = [20, 3, 3, 0, 1, 1];
     // An in-window compatibility CCS is ignored before the next protected record.
@@ -676,7 +721,7 @@ fn finished_must_end_at_record_boundary_and_compatibility_ccs_is_dropped() -> Re
     );
     assert_eq!(
         after_finished.connection.feed(&ccs).1,
-        Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
+        application_failure(&after_finished, 0, clazel_tls::spec::UNEXPECTED_MESSAGE)?
     );
     Ok(())
 }
@@ -689,12 +734,10 @@ fn application_record_before_server_finished_is_terminal() -> Result<(), String>
     let premature = server
         .seal(23, b"too early", 0)
         .map_err(|e| format!("record seal alert {e}"))?;
+    let expected = handshake_failure(&fixture, clazel_tls::spec::UNEXPECTED_MESSAGE)?;
     assert_eq!(
         fixture.connection.feed(&premature),
-        (
-            premature.len(),
-            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
-        )
+        (premature.len(), expected)
     );
     assert_eq!(fixture.connection.mode(), Mode::Failed);
     assert_eq!(fixture.connection.feed(&premature), (0, Action::None));
@@ -727,9 +770,11 @@ fn local_key_update_waits_for_exact_send_ack_and_rotates_only_client_epoch() -> 
     if let Some(last) = wrong_ack.last_mut() {
         *last ^= 1;
     }
+    // A KeyUpdate awaits acknowledgement: the write epoch is not settled, so
+    // no alert is sealed.
     assert_eq!(
         failed_fixture.connection.acknowledge_key_update(&wrong_ack),
-        Action::Fail(clazel_tls::spec::INTERNAL_ERROR)
+        Action::Fail(clazel_tls::spec::INTERNAL_ERROR, None)
     );
     assert_eq!(failed_fixture.connection.mode(), Mode::Failed);
 
@@ -897,12 +942,10 @@ fn fragmented_key_update_with_trailing_message_is_rejected() -> Result<(), Strin
     let second_record = server
         .seal(22, &second_fragment, 0)
         .map_err(|e| format!("second fragment seal alert {e}"))?;
+    let expected = application_failure(&fixture, 0, clazel_tls::spec::UNEXPECTED_MESSAGE)?;
     assert_eq!(
         fixture.connection.feed(&second_record),
-        (
-            second_record.len(),
-            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
-        )
+        (second_record.len(), expected)
     );
     assert_eq!(fixture.connection.mode(), Mode::Failed);
     assert_eq!(fixture.connection.feed(&second_record), (0, Action::None));
@@ -965,7 +1008,8 @@ fn compatibility_ccs_between_handshake_fragments_is_refused() -> Result<(), Stri
         (prefix_record.len(), Action::None)
     );
     let ccs = [20, 3, 3, 0, 1, 1];
-    assert_eq!(fixture.connection.feed(&ccs), (ccs.len(), Action::Fail(10)));
+    let expected = handshake_failure(&fixture, 10)?;
+    assert_eq!(fixture.connection.feed(&ccs), (ccs.len(), expected));
     // The failure is terminal: the rest of the message is not accepted.
     let suffix_record = server
         .seal(22, suffix, 0)
@@ -1005,12 +1049,10 @@ fn compatibility_ccs_between_whole_handshake_messages_is_dropped() -> Result<(),
 fn invalid_or_protected_ccs_and_other_record_interleaving_fail() -> Result<(), String> {
     let mut invalid_fixture = fixture()?;
     let invalid_ccs = [20, 3, 3, 0, 1, 2];
+    let expected = handshake_failure(&invalid_fixture, clazel_tls::spec::UNEXPECTED_MESSAGE)?;
     assert_eq!(
         invalid_fixture.connection.feed(&invalid_ccs),
-        (
-            invalid_ccs.len(),
-            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
-        )
+        (invalid_ccs.len(), expected)
     );
 
     let mut interleaved_fixture = fixture()?;
@@ -1032,12 +1074,10 @@ fn invalid_or_protected_ccs_and_other_record_interleaving_fail() -> Result<(), S
     let app_record = server
         .seal(23, b"interleaved application record", 0)
         .map_err(|e| format!("interleaved app seal alert {e}"))?;
+    let expected = handshake_failure(&interleaved_fixture, clazel_tls::spec::UNEXPECTED_MESSAGE)?;
     assert_eq!(
         interleaved_fixture.connection.feed(&app_record),
-        (
-            app_record.len(),
-            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
-        )
+        (app_record.len(), expected)
     );
 
     let mut protected_fixture = ready_fixture()?;
@@ -1046,12 +1086,11 @@ fn invalid_or_protected_ccs_and_other_record_interleaving_fail() -> Result<(), S
     let iv = clazel_tls::schedule::exec::write_iv(&protected_fixture.crypto, &server_secret);
     let cipher = ToyCipher { key };
     let protected_ccs = clazel_tls::record::encrypt_record(&cipher, &iv, 0, 20, &[1], 0);
+    let expected =
+        application_failure(&protected_fixture, 0, clazel_tls::spec::UNEXPECTED_MESSAGE)?;
     assert_eq!(
         protected_fixture.connection.feed(&protected_ccs),
-        (
-            protected_ccs.len(),
-            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
-        )
+        (protected_ccs.len(), expected)
     );
     Ok(())
 }
@@ -1082,9 +1121,10 @@ fn user_canceled_is_nonfatal_and_eof_without_close_notify_is_truncation() -> Res
             Action::Deliver(b"user_canceled did not close the write direction".to_vec())
         )
     );
+    // §6.1 truncation: the peer has closed, so nothing is sent.
     assert_eq!(
         fixture.connection.eof(),
-        Action::Fail(clazel_tls::spec::INTERNAL_ERROR)
+        Action::Fail(clazel_tls::spec::INTERNAL_ERROR, None)
     );
     assert_eq!(fixture.connection.mode(), Mode::Failed);
     Ok(())
@@ -1163,9 +1203,10 @@ fn close_notify_write_requires_exact_send_acknowledgement() -> Result<(), String
     if let Some(last) = wrong.last_mut() {
         *last ^= 1;
     }
+    // §6.1: nothing is written after the sealed close_notify, not even an alert.
     assert_eq!(
         fixture.connection.acknowledge_close_notify(&wrong),
-        Action::Fail(clazel_tls::spec::INTERNAL_ERROR)
+        Action::Fail(clazel_tls::spec::INTERNAL_ERROR, None)
     );
     assert_eq!(fixture.connection.mode(), Mode::Failed);
     Ok(())
@@ -1201,12 +1242,10 @@ fn fragmented_ticket_is_discarded_but_coalesced_or_duplicate_messages_fail() -> 
     let coalesced_record = server
         .seal(22, &coalesced, 0)
         .map_err(|e| format!("coalesced post-handshake seal alert {e}"))?;
+    let expected = application_failure(&fixture, 0, clazel_tls::spec::UNEXPECTED_MESSAGE)?;
     assert_eq!(
         fixture.connection.feed(&coalesced_record),
-        (
-            coalesced_record.len(),
-            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE)
-        )
+        (coalesced_record.len(), expected)
     );
     assert_eq!(fixture.connection.mode(), Mode::Failed);
 
@@ -1233,12 +1272,10 @@ fn fragmented_ticket_is_discarded_but_coalesced_or_duplicate_messages_fail() -> 
     let duplicate_record = duplicate_server
         .seal(22, &duplicate_ticket, 0)
         .map_err(|e| format!("duplicate ticket seal alert {e}"))?;
+    let expected = application_failure(&duplicate_fixture, 0, clazel_tls::spec::ILLEGAL_PARAMETER)?;
     assert_eq!(
         duplicate_fixture.connection.feed(&duplicate_record),
-        (
-            duplicate_record.len(),
-            Action::Fail(clazel_tls::spec::ILLEGAL_PARAMETER)
-        )
+        (duplicate_record.len(), expected)
     );
     Ok(())
 }
@@ -1256,12 +1293,10 @@ fn empty_ticket_is_decode_error_and_unknown_ticket_extensions_are_discarded() ->
     let malformed_record = server
         .seal(22, &malformed, 0)
         .map_err(|e| format!("malformed ticket seal alert {e}"))?;
+    let expected = application_failure(&fixture, 0, clazel_tls::spec::DECODE_ERROR)?;
     assert_eq!(
         fixture.connection.feed(&malformed_record),
-        (
-            malformed_record.len(),
-            Action::Fail(clazel_tls::spec::DECODE_ERROR)
-        )
+        (malformed_record.len(), expected)
     );
 
     let mut unknown_fixture = ready_fixture()?;
@@ -1283,6 +1318,126 @@ fn empty_ticket_is_decode_error_and_unknown_ticket_extensions_are_discarded() ->
     assert_eq!(
         unknown_fixture.connection.feed(&unknown_record),
         (unknown_record.len(), Action::None)
+    );
+    Ok(())
+}
+
+/// RFC 8446 §6, §6.2: a fatal alert from the server, during its flight or
+/// after the handshake, at either level, ends the connection unanswered.
+#[test]
+fn peer_fatal_alerts_are_not_answered() -> Result<(), String> {
+    let mut during = fixture()?;
+    let mut server = Encryptor::new(&during.crypto, &during.factory, &during.server_secret)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+    let alert = server
+        .seal(21, &[2, 40], 0)
+        .map_err(|e| format!("alert seal alert {e}"))?;
+    assert_eq!(
+        during.connection.feed(&alert),
+        (alert.len(), Action::PeerAlert(40))
+    );
+    assert_eq!(during.connection.mode(), Mode::Failed);
+
+    for level in [1, 2] {
+        let mut after = ready_fixture()?;
+        let (_, server_secret) = application_secrets(&after);
+        let mut server = Encryptor::new(&after.crypto, &after.factory, &server_secret)
+            .map_err(|e| format!("server epoch alert {e}"))?;
+        let alert = server
+            .seal(21, &[level, 42], 0)
+            .map_err(|e| format!("alert seal alert {e}"))?;
+        assert_eq!(
+            after.connection.feed(&alert),
+            (alert.len(), Action::PeerAlert(42))
+        );
+        assert_eq!(after.connection.mode(), Mode::Failed);
+        // No key is left to seal anything with.
+        assert_eq!(
+            after.connection.send_application(b"x", 0),
+            Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE, None)
+        );
+    }
+    Ok(())
+}
+
+/// A protected change_cipher_spec, the server's first record under
+/// `secret` (§5: always unexpected_message). `Encryptor` refuses to seal one.
+fn server_protected_ccs(crypto: &TestCrypto, secret: &[u8]) -> Vec<u8> {
+    let key = clazel_tls::schedule::exec::write_key(crypto, secret);
+    let iv = clazel_tls::schedule::exec::write_iv(crypto, secret);
+    clazel_tls::record::encrypt_record(&ToyCipher { key }, &iv, 0, 20, &[1], 0)
+}
+
+/// RFC 8446 §5.3, §6.2: after the handshake a local failure seals its alert
+/// under the current application epoch at its next sequence number, after
+/// the records the client already sent, and the peer can read it.
+#[test]
+fn a_local_failure_seals_its_alert_at_the_next_sequence_number() -> Result<(), String> {
+    let mut fixture = ready_fixture()?;
+    let (client_secret, server_secret) = application_secrets(&fixture);
+    let mut sent = Vec::new();
+    for data in [&b"first"[..], &b"second"[..]] {
+        match fixture.connection.send_application(data, 0) {
+            Action::Send(wire) => sent.push(wire),
+            other => return Err(format!("expected application send, got {other:?}")),
+        }
+    }
+    let protected_ccs = server_protected_ccs(&fixture.crypto, &server_secret);
+    let (_, action) = fixture.connection.feed(&protected_ccs);
+    assert_eq!(
+        action,
+        application_failure(&fixture, 2, clazel_tls::spec::UNEXPECTED_MESSAGE)?
+    );
+    let Action::Fail(_, Some(alert)) = action else {
+        return Err("no alert was sealed".to_owned());
+    };
+    // The server's view: two data records, then the alert, in order.
+    let mut peer = Decryptor::new(&fixture.crypto, &ToyFactory::new(), &client_secret)
+        .map_err(|e| format!("client epoch alert {e}"))?;
+    for wire in &sent {
+        assert!(matches!(
+            peer.open(wire),
+            clazel_tls::traffic::exec::Read::Record(23, _, _)
+        ));
+    }
+    assert!(matches!(
+        peer.open(&alert),
+        clazel_tls::traffic::exec::Read::Record(21, bytes, consumed)
+            if bytes == [2, clazel_tls::spec::UNEXPECTED_MESSAGE] && consumed == alert.len()
+    ));
+    Ok(())
+}
+
+/// RFC 8446 §6.1: nothing is written after our close_notify, so a failure
+/// once it is sealed sends no alert; and while the client Finished awaits its
+/// acknowledgement no write epoch is settled, so a failure there sends none.
+#[test]
+fn no_alert_after_close_notify_or_before_the_application_keys() -> Result<(), String> {
+    let mut closing = ready_fixture()?;
+    let (_, server_secret) = application_secrets(&closing);
+    let close = match closing.connection.close_write() {
+        Action::Send(wire) => wire,
+        other => return Err(format!("expected protected close_notify, got {other:?}")),
+    };
+    assert!(!close.is_empty());
+    let protected_ccs = server_protected_ccs(&closing.crypto, &server_secret);
+    assert_eq!(
+        closing.connection.feed(&protected_ccs).1,
+        Action::Fail(clazel_tls::spec::UNEXPECTED_MESSAGE, None)
+    );
+
+    let mut awaiting = fixture()?;
+    let mut flight = Action::None;
+    for record in &awaiting.server_records {
+        flight = awaiting.connection.feed(record).1;
+    }
+    assert!(matches!(flight, Action::Send(_)));
+    assert_eq!(awaiting.connection.mode(), Mode::AwaitClientFlight);
+    assert_eq!(
+        awaiting
+            .connection
+            .acknowledge_client_flight(b"not the flight"),
+        Action::Fail(clazel_tls::spec::INTERNAL_ERROR, None)
     );
     Ok(())
 }
