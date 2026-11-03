@@ -298,6 +298,58 @@ fn a_certificate_for_another_name_is_bad_certificate() -> T {
     Ok(())
 }
 
+/// RFC 8446 §5.2, §6.2: after the handshake, a response record that fails
+/// to decrypt is bad_record_mac (20): the client seals that alert under its
+/// application key, and rustls decrypts and reports it.
+#[test]
+fn an_undecryptable_response_sends_bad_record_mac() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_ECDSA, KEY_ECDSA)?;
+        read_until(&mut tls, b"\r\n\r\n")?;
+        tls.conn
+            .writer()
+            .write_all(b"HTTP/1.1 200 OK\r\n\r\n")
+            .map_err(|e| e.to_string())?;
+        let mut records = Vec::new();
+        while tls.conn.wants_write() {
+            tls.conn
+                .write_tls(&mut records)
+                .map_err(|e| e.to_string())?;
+        }
+        // Flip one octet of the last record's AEAD tag.
+        if let Some(last) = records.last_mut() {
+            *last ^= 1;
+        }
+        tls.sock.write_all(&records).map_err(|e| e.to_string())?;
+        // What the client sends back is its alert.
+        loop {
+            match tls.conn.read_tls(&mut tls.sock) {
+                Ok(0) => return Ok("closed without an alert".to_owned()),
+                Ok(_) => {
+                    if let Err(e) = tls.conn.process_new_packets() {
+                        return Ok(e.to_string());
+                    }
+                }
+                Err(e) => return Ok(e.to_string()),
+            }
+        }
+    })?;
+    let mut conn = open(port, Duration::from_secs(5)).map_err(|e| e.to_string())?;
+    conn.send(REQUEST).map_err(|e| e.to_string())?;
+    let failure = Failure {
+        alert: 20,
+        origin: Origin::Sent,
+    };
+    assert_eq!(conn.read(&mut [0u8; 64]), Err(NetError::Tls(failure)));
+    assert_eq!(
+        NetError::Tls(failure).to_string(),
+        "tls: bad_record_mac (20), sent to the server"
+    );
+    let server_error = join(handle)?;
+    assert!(server_error.contains("BadRecordMac"), "{server_error}");
+    Ok(())
+}
+
 #[test]
 fn bytes_that_are_not_tls() -> T {
     let (port, handle) = server(|mut socket| {

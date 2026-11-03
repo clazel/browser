@@ -331,9 +331,9 @@ enum Event {
     PeerClosed,
     /// Both directions closed: the peer's close_notify after ours.
     Closed,
-    /// Fatal: the dispatcher's alert description.
+    /// Fatal: the dispatcher's alert description, for a local error.
     Fail(u8),
-    /// An alert the peer sent before the handshake keys.
+    /// A fatal alert the peer sent, before or after the handshake keys.
     PeerAlert(u8),
     /// Anything else of interest.
     Other(String),
@@ -500,8 +500,14 @@ impl Client {
                 events.push(Event::PeerClosed);
                 false
             }
-            Action::Fail(alert) => {
+            // The sealed alert record, if any, is checked in `tests/client.rs`
+            // through the driver; this suite records the description.
+            Action::Fail(alert, _) => {
                 events.push(Event::Fail(alert));
+                true
+            }
+            Action::PeerAlert(alert) => {
+                events.push(Event::PeerAlert(alert));
                 true
             }
             Action::Close => {

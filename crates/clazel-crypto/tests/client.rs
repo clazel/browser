@@ -263,6 +263,76 @@ fn an_empty_trust_store_sends_unknown_ca() -> TestResult {
     Ok(())
 }
 
+/// RFC 8446 §5.2, §6.2: after the handshake, application data from the
+/// server that fails to decrypt is bad_record_mac (20). `Connection` seals
+/// that alert under the client application key at its next sequence number
+/// (1, after the request) before it drops its keys, and rustls decrypts it.
+#[test]
+fn undecryptable_application_data_sends_bad_record_mac() -> TestResult {
+    let mut server = server(LEAF_ECDSA, KEY_ECDSA)?;
+    let (mut client, hello) = connect(anchors());
+    let (out, _) = handshake(&mut client, &mut server, hello.send)?;
+    assert_eq!(out.state, State::Open);
+    let out = client
+        .send(b"GET / HTTP/1.1\r\n\r\n")
+        .map_err(|e| format!("{e:?}"))?;
+    feed(&mut server, &out.send)?;
+    write_plaintext(&mut server, b"a response the client cannot read")?;
+    let mut record = take(&mut server)?;
+    // Flip one octet of the AEAD tag: the record no longer authenticates.
+    if let Some(last) = record.last_mut() {
+        *last ^= 1;
+    }
+    let out = client.receive(&record);
+    assert_eq!(
+        out.state,
+        State::Failed(Failure {
+            alert: 20,
+            origin: Origin::Sent
+        })
+    );
+    assert!(out.deliver.is_empty());
+    // One protected record: application_data outer type, 0x0303, and the
+    // two alert octets, the inner type and the 16-octet tag.
+    assert_eq!(out.send.len(), 5 + 2 + 1 + 16, "{:?}", out.send);
+    assert_eq!(out.send.get(..5), Some(&[23u8, 3, 3, 0, 19][..]));
+    let error = feed(&mut server, &out.send).err().unwrap_or_default();
+    assert!(error.contains("BadRecordMac"), "{error}");
+    // Final: nothing more is read or sent.
+    let after = client.receive(&take(&mut server)?);
+    assert!(after.send.is_empty() && after.deliver.is_empty());
+    Ok(())
+}
+
+/// RFC 8446 §6, §6.2: a fatal alert from the server after the handshake ends
+/// the connection and is not answered.
+#[test]
+fn a_server_alert_after_the_handshake_is_not_answered() -> TestResult {
+    let mut server = server(LEAF_ECDSA, KEY_ECDSA)?;
+    let (mut client, hello) = connect(anchors());
+    let (out, _) = handshake(&mut client, &mut server, hello.send)?;
+    assert_eq!(out.state, State::Open);
+    // A tampered client record makes rustls send bad_record_mac.
+    let mut record = client.send(b"x").map_err(|e| format!("{e:?}"))?.send;
+    if let Some(last) = record.last_mut() {
+        *last ^= 1;
+    }
+    let error = feed(&mut server, &record).err().unwrap_or_default();
+    assert!(error.contains("ecrypt"), "{error}");
+    let alert = take(&mut server)?;
+    assert!(!alert.is_empty());
+    let out = client.receive(&alert);
+    assert_eq!(
+        out.state,
+        State::Failed(Failure {
+            alert: 20,
+            origin: Origin::Peer
+        })
+    );
+    assert!(out.send.is_empty());
+    Ok(())
+}
+
 #[test]
 fn the_end_of_stream_without_close_notify_is_truncation() -> TestResult {
     let mut server = server(LEAF_ECDSA, KEY_ECDSA)?;

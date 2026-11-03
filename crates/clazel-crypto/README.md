@@ -138,21 +138,26 @@ its own:
   octets to send, plaintext delivered and the `State`.
 - `State`: `Handshaking`, `Open`, `Closing` (our close_notify sent), `Closed`,
   `Failed(Failure { alert, origin })`, where `alert` is the RFC 8446 §6.2
-  description and `origin` is `Sent` (the client's alert is in `send`),
-  `NotSent`, `Peer` (the server's alert) or `Truncated` (end of stream before
-  close_notify).
+  description and `origin` is `Sent` (the client's alert is the last record
+  in `send`), `NotSent` (a local failure with no key to seal the alert
+  under), `Peer` (the server's alert, never answered) or `Truncated` (end of
+  stream before close_notify).
 
-Neither `Bootstrap` nor `Connection` sends an alert itself, so the driver
-does, once: a plaintext fatal alert before the handshake keys, and during the
-server's protected flight an alert sealed under the client handshake epoch at
-sequence number 0, from a second copy of that epoch that the driver derives
-with the verified `hello::join::derive` and drops unused when the client
-Finished is produced. A copy of the server epoch, decrypting the flight in step
-with `Connection`, tells the server's alert (never answered) from a local
-failure. After the client Finished nothing is sent on failure: `Connection`
-drops its application keys when it fails and reports a received alert and a
-local error alike, so the alert there needs a change in `clazel-tls`. The
-server's close_notify is answered with ours.
+Alerts: before the handshake keys `Bootstrap` puts none on the wire, so the
+driver writes a plaintext fatal alert. From the ServerHello on, `Connection`
+(in `clazel-tls`) seals the fatal alert of a local failure itself, under the
+write epoch the server reads next (the client handshake epoch during the
+server's flight, the client application epoch after the client Finished) at
+its next sequence number, before it drops its keys, and returns it in
+`Fail(description, Some(record))`; the driver sends that record and holds no
+key of its own. `Connection` reports a fatal alert from the server as
+`PeerAlert(description)`, which is not answered. When `Connection` holds no
+settled write epoch (our close_notify already sealed, a failed or spent
+epoch) the failure is `NotSent`. The server's close_notify is answered with
+ours after the handshake; during the server's flight a close_notify from the
+server, or `close()`, ends the connection without one, since `Connection`
+seals only fatal alerts there. Before the ServerHello `close()` sends a
+plaintext close_notify.
 
 The driver is plain safe Rust outside `verus!` (tier 0, shell glue). Its tests
 are in `src/client.rs` (bytes that are not TLS, a plaintext alert, close_notify
@@ -161,9 +166,11 @@ same rustls server as `tests/conformance_tls.rs` with ring's own X25519:
 handshakes for the ECDSA and the RSA chain, a request, a 40000-octet response,
 a 20000-octet upload, close_notify both ways; the server's close_notify
 answered; another name (bad_certificate) and an empty trust store
-(unknown_ca), each alert sealed and read by rustls; truncation after the
-handshake. `tests/conformance_tls.rs` still assembles the client by hand and
-should move to this driver.
+(unknown_ca), each alert sealed and read by rustls; after the handshake, a
+server record that fails to decrypt, answered with bad_record_mac sealed under
+the application key and read by rustls, and a server alert, not answered;
+truncation after the handshake. `tests/conformance_tls.rs` still assembles
+the client by hand and should move to this driver.
 
 ## Not here
 - Randomness: the caller supplies it (`Client::connect`'s `random`); there
@@ -172,7 +179,8 @@ should move to this driver.
 - Socket I/O: `clazel-net`'s `TlsConnection` runs the driver over TCP. Not
   yet used by `clazel-fetch` (`tls: true` in its transducer), the kernel's
   `https:` path or `clazel fetch https://` (phase-3.md 3.6 to 3.8).
-- An alert after the client Finished (see "The client driver").
+- A close_notify during the server's protected flight (see "The client
+  driver"): `Connection` seals only fatal alerts there.
 - A measurement against public servers (3.5g's local item) and the
   real-certificate corpus: not run, no result claimed.
 - Any side-channel claim beyond HACL\*'s. libcrux's README makes none for the
