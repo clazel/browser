@@ -5,7 +5,8 @@
 //! builds the query, `decode::decode_udp` and `decode_message` read the reply,
 //! `answer::answer_addresses` accepts it (ID, question, QR, RCODE) and
 //! `encode::tcp_frame` / `tcp_message_len` do the TCP framing. This module
-//! only owns sockets, clocks, the random ID and the retry order.
+//! only owns sockets, clocks, the random ID (from `clazel_sys::fill_random`)
+//! and the retry order.
 
 use crate::error::{NetError, ResolveError, Stage, from_io};
 use clazel_dns::answer::answer_addresses;
@@ -262,29 +263,12 @@ fn deadline_after(d: Duration) -> Instant {
     now.checked_add(d).unwrap_or(now)
 }
 
-/// A random 16-bit query ID from `/dev/urandom` (RFC 5452 §9.2 wants it
-/// unpredictable).
-#[cfg(unix)]
+/// A random 16-bit query ID from the OS random source,
+/// `clazel_sys::fill_random` (RFC 5452 §9.2 wants it unpredictable).
 fn random_id() -> Result<u16, NetError> {
     let mut b = [0u8; 2];
-    std::fs::File::open("/dev/urandom")
-        .and_then(|mut f| f.read_exact(&mut b))
-        .map_err(|e| NetError::Resolve(ResolveError::Random(e.kind())))?;
+    clazel_sys::fill_random(&mut b).map_err(NetError::Random)?;
     Ok(u16::from_be_bytes(b))
-}
-
-/// Windows: `std` has no safe OS random source, and `BCryptGenRandom` needs
-/// `unsafe`, which only `clazel-sys` may hold (CLAUDE.md rule 1). Until it has
-/// that call (it needs an audit), take the ID from `std`'s per-process random
-/// hasher key, which the standard library seeds from the OS. It is
-/// unpredictable to an off-path attacker, but it is not a CSPRNG.
-#[cfg(not(unix))]
-fn random_id() -> Result<u16, NetError> {
-    use std::hash::{BuildHasher, Hasher, RandomState};
-    let mut h = RandomState::new().build_hasher();
-    h.write_u64(0);
-    let [a, b, ..] = h.finish().to_be_bytes();
-    Ok(u16::from_be_bytes([a, b]))
 }
 
 #[cfg(test)]

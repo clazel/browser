@@ -174,9 +174,10 @@ truncation after the handshake. `tests/conformance_tls.rs` still assembles
 the client by hand and should move to this driver.
 
 ## Not here
-- Randomness: the caller supplies it (`Client::connect`'s `random`); there
-  is no production source. One needs `clazel-sys` and its own audit. Tests
-  use a fixed seed through SHA-256.
+- Randomness: the caller supplies it (`Client::connect`'s `random`). The
+  production source is in `clazel-net`: `TlsConnection::open` draws from
+  `clazel_sys::fill_random` (audited, `docs/SYS-AUDITS.md`). Tests here use
+  a fixed seed through SHA-256.
 - Socket I/O: `clazel-net`'s `TlsConnection` runs the driver over TCP. Not
   yet used by `clazel-fetch` (`tls: true` in its transducer), the kernel's
   `https:` path or `clazel fetch https://` (phase-3.md 3.6 to 3.8).
