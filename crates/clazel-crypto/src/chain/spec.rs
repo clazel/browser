@@ -22,10 +22,14 @@
 //! - RFC 5758 §3.2 (ecdsa-with-SHA256 and ecdsa-with-SHA384, "the encoding
 //!   MUST omit the parameters field"),
 //!   <https://www.rfc-editor.org/rfc/rfc5758#section-3.2>; RFC 5480 §2.1.1
-//!   and §2.2 (secp256r1 keys, the ECPoint); RFC 3279 §2.2.3
-//!   (Ecdsa-Sig-Value); FIPS 186-5 §6.4.2 (verification, which libcrux
-//!   performs: `crate::signature::spec::ecdsa_p256_sha256_verify` and
-//!   `ecdsa_p256_sha384_verify`).
+//!   and §2.2 (secp256r1 and secp384r1 keys, the ECPoint); RFC 3279 §2.2.3
+//!   (Ecdsa-Sig-Value); FIPS 186-5 §6.4.2 (verification: libcrux for P-256,
+//!   `crate::signature::spec::ecdsa_p256_sha256_verify` and
+//!   `ecdsa_p256_sha384_verify`; `clazel_p384::spec::ecdsa_verify`, ours,
+//!   for P-384).
+//! - Browser behaviour, for the hash under a P-384 key: webpki 0.103.16's
+//!   `ALL_VERIFICATION_ALGS` (`src/lib.rs`) lists both `ECDSA_P384_SHA256`
+//!   and `ECDSA_P384_SHA384` (read 2026-11-03).
 //! - Browser behaviour, for the refusals marked (R): Chromium
 //!   `net/cert/cert_verify_proc.cc` (`IsWeakKey`: an RSA key below 1024 bits
 //!   is weak) and BoringSSL `crypto/fipsmodule/rsa/rsa_impl.cc.inc`
@@ -71,19 +75,35 @@
 //!     (ring's rule is the same). With `clazel_pkcs1`'s `exponent_in_range`
 //!     (at least 3) that is e odd in 3 ..= 2^33 - 1.
 //! - **ECDSA** (ecdsa-with-SHA256, ecdsa-with-SHA384, parameters absent by
-//!   RFC 5758 §3.2): only an issuer key on secp256r1, classified by
-//!   `clazel_x509::spki` as `EcP256` (namedCurve only, uncompressed point
-//!   only) and read by `crate::signature::spec::p256_point`. The signature
-//!   is one DER Ecdsa-Sig-Value read by `crate::signature::spec::ecdsa_sig_value`
-//!   (the CertificateVerify decoder, shared). libcrux checks that the point
-//!   is on the curve and that 1 <= r, s < n, and hashes `tbs_der` itself.
+//!   RFC 5758 §3.2): an issuer key on secp256r1 or secp384r1, classified by
+//!   `clazel_x509::spki` as `EcP256` or `EcP384` (namedCurve only,
+//!   uncompressed point only).
+//!   - **P-256** ([`ecdsa_p256_sha384`] and
+//!     `crate::signature::spec::ecdsa_p256_sha256`): the point is read by
+//!     `crate::signature::spec::p256_point` and the signature is one DER
+//!     Ecdsa-Sig-Value read by `crate::signature::spec::ecdsa_sig_value`
+//!     (the CertificateVerify decoder, shared). libcrux checks that the
+//!     point is on the curve and that 1 <= r, s < n, and hashes `tbs_der`
+//!     itself.
+//!   - **P-384** ([`ecdsa_p384_link`], design P17): the digest of `tbs_der`
+//!     with the hash the algorithm names ([`ecdsa_digest`], libcrux SHA-256
+//!     or SHA-384), r and s from one DER Ecdsa-Sig-Value
+//!     ([`ecdsa_sig_value_p384`]: the same decoder with 48 octets, the
+//!     length of n, in place of 32), then `clazel_p384::spec::ecdsa_verify`
+//!     on `clazel_p384::spec::p384()` with the complete 97-octet ECPoint
+//!     that `EcP384` holds. That function decodes and validates the point
+//!     (uncompressed only, on the curve) and checks 1 <= r, s < n (FIPS
+//!     186-5 §6.4.2 steps 1 to 9). The verification is ours (`clazel-p384`,
+//!     proven in Verus, no axiom of its own beyond `fiat-crypto`'s field
+//!     arithmetic), not libcrux's; only the digest is a libcrux axiom.
+//!     `clazel-p384` is at tier 0 (target 2), so this link rests on its
+//!     proofs as they stand.
 //!   - **(R) Compressed points are refused** (Firefox's mozilla::pkix
 //!     accepts only the uncompressed form; RFC 5480 §2.2 makes the
 //!     compressed form optional).
-//!   - **(R) A secp384r1 issuer key (`EcP384`) is refused**, under either
-//!     hash, until design P17 adds `clazel-p384` here; Chrome and Firefox
-//!     accept it. Every chain through a P-384 CA (Let's Encrypt E5 to E9,
-//!     35 of the 118 Mozilla roots) fails until then.
+//!   - **(=) ecdsa-with-SHA256 under a P-384 key is accepted**, as RFC 5758
+//!     §3.2 allows and webpki does (header). FIPS 186-5 §6.4.2 step 3 uses
+//!     the whole 256-bit digest, which is shorter than n.
 //!   - **(=) ecdsa-with-SHA384 under a P-256 key is accepted**, as RFC
 //!     5758 §3.2 allows and both browsers do. It is listed because RFC 8446
 //!     §4.2.3 does not allow the pair for CertificateVerify, so
@@ -166,6 +186,62 @@ pub open spec fn ecdsa_p256_sha384(spki: clazel_x509::spki::spec::SubjectPublicK
 }
 
 // ---------------------------------------------------------------------------
+// ECDSA P-384 (RFC 5758 §3.2, RFC 5480 §2.1.1, design P17)
+// ---------------------------------------------------------------------------
+
+/// `m` with zero octets in front, to 48 octets: the r or s of a P-384
+/// signature, whose order n has 384 bits (SP 800-186 §3.2.1.4).
+pub open spec fn pad48(m: Seq<u8>) -> Seq<u8> {
+    Seq::new((48 - m.len()) as nat, |i: int| 0u8) + m
+}
+
+/// RFC 3279 §2.2.3 for a P-384 signature: r and s of exactly one DER
+/// Ecdsa-Sig-Value, each a non-negative INTEGER of at most 48 magnitude
+/// octets, padded to 48. `crate::signature::spec::ecdsa_sig_value` with 48
+/// in place of 32.
+pub open spec fn ecdsa_sig_value_p384(signature: Seq<u8>) -> Option<(Seq<u8>, Seq<u8>)> {
+    match clazel_der::spec::expect_sequence(signature, 0, signature.len()) {
+        Some((cs, ce)) if ce == signature.len() =>
+            match clazel_der::spec::read_integer(signature, cs, ce) {
+                Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 48 =>
+                    match clazel_der::spec::read_integer(signature, after_r, ce) {
+                        Some((s_negative, ss, se, after_s)) if !s_negative && se - ss <= 48 && after_s == ce =>
+                            Some((pad48(signature.subrange(rs as int, re as int)),
+                                pad48(signature.subrange(ss as int, se as int)))),
+                        _ => None,
+                    },
+                _ => None,
+            },
+        _ => None,
+    }
+}
+
+/// FIPS 186-5 §6.4.2 step 2, "Compute H = Hash(M)", with the hash the
+/// signature algorithm names (RFC 5758 §3.2), by libcrux (`crate::axioms`).
+pub open spec fn ecdsa_digest(hash: clazel_x509::signature_algorithm::spec::EcdsaHash,
+    message: Seq<u8>) -> Seq<u8>
+{
+    match hash {
+        clazel_x509::signature_algorithm::spec::EcdsaHash::Sha256 => crate::spec::sha256(message),
+        clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384 => crate::spec::sha384(message),
+    }
+}
+
+/// ecdsa-with-SHA256 or ecdsa-with-SHA384 under a secp384r1 key whose
+/// ECPoint is `point` (all 97 octets): r and s, then FIPS 186-5 §6.4.2 on
+/// P-384 (`clazel_p384`, which validates the point) over the digest of
+/// the signed octets.
+pub open spec fn ecdsa_p384_link(point: Seq<u8>, hash: clazel_x509::signature_algorithm::spec::EcdsaHash,
+    message: Seq<u8>, signature: Seq<u8>) -> bool
+{
+    match ecdsa_sig_value_p384(signature) {
+        Some((r, s)) => clazel_p384::spec::ecdsa_verify(clazel_p384::spec::p384(),
+            ecdsa_digest(hash, message), clazel_p384::spec::os2ip(r), clazel_p384::spec::os2ip(s), point),
+        None => false,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // §6.1.3 (a)(1)
 // ---------------------------------------------------------------------------
 
@@ -183,6 +259,11 @@ pub open spec fn link_with_key(spki: clazel_x509::spki::spec::SubjectPublicKeyIn
                 clazel_x509::spki::spec::PublicKey::Rsa(key) => rsa_pkcs1_link(key, hash, tbs_der, signature),
                 _ => false,
             },
+        // RFC 5758 §3.2: ecdsa-with-SHA256 or ecdsa-with-SHA384 under a
+        // secp384r1 key (design P17).
+        Some(clazel_x509::signature_algorithm::spec::AlgorithmClass::Ecdsa(hash))
+            if spki.public_key is EcP384 =>
+            ecdsa_p384_link(spki.public_key->EcP384_0, hash, tbs_der, signature),
         // RFC 5758 §3.2: ecdsa-with-SHA256 under a secp256r1 key.
         Some(clazel_x509::signature_algorithm::spec::AlgorithmClass::Ecdsa(
             clazel_x509::signature_algorithm::spec::EcdsaHash::Sha256)) =>
