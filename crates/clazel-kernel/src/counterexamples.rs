@@ -180,6 +180,11 @@ pub proof fn lemma_ce_start()
     let host = clazel_url::host::spec::Host::Domain(seq![0x61u32]);
     assert(clazel_url::host::spec::host_serializer(host) == seq![0x61u32]);
     assert(clazel_fetch::request::spec::all_ascii(seq![0x61u32])) by (compute_only);
+    // `http` is not `https`: the default port is 80 and there is no TLS.
+    assert(!clazel_fetch::request::spec::uses_tls(ua)) by {
+        assert(ua.scheme.len() == 4);
+        assert(clazel_url::url::spec::https_str().len() == 5);
+    }
     assert(clazel_fetch::request::spec::connect_to(ua) == Some((seq![0x61u8], 80nat))) by {
         assert(clazel_fetch::request::spec::ascii_octets(seq![0x61u32]) =~= Some(seq![0x61u8]));
     }
