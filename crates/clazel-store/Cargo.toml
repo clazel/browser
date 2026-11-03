@@ -1,0 +1,24 @@
+[package]
+name = "clazel-store"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The persistent store (item 3.10a): an append-only log of DER records checked by CRC-32C, with a proven recovery, specified in Verus."
+
+[dependencies]
+clazel-der = { path = "../clazel-der" }
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires. The
+# spec and contracts exist; nothing is implemented or proven yet.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

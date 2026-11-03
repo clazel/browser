@@ -2046,7 +2046,10 @@ choice below is followed by what it costs.
     length must be known before it is written, which is fine for a
     transaction that is already built.
 - **Torn writes: a CRC-32C per record, the Castagnoli polynomial
-  `0x11edc6f41` (RFC 3720 §12.1, with its test vectors in §B.4).**
+  `0x11edc6f41`** (RFC 7143 §13.1, which obsoletes RFC 3720, with test
+  vectors in §A.4). Read §13.1 with §11's convention that bit 0 is the
+  most significant bit: its "bit 7" is the least significant bit, so the
+  CRC is the reflected one.
   - A crash can leave the tail of the file truncated, or on some file
     systems holding octets that were never written. The `check` field
     covers the record's other contents.

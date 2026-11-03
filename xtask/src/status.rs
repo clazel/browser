@@ -45,6 +45,7 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-kernel", Place::Kernel),
     ("clazel-fetch", Place::Kernel),
     ("clazel-cookie", Place::Kernel),
+    ("clazel-store", Place::Kernel),
     ("clazel-origin", Place::Kernel),
     ("clazel-psl", Place::Kernel),
     ("clazel-http", Place::Network),
