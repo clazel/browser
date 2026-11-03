@@ -1,6 +1,6 @@
 //! Windows: start a process inside an AppContainer and a Job Object, the
-//! two checks and one escape attempt the sandbox tests make, and
-//! `BCryptGenRandom`.
+//! two checks and one escape attempt the sandbox tests make,
+//! `BCryptGenRandom`, and `GetAdaptersAddresses` (the DNS servers, as octets).
 //!
 //! Windows cannot move a running process into an AppContainer, so unlike the
 //! Linux and macOS modules this one *spawns*: the host calls [`spawn`] with a
@@ -193,6 +193,25 @@ unsafe extern "system" {
     fn BCryptGenRandom(algorithm: *mut c_void, buffer: *mut u8, length: u32, flags: u32) -> i32;
 }
 
+#[link(name = "iphlpapi")]
+// SAFETY: docs GetAdaptersAddresses (iphlpapi, iphlpapi.h: `ULONG WINAPI
+// GetAdaptersAddresses(ULONG Family, ULONG Flags, PVOID Reserved,
+// PIP_ADAPTER_ADDRESSES AdapterAddresses, PULONG SizePointer)`). The
+// declaration below matches that prototype on 64-bit Windows: `ULONG` is
+// 32-bit (`u32`), `PVOID` and the structure pointer are `*mut c_void`,
+// `PULONG` is `*mut u32`, and `WINAPI` is the `system` calling convention.
+// It is linked by the `#[link]` attribute, is not `pub` and not declared
+// `safe`, so every call needs its own `unsafe` block.
+unsafe extern "system" {
+    fn GetAdaptersAddresses(
+        family: u32,
+        flags: u32,
+        reserved: *mut c_void,
+        addresses: *mut c_void,
+        size: *mut u32,
+    ) -> u32;
+}
+
 // Constants from `winnt.h`, `winbase.h`, `processthreadsapi.h`, `jobapi2.h`.
 const PROC_THREAD_ATTRIBUTE_HANDLE_LIST: usize = 0x0002_0002;
 const PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY: usize = 0x0002_0007;
@@ -232,6 +251,23 @@ const STATUS_SUCCESS: i32 = 0;
 
 /// The most one `BCryptGenRandom` call fills: its length is a `ULONG`.
 pub(crate) const RANDOM_MAX_PER_CALL: usize = u32::MAX as usize;
+
+/// `AF_UNSPEC` of `ws2def.h`: adapters of both address families.
+const AF_UNSPEC: u32 = 0;
+/// `GAA_FLAG_SKIP_UNICAST | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST
+/// | GAA_FLAG_SKIP_FRIENDLY_NAME` of `IPTypes.h`: leave out the lists and
+/// names nobody reads, keep the DNS server lists.
+const ADAPTER_FLAGS: u32 = 0x0001 | 0x0002 | 0x0004 | 0x0020;
+/// `ERROR_SUCCESS`, `ERROR_BUFFER_OVERFLOW` and `ERROR_NO_DATA` of
+/// `winerror.h`, the returns docs GetAdaptersAddresses names.
+const ERROR_SUCCESS: u32 = 0;
+const ERROR_BUFFER_OVERFLOW: u32 = 111;
+const ERROR_NO_DATA: u32 = 232;
+/// The first buffer size: the 15 KB docs GetAdaptersAddresses recommends.
+const ADAPTERS_FIRST_SIZE: u32 = 15_000;
+/// Calls made before giving up when the adapters keep growing between the
+/// call that reports the size needed and the next.
+const ADAPTERS_ATTEMPTS: usize = 4;
 
 /// Why a process could not be started or a check made.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -919,9 +955,79 @@ pub(crate) fn fill_random(buf: &mut [u8]) -> Result<(), RandomError> {
     Ok(())
 }
 
+/// What `GetAdaptersAddresses` wrote: a copy of the buffer's octets, and the
+/// address the buffer was at when the OS wrote it. The pointers inside the
+/// octets are addresses in that buffer; this crate never follows one. The
+/// proven reader in `clazel-dns` (`adapters::parse::dns_servers`) turns
+/// each into an offset from `base`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterBuffer {
+    /// The buffer's octets, in memory order.
+    pub bytes: Vec<u8>,
+    /// The address of the buffer's first octet, as a number.
+    pub base: u64,
+}
+
+/// `GetAdaptersAddresses(AF_UNSPEC, ADAPTER_FLAGS, NULL, buf, &size)`: the
+/// list of adapters with their DNS servers, as octets. A buffer too small
+/// is grown to the size the OS reports and the call repeated, at most
+/// [`ADAPTERS_ATTEMPTS`] times. No adapters (`ERROR_NO_DATA`) is an empty
+/// buffer. Any other return is the error, as a Win32 error code.
+pub fn adapter_addresses() -> Result<AdapterBuffer, Errno> {
+    let mut size: u32 = ADAPTERS_FIRST_SIZE;
+    for _ in 0..ADAPTERS_ATTEMPTS {
+        // `u64`s, so the buffer is 8-byte aligned, as the structures are.
+        let mut words = vec![0u64; (size as usize).div_ceil(8)];
+        let mut len = u32::try_from(words.len().saturating_mul(8))
+            .map_err(|_| Errno(ERROR_BUFFER_OVERFLOW as i32))?;
+        let buf: *mut c_void = words.as_mut_ptr().cast();
+        let len_slot: *mut u32 = &raw mut len;
+        let reserved: *mut c_void = std::ptr::null_mut();
+        // SAFETY: docs GetAdaptersAddresses: `Reserved` must be NULL; the
+        // call writes at most `*SizePointer` bytes to `AdapterAddresses`
+        // (`_Out_writes_bytes_opt_(*SizePointer)` in iphlpapi.h) and, when
+        // that is too small, writes nothing there and returns
+        // ERROR_BUFFER_OVERFLOW with the size needed in `*SizePointer`.
+        // `buf` points to the `len` bytes of `words`, live, 8-aligned and
+        // borrowed only by this call; `len_slot` points to the live local
+        // `len`. Any byte pattern is a valid `u64`.
+        let r = unsafe { GetAdaptersAddresses(AF_UNSPEC, ADAPTER_FLAGS, reserved, buf, len_slot) };
+        match r {
+            ERROR_SUCCESS => {
+                let base = words.as_ptr() as usize as u64;
+                let bytes = words.iter().flat_map(|w| w.to_ne_bytes()).collect();
+                return Ok(AdapterBuffer { bytes, base });
+            }
+            ERROR_NO_DATA => {
+                return Ok(AdapterBuffer {
+                    bytes: Vec::new(),
+                    base: 0,
+                });
+            }
+            ERROR_BUFFER_OVERFLOW => size = len.max(size.saturating_add(1)),
+            e => return Err(Errno(e as i32)),
+        }
+    }
+    Err(Errno(ERROR_BUFFER_OVERFLOW as i32))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn the_adapter_list_is_read() -> Result<(), Errno> {
+        let a = adapter_addresses()?;
+        // Every machine has at least the loopback adapter; its record
+        // starts with its `Length`, which is at least the 108 octets the
+        // reader in `clazel-dns` needs.
+        assert!(a.bytes.len() >= 108);
+        assert_ne!(a.base, 0);
+        let length = a.bytes.first_chunk::<4>().map(|c| u32::from_ne_bytes(*c));
+        assert!(length.is_some_and(|l| l >= 108), "{length:?}");
+        Ok(())
+    }
 
     #[test]
     fn arguments_are_quoted_for_the_command_line() {

@@ -1,6 +1,9 @@
 //! The one crate with `unsafe` (CLAUDE.md rule 1): safe wrappers around the
-//! few calls that put a process into an OS sandbox, and the one call that
-//! reads cryptographically secure random bytes from the OS ([`fill_random`]).
+//! few calls that put a process into an OS sandbox, the one call that reads
+//! cryptographically secure random bytes from the OS ([`fill_random`]), and,
+//! on Windows, the one call that lists the DNS servers
+//! ([`windows::adapter_addresses`]: octets for a proven reader, since
+//! Windows has no `/etc/resolv.conf`).
 //!
 //! It makes **no policy decisions**. It takes data that safe, verified code
 //! already built (a BPF program as a slice of instructions, a Seatbelt
