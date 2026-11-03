@@ -57,7 +57,7 @@
 //! - **(I) Revocation, §6.1.3 (a)(3), is a parameter** (`revoked`), so the
 //!   step stays a numbered line. The production instance is "nothing is
 //!   revoked" (design §1.3, Q4: browsers no longer do online OCSP for DV
-//!   certificates; a pushed revocation set is Phase 8). Stapled OCSP is not
+//!   certificates; a pushed revocation set is phase-3.md item 3.5h). Stapled OCSP is not
 //!   read.
 //! - **The policy tree is not modelled** (design §1.2, Q5). §6.1.2 (a),
 //!   (e), (f); §6.1.3 (d), (e); §6.1.4 (b), (h)(2), (h)(3), (i)(2), (j); and
