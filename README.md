@@ -23,8 +23,10 @@ v1.5 verification (`clazel-pkcs1`) are at Tier 2. The kernel
 kernel state, every request, redirect and cookie is its decision, and its
 Phase 2 theorems still hold with network events. The network shell
 (`clazel-net`) only carries bytes. TLS is not done yet: X.509, the TLS 1.3
-handshake and the libcrux join are partly built on `main` at Tier 0 and not
-yet joined to the kernel, so the browser speaks only `http://`. What
+handshake and the libcrux join are partly built at Tier 0; `clazel fetch`
+uses them for `https://`, but certificate chains with a P-384 issuer key
+are refused for now, so most sites fail, and they are not yet joined to the
+kernel, so `clazel browse` speaks only `http://`. What
 remains is listed in [docs/phases/phase-3.md](docs/phases/phase-3.md#status).
 
 Phase 4 (HTML and DOM) is built but not yet complete: every CI job but
@@ -145,13 +147,15 @@ each tab:
 
 ```sh
 cargo build --release --bin clazel --bin clazel-renderer   # both land in target/release/
-target/release/clazel fetch http://example.com/           # http:// GET, redirects followed, response printed
+target/release/clazel fetch http://example.com/           # GET, redirects followed, response printed
 ```
 
 `fetch` resolves the host with our own DNS client and drives the proven fetch
 client: it builds each request, frames each response with the proven HTTP/1.1
 parser, follows redirects and keeps the cookies they set for the rest of the
-run. It needs the Internet, and speaks only `http://` until TLS lands.
+run. It needs the Internet. An `https://` URL goes over our TLS 1.3 client
+with Mozilla's roots as the trust store; until P-384 issuer keys are
+supported, a chain that has one (most sites today) fails with `unknown_ca`.
 
 ```sh
 target/release/clazel browse http://info.cern.ch/         # text-mode browser: title, text, numbered links

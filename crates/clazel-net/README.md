@@ -8,9 +8,13 @@ This crate **carries bytes and decides nothing about them.** It does not parse
 HTTP, does not build requests, and never touches the cookie jar. Every
 decision about a byte is made by a proven function in another crate; this
 crate owns the sockets, the clocks, the random query ID and the order in which
-things are tried. `fetch` is `http://` only. `TlsConnection` carries a TLS
-1.3 connection, but nothing uses it yet: `clazel-fetch`'s transducer, the
-kernel and `clazel fetch` have no `https:` path. Random octets, for the TLS
+things are tried. `fetch` takes `http://` and `https://` URLs: when
+`clazel-fetch`'s transducer asks for `Connect { tls: true }` it opens a
+`TlsConnection` to the host it names, with Mozilla's roots as the trust
+anchors (`fetch_jar_verified` takes others, for tests), and reports any TLS
+failure, a truncation included, as `Error`. The kernel's network driver
+(`Driver`) does not carry out TLS yet, so `clazel browse` has no `https:`
+path (phase-3.md 3.7). Random octets, for the TLS
 client and the DNS query ID, come from the OS through
 `clazel_sys::fill_random`, the one audited `unsafe` call per OS
 (`docs/SYS-AUDITS.md`).
@@ -99,4 +103,10 @@ TLS (a plaintext alert on the wire). The ECDSA and RSA handshakes run again
 through `open`, with the OS source, and two connections through `open` send
 different ClientHello randoms and session ids (two seeded ones send the same
 ClientHello). A unit test in `src/tls.rs` checks that a failing source opens
-no socket. `cargo test -p clazel-net`.
+no socket. The same file runs `fetch_jar_verified` over TLS (OS randomness):
+an `https:` request and response, with the request an `http:` URL gets; a
+certificate for another name (the fetch fails with bad_certificate and
+sends no request); a close-delimited body whose stream ends without the
+server's close_notify (a truncation, so the fetch fails); and a `Secure`
+cookie set by an `https:` response and sent on the `https:` redirect.
+`cargo test -p clazel-net`.
