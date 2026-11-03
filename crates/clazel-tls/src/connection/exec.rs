@@ -252,10 +252,7 @@ fn seal_alert<A: KeyedAead>(sender: &mut Encryptor<A>, Ghost(ciphers): Ghost<sup
     let ghost epoch = sender@;
     let ghost seal_before = |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| sender.seal_spec(n, ad, p);
     proof { lemma_seal_with(ciphers, epoch, seal_before); }
-    match sender.seal(crate::spec::CT_ALERT, content, 0) {
-        Ok(wire) => Some(wire),
-        Err(_) => None,
-    }
+    sender.seal(crate::spec::CT_ALERT, content, 0).ok()
 }
 
 impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: KeyedAead {
