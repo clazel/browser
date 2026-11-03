@@ -32,7 +32,7 @@ Every file in a crate named:
 
 A row is **current** while the file's SHA-256 matches. Any edit to the file
 makes the review **stale**. Review status is listed on every run and shown in
-the README status table. It never blocks anything.
+the status table (docs/STATUS.md). It never blocks anything.
 
 <!-- BEGIN REVIEWS: checked by `cargo xtask check` -->
 | File | SHA-256 | Reviewer | Date | Reviewed against |

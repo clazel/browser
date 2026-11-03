@@ -48,15 +48,16 @@
 #             fails unless every job above passed (`approval` is skipped
 #             outside pull requests), then checks that every crate's
 #             measurements are present and from this commit, and reports
-#             whether README.md's table matches them.
+#             whether docs/STATUS.md's table and images match them.
 #   table     on pushes to main only, after `assemble` passed: writes
-#             README.md's table from the same measurements
-#             (`verify --part assemble --write`) and, if it changed, commits
-#             it to main as github-actions[bot]. Changes therefore never need
-#             to carry the table. It is the only job that may write to the
-#             repository. Its push uses the workflow's own token, which starts
-#             no new CI run. If main has moved on since the run started, it
-#             commits nothing: the newer run updates the table instead.
+#             docs/STATUS.md's table and the status images from the same
+#             measurements (`verify --part assemble --write`) and, if they
+#             changed, commits them to main as github-actions[bot]. Changes
+#             therefore never need to carry them. It is the only job that
+#             may write to the repository. Its push uses the workflow's own
+#             token, which starts no new CI run. If main has moved on since
+#             the run started, it commits nothing: the newer run updates the
+#             table instead.
 #   release   `cargo build --release --locked` of the shipped binaries
 #             (`clazel` and `clazel-renderer`) for Linux x86-64, uploaded as
 #             a tarball with its SHA-256, with `install.sh` and the AppArmor
@@ -308,7 +309,7 @@ jobs:
         run: cargo xtask verify --part assemble --metrics parts
 
   table:
-    name: Update README table
+    name: Update status table
     needs: assemble
     # On a push to main, after a passing full verification. Spelled with a
     # status function: without one GitHub also requires every job upstream
@@ -321,7 +322,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
-      # Commit the regenerated table to main.
+      # Commit the regenerated table and images to main.
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -333,12 +334,14 @@ jobs:
           pattern: part-*
           path: parts
           merge-multiple: true
-      - name: Write the table
+      - name: Write the table and images
         run: cargo xtask verify --part assemble --metrics parts --write
-      - name: Commit it
+      - name: Commit them
+        env:
+          STATUS_FILES: docs/STATUS.md docs/status.svg docs/status-detail.svg
         run: |
-          if git diff --quiet -- README.md; then
-            echo "README.md's table is up to date."
+          if git diff --quiet -- $STATUS_FILES; then
+            echo "The status table and images are up to date."
             exit 0
           fi
           # A newer push to main supersedes this run: its own table job
@@ -350,7 +353,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update the README status table for ${GITHUB_SHA::12}" -- README.md
+          git commit -m "Update the status table for ${GITHUB_SHA::12}" -- $STATUS_FILES
           git push origin HEAD:main
 
   release:

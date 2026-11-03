@@ -38,7 +38,7 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
    `external_fn_specification` and `exec_allows_no_decreases_clause` are
    banned. A genuinely needed axiom goes in the crate's `axioms.rs`, with a
    `// AXIOM:` justification within the three lines above it. The checker
-   rejects every other use and counts the axioms in the README table.
+   rejects every other use and counts the axioms in the status table.
 5. **Cite the spec, and follow `docs/SPEC-STYLE.md`.** Every function
    implementing a standard links to the exact algorithm and quotes the step
    numbers it covers, e.g. `// URL §4.4 basic URL parser, step 3.2`. Spec
@@ -100,12 +100,14 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
   `use vstd::prelude::*;` or `use super::spec::*;` (ghost imports look unused
   to normal builds), and `unsafe_code = "allow"` in `clazel-sys`'s manifest.
   The checker rejects everything else.
-- Never edit README.md's status table by hand, and do not commit a
-  regenerated one with a change. CI keeps it up to date: after every push to
-  `main` whose full verification passes, its `table` job writes the table
-  from that run's measurements and commits it as github-actions[bot].
-  `cargo xtask report --changed` still shows locally what the table would
-  say; a table that differs from what a run measured is reported, not a
-  failure.
+- Never edit the status table in `docs/STATUS.md` or the images drawn from
+  it (`docs/status.svg`, `docs/status-detail.svg`) by hand, and do not
+  commit regenerated ones with a change. CI keeps them up to date: after
+  every push to `main` whose full verification passes, its `table` job
+  writes them from that run's measurements and commits them as
+  github-actions[bot]. `cargo xtask report --changed` still shows locally
+  what the table would say; a table that differs from what a run measured
+  is reported, not a failure. A new crate must be placed in a component
+  (`PLACES` in `xtask/src/status.rs`), or `cargo xtask check` fails.
 - Keep changes small: one spec section or one proof per commit where practical.
 - Test against official suites (WPT, html5lib-tests), vendored under `tests/`.

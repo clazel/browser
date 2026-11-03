@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="186" viewBox="0 0 880 186" role="img" aria-labelledby="title">
+<title id="title">Verification status</title>
+<style>
+:root{--bg:#ffffff;--fg:#1f2328;--mut:#59636e;--line:#d1d9e0;--panel:#f6f8fa;
+--t2:#1a7f37;--t2s:#dafbe1;--t1:#0969da;--t1s:#ddf4ff;--t0:#818b98;--t0s:#eff2f5;--gap:#bf8700;
+--spec:#8250df;--proof:#1a7f37;--exec:#9ea7b3;--bad:#cf222e}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--mut:#9198a1;--line:#3d444d;--panel:#151b23;
+--t2:#3fb950;--t2s:#0f2d1a;--t1:#4493f8;--t1s:#0c2d6b;--t0:#7d8590;--t0s:#21262d;--gap:#d29922;
+--spec:#a371f7;--proof:#3fb950;--exec:#656c76;--bad:#f85149}}
+text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:var(--fg)}
+.m{font-family:ui-monospace,SFMono-Regular,'SF Mono',Consolas,'Liberation Mono',monospace}.mut{fill:var(--mut)}.b{font-weight:600}
+</style>
+<rect width="880" height="186" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+<text x="24" y="50" font-size="24" class="b">18<tspan font-size="14" class="mut">/29</tspan></text>
+<text x="24" y="68" font-size="10.5" class="mut">crates proven correct</text>
+<text x="182" y="50" font-size="24" class="b">9.4k<tspan font-size="14" class="mut"></tspan></text>
+<text x="182" y="68" font-size="10.5" class="mut">Verus proof obligations</text>
+<text x="340" y="50" font-size="24" class="b">1897<tspan font-size="14" class="mut">/1907</tspan></text>
+<text x="340" y="68" font-size="10.5" class="mut">broken specs caught</text>
+<text x="24" y="114" font-size="24" class="b">901k<tspan font-size="14" class="mut"></tspan></text>
+<text x="24" y="132" font-size="10.5" class="mut">conformance cases, 95 suites</text>
+<text x="182" y="114" font-size="24" class="b">38<tspan font-size="14" class="mut"></tspan></text>
+<text x="182" y="132" font-size="10.5" class="mut">unsafe blocks, all in clazel-sys</text>
+<text x="340" y="114" font-size="24" class="b">21<tspan font-size="14" class="mut"></tspan></text>
+<text x="340" y="132" font-size="10.5" class="mut">axioms, each justified</text>
+<line x1="500" x2="500" y1="20" y2="166" stroke="var(--line)"/>
+<text x="516" y="34" font-size="11" class="mut">Kernel</text>
+<rect x="600" y="22" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="620" y="22" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="640" y="22" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="660" y="22" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="680" y="22" width="16" height="16" rx="4" fill="var(--t2)"/>
+<text x="786" y="34" font-size="10.5" class="mut">5/5 correct</text>
+<text x="516" y="59" font-size="11" class="mut">Network</text>
+<rect x="600" y="47" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="620" y="47" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="640" y="47" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="660" y="47" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="680" y="47" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="684" y="51" width="8" height="8" rx="2" fill="var(--t0)"/>
+<rect x="700" y="47" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="704" y="51" width="8" height="8" rx="2" fill="var(--t0)"/>
+<rect x="720" y="47" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="724" y="51" width="8" height="8" rx="2" fill="var(--t0)"/>
+<rect x="740" y="47" width="16" height="16" rx="4" fill="var(--t0)"/>
+<text x="786" y="59" font-size="10.5" class="mut">4/8 correct</text>
+<text x="516" y="84" font-size="11" class="mut">Renderer</text>
+<rect x="600" y="72" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="620" y="72" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="640" y="72" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="644" y="76" width="8" height="8" rx="2" fill="var(--t0)"/>
+<rect x="660" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="680" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
+<text x="786" y="84" font-size="10.5" class="mut">2/5 correct</text>
+<text x="516" y="109" font-size="11" class="mut">Primitives</text>
+<rect x="600" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="620" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="640" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="660" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="680" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="700" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
+<rect x="720" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
+<text x="786" y="109" font-size="10.5" class="mut">7/7 correct</text>
+<text x="516" y="134" font-size="11" class="mut">Shells and OS</text>
+<rect x="600" y="122" width="16" height="16" rx="4" fill="var(--t1)"/>
+<rect x="620" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="640" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="660" y="122" width="16" height="16" rx="4" fill="var(--t0)"/>
+<text x="786" y="134" font-size="10.5" class="mut">0/4 correct</text>
+<rect x="516" y="151" width="10" height="10" rx="2" fill="var(--t2)"/><text x="530" y="160" font-size="10.5" class="mut">Proven correct</text>
+<rect x="613.6" y="151" width="10" height="10" rx="2" fill="var(--t1)"/><text x="627.6" y="160" font-size="10.5" class="mut">Panic-free</text>
+<rect x="689.6" y="151" width="10" height="10" rx="2" fill="var(--t0)"/><text x="703.6" y="160" font-size="10.5" class="mut">Memory safe</text>
+<rect x="771" y="151" width="10" height="10" rx="2" fill="none" stroke="var(--gap)" stroke-dasharray="2 1.5"/><text x="785" y="160" font-size="10.5" class="mut">below target</text>
+</svg>

@@ -35,7 +35,7 @@ pub enum Selection {
 /// proofs, tests or measurements. Everything they feed is re-checked by the
 /// static checks, which `--changed` always runs in full: `docs/` holds the
 /// dependency allowlist, spec reviews and `clazel-sys` audits, and
-/// README.md's status table is compared row by row.
+/// docs/STATUS.md's status table is compared row by row.
 fn is_inert(path: &str) -> bool {
     path.starts_with("docs/")
         || path.starts_with(".github/")

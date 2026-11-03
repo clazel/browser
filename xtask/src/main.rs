@@ -12,7 +12,8 @@
 //!   parts for separate CI jobs (`parts.rs`); `cargo xtask crates` lists the
 //!   crates for them. `miri` takes an optional comma-separated crate list and
 //!   runs the whole workspace without one. `assemble --write` writes
-//!   README.md's table from the parts, which CI does on main.
+//!   docs/STATUS.md's table and the status images from the parts, which CI
+//!   does on main.
 //! - `cargo xtask check`: only the fast static checks (no build, no proofs).
 //! - `cargo xtask mutate`: only the proof mutation tests (also part of
 //!   `verify`).
@@ -25,11 +26,11 @@
 //!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`).
 //!   `check` and `verify` fail if they are stale or a data file's hash
 //!   differs from its `SOURCE.md`.
-//! - `cargo xtask report [--write] [--changed [base]]`: run the checks that produce the README
+//! - `cargo xtask report [--write] [--changed [base]]`: run the checks that produce the
 //!   status table (including each crate's conformance suites, see
-//!   `conformance.rs`), print it, and with `--write` update README.md. A
-//!   table that differs from what was measured is reported, not a failure:
-//!   CI rewrites it on main.
+//!   `conformance.rs`), print it, and with `--write` update docs/STATUS.md
+//!   and the images drawn from it (`status.rs`). A table that differs from
+//!   what was measured is reported, not a failure: CI rewrites it on main.
 
 mod changed;
 mod conformance;
@@ -44,6 +45,7 @@ mod report;
 mod reviews;
 mod roots;
 mod scan;
+mod status;
 mod sys;
 mod testdata;
 mod unicode;
@@ -66,7 +68,7 @@ enum Outcome {
 struct Runner {
     failed: bool,
     skipped: bool,
-    /// What the checks measured, for the README status table.
+    /// What the checks measured, for the status table.
     metrics: report::Table,
 }
 
@@ -221,6 +223,9 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
                 m.kani_harnesses = s.kani_proofs;
                 m.unsafe_blocks = s.unsafe_blocks;
                 m.unsafe_lines = s.unsafe_lines;
+                if s.axioms > 0 {
+                    m.axiom_summary = status::axiom_summary(&c.dir);
+                }
                 unsafe_blocks = unsafe_blocks.saturating_add(s.unsafe_blocks);
                 unsafe_lines = unsafe_lines.saturating_add(s.unsafe_lines);
                 violations.extend(s.violations);
@@ -319,6 +324,11 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     r.step(
         "crate tier declarations",
         outcome(decl_problems, decl_notes),
+    );
+    let names: Vec<&str> = crates.iter().map(|c| c.name.as_str()).collect();
+    r.step(
+        "every crate placed in the status images",
+        outcome(status::placement_problems(&names), Vec::new()),
     );
     // Unreviewed specs are not a failure (agents must be able to edit
     // them), but every run lists them.
@@ -795,12 +805,13 @@ fn conformance_suites(r: &mut Runner, crates: &[Crate]) {
     }
 }
 
-/// Compare (or, with `write`, update) README.md's status table against what
-/// this run measured. With `only` (a `--changed` run), the other crates'
-/// proof and test columns are carried over from README.md's current table,
-/// since their inputs did not change; CI's full run re-measures them all.
-fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
-    const NAME: &str = "README status table";
+/// Compare (or, with `write`, update) docs/STATUS.md's status table and the
+/// images drawn from it against what this run measured. With `only` (a
+/// `--changed` run), the other crates' proof and test columns are carried
+/// over from the committed table, since their inputs did not change; CI's
+/// full run re-measures them all.
+fn status_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
+    const NAME: &str = "status table and images";
     let host_shell_count = report::shell_lines(std::path::Path::new(report::HOST_SHELL_DIR));
     if let Some(counted) = host_shell_count.as_ref() {
         match counted {
@@ -825,10 +836,10 @@ fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
     let carried = match only {
         None => report::Rows::new(),
         Some(cs) => {
-            let rows = std::fs::read_to_string(report::README)
-                .map_err(|e| format!("{}: {e}", report::README))
+            let rows = std::fs::read_to_string(report::STATUS)
+                .map_err(|e| format!("{}: {e}", report::STATUS))
                 .and_then(|t| {
-                    report::rows(report::current(&t).ok_or("README.md has no status table")?)
+                    report::rows(report::current(&t).ok_or("docs/STATUS.md has no status table")?)
                 });
             let rows = match rows {
                 Ok(rows) => rows,
@@ -876,13 +887,24 @@ fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
         host_shell_count.and_then(Result::ok),
         net_shell_count.and_then(Result::ok),
     );
-    let readme = match std::fs::read_to_string(report::README) {
+    let page = match std::fs::read_to_string(report::STATUS) {
         Ok(t) => t,
         Err(e) => {
             r.step(
                 NAME,
-                Outcome::Fail(vec![format!("{}: {e}", report::README)]),
+                Outcome::Fail(vec![format!("{}: {e}", report::STATUS)]),
             );
+            return;
+        }
+    };
+    // The images are drawn from the block's own rows, so they show exactly
+    // what the table shows, carried cells included.
+    let summaries = |name: &str| r.metrics.get(name).and_then(|m| m.axiom_summary.clone());
+    let images = report::rows(&block).and_then(|rows| status::render(&rows, &summaries));
+    let (scoreboard, detail) = match images {
+        Ok(i) => i,
+        Err(e) => {
+            r.step(NAME, Outcome::Fail(vec![e]));
             return;
         }
     };
@@ -891,28 +913,53 @@ fn readme_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
         let outcome = if r.failed {
             Outcome::Fail(vec!["refusing to write: a check above failed".into()])
         } else {
-            match report::splice(&readme, &block)
-                .and_then(|new| std::fs::write(report::README, new).map_err(|e| e.to_string()))
-            {
-                Ok(()) => Outcome::Pass(vec![format!("wrote {}", report::README), block]),
+            let res = report::splice(&page, &block).and_then(|new| {
+                for (path, text) in [
+                    (report::STATUS, new.as_str()),
+                    (status::SCOREBOARD, scoreboard.as_str()),
+                    (status::DETAIL, detail.as_str()),
+                ] {
+                    std::fs::write(path, text).map_err(|e| format!("{path}: {e}"))?;
+                }
+                Ok(())
+            });
+            match res {
+                Ok(()) => Outcome::Pass(vec![
+                    format!(
+                        "wrote {}, {} and {}",
+                        report::STATUS,
+                        status::SCOREBOARD,
+                        status::DETAIL
+                    ),
+                    block,
+                ]),
                 Err(e) => Outcome::Fail(vec![e]),
             }
         };
         r.step(NAME, outcome);
         return;
     }
-    // A stale table is not a failure: CI rewrites it on main from the
-    // measurements of a fully verified commit (the `table` job in
-    // .github/workflows/ci.yml), so a change need not carry it.
-    let outcome = match report::current(&readme) {
-        Some(cur) if cur == block => Outcome::Pass(Vec::new()),
+    // A stale table or image is not a failure: CI rewrites them on main from
+    // the measurements of a fully verified commit (the `table` job in
+    // .github/workflows/ci.yml), so a change need not carry them.
+    let stale_images: Vec<&str> = [(status::SCOREBOARD, &scoreboard), (status::DETAIL, &detail)]
+        .into_iter()
+        .filter(|(path, text)| std::fs::read_to_string(path).ok().as_ref() != Some(*text))
+        .map(|(path, _)| path)
+        .collect();
+    let outcome = match report::current(&page) {
+        Some(cur) if cur == block && stale_images.is_empty() => Outcome::Pass(Vec::new()),
+        Some(cur) if cur == block => Outcome::Pass(vec![format!(
+            "{} differ from what this run measured; CI updates them on main",
+            stale_images.join(" and ")
+        )]),
         Some(_) => Outcome::Pass(vec![
-            "README.md's table differs from what this run measured; CI updates it on main. Measured:".into(),
+            "docs/STATUS.md's table differs from what this run measured; CI updates it and the images on main. Measured:".into(),
             block,
         ]),
         None => Outcome::Fail(vec![format!(
             "{} has no {} … {} block",
-            report::README,
+            report::STATUS,
             report::BEGIN,
             report::END
         )]),
@@ -1123,7 +1170,7 @@ fn main() -> ExitCode {
         verus(&mut r, checked, &pins);
         mutations(&mut r, checked, &root, None);
         conformance_suites(&mut r, checked);
-        readme_table(&mut r, write, only);
+        status_table(&mut r, write, only);
     }
     if r.failed {
         println!("RESULT: FAILED");
@@ -1167,8 +1214,8 @@ enum Part {
     /// One or more crates (comma-separated on the command line; CI groups
     /// the crates with no proofs into one job, see [`crate_groups`]).
     Crate(Vec<String>, PathBuf),
-    /// The crate parts' directory, and whether to write README.md's table
-    /// from them (CI does, on main, after every part passed).
+    /// The crate parts' directory, and whether to write docs/STATUS.md's
+    /// table and the status images from them (CI does, on main, after every part passed).
     Assemble(PathBuf, bool),
     /// `cargo xtask crates`: the crate groups as a JSON array of
     /// comma-separated names, for CI's matrix of `crate` parts.
@@ -1299,7 +1346,7 @@ fn run_part(r: &mut Runner, part: Part, crates: &[Crate], pins: &Pins, root: &Pa
             });
             r.step("read crate parts", from_result(res));
             if !r.failed {
-                readme_table(r, write, None);
+                status_table(r, write, None);
             }
             "PARTS ASSEMBLED (every crate part present and from this commit; the gate is this and every part passing on the same commit)".to_owned()
         }
