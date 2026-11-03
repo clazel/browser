@@ -785,6 +785,48 @@
       }
     },
     {
+      "id": "hello-downgrade-sentinel-removed",
+      "file": "src/hello/spec.rs",
+      "find": "if downgrade_sentinel(random) { crate::spec::ILLEGAL_PARAMETER } else { crate::spec::PROTOCOL_VERSION }",
+      "replace": "crate::spec::PROTOCOL_VERSION",
+      "expect": "killed",
+      "reason": "RFC 8446 §4.1.3's downgrade-sentinel check is removed, so a TLS 1.2 ServerHello whose Random ends in 44 4F 57 4E 47 52 44 01 is protocol_version instead of illegal_parameter: lemma_downgrade_sentinel_tls12_is_illegal_parameter is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_downgrade_sentinel_tls12_is_illegal_parameter()",
+        "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_with_random_tail(super::spec::downgrade_tls12())) != Err(crate::spec::ILLEGAL_PARAMETER)"
+      }
+    },
+    {
+      "id": "hello-downgrade-tls12-sentinel-missed",
+      "file": "src/hello/spec.rs",
+      "find": "(random.subrange(24, 32) == downgrade_tls12()\n        || ",
+      "replace": "(",
+      "expect": "killed",
+      "reason": "Only the TLS 1.1 sentinel is checked, so a Random ending in 44 4F 57 4E 47 52 44 01 is protocol_version: lemma_downgrade_sentinel_tls12_is_illegal_parameter is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_downgrade_sentinel_tls12_is_illegal_parameter()",
+        "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_with_random_tail(super::spec::downgrade_tls12())) != Err(crate::spec::ILLEGAL_PARAMETER)"
+      }
+    },
+    {
+      "id": "hello-downgrade-tls11-sentinel-missed",
+      "file": "src/hello/spec.rs",
+      "find": "\n        || random.subrange(24, 32) == downgrade_tls11())",
+      "replace": ")",
+      "expect": "killed",
+      "reason": "Only the TLS 1.2 sentinel is checked, so a Random ending in 44 4F 57 4E 47 52 44 00 is protocol_version: lemma_downgrade_sentinel_tls11_is_illegal_parameter is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_downgrade_sentinel_tls11_is_illegal_parameter()",
+        "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_with_random_tail(super::spec::downgrade_tls11())) != Err(crate::spec::ILLEGAL_PARAMETER)"
+      }
+    },
+    {
       "id": "sv-body-version",
       "file": "src/spec.rs",
       "find": "match read_vec(data, 2, 254) {",
@@ -2425,10 +2467,10 @@
     {
       "id": "hello-legacy-server-hello-protocol-version",
       "file": "src/hello/spec.rs",
-      "find": "None => Some(crate::spec::PROTOCOL_VERSION),",
+      "find": "None => Some(below_tls13(sh.random)),",
       "replace": "None => Some(crate::spec::MISSING_EXTENSION),",
       "expect": "killed",
-      "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version.",
+      "reason": "A legacy ServerHello without supported_versions selects an unsupported protocol for this TLS 1.3-only client and must fail with protocol_version (illegal_parameter only when its random carries a downgrade sentinel), not missing_extension.",
       "module": "hello::certificates",
       "certificate": {
         "file": "src/hello/mutation_certificates.rs",
