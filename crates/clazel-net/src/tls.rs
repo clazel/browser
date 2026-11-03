@@ -190,6 +190,22 @@ impl<'r> TlsConnection<'r> {
         self.conn.socket()
     }
 
+    /// Seal our close_notify now and return its record without sending it,
+    /// for a caller that sends nothing more and must be able to close the
+    /// connection from another thread while this one reads. The driver
+    /// then only reads (`Closing`: the server's data is still delivered
+    /// until its close_notify). The caller writes the record when it
+    /// closes, with [`Self::send_sealed`] or on its own handle of the
+    /// socket. Empty unless the connection is open.
+    pub(crate) fn seal_close(&mut self) -> Vec<u8> {
+        self.client.close().send
+    }
+
+    /// Write a record that [`Self::seal_close`] returned.
+    pub(crate) fn send_sealed(&mut self, record: &[u8]) -> Result<(), NetError> {
+        self.conn.send(record)
+    }
+
     /// Read once from the socket and give the driver what arrived.
     fn pull(&mut self) -> Result<(), NetError> {
         let out = match self.conn.read(&mut self.buf)? {

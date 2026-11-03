@@ -16,18 +16,27 @@
 //!   nothing before the request, so reading first would block both sides.
 //!   3.6's transducer sends one request per connection, so a later write
 //!   would wait until the read in progress returns.
-//! - **Close:** the socket is shut down at once, for TCP and for TLS. A TLS
-//!   connection the kernel closes sends no close_notify (RFC 8446 §6.1 asks
-//!   for one; the thread is blocked in a read and holds the state that
-//!   would seal it). The kernel closes a connection once its response is
-//!   decided, or when its tab goes.
+//! - **Close:** a TCP socket is shut down at once. A TLS connection sends
+//!   close_notify first (RFC 8446 §6.1: "Each party MUST send a
+//!   "close_notify" alert before closing its write side of the
+//!   connection"). The thread cannot seal it then: it is blocked in a read,
+//!   and on Windows shutting down only the read side does not wake that
+//!   read. So the thread seals close_notify as soon as it has sent the
+//!   request (the client sends nothing after it; the connection goes on
+//!   reading, `Closing`) and leaves the record with the driver, unsent. A
+//!   `Close` writes it and then shuts the socket down, which ends the read;
+//!   if the server ends first, the thread writes it. A `Close` before the
+//!   request was sent stops the thread before it sends anything, and it
+//!   closes with close_notify itself.
 //! - Any TLS failure (a certificate that does not validate, a stream that
 //!   ends without the server's close_notify) is `Error`.
 
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
-use std::sync::mpsc::{Receiver, Sender, TryRecvError, channel};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Sender, channel};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use clazel_crypto::join::exec::{ChainVerifier, mozilla};
@@ -53,10 +62,26 @@ pub enum Report {
 
 /// The driver's end of a TLS connection, which its thread owns.
 pub struct TlsEnd {
-    /// The TCP socket under it, to shut down on `Close`.
+    /// The TCP socket under it: `Close` writes close_notify on it and shuts
+    /// it down.
     socket: TcpStream,
     /// Writes for the thread.
     writes: Sender<Vec<u8>>,
+    /// Set by `Close`: the kernel closed the connection.
+    closing: Arc<AtomicBool>,
+    /// Our close_notify, sealed by the thread once the request is sent and
+    /// not yet written (see the module docs). Whoever closes first takes it.
+    goodbye: Goodbye,
+}
+
+/// The sealed close_notify of a TLS connection, shared by the driver and
+/// the connection's thread. Its lock also orders a `Close` against the
+/// thread's first write.
+type Goodbye = Arc<Mutex<Option<Vec<u8>>>>;
+
+/// Take the sealed close_notify out of `goodbye`, if it is there.
+fn take(goodbye: &Goodbye) -> Option<Vec<u8>> {
+    goodbye.lock().ok().and_then(|mut g| g.take())
 }
 
 /// An open connection, as the driver writes to it.
@@ -152,8 +177,13 @@ impl<M: Send + 'static> Driver<M> {
                     Some(Open::Tcp(sock)) => {
                         sock.write_all(&bytes).and_then(|()| sock.flush()).is_ok()
                     }
-                    // The thread writes it; a failure comes back as its report.
-                    Some(Open::Tls(end)) => end.writes.send(bytes.clone()).is_ok(),
+                    // The thread writes the request; a failure comes back as
+                    // its report. Once it has sealed close_notify after the
+                    // request, a second write cannot be sent: it fails here.
+                    Some(Open::Tls(end)) => {
+                        let sealed = end.goodbye.lock().map_or(true, |g| g.is_some());
+                        !sealed && end.writes.send(bytes.clone()).is_ok()
+                    }
                     None => false,
                 };
                 let failed = if ok { "" } else { " (failed)" };
@@ -168,10 +198,13 @@ impl<M: Send + 'static> Driver<M> {
             Op::Close => {
                 self.wanted.remove(&conn);
                 let sock = self.open.remove(&conn);
-                let _ = sock.as_ref().map(|s| match s {
-                    Open::Tcp(s) => s.shutdown(Shutdown::Both),
-                    Open::Tls(end) => end.socket.shutdown(Shutdown::Both),
-                });
+                match &sock {
+                    Some(Open::Tcp(s)) => {
+                        let _ = s.shutdown(Shutdown::Both);
+                    }
+                    Some(Open::Tls(end)) => close_tls(end),
+                    None => {}
+                }
                 (
                     true,
                     sock.map(|_| format!("network: connection {conn} closed")),
@@ -255,58 +288,82 @@ fn run_tls(
         }
     };
     let (writes, pending) = channel::<Vec<u8>>();
-    if !report(Report::ConnectedTls(TlsEnd { socket, writes })) {
+    let closing = Arc::new(AtomicBool::new(false));
+    let goodbye: Goodbye = Arc::new(Mutex::new(None));
+    let end = TlsEnd {
+        socket,
+        writes,
+        closing: Arc::clone(&closing),
+        goodbye: Arc::clone(&goodbye),
+    };
+    // A driver that no longer wants the connection drops the end at once.
+    if !report(Report::ConnectedTls(end)) {
+        let _ = tls.close();
         return;
     }
     // The request first: nothing is read before it is sent. The driver
     // dropping its end (a `Close` before any write) ends the thread.
     let Ok(first) = pending.recv() else {
+        let _ = tls.close();
         return;
     };
-    if let Err(e) = tls.send(&first) {
-        report(Report::Failed(e.to_string()));
-        return;
+    {
+        // Held across the write and the seal, so that a `Close` either
+        // comes first (and nothing is sent but close_notify) or finds the
+        // sealed record.
+        let Ok(mut sealed) = goodbye.lock() else {
+            return;
+        };
+        if closing.load(Ordering::SeqCst) {
+            drop(sealed);
+            let _ = tls.close();
+            return;
+        }
+        if let Err(e) = tls.send(&first) {
+            drop(sealed);
+            report(Report::Failed(e.to_string()));
+            return;
+        }
+        *sealed = Some(tls.seal_close());
     }
     let mut buf = vec![0u8; 16 * 1024];
     loop {
-        if !send_pending(&mut tls, &pending, &report) {
-            return;
-        }
         match tls.read(&mut buf) {
             Ok(Some(n)) => {
                 if !report(Report::Bytes(buf.get(..n).unwrap_or_default().to_vec())) {
-                    return;
+                    break;
                 }
             }
             Ok(None) => {
                 report(Report::Closed);
-                return;
+                break;
             }
+            // After a `Close` this is the shutdown, and the driver drops it.
             Err(e) => {
                 report(Report::Failed(e.to_string()));
-                return;
+                break;
             }
         }
     }
+    // The server ended first (or the driver went away): our close_notify,
+    // unless a `Close` already wrote it.
+    if let Some(record) = take(&goodbye) {
+        let _ = tls.send_sealed(&record);
+    }
 }
 
-/// Send the writes that are waiting, without blocking: whether the thread
-/// goes on (no write failed).
-fn send_pending(
-    tls: &mut TlsConnection<'_>,
-    pending: &Receiver<Vec<u8>>,
-    report: &impl Fn(Report) -> bool,
-) -> bool {
-    loop {
-        match pending.try_recv() {
-            Ok(bytes) => {
-                if let Err(e) = tls.send(&bytes) {
-                    report(Report::Failed(e.to_string()));
-                    return false;
-                }
-            }
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => return true,
-        }
+/// `Close` on a TLS connection: write the close_notify its thread sealed,
+/// then shut the socket down, which ends the thread's read. If the thread
+/// has not sent the request yet, it sees `closing` and closes by itself.
+fn close_tls(end: &TlsEnd) {
+    end.closing.store(true, Ordering::SeqCst);
+    let Ok(mut sealed) = end.goodbye.lock() else {
+        return;
+    };
+    if let Some(record) = sealed.take() {
+        let mut socket = &end.socket;
+        let _ = socket.write_all(&record).and_then(|()| socket.flush());
+        let _ = end.socket.shutdown(Shutdown::Both);
     }
 }
 

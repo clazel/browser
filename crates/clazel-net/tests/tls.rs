@@ -709,8 +709,8 @@ fn the_driver_refuses_a_certificate_for_another_name() -> T {
     Ok(())
 }
 
-/// `Close` while the thread is reading: the socket is shut down at once,
-/// the server sees the connection end, and nothing more reaches the kernel.
+/// `Close` while the thread is reading: the client's close_notify reaches
+/// the server at once (RFC 8446 §6.1), and nothing more reaches the kernel.
 #[test]
 fn the_driver_closes_a_tls_connection_while_it_reads() -> T {
     let (port, handle) = server(|socket| {
@@ -719,11 +719,12 @@ fn the_driver_closes_a_tls_connection_while_it_reads() -> T {
         tls.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 1000\r\n\r\npart")
             .map_err(|e| e.to_string())?;
         tls.flush().map_err(|e| e.to_string())?;
-        // Wait for the client to go away: the read ends with an error or
-        // the end of the stream, without close_notify (see `Driver`).
+        // Wait for the client to go away. rustls reads the client's
+        // close_notify as the end of the stream (`Ok`); a TCP close without
+        // one is an error (`UnexpectedEof`).
         let started = Instant::now();
         let ended = read_until(&mut tls, b"never");
-        Ok((started.elapsed(), ended.is_err()))
+        Ok((started.elapsed(), ended))
     })?;
     let (mut driver, rx) = driver();
     connect_tls(&mut driver, port);
@@ -739,8 +740,9 @@ fn the_driver_closes_a_tls_connection_while_it_reads() -> T {
     ));
     let (ok, _) = driver.apply(0, Op::Close, None);
     assert!(ok);
-    let (elapsed, _) = join(handle)?;
+    let (elapsed, ended) = join(handle)?;
     assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    assert_eq!(ended, Ok(Vec::new()), "the server saw no close_notify");
     assert!(next_input(&mut driver, &rx, Duration::from_millis(500)).is_none());
     Ok(())
 }
