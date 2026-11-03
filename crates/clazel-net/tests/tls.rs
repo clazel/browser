@@ -617,9 +617,12 @@ fn a_secure_cookie_is_stored_and_sent_over_https() -> T {
 // kernel, against the same rustls server, with OS randomness.
 // ---------------------------------------------------------------------
 
+/// A connection's id and what its thread reported.
+type Reported = (u64, Report);
+
 /// A driver whose reports arrive on the returned receiver, validating
 /// against the test root.
-fn driver() -> (Driver<(u64, Report)>, Receiver<(u64, Report)>) {
+fn driver() -> (Driver<Reported>, Receiver<Reported>) {
     let (tx, rx) = channel();
     (Driver::with_verifier(tx, |c, r| (c, r), verifier), rx)
 }
@@ -628,11 +631,11 @@ fn driver() -> (Driver<(u64, Report)>, Receiver<(u64, Report)>) {
 /// wants (reports for connections it no longer wants are dropped, as the
 /// host drops them), or `None` after `wait` with nothing.
 fn next_input(
-    driver: &mut Driver<(u64, Report)>,
-    rx: &Receiver<(u64, Report)>,
+    driver: &mut Driver<Reported>,
+    rx: &Receiver<Reported>,
     wait: Duration,
 ) -> Option<(u64, InputBuf)> {
-    let deadline = Instant::now() + wait;
+    let deadline = Instant::now().checked_add(wait)?;
     loop {
         let left = deadline.checked_duration_since(Instant::now())?;
         let (conn, report) = rx.recv_timeout(left).ok()?;
@@ -642,7 +645,7 @@ fn next_input(
     }
 }
 
-fn connect_tls(driver: &mut Driver<(u64, Report)>, port: u16) {
+fn connect_tls(driver: &mut Driver<Reported>, port: u16) {
     let route = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let (ok, _) = driver.apply(
         0,
