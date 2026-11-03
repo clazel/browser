@@ -80,6 +80,14 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     "OpenProcess",
     "OpenProcessToken",
     "GetTokenInformation",
+    // Cryptographically secure random bytes for the TLS client
+    // (`clazel_sys::fill_random`): `getrandom(2)` with flags 0 on Linux (the
+    // `libc` wrapper, not `syscall`), `getentropy(2)` on macOS and
+    // `BCryptGenRandom` with the system-preferred RNG on Windows. Each only
+    // writes into a caller's buffer.
+    "getrandom",
+    "getentropy",
+    "BCryptGenRandom",
 ];
 
 /// The system call numbers `syscall` may be given (names as in `libc`).
