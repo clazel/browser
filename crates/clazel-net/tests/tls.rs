@@ -5,8 +5,11 @@
 //! `clazel-crypto/tests/fixtures/tls` (see `SOURCE.md` there); the client's
 //! trust store is the test root. Hostile servers are plain `TcpListener`s.
 //!
-//! **Randomness is test-only**: the client's random octets come from a fixed
-//! seed through SHA-256. Nothing here is a model for a production source.
+//! **Randomness**: most tests use a fixed seed through SHA-256
+//! (`open_with_random`), so a handshake is reproducible; that seed is never a
+//! model for production. The `*_with_os_randomness` tests and
+//! `os_randomness_differs_between_connections` use the production path,
+//! `TlsConnection::open`, whose octets come from `clazel_sys::fill_random`.
 
 // rustls's ring provider is C and assembly, and these tests open sockets:
 // Miri can run neither.
@@ -72,21 +75,39 @@ fn timeouts(idle: Duration) -> Timeouts {
     }
 }
 
-fn open(port: u16, idle: Duration) -> Result<TlsConnection<'static>, NetError> {
-    let verifier = ChainVerifier::new(&[Root {
+fn verifier() -> ChainVerifier<'static> {
+    ChainVerifier::new(&[Root {
         der: ROOT,
         server_distrust_after: None,
-    }]);
+    }])
+}
+
+fn open(port: u16, idle: Duration) -> Result<TlsConnection<'static>, NetError> {
+    TlsConnection::open_with_random(
+        &LOCAL,
+        port,
+        timeouts(idle),
+        Host::Dns(b"test.example".to_vec()),
+        NOW,
+        verifier(),
+        &mut seeded(),
+    )
+}
+
+/// The production path: the client's random octets from the OS
+/// (`clazel_sys::fill_random`).
+fn open_os(port: u16, idle: Duration) -> Result<TlsConnection<'static>, NetError> {
     TlsConnection::open(
         &LOCAL,
         port,
         timeouts(idle),
         Host::Dns(b"test.example".to_vec()),
         NOW,
-        verifier,
-        &mut seeded(),
+        verifier(),
     )
 }
+
+type Opener = fn(u16, Duration) -> Result<TlsConnection<'static>, NetError>;
 
 /// A server that accepts one connection and runs `f` on it.
 fn server<R: Send + 'static>(
@@ -170,8 +191,9 @@ fn read_record(socket: &mut TcpStream) -> Result<Vec<u8>, String> {
 }
 
 /// A handshake, a request, a response; the client closes first, then the
-/// server answers with its own close_notify.
-fn request_response(leaf: &'static [u8], key: &'static [u8]) -> T {
+/// server answers with its own close_notify. `open` is [`open`] (seeded) or
+/// [`open_os`].
+fn request_response(leaf: &'static [u8], key: &'static [u8], open: Opener) -> T {
     let (port, handle) = server(move |socket| {
         let mut tls = rustls(socket, leaf, key)?;
         let request = read_until(&mut tls, b"\r\n\r\n")?;
@@ -206,12 +228,12 @@ fn request_response(leaf: &'static [u8], key: &'static [u8]) -> T {
 
 #[test]
 fn ecdsa_handshake_request_response_close() -> T {
-    request_response(LEAF_ECDSA, KEY_ECDSA)
+    request_response(LEAF_ECDSA, KEY_ECDSA, open)
 }
 
 #[test]
 fn rsa_handshake_request_response_close() -> T {
-    request_response(LEAF_RSA, KEY_RSA)
+    request_response(LEAF_RSA, KEY_RSA, open)
 }
 
 #[test]
@@ -319,5 +341,56 @@ fn bytes_that_are_not_tls() -> T {
         })) => assert_eq!(back, [21, 3, 3, 0, 2, 2, alert]),
         other => return Err(format!("{other:?}")),
     }
+    Ok(())
+}
+
+#[test]
+fn ecdsa_handshake_with_os_randomness() -> T {
+    request_response(LEAF_ECDSA, KEY_ECDSA, open_os)
+}
+
+#[test]
+fn rsa_handshake_with_os_randomness() -> T {
+    request_response(LEAF_RSA, KEY_RSA, open_os)
+}
+
+/// The ClientHello's random (RFC 8446 §4.1.2) and legacy_session_id: after
+/// the record header (5), the handshake header (4) and legacy_version (2),
+/// 32 octets of random, then the session id's length (32) and its octets.
+fn hello_randoms(record: &[u8]) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let random = record.get(11..43).ok_or("short ClientHello")?;
+    let session_id = record.get(44..76).ok_or("short ClientHello")?;
+    assert_eq!(record.get(43), Some(&32));
+    Ok((random.to_vec(), session_id.to_vec()))
+}
+
+/// Open a connection with `open` and return the ClientHello it sent; the
+/// server then closes, so the handshake ends in truncation.
+fn client_hello(open: Opener) -> Result<Vec<u8>, String> {
+    let (port, handle) = server(|mut socket| read_record(&mut socket))?;
+    let result = open(port, Duration::from_secs(5));
+    let hello = join(handle)?;
+    match result.err() {
+        Some(NetError::Tls(Failure {
+            origin: Origin::Truncated,
+            ..
+        })) => Ok(hello),
+        other => Err(format!("{other:?}")),
+    }
+}
+
+/// With the OS source, two connections draw different octets; with the
+/// test seed they are the same. The X25519 scalar is drawn the same way
+/// but never leaves the client.
+#[test]
+fn os_randomness_differs_between_connections() -> T {
+    let (random_a, session_a) = hello_randoms(&client_hello(open_os)?)?;
+    let (random_b, session_b) = hello_randoms(&client_hello(open_os)?)?;
+    assert_ne!(random_a, random_b);
+    assert_ne!(session_a, session_b);
+    assert_ne!(random_a, session_a);
+    let seeded_a = client_hello(open)?;
+    let seeded_b = client_hello(open)?;
+    assert_eq!(seeded_a, seeded_b);
     Ok(())
 }

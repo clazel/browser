@@ -288,6 +288,7 @@ dependencies = [
  "clazel-dns",
  "clazel-fetch",
  "clazel-http",
+ "clazel-sys",
  "clazel-tls",
  "clazel-url",
  "rustls",

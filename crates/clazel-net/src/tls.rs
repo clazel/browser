@@ -34,9 +34,10 @@ impl<'r> TlsConnection<'r> {
     /// Connect to `addrs` in order (as [`crate::connect`]) and run the TLS
     /// handshake for `host`, validating the server's certificates at `now`
     /// (seconds since the Unix epoch) against `verifier`'s trust anchors.
-    /// `random` is the driver's source of secret random octets (see
-    /// `clazel_crypto::client::Client::connect`). Each read and write of
-    /// the handshake waits at most `timeouts.idle`; a timeout is
+    /// The driver's secret random octets come from the OS
+    /// (`clazel_sys::fill_random`); if it fails, the error is
+    /// [`NetError::Random`] and nothing is connected or sent. Each read and
+    /// write of the handshake waits at most `timeouts.idle`; a timeout is
     /// [`NetError::Timeout`] at [`Stage::Handshake`]. A handshake that the
     /// driver ends is [`NetError::Tls`], including a close_notify from the
     /// server (alert 0, from the server).
@@ -47,10 +48,54 @@ impl<'r> TlsConnection<'r> {
         host: Host,
         now: u64,
         verifier: ChainVerifier<'r>,
+    ) -> Result<Self, NetError> {
+        let mut os = |buf: &mut [u8]| clazel_sys::fill_random(buf).map_err(NetError::Random);
+        Self::start(addrs, port, timeouts, host, now, verifier, &mut os)
+    }
+
+    /// [`Self::open`] with the caller's source of random octets instead of
+    /// the OS's, for tests that need a reproducible handshake. `random`
+    /// must fill its argument with fresh, secret, uniformly random octets
+    /// (see `clazel_crypto::client::Client::connect`): a fixed seed makes
+    /// every key of the connection predictable.
+    pub fn open_with_random(
+        addrs: &[IpAddr],
+        port: u16,
+        timeouts: Timeouts,
+        host: Host,
+        now: u64,
+        verifier: ChainVerifier<'r>,
         random: &mut dyn FnMut(&mut [u8]),
     ) -> Result<Self, NetError> {
+        let mut caller = |buf: &mut [u8]| {
+            random(buf);
+            Ok(())
+        };
+        Self::start(addrs, port, timeouts, host, now, verifier, &mut caller)
+    }
+
+    /// Build the driver, then connect and run the handshake. `random` may
+    /// fail. The driver draws every random octet inside `Client::connect`,
+    /// which sends nothing itself, so after a failed draw the remaining
+    /// draws are skipped, the ClientHello built from them is dropped unsent,
+    /// and no socket is opened.
+    fn start(
+        addrs: &[IpAddr],
+        port: u16,
+        timeouts: Timeouts,
+        host: Host,
+        now: u64,
+        verifier: ChainVerifier<'r>,
+        random: &mut dyn FnMut(&mut [u8]) -> Result<(), NetError>,
+    ) -> Result<Self, NetError> {
+        let mut drawn = Ok(());
+        let (client, first) = Client::connect(host, now, verifier, &mut |buf: &mut [u8]| {
+            if drawn.is_ok() {
+                drawn = random(buf);
+            }
+        });
+        drawn?;
         let conn = Connection::open(addrs, port, timeouts)?;
-        let (client, first) = Client::connect(host, now, verifier, random);
         let mut tls = TlsConnection {
             conn,
             client,
@@ -148,5 +193,53 @@ fn handshake_stage(e: NetError) -> NetError {
     match e {
         NetError::Timeout(Stage::Read | Stage::Write) => NetError::Timeout(Stage::Handshake),
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clazel_crypto::join::exec::Root;
+    use clazel_sys::RandomError;
+    use std::net::{Ipv4Addr, TcpListener};
+    use std::time::Duration;
+
+    /// A random source that fails never reaches the network: no socket is
+    /// opened, so no ClientHello built from unfilled octets is sent.
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn a_failed_draw_opens_no_socket() -> Result<(), Box<dyn std::error::Error>> {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?;
+        listener.set_nonblocking(true)?;
+        let port = listener.local_addr()?.port();
+        let mut calls = 0u32;
+        let mut failing = |_: &mut [u8]| {
+            calls = calls.saturating_add(1);
+            Err(NetError::Random(RandomError::Unsupported))
+        };
+        let result = TlsConnection::start(
+            &[IpAddr::V4(Ipv4Addr::LOCALHOST)],
+            port,
+            Timeouts {
+                connect: Duration::from_secs(2),
+                idle: Duration::from_secs(2),
+            },
+            Host::Dns(b"test.example".to_vec()),
+            0,
+            ChainVerifier::new(&[] as &[Root<'_>]),
+            &mut failing,
+        );
+        assert!(matches!(
+            result,
+            Err(NetError::Random(RandomError::Unsupported))
+        ));
+        // The first failure skips the remaining draws.
+        assert_eq!(calls, 1);
+        let accepted = listener.accept();
+        assert!(
+            matches!(&accepted, Err(e) if e.kind() == io::ErrorKind::WouldBlock),
+            "{accepted:?}"
+        );
+        Ok(())
     }
 }

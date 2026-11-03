@@ -25,6 +25,11 @@ clazel-http = { path = "../clazel-http" }
 clazel-tls = { path = "../clazel-tls" }
 clazel-crypto = { path = "../clazel-crypto" }
 
+# The OS random source, `clazel_sys::fill_random`: the TLS client's secret
+# octets and the DNS query ID. `clazel-sys` holds the one `unsafe` call per
+# OS (audited, docs/SYS-AUDITS.md); this crate only hands it a buffer.
+clazel-sys = { path = "../clazel-sys" }
+
 # Test-only TLS 1.3 server for tests/tls.rs (class `test` in
 # docs/DEPENDENCIES.md: never shipped), configured as in clazel-crypto's
 # tests: TLS 1.3, TLS_CHACHA20_POLY1305_SHA256 and X25519 over the `ring`
