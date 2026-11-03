@@ -208,6 +208,100 @@ fn tls12_server_hello_without_tls13_version_fails_with_protocol_version() {
     );
 }
 
+/// RFC 8446 §4.1.3: the last 8 bytes of a downgrading TLS 1.3 server's Random.
+const DOWNGRADE_TLS12: [u8; 8] = [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x01];
+const DOWNGRADE_TLS11: [u8; 8] = [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00];
+
+fn random_ending_in(tail: &[u8; 8]) -> [u8; 32] {
+    let mut random = RANDOM;
+    if let Some(slot) = random.get_mut(24..) {
+        slot.copy_from_slice(tail);
+    }
+    random
+}
+
+#[test]
+fn downgrade_sentinel_in_a_tls12_or_lower_server_hello_is_illegal_parameter() {
+    // RFC 8446 §4.1.3: "TLS 1.3 clients receiving a ServerHello indicating
+    // TLS 1.2 or below MUST check that the last 8 bytes are not equal to
+    // either of these values ... If a match is found, the client MUST abort
+    // the handshake with an "illegal_parameter" alert."
+    for (legacy_version, tail) in [
+        (0x0303u16, DOWNGRADE_TLS12),
+        (0x0302, DOWNGRADE_TLS11),
+        // A TLS 1.3 client checks both values whatever legacy_version says.
+        (0x0303, DOWNGRADE_TLS11),
+        (0x0302, DOWNGRADE_TLS12),
+    ] {
+        let random = random_ending_in(&tail);
+        // With the extension field absent (RFC 5246 form) ...
+        let mut absent = Vec::new();
+        absent.extend_from_slice(&legacy_version.to_be_bytes());
+        absent.extend_from_slice(&random);
+        absent.push(u8::try_from(SESSION_ID.len()).unwrap_or(u8::MAX));
+        absent.extend_from_slice(SESSION_ID);
+        absent.extend_from_slice(&0x002fu16.to_be_bytes());
+        absent.push(0);
+        assert_eq!(
+            validate(SESSION_ID, false, &absent),
+            Err(ILLEGAL_PARAMETER),
+            "{legacy_version:#06x} {tail:02x?}"
+        );
+        // ... empty, or holding only extensions other than supported_versions.
+        let empty = server_hello(legacy_version, &random, SESSION_ID, 0x002f, 0, &[]);
+        assert_eq!(validate(SESSION_ID, false, &empty), Err(ILLEGAL_PARAMETER));
+        let other = server_hello(
+            legacy_version,
+            &random,
+            SESSION_ID,
+            0x002f,
+            0,
+            &[(0xff01, &[0u8][..])],
+        );
+        assert_eq!(validate(SESSION_ID, false, &other), Err(ILLEGAL_PARAMETER));
+    }
+
+    // Without a sentinel (here one byte off each) the same messages are a
+    // plain version mismatch.
+    for tail in [
+        [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x02],
+        [0x45, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x01],
+        [0x44, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x45, 0x00],
+    ] {
+        let body = server_hello(0x0303, &random_ending_in(&tail), SESSION_ID, 0x002f, 0, &[]);
+        assert_eq!(validate(SESSION_ID, false, &body), Err(PROTOCOL_VERSION));
+    }
+}
+
+#[test]
+fn downgrade_sentinel_is_not_checked_when_tls13_is_selected() {
+    // §4.1.3 asks a TLS 1.3 client to check a ServerHello "indicating TLS 1.2
+    // or below". One that selects TLS 1.3 through supported_versions does
+    // not, so its Random is not examined; one that selects TLS 1.2 there is
+    // illegal_parameter by §4.2.1 whatever its Random.
+    let extensions = valid_extensions(&X25519_SHARE);
+    let random = random_ending_in(&DOWNGRADE_TLS12);
+    let tls13 = server_hello(
+        0x0303,
+        &random,
+        SESSION_ID,
+        0x1303,
+        0,
+        &borrow_extensions(&extensions),
+    );
+    assert_eq!(
+        validate(SESSION_ID, false, &tls13),
+        Ok(Selection::Share(&X25519_SHARE))
+    );
+    let tls12_version = supported_versions(0x0303);
+    let share = server_key_share(29, &X25519_SHARE);
+    let tls12_selected = [(43, &tls12_version[..]), (51, share.as_slice())];
+    for random in [RANDOM, random] {
+        let body = server_hello(0x0303, &random, SESSION_ID, 0x1303, 0, &tls12_selected);
+        assert_eq!(validate(SESSION_ID, false, &body), Err(ILLEGAL_PARAMETER));
+    }
+}
+
 #[test]
 fn parser_rejects_malformed_and_duplicate_extensions_before_negotiation() {
     let malformed_version = [3, 4, 5];

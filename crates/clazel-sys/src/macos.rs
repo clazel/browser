@@ -1,22 +1,26 @@
-//! macOS: the Seatbelt sandbox (`sandbox_init`), and the two escape attempts
-//! the sandbox tests make (`fork`, `ptrace`).
+//! macOS: the Seatbelt sandbox (`sandbox_init`), the two escape attempts
+//! the sandbox tests make (`fork`, `ptrace`), and `getentropy`.
 //!
 //! `sandbox_init` is deprecated, but it is what Chromium and Firefox still
 //! use, and no replacement exists for a process that is not an App Sandbox
 //! application. `libc` does not declare it, so it is declared here.
 
-use std::ffi::{CString, c_char, c_int};
+use std::ffi::{CString, c_char, c_int, c_void};
 use std::fmt;
 
-use crate::Errno;
+use crate::{Errno, RandomError};
 
 // SAFETY: man 3 sandbox_init and <sandbox.h>: `int sandbox_init(const char
 // *profile, uint64_t flags, char **errorbuf)` and `void
 // sandbox_free_error(char *errorbuf)`; man 2 fork: `pid_t fork(void)`; man 2
 // _exit: `void _exit(int status)`; man 2 ptrace and <sys/ptrace.h>: `int
-// ptrace(int request, pid_t pid, caddr_t addr, int data)`. The declarations
-// below match those prototypes (`c_char`, `c_int` and `u64` have the C sizes
-// on every macOS target, `pid_t` is `int` and `caddr_t` is `char *`), the
+// ptrace(int request, pid_t pid, caddr_t addr, int data)`; man 2 getentropy
+// and <sys/random.h>: `int getentropy(void *buf, size_t buflen)` (as in
+// `libc`'s apple declaration, `getentropy(*mut c_void, size_t) -> c_int`,
+// though `libc` is not a dependency on macOS). The declarations below match
+// those prototypes (`c_char`, `c_int` and `u64` have the C sizes on every
+// macOS target, `pid_t` is `int`, `caddr_t` is `char *` and `size_t` is
+// `usize`), the
 // functions live in libSystem, which Rust's standard library
 // links, and neither is `pub` or declared `safe`, so every call needs its own
 // `unsafe` block.
@@ -26,6 +30,7 @@ unsafe extern "C" {
     fn fork() -> c_int;
     fn _exit(status: c_int) -> !;
     fn ptrace(request: c_int, pid: c_int, addr: *mut c_char, data: c_int) -> c_int;
+    fn getentropy(buf: *mut c_void, buflen: usize) -> c_int;
 }
 
 /// `PT_ATTACHEXC` of `<sys/ptrace.h>`: attach to a process and take its
@@ -34,6 +39,14 @@ const PT_ATTACHEXC: c_int = 14;
 
 /// `EINVAL` of `<sys/errno.h>` (`libc` is not a dependency on macOS).
 const EINVAL: i32 = 22;
+
+/// `EINTR` of `<sys/errno.h>`.
+const EINTR: i32 = 4;
+
+/// The most `getentropy` fills in one call (man 2 getentropy: a larger
+/// `buflen` fails with `EINVAL`), so buffers are filled in chunks of this
+/// size.
+pub(crate) const RANDOM_MAX_PER_CALL: usize = 256;
 
 /// Why a Seatbelt profile was not applied.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,6 +145,34 @@ pub fn attempt_ptrace_attach(pid: i32) -> Result<(), Errno> {
     // for this request, so nothing can dangle.
     let rc = unsafe { ptrace(PT_ATTACHEXC, pid, addr, 0) };
     if rc == 0 { Ok(()) } else { Err(Errno::last()) }
+}
+
+/// `getentropy(buf, len)` on chunks of at most [`RANDOM_MAX_PER_CALL`] bytes:
+/// [`crate::fill_random`] on macOS. Each call fills its whole chunk or fails;
+/// a call interrupted by a signal (`EINTR`) is repeated.
+pub(crate) fn fill_random(buf: &mut [u8]) -> Result<(), RandomError> {
+    for chunk in buf.chunks_mut(RANDOM_MAX_PER_CALL) {
+        let ptr: *mut c_void = chunk.as_mut_ptr().cast();
+        let len: usize = chunk.len();
+        loop {
+            // SAFETY: man 2 getentropy: `getentropy(buf, buflen)` fills
+            // `buflen` bytes at `buf`, at most 256, and returns 0, or -1 and
+            // sets errno. The arguments have the types of the declaration
+            // above (`void *`, `size_t`): `ptr` and `len` are the pointer and
+            // length of the live slice `chunk`, which this function borrows
+            // mutably, and `len` is at most 256 because `chunks_mut` makes it
+            // so; any byte pattern is a valid `u8`.
+            let rc = unsafe { getentropy(ptr, len) };
+            if rc == 0 {
+                break;
+            }
+            let e = Errno::last();
+            if e.0 != EINTR {
+                return Err(RandomError::Os(e));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

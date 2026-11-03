@@ -17,12 +17,23 @@
 //!   key exchange and traffic-secret derivation live in the separate join.
 //! - Complete handshake bodies use the existing format/extension parser.
 //!   Its duplicate, placement and structural errors win before negotiation;
-//!   absent `supported_versions` is a protocol-version negotiation failure.
-//!   Multi-fault inputs need only one fatal alert.
+//!   absent `supported_versions` is a protocol-version negotiation failure
+//!   (or `illegal_parameter`, below). Multi-fault inputs need only one fatal
+//!   alert.
 //! - RFC 5246 permits a legacy ServerHello to omit its extension field. A
 //!   complete body with that form, or a complete valid extension vector that
 //!   lacks `supported_versions`, is classified as `protocol_version` before
 //!   the TLS 1.3 parser. Malformed/truncated vectors remain `decode_error`.
+//! - Such a ServerHello "indicat[es] TLS 1.2 or below" (§4.1.3; Appendix D.1:
+//!   without `supported_versions` the server has negotiated a prior
+//!   version), so its `random` is checked for the downgrade sentinels first,
+//!   and a match is `illegal_parameter` instead of `protocol_version`
+//!   ([`below_tls13`]). A ServerHello that carries `supported_versions` is
+//!   not checked: one selecting a version before TLS 1.3 is already
+//!   `illegal_parameter` (§4.2.1), and one selecting TLS 1.3 does not
+//!   indicate TLS 1.2 or below, so §4.1.3 asks nothing of its random. Both
+//!   sentinels are checked whatever the `legacy_version`, as §4.1.3 asks of
+//!   a TLS 1.3 client ("not equal to either of these values").
 //! - Body size inherits the transcript limit; invalid local session IDs and
 //!   oversized bodies yield internal_error. RFC prose has no step numbers;
 //!   comments name the exact field or clause rather than inventing steps.
@@ -53,10 +64,12 @@ pub open spec fn offered(es: Seq<crate::spec::Ext>, retry: bool) -> bool
 }
 /// §4.2.1 selected_version first; §4.1.3 session echo, cipher and compression.
 /// RFC 8446 Appendix D.1: no selected-version extension identifies a legacy
-/// server response, which this TLS 1.3-only client rejects with protocol_version.
+/// server response, which this TLS 1.3-only client rejects with
+/// protocol_version, or with illegal_parameter if its random carries a
+/// §4.1.3 downgrade sentinel ([`below_tls13`]).
 pub open spec fn parameters(sh: crate::spec::ServerHello, session_id: Seq<u8>) -> Option<u8> {
     match extension(sh.extensions, 43) {
-        None => Some(crate::spec::PROTOCOL_VERSION),
+        None => Some(below_tls13(sh.random)),
         Some(data) => match crate::spec::read_supported_versions_sh(data) {
             None => Some(50),
             Some(version) => if version != 0x0304 { Some(47) }
@@ -91,6 +104,37 @@ pub open spec fn share(sh: crate::spec::ServerHello) -> Result<Selection, u8> {
         },
     }
 }
+/// RFC 8446 §4.1.3: the last 8 bytes of a TLS 1.3 server's Random when it
+/// negotiates TLS 1.2: "44 4F 57 4E 47 52 44 01".
+pub open spec fn downgrade_tls12() -> Seq<u8> {
+    seq![0x44u8, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x01]
+}
+/// RFC 8446 §4.1.3: the last 8 bytes of a TLS 1.3 server's Random when it
+/// negotiates TLS 1.1 or below: "44 4F 57 4E 47 52 44 00".
+pub open spec fn downgrade_tls11() -> Seq<u8> {
+    seq![0x44u8, 0x4F, 0x57, 0x4E, 0x47, 0x52, 0x44, 0x00]
+}
+/// RFC 8446 §4.1.3: "TLS 1.3 clients receiving a ServerHello indicating
+/// TLS 1.2 or below MUST check that the last 8 bytes are not equal to either
+/// of these values." `random` is the 32-byte `Random`.
+pub open spec fn downgrade_sentinel(random: Seq<u8>) -> bool {
+    random.len() == 32 && (random.subrange(24, 32) == downgrade_tls12()
+        || random.subrange(24, 32) == downgrade_tls11())
+}
+/// RFC 8446 §4.1.3: the alert for a ServerHello indicating TLS 1.2 or below.
+/// The sentinel is checked first: "If a match is found, the client MUST
+/// abort the handshake with an "illegal_parameter" alert." Without one, this
+/// TLS 1.3-only client shares no version with the server (Appendix D.1):
+/// protocol_version.
+pub open spec fn below_tls13(random: Seq<u8>) -> u8 {
+    if downgrade_sentinel(random) { crate::spec::ILLEGAL_PARAMETER } else { crate::spec::PROTOCOL_VERSION }
+}
+/// §4.1.3 `Random random`: the 32 bytes of a ServerHello body after its
+/// two-byte `legacy_version`; empty for a body too short to hold them, which
+/// `legacy_server_hello_without_supported_versions` never accepts.
+pub open spec fn server_random(body: Seq<u8>) -> Seq<u8> {
+    if body.len() < 34 { Seq::empty() } else { body.subrange(2, 34) }
+}
 /// §4.1.3/§4.1.4 acceptance after format checks.
 pub open spec fn parsed(sh: crate::spec::ServerHello, session_id: Seq<u8>, retried: bool) -> Result<Selection, u8> {
     match parameters(sh, session_id) {
@@ -107,7 +151,10 @@ pub open spec fn parsed(sh: crate::spec::ServerHello, session_id: Seq<u8>, retri
 pub open spec fn validate(session_id: Seq<u8>, retried: bool, body: Seq<u8>) -> Result<Selection, u8> {
     if session_id.len() > 32 || body.len() > crate::transcript::spec::MAX_BODY { Err(80) }
     else if crate::spec::legacy_server_hello_without_supported_versions(body) {
-        Err(crate::spec::PROTOCOL_VERSION)
+        // RFC 8446 §4.1.3: without supported_versions the ServerHello
+        // indicates TLS 1.2 or below, so the downgrade sentinel decides the
+        // alert before the version mismatch does (below_tls13).
+        Err(below_tls13(server_random(body)))
     }
     else {
         match crate::spec::parse_handshake_body(2, body, 32) {

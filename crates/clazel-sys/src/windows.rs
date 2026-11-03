@@ -1,5 +1,6 @@
-//! Windows: start a process inside an AppContainer and a Job Object, and the
-//! two checks and one escape attempt the sandbox tests make.
+//! Windows: start a process inside an AppContainer and a Job Object, the
+//! two checks and one escape attempt the sandbox tests make, and
+//! `BCryptGenRandom`.
 //!
 //! Windows cannot move a running process into an AppContainer, so unlike the
 //! Linux and macOS modules this one *spawns*: the host calls [`spawn`] with a
@@ -23,7 +24,7 @@ use std::os::windows::ffi::OsStrExt;
 use std::os::windows::io::{AsRawHandle, OwnedHandle};
 use std::path::Path;
 
-use crate::Errno;
+use crate::{Errno, RandomError};
 
 type Handle = isize;
 type Bool = i32;
@@ -109,8 +110,12 @@ struct TokenIsAppContainer {
 #[link(name = "kernel32")]
 #[link(name = "advapi32")]
 #[link(name = "userenv")]
+#[link(name = "bcrypt")]
 // SAFETY: docs CreateAppContainerProfile, DeriveAppContainerSidFromAppContainerName
-// (userenv.h); docs CreateProcessW, InitializeProcThreadAttributeList,
+// (userenv.h); docs BCryptGenRandom (bcrypt, bcrypt.h: `NTSTATUS
+// BCryptGenRandom(BCRYPT_ALG_HANDLE, PUCHAR, ULONG, ULONG)`, where
+// `BCRYPT_ALG_HANDLE` is a `PVOID`, `ULONG` is 32-bit and `NTSTATUS` is a
+// 32-bit `LONG`); docs CreateProcessW, InitializeProcThreadAttributeList,
 // UpdateProcThreadAttribute, DeleteProcThreadAttributeList, CloseHandle,
 // CreateJobObjectW, SetInformationJobObject, SetHandleInformation,
 // WaitForSingleObject, GetExitCodeProcess, TerminateProcess, OpenProcess
@@ -185,6 +190,7 @@ unsafe extern "system" {
         length: Dword,
         return_length: *mut Dword,
     ) -> Bool;
+    fn BCryptGenRandom(algorithm: *mut c_void, buffer: *mut u8, length: u32, flags: u32) -> i32;
 }
 
 // Constants from `winnt.h`, `winbase.h`, `processthreadsapi.h`, `jobapi2.h`.
@@ -218,6 +224,14 @@ const CURRENT_PROCESS: Handle = -1;
 const KILLED: u32 = 1;
 /// `STILL_ACTIVE` from `GetExitCodeProcess`.
 const STILL_ACTIVE: Dword = 259;
+/// `BCRYPT_USE_SYSTEM_PREFERRED_RNG` of `bcrypt.h`: no algorithm handle,
+/// the system's default random number generator.
+const BCRYPT_USE_SYSTEM_PREFERRED_RNG: u32 = 0x0000_0002;
+/// `STATUS_SUCCESS`, the one success value docs BCryptGenRandom lists.
+const STATUS_SUCCESS: i32 = 0;
+
+/// The most one `BCryptGenRandom` call fills: its length is a `ULONG`.
+pub(crate) const RANDOM_MAX_PER_CALL: usize = u32::MAX as usize;
 
 /// Why a process could not be started or a check made.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -877,6 +891,31 @@ pub fn attempt_open_process(pid: u32) -> Result<(), Errno> {
         return Err(Errno::last());
     }
     drop(Owned(handle));
+    Ok(())
+}
+
+/// `BCryptGenRandom(NULL, buf, len, BCRYPT_USE_SYSTEM_PREFERRED_RNG)` on
+/// chunks of at most [`RANDOM_MAX_PER_CALL`] bytes: [`crate::fill_random`]
+/// on Windows. Each call fills its whole chunk or fails; there are no short
+/// reads and no `EINTR`.
+pub(crate) fn fill_random(buf: &mut [u8]) -> Result<(), RandomError> {
+    for chunk in buf.chunks_mut(RANDOM_MAX_PER_CALL) {
+        let len = u32::try_from(chunk.len()).map_err(|_| RandomError::BadCount)?;
+        let ptr: *mut u8 = chunk.as_mut_ptr();
+        let no_algorithm: *mut c_void = std::ptr::null_mut();
+        let flags = BCRYPT_USE_SYSTEM_PREFERRED_RNG;
+        // SAFETY: docs BCryptGenRandom: with BCRYPT_USE_SYSTEM_PREFERRED_RNG
+        // in `flags` the algorithm handle must be NULL, and the call writes
+        // `cbBuffer` bytes to `pbBuffer` and returns an NTSTATUS. The
+        // arguments have the types of the declaration above: `ptr` and `len`
+        // are the pointer and length of the live slice `chunk`, which this
+        // function borrows mutably (`len` fits a `ULONG`, checked above); any
+        // byte pattern is a valid `u8`.
+        let status = unsafe { BCryptGenRandom(no_algorithm, ptr, len, flags) };
+        if status != STATUS_SUCCESS {
+            return Err(RandomError::Status(status));
+        }
+    }
     Ok(())
 }
 
