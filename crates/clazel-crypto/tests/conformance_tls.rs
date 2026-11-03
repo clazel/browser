@@ -89,6 +89,7 @@ const BAD_RECORD_MAC: u8 = 20;
 const RECORD_OVERFLOW: u8 = 22;
 const BAD_CERTIFICATE: u8 = 42;
 const CERTIFICATE_EXPIRED: u8 = 45;
+const ILLEGAL_PARAMETER: u8 = 47;
 const UNKNOWN_CA: u8 = 48;
 const DECRYPT_ERROR: u8 = 51;
 const PROTOCOL_VERSION: u8 = 70;
@@ -1063,32 +1064,34 @@ fn tls12_server_hello_is_refused() -> TestResult {
     Ok(())
 }
 
-fn downgrade_sentinel_is_protocol_version() -> TestResult {
-    // RFC 8446 §4.1.3: ServerHello.random ends in "DOWNGRD\x01" (a TLS 1.2
-    // selection by a server that supports 1.3), which a client that supports
-    // TLS 1.2 must refuse with illegal_parameter. This client offers only
-    // 1.3 and clazel-tls's hello/spec.rs classifies every ServerHello without
-    // supported_versions as protocol_version before it reads the random, so
-    // the sentinel is not looked at: the alert differs from §4.1.3's literal
-    // text (both are fatal). Reported in phase-3.md 3.5g, not changed here.
-    let (events, _, _) = run_scripted(&ecdsa_chain(), |f| {
-        let mut record = server_hello_without(f, 43)?;
-        // header(5) + handshake header(4) + version(2) + random(32): the
-        // random's last eight octets end at offset 43.
-        let sentinel = b"DOWNGRD\x01";
-        let slot = record.get_mut(35..43).ok_or("short ServerHello")?;
-        slot.copy_from_slice(sentinel);
-        match f.items.first_mut() {
-            Some(first) => *first = Item::Plain(record),
-            None => return Err("empty flight".to_owned()),
-        }
-        Ok(())
-    })?;
-    assert_eq!(
-        last_event(&events),
-        Some(&Event::Fail(PROTOCOL_VERSION)),
-        "{events:?}"
-    );
+fn downgrade_sentinel_is_illegal_parameter() -> TestResult {
+    // RFC 8446 §4.1.3: a ServerHello without supported_versions indicates
+    // TLS 1.2 or below, and "TLS 1.3 clients receiving a ServerHello
+    // indicating TLS 1.2 or below MUST check that the last 8 bytes are not
+    // equal to either of these values" (DOWNGRD\x01 for TLS 1.2, DOWNGRD\x00
+    // for TLS 1.1 or below); on a match the client MUST abort with
+    // illegal_parameter. clazel-tls's hello/spec.rs (below_tls13) checks the
+    // sentinel before reporting the missing version, so the same ServerHello
+    // without it stays protocol_version (tls12_server_hello_is_refused).
+    for sentinel in [b"DOWNGRD\x01", b"DOWNGRD\x00"] {
+        let (events, _, _) = run_scripted(&ecdsa_chain(), |f| {
+            let mut record = server_hello_without(f, 43)?;
+            // header(5) + handshake header(4) + version(2) + random(32): the
+            // random's last eight octets end at offset 43.
+            let slot = record.get_mut(35..43).ok_or("short ServerHello")?;
+            slot.copy_from_slice(sentinel);
+            match f.items.first_mut() {
+                Some(first) => *first = Item::Plain(record),
+                None => return Err("empty flight".to_owned()),
+            }
+            Ok(())
+        })?;
+        assert_eq!(
+            last_event(&events),
+            Some(&Event::Fail(ILLEGAL_PARAMETER)),
+            "{sentinel:02x?}: {events:?}"
+        );
+    }
     Ok(())
 }
 
@@ -1243,8 +1246,8 @@ const HOSTILE: &[Case] = &[
         tls12_server_hello_is_refused,
     ),
     (
-        "downgrade_sentinel_is_protocol_version",
-        downgrade_sentinel_is_protocol_version,
+        "downgrade_sentinel_is_illegal_parameter",
+        downgrade_sentinel_is_illegal_parameter,
     ),
     (
         "change_cipher_spec_in_the_wrong_place_is_unexpected_message",
