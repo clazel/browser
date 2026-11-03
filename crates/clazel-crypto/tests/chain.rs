@@ -229,7 +229,11 @@ fn refused_ecdsa_with_parameters() -> TestResult {
 
 /// Design P17: a P-384 issuer key verifies under ecdsa-with-SHA384 and
 /// ecdsa-with-SHA256 (`clazel_p384`), and only with the hash that signed.
+/// Ignored under Miri: its eleven P-384 link checks ran into CI's six-hour
+/// limit there, and `clazel-p384`'s own tests already find one field
+/// inverse too slow for Miri.
 #[test]
+#[cfg_attr(miri, ignore = "eleven P-384 link checks are far too slow under Miri")]
 fn p384_issuer_key() -> TestResult {
     let sha256 = oid(&[1, 2, 840, 10_045, 4, 3, 2]);
     let sha384 = oid(&[1, 2, 840, 10_045, 4, 3, 3]);
