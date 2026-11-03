@@ -5,4 +5,5 @@
 
 pub mod contract;
 pub mod examples;
+pub mod exec;
 pub mod spec;
