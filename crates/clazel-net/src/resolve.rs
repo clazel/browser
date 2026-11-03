@@ -1,7 +1,9 @@
 //! The stub resolver: carries a query to a nameserver and the reply back.
 //!
 //! Every decision about the bytes is a proven function of `clazel-dns`:
-//! `resolv::parse::nameservers` reads `resolv.conf`, `encode::encode_query`
+//! `resolv::parse::nameservers` reads `resolv.conf` (on Windows,
+//! `adapters::parse::dns_servers` reads the octets of
+//! `clazel_sys::windows::adapter_addresses`), `encode::encode_query`
 //! builds the query, `decode::decode_udp` and `decode_message` read the reply,
 //! `answer::answer_addresses` accepts it (ID, question, QR, RCODE) and
 //! `encode::tcp_frame` / `tcp_message_len` do the TCP framing. This module
@@ -9,19 +11,24 @@
 //! and the retry order.
 
 use crate::error::{NetError, ResolveError, Stage, from_io};
+#[cfg(windows)]
+use clazel_dns::adapters::parse::dns_servers;
 use clazel_dns::answer::answer_addresses;
 use clazel_dns::decode::{decode_message, decode_udp};
 use clazel_dns::encode::{
     dotted_to_wire, encode_query, tcp_frame, tcp_message_len, wire_to_dotted,
 };
+#[cfg(any(not(windows), test))]
 use clazel_dns::resolv::parse::nameservers;
 use clazel_dns::spec::Addr;
 use clazel_dns::types::{Msg, Resolved};
 use std::io::{self, Read, Write};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream, UdpSocket};
+#[cfg(any(not(windows), test))]
 use std::path::Path;
 use std::time::{Duration, Instant};
 
+#[cfg(not(windows))]
 const RESOLV_CONF: &str = "/etc/resolv.conf";
 const QTYPE_A: u16 = 1;
 const QTYPE_AAAA: u16 = 28;
@@ -44,15 +51,15 @@ pub(crate) struct Config {
 
 /// Resolve `host` (a dotted name or an IP literal, `[::1]` allowed) to
 /// addresses, in the order to try them. IP literals and `localhost` need no
-/// query; anything else goes to the nameservers of `/etc/resolv.conf`, port
-/// 53, A first and AAAA only if A gave no address. Two attempts per
+/// query; anything else goes to the system's nameservers ([`system_nameservers`]),
+/// port 53, A first and AAAA only if A gave no address. Two attempts per
 /// nameserver, 2 s each.
 pub fn resolve(host: &[u8]) -> Result<Vec<IpAddr>, NetError> {
     if let Some(addrs) = without_query(host) {
         return Ok(addrs);
     }
     let cfg = Config {
-        nameservers: nameservers_from_file(Path::new(RESOLV_CONF), 53)?,
+        nameservers: system_nameservers(53)?,
         timeout: Duration::from_secs(2),
         retries: 1,
     };
@@ -75,11 +82,40 @@ fn without_query(host: &[u8]) -> Option<Vec<IpAddr>> {
     bare.parse::<IpAddr>().ok().map(|ip| vec![ip])
 }
 
+/// The system's nameservers, at `port`: the `nameserver` lines of
+/// `/etc/resolv.conf`.
+#[cfg(not(windows))]
+fn system_nameservers(port: u16) -> Result<Vec<SocketAddr>, NetError> {
+    nameservers_from_file(Path::new(RESOLV_CONF), port)
+}
+
+/// The system's nameservers, at `port`: Windows has no `/etc/resolv.conf`,
+/// so the DNS servers of the adapters that are up, read by the proven
+/// `dns_servers` from the buffer `GetAdaptersAddresses` filled. That
+/// reader is the 64-bit layout of the structures; every Windows target this
+/// project builds is 64-bit.
+#[cfg(windows)]
+fn system_nameservers(port: u16) -> Result<Vec<SocketAddr>, NetError> {
+    const _: () = assert!(
+        size_of::<usize>() == 8,
+        "the adapter reader is the 64-bit layout"
+    );
+    let buffer = clazel_sys::windows::adapter_addresses()
+        .map_err(|e| NetError::Resolve(ResolveError::Adapters(e)))?;
+    at_port(dns_servers(&buffer.bytes, buffer.base), port)
+}
+
 /// The nameserver lines of the resolv.conf at `path`, at `port`.
+#[cfg(any(not(windows), test))]
 pub(crate) fn nameservers_from_file(path: &Path, port: u16) -> Result<Vec<SocketAddr>, NetError> {
     let bytes =
         std::fs::read(path).map_err(|e| NetError::Resolve(ResolveError::ResolvConf(e.kind())))?;
-    let list: Vec<SocketAddr> = nameservers(&bytes)
+    at_port(nameservers(&bytes), port)
+}
+
+/// `addrs` at `port`; none is an error.
+fn at_port(addrs: Vec<Addr>, port: u16) -> Result<Vec<SocketAddr>, NetError> {
+    let list: Vec<SocketAddr> = addrs
         .into_iter()
         .map(|a| SocketAddr::new(to_ip(a), port))
         .collect();
@@ -385,6 +421,27 @@ mod tests {
             )))
         );
         Ok(())
+    }
+
+    /// The real list on this machine. Offline, every adapter may be down,
+    /// so no nameserver is not a failure; an OS error is, and so is a
+    /// scoped IPv6 server or a port other than the one asked for.
+    #[test]
+    #[cfg(windows)]
+    #[cfg_attr(miri, ignore = "calls the OS")]
+    fn windows_lists_its_dns_servers() {
+        match system_nameservers(53) {
+            Ok(list) => {
+                for ns in list {
+                    assert_eq!(ns.port(), 53);
+                    if let IpAddr::V6(a) = ns.ip() {
+                        let [first, second, ..] = a.octets();
+                        assert!(!(first == 0xFE && second >= 0x80), "{a}");
+                    }
+                }
+            }
+            Err(e) => assert_eq!(e, NetError::Resolve(ResolveError::NoNameservers)),
+        }
     }
 
     #[test]
