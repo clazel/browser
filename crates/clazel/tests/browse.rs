@@ -103,8 +103,8 @@ fn browsing_is_a_fetch_and_every_page_is_under_the_kernels_url() {
     );
     assert_eq!(page(&out, 2).first(), Some(&"URL: http://a.test/"), "{out}");
     assert_eq!(page(&out, 3).first(), Some(&"URL: http://a.test/"), "{out}");
-    // The kernel's network driver does not carry out TLS yet (3.7): an
-    // `https:` page is a fetch failure, with its URL.
+    // The test server speaks plain HTTP, so the TLS handshake for an
+    // `https:` page fails: a fetch failure, with its URL.
     assert!(out.contains("fetch failed: https://a.test/"), "{out}");
     assert_eq!(
         out.matches(&format!("{}\nURL: ", "-".repeat(40))).count(),

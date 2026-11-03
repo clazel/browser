@@ -135,6 +135,11 @@ impl Connection {
         })
     }
 
+    /// Another handle on the socket (`TcpStream::try_clone`).
+    pub(crate) fn socket(&self) -> io::Result<TcpStream> {
+        self.stream.try_clone()
+    }
+
     /// Write `bytes` in full. If the peer has closed or reset the
     /// connection, whatever it sent before is still read: the error is
     /// kept for [`Connection::read`] instead.

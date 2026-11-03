@@ -27,7 +27,7 @@ mod resolve;
 mod tls;
 
 pub use conn::{Connection, Finish, Flow, Timeouts, connect, run, run_with};
-pub use driver::{Driver, InputBuf, Op, Report};
+pub use driver::{Driver, InputBuf, Op, Report, TlsEnd};
 pub use error::{NetError, ResolveError, Stage};
 pub use fetch::{FetchError, fetch, fetch_jar, fetch_jar_verified, fetch_with, now_1601};
 pub use frames::read_frames;

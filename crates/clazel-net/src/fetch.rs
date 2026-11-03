@@ -26,12 +26,11 @@ use clazel_http::message::types::ResponseBuf;
 use clazel_url::url::parse::basic_url_parser;
 
 use clazel_crypto::join::exec::{ChainVerifier, mozilla};
-use clazel_tls::host::exec::Host;
 
 use crate::conn::{Connection, Timeouts};
 use crate::error::NetError;
 use crate::resolve::resolve;
-use crate::tls::TlsConnection;
+use crate::tls::{TlsConnection, tls_host};
 
 /// Why a fetch gave no response.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,26 +140,6 @@ pub fn fetch_jar(
     resolver: impl Fn(&[u8]) -> Result<Vec<IpAddr>, NetError>,
 ) -> (Result<ResponseBuf, FetchError>, Vec<CookieRecord>) {
     fetch_jar_verified(url, jar, now, timeouts, resolver, mozilla)
-}
-
-/// The TLS host for the transducer's `host` (the URL host serializer's
-/// output): an IP address literal (an IPv6 one in brackets) is an address,
-/// anything else a DNS name without its trailing dot, if it has one (RFC
-/// 6066 §3: "The hostname is represented as a byte string using ASCII
-/// encoding without a trailing dot"). `None` if it is not a host the TLS
-/// client takes (`Host::is_ok`).
-fn tls_host(host: &[u8]) -> Option<Host> {
-    let text = std::str::from_utf8(host).ok()?;
-    let literal = text
-        .strip_prefix('[')
-        .and_then(|t| t.strip_suffix(']'))
-        .unwrap_or(text);
-    let tls = match literal.parse::<IpAddr>() {
-        Ok(IpAddr::V4(a)) => Host::Ip(a.octets().to_vec()),
-        Ok(IpAddr::V6(a)) => Host::Ip(a.octets().to_vec()),
-        Err(_) => Host::Dns(host.strip_suffix(b".").unwrap_or(host).to_vec()),
-    };
-    tls.is_ok().then_some(tls)
 }
 
 /// One open connection of a fetch: TCP, or TLS over TCP.

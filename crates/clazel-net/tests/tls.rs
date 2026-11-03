@@ -16,8 +16,9 @@
 #![cfg(not(miri))]
 
 use std::io::{self, Read, Write};
-use std::net::{IpAddr, Ipv4Addr, TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, channel};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -25,7 +26,10 @@ use clazel_cookie::storage::exec::CookieRecord;
 use clazel_crypto::client::{Failure, Origin};
 use clazel_crypto::join::exec::{ChainVerifier, Root};
 use clazel_crypto::provider::Sha256Suite;
-use clazel_net::{FetchError, NetError, Stage, Timeouts, TlsConnection, fetch_jar_verified};
+use clazel_net::{
+    Driver, FetchError, InputBuf, NetError, Op, Report, Stage, Timeouts, TlsConnection,
+    fetch_jar_verified,
+};
 use clazel_tls::host::exec::Host;
 use clazel_tls::schedule::crypto::Crypto;
 use rustls::crypto::ring::{cipher_suite::TLS13_CHACHA20_POLY1305_SHA256, default_provider};
@@ -604,5 +608,136 @@ fn a_secure_cookie_is_stored_and_sent_over_https() -> T {
             .is_some_and(|h| h.contains("\r\nCookie: s=1\r\n")),
         "{second:?}"
     );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------
+// The kernel's connection driver over TLS: `Driver` carries out
+// `Connect { tls: true }`, `Send` and `Close` as the host does for the
+// kernel, against the same rustls server, with OS randomness.
+// ---------------------------------------------------------------------
+
+/// A driver whose reports arrive on the returned receiver, validating
+/// against the test root.
+fn driver() -> (Driver<(u64, Report)>, Receiver<(u64, Report)>) {
+    let (tx, rx) = channel();
+    (Driver::with_verifier(tx, |c, r| (c, r), verifier), rx)
+}
+
+/// The next input the driver hands the kernel for a connection it still
+/// wants (reports for connections it no longer wants are dropped, as the
+/// host drops them), or `None` after `wait` with nothing.
+fn next_input(
+    driver: &mut Driver<(u64, Report)>,
+    rx: &Receiver<(u64, Report)>,
+    wait: Duration,
+) -> Option<(u64, InputBuf)> {
+    let deadline = Instant::now() + wait;
+    loop {
+        let left = deadline.checked_duration_since(Instant::now())?;
+        let (conn, report) = rx.recv_timeout(left).ok()?;
+        if let (Some(input), _) = driver.accept(conn, report) {
+            return Some((conn, input));
+        }
+    }
+}
+
+fn connect_tls(driver: &mut Driver<(u64, Report)>, port: u16) {
+    let route = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let (ok, _) = driver.apply(
+        0,
+        Op::Connect {
+            host: b"test.example".to_vec(),
+            port: u64::from(port),
+            tls: true,
+        },
+        Some(route),
+    );
+    assert!(ok);
+}
+
+/// `Connect { tls: true }` runs the handshake, the request goes out after
+/// `Connected`, and the response comes back as `Bytes` until `Closed`
+/// (the server's close_notify).
+#[test]
+fn the_driver_carries_a_tls_connection() -> T {
+    const REPLY: &[u8] = b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\n\r\nok";
+    let (port, handle) = https_server(1, LEAF_ECDSA, KEY_ECDSA, |_| REPLY)?;
+    let (mut driver, rx) = driver();
+    connect_tls(&mut driver, port);
+    let wait = Duration::from_secs(10);
+    assert!(matches!(
+        next_input(&mut driver, &rx, wait),
+        Some((0, InputBuf::Connected))
+    ));
+    let (ok, _) = driver.apply(0, Op::Send(REQUEST.to_vec()), None);
+    assert!(ok);
+    let mut got = Vec::new();
+    loop {
+        match next_input(&mut driver, &rx, wait) {
+            Some((0, InputBuf::Bytes(b))) => got.extend_from_slice(&b),
+            Some((0, InputBuf::Closed)) => break,
+            other => return Err(format!("unexpected {other:?}")),
+        }
+    }
+    assert_eq!(got, REPLY);
+    assert_eq!(join(handle)?, [REQUEST.to_vec()]);
+    Ok(())
+}
+
+/// A certificate for another name is `Error`, with the alert in the log
+/// line, and no `Connected` comes first.
+#[test]
+fn the_driver_refuses_a_certificate_for_another_name() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_OTHER, KEY_OTHER)?;
+        Ok(read_until(&mut tls, b"\r\n\r\n").err())
+    })?;
+    let (mut driver, rx) = driver();
+    connect_tls(&mut driver, port);
+    let (conn, report) = rx
+        .recv_timeout(Duration::from_secs(10))
+        .map_err(|e| e.to_string())?;
+    let (input, note) = driver.accept(conn, report);
+    assert!(matches!(input, Some(InputBuf::Error)), "{input:?}");
+    let note = note.unwrap_or_default();
+    assert!(note.contains("bad_certificate (42)"), "{note}");
+    assert!(join(handle)?.is_some());
+    Ok(())
+}
+
+/// `Close` while the thread is reading: the socket is shut down at once,
+/// the server sees the connection end, and nothing more reaches the kernel.
+#[test]
+fn the_driver_closes_a_tls_connection_while_it_reads() -> T {
+    let (port, handle) = server(|socket| {
+        let mut tls = rustls(socket, LEAF_ECDSA, KEY_ECDSA)?;
+        read_until(&mut tls, b"\r\n\r\n")?;
+        tls.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 1000\r\n\r\npart")
+            .map_err(|e| e.to_string())?;
+        tls.flush().map_err(|e| e.to_string())?;
+        // Wait for the client to go away: the read ends with an error or
+        // the end of the stream, without close_notify (see `Driver`).
+        let started = Instant::now();
+        let ended = read_until(&mut tls, b"never");
+        Ok((started.elapsed(), ended.is_err()))
+    })?;
+    let (mut driver, rx) = driver();
+    connect_tls(&mut driver, port);
+    let wait = Duration::from_secs(10);
+    assert!(matches!(
+        next_input(&mut driver, &rx, wait),
+        Some((0, InputBuf::Connected))
+    ));
+    driver.apply(0, Op::Send(REQUEST.to_vec()), None);
+    assert!(matches!(
+        next_input(&mut driver, &rx, wait),
+        Some((0, InputBuf::Bytes(_)))
+    ));
+    let (ok, _) = driver.apply(0, Op::Close, None);
+    assert!(ok);
+    let (elapsed, _) = join(handle)?;
+    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    assert!(next_input(&mut driver, &rx, Duration::from_millis(500)).is_none());
     Ok(())
 }

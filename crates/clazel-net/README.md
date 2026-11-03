@@ -13,8 +13,11 @@ things are tried. `fetch` takes `http://` and `https://` URLs: when
 `TlsConnection` to the host it names, with Mozilla's roots as the trust
 anchors (`fetch_jar_verified` takes others, for tests), and reports any TLS
 failure, a truncation included, as `Error`. The kernel's network driver
-(`Driver`) does not carry out TLS yet, so `clazel browse` has no `https:`
-path (phase-3.md 3.7). Random octets, for the TLS
+(`Driver`) carries out `Connect { tls: true }` the same way, so `clazel
+browse` opens `https:` pages: each TLS connection's thread owns its
+`TlsConnection` and takes the request over a channel, since one TLS state
+machine serves both directions. A connection the kernel closes is shut
+down without close_notify. Random octets, for the TLS
 client and the DNS query ID, come from the OS through
 `clazel_sys::fill_random`, the one audited `unsafe` call per OS
 (`docs/SYS-AUDITS.md`).
