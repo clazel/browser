@@ -444,6 +444,100 @@ mod tests {
         }
     }
 
+    /// Whether `listing` agrees with `ours`, the servers the proven reader
+    /// found. Each line of `listing` is `up <address>` or `other <address>`,
+    /// as [`WINDOWS_LISTING`] prints them. Scoped IPv6 servers are left out
+    /// and a zone is ignored, as the reader's spec says. The two sources
+    /// define "up" differently, so the check goes both ways with room between
+    /// them: every server listed as `up` must be in `ours`, and everything in
+    /// `ours` must be listed at all. Returns how many `up` servers there were.
+    fn agrees_with_listing(ours: &[IpAddr], listing: &str) -> Result<usize, String> {
+        let mut up: Vec<IpAddr> = Vec::new();
+        let mut all: Vec<IpAddr> = Vec::new();
+        for line in listing.lines().filter(|l| !l.trim().is_empty()) {
+            let (state, address) = line
+                .trim()
+                .split_once(' ')
+                .ok_or_else(|| format!("no state in {line:?}"))?;
+            let bare = address.split('%').next().unwrap_or(address);
+            let ip: IpAddr = bare.parse().map_err(|e| format!("{e} in {line:?}"))?;
+            if let IpAddr::V6(a) = ip {
+                let [first, second, ..] = a.octets();
+                if first == 0xFE && second >= 0x80 {
+                    continue;
+                }
+            }
+            all.push(ip);
+            if state == "up" {
+                up.push(ip);
+            }
+        }
+        if let Some(missing) = up.iter().find(|ip| !ours.contains(ip)) {
+            return Err(format!("{missing} is up but was not read: {ours:?}"));
+        }
+        if let Some(extra) = ours.iter().find(|ip| !all.contains(ip)) {
+            return Err(format!("{extra} was read but is not listed: {all:?}"));
+        }
+        Ok(up.len())
+    }
+
+    #[test]
+    fn a_listing_is_compared_both_ways() -> T {
+        let one: IpAddr = "1.1.1.1".parse()?;
+        let two: IpAddr = "8.8.8.8".parse()?;
+        let listing = "up 1.1.1.1\r\nup fec0:0:0:ffff::1\r\nup fe80::1%12\r\nother 8.8.8.8\r\n";
+        assert_eq!(agrees_with_listing(&[one], listing), Ok(1));
+        // A server of an adapter only one source calls up is not a failure.
+        assert_eq!(agrees_with_listing(&[one, two], listing), Ok(1));
+        // A wrong layout reads nothing: that must fail, not pass as "offline".
+        assert!(agrees_with_listing(&[], listing).is_err());
+        // A server nothing lists must fail too.
+        assert!(agrees_with_listing(&[one, "9.9.9.9".parse()?], listing).is_err());
+        assert!(agrees_with_listing(&[], "up not-an-address").is_err());
+        assert_eq!(agrees_with_listing(&[], ""), Ok(0));
+        Ok(())
+    }
+
+    /// Prints the DNS servers Windows reports through PowerShell's own
+    /// modules, one per line, marked by whether the interface is connected.
+    #[cfg(windows)]
+    const WINDOWS_LISTING: &str = "$ErrorActionPreference = 'Stop'; \
+        $up = @(Get-NetIPInterface -ConnectionState Connected | ForEach-Object InterfaceIndex); \
+        Get-DnsClientServerAddress | ForEach-Object { \
+            $state = if ($up -contains $_.InterfaceIndex) { 'up' } else { 'other' }; \
+            foreach ($a in $_.ServerAddresses) { \"$state $a\" } \
+        }";
+
+    /// The reader against a source that shares no code with it, on the real
+    /// buffer of this machine: a wrong layout finds no servers, which
+    /// [`windows_lists_its_dns_servers`] has to accept as being offline.
+    /// GitHub's runners are online, so there the list must not be empty, or
+    /// this would compare nothing.
+    #[test]
+    #[cfg(windows)]
+    #[cfg_attr(miri, ignore = "calls the OS")]
+    fn windows_servers_match_what_powershell_lists() -> T {
+        let ours: Vec<IpAddr> = match system_nameservers(53) {
+            Ok(list) => list.into_iter().map(|ns| ns.ip()).collect(),
+            Err(NetError::Resolve(ResolveError::NoNameservers)) => Vec::new(),
+            Err(e) => return Err(e.into()),
+        };
+        let output = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", WINDOWS_LISTING])
+            .output()?;
+        let listing = String::from_utf8(output.stdout)?;
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let up = agrees_with_listing(&ours, &listing)?;
+        if std::env::var_os("GITHUB_ACTIONS").is_some() {
+            assert!(up > 0, "no server to compare: {listing:?}");
+        }
+        Ok(())
+    }
+
     #[test]
     #[cfg_attr(miri, ignore = "opens sockets")]
     fn a_query_is_answered_over_udp() -> T {
