@@ -9,6 +9,8 @@
 pub mod contract;
 pub mod examples;
 pub mod exec;
+pub mod independent;
+pub mod independent_equivalence;
 pub mod independent_profile;
 pub mod independent_profile_equivalence;
 pub mod lemmas;
