@@ -3,7 +3,7 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 38 `unsafe` blocks (136 lines) that enter the OS sandbox, machine-checked and audited. Shipped dependencies are `libc` and libcrux.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 41 `unsafe` blocks (141 lines) that enter the OS sandbox, machine-checked and audited. Shipped dependencies are `libc` and libcrux.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Honest about it:** each crate declares its verification tier, and the
@@ -91,10 +91,10 @@ verification passes, so it shows the last such push and can lag behind
 | clazel-sandbox | 1 (1) | not used | 8 successfully verified harnesses, 0 failures, 8 total | 0 | 0 (0) | — | — | none | no spec files |
 | clazel-sys | 0 (0) | not used | no harnesses | 0 | 38 (136) | — | — | none | no spec files |
 | clazel-text | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
-| clazel-tls | 0 (2) | 814 verified, 0 errors | no harnesses | 0 | 0 (0) | 7350 / 5494 / 3825 | 207 / 0 / 1 of 208 | RFC 5869 Appendix A.1 reference provider: 1 / 1<br>RFC 8446 section 4.4.3 signature input example: 1 / 1<br>RFC 8448 handshake messages (sections 3 to 7): 39 / 40 (1 expected failures)<br>RFC 8448 handshake payloads through the reassembler: 24 / 24<br>RFC 8448 key schedule sections 3 and 5: 40 / 40<br>RFC 8448 live transcripts sections 3 and 5: 12 / 12<br>RFC 8448 records (sections 3 to 7): 41 / 41<br>hand-built cases, one or more per error rule of RFC 8446 sections 4 to 6: 68 / 68<br>rustls alerts (all 65536 two-byte payloads) and change_cipher_spec: 65796 / 65796<br>rustls enum numbers (content, handshake, alert, extension types): 79 / 79<br>rustls fragmenter (RFC 8448 payloads, 7 sizes): 168 / 168<br>rustls handshake message acceptance (RFC 8448 messages and 400 mutations each): 15959 / 16040 (81 expected failures) | 0 of 14 files current |
+| clazel-tls | 0 (2) | 822 verified, 0 errors | no harnesses | 0 | 0 (0) | 7389 / 5520 / 3848 | 210 / 0 / 1 of 211 | RFC 5869 Appendix A.1 reference provider: 1 / 1<br>RFC 8446 section 4.4.3 signature input example: 1 / 1<br>RFC 8448 handshake messages (sections 3 to 7): 39 / 40 (1 expected failures)<br>RFC 8448 handshake payloads through the reassembler: 24 / 24<br>RFC 8448 key schedule sections 3 and 5: 40 / 40<br>RFC 8448 live transcripts sections 3 and 5: 12 / 12<br>RFC 8448 records (sections 3 to 7): 41 / 41<br>hand-built cases, one or more per error rule of RFC 8446 sections 4 to 6: 68 / 68<br>rustls alerts (all 65536 two-byte payloads) and change_cipher_spec: 65796 / 65796<br>rustls enum numbers (content, handshake, alert, extension types): 79 / 79<br>rustls fragmenter (RFC 8448 payloads, 7 sizes): 168 / 168<br>rustls handshake message acceptance (RFC 8448 messages and 400 mutations each): 15959 / 16040 (81 expected failures) | 0 of 14 files current |
 | clazel-treebuilder | 2 (2) | 1703 verified, 0 errors | no harnesses | 0 | 0 (0) | 16900 / 20297 / 6692 | 48 / 0 / 0 of 48 | html5ever 0.39.0 differential, WPT tree-construction inputs: 3699 / 3898 (199 expected failures)<br>html5ever 0.39.0 differential, random tag soup: 9991 / 10000 (9 expected failures)<br>html5lib tree construction (WPT): 1963 / 1967 (4 expected failures) | 0 of 2 files current |
 | clazel-url | 2 (2) | 565 verified, 0 errors | no harnesses | 0 | 0 (0) | 5725 / 5260 / 2026 | 144 / 0 / 0 of 144 | WPT url/ setters_tests.json: 278 / 278<br>WPT url/ toascii.json: 87 / 87<br>WPT url/ urltestdata.json: 896 / 896<br>WPT url/ urltestdata.json hosts: 359 / 359 | 0 of 7 files current |
-| clazel-x509 | 0 (2) | 878 verified, 0 errors | no harnesses | 0 | 0 (0) | 7223 / 6029 / 4070 | 273 / 0 / 0 of 273 | x509-limbo leaf checks: 927 / 9802 (8875 expected failures) | 0 of 33 files current |
+| clazel-x509 | 0 (2) | 897 verified, 0 errors | no harnesses | 0 | 0 (0) | 7605 / 6268 / 4080 | 273 / 0 / 0 of 273 | x509-limbo path validation (accept-all links): 9737 / 9802 (65 expected failures) | 0 of 33 files current |
 | xtask | 0 (0) | not used | no harnesses | 0 | 0 (0) | — | — | none | no spec files |
 
 ¹ From Verus's `line_count`; only code inside `verus!` is counted, and type definitions count as exec.
@@ -103,7 +103,7 @@ verification passes, so it shows the last such push and can lag behind
 ⁴ Measured by the run: passing / total units per vendored suite, as each `tests/conformance*.rs` reports them. Expected failures are counted separately and never as passes. See [docs/VERIFICATION.md](docs/VERIFICATION.md#honesty-metrics).
 ⁵ Counted by `cargo xtask check`: `unsafe` blocks (and `unsafe extern` blocks), with the lines from the `unsafe` keyword to the closing brace. Only `clazel-sys` may have any; the rule and its audits are in [docs/VERIFICATION.md](docs/VERIFICATION.md) and [docs/SYS-AUDITS.md](docs/SYS-AUDITS.md).
 ⁶ The host shell (`crates/clazel/src`, item 2.15) is 274 lines, counted as `wc -l` counts them over its Rust files; the plan's limit is 300. The command line and the demo (`crates/clazel/cli`, item 2.16) are not counted: they only call the shell's public functions.
-⁷ The network shell (`crates/clazel-net/src`, item 3.8: the resolver's sockets, TCP connections and the loop that drives the fetch transducer) is 1844 lines, counted the same way. It is Tier 0 and makes no protocol decisions: every parser and decision on its path is a proven function of the crates it calls.
+⁷ The network shell (`crates/clazel-net/src`, item 3.8: the resolver's sockets, TCP connections and the loop that drives the fetch transducer) is 2008 lines, counted the same way. It is Tier 0 and makes no protocol decisions: every parser and decision on its path is a proven function of the crates it calls.
 <!-- END STATUS -->
 
 **Phase 2 process tests: where they have run.** The demo (`cargo run -p clazel
@@ -205,10 +205,10 @@ and much of it is work only a person can do.
 - **Run it where we have not.** The Phase 2 and 4 process tests (the sandbox,
   the hostile renderer, the hostile pages) run in CI on `ubuntu-24.04` and
   macOS arm64 only. Other Linux distributions and kernels are untested.
-- **Read `clazel-sys`.** It is the only crate with `unsafe`: 38 blocks that
-  enter the OS sandbox. Every change is audited by a second model
-  ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person reading it too is
-  welcome.
+- **Read `clazel-sys`.** It is the only crate with `unsafe`: 41 blocks that
+  enter the OS sandbox or read the OS random source. Every change is audited
+  by a second model ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person
+  reading it too is welcome.
 - **Build the next phases.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md)
   and the detailed plans in [docs/phases/](docs/phases/). TLS is partly
   built and not yet joined to the kernel. Contributions go through the same
