@@ -1506,6 +1506,178 @@ not change.
   a revoked certificate); a set that does not parse or whose signature
   fails is not used; an expired set follows the staleness rule.
 
+#### 3.5h.0 Checked facts and the options (2026-11-03; not yet decided)
+
+These facts were checked on 2026-11-03 against the sources cited. The
+sizes and counts were measured that day from the publishers' own live
+endpoints, using a scratch script outside the repository. "Unverified" marks
+anything that could not be checked. **The choice is the maintainer's.** A
+recommendation follows the facts.
+
+**CRLite (Mozilla).**
+- *What it is and who uses it.* CRLite ships the full set of revocations
+  to the client, which queries it locally. Firefox enabled it for all
+  desktop users in Firefox 137
+  ([Mozilla Hacks, 2025-08-19](https://hacks.mozilla.org/2025/08/crlite-fast-private-and-comprehensive-certificate-revocation-checking-in-firefox/)).
+- *Publisher and pipeline.* The set is built by Mozilla's open pipeline
+  ([`mozilla/crlite`](https://github.com/mozilla/crlite), MPL-2.0; at
+  commit `0082998261`, 2026-08-03). It takes certificates from CT logs
+  enrolled by a Mozilla engineer (the `ct-logs` collection), and
+  revocations from the CRLs that CAs disclose to CCADB. Only issuers in
+  Mozilla's root program are included
+  ([wiki FAQ](https://github.com/mozilla/crlite/wiki)).
+- *Where it is published.* Remote Settings, bucket `security-state`,
+  collection `cert-revocations`
+  (`https://firefox.settings.services.mozilla.com/v1/buckets/security-state/collections/cert-revocations/records`).
+  The files are attachments under
+  `https://firefox-settings-attachments.cdn.mozilla.net/`.
+- *Channels and coverage.* There are two channels.
+  - `default` keeps every revocation.
+  - `compat` keeps only the reasons keyCompromise, cessationOfOperation and
+    privilegeWithdrawn.
+
+  Both definitions are in `moz_kinto_publisher/main.py` (`CHANNELS`) and
+  `rust-create-cascade/src/main.rs` (`ReasonSet::Priority`).
+- *Sizes, measured.* On 2026-11-03 the collection held:
+  - one full filter per channel, from 2026-10-17: `default` 6,006,419
+    octets, `compat` 1,574,015 octets;
+  - 34 deltas per channel since then, about two a day: `default` 203,061
+    to 445,838 octets (237,246 on average), `compat` 122,497 on average.
+
+  That is about 475 KB a day on `default`, against the Hacks post's "300
+  kB per day". A full filter lasts at most 45 days (`max_filter_age_days`).
+- *Format.*
+  - Each file starts with a 2-octet little-endian encoding number.
+  - The live files are `03 00`, encoding V3: a `bincode` 1.3
+    serialization of the `clubcard-crlite` crate's Rust structures
+    (`CRLiteClubcard::from_bytes`,
+    [`mozilla/clubcard-crlite`](https://github.com/mozilla/clubcard-crlite)
+    0.6.2, MPL-2.0, at `054c1799ae`).
+  - Version 0.6.2 also defines V4, a TLS-style encoding described only in
+    comments in `src/codec.rs`. No live file uses it.
+  - The filter is a pair of ribbon filters partitioned by issuer
+    ([`mozilla/clubcard`](https://github.com/mozilla/clubcard) 0.3.4). Its
+    README says "Neither the API nor the serialization format for clubcard
+    are stable".
+  - There is no specification beyond this code.
+- *Query.*
+  - The key is `SHA-256(issuer SPKI hash ‖ serial)`, where the issuer SPKI
+    hash is the SHA-256 of the issuer's SubjectPublicKeyInfo
+    (`CRLiteKey::new`).
+  - The query also needs a (CT log ID, timestamp) pair from one of the
+    certificate's SCTs (`CRLiteQuery`).
+  - The result is `Good`, `Revoked`, `NotEnrolled` (issuer not in the set)
+    or `NotCovered` (no SCT, or one outside the logs' covered time ranges:
+    `in_universe`).
+  - Within the covered universe, absence does mean not revoked. That is
+    the design's point: false positives are removed by an exact second
+    filter.
+  - Firefox falls back to OCSP for certificates that aren't covered (wiki
+    FAQ). clazel has no OCSP.
+- *Signing.* The collection, not each file, carries a Remote Settings
+  content signature.
+  - Algorithm: ECDSA P-384 with SHA-384 (`mode: p384ecdsa`, signer
+    `onecrl_202402`). The signed message is `"Content-Signature:\x00"`
+    followed by canonical JSON of the records, sorted by `id`, together
+    with `last_modified`
+    ([application-services `signatures.rs`](https://mozilla.github.io/application-services/book/rust-docs/src/remote_settings/signatures.rs.html),
+    [Autograph `contentsignature`](https://pkg.go.dev/github.com/mozilla-services/autograph/signer/contentsignature)).
+  - Each record holds its attachment's SHA-256. The downloaded delta
+    `20261103-1-default.filter.delta` (255,061 octets) matched its
+    record's hash.
+  - The `x5u` URL serves a PEM chain of three certificates:
+    1. an end-entity `onecrl.content-signature.mozilla.org` (P-384), valid
+       2026-09-26 to 2026-12-15, so it rotates about every 80 days;
+    2. an intermediate `Content Signing Intermediate` (P-384);
+    3. a root `root-ca-production-amo` (RSA-4096, SHA-256 of its DER
+       `c8a80e9a…a106db`).
+
+    Firefox pins that root by hash.
+- *Licence of the data.* Unverified. Neither the repository nor Remote
+  Settings states terms for clients other than Firefox.
+
+**CRLSets (Google).**
+- *What it is.* Chrome's pushed set. Chromium's page says "A subset of the
+  certificates identified as revoked" on the crawled CRLs is included,
+  and that "the process by which they are generated is not" public
+  ([chromium.org, CRLSets](https://www.chromium.org/Home/chromium-security/crlsets/),
+  no date shown).
+- *Coverage.* Coverage is curated. Absence doesn't mean "not revoked":
+  `CheckSerial` returns `GOOD` for a listed issuer whose serial is absent,
+  but the set is a subset by design. Which reasons are kept is
+  unpublished (unverified).
+- *Delivery.*
+  - Google's component updater (Omaha), app ID
+    `hfnkpimlhhgieaddgfemjhofmfblmnib`. The update request goes to
+    `https://clients2.google.com/service/update2/crx` and gets an XML
+    response that names a CRX3 file
+    ([`agl/crlset-tools`](https://github.com/agl/crlset-tools), 2026-08-05).
+  - Requests are put in cohorts. On 2026-11-03, version 10881 was
+    36,966 octets for "Auto androidlowmem" (the default: 204 issuers, 994
+    serials) and 2,031,437 octets for "Auto full" (`tag=force_full`: 415
+    issuers, 117,604 serials).
+  - Both also carry 177 `BlockedSPKIs` and 9 `BlockedInterceptionSPKIs`.
+  - `NotAfter` is 2026-11-07, four days later.
+  - Whether a client that isn't Chrome may use this service is
+    unverified. Chromium's page licenses its own text (CC BY 2.5), not the
+    service.
+- *Format.* The format isn't specified anywhere except in code.
+  - A CRX3 file: `Cr24`, a version number, and a protobuf `CrxFileHeader`
+    (`components/crx_file/crx3.proto`), followed by a ZIP. In version
+    10881 every entry was "Stored", uncompressed, but nothing promises
+    that.
+  - Inside it, `crl-set` is described in the comment at the top of
+    `net/cert/crl_set.cc`: a 2-octet little-endian header length; a JSON
+    header (`Version` 0, `ContentType` "CRLSet", `Sequence`, `NotAfter`,
+    the SPKI lists); then repeated entries of a 32-octet parent SPKI
+    SHA-256, a 4-octet little-endian count, and serials each preceded by a
+    1-octet length.
+- *Query.* By the issuer's SPKI SHA-256 and the serial, with leading zero
+  octets removed (`CRLSet::CheckSerial`), plus `CheckSPKI` against the
+  blocked keys.
+- *Signing.*
+  - CRX3 proofs over `"CRX3 SignedData\x00"`, the signed header data's
+    4-octet length, the signed header data, and the archive
+    (`components/crx_file/crx_verifier.cc`, `crx_file.h`).
+  - Chromium requires the proof whose SPKI SHA-256 is
+    `kCrlSetPublicKeySHA256` (`75daf8cb…edb84397`,
+    `chrome/browser/component_updater/crl_set_component_installer.cc`).
+    In the downloaded file, that is an RSA-2048 key signing with PKCS#1
+    v1.5 and SHA-256.
+
+**What each would cost clazel.** Under CLAUDE.md rule 8, every parser
+below is ours.
+
+| | CRLite (`default`) | CRLSets ("Auto full") |
+|---|---|---|
+| Coverage | every revocation on CCADB-disclosed CRLs, for certificates with an SCT in an enrolled log; not covered → no answer | a curated subset; absence proves nothing |
+| Download | ~6 MB every ≤45 days plus ~475 KB a day | ~2 MB a version, full each time (`DeltaFrom` 0) |
+| Set format | bincode V3 of Rust structures, declared unstable; V4 documented only in code | small binary body; a JSON header |
+| Container | none (Remote Settings JSON records, an attachment) | Omaha XML, a CRX3 protobuf header, ZIP |
+| Signature | P-384 ECDSA (`clazel-p384`, P17) over canonical JSON, needing a JSON parser and a canonical serializer; a three-certificate chain to a pinned RSA-4096 root, rotating about every 80 days | RSA-2048 PKCS#1 v1.5 (`clazel-pkcs1`) with a pinned key hash |
+| New parser in X.509 | the SCT list extension (RFC 6962 §3.3), for the coverage check | none |
+| Spec source | code only (`clubcard`, `clubcard-crlite`) | code only (`crl_set.cc`, `crx3.proto`) |
+| Terms for other clients | unverified | unverified; it means acting as a Chrome component client |
+
+**Recommendation: CRLite, `default` channel.** Exit criterion 6 is that a
+revoked certificate is refused. Only CRLite can say that a covered
+certificate is *not* revoked, and its pipeline, coverage rule and query are
+public, while CRLSets' selection isn't. clazel already has the P-384 and
+X.509 code its signature needs. The costs to accept:
+- *An unstable format.* The spec transcribes the code of a pinned
+  `clubcard-crlite` version, with its encoding number. A new number is
+  refused, not guessed, and moving to V4 is an erratum-style update.
+- *Canonical JSON.* We need a JSON parser and a canonical serializer for
+  the records, both ours and proven.
+- *An SCT-list parser* in `clazel-x509`.
+- *About 475 KB a day*, or `compat`'s about 120 KB a day for the three
+  priority reasons only, if bandwidth matters more than coverage.
+- *A staleness rule* for `NotCovered` and for an old set (3.5h's
+  staleness bullet). There is no OCSP to fall back to.
+- *Asking Mozilla.* Whether a third-party client may use the endpoint is
+  unverified. Asking is outward contact, so it is left to the maintainer;
+  no agent contacts Mozilla or Google.
+
 ### 3.6 The client state machine (L)
 
 `crates/clazel-fetch`. A pure transducer: `start(url, jar, now, context)`
@@ -1811,7 +1983,7 @@ half does not wait on TLS. 3.10 and 3.5h (added 2026-11-03) come after the
 | 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters, and a post-handshake transducer: spec, contracts, executable, lemmas, 20 witnesses, 20 mutations and 25 passing integration tests (on `main`, #77, CI's full verification green on 797e26b). The dispatcher seals its own fatal alert (§6, §6.2) under the settled write epoch's next sequence number (§5.3) before dropping its keys, in the server's flight and after the handshake, and never answers a peer's alert (`PeerAlert`): spec, contracts, exec, lemmas, 8 new mutations with certificates and 20 dispatcher integration tests (on `main`, #86, 2026-11-03); **its proofs and certificates have not passed Verus yet**: #86's pull-request run was cancelled before its proof jobs, so `main`'s full verification at f48d601 (in progress) is their first. Production providers and socket I/O are 3.5f and 3.8; the join of the transducer to the dispatcher remains; tier 0 |
 | 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. Randomness: `clazel_sys::fill_random` exists (Linux `getrandom` with flags 0, macOS `getentropy`, Windows `BCryptGenRandom` with the system-preferred RNG) and is audited (`docs/SYS-AUDITS.md`, source aa66b138); `clazel_net::TlsConnection::open` draws the scalar, ClientHello random and session id from it (on `main`, #88; its first full verification is `main`'s run at f48d601, in progress), and the driver itself still takes them from its caller. The client driver `clazel_crypto::client::Client` (on `main`, #85, CI's full verification green on 0a6fbec): connect/receive/send/close over `Bootstrap`, the key exchange and `Connection`; alerts in plaintext before the handshake keys, and from the ServerHello on the record `Connection` seals itself (#86, 2026-11-03: the driver's copy of the handshake epochs is removed, and a failure after the client Finished now sends its alert), 15 passing tests (8 against rustls, among them bad_record_mac after the handshake read by rustls); a close_notify during the server's flight is not sent, and the join is not proven equal to 3.5e's machine |
 | 3.5g TLS conformance and trust store | first part built (2026-10-31, on `main`, #82, CI's full verification green on bcc4040): `clazel-crypto/tests/conformance_tls.rs`, 17 cases in two suites (5 success and control, 12 hostile): full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello without and with the §4.1.3 downgrade sentinel, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the behaviour it pins); the downgrade sentinel is checked (`illegal_parameter`, 2026-11-02, on `main`, #83, CI's full verification green on 2755dde). `conformance_tls.rs` still assembles the client by hand rather than through 3.5f's driver. Not done: the Mozilla root table check, the local top-site measurement and the real-certificate corpus (no result claimed), HelloRetryRequest and ticket paths against a real server, the tier 2 raises |
-| 3.5h Revocation (pushed set) | planned (2026-11-03): option 1 decided by the maintainer; 3.5h.0 (CRLite or CRLSets) not taken; nothing built. Production still passes `NothingRevoked`, so a revoked certificate is accepted |
+| 3.5h Revocation (pushed set) | planned (2026-11-03): option 1 decided by the maintainer; 3.5h.0 facts checked and written up (2026-11-03), with a recommendation of CRLite on its `default` channel; not decided; nothing built. Production still passes `NothingRevoked`, so a revoked certificate is accepted |
 | 3.6 Client state machine | on `main` (#3, #5), `http://` only: transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). `https:` (on `phase3/fetch-https`, 2026-11-03): `https:` URLs get the same request as `http:`, port 443 by default and `Connect.tls` exactly for `https` (RFC 9110 §4.2.2), with `theorem_tls_when_secure` (every `Connect` is the current request's and speaks TLS exactly when the cookie functions see it as secure), 6 new examples and 4 new mutations with certificates; **none of it run through Verus yet** (no Verus on the machine that wrote it; CI's full verification pending); the independent transcription does not cover the connection (port, TLS). Not yet: other request contexts, HSTS, WPT fetch suites (none vendored) |
 | 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. Open: `https:` (3.5), the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
 | 3.8 Network shell and `curl` clone | `http://` half built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function. TLS loop built (on `main`, #85, CI's full verification green on 0a6fbec): `TlsConnection` over 3.5f's driver, `NetError::Tls` with the §6.2 alert, `Timeout(Stage::Handshake)`, `tests/tls.rs` against rustls on loopback (ECDSA, RSA, a 100000-octet response, close during the handshake, a stall, another name, an undecryptable response answered with bad_record_mac (#86), bytes that are not TLS). Randomness from the OS (#88): `open` draws from `clazel_sys::fill_random` and fails with `NetError::Random` before opening a socket, `open_with_random` keeps a seeded source for tests, the resolver's query ID comes from the same call, and `tests/tls.rs` has 11 tests (3 with the OS source); its first full verification is `main`'s run at f48d601, in progress. `https:` in `fetch` and `clazel fetch` (on `phase3/fetch-https`, 2026-11-03, local run, CI not yet): `Connect { tls: true }` opens a `TlsConnection` with Mozilla's roots, and any TLS failure (a truncation included) fails the fetch; `tests/tls.rs` adds four `fetch` tests over TLS (a request and response, another name, a truncated close-delimited body, a `Secure` cookie stored and sent). Checked by hand (2026-11-03): https://www.rust-lang.org/ gives 200; example.com, www.google.com, en.wikipedia.org, github.com, www.cloudflare.com, letsencrypt.org, http.cat and https://1.1.1.1/ fail with unknown_ca, each chain having a P-384 issuer key, which `clazel-crypto` refuses until P17, so most real sites fail today. `https:` in the kernel's network driver (on `phase3/kernel-driver-tls`, stacked on `phase3/fetch-https`, 2026-11-03, local run, CI not yet): `Driver` carries out `Connect { tls: true }` with a thread that owns the `TlsConnection` (Mozilla's roots, or `Driver::with_verifier`'s) and takes the request over a channel; a `Close` sends close_notify (sealed by the thread right after the request, written by the driver; on Windows shutting down only the read side does not wake a blocked read) and then shuts the socket down; `tests/tls.rs` adds three driver tests against rustls (a request and response until close_notify, another name refused with bad_certificate, a `Close` while reading that the server reads as a clean close_notify), and `crates/clazel/tests/host.rs` an `https:` navigation through the host and the kernel against rustls (Unix only, like the rest of that file: not run on the Windows machine that wrote it). The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
