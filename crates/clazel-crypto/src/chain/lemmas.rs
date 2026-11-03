@@ -112,8 +112,12 @@ pub proof fn lemma_link_verified(issuer_spki: Seq<u8>, cert: clazel_x509::path::
             assert(rsa_verified(spki, hash, d.tbs_der, d.signature));
         },
         Some(clazel_x509::signature_algorithm::spec::AlgorithmClass::Ecdsa(hash)) => {
-            assert(p256_verified(spki, hash == clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384,
-                d.tbs_der, d.signature));
+            if spki.public_key is EcP384 {
+                assert(p384_verified(spki, hash, d.tbs_der, d.signature));
+            } else {
+                assert(p256_verified(spki, hash == clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384,
+                    d.tbs_der, d.signature));
+            }
         },
         _ => {},
     }

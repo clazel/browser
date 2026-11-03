@@ -241,7 +241,7 @@ fn validate(
 }
 
 /// Whether a trusted or intermediate certificate of `case` has a secp384r1
-/// key: a link from it is refused until P17.
+/// key (a link that needs P17).
 fn has_p384_ca(case: &Case) -> Result<bool, String> {
     for &i in case.trusted.iter().chain(case.intermediates) {
         let is_p384 = parse_path_cert(limbo_cert(i)?)
@@ -283,19 +283,18 @@ fn real_world_chains_validate_against_the_mozilla_roots() -> Result<(), String> 
             Ok(key) => {
                 assert_eq!(key, leaf_spki(c)?, "{}", c.id);
                 accepted.push(c.id);
+                if has_p384_ca(c)? {
+                    p384.push(c.id);
+                }
             }
-            // A P-384 CA's link is refused until P17; the path search then
-            // finds no valid path (BadSignature or UnknownIssuer: unknown_ca).
-            Err(error) => {
-                assert!(has_p384_ca(c)?, "{}: {error:?} without a P-384 CA", c.id);
-                assert_eq!(error, CertificateError::UnknownCa, "{}", c.id);
-                p384.push(c.id);
-            }
+            Err(error) => return Err(format!("{}: {error:?}", c.id)),
         }
     }
+    // Every one validates; four go through a P-384 CA key (P17).
     assert_eq!(
         accepted,
         [
+            "online::akamai.com",
             "online::bing.com",
             "online::fastly.com",
             "online::s3.amazonaws.com",
@@ -305,7 +304,10 @@ fn real_world_chains_validate_against_the_mozilla_roots() -> Result<(), String> 
             "online::facebook.com",
             "online::google.com",
             "online::storage.googleapis.com",
+            "online::apple.com",
+            "online::cloudflare.com",
             "online::microsoft.com",
+            "online::stackoverflow.com",
         ]
     );
     assert_eq!(

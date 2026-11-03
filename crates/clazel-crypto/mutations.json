@@ -491,17 +491,93 @@
       }
     },
     {
-      "id": "link-p384-accepted",
+      "id": "link-ecdsa-sha384-other-key-accepted",
       "file": "src/chain/spec.rs",
       "find": "ecdsa_p256_sha384_verify(message, r, s, point),\n        _ => false,",
       "replace": "ecdsa_p256_sha384_verify(message, r, s, point),\n        _ => true,",
       "expect": "killed",
-      "reason": "A P-384 issuer key is refused until P17; accepting a key that is not P-256 under ecdsa-with-SHA384 would pass every such link unverified.",
+      "reason": "Accepts ecdsa-with-SHA384 under a key that is neither P-256 nor P-384 (P-384 takes the P17 arm first): an RSA key would pass the link unverified. lemma_link_refusals says it is refused.",
       "certificate": {
         "file": "src/chain/certificates.rs",
         "lemma": "crate::chain::examples::lemma_link_refusals()",
-        "witness": "link_with_key(crate::chain::examples::ex_p384(), crate::chain::examples::ex_ecdsa_sha384(), seq![], seq![])"
+        "witness": "link_with_key(crate::chain::examples::ex_rsa(seq![0x01u8, 0x00u8, 0x01u8]), crate::chain::examples::ex_ecdsa_sha384(), seq![], seq![])"
       }
+    },
+    {
+      "id": "link-p384-r-bound-32",
+      "file": "src/chain/spec.rs",
+      "find": "Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 48 =>",
+      "replace": "Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 32 =>",
+      "expect": "killed",
+      "reason": "Reads a P-384 r of at most 32 octets, the P-256 bound: every P-384 signature with an r above 2^256 would be refused. lemma_ecdsa_sig_value_p384_examples reads a 48-octet r.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_ecdsa_sig_value_p384_examples()",
+        "witness": "ecdsa_sig_value_p384(crate::chain::examples::ex_sig(48)) is None"
+      }
+    },
+    {
+      "id": "link-p384-r-bound-49",
+      "file": "src/chain/spec.rs",
+      "find": "Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 48 =>",
+      "replace": "Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 49 =>",
+      "expect": "killed",
+      "reason": "Reads an r of 49 octets, longer than n (RFC 3279 §2.2.3 with SP 800-186 §3.2.1.4): pad48 would then not pad. lemma_ecdsa_sig_value_p384_examples refuses 49 octets.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_ecdsa_sig_value_p384_examples()",
+        "witness": "ecdsa_sig_value_p384(crate::chain::examples::ex_sig(49)) is Some"
+      }
+    },
+    {
+      "id": "link-p384-trailing-accepted",
+      "file": "src/chain/spec.rs",
+      "find": "    match clazel_der::spec::expect_sequence(signature, 0, signature.len()) {\n        Some((cs, ce)) if ce == signature.len() =>\n            match clazel_der::spec::read_integer(signature, cs, ce) {\n                Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 48 =>",
+      "replace": "    match clazel_der::spec::expect_sequence(signature, 0, signature.len()) {\n        Some((cs, ce)) =>\n            match clazel_der::spec::read_integer(signature, cs, ce) {\n                Some((r_negative, rs, re, after_r)) if !r_negative && re - rs <= 48 =>",
+      "expect": "killed",
+      "reason": "Accepts octets after the Ecdsa-Sig-Value (RFC 3279 §2.2.3: the signature is exactly one SEQUENCE). lemma_ecdsa_sig_value_p384_examples refuses a trailing octet.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_ecdsa_sig_value_p384_examples()",
+        "witness": "ecdsa_sig_value_p384(crate::chain::examples::ex_sig(48) + seq![0x00u8]) is Some"
+      }
+    },
+    {
+      "id": "link-p384-unpadded",
+      "file": "src/chain/spec.rs",
+      "find": "    Seq::new((48 - m.len()) as nat, |i: int| 0u8) + m",
+      "replace": "    m",
+      "expect": "killed",
+      "reason": "Passes r and s unpadded. The integer is the same (OS2IP), but the decoder's result is no longer the 48-octet strings the exec arrays hold. lemma_ecdsa_sig_value_p384_examples pads a 33-octet r and a 1-octet s to 48.",
+      "certificate": {
+        "file": "src/chain/certificates.rs",
+        "lemma": "crate::chain::examples::lemma_ecdsa_sig_value_p384_examples()",
+        "witness": "ecdsa_sig_value_p384(crate::chain::examples::ex_sig(33)) != Some((Seq::new(15, |i: int| 0u8) + Seq::new(33, |i: int| (i + 1) as u8), Seq::new(47, |i: int| 0u8) + seq![0x01u8]))"
+      }
+    },
+    {
+      "id": "link-p384-digest-sha256",
+      "file": "src/chain/spec.rs",
+      "find": "clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384 => crate::spec::sha384(message),",
+      "replace": "clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384 => crate::spec::sha256(message),",
+      "expect": "killed-incidentally",
+      "reason": "Verifies ecdsa-with-SHA384 under a P-384 key with SHA-256. The digests are uninterpreted, so no compute_only certificate exists; the exec proof breaks (ecdsa_digest calls axioms::sha384), and tests/chain.rs p384_issuer_key fails (the SHA-384 fixture would not verify)."
+    },
+    {
+      "id": "link-p384-refused",
+      "file": "src/chain/spec.rs",
+      "find": "            ecdsa_p384_link(spki.public_key->EcP384_0, hash, tbs_der, signature),",
+      "replace": "            false,",
+      "expect": "killed-incidentally",
+      "reason": "Refuses every P-384 issuer key again (P17 undone). An accepted P-384 link is too large to evaluate by compute_only, so no certificate exists; the exec proof breaks, and tests/chain.rs (the 35 P-384 Mozilla roots) and tests/join.rs (four online chains) fail."
+    },
+    {
+      "id": "link-p384-unverified",
+      "file": "src/chain/spec.rs",
+      "find": "        Some((r, s)) => clazel_p384::spec::ecdsa_verify(clazel_p384::spec::p384(),\n            ecdsa_digest(hash, message), clazel_p384::spec::os2ip(r), clazel_p384::spec::os2ip(s), point),",
+      "replace": "        Some((r, s)) => true,",
+      "expect": "killed-incidentally",
+      "reason": "Accepts any well-formed signature under a P-384 key without verifying it. Evaluating a refusal needs a P-384 point check, too large for compute_only here; the exec proof breaks, and tests/chain.rs p384_issuer_key fails (a flipped signature bit would verify)."
     },
     {
       "id": "link-rsa-digest-sha384",
