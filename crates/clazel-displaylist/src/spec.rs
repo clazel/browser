@@ -354,9 +354,14 @@ pub open spec fn decode_items(s: Seq<u8>) -> Option<Seq<Item>>
     }
 }
 
+/// A list may be this many bytes long.
+pub open spec fn list_length_ok(n: nat) -> bool {
+    n <= (MAX_LIST_BYTES as nat)
+}
+
 /// A list's items, or `None` if it is too long or is not exactly a run of items.
 pub open spec fn decode(s: Seq<u8>) -> Option<Seq<Item>> {
-    if s.len() > (MAX_LIST_BYTES as nat) {
+    if !list_length_ok(s.len()) {
         None
     } else {
         decode_items(s)
@@ -400,9 +405,14 @@ pub open spec fn live_bytes(table: Seq<Option<MaskSize>>) -> nat
     }
 }
 
+/// An id the table has an entry for.
+pub open spec fn id_ok(id: u32) -> bool {
+    (id as nat) < (MAX_MASKS as nat)
+}
+
 /// Whether `id` names a live mask.
 pub open spec fn is_live(masks: Masks, id: u32) -> bool {
-    (id as nat) < (MAX_MASKS as nat) && masks.table[id as int] is Some
+    id_ok(id) && masks.table[id as int] is Some
 }
 
 /// The masks after one item, or `None` if the item breaks a rule. Clips are
@@ -427,7 +437,7 @@ pub open spec fn masks_after(masks: Masks, item: Item) -> Option<Masks> {
         Item::UploadMask { id, columns: width, rows: height, .. } => {
             let size = MaskSize { width: width as nat, height: height as nat };
             let updated = Masks { table: masks.table.update(id as int, Some(size)) };
-            if id as nat >= (MAX_MASKS as nat) || masks.table[id as int] is Some {
+            if !id_ok(id) || masks.table[id as int] is Some {
                 None
             } else if width == 0 || height == 0 {
                 None
@@ -497,9 +507,14 @@ pub open spec fn walk(masks: Masks, depth: nat, items: Seq<Item>) -> Option<Mask
     }
 }
 
+/// A list may have this many items.
+pub open spec fn item_count_ok(n: nat) -> bool {
+    n <= (MAX_ITEMS as nat)
+}
+
 /// The masks a list leaves, given those it found, or `None` if the list is refused.
 pub open spec fn validate(masks: Masks, items: Seq<Item>) -> Option<Masks> {
-    if items.len() > (MAX_ITEMS as nat) {
+    if !item_count_ok(items.len()) {
         None
     } else {
         walk(masks, 0, items)
@@ -516,12 +531,12 @@ pub open spec fn in_range(item: Item) -> bool {
         Item::PushClip { x, y, width, height } => position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height),
         Item::PopClip => true,
         Item::UploadMask { id, columns: width, rows: height, .. } => {
-            (id as nat) < (MAX_MASKS as nat)
+            id_ok(id)
                 && 0 < width as nat <= (MAX_MASK_SIDE as nat)
                 && 0 < height as nat <= (MAX_MASK_SIDE as nat)
         },
-        Item::DrawMask { id, x, y, .. } => (id as nat) < (MAX_MASKS as nat) && position_ok(x) && position_ok(y),
-        Item::FreeMask { id } => (id as nat) < (MAX_MASKS as nat),
+        Item::DrawMask { id, x, y, .. } => id_ok(id) && position_ok(x) && position_ok(y),
+        Item::FreeMask { id } => id_ok(id),
     }
 }
 

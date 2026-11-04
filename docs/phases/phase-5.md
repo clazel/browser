@@ -1000,6 +1000,22 @@ id with a colour; push and pop a clip rectangle; the image item Phase 6 fills.
 Coordinates are in device pixels, and nothing carries a shader, a pipeline, a
 buffer offset or anything else a driver would read directly.
 
+**The format, as designed.** A list is a run of items with nothing around them, each
+a one-byte tag and then its fields, least significant byte first. Signed fields are
+two's complement. Tag 1 fills a rectangle: x, y (signed, 32 bits), width, height,
+colour (unsigned, 32 bits). Tag 2 pushes a clip: x, y, width, height, as tag 1. Tag 3
+pops a clip and has no fields. Tag 4 uploads a mask: id (unsigned, 32 bits), columns,
+rows (unsigned, 16 bits), then columns × rows bytes of coverage. Tag 5 draws a mask:
+id, then x, y, then colour, each 32 bits as above. Tag 6 frees a mask: id. Any other
+tag, an item cut short, or more than 2^27 bytes in all is not a list. A list that reads
+is checked in order, against the masks earlier lists left: at most 2^20 items; a
+position lies within ±2^23 and a width or height is at most 2^23, for fills, clips and
+draws; a clip stack never pops when empty, never passes 256, and ends empty; an id is
+below 2^16; an upload's id is not live, its columns and rows are 1 to 2048, and live
+coverage, each mask costing columns × rows, stays at most 2^26 bytes; a draw or a free
+names a live mask, and a free ends it. Colours have no rule. A list breaking any rule
+is refused.
+
 Proven: `theorem_decode_total`; `theorem_decode_encode_roundtrip`;
 `theorem_validated_bounds`: a validated list has at most a stated number of items
 and of mask bytes, every clip push has its pop within the stated depth, every

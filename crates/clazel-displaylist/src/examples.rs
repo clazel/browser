@@ -68,4 +68,118 @@ pub proof fn lemma_example_ranges()
 {
 }
 
+/// The limits' values.
+pub proof fn lemma_limits()
+    ensures
+        MAX_LIST_BYTES == 134_217_728usize,
+        MAX_ITEMS == 1_048_576usize,
+        MAX_CLIP_DEPTH == 256usize,
+        MAX_MASKS == 65_536usize,
+        MAX_MASK_SIDE == 2048usize,
+        MAX_MASK_BYTES == 67_108_864usize,
+        MAX_COORD == 8_388_608usize,
+        list_length_ok(134_217_728),
+        !list_length_ok(134_217_729),
+        item_count_ok(1_048_576),
+        !item_count_ok(1_048_577),
+        id_ok(65_535),
+        !id_ok(65_536),
+{
+}
+
+/// A table with mask 0 dead and mask 1 live, of 6 bytes.
+pub open spec fn sample() -> Masks {
+    Masks { table: seq![None, Some(MaskSize { width: 2, height: 3 })] }
+}
+
+/// A table whose one live mask fills the whole budget.
+pub open spec fn full() -> Masks {
+    Masks { table: seq![None, Some(MaskSize { width: 8192, height: 8192 })] }
+}
+
+/// An upload, with the coverage left out, which the rules do not read.
+pub open spec fn upload(id: u32, columns: u16, rows: u16) -> Item {
+    Item::UploadMask { id, columns, rows, coverage: Seq::empty() }
+}
+
+/// The mask rules, one case each way.
+pub proof fn lemma_example_masks()
+    ensures
+        masks_after(sample(), Item::DrawMask { id: 0, x: 0, y: 0, colour: 0 }) is None,
+        masks_after(sample(), Item::DrawMask { id: 1, x: 0, y: 0, colour: 0 }) is Some,
+        masks_after(sample(), Item::FreeMask { id: 0 }) is None,
+        masks_after(sample(), Item::FreeMask { id: 1 })->Some_0.table[1] is None,
+        masks_after(sample(), upload(1, 1, 1)) is None,
+        masks_after(sample(), upload(0, 0, 1)) is None,
+        masks_after(sample(), upload(0, 1, 0)) is None,
+        masks_after(sample(), upload(0, 2049, 1)) is None,
+        masks_after(sample(), upload(0, 1, 2049)) is None,
+        masks_after(sample(), upload(0, 2048, 1)) is Some,
+        masks_after(sample(), upload(0, 1, 1))->Some_0.table[0] is Some,
+        masks_after(full(), upload(0, 1, 1)) is None,
+        live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) == 10,
+{
+    assert(masks_after(sample(), Item::DrawMask { id: 0, x: 0, y: 0, colour: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::DrawMask { id: 1, x: 0, y: 0, colour: 0 }) is Some) by (compute_only);
+    assert(masks_after(sample(), Item::FreeMask { id: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::FreeMask { id: 1 })->Some_0.table[1] is None) by (compute_only);
+    assert(masks_after(sample(), upload(1, 1, 1)) is None) by (compute_only);
+    assert(masks_after(sample(), upload(0, 0, 1)) is None) by (compute_only);
+    assert(masks_after(sample(), upload(0, 1, 0)) is None) by (compute_only);
+    assert(masks_after(sample(), upload(0, 2049, 1)) is None) by (compute_only);
+    assert(masks_after(sample(), upload(0, 1, 2049)) is None) by (compute_only);
+    assert(masks_after(sample(), upload(0, 2048, 1)) is Some) by (compute_only);
+    assert(masks_after(sample(), upload(0, 1, 1))->Some_0.table[0] is Some) by (compute_only);
+    assert(masks_after(full(), upload(0, 1, 1)) is None) by (compute_only);
+    assert(live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) == 10) by (compute_only);
+}
+
+/// The range rules, for every field of every item that has one.
+pub proof fn lemma_example_fields()
+    ensures
+        masks_after(sample(), Item::FillRect { x: 8_388_609, y: 0, width: 0, height: 0, colour: 0 }) is None,
+        masks_after(sample(), Item::FillRect { x: 0, y: 8_388_609, width: 0, height: 0, colour: 0 }) is None,
+        masks_after(sample(), Item::FillRect { x: 0, y: 0, width: 8_388_609, height: 0, colour: 0 }) is None,
+        masks_after(sample(), Item::FillRect { x: 0, y: 0, width: 0, height: 8_388_609, colour: 0 }) is None,
+        masks_after(sample(), Item::FillRect { x: 0, y: 0, width: 0, height: 0, colour: 0 }) is Some,
+        masks_after(sample(), Item::PushClip { x: 8_388_609, y: 0, width: 0, height: 0 }) is None,
+        masks_after(sample(), Item::PushClip { x: 0, y: 8_388_609, width: 0, height: 0 }) is None,
+        masks_after(sample(), Item::PushClip { x: 0, y: 0, width: 8_388_609, height: 0 }) is None,
+        masks_after(sample(), Item::PushClip { x: 0, y: 0, width: 0, height: 8_388_609 }) is None,
+        masks_after(sample(), Item::DrawMask { id: 1, x: 8_388_609, y: 0, colour: 0 }) is None,
+        masks_after(sample(), Item::DrawMask { id: 1, x: 0, y: 8_388_609, colour: 0 }) is None,
+{
+    assert(masks_after(sample(), Item::FillRect { x: 8_388_609, y: 0, width: 0, height: 0, colour: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::FillRect { x: 0, y: 8_388_609, width: 0, height: 0, colour: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::FillRect { x: 0, y: 0, width: 8_388_609, height: 0, colour: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::FillRect { x: 0, y: 0, width: 0, height: 8_388_609, colour: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::FillRect { x: 0, y: 0, width: 0, height: 0, colour: 0 }) is Some) by (compute_only);
+    assert(masks_after(sample(), Item::PushClip { x: 8_388_609, y: 0, width: 0, height: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::PushClip { x: 0, y: 8_388_609, width: 0, height: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::PushClip { x: 0, y: 0, width: 8_388_609, height: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::PushClip { x: 0, y: 0, width: 0, height: 8_388_609 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::DrawMask { id: 1, x: 8_388_609, y: 0, colour: 0 }) is None) by (compute_only);
+    assert(masks_after(sample(), Item::DrawMask { id: 1, x: 0, y: 8_388_609, colour: 0 }) is None) by (compute_only);
+}
+
+/// A list's clips must end balanced, and a pushed clip counts.
+pub proof fn lemma_example_walk()
+    ensures
+        walk(sample(), 0, Seq::empty()) is Some,
+        walk(sample(), 1, Seq::empty()) is None,
+        clip_after(255, Item::PushClip { x: 0, y: 0, width: 0, height: 0 }) == Some(256nat),
+        clip_after(3, Item::PopClip) == Some(2nat),
+        clip_after(3, Item::FreeMask { id: 0 }) == Some(3nat),
+        walk(sample(), 0, seq![upload(0, 1, 1), Item::DrawMask { id: 0, x: 0, y: 0, colour: 0 }]) is Some,
+        walk(sample(), 0, seq![Item::PushClip { x: 0, y: 0, width: 0, height: 0 }, Item::PopClip]) is Some,
+        decode(seq![3u8, 6u8, 1, 0, 0, 0]) == Some(seq![Item::PopClip, Item::FreeMask { id: 1 }]),
+        no_masks().table[0] is None,
+{
+    assert(walk(sample(), 0, Seq::empty()) is Some) by (compute_only);
+    assert(walk(sample(), 1, Seq::empty()) is None) by (compute_only);
+    assert(walk(sample(), 0, seq![upload(0, 1, 1), Item::DrawMask { id: 0, x: 0, y: 0, colour: 0 }]) is Some) by (compute_only);
+    assert(walk(sample(), 0, seq![Item::PushClip { x: 0, y: 0, width: 0, height: 0 }, Item::PopClip]) is Some) by (compute_only);
+    assert(decode(seq![3u8, 6u8, 1, 0, 0, 0]) == Some(seq![Item::PopClip, Item::FreeMask { id: 1 }])) by (compute_only);
+}
+
 } // verus!

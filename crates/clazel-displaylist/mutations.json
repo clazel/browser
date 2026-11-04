@@ -1,0 +1,1031 @@
+{
+  "mutations": [
+    {
+      "id": "le-bytes-modulus",
+      "file": "src/spec.rs",
+      "find": "seq![(n % 256) as u8] + le_bytes(n / 256,",
+      "replace": "seq![(n % 255) as u8] + le_bytes(n / 256,",
+      "expect": "killed",
+      "reason": "Bytes written modulo 255 do not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "le-bytes-divisor",
+      "file": "src/spec.rs",
+      "find": "seq![(n % 256) as u8] + le_bytes(n / 256,",
+      "replace": "seq![(n % 256) as u8] + le_bytes(n / 255,",
+      "expect": "killed",
+      "reason": "A colour of 300 needs its second byte right.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "le-value-base",
+      "file": "src/spec.rs",
+      "find": "s[0] as nat + 256 * le_value",
+      "replace": "s[0] as nat + 255 * le_value",
+      "expect": "killed",
+      "reason": "A number read in the wrong base is not the number written.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "i32-boundary",
+      "file": "src/spec.rs",
+      "find": "if n < 0x8000_0000 {",
+      "replace": "if n < 0x4000_0000 {",
+      "expect": "killed",
+      "reason": "A positive number above the wrong boundary reads as negative.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_i32_of_bits(0x5000_0000i32)",
+        "witness": "i32_of(bits_of(0x5000_0000i32)) != 0x5000_0000i32"
+      }
+    },
+    {
+      "id": "bits-of-negative",
+      "file": "src/spec.rs",
+      "find": "(v + 0x1_0000_0000) as nat",
+      "replace": "(v + 0x1_0000_0001) as nat",
+      "expect": "killed",
+      "reason": "The bits of -1 would not fit in 32 bits.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_i32_of_bits(-1i32)",
+        "witness": "bits_of(-1i32) >= 0x1_0000_0000nat"
+      }
+    },
+    {
+      "id": "read-tag-fill",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 1u8 {",
+      "replace": "else if s[0] == 9u8 {",
+      "expect": "killed",
+      "reason": "A rectangle would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "read-tag-push",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 2u8 {",
+      "replace": "else if s[0] == 9u8 {",
+      "expect": "killed",
+      "reason": "A clip would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }) + Seq::<u8>::empty()) != Some((Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }).len()))"
+      }
+    },
+    {
+      "id": "read-tag-pop",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 3u8 {",
+      "replace": "else if s[0] == 9u8 {",
+      "expect": "killed",
+      "reason": "A pop would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::PopClip, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::PopClip) + Seq::<u8>::empty()) != Some((Item::PopClip, encode_item(Item::PopClip).len()))"
+      }
+    },
+    {
+      "id": "read-tag-upload",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 4u8 {",
+      "replace": "else if s[0] == 9u8 {",
+      "expect": "killed",
+      "reason": "An upload would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+      }
+    },
+    {
+      "id": "read-tag-draw",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 5u8 {",
+      "replace": "else if s[0] == 9u8 {",
+      "expect": "killed",
+      "reason": "A draw would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }) + Seq::<u8>::empty()) != Some((Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }).len()))"
+      }
+    },
+    {
+      "id": "read-tag-free",
+      "file": "src/spec.rs",
+      "find": "else if s[0] == 6u8 {",
+      "replace": "else if s[0] == 9u8 {",
+      "expect": "killed",
+      "reason": "A free would not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeMask { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeMask { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeMask { id: 1 }, encode_item(Item::FreeMask { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "write-tag-fill",
+      "file": "src/spec.rs",
+      "find": "=> seq![1u8]",
+      "replace": "=> seq![9u8]",
+      "expect": "killed",
+      "reason": "A rectangle written with another tag does not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "write-tag-push",
+      "file": "src/spec.rs",
+      "find": "=> seq![2u8]",
+      "replace": "=> seq![9u8]",
+      "expect": "killed",
+      "reason": "A clip written with another tag does not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }) + Seq::<u8>::empty()) != Some((Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }).len()))"
+      }
+    },
+    {
+      "id": "write-tag-pop",
+      "file": "src/spec.rs",
+      "find": "=> seq![3u8],",
+      "replace": "=> seq![9u8],",
+      "expect": "killed",
+      "reason": "A pop written with another tag does not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::PopClip, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::PopClip) + Seq::<u8>::empty()) != Some((Item::PopClip, encode_item(Item::PopClip).len()))"
+      }
+    },
+    {
+      "id": "write-tag-upload",
+      "file": "src/spec.rs",
+      "find": "=> seq![4u8]",
+      "replace": "=> seq![9u8]",
+      "expect": "killed",
+      "reason": "An upload written with another tag does not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+      }
+    },
+    {
+      "id": "write-tag-draw",
+      "file": "src/spec.rs",
+      "find": "=> seq![5u8]",
+      "replace": "=> seq![9u8]",
+      "expect": "killed",
+      "reason": "A draw written with another tag does not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }) + Seq::<u8>::empty()) != Some((Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }).len()))"
+      }
+    },
+    {
+      "id": "write-tag-free",
+      "file": "src/spec.rs",
+      "find": "=> seq![6u8] +",
+      "replace": "=> seq![9u8] +",
+      "expect": "killed",
+      "reason": "A free written with another tag does not read back.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeMask { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeMask { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeMask { id: 1 }, encode_item(Item::FreeMask { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "fill-read-y",
+      "file": "src/spec.rs",
+      "find": "Item::FillRect {\n                    x: i32_of(field4(s, 1)),\n                    y: i32_of(field4(s, 5)),",
+      "replace": "Item::FillRect {\n                    x: i32_of(field4(s, 1)),\n                    y: i32_of(field4(s, 1)),",
+      "expect": "killed",
+      "reason": "y read from where x is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "fill-read-colour",
+      "file": "src/spec.rs",
+      "find": "colour: field4(s, 17) as u32,",
+      "replace": "colour: field4(s, 13) as u32,",
+      "expect": "killed",
+      "reason": "The colour read from where the height is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "fill-taken",
+      "file": "src/spec.rs",
+      "find": "colour: field4(s, 17) as u32,\n                },\n                21,",
+      "replace": "colour: field4(s, 17) as u32,\n                },\n                20,",
+      "expect": "killed",
+      "reason": "A byte of the colour left over.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "fill-too-strict",
+      "file": "src/spec.rs",
+      "find": "if s.len() < 21 {",
+      "replace": "if s.len() < 22 {",
+      "expect": "killed",
+      "reason": "A rectangle at the end of a list refused.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "push-read-height",
+      "file": "src/spec.rs",
+      "find": "height: field4(s, 13) as u32,\n                },\n                17,",
+      "replace": "height: field4(s, 9) as u32,\n                },\n                17,",
+      "expect": "killed",
+      "reason": "The height read from where the width is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }) + Seq::<u8>::empty()) != Some((Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }).len()))"
+      }
+    },
+    {
+      "id": "push-taken",
+      "file": "src/spec.rs",
+      "find": "height: field4(s, 13) as u32,\n                },\n                17,",
+      "replace": "height: field4(s, 13) as u32,\n                },\n                16,",
+      "expect": "killed",
+      "reason": "A byte of the height left over.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }) + Seq::<u8>::empty()) != Some((Item::PushClip { x: 1, y: 2, width: 3, height: 4 }, encode_item(Item::PushClip { x: 1, y: 2, width: 3, height: 4 }).len()))"
+      }
+    },
+    {
+      "id": "upload-read-rows",
+      "file": "src/spec.rs",
+      "find": "let height = field2(s, 7);",
+      "replace": "let height = field2(s, 5);",
+      "expect": "killed",
+      "reason": "The rows read from where the columns are.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+      }
+    },
+    {
+      "id": "upload-size",
+      "file": "src/spec.rs",
+      "find": "let size = width * height;",
+      "replace": "let size = width + height;",
+      "expect": "killed",
+      "reason": "The coverage is columns times rows.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+      }
+    },
+    {
+      "id": "upload-coverage-offset",
+      "file": "src/spec.rs",
+      "find": "coverage: s.subrange(9, 9 + size as int),",
+      "replace": "coverage: s.subrange(8, 8 + size as int),",
+      "expect": "killed",
+      "reason": "The coverage starts after the header.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+      }
+    },
+    {
+      "id": "upload-taken",
+      "file": "src/spec.rs",
+      "find": "                    9 + size,",
+      "replace": "                    10 + size,",
+      "expect": "killed",
+      "reason": "One byte too many taken.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+      }
+    },
+    {
+      "id": "draw-read-y",
+      "file": "src/spec.rs",
+      "find": "x: i32_of(field4(s, 5)),\n                    y: i32_of(field4(s, 9)),\n                    colour",
+      "replace": "x: i32_of(field4(s, 5)),\n                    y: i32_of(field4(s, 5)),\n                    colour",
+      "expect": "killed",
+      "reason": "y read from where x is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }) + Seq::<u8>::empty()) != Some((Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }).len()))"
+      }
+    },
+    {
+      "id": "draw-read-colour",
+      "file": "src/spec.rs",
+      "find": "colour: field4(s, 13) as u32,",
+      "replace": "colour: field4(s, 9) as u32,",
+      "expect": "killed",
+      "reason": "The colour read from where y is.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }) + Seq::<u8>::empty()) != Some((Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }).len()))"
+      }
+    },
+    {
+      "id": "draw-taken",
+      "file": "src/spec.rs",
+      "find": "colour: field4(s, 13) as u32,\n                },\n                17,",
+      "replace": "colour: field4(s, 13) as u32,\n                },\n                16,",
+      "expect": "killed",
+      "reason": "A byte of the colour left over.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }) + Seq::<u8>::empty()) != Some((Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }, encode_item(Item::DrawMask { id: 1, x: 2, y: 3, colour: 4 }).len()))"
+      }
+    },
+    {
+      "id": "free-taken",
+      "file": "src/spec.rs",
+      "find": "Some((Item::FreeMask { id: field4(s, 1) as u32 }, 5))",
+      "replace": "Some((Item::FreeMask { id: field4(s, 1) as u32 }, 4))",
+      "expect": "killed",
+      "reason": "A byte of the id left over.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeMask { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeMask { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeMask { id: 1 }, encode_item(Item::FreeMask { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "free-too-strict",
+      "file": "src/spec.rs",
+      "find": "if s.len() < 5 {",
+      "replace": "if s.len() < 6 {",
+      "expect": "killed",
+      "reason": "A free at the end of a list refused.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FreeMask { id: 1 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FreeMask { id: 1 }) + Seq::<u8>::empty()) != Some((Item::FreeMask { id: 1 }, encode_item(Item::FreeMask { id: 1 }).len()))"
+      }
+    },
+    {
+      "id": "write-fill-width",
+      "file": "src/spec.rs",
+      "find": "+ le_bytes(colour as nat, 4),\n        Item::PushClip",
+      "replace": "+ le_bytes(colour as nat, 3),\n        Item::PushClip",
+      "expect": "killed",
+      "reason": "A rectangle whose colour is cut short.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+      }
+    },
+    {
+      "id": "write-upload-swap",
+      "file": "src/spec.rs",
+      "find": "+ le_bytes(width as nat, 2)\n            + le_bytes(height as nat, 2)",
+      "replace": "+ le_bytes(height as nat, 2)\n            + le_bytes(width as nat, 2)",
+      "expect": "killed",
+      "reason": "Columns and rows written the wrong way round.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+      }
+    },
+    {
+      "id": "read-order",
+      "file": "src/spec.rs",
+      "find": "Some(rest) => Some(seq![item] + rest),",
+      "replace": "Some(rest) => Some(rest + seq![item]),",
+      "expect": "killed",
+      "reason": "Items would come out in the wrong order.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "decode(seq![3u8, 6u8, 1, 0, 0, 0]) != Some(seq![Item::PopClip, Item::FreeMask { id: 1 }])"
+      }
+    },
+    {
+      "id": "limit-list",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_LIST_BYTES: usize = 134_217_728;",
+      "replace": "pub const MAX_LIST_BYTES: usize = 134_217_729;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_LIST_BYTES != 134_217_728usize"
+      }
+    },
+    {
+      "id": "limit-items",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_ITEMS: usize = 1_048_576;",
+      "replace": "pub const MAX_ITEMS: usize = 1_048_577;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_ITEMS != 1_048_576usize"
+      }
+    },
+    {
+      "id": "limit-depth",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_CLIP_DEPTH: usize = 256;",
+      "replace": "pub const MAX_CLIP_DEPTH: usize = 257;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_CLIP_DEPTH != 256usize"
+      }
+    },
+    {
+      "id": "limit-masks",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_MASKS: usize = 65_536;",
+      "replace": "pub const MAX_MASKS: usize = 65_537;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_MASKS != 65_536usize"
+      }
+    },
+    {
+      "id": "limit-side",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_MASK_SIDE: usize = 2048;",
+      "replace": "pub const MAX_MASK_SIDE: usize = 2049;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_MASK_SIDE != 2048usize"
+      }
+    },
+    {
+      "id": "limit-mask-bytes",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_MASK_BYTES: usize = 67_108_864;",
+      "replace": "pub const MAX_MASK_BYTES: usize = 67_108_865;",
+      "expect": "killed",
+      "reason": "The limit is stated.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_MASK_BYTES != 67_108_864usize"
+      }
+    },
+    {
+      "id": "limit-coord",
+      "file": "src/spec.rs",
+      "find": "pub const MAX_COORD: usize = 8_388_608;",
+      "replace": "pub const MAX_COORD: usize = 16_777_216;",
+      "expect": "killed",
+      "reason": "Far edges would pass what f32 holds exactly.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "MAX_COORD != 8_388_608usize"
+      }
+    },
+    {
+      "id": "list-length-test",
+      "file": "src/spec.rs",
+      "find": "n <= (MAX_LIST_BYTES as nat)",
+      "replace": "n <= (MAX_LIST_BYTES as nat) + 1",
+      "expect": "killed",
+      "reason": "One byte past the limit accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "list_length_ok(134_217_729)"
+      }
+    },
+    {
+      "id": "item-count-test",
+      "file": "src/spec.rs",
+      "find": "n <= (MAX_ITEMS as nat)",
+      "replace": "n <= (MAX_ITEMS as nat) + 1",
+      "expect": "killed",
+      "reason": "One item past the limit accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "item_count_ok(1_048_577)"
+      }
+    },
+    {
+      "id": "id-test",
+      "file": "src/spec.rs",
+      "find": "(id as nat) < (MAX_MASKS as nat)",
+      "replace": "(id as nat) <= (MAX_MASKS as nat)",
+      "expect": "killed",
+      "reason": "An id past the table accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_limits()",
+        "witness": "id_ok(65_536)"
+      }
+    },
+    {
+      "id": "position-low",
+      "file": "src/spec.rs",
+      "find": "-(MAX_COORD as int) <= v as int",
+      "replace": "-(MAX_COORD as int) - 1 <= v as int",
+      "expect": "killed",
+      "reason": "A position past the negative range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_ranges()",
+        "witness": "position_ok(-8_388_609i32)"
+      }
+    },
+    {
+      "id": "position-high",
+      "file": "src/spec.rs",
+      "find": "v as int <= MAX_COORD as int",
+      "replace": "v as int < MAX_COORD as int",
+      "expect": "killed",
+      "reason": "The position at the edge refused.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_ranges()",
+        "witness": "!position_ok(8_388_608)"
+      }
+    },
+    {
+      "id": "size-high",
+      "file": "src/spec.rs",
+      "find": "v as nat <= (MAX_COORD as nat)",
+      "replace": "v as nat < (MAX_COORD as nat)",
+      "expect": "killed",
+      "reason": "The size at the edge refused.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_ranges()",
+        "witness": "!size_ok(8_388_608)"
+      }
+    },
+    {
+      "id": "fill-unchecked-x",
+      "file": "src/spec.rs",
+      "find": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(y) && size_ok(width) && size_ok(height) {",
+      "expect": "killed",
+      "reason": "A fill whose x is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::FillRect { x: 8_388_609, y: 0, width: 0, height: 0, colour: 0 }) is Some"
+      }
+    },
+    {
+      "id": "fill-unchecked-y",
+      "file": "src/spec.rs",
+      "find": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(x) && size_ok(width) && size_ok(height) {",
+      "expect": "killed",
+      "reason": "A fill whose y is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::FillRect { x: 0, y: 8_388_609, width: 0, height: 0, colour: 0 }) is Some"
+      }
+    },
+    {
+      "id": "fill-unchecked-width",
+      "file": "src/spec.rs",
+      "find": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(x) && position_ok(y) && size_ok(height) {",
+      "expect": "killed",
+      "reason": "A fill whose width is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::FillRect { x: 0, y: 0, width: 8_388_609, height: 0, colour: 0 }) is Some"
+      }
+    },
+    {
+      "id": "fill-unchecked-height",
+      "file": "src/spec.rs",
+      "find": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::FillRect { x, y, width, height, .. } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) {",
+      "expect": "killed",
+      "reason": "A fill whose height is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::FillRect { x: 0, y: 0, width: 0, height: 8_388_609, colour: 0 }) is Some"
+      }
+    },
+    {
+      "id": "push-unchecked-x",
+      "file": "src/spec.rs",
+      "find": "Item::PushClip { x, y, width, height } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::PushClip { x, y, width, height } => {\n            if position_ok(y) && size_ok(width) && size_ok(height) {",
+      "expect": "killed",
+      "reason": "A push whose x is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::PushClip { x: 8_388_609, y: 0, width: 0, height: 0 }) is Some"
+      }
+    },
+    {
+      "id": "push-unchecked-y",
+      "file": "src/spec.rs",
+      "find": "Item::PushClip { x, y, width, height } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::PushClip { x, y, width, height } => {\n            if position_ok(x) && size_ok(width) && size_ok(height) {",
+      "expect": "killed",
+      "reason": "A push whose y is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::PushClip { x: 0, y: 8_388_609, width: 0, height: 0 }) is Some"
+      }
+    },
+    {
+      "id": "push-unchecked-width",
+      "file": "src/spec.rs",
+      "find": "Item::PushClip { x, y, width, height } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::PushClip { x, y, width, height } => {\n            if position_ok(x) && position_ok(y) && size_ok(height) {",
+      "expect": "killed",
+      "reason": "A push whose width is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::PushClip { x: 0, y: 0, width: 8_388_609, height: 0 }) is Some"
+      }
+    },
+    {
+      "id": "push-unchecked-height",
+      "file": "src/spec.rs",
+      "find": "Item::PushClip { x, y, width, height } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) && size_ok(height) {",
+      "replace": "Item::PushClip { x, y, width, height } => {\n            if position_ok(x) && position_ok(y) && size_ok(width) {",
+      "expect": "killed",
+      "reason": "A push whose height is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::PushClip { x: 0, y: 0, width: 0, height: 8_388_609 }) is Some"
+      }
+    },
+    {
+      "id": "draw-unchecked-x",
+      "file": "src/spec.rs",
+      "find": "if position_ok(x) && position_ok(y) && is_live(masks, id) {",
+      "replace": "if position_ok(y) && is_live(masks, id) {",
+      "expect": "killed",
+      "reason": "A draw whose x is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::DrawMask { id: 1, x: 8_388_609, y: 0, colour: 0 }) is Some"
+      }
+    },
+    {
+      "id": "draw-unchecked-y",
+      "file": "src/spec.rs",
+      "find": "if position_ok(x) && position_ok(y) && is_live(masks, id) {",
+      "replace": "if position_ok(x) && is_live(masks, id) {",
+      "expect": "killed",
+      "reason": "A draw whose y is out of range accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_fields()",
+        "witness": "masks_after(crate::examples::sample(), Item::DrawMask { id: 1, x: 0, y: 8_388_609, colour: 0 }) is Some"
+      }
+    },
+    {
+      "id": "draw-dead",
+      "file": "src/spec.rs",
+      "find": "if position_ok(x) && position_ok(y) && is_live(masks, id) {",
+      "replace": "if position_ok(x) && position_ok(y) {",
+      "expect": "killed",
+      "reason": "A dead mask drawn.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), Item::DrawMask { id: 0, x: 0, y: 0, colour: 0 }) is Some"
+      }
+    },
+    {
+      "id": "free-dead",
+      "file": "src/spec.rs",
+      "find": "if is_live(masks, id) {\n                Some(Masks { table: masks.table.update(id as int, None) })",
+      "replace": "if id_ok(id) {\n                Some(Masks { table: masks.table.update(id as int, None) })",
+      "expect": "killed",
+      "reason": "A dead mask freed.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), Item::FreeMask { id: 0 }) is Some"
+      }
+    },
+    {
+      "id": "free-keeps",
+      "file": "src/spec.rs",
+      "find": "Some(Masks { table: masks.table.update(id as int, None) })",
+      "replace": "Some(masks)",
+      "expect": "killed",
+      "reason": "A freed mask still live.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), Item::FreeMask { id: 1 })->Some_0.table[1] is Some"
+      }
+    },
+    {
+      "id": "upload-replaces",
+      "file": "src/spec.rs",
+      "find": "if !id_ok(id) || masks.table[id as int] is Some {",
+      "replace": "if !id_ok(id) {",
+      "expect": "killed",
+      "reason": "A live mask replaced.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload(1, 1, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-no-columns",
+      "file": "src/spec.rs",
+      "find": "else if width == 0 || height == 0 {",
+      "replace": "else if height == 0 {",
+      "expect": "killed",
+      "reason": "A mask with no columns accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload(0, 0, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-no-rows",
+      "file": "src/spec.rs",
+      "find": "else if width == 0 || height == 0 {",
+      "replace": "else if width == 0 {",
+      "expect": "killed",
+      "reason": "A mask with no rows accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload(0, 1, 0)) is Some"
+      }
+    },
+    {
+      "id": "upload-side-columns",
+      "file": "src/spec.rs",
+      "find": "else if width as nat > (MAX_MASK_SIDE as nat) || height as nat > (MAX_MASK_SIDE as nat) {",
+      "replace": "else if height as nat > (MAX_MASK_SIDE as nat) {",
+      "expect": "killed",
+      "reason": "Too many columns accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload(0, 2049, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-side-rows",
+      "file": "src/spec.rs",
+      "find": "else if width as nat > (MAX_MASK_SIDE as nat) || height as nat > (MAX_MASK_SIDE as nat) {",
+      "replace": "else if width as nat > (MAX_MASK_SIDE as nat) {",
+      "expect": "killed",
+      "reason": "Too many rows accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload(0, 1, 2049)) is Some"
+      }
+    },
+    {
+      "id": "upload-budget",
+      "file": "src/spec.rs",
+      "find": "else if live_bytes(updated.table) > (MAX_MASK_BYTES as nat) {",
+      "replace": "else if false {",
+      "expect": "killed",
+      "reason": "A mask past the budget accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::full(), crate::examples::upload(0, 1, 1)) is Some"
+      }
+    },
+    {
+      "id": "upload-forgets",
+      "file": "src/spec.rs",
+      "find": "let updated = Masks { table: masks.table.update(id as int, Some(size)) };",
+      "replace": "let updated = masks;",
+      "expect": "killed",
+      "reason": "An uploaded mask not recorded.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "masks_after(crate::examples::sample(), crate::examples::upload(0, 1, 1))->Some_0.table[0] is None"
+      }
+    },
+    {
+      "id": "live-bytes-skips",
+      "file": "src/spec.rs",
+      "find": "Some(size) => size.width * size.height + rest,",
+      "replace": "Some(size) => rest,",
+      "expect": "killed",
+      "reason": "Live coverage not counted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) != 10"
+      }
+    },
+    {
+      "id": "live-bytes-sum",
+      "file": "src/spec.rs",
+      "find": "Some(size) => size.width * size.height + rest,",
+      "replace": "Some(size) => size.width + size.height + rest,",
+      "expect": "killed",
+      "reason": "Coverage is columns times rows.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_masks()",
+        "witness": "live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) != 10"
+      }
+    },
+    {
+      "id": "no-masks-live",
+      "file": "src/spec.rs",
+      "find": "|i: int| None)",
+      "replace": "|i: int| Some(MaskSize { width: 1, height: 1 }))",
+      "expect": "killed",
+      "reason": "A new process has no masks.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "no_masks().table[0] is Some"
+      }
+    },
+    {
+      "id": "clip-depth",
+      "file": "src/spec.rs",
+      "find": "if depth < (MAX_CLIP_DEPTH as nat) {",
+      "replace": "if depth <= (MAX_CLIP_DEPTH as nat) {",
+      "expect": "killed",
+      "reason": "A clip past the depth limit accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_clips()",
+        "witness": "clip_after(MAX_CLIP_DEPTH as nat, Item::PushClip { x: 0, y: 0, width: 0, height: 0 }) is Some"
+      }
+    },
+    {
+      "id": "clip-push-count",
+      "file": "src/spec.rs",
+      "find": "Some(depth + 1)",
+      "replace": "Some(depth)",
+      "expect": "killed",
+      "reason": "A push must count.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "clip_after(255, Item::PushClip { x: 0, y: 0, width: 0, height: 0 }) != Some(256nat)"
+      }
+    },
+    {
+      "id": "clip-pop-empty",
+      "file": "src/spec.rs",
+      "find": "if depth > 0 {",
+      "replace": "if depth >= 0 {",
+      "expect": "killed",
+      "reason": "Popping an empty stack accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_clips()",
+        "witness": "clip_after(0, Item::PopClip) is Some"
+      }
+    },
+    {
+      "id": "clip-pop-count",
+      "file": "src/spec.rs",
+      "find": "Some((depth - 1) as nat)",
+      "replace": "Some(depth)",
+      "expect": "killed",
+      "reason": "A pop must count.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "clip_after(3, Item::PopClip) != Some(2nat)"
+      }
+    },
+    {
+      "id": "clip-other-count",
+      "file": "src/spec.rs",
+      "find": "_ => Some(depth),",
+      "replace": "_ => Some(depth + 1),",
+      "expect": "killed",
+      "reason": "Other items leave the stack alone.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "clip_after(3, Item::FreeMask { id: 0 }) != Some(3nat)"
+      }
+    },
+    {
+      "id": "walk-unbalanced",
+      "file": "src/spec.rs",
+      "find": "if depth == 0 {\n            Some(masks)",
+      "replace": "if true {\n            Some(masks)",
+      "expect": "killed",
+      "reason": "A list ending with clips pushed accepted.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "walk(crate::examples::sample(), 1, Seq::empty()) is Some"
+      }
+    },
+    {
+      "id": "walk-forgets-masks",
+      "file": "src/spec.rs",
+      "find": "walk(next_masks, next_depth, items",
+      "replace": "walk(masks, next_depth, items",
+      "expect": "killed",
+      "reason": "A mask uploaded earlier in the list must be drawable.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "walk(crate::examples::sample(), 0, seq![crate::examples::upload(0, 1, 1), Item::DrawMask { id: 0, x: 0, y: 0, colour: 0 }]) is None"
+      }
+    },
+    {
+      "id": "walk-forgets-depth",
+      "file": "src/spec.rs",
+      "find": "walk(next_masks, next_depth, items",
+      "replace": "walk(next_masks, depth, items",
+      "expect": "killed",
+      "reason": "A clip pushed earlier in the list must be poppable.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::examples::lemma_example_walk()",
+        "witness": "walk(crate::examples::sample(), 0, seq![Item::PushClip { x: 0, y: 0, width: 0, height: 0 }, Item::PopClip]) is None"
+      }
+    }
+  ]
+}
