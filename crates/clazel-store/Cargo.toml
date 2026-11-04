@@ -10,9 +10,18 @@ description = "The persistent store (item 3.10a): an append-only log of DER reco
 clazel-der = { path = "../clazel-der" }
 vstd = "=0.0.0-2026-10-04-0306"
 
+# tests/conformance_store.rs (class `test` in docs/DEPENDENCIES.md: never
+# shipped): independent engines for the differential. `crc` computes
+# CRC-32C from its catalogue entry `CRC_32_ISCSI`; `der` (with the same
+# features as clazel-der's) decodes the headers and records we write.
+[dev-dependencies]
+crc = "=3.4.0"
+der = { version = "=0.8.2", default-features = false, features = ["alloc", "oid"] }
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires. The
-# spec and contracts exist; nothing is implemented or proven yet.
+# proofs pass locally; mutations and an independent transcription are not
+# written yet, so the crate stays at tier 0.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
