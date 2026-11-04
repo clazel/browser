@@ -9,4 +9,5 @@
 
 pub mod contract;
 pub mod exec;
+pub mod lemmas;
 pub mod spec;
