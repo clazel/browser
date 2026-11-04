@@ -18,7 +18,10 @@
 //!    and values up to 70 000 octets, so long-form lengths occur), with
 //!    commit numbers across the whole range.
 //!
-//! Each case is one unit of its suite.
+//! Each case is one unit of its suite. Under Miri, which is there to find
+//! undefined behaviour and not to repeat these comparisons, the suites run
+//! fewer cases and no long inputs: a bit-at-a-time CRC of a megabyte takes
+//! hours there.
 
 use clazel_store::crc32c::exec::crc32c;
 use clazel_store::log::exec::{OpRef, encode_header, encode_record};
@@ -87,9 +90,12 @@ fn crc32c_published_vectors() {
 #[test]
 fn crc32c_against_crc_engine() {
     let mut rng = Rng(0x5eed_c0de_1234_5678);
-    let mut messages: Vec<Vec<u8>> = (0..=300).map(|n| rng.bytes(n)).collect();
-    for n in [1000usize, 4096, 65_537, 1_000_003] {
-        messages.push(rng.bytes(n));
+    let lengths = if cfg!(miri) { 0..=20 } else { 0..=300 };
+    let mut messages: Vec<Vec<u8>> = lengths.map(|n| rng.bytes(n)).collect();
+    if !cfg!(miri) {
+        for n in [1000usize, 4096, 65_537, 1_000_003] {
+            messages.push(rng.bytes(n));
+        }
     }
     let fail = messages
         .iter()
@@ -140,8 +146,11 @@ fn der_header(bytes: &[u8]) -> Option<(Vec<u8>, u64, Vec<u8>)> {
 #[test]
 fn headers_against_der() {
     let mut rng = Rng(0x0123_4567_89ab_cdef);
-    let mut identities: Vec<Vec<u8>> = (0..200).map(|n| rng.bytes(n)).collect();
-    identities.push(rng.bytes(4096));
+    let lengths = if cfg!(miri) { 0..10 } else { 0..200 };
+    let mut identities: Vec<Vec<u8>> = lengths.map(|n| rng.bytes(n)).collect();
+    if !cfg!(miri) {
+        identities.push(rng.bytes(4096));
+    }
     let fail = identities
         .iter()
         .filter(|id| {
@@ -222,14 +231,15 @@ fn records_against_der() {
     let commits = [1u64, 2, 127, 128, 255, 256, 65_535, 1 << 31, u64::MAX];
     let mut cases = 0usize;
     let mut fail = 0usize;
-    for round in 0..300usize {
+    for round in 0..(if cfg!(miri) { 6usize } else { 300 }) {
         let n = rng.below(8);
         let mut keys = Vec::new();
         let mut values = Vec::new();
         for _ in 0..n {
-            let long = round % 50 == 0;
-            let kl = if long { 70_000 } else { rng.below(200) };
-            let vl = if long { 1000 } else { rng.below(200) };
+            let long = !cfg!(miri) && round % 50 == 0;
+            let most = if cfg!(miri) { 8 } else { 200 };
+            let kl = if long { 70_000 } else { rng.below(most) };
+            let vl = if long { 1000 } else { rng.below(most) };
             keys.push(rng.bytes(kl));
             values.push(rng.bytes(vl));
         }

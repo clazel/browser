@@ -26,6 +26,7 @@ fn put<'a>(key: &'a [u8], value: &'a [u8]) -> OpRef<'a> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn reopens_to_what_was_committed() -> Result<(), StoreError> {
     let dir = scratch("reopen");
     {
@@ -61,6 +62,7 @@ fn reopens_to_what_was_committed() -> Result<(), StoreError> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn a_torn_tail_is_cut_and_kept() -> Result<(), StoreError> {
     let dir = scratch("torn");
     let path = {
@@ -89,6 +91,7 @@ fn a_torn_tail_is_cut_and_kept() -> Result<(), StoreError> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn a_foreign_file_is_refused_and_kept() -> Result<(), StoreError> {
     let dir = scratch("foreign");
     let store = Store::open(&dir)?;
@@ -106,6 +109,7 @@ fn a_foreign_file_is_refused_and_kept() -> Result<(), StoreError> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn compaction_is_published_by_rename() -> Result<(), StoreError> {
     let dir = scratch("compact");
     {
@@ -133,6 +137,7 @@ fn compaction_is_published_by_rename() -> Result<(), StoreError> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn one_process_at_a_time() -> Result<(), StoreError> {
     let dir = scratch("lock");
     let store = Store::open(&dir)?;
@@ -144,6 +149,7 @@ fn one_process_at_a_time() -> Result<(), StoreError> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn identities_over_the_limit_are_refused() -> Result<(), StoreError> {
     let dir = scratch("long");
     let store = Store::open(&dir)?;
@@ -158,6 +164,7 @@ fn identities_over_the_limit_are_refused() -> Result<(), StoreError> {
 /// A process killed at every write: the file cut at every octet opens to
 /// the state after some number of the commits, never anything else.
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn every_cut_opens_to_a_committed_state() -> Result<(), StoreError> {
     let dir = scratch("cuts");
     let commits: [&[OpRef]; 4] = [
@@ -205,6 +212,7 @@ fn every_cut_opens_to_a_committed_state() -> Result<(), StoreError> {
 /// Files are the user's alone: the directory 0700, the logs 0600.
 #[cfg(unix)]
 #[test]
+#[cfg_attr(miri, ignore = "opens files")]
 fn files_are_private() -> Result<(), StoreError> {
     use std::os::unix::fs::PermissionsExt;
     let dir = scratch("private");

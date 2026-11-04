@@ -44,18 +44,6 @@ fn record() {
 #[test]
 fn refusals() {
     assert_eq!(encode_record(0, &[]), None);
-    let big = vec![0u8; 67_108_864];
-    assert_eq!(
-        encode_record(
-            1,
-            &[OpRef::Put {
-                bottle: 0,
-                key: b"",
-                value: &big
-            }]
-        ),
-        None
-    );
     assert!(encode_record(1, &[]).is_some());
 }
 
@@ -181,19 +169,6 @@ fn compaction() {
     ];
     assert_eq!(recover(b"id", &file).map(|(ts, _)| owned(&ts)), Some(want));
     assert_eq!(compact(b"id", &[]), Some(encode_header(b"id")));
-
-    let big = vec![0u8; 67_108_864];
-    assert_eq!(
-        compact(
-            b"id",
-            &[EntryRef {
-                bottle: 0,
-                key: b"",
-                value: &big
-            }]
-        ),
-        None
-    );
 }
 
 use clazel_store::log::bucket::Bucket;
@@ -481,4 +456,23 @@ fn bucket_against_a_model() {
             .collect();
         assert_eq!(got, want);
     }
+}
+
+/// A value of 64 MiB does not fit in a record (its framing takes it over).
+#[test]
+#[cfg_attr(miri, ignore = "one case CRCs 64 MiB a bit at a time, days under Miri")]
+fn over_the_record_limit() {
+    let big = vec![0u8; 67_108_864];
+    let put = OpRef::Put {
+        bottle: 0,
+        key: b"",
+        value: &big,
+    };
+    assert_eq!(encode_record(1, &[put]), None);
+    let entry = EntryRef {
+        bottle: 0,
+        key: b"",
+        value: &big,
+    };
+    assert_eq!(compact(b"id", &[entry]), None);
 }
