@@ -1030,7 +1030,7 @@ memory through `VK_KHR_external_memory_fd` and `VK_EXT_external_memory_dma_buf`�
 to accept a call through a looked-up function pointer), and `clazel-sys` linking
 only `libvulkan`; Metal on macOS through `objc_msgSend`, drawing into an IOSurface
 as a texture; Direct3D 12 on Windows, through COM, presenting with
-`CreateSwapChainForCompositionSurfaceHandle`† so that it needs no window. COM calls
+`CreateSwapChainForCompositionSurfaceHandle` so that it needs no window (5.22a). COM calls
 go through a vtable, so the checker must learn that form too, with hand-written
 vtable declarations audited against the headers, and shaders are also stored
 compiled for Direct3D (DXBC, unless the prototype finds DXIL's signing workable†).
@@ -1062,7 +1062,7 @@ stated in DEPENDENCIES.md (it is not a Cargo package, so the allowlist table doe
 not reach it). Its sandbox is 5.21a's without device access, which is stronger
 than the hardware profile's. It is slower; a window shows a host-drawn indicator
 that software drawing is in use, in the address bar strip. On Windows, the
-Direct3D 12 backend runs on WARP (`IDXGIFactory4::EnumWarpAdapter`†), which is part
+Direct3D 12 backend runs on WARP (`IDXGIFactory4::EnumWarpAdapter`), which is part
 of the OS, so nothing is shipped. On macOS there is no
 software Metal driver to ship, and every supported macOS has Metal, so there is
 no fallback: a Metal failure goes to the notice below, listed.
@@ -1308,7 +1308,8 @@ runtime (`objc_getClass`, `sel_registerName`, typed `objc_msgSend`) for
 `sendEvent:`: a polling loop, so no class or callback is defined in Rust),
 `NSWindow` (create, title, content view, close), a content layer whose `contents`
 is an IOSurface the GPU process draws into, with the address bar in a separate layer
-outside it, and `NSEvent`'s accessors for location, buttons, scroll deltas, key
+outside it, the content layer clipping to its bounds, as 5.22a found a surface must be
+clipped by the host and tested, and `NSEvent`'s accessors for location, buttons, scroll deltas, key
 codes and characters. Moving an IOSurface between processes takes a Mach port
 (`IOSurfaceCreateMachPort`, `IOSurfaceLookupFromMachPort`†); how a sandboxed process
 gets a port to the host, likely `posix_spawnattr_setspecialport_np`† at spawn, needs
@@ -1368,17 +1369,32 @@ taught to accept it.
 
 Content: the host builds a DirectComposition tree (`DCompositionCreateDevice`,
 `CreateTargetForHwnd`) with the page's surface in a clipped visual and the strip
-outside it, makes a surface handle (`DCompositionCreateSurfaceHandle`†) and copies it
+outside it, makes a surface handle (`DCompositionCreateSurfaceHandle`) and copies it
 into the GPU process with `DuplicateHandle`, so the host pushes and the sandboxed
-process needs no right to open anything. The host never maps it. Should that fail on a
+process needs no right to open anything. The host never maps it.
+
+**The visual's clip is required, and the host sets it from the viewport.** The GPU
+process, not the host, chooses the swap chain's size, so the surface can be larger
+than the host intended, and neither the kernel's check of the claimed size nor the
+surface handle limits it.
+
+Measured 2026-11-04 by a throwaway host and child, on the RTX 5060 Ti and on WARP:
+the child, under 5.21a's policy and with no window, made a swap chain on the handle
+and drew a triangle through a graphics pipeline, and the host read the result from the
+screen. A hostile child with a surface over the strip **painted over it** with no clip;
+with `IDCompositionVisual::SetClip` it did not, up to a surface three times the
+window's height. Not tried: repeated frames, resizing, measured latency, or a second
+GPU. Should that fail on a
 machine, the second path is a section the GPU process writes, shown with
 `CreateDIBSection` and `BitBlt`. No Windows path needs `sendmsg`. The list's pipe is one
 more handle in `windows::spawn`'s inherit list.
 
 Every change is audited by another session (CLAUDE.md rule 1). Tests: a smoke test on
 the `base-windows` job (it has a desktop session or is ignored, with the reason);
-`clazel-window`'s event translation on recorded messages. If WARP can present through a
-composition surface, CI also covers this zero-copy path, which Linux's cannot.
+`clazel-window`'s event translation on recorded messages; and the hostile surface
+above, reading the strip back from the screen. WARP presents through a composition
+surface, so CI can cover this path, which Linux's cannot, if the `base-windows` job's
+session has a working compositor (not yet tried).
 
 ### 5.23 `clazel browse` with a window (M)
 
@@ -1489,7 +1505,8 @@ test.
   million-column table and `colspan=1000` everywhere; `font-size: 1e9px`,
   `width: 1e9px`, margins of `-1e9px`; a page that tries to draw over the
   address bar (negative margins; an adversarial GPU process claiming a surface
-  larger than the viewport, refused; one sending a descriptor that is not a buffer,
+  larger than the viewport, refused; one really drawing a surface larger than it
+  claimed, with the strip read back and unchanged; one sending a descriptor that is not a buffer,
   or a buffer too small or truncated, with the host unharmed and the X server
   refusing it; a title shaped like a URL, shown only in
   the title bar); a page whose GPU process is killed repeatedly (one tab goes to
