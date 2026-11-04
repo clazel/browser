@@ -8,6 +8,7 @@
 //! - [`exec`]: the header and record encoders, proven to meet it.
 //! - [`lemmas`]: the encodings read apart from the front, so the list
 //!   recovery picks is unique.
+//! - [`order_examples`]: the key order, evaluated on the spec.
 //! - [`read`]: recovery, proven to meet it.
 //! - [`bucket`]: one bucket's state in memory: get, usage, and commit
 //!   under a quota, proven to meet it.
@@ -24,6 +25,7 @@ pub mod contract;
 pub mod examples;
 pub mod exec;
 pub mod lemmas;
+pub mod order_examples;
 pub mod read;
 pub mod spec;
 pub mod store;

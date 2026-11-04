@@ -49,7 +49,12 @@
 //!   [`max_identity_len`] octets. A transaction over a limit is not valid
 //!   and is never encoded.
 //! - **The state** is a map from (bottle, key) to value. Keys are octets,
-//!   and ordering them is a later scan's concern, not this map's.
+//!   and their order ([`key_less`]) is a scan's concern, not this map's.
+//! - **A scan** ([`is_scan`]) is stated by what it returns, not how it finds
+//!   it: one bottle's entries with keys from `lo` up to but not including
+//!   `hi` (no upper bound when `hi` is `None`), each once, in key order. An
+//!   empty result is the answer when `hi` is not above `lo`. Scans do not
+//!   cross bottles.
 //!   `clear` removes every key of its bottle.
 //! - **Compaction** (the note's theorem 3) is stated over states, not over
 //!   how the new file is laid out: [`compaction_of`] accepts any file
@@ -382,6 +387,53 @@ pub open spec fn commit_state(s: State, ops: Seq<Op>, quota: nat) -> State {
     } else {
         s
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Key order and scans
+// ---------------------------------------------------------------------------
+
+/// The note's "keys are ordered by octets": `a` comes before `b` when, at
+/// the first octet where they differ, its octet is the smaller as an
+/// unsigned number, or when it is a proper prefix of `b`.
+pub open spec fn key_less(a: Seq<u8>, b: Seq<u8>) -> bool
+    decreases a.len(),
+{
+    if a.len() == 0 {
+        b.len() > 0
+    } else if b.len() == 0 {
+        false
+    } else if a[0] != b[0] {
+        a[0] < b[0]
+    } else {
+        key_less(a.drop_first(), b.drop_first())
+    }
+}
+
+/// Key `k` is from `lo` up to but not including `hi`.
+pub open spec fn in_range(k: Seq<u8>, lo: Seq<u8>, hi: Option<Seq<u8>>) -> bool {
+    &&& !key_less(k, lo)
+    &&& match hi {
+        Some(h) => key_less(k, h),
+        None => true,
+    }
+}
+
+/// `out` is the scan of `bottle` in state `s` from `lo` to `hi`: its keys
+/// strictly increase, each pair is an entry of the bottle within the range,
+/// and every such entry is there.
+pub open spec fn is_scan(s: State, bottle: nat, lo: Seq<u8>, hi: Option<Seq<u8>>, out: Seq<(Seq<u8>, Seq<u8>)>) -> bool {
+    &&& forall|i: int, j: int| 0 <= i < j < out.len() ==> key_less(#[trigger] out[i].0, #[trigger] out[j].0)
+    &&& forall|i: int|
+        0 <= i < out.len() ==> {
+            &&& in_range(#[trigger] out[i].0, lo, hi)
+            &&& s.dom().contains((bottle, out[i].0))
+            &&& s[(bottle, out[i].0)] == out[i].1
+        }
+    &&& forall|k: Seq<u8>|
+        #[trigger] s.dom().contains((bottle, k)) && in_range(k, lo, hi) ==> exists|i: int|
+            0 <= i < out.len() && #[trigger] out[i].0 == k
 }
 
 } // verus!

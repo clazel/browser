@@ -69,6 +69,18 @@ pub open spec fn bucket_get_ensures(s: State, bottle: nat, key: Seq<u8>, output:
     }
 }
 
+/// Contract for the bucket's `scan(bottle: u32, lo: &[u8], hi: Option<&[u8]>)
+/// -> Vec<(&[u8], &[u8])>`: the keys and values of [`is_scan`].
+pub open spec fn bucket_scan_ensures(
+    s: State,
+    bottle: nat,
+    lo: Seq<u8>,
+    hi: Option<Seq<u8>>,
+    output: Seq<(Seq<u8>, Seq<u8>)>,
+) -> bool {
+    is_scan(s, bottle, lo, hi, output)
+}
+
 /// Contract for the bucket's `usage() -> u64`: exactly [`usage`].
 pub open spec fn bucket_usage_ensures(s: State, output: nat) -> bool {
     output == usage(s)
