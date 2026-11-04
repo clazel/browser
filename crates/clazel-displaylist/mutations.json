@@ -9,8 +9,8 @@
       "reason": "Bytes written modulo 255 do not read back.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -19,11 +19,11 @@
       "find": "seq![(n % 256) as u8] + le_bytes(n / 256,",
       "replace": "seq![(n % 256) as u8] + le_bytes(n / 255,",
       "expect": "killed",
-      "reason": "A colour of 300 needs its second byte right.",
+      "reason": "A colour of 70,000 needs its second byte right.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -35,8 +35,8 @@
       "reason": "A number read in the wrong base is not the number written.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -49,7 +49,7 @@
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "lemma_i32_of_bits(0x5000_0000i32)",
-        "witness": "i32_of(bits_of(0x5000_0000i32)) != 0x5000_0000i32"
+        "witness": "signed_value(bits_of(0x5000_0000i32)) != 0x5000_0000int"
       }
     },
     {
@@ -74,8 +74,8 @@
       "reason": "A rectangle would not read back.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -113,8 +113,8 @@
       "reason": "An upload would not read back.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+        "lemma": "crate::examples::lemma_example_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_upload())) != Some((crate::examples::sample_upload(), 15nat))"
       }
     },
     {
@@ -152,8 +152,8 @@
       "reason": "A rectangle written with another tag does not read back.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -191,8 +191,8 @@
       "reason": "An upload written with another tag does not read back.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+        "lemma": "crate::examples::lemma_example_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_upload())) != Some((crate::examples::sample_upload(), 15nat))"
       }
     },
     {
@@ -230,8 +230,8 @@
       "reason": "y read from where x is.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -243,8 +243,8 @@
       "reason": "The colour read from where the height is.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -256,8 +256,8 @@
       "reason": "A byte of the colour left over.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -269,8 +269,8 @@
       "reason": "A rectangle at the end of a list refused.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -308,8 +308,8 @@
       "reason": "The rows read from where the columns are.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+        "lemma": "crate::examples::lemma_example_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_upload())) != Some((crate::examples::sample_upload(), 15nat))"
       }
     },
     {
@@ -321,8 +321,8 @@
       "reason": "The coverage is columns times rows.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+        "lemma": "crate::examples::lemma_example_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_upload())) != Some((crate::examples::sample_upload(), 15nat))"
       }
     },
     {
@@ -334,8 +334,8 @@
       "reason": "The coverage starts after the header.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+        "lemma": "crate::examples::lemma_example_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_upload())) != Some((crate::examples::sample_upload(), 15nat))"
       }
     },
     {
@@ -347,8 +347,8 @@
       "reason": "One byte too many taken.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+        "lemma": "crate::examples::lemma_example_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_upload())) != Some((crate::examples::sample_upload(), 15nat))"
       }
     },
     {
@@ -425,8 +425,8 @@
       "reason": "A rectangle whose colour is cut short.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 300 }).len()))"
+        "lemma": "lemma_decode_item_encode(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, Seq::<u8>::empty())",
+        "witness": "decode_item(encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }) + Seq::<u8>::empty()) != Some((Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }, encode_item(Item::FillRect { x: 1, y: 2, width: 3, height: 4, colour: 70_000 }).len()))"
       }
     },
     {
@@ -438,8 +438,8 @@
       "reason": "Columns and rows written the wrong way round.",
       "certificate": {
         "file": "src/lemmas.rs",
-        "lemma": "lemma_decode_item_encode(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, Seq::<u8>::empty())",
-        "witness": "decode_item(encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }) + Seq::<u8>::empty()) != Some((Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }, encode_item(Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }).len()))"
+        "lemma": "crate::examples::lemma_example_upload()",
+        "witness": "decode_item(encode_item(crate::examples::sample_upload())) != Some((crate::examples::sample_upload(), 15nat))"
       }
     },
     {
@@ -602,7 +602,7 @@
       "id": "position-high",
       "file": "src/spec.rs",
       "find": "v as int <= MAX_COORD as int",
-      "replace": "v as int < MAX_COORD as int",
+      "replace": "(v as int) < (MAX_COORD as int)",
       "expect": "killed",
       "reason": "The position at the edge refused.",
       "certificate": {
@@ -615,7 +615,7 @@
       "id": "size-high",
       "file": "src/spec.rs",
       "find": "v as nat <= (MAX_COORD as nat)",
-      "replace": "v as nat < (MAX_COORD as nat)",
+      "replace": "(v as nat) < (MAX_COORD as nat)",
       "expect": "killed",
       "reason": "The size at the edge refused.",
       "certificate": {
@@ -894,7 +894,7 @@
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::lemma_example_masks()",
-        "witness": "live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) != 10"
+        "witness": "live_bytes(seq![Some(MaskSize { width: 3, height: 4 }), None, Some(MaskSize { width: 1, height: 4 })]) != 16"
       }
     },
     {
@@ -907,7 +907,7 @@
       "certificate": {
         "file": "src/lemmas.rs",
         "lemma": "crate::examples::lemma_example_masks()",
-        "witness": "live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) != 10"
+        "witness": "live_bytes(seq![Some(MaskSize { width: 3, height: 4 }), None, Some(MaskSize { width: 1, height: 4 })]) != 16"
       }
     },
     {

@@ -130,6 +130,7 @@ pub proof fn lemma_le_bytes_of_value(s: Seq<u8>)
 pub proof fn lemma_i32_of_bits(v: i32)
     ensures
         bits_of(v) < 0x1_0000_0000nat,
+        signed_value(bits_of(v)) == v as int,
         i32_of(bits_of(v)) == v,
 {
 }

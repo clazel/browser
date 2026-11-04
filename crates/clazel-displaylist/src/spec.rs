@@ -168,13 +168,18 @@ pub open spec fn le_value(s: Seq<u8>) -> nat
     }
 }
 
+/// A two's complement reading of 32 bits, as a number.
+pub open spec fn signed_value(n: nat) -> int {
+    if n < 0x8000_0000 {
+        n as int
+    } else {
+        n - 0x1_0000_0000
+    }
+}
+
 /// A two's complement reading of 32 bits.
 pub open spec fn i32_of(n: nat) -> i32 {
-    if n < 0x8000_0000 {
-        n as i32
-    } else {
-        (n - 0x1_0000_0000) as i32
-    }
+    signed_value(n) as i32
 }
 
 /// The 32 bits of a signed number.

@@ -68,6 +68,21 @@ pub proof fn lemma_example_ranges()
 {
 }
 
+/// An upload with every field different, and coverage to read.
+pub open spec fn sample_upload() -> Item {
+    Item::UploadMask { id: 1, columns: 2, rows: 3, coverage: seq![1u8, 2, 3, 4, 5, 6] }
+}
+
+/// An upload reads back from its bytes, and they are what the format's table says.
+pub proof fn lemma_example_upload()
+    ensures
+        decode_item(encode_item(sample_upload())) == Some((sample_upload(), 15nat)),
+        encode_item(sample_upload()) == seq![4u8, 1, 0, 0, 0, 2, 0, 3, 0, 1, 2, 3, 4, 5, 6],
+{
+    assert(decode_item(encode_item(sample_upload())) == Some((sample_upload(), 15nat))) by (compute_only);
+    assert(encode_item(sample_upload()) == seq![4u8, 1, 0, 0, 0, 2, 0, 3, 0, 1, 2, 3, 4, 5, 6]) by (compute_only);
+}
+
 /// The limits' values.
 pub proof fn lemma_limits()
     ensures
@@ -117,7 +132,7 @@ pub proof fn lemma_example_masks()
         masks_after(sample(), upload(0, 2048, 1)) is Some,
         masks_after(sample(), upload(0, 1, 1))->Some_0.table[0] is Some,
         masks_after(full(), upload(0, 1, 1)) is None,
-        live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) == 10,
+        live_bytes(seq![Some(MaskSize { width: 3, height: 4 }), None, Some(MaskSize { width: 1, height: 4 })]) == 16,
 {
     assert(masks_after(sample(), Item::DrawMask { id: 0, x: 0, y: 0, colour: 0 }) is None) by (compute_only);
     assert(masks_after(sample(), Item::DrawMask { id: 1, x: 0, y: 0, colour: 0 }) is Some) by (compute_only);
@@ -131,7 +146,7 @@ pub proof fn lemma_example_masks()
     assert(masks_after(sample(), upload(0, 2048, 1)) is Some) by (compute_only);
     assert(masks_after(sample(), upload(0, 1, 1))->Some_0.table[0] is Some) by (compute_only);
     assert(masks_after(full(), upload(0, 1, 1)) is None) by (compute_only);
-    assert(live_bytes(seq![Some(MaskSize { width: 2, height: 3 }), None, Some(MaskSize { width: 1, height: 4 })]) == 10) by (compute_only);
+    assert(live_bytes(seq![Some(MaskSize { width: 3, height: 4 }), None, Some(MaskSize { width: 1, height: 4 })]) == 16) by (compute_only);
 }
 
 /// The range rules, for every field of every item that has one.
