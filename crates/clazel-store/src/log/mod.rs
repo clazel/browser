@@ -4,10 +4,13 @@
 //! - [`spec`]: the format and the recovery rule.
 //! - [`contract`]: what the executable encoder and recovery will be proven
 //!   to satisfy.
-//! - [`exec`]: the header and record encoders, proven to meet it. Recovery
-//!   is not written yet.
+//! - [`exec`]: the header and record encoders, proven to meet it.
+//! - [`lemmas`]: the encodings read apart from the front, so the list
+//!   recovery picks is unique.
+//! - [`read`]: recovery, proven to meet it.
 
 pub mod contract;
 pub mod exec;
 pub mod lemmas;
+pub mod read;
 pub mod spec;
