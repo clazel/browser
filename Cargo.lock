@@ -412,6 +412,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-window"
+version = "0.0.0"
+dependencies = [
+ "clazel-sys",
+]
+
+[[package]]
 name = "clazel-x509"
 version = "0.0.0"
 dependencies = [
