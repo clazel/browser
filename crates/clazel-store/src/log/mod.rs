@@ -8,9 +8,14 @@
 //! - [`lemmas`]: the encodings read apart from the front, so the list
 //!   recovery picks is unique.
 //! - [`read`]: recovery, proven to meet it.
+//! - [`compact`]: compaction, proven to meet it.
+//! - [`theorems`]: the design note's theorems 1 to 3 (any prefix, the
+//!   whole file, compaction).
 
+pub mod compact;
 pub mod contract;
 pub mod exec;
 pub mod lemmas;
 pub mod read;
 pub mod spec;
+pub mod theorems;

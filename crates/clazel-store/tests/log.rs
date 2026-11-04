@@ -115,3 +115,25 @@ fn refused_files() {
     assert_eq!(recover(&[0u8; 4097], &file).map(|ts| ts.len()), None);
     assert_eq!(recover(b"id", &file).map(|ts| ts.len()), Some(0));
 }
+
+use clazel_store::log::compact::{compact, EntryRef};
+
+#[test]
+fn compaction() {
+    let entries = [
+        EntryRef { bottle: 1, key: b"a", value: b"x" },
+        EntryRef { bottle: 2, key: b"a", value: b"y" },
+        EntryRef { bottle: 1, key: b"a", value: b"z" },
+    ];
+    let file = compact(b"id", &entries).unwrap_or_default();
+    let want = vec![
+        vec![Owned::Put(1, b"a".to_vec(), b"x".to_vec())],
+        vec![Owned::Put(2, b"a".to_vec(), b"y".to_vec())],
+        vec![Owned::Put(1, b"a".to_vec(), b"z".to_vec())],
+    ];
+    assert_eq!(recover(b"id", &file).map(|ts| owned(&ts)), Some(want));
+    assert_eq!(compact(b"id", &[]), Some(encode_header(b"id")));
+
+    let big = vec![0u8; 67_108_864];
+    assert_eq!(compact(b"id", &[EntryRef { bottle: 0, key: b"", value: &big }]), None);
+}
