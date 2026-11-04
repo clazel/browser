@@ -355,3 +355,130 @@ fn shell_round_trip() -> Result<(), &'static str> {
     assert!(BucketLog::load(b"other", &file).is_none());
     Ok(())
 }
+
+#[test]
+fn scans() {
+    let mut b = Bucket::new();
+    assert!(b.commit(
+        &[
+            OpRef::Put {
+                bottle: 1,
+                key: b"b",
+                value: b"2"
+            },
+            OpRef::Put {
+                bottle: 1,
+                key: b"a",
+                value: b"1"
+            },
+            OpRef::Put {
+                bottle: 1,
+                key: b"ab",
+                value: b"3"
+            },
+            OpRef::Put {
+                bottle: 1,
+                key: &[0xff],
+                value: b"4"
+            },
+            OpRef::Put {
+                bottle: 1,
+                key: b"",
+                value: b"0"
+            },
+            OpRef::Put {
+                bottle: 2,
+                key: b"a",
+                value: b"other"
+            },
+        ],
+        100
+    ));
+    let keys = |lo: &[u8], hi: Option<&[u8]>| -> Vec<Vec<u8>> {
+        b.scan(1, lo, hi).iter().map(|(k, _)| k.to_vec()).collect()
+    };
+    // In order by unsigned octets, a prefix first, one bottle only.
+    assert_eq!(
+        keys(b"", None),
+        [&b""[..], b"a", b"ab", b"b", &[0xff]].map(<[u8]>::to_vec)
+    );
+    // From lo, up to but not including hi.
+    assert_eq!(
+        keys(b"a", Some(b"b")),
+        [&b"a"[..], b"ab"].map(<[u8]>::to_vec)
+    );
+    assert_eq!(keys(b"aa", Some(b"ab")), Vec::<Vec<u8>>::new());
+    assert_eq!(keys(b"b", Some(b"a")), Vec::<Vec<u8>>::new());
+    assert_eq!(b.scan(2, b"", None), vec![(&b"a"[..], &b"other"[..])]);
+    assert_eq!(b.scan(3, b"", None), Vec::<(&[u8], &[u8])>::new());
+}
+
+/// `Bucket` against a `BTreeMap` of the same transactions, on random
+/// transactions: every get and scan agrees, and so does the usage.
+#[test]
+fn bucket_against_a_model() {
+    use std::collections::BTreeMap;
+    let mut x = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = move |n: u64| {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        x.checked_rem(n).unwrap_or(0)
+    };
+    let mut model: BTreeMap<(u32, Vec<u8>), Vec<u8>> = BTreeMap::new();
+    let mut b = Bucket::new();
+    for _ in 0..300 {
+        let bottle = u32::try_from(next(3)).unwrap_or(0);
+        // Keys from a small alphabet, so they collide and share prefixes.
+        let key: Vec<u8> = (0..next(4))
+            .map(|_| {
+                [0u8, 1, 0xff]
+                    .get(usize::try_from(next(3)).unwrap_or(0))
+                    .copied()
+                    .unwrap_or(0)
+            })
+            .collect();
+        let value = vec![0u8; usize::try_from(next(5)).unwrap_or(0)];
+        match next(8) {
+            0 => {
+                assert!(b.commit(&[OpRef::Clear { bottle }], u64::MAX));
+                model.retain(|k, _| k.0 != bottle);
+            }
+            1 | 2 => {
+                assert!(b.commit(&[OpRef::Delete { bottle, key: &key }], u64::MAX));
+                model.remove(&(bottle, key.clone()));
+            }
+            _ => {
+                assert!(b.commit(
+                    &[OpRef::Put {
+                        bottle,
+                        key: &key,
+                        value: &value
+                    }],
+                    u64::MAX
+                ));
+                model.insert((bottle, key.clone()), value.clone());
+            }
+        }
+        let usage: usize = model
+            .iter()
+            .map(|(k, v)| k.1.len().saturating_add(v.len()))
+            .sum();
+        assert_eq!(usize::try_from(b.usage()).unwrap_or(0), usage);
+        assert_eq!(
+            b.get(bottle, &key).map(<[u8]>::to_vec),
+            model.get(&(bottle, key.clone())).cloned()
+        );
+        let got: Vec<(Vec<u8>, Vec<u8>)> = b
+            .scan(bottle, &key, None)
+            .iter()
+            .map(|(k, v)| (k.to_vec(), v.to_vec()))
+            .collect();
+        let want: Vec<(Vec<u8>, Vec<u8>)> = model
+            .iter()
+            .filter(|(k, _)| k.0 == bottle && k.1 >= key)
+            .map(|(k, v)| (k.1.clone(), v.clone()))
+            .collect();
+        assert_eq!(got, want);
+    }
+}
