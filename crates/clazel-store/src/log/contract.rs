@@ -37,4 +37,23 @@ pub open spec fn recover_ensures(identity: Seq<u8>, file: Seq<u8>, output: Optio
     output == recovered(identity, file)
 }
 
+
+/// The put of one entry.
+pub open spec fn entry_put(e: Entry) -> Op {
+    Op::Put { bottle: e.0, key: e.1, value: e.2 }
+}
+
+/// Contract for `compact(identity: &[u8], entries: &[Entry]) ->
+/// Option<Vec<u8>>`, which requires [`identity_ok`]: a file that is a
+/// compaction of the entries' state, or `None` (nothing written) only when
+/// some entry's put, alone in a record, would not be a valid transaction (a
+/// record over [`max_record_len`]).
+pub open spec fn compact_ensures(identity: Seq<u8>, entries: Seq<Entry>, output: Option<Seq<u8>>) -> bool {
+    match output {
+        Some(file) => compaction_of(identity, entries_state(entries), file),
+        None => exists|i: int|
+            0 <= i < entries.len() && !transaction_ok((i + 1) as nat, seq![entry_put(#[trigger] entries[i])]),
+    }
+}
+
 } // verus!

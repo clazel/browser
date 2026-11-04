@@ -51,8 +51,14 @@
 //! - **The state** is a map from (bottle, key) to value. Keys are octets,
 //!   and ordering them is a later scan's concern, not this map's.
 //!   `clear` removes every key of its bottle.
-//! - **Quota and compaction** (the note's theorems 3 and 4) are not here.
-//!   They come with their own specs, one section per commit.
+//! - **Compaction** (the note's theorem 3) is stated over states, not over
+//!   how the new file is laid out: [`compaction_of`] accepts any file
+//!   written whole from valid transactions that build the state. How many
+//!   records it uses, and in what order, is the implementation's choice.
+//!   The state to write is given as a list of entries, later ones replacing
+//!   earlier ones with the same bottle and key ([`entries_state`]).
+//! - **Quota** (the note's theorem 4) is not here. It comes with its own
+//!   spec, in a commit of its own.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -277,6 +283,44 @@ pub open spec fn apply_log(ts: Seq<Seq<Op>>) -> State
     } else {
         apply_transaction(apply_log(ts.drop_last()), ts.last())
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Compaction
+// ---------------------------------------------------------------------------
+
+/// One entry of a state to write: its bottle, key and value.
+pub type Entry = (nat, Seq<u8>, Seq<u8>);
+
+/// The state holding the entries `es`, a later entry replacing an earlier
+/// one with the same bottle and key.
+pub open spec fn entries_state(es: Seq<Entry>) -> State
+    decreases es.len(),
+{
+    if es.len() == 0 {
+        Map::empty()
+    } else {
+        let e = es.last();
+        entries_state(es.drop_last()).insert((e.0, e.1), e.2)
+    }
+}
+
+/// The state a file holds as the log of bucket `identity`: its recovered
+/// transactions applied to an empty bucket, or `None` for a refused file
+/// (the note's `state(file)`).
+pub open spec fn file_state(identity: Seq<u8>, file: Seq<u8>) -> Option<State> {
+    match recovered(identity, file) {
+        Some(ts) => Some(apply_log(ts)),
+        None => None,
+    }
+}
+
+/// A compaction of state `s` (the note's "compaction writes the live
+/// state as a new log"): the whole log written from some valid list of
+/// transactions that builds `s` from an empty bucket.
+pub open spec fn compaction_of(identity: Seq<u8>, s: State, file: Seq<u8>) -> bool {
+    exists|ts: Seq<Seq<Op>>| log_ok(ts) && file == #[trigger] encode_log(identity, ts) && apply_log(ts) == s
 }
 
 } // verus!
