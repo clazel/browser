@@ -2041,7 +2041,9 @@ choice below is followed by what it costs.
     - `delete [1] { bottle, key }`;
     - `clear [2] { bottle }`.
 
-    `commit` increases by exactly 1 from record to record.
+    `commit` increases by exactly 1 from record to record, and the first
+    record's `commit` is 1. (That last clause was added on 2026-11-04: the
+    independent transcription found this note silent on the first number.)
   - *The cost.* DER spends a few octets of framing per field. A record's
     length must be known before it is written, which is fine for a
     transaction that is already built.
