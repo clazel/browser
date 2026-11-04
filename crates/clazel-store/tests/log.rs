@@ -2,7 +2,7 @@
 //! the code to the spec; this runs the compiled code and pins the format.
 
 use clazel_store::crc32c::exec::crc32c;
-use clazel_store::log::exec::{encode_header, encode_record, OpRef};
+use clazel_store::log::exec::{OpRef, encode_header, encode_record};
 
 #[test]
 fn header() {
@@ -15,8 +15,15 @@ fn header() {
 #[test]
 fn record() {
     let ops = [
-        OpRef::Put { bottle: 2, key: b"k", value: b"vv" },
-        OpRef::Delete { bottle: 0x80, key: b"" },
+        OpRef::Put {
+            bottle: 2,
+            key: b"k",
+            value: b"vv",
+        },
+        OpRef::Delete {
+            bottle: 0x80,
+            key: b"",
+        },
         OpRef::Clear { bottle: 0 },
     ];
     // commit 7; ops: [0] { 2, "k", "vv" }, [1] { 128, "" }, [2] { 0 }.
@@ -38,7 +45,17 @@ fn record() {
 fn refusals() {
     assert_eq!(encode_record(0, &[]), None);
     let big = vec![0u8; 67_108_864];
-    assert_eq!(encode_record(1, &[OpRef::Put { bottle: 0, key: b"", value: &big }]), None);
+    assert_eq!(
+        encode_record(
+            1,
+            &[OpRef::Put {
+                bottle: 0,
+                key: b"",
+                value: &big
+            }]
+        ),
+        None
+    );
     assert!(encode_record(1, &[]).is_some());
 }
 
@@ -57,7 +74,9 @@ fn owned(ts: &[Vec<OpRef>]) -> Vec<Vec<Owned>> {
         .map(|ops| {
             ops.iter()
                 .map(|op| match op {
-                    OpRef::Put { bottle, key, value } => Owned::Put(*bottle, key.to_vec(), value.to_vec()),
+                    OpRef::Put { bottle, key, value } => {
+                        Owned::Put(*bottle, key.to_vec(), value.to_vec())
+                    }
                     OpRef::Delete { bottle, key } => Owned::Delete(*bottle, key.to_vec()),
                     OpRef::Clear { bottle } => Owned::Clear(*bottle),
                 })
@@ -77,8 +96,18 @@ fn log(identity: &[u8], ts: &[&[OpRef]]) -> Vec<u8> {
 
 #[test]
 fn recovery() {
-    let one: &[OpRef] = &[OpRef::Put { bottle: 1, key: b"a", value: b"x" }];
-    let two: &[OpRef] = &[OpRef::Delete { bottle: 1, key: b"a" }, OpRef::Clear { bottle: 3 }];
+    let one: &[OpRef] = &[OpRef::Put {
+        bottle: 1,
+        key: b"a",
+        value: b"x",
+    }];
+    let two: &[OpRef] = &[
+        OpRef::Delete {
+            bottle: 1,
+            key: b"a",
+        },
+        OpRef::Clear { bottle: 3 },
+    ];
     let file = log(b"id", &[one, two]);
     let want = vec![
         vec![Owned::Put(1, b"a".to_vec(), b"x".to_vec())],
@@ -111,19 +140,38 @@ fn recovery() {
 fn refused_files() {
     let file = log(b"id", &[]);
     assert_eq!(recover(b"other", &file).map(|(ts, _)| ts.len()), None);
-    assert_eq!(recover(b"id", file.get(..file.len().saturating_sub(1)).unwrap_or_default()).map(|(ts, _)| ts.len()), None);
+    assert_eq!(
+        recover(
+            b"id",
+            file.get(..file.len().saturating_sub(1)).unwrap_or_default()
+        )
+        .map(|(ts, _)| ts.len()),
+        None
+    );
     assert_eq!(recover(&[0u8; 4097], &file).map(|(ts, _)| ts.len()), None);
     assert_eq!(recover(b"id", &file).map(|(ts, _)| ts.len()), Some(0));
 }
 
-use clazel_store::log::compact::{compact, EntryRef};
+use clazel_store::log::compact::{EntryRef, compact};
 
 #[test]
 fn compaction() {
     let entries = [
-        EntryRef { bottle: 1, key: b"a", value: b"x" },
-        EntryRef { bottle: 2, key: b"a", value: b"y" },
-        EntryRef { bottle: 1, key: b"a", value: b"z" },
+        EntryRef {
+            bottle: 1,
+            key: b"a",
+            value: b"x",
+        },
+        EntryRef {
+            bottle: 2,
+            key: b"a",
+            value: b"y",
+        },
+        EntryRef {
+            bottle: 1,
+            key: b"a",
+            value: b"z",
+        },
     ];
     let file = compact(b"id", &entries).unwrap_or_default();
     let want = vec![
@@ -135,7 +183,17 @@ fn compaction() {
     assert_eq!(compact(b"id", &[]), Some(encode_header(b"id")));
 
     let big = vec![0u8; 67_108_864];
-    assert_eq!(compact(b"id", &[EntryRef { bottle: 0, key: b"", value: &big }]), None);
+    assert_eq!(
+        compact(
+            b"id",
+            &[EntryRef {
+                bottle: 0,
+                key: b"",
+                value: &big
+            }]
+        ),
+        None
+    );
 }
 
 use clazel_store::log::bucket::Bucket;
@@ -143,24 +201,74 @@ use clazel_store::log::bucket::Bucket;
 #[test]
 fn bucket() {
     let mut b = Bucket::new();
-    assert!(b.commit(&[OpRef::Put { bottle: 1, key: b"ab", value: b"xyz" }, OpRef::Put { bottle: 2, key: b"ab", value: b"q" }], 100));
+    assert!(b.commit(
+        &[
+            OpRef::Put {
+                bottle: 1,
+                key: b"ab",
+                value: b"xyz"
+            },
+            OpRef::Put {
+                bottle: 2,
+                key: b"ab",
+                value: b"q"
+            }
+        ],
+        100
+    ));
     assert_eq!(b.usage(), 8);
     assert_eq!(b.get(1, b"ab"), Some(&b"xyz"[..]));
     assert_eq!(b.get(3, b"ab"), None);
 
     // Over the quota: refused whole.
-    assert!(!b.commit(&[OpRef::Delete { bottle: 2, key: b"ab" }, OpRef::Put { bottle: 1, key: b"c", value: &[0; 10] }], 10));
+    assert!(!b.commit(
+        &[
+            OpRef::Delete {
+                bottle: 2,
+                key: b"ab"
+            },
+            OpRef::Put {
+                bottle: 1,
+                key: b"c",
+                value: &[0; 10]
+            }
+        ],
+        10
+    ));
     assert_eq!(b.usage(), 8);
     assert_eq!(b.get(2, b"ab"), Some(&b"q"[..]));
 
     // Only the end state counts: a put then a clear of its bottle is admitted.
-    assert!(b.commit(&[OpRef::Put { bottle: 3, key: b"k", value: &[0; 50] }, OpRef::Clear { bottle: 3 }], 8));
+    assert!(b.commit(
+        &[
+            OpRef::Put {
+                bottle: 3,
+                key: b"k",
+                value: &[0; 50]
+            },
+            OpRef::Clear { bottle: 3 }
+        ],
+        8
+    ));
     assert_eq!(b.usage(), 8);
 
     // Replacing a value, deleting and clearing.
-    assert!(b.commit(&[OpRef::Put { bottle: 1, key: b"ab", value: b"" }], 100));
+    assert!(b.commit(
+        &[OpRef::Put {
+            bottle: 1,
+            key: b"ab",
+            value: b""
+        }],
+        100
+    ));
     assert_eq!(b.usage(), 5);
-    assert!(b.commit(&[OpRef::Delete { bottle: 2, key: b"ab" }], 100));
+    assert!(b.commit(
+        &[OpRef::Delete {
+            bottle: 2,
+            key: b"ab"
+        }],
+        100
+    ));
     assert_eq!(b.usage(), 2);
     assert!(b.commit(&[OpRef::Clear { bottle: 1 }], 0));
     assert_eq!(b.usage(), 0);
@@ -176,12 +284,46 @@ fn shell_round_trip() -> Result<(), &'static str> {
     let (mut log, len) = BucketLog::load(b"id", &file).ok_or("fresh file")?;
     assert_eq!(len, file.len());
 
-    let r1 = log.commit(&[OpRef::Put { bottle: 1, key: b"a", value: b"one" }], 100).unwrap_or_default();
+    let r1 = log
+        .commit(
+            &[OpRef::Put {
+                bottle: 1,
+                key: b"a",
+                value: b"one",
+            }],
+            100,
+        )
+        .unwrap_or_default();
     file.extend_from_slice(&r1);
-    let r2 = log.commit(&[OpRef::Put { bottle: 1, key: b"b", value: b"two" }, OpRef::Delete { bottle: 1, key: b"a" }], 100).unwrap_or_default();
+    let r2 = log
+        .commit(
+            &[
+                OpRef::Put {
+                    bottle: 1,
+                    key: b"b",
+                    value: b"two",
+                },
+                OpRef::Delete {
+                    bottle: 1,
+                    key: b"a",
+                },
+            ],
+            100,
+        )
+        .unwrap_or_default();
     file.extend_from_slice(&r2);
     // Refused by the quota: nothing to write, nothing changes.
-    assert_eq!(log.commit(&[OpRef::Put { bottle: 1, key: b"c", value: &[0; 200] }], 100), None);
+    assert_eq!(
+        log.commit(
+            &[OpRef::Put {
+                bottle: 1,
+                key: b"c",
+                value: &[0; 200]
+            }],
+            100
+        ),
+        None
+    );
     assert_eq!(log.bucket().get(1, b"b"), Some(&b"two"[..]));
 
     // A torn write after the last record: load cuts it off.
@@ -203,7 +345,9 @@ fn shell_round_trip() -> Result<(), &'static str> {
 
     // Commits after compaction continue its numbering.
     let mut file = compacted;
-    let r3 = log.commit(&[OpRef::Clear { bottle: 1 }], 100).unwrap_or_default();
+    let r3 = log
+        .commit(&[OpRef::Clear { bottle: 1 }], 100)
+        .unwrap_or_default();
     file.extend_from_slice(&r3);
     let (last, _) = BucketLog::load(b"id", &file).ok_or("after compaction")?;
     assert_eq!(last.bucket().usage(), 0);

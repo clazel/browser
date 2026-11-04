@@ -21,6 +21,10 @@ clazel-ipc = { path = "../clazel-ipc" }
 clazel-net = { path = "../clazel-net" }
 # The network input of a `Net` event (`InputBuf`).
 clazel-fetch = { path = "../clazel-fetch" }
+# The store's shell (src/store.rs): the proven bucket log it keeps in files,
+# and SHA-256 for the files' names (already below clazel-net).
+clazel-store = { path = "../clazel-store" }
+clazel-crypto = { path = "../clazel-crypto" }
 
 # The command line (`clazel URL SCRIPT`, `clazel demo`) is outside `src/`, whose
 # line count the README reports: it only calls the host's public functions.

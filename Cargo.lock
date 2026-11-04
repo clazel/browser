@@ -116,6 +116,7 @@ name = "clazel"
 version = "0.0.0"
 dependencies = [
  "clazel-cookie",
+ "clazel-crypto",
  "clazel-dom",
  "clazel-fetch",
  "clazel-ipc",
@@ -123,6 +124,7 @@ dependencies = [
  "clazel-net",
  "clazel-origin",
  "clazel-renderer",
+ "clazel-store",
  "clazel-url",
  "rustls",
 ]
