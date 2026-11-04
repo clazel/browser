@@ -7,9 +7,9 @@ Level 4), the cascade gives every element its computed style (CSS Cascade
 Level 4, with HTML §15's user agent style sheet and presentational hints), the
 boxes are laid out as blocks, lines and tables (CSS 2.1 §9, §10, §17, CSS Text
 Level 3), the text is set in fonts read from OpenType files, and a sandboxed GPU
-process draws the renderer's display list with Metal or Vulkan. The host gains a
-native window on macOS and Linux, with an address bar neither process can draw
-on. The kernel keeps its two display theorems in a new shape: a tab's pixels are
+process draws the renderer's display list with Metal, Vulkan or Direct3D 12. The
+host gains a native window on macOS, Linux and Windows, with an address bar neither
+process can draw on. The kernel keeps its two display theorems in a new shape: a tab's pixels are
 shown only in that tab, under the URL the kernel committed there, and never
 outside the viewport the host gave it.
 
@@ -39,7 +39,9 @@ at the pinned text before a spec header cites them.
 
 ## Exit criteria
 
-Phase 5 is done when all of these hold on macOS arm64 and Linux x86-64:
+Phase 5 is done when all of these hold on macOS arm64, Linux x86-64 and Windows
+x86-64 (Verus, Kani and Miri run on Linux, as CI does; items 1 and 4 hold on every
+OS through them):
 
 1. **Tiers**, as 5.0 decided them and `cargo xtask check` accepts:
    `clazel-css` and `clazel-selectors` at **tier 2** (every
@@ -120,11 +122,13 @@ Phase 5 is done when all of these hold on macOS arm64 and Linux x86-64:
    mis-render or kill one tab but not break a kernel theorem; their evidence is
    the reftests, the reference harness and the hostile pages.
 4. **Assumed (TCB), new:** the OS windowing system and compositor (AppKit and
-   the WindowServer; the X server, or XWayland and a Wayland compositor); the
+   the WindowServer; the X server, or XWayland and a Wayland compositor; on Windows,
+   USER32, DirectComposition and the Desktop Window Manager); the
    windowing bindings 5.0(e) chooses; the system font files read by path
    (5.0(c)); and, as evidence that the specs match the standards, the suites and
    engines of the differential tests. **GPU drivers** (Metal; the Vulkan loader
-   and whichever driver it picks, including the lavapipe the release ships) run inside the GPU process, on command buffers
+   and whichever driver it picks, including the lavapipe the release ships;
+   Direct3D 12, its driver, and WARP) run inside the GPU process, on command buffers
    derived from a page. They are large, unverified and mostly C, so they are
    assumed only up to that process's sandbox.
 
@@ -165,13 +169,13 @@ content, which is Tier 0 code with a test, not a theorem.
 | `clazel-layout` | 0 (0) | CSS 2.1 §8 to §11, §16, §17, Appendix E; CSS Text 3; CSS Tables 3 (auto layout)†; UAX #14; HTML §15.3, §15.4; Quirks Mode §3 | the box tree, block, inline and table formatting, white space, line breaking, font matching and the shaping glue, hit testing, the display list. **Replaces `clazel-text`** (5.0(g)) |
 | `clazel-raster` | 0 (1) | none (ours); the OpenType `glyf` chapter fixes the outline semantics | glyph outlines to coverage masks in the renderer: flattening and anti-aliased coverage only, no surface, no blending |
 | `clazel-displaylist` | 0 (2) | RFC 8949 §3; ours | the display list's types, its encoder and decoder, and the validator every list passes before any GPU call |
-| `clazel-gpu` | 0 (0) | Vulkan 1.x specification†; Apple's Metal documentation | the GPU process: fixed pipelines and shaders, batching a validated list, a glyph atlas, drawing into shared buffers; Metal and Vulkan backends |
-| `clazel-window` | 0 (0) | X Window System Protocol (X11R7)† on Linux; Apple's AppKit and Core Graphics documentation on macOS | the host's window: open, present a surface, read events; per 5.0(e) |
+| `clazel-gpu` | 0 (0) | Vulkan 1.x specification†; Apple's Metal documentation; Microsoft Learn's Direct3D 12 and DXGI pages | the GPU process: fixed pipelines and shaders, batching a validated list, a glyph atlas, drawing into shared buffers; Metal, Vulkan and Direct3D 12 backends |
+| `clazel-window` | 0 (0) | X Window System Protocol (X11R7)† on Linux; Apple's AppKit and Core Graphics documentation on macOS; Microsoft Learn's Win32 and DirectComposition pages on Windows | the host's window: open, present a surface, read events; per 5.0(e) |
 | `clazel-ipc` | 2 (exists) | RFC 8949 §3; ours | the messages of 5.18 and 5.19 |
 | `clazel-kernel` | 2 (exists) | ours; Fetch for 5.19's request | viewports, paint routing, input routing, style sheet fetches, the theorems |
 | `clazel-renderer` | 0 (exists) | — | the pipeline of 5.20, inside the sandbox |
 | `clazel-sandbox` | 1 (exists) | ours | the GPU process's Seatbelt profile and seccomp list, per OS |
-| `clazel-sys` | 0 (exists) | man pages, Apple documentation and the Vulkan specification | per 5.0(d) and (e): the macOS window calls, Metal and Vulkan calls, audited |
+| `clazel-sys` | 0 (exists) | man pages, Apple documentation, Microsoft Learn and the Vulkan specification | per 5.0(d) and (e): the macOS and Windows window calls, Metal, Vulkan and Direct3D 12 calls, audited |
 | `clazel` | 0 (exists) | — | `browse` with a window; the host shell stays under 300 lines |
 
 Each new Tier 1 or Tier 2 crate starts as `tier = 0` with its target, as in
@@ -341,6 +345,13 @@ that a CPU rasterizer does not scale to a full browser.** That is:
   sees only ids and sizes. Lists go from the renderer to its GPU process on a
   direct socket; pixels go from the GPU process to the OS compositor in shared
   buffers. 5.18 gives the design.
+
+**Windows is in this phase (2026-11-04, by the maintainer).** The renderer already
+runs in an AppContainer and CI has a base Windows job, so Windows joins macOS and
+Linux for the window (5.22a), GPU drawing (Direct3D 12, 5.17b), the fallback (WARP,
+5.17c) and the sandbox (5.21a). The rest of Phase 8's Windows work stays there,
+including running the proofs on Windows: a proof holds on any OS, and CI runs them
+on Linux.
 
 **Also decided, 2026-11-04, by the maintainer, as following from the above:**
 
@@ -1018,14 +1029,18 @@ memory through `VK_KHR_external_memory_fd` and `VK_EXT_external_memory_dma_buf`�
 (extension functions come from `vkGetDeviceProcAddr`, so the checker must learn
 to accept a call through a looked-up function pointer), and `clazel-sys` linking
 only `libvulkan`; Metal on macOS through `objc_msgSend`, drawing into an IOSurface
-as a texture. All
+as a texture; Direct3D 12 on Windows, through COM, presenting with
+`CreateSwapChainForCompositionSurfaceHandle`† so that it needs no window. COM calls
+go through a vtable, so the checker must learn that form too, with hand-written
+vtable declarations audited against the headers, and shaders are also stored
+compiled for Direct3D (DXBC, unless the prototype finds DXIL's signing workable†).
+All
 foreign calls are in `clazel-sys` under rule 1, which is the largest change it
 has had: each Vulkan or Metal function joins `xtask/src/sys.rs`'s list with its
 `// SAFETY:` citation and an independent audit, and the structures passed to
 Vulkan need `#[repr(C)]` declarations written by hand and checked against the
 specification. On the shared-memory path the rows are copied into a mapped buffer;
 the checker forbids pointer arithmetic, so that is one audited call that copies.
-Direct3D 12 for Windows is Phase 8.
 
 A lost device, an out-of-memory or a failed call ends the GPU process, never the
 tab's renderer; what happens next is 5.17c's. Tests: every list item on lavapipe against stored
@@ -1046,7 +1061,9 @@ amount, its licences ship with it, and it is added to VERIFICATION.md's TCB and
 stated in DEPENDENCIES.md (it is not a Cargo package, so the allowlist table does
 not reach it). Its sandbox is 5.21a's without device access, which is stronger
 than the hardware profile's. It is slower; a window shows a host-drawn indicator
-that software drawing is in use, in the address bar strip. On macOS there is no
+that software drawing is in use, in the address bar strip. On Windows, the
+Direct3D 12 backend runs on WARP (`IDXGIFactory4::EnumWarpAdapter`†), which is part
+of the OS, so nothing is shipped. On macOS there is no
 software Metal driver to ship, and every supported macOS has Metal, so there is
 no fallback: a Metal failure goes to the notice below, listed.
 
@@ -1222,7 +1239,13 @@ lavapipe and most drivers, starts threads. Per OS: on Linux, a seccomp list and
 the device paths opened before entering it, with no `socket` or `connect`, so no X
 server or network, and `sendmsg` and `recvmsg` for passing buffer descriptors to the
 host, which the renderer's list deliberately lacks; on macOS, a Seatbelt
-profile with the IOKit and Mach services Metal needs and no WindowServer. The
+profile with the IOKit and Mach services Metal needs and no WindowServer; on
+Windows, an AppContainer and Job Object, as the renderer has, but not its policy
+unchanged: `crates/clazel-sandbox/src/appcontainer.rs`'s `WIN32K` mitigation removes
+the system calls Direct3D reaches the driver through†, its mitigations assume no
+JIT where drivers and WARP compile shaders†, and whether a less-privileged
+AppContainer can open a GPU at all is unknown. The prototype measures each; what must
+be dropped is written down. The
 lists are found by measuring each driver and are written down with what each
 entry is for; `ioctl` argument filtering is stated per driver or stated as
 absent. Real drivers (Intel, AMD, NVIDIA, Apple) can need different lists, so an
@@ -1287,6 +1310,39 @@ Tests: the encoder and reply parser against recorded exchanges; a smoke test
 against `Xvfb` in CI's Linux job if the image has it (else ignored, with the
 reason).
 
+### 5.22a The window on Windows (L)
+
+Through `clazel-sys` in the audited style, with Microsoft Learn citations
+(`cites_win32_docs` already accepts them; `crates/clazel-sys/src/windows.rs` has the
+form). The calls: `RegisterClassExW` with `DefWindowProcW` itself as the window
+procedure, so that no callback is defined in Rust, `CreateWindowExW`, `PeekMessageW`,
+`TranslateMessage`, `DispatchMessageW`, `SetWindowTextW`, `GetClientRect`, `IsWindow`,
+`GetDpiForWindow`, `DestroyWindow`, and `GetDC`, `SetDIBitsToDevice` and `ReleaseDC`
+for the strip, as `PutImage` is on Linux.
+
+That choice has costs, measured in the first slice. Sent messages such as `WM_SIZE`
+and `WM_CLOSE` go to `DefWindowProcW` and are never seen, so size is polled and
+closing is seen as `IsWindow` going false. `WM_PAINT` does come from `PeekMessageW`,
+so the host sees it and can redraw. A drag-resize loops inside `DispatchMessageW`, so
+messages have their own thread and the host draws from another. If that proves
+unworkable, the alternative is one
+audited window procedure in `clazel-sys` that only queues messages, with the checker
+taught to accept it.
+
+Content: the host builds a DirectComposition tree (`DCompositionCreateDevice`,
+`CreateTargetForHwnd`) with the page's surface in a clipped visual and the strip
+outside it, makes a surface handle (`DCompositionCreateSurfaceHandle`†) and copies it
+into the GPU process with `DuplicateHandle`, so the host pushes and the sandboxed
+process needs no right to open anything. The host never maps it. Should that fail on a
+machine, the second path is a section the GPU process writes, shown with
+`CreateDIBSection` and `BitBlt`. No Windows path needs `sendmsg`. The list's pipe is one
+more handle in `windows::spawn`'s inherit list.
+
+Every change is audited by another session (CLAUDE.md rule 1). Tests: a smoke test on
+the `base-windows` job (it has a desktop session or is ignored, with the reason);
+`clazel-window`'s event translation on recorded messages. If WARP can present through a
+composition surface, CI also covers this zero-copy path, which Linux's cannot.
+
 ### 5.23 `clazel browse` with a window (M)
 
 `crates/clazel/cli/browse.rs` and `clazel-window`: open a window, a tab at the
@@ -1301,7 +1357,9 @@ and `clazel-raster`'s masks, blended into the strip by a few lines of its own
 (the host has no GPU), on a bundled or system font, outside the sandbox; it never
 draws a byte the page chose in the strip. The page's title (from
 `Paint.title`) goes to the window's title bar, after the URL, so that a title
-cannot look like the address. Events: a resize sends `Resize`; a click or
+cannot look like the address. The loop applies every queued event before it draws
+one frame: drawing once per event fell behind in 5.22a's first slice, with input
+waiting behind the backlog. Events: a resize sends `Resize`; a click or
 wheel in the content area sends `Input` with coordinates relative to it; keys:
 typing in the address bar and Enter navigate (`navigate_tab`), Escape cancels,
 `Cmd/Ctrl-L` focuses it, `Cmd/Ctrl-[` goes back along the host's list of
@@ -1337,7 +1395,9 @@ URL as a link.
 `crates/clazel/tests/reftests.rs` and `xtask`. **Driver:** CI's Linux job installs
 one pinned version of Mesa's lavapipe, a software Vulkan driver, and these tests
 fail rather than run on any other; the real GPU code runs, but on a CPU, so exact
-comparison means something. Macs in CI get a smoke test (Metal on a virtual GPU
+comparison means something. Windows CI runs the reftests on WARP, since a reftest
+compares the engine with itself, but not the stored screenshot, as WARP changes with
+the runner's image. Macs in CI get a smoke test (Metal on a virtual GPU
 is not relied on), and a real GPU is checked locally by a stated command, with
 its result reported, not asserted. A bug only one real driver shows is not caught
 in CI (see Risks). **Reftests:** each vendored WPT
@@ -1367,7 +1427,7 @@ test.
 ### 5.26 Exit demo, hostile pages, process tests (M)
 
 - **Demo:** `cargo run -p clazel -- browse https://news.ycombinator.com/` on
-  macOS arm64 and Linux x86-64 (X11 or XWayland) once Phase 3's TLS is in the
+  macOS arm64, Linux x86-64 (X11 or XWayland) and Windows x86-64 once Phase 3's TLS is in the
   kernel: the front page, a Show HN item page, a click, scrolling, back;
   5.25's geometry and pixel numbers recorded in the Status table. Before that:
   `http://` sites and the fixture.
@@ -1425,13 +1485,14 @@ delete `clazel-text` per 5.0(g).
 5.17a display list ─> 5.17b GPU drawing ─> 5.17c fallback ─> 5.21a GPU sandbox ─────────────────────────────┤
 5.18 IPC + kernel: frames, surfaces, viewports, input ─> 5.19 style sheet fetches ──────────────────────────┴─> 5.20 pipeline ─┐
 5.21 macOS window ─┬─> 5.23 browse with a window ─────────────────────────────────────────────────────────────────────────────┴─> 5.25 harness ─> 5.26 demo ─> 5.27
-5.22 Linux window ─┘
+5.22 Linux window ─┤
+5.22a Windows window ┘
 Phase 3: TLS in the kernel (3.5b, 3.5e to 3.5g, 3.7) ─> the https:// step of 5.26
 5.24 iframe design: any time
 ```
 
 5.1, 5.2, 5.9, 5.12, 5.13 (against a hand-built computed-style table), 5.17 (with
-5.10's outline type), 5.17a, 5.17b, 5.17c, 5.21, 5.21a, 5.22 and 5.24 start at once,
+5.10's outline type), 5.17a, 5.17b, 5.17c, 5.21, 5.21a, 5.22, 5.22a and 5.24 start at once,
 and 5.18 once the question 5.0 leaves open is answered. 5.13 to
 5.16 take computed style as a parameter (a table of the subset's computed
 values per node), so layout does not wait for the cascade's proofs, as
@@ -1469,6 +1530,7 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | 5.21a GPU process's sandbox | not started |
 | 5.21 Window on macOS | not started |
 | 5.22 Window on Linux | not started |
+| 5.22a Window on Windows | first slice built, not on `main`: `clazel-window` opens a window, reads its events and draws with GDI, through new `clazel-sys` calls awaiting their audit; DirectComposition and the child visual not started |
 | 5.23 `clazel browse` with a window | not started |
 | 5.24 Nested browsing contexts: design | not started |
 | 5.25 Reference rendering harness | not started |
@@ -1526,10 +1588,15 @@ The four biggest first.
   guard, answered by restriding, not by ignoring.
 - **Three tier-2 crates change at once** (5.18, 5.19). As 4.12, each lands as
   one pull request with proofs, mutations and process tests green.
+- **Three platforms multiply the GPU path.** Windows brings a third raw backend
+  and COM vtables to audit, and the sandbox question is sharper there: the
+  renderer's `WIN32K` lockdown probably cannot apply to a GPU process, which would
+  make it noticeably weaker than the renderer's on that OS. Some process tests are
+  Unix-only today (README) and must be ported for the exit.
 - **Buffer sharing is platform-specific and unproven here.** IOSurface's Mach port
-  from a sandboxed process, and dma-buf support across X servers, XWayland and
-  drivers (NVIDIA's especially), have not been tried; 5.21 and 5.22 start with a
-  prototype. The kernel's old proof that the pixels are the ones sent is given up,
+  from a sandboxed process, composition surfaces from an AppContainer, and dma-buf
+  support across X servers, XWayland and drivers (NVIDIA's especially), have not been
+  tried; 5.21, 5.22 and 5.22a start with a prototype. The kernel's old proof that the pixels are the ones sent is given up,
   knowingly, for this (5.18).
 - **Copyright of the exit page.** Only counts are stored (5.1), CI uses our
   own fixture (5.26), and real-site screenshots stay local unless the
