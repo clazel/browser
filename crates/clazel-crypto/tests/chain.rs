@@ -227,20 +227,54 @@ fn refused_ecdsa_with_parameters() -> TestResult {
     Ok(())
 }
 
+/// Design P17: a P-384 issuer key verifies under ecdsa-with-SHA384 and
+/// ecdsa-with-SHA256 (`clazel_p384`), and only with the hash that signed.
+/// Ignored under Miri: its eleven P-384 link checks ran into CI's six-hour
+/// limit there, and `clazel-p384`'s own tests already find one field
+/// inverse too slow for Miri.
 #[test]
-fn refused_p384_issuer_key_until_p17() -> TestResult {
-    let c = cert(fixture!("p384-sha384.der"))?;
-    let spki = parse_subject_public_key_info(c.tbs.subject_public_key_info_der).ok_or("spki")?;
-    assert!(matches!(spki.public_key, PublicKey::EcP384(_)));
-    assert!(!link_of(&c, &c));
-    // Under either hash.
-    let alg = oid(&[1, 2, 840, 10_045, 4, 3, 2]);
-    assert!(!link(
-        c.tbs.subject_public_key_info_der,
-        &alg,
-        c.envelope.tbs_certificate_der,
-        c.envelope.signature_bits
-    ));
+#[cfg_attr(miri, ignore = "eleven P-384 link checks are far too slow under Miri")]
+fn p384_issuer_key() -> TestResult {
+    let sha256 = oid(&[1, 2, 840, 10_045, 4, 3, 2]);
+    let sha384 = oid(&[1, 2, 840, 10_045, 4, 3, 3]);
+    for (name, der, signed, other) in [
+        (
+            "p384-sha384.der",
+            fixture!("p384-sha384.der"),
+            &sha384,
+            &sha256,
+        ),
+        (
+            "p384-sha256.der",
+            fixture!("p384-sha256.der"),
+            &sha256,
+            &sha384,
+        ),
+    ] {
+        let c = cert(der)?;
+        let spki =
+            parse_subject_public_key_info(c.tbs.subject_public_key_info_der).ok_or("spki")?;
+        assert!(matches!(spki.public_key, PublicKey::EcP384(_)), "{name}");
+        assert!(link_of(&c, &c), "{name}");
+        let key = c.tbs.subject_public_key_info_der;
+        let tbs = c.envelope.tbs_certificate_der;
+        let signature = c.envelope.signature_bits;
+        assert!(link(key, signed, tbs, signature), "{name}");
+        // The same signature under the other hash: another digest.
+        assert!(!link(key, other, tbs, signature), "{name}");
+        // A changed TBS, or a signature with one bit flipped, fails.
+        let mut changed = tbs.to_vec();
+        if let Some(b) = changed.last_mut() {
+            *b ^= 1;
+        }
+        assert!(!link(key, signed, &changed, signature), "{name}");
+        let mut flipped = signature.to_vec();
+        if let Some(b) = flipped.last_mut() {
+            *b ^= 1;
+        }
+        assert!(!link(key, signed, tbs, &flipped), "{name}");
+    }
+    assert!(!self_link(&flip_tbs(fixture!("p384-sha384.der"))?)?);
     Ok(())
 }
 
@@ -311,7 +345,7 @@ fn refused_malformed_inputs() -> TestResult {
 #[test]
 #[cfg_attr(miri, ignore = "118 full verifications are slow under Miri")]
 fn every_mozilla_root_self_signature() -> TestResult {
-    // (accepted, refused P-384 key, refused other)
+    // (accepted, of which under a P-384 key, refused)
     let (mut ok, mut p384, mut other) = (Vec::new(), Vec::new(), Vec::new());
     for root in &clazel_x509::roots::ROOTS {
         let c = cert(root.der).map_err(|e| format!("{}: {e}", root.label))?;
@@ -319,23 +353,24 @@ fn every_mozilla_root_self_signature() -> TestResult {
             .ok_or_else(|| format!("{}: spki", root.label))?;
         if link_of(&c, &c) {
             ok.push(root.label);
-        } else if matches!(spki.public_key, PublicKey::EcP384(_)) {
-            p384.push(root.label);
+            if matches!(spki.public_key, PublicKey::EcP384(_)) {
+                p384.push(root.label);
+            }
         } else {
             other.push(root.label);
         }
     }
     println!(
-        "Mozilla roots: {} self-signatures verify, {} refused (P-384 key), {} refused otherwise: {other:?}",
+        "Mozilla roots: {} self-signatures verify ({} under a P-384 key, P17), {} refused: {other:?}",
         ok.len(),
         p384.len(),
         other.len()
     );
-    // Every root signed with SHA-2 under an RSA or P-256 key verifies; the
-    // P-384 roots are refused until P17. The rest, refused (R) as their
+    // Every root signed with SHA-2 under an RSA, P-256 or (P17) P-384 key
+    // verifies, the 35 P-384 roots included. The rest, refused (R) as their
     // algorithm is (a root's own signature is never checked in a path, but
     // chains through the P-521 root's key are refused):
-    assert_eq!((ok.len(), p384.len()), (79, 35));
+    assert_eq!((ok.len(), p384.len()), (114, 35));
     assert_eq!(
         other,
         [

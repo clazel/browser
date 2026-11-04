@@ -4,9 +4,11 @@
 //! a path §6.1 accepts is then one of the accepted forms, written out in
 //! [`verified_link`] as a disjunction rather than as the instance's
 //! `match`: an RSA PKCS#1 v1.5 verification under `clazel_pkcs1`'s spec of
-//! the libcrux SHA-2 digest of the certificate's exact TBS octets, or
-//! libcrux's ECDSA P-256 predicate on those octets. No other algorithm and
-//! no other key class (P-384 included) can occur.
+//! the libcrux SHA-2 digest of the certificate's exact TBS octets,
+//! libcrux's ECDSA P-256 predicate on those octets, or `clazel_p384`'s
+//! FIPS 186-5 verification on P-384 over their libcrux SHA-256 or SHA-384
+//! digest (design P17). No other algorithm and no other key class can
+//! occur.
 //!
 //! The TBS octets are `cert.signature.tbs_der`, which `path::parsed`
 //! builds with `prepare_signature` from the certificate envelope's
@@ -49,6 +51,21 @@ pub open spec fn p256_verified(spki: clazel_x509::spki::spec::SubjectPublicKeyIn
     }
 }
 
+/// An ECDSA P-384 link (design P17): a secp384r1 key, one Ecdsa-Sig-Value
+/// whose r and s have at most 48 octets, and FIPS 186-5 §6.4.2 on P-384
+/// (`clazel_p384`) over the `hash` digest of `tbs`.
+pub open spec fn p384_verified(spki: clazel_x509::spki::spec::SubjectPublicKeyInfo,
+    hash: clazel_x509::signature_algorithm::spec::EcdsaHash, tbs: Seq<u8>, signature: Seq<u8>) -> bool
+{
+    &&& spki.public_key is EcP384
+    &&& ecdsa_sig_value_p384(signature) is Some
+    &&& {
+        let (r, s) = ecdsa_sig_value_p384(signature)->Some_0;
+        clazel_p384::spec::ecdsa_verify(clazel_p384::spec::p384(), ecdsa_digest(hash, tbs),
+            clazel_p384::spec::os2ip(r), clazel_p384::spec::os2ip(s), spki.public_key->EcP384_0)
+    }
+}
+
 /// The link from the key `issuer_spki` to `cert` is a verification of one
 /// of the accepted forms, on `cert`'s exact TBS octets.
 pub open spec fn verified_link(issuer_spki: Seq<u8>, cert: clazel_x509::path::parsed::spec::PathCert) -> bool {
@@ -73,6 +90,12 @@ pub open spec fn verified_link(issuer_spki: Seq<u8>, cert: clazel_x509::path::pa
         ||| class == Some(clazel_x509::signature_algorithm::spec::AlgorithmClass::Ecdsa(
                 clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384))
             && p256_verified(spki, true, tbs, signature)
+        ||| class == Some(clazel_x509::signature_algorithm::spec::AlgorithmClass::Ecdsa(
+                clazel_x509::signature_algorithm::spec::EcdsaHash::Sha256))
+            && p384_verified(spki, clazel_x509::signature_algorithm::spec::EcdsaHash::Sha256, tbs, signature)
+        ||| class == Some(clazel_x509::signature_algorithm::spec::AlgorithmClass::Ecdsa(
+                clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384))
+            && p384_verified(spki, clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384, tbs, signature)
     }
 }
 
@@ -89,8 +112,12 @@ pub proof fn lemma_link_verified(issuer_spki: Seq<u8>, cert: clazel_x509::path::
             assert(rsa_verified(spki, hash, d.tbs_der, d.signature));
         },
         Some(clazel_x509::signature_algorithm::spec::AlgorithmClass::Ecdsa(hash)) => {
-            assert(p256_verified(spki, hash == clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384,
-                d.tbs_der, d.signature));
+            if spki.public_key is EcP384 {
+                assert(p384_verified(spki, hash, d.tbs_der, d.signature));
+            } else {
+                assert(p256_verified(spki, hash == clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384,
+                    d.tbs_der, d.signature));
+            }
         },
         _ => {},
     }

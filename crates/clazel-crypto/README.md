@@ -30,7 +30,9 @@ wrapper whose `ensures` says only what libcrux documents. The output is the
 uninterpreted function of `src/spec.rs` applied to exactly these inputs,
 with the documented output length. There is also one proof axiom: the
 ChaCha20-Poly1305 tag is 16 octets. Three of the calls (SHA-384, SHA-512 and
-ECDSA P-256 with SHA-384) serve only certificate-chain links. That libcrux computes the standard's
+ECDSA P-256 with SHA-384) serve only certificate-chain links. ECDSA P-384
+is not a libcrux call: it is `clazel-p384` (ours, proven in Verus; its
+field arithmetic is fiat-crypto's, six axioms in that crate). That libcrux computes the standard's
 function is HACL\*'s proof, recorded in docs/VERIFICATION.md's TCB, and is
 never assumed here. A session other than the one that changed
 `src/axioms.rs` reviews each change to it.
@@ -72,16 +74,21 @@ vectors, and our own RSA-PSS fixtures in `tests/fixtures/rsa-pss` (see the
 (path-validation design P11). Its `verify` is proven equal to
 `chain::spec::link`, whose header lists the profile and every refusal:
 RSA PKCS#1 v1.5 with SHA-256/384/512 (modulus 2048 to 8192 bits, exponent
-odd and below 2^33) and ECDSA P-256 with SHA-256 or SHA-384; RSA-PSS,
-Ed25519, SHA-1, P-521 and, until P17, P-384 issuer keys are refused.
+odd and below 2^33), ECDSA P-256 with SHA-256 or SHA-384, and (design
+P17) ECDSA P-384 with SHA-256 or SHA-384, verified by `clazel-p384`, our
+own proven FIPS 186-5 verifier, over the libcrux digest; RSA-PSS, Ed25519,
+SHA-1 and P-521 are refused.
 `chain::lemmas::lemma_thm_production_links_verify` composes `clazel-x509`'s
 `thm_links_verify` with it: every link of an accepted path is one of those
 verifications, on the certificate's exact TBS octets.
 
 Tests: our own certificates in `tests/fixtures/chain` (see `SOURCE.md`),
-the self-signatures of Mozilla's 118 roots, and x509-limbo chains in
-limbo's order through `clazel-x509`'s candidate verdict
-(`tests/chain_limbo.rs`).
+the self-signatures of Mozilla's 118 roots (114 verify, the 35 P-384
+roots among them; the other 4 are SHA-1 or P-521), and x509-limbo chains
+in limbo's order through `clazel-x509`'s candidate verdict
+(`tests/chain_limbo.rs`: no SUCCESS case is refused by the links).
+`tests/join.rs` validates all 14 of limbo's online chains against the
+Mozilla roots, four of them through a P-384 CA key.
 
 ## The chain validation and the end-to-end test
 

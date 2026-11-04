@@ -18,9 +18,8 @@ use clazel_x509::certificate::exec::AlgorithmIdentifier;
 use clazel_x509::matcher::ReferenceIdentity;
 use clazel_x509::path::contract::{LinkVerifier, RevocationOracle};
 use clazel_x509::path::exec::{Candidate, Environment, candidate_verdict, chain_inputs};
-use clazel_x509::path::parsed::exec::{Anchor, PathCert, anchor_from_root, parse_path_cert};
+use clazel_x509::path::parsed::exec::{Anchor, PathCert, anchor_from_root};
 use clazel_x509::path::spec::PathError;
-use clazel_x509::spki::exec::{PublicKey, parse_subject_public_key_info};
 use clazel_x509::time::exec::CertificateTime;
 
 /// Accepts every link.
@@ -205,17 +204,6 @@ fn limbo_verdict<L: LinkVerifier>(case: &Case, link: &L) -> Option<Result<(), Pa
     )
 }
 
-/// Whether a trusted or intermediate certificate of `case` has a secp384r1
-/// key: a link from it is refused until P17.
-fn has_p384_ca(case: &Case) -> bool {
-    case.trusted.iter().chain(case.intermediates).any(|&i| {
-        limbo_cert(i)
-            .and_then(parse_path_cert)
-            .and_then(|c| parse_subject_public_key_info(c.tbs.subject_public_key_info_der))
-            .is_some_and(|k| matches!(k.public_key, PublicKey::EcP384(_)))
-    })
-}
-
 /// The signature-related testcases, with the verdict the real links give
 /// (limbo's own expectation in the comment where it differs).
 const SIGNATURE_CASES: &[(&str, Result<(), PathError>)] = &[
@@ -257,7 +245,6 @@ fn limbo_links_sweep() -> Result<(), String> {
     let mut drawn = 0usize;
     let mut refused_by_links = Vec::new();
     let mut success_refused = Vec::new();
-    let mut p384_refused = Vec::new();
     for (k, case) in CASES.iter().enumerate() {
         // Every non-BetterTLS case, and every 25th BetterTLS one.
         if case.id.starts_with("bettertls::") && k % 25 != 0 {
@@ -271,8 +258,6 @@ fn limbo_links_sweep() -> Result<(), String> {
         if fake.is_ok() && real.is_err() {
             if case.expected == "FAILURE" {
                 refused_by_links.push((case.id, real));
-            } else if has_p384_ca(case) {
-                p384_refused.push(case.id);
             } else {
                 success_refused.push((case.id, case.features, case.importance, real));
             }
@@ -288,18 +273,8 @@ fn limbo_links_sweep() -> Result<(), String> {
     println!(
         "limbo: {drawn} testcases drawn; FAILURE refused by the links alone: {refused_by_links:#?}"
     );
-    println!("limbo: SUCCESS refused, a P-384 CA key (P17): {p384_refused:?}");
-    // No SUCCESS testcase is refused by the links except through a P-384
-    // key, which is refused until P17 (an expected failure).
+    // No SUCCESS testcase is refused by the links (P-384 CA keys included,
+    // since P17).
     assert!(success_refused.is_empty(), "{success_refused:#?}");
-    assert_eq!(
-        p384_refused,
-        [
-            "online::akamai.com",
-            "online::apple.com",
-            "online::cloudflare.com",
-            "online::stackoverflow.com",
-        ]
-    );
     Ok(())
 }
