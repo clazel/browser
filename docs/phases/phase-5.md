@@ -168,7 +168,7 @@ content, which is Tier 0 code with a test, not a theorem.
 | `clazel-font` | 0 (1) | OpenType 1.9† (font file, collections, `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `loca`, `glyf`, `name`, `OS/2`, `post`, `kern`, `GPOS` type 2; `CFF` per 5.0(c)); Apple TrueType Reference Manual (second text) | the table directory, each table's parser, glyph outlines as quadratic contours, advances, kerning lookups |
 | `clazel-layout` | 0 (0) | CSS 2.1 §8 to §11, §16, §17, Appendix E; CSS Text 3; CSS Tables 3 (auto layout)†; UAX #14; HTML §15.3, §15.4; Quirks Mode §3 | the box tree, block, inline and table formatting, white space, line breaking, font matching and the shaping glue, hit testing, the display list. **Replaces `clazel-text`** (5.0(g)) |
 | `clazel-raster` | 0 (1) | none (ours); the OpenType `glyf` chapter fixes the outline semantics | glyph outlines to coverage masks in the renderer: flattening and anti-aliased coverage only, no surface, no blending |
-| `clazel-displaylist` | 0 (2) | RFC 8949 §3; ours | the display list's types, its encoder and decoder, and the validator every list passes before any GPU call |
+| `clazel-displaylist` | 0 (2) | ours | the display list's types, its encoder and decoder, and the validator every list passes before any GPU call |
 | `clazel-gpu` | 0 (0) | Vulkan 1.x specification†; Apple's Metal documentation; Microsoft Learn's Direct3D 12 and DXGI pages | the GPU process: fixed pipelines and shaders, batching a validated list, a glyph atlas, drawing into shared buffers; Metal, Vulkan and Direct3D 12 backends |
 | `clazel-window` | 0 (0) | X Window System Protocol (X11R7)† on Linux; Apple's AppKit and Core Graphics documentation on macOS; Microsoft Learn's Win32 and DirectComposition pages on Windows | the host's window: open, present a surface, read events; per 5.0(e) |
 | `clazel-ipc` | 2 (exists) | RFC 8949 §3; ours | the messages of 5.18 and 5.19 |
@@ -1575,7 +1575,7 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | 5.15 Table layout | not started |
 | 5.16 Paint | not started |
 | 5.17 Glyph masks | not started |
-| 5.17a Display list codec and validator | not started |
+| 5.17a Display list codec and validator | spec and contracts written, not on `main`: `clazel-displaylist` at tier 0; no executable code or proofs yet |
 | 5.17b GPU process: drawing | not started |
 | 5.17c Software fallback, blocklist, crash policy | not started |
 | 5.18 IPC and kernel: surfaces, viewports, input | not started |

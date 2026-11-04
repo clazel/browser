@@ -178,6 +178,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-displaylist"
+version = "0.0.0"
+dependencies = [
+ "vstd",
+]
+
+[[package]]
 name = "clazel-dns"
 version = "0.0.0"
 dependencies = [
