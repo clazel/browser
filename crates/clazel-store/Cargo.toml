@@ -20,8 +20,8 @@ der = { version = "=0.8.2", default-features = false, features = ["alloc", "oid"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires. The
-# proofs pass locally; mutations and an independent transcription are not
-# written yet, so the crate stays at tier 0.
+# proofs pass locally; mutations are not written yet, so the crate stays at
+# tier 0.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2

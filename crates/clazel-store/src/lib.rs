@@ -18,6 +18,7 @@
 //! `docs/VERIFICATION.md`.
 //!
 //! - [`crc32c`]: the check value.
+//! - [`independent`]: a second transcription, proven equal to the spec.
 //! - [`log`]: the header, the records, the state they build, and recovery.
 
 pub mod crc32c;
