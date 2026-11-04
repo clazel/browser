@@ -159,4 +159,135 @@ pub proof fn theorem_quota(s: State, ops: Seq<Op>, quota: nat)
 {
 }
 
+
+// ---------------------------------------------------------------------------
+// The records: round trip, canonicity and refusal
+// ---------------------------------------------------------------------------
+
+/// A log is at least one octet per transaction: no record is empty.
+proof fn lemma_log_len(identity: Seq<u8>, u: Seq<Seq<Op>>)
+    ensures
+        encode_log(identity, u).len() >= u.len(),
+    decreases u.len(),
+{
+    if u.len() > 0 {
+        lemma_log_len(identity, u.drop_last());
+        let body = record_body(u.len(), u.last());
+        super::lemmas::lemma_tlv_len(
+            clazel_der::spec::universal_constructed(clazel_der::spec::SEQUENCE),
+            body + clazel_der::spec::encode_octet_string(crate::crc32c::spec::crc32c(body)),
+        );
+    }
+}
+
+/// Some list that fits is longest, when no list longer than `n` fits and
+/// the file holds the header.
+proof fn lemma_longest_exists(identity: Seq<u8>, file: Seq<u8>, n: nat)
+    requires
+        encode_header(identity).is_prefix_of(file),
+        forall|u: Seq<Seq<Op>>| #[trigger] fits(identity, file, u) ==> u.len() <= n,
+    ensures
+        exists|v: Seq<Seq<Op>>| longest_fit(identity, file, v),
+    decreases n,
+{
+    if exists|u: Seq<Seq<Op>>| #[trigger] fits(identity, file, u) && u.len() == n {
+        let u = choose|u: Seq<Seq<Op>>| #[trigger] fits(identity, file, u) && u.len() == n;
+        assert(longest_fit(identity, file, u));
+    } else if n == 0 {
+        let e = Seq::<Seq<Op>>::empty();
+        assert(encode_log(identity, e) == encode_header(identity));
+        assert(fits(identity, file, e));
+    } else {
+        assert forall|u: Seq<Seq<Op>>| #[trigger] fits(identity, file, u) implies u.len() <= (n - 1) as nat by {
+            if u.len() == n {
+                assert(fits(identity, file, u) && u.len() == n);
+            }
+        }
+        lemma_longest_exists(identity, file, (n - 1) as nat);
+    }
+}
+
+/// When the file holds the header of a valid identity, what is recovered
+/// is a longest list that fits.
+pub proof fn lemma_recovered(identity: Seq<u8>, file: Seq<u8>)
+    requires
+        identity_ok(identity),
+        encode_header(identity).is_prefix_of(file),
+    ensures
+        recovered(identity, file) matches Some(v) && longest_fit(identity, file, v),
+{
+    assert forall|u: Seq<Seq<Op>>| #[trigger] fits(identity, file, u) implies u.len() <= file.len() by {
+        lemma_log_len(identity, u);
+    }
+    lemma_longest_exists(identity, file, file.len());
+}
+
+/// Round trip: the log of valid transactions `ts`, followed by any octets
+/// at all, recovers `ts` and perhaps more (the octets after it may hold
+/// further records). With nothing after it, exactly `ts`
+/// ([`theorem_whole`]).
+pub proof fn theorem_round_trip(identity: Seq<u8>, ts: Seq<Seq<Op>>, rest: Seq<u8>)
+    requires
+        identity_ok(identity),
+        log_ok(ts),
+    ensures
+        recovered(identity, encode_log(identity, ts) + rest) matches Some(v) && ts.len() <= v.len() && v.take(
+            ts.len() as int,
+        ) == ts,
+{
+    let log = encode_log(identity, ts);
+    let file = log + rest;
+    assert(log.is_prefix_of(file)) by {
+        assert(file.subrange(0, log.len() as int) =~= log);
+    }
+    super::lemmas::lemma_encode_log_take(identity, ts, 0);
+    assert(ts.take(0) =~= Seq::<Seq<Op>>::empty());
+    lemma_prefix_trans(encode_header(identity), log, file);
+    lemma_recovered(identity, file);
+    let v = recovered(identity, file).unwrap();
+    assert(fits(identity, file, ts));
+    super::lemmas::lemma_fits_agree(identity, file, v, ts);
+}
+
+/// Canonicity: encoding what was recovered gives the file's own octets, a
+/// prefix of the file, and the transactions are valid. (DER has one
+/// encoding per value, so nothing else could have been read.)
+pub proof fn theorem_canonical(identity: Seq<u8>, file: Seq<u8>)
+    ensures
+        recovered(identity, file) matches Some(v) ==> log_ok(v) && encode_log(identity, v).is_prefix_of(file),
+{
+    if recovered(identity, file) is Some {
+        lemma_recovered(identity, file);
+    }
+}
+
+/// Refusal: a file is refused exactly when the identity is over its limit
+/// or the file does not start with the header; and the octets after what is
+/// recovered never start a valid next record, so nothing is half read.
+pub proof fn theorem_refusal(identity: Seq<u8>, file: Seq<u8>)
+    ensures
+        (recovered(identity, file) is None) == (!identity_ok(identity) || !encode_header(identity).is_prefix_of(file)),
+        recovered(identity, file) matches Some(v) ==> forall|t: Seq<Op>|
+            transaction_ok(v.len() + 1, t) ==> !(#[trigger] encode_log(identity, v.push(t))).is_prefix_of(file),
+{
+    if recovered(identity, file) is Some {
+        lemma_recovered(identity, file);
+        let v = recovered(identity, file).unwrap();
+        assert forall|t: Seq<Op>| transaction_ok(v.len() + 1, t) implies !(#[trigger] encode_log(
+            identity,
+            v.push(t),
+        )).is_prefix_of(file) by {
+            let n = v.push(t);
+            if encode_log(identity, n).is_prefix_of(file) {
+                assert forall|i: int| 0 <= i < n.len() implies transaction_ok((i + 1) as nat, #[trigger] n[i]) by {
+                    if i < v.len() {
+                        assert(n[i] == v[i]);
+                    }
+                }
+                assert(fits(identity, file, n));
+            }
+        }
+    }
+}
+
 } // verus!
