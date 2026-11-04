@@ -8,10 +8,13 @@
 //! - [`lemmas`]: the encodings read apart from the front, so the list
 //!   recovery picks is unique.
 //! - [`read`]: recovery, proven to meet it.
+//! - [`bucket`]: one bucket's state in memory: get, usage, and commit
+//!   under a quota, proven to meet it.
 //! - [`compact`]: compaction, proven to meet it.
 //! - [`theorems`]: the design note's theorems 1 to 3 (any prefix, the
 //!   whole file, compaction).
 
+pub mod bucket;
 pub mod compact;
 pub mod contract;
 pub mod exec;

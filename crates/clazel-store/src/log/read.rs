@@ -52,7 +52,7 @@ proof fn lemma_at_range(b: Seq<u8>, cs: nat, ce: nat, x: Seq<u8>)
 }
 
 /// Whether two slices hold the same octets.
-fn same(a: &[u8], b: &[u8]) -> (r: bool)
+pub(crate) fn same(a: &[u8], b: &[u8]) -> (r: bool)
     ensures
         r == (a@ == b@),
 {

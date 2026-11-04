@@ -137,3 +137,32 @@ fn compaction() {
     let big = vec![0u8; 67_108_864];
     assert_eq!(compact(b"id", &[EntryRef { bottle: 0, key: b"", value: &big }]), None);
 }
+
+use clazel_store::log::bucket::Bucket;
+
+#[test]
+fn bucket() {
+    let mut b = Bucket::new();
+    assert!(b.commit(&[OpRef::Put { bottle: 1, key: b"ab", value: b"xyz" }, OpRef::Put { bottle: 2, key: b"ab", value: b"q" }], 100));
+    assert_eq!(b.usage(), 8);
+    assert_eq!(b.get(1, b"ab"), Some(&b"xyz"[..]));
+    assert_eq!(b.get(3, b"ab"), None);
+
+    // Over the quota: refused whole.
+    assert!(!b.commit(&[OpRef::Delete { bottle: 2, key: b"ab" }, OpRef::Put { bottle: 1, key: b"c", value: &[0; 10] }], 10));
+    assert_eq!(b.usage(), 8);
+    assert_eq!(b.get(2, b"ab"), Some(&b"q"[..]));
+
+    // Only the end state counts: a put then a clear of its bottle is admitted.
+    assert!(b.commit(&[OpRef::Put { bottle: 3, key: b"k", value: &[0; 50] }, OpRef::Clear { bottle: 3 }], 8));
+    assert_eq!(b.usage(), 8);
+
+    // Replacing a value, deleting and clearing.
+    assert!(b.commit(&[OpRef::Put { bottle: 1, key: b"ab", value: b"" }], 100));
+    assert_eq!(b.usage(), 5);
+    assert!(b.commit(&[OpRef::Delete { bottle: 2, key: b"ab" }], 100));
+    assert_eq!(b.usage(), 2);
+    assert!(b.commit(&[OpRef::Clear { bottle: 1 }], 0));
+    assert_eq!(b.usage(), 0);
+    assert_eq!(b.get(1, b"ab"), None);
+}

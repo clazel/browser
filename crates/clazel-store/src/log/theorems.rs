@@ -1,5 +1,6 @@
 //! The design note's theorems 1 to 3 (3.10a.0, "The theorems this gives"),
-//! in [`super::spec`]'s terms. Theorem 4 (quota) comes with its own spec.
+//! in [`super::spec`]'s terms. Theorem 4 (quota) is stated here over the
+//! spec, and [`super::bucket`]'s `commit` is proven to meet it.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -146,6 +147,16 @@ pub proof fn theorem_compaction(identity: Seq<u8>, s: State, file: Seq<u8>)
 {
     let ts = choose|ts: Seq<Seq<Op>>| log_ok(ts) && file == #[trigger] encode_log(identity, ts) && apply_log(ts) == s;
     theorem_whole(identity, ts);
+}
+
+
+/// Theorem 4: committing under a quota leaves a bucket within it, or, when
+/// the transaction is refused, exactly as it was.
+pub proof fn theorem_quota(s: State, ops: Seq<Op>, quota: nat)
+    ensures
+        admits(s, ops, quota) ==> usage(commit_state(s, ops, quota)) <= quota,
+        !admits(s, ops, quota) ==> commit_state(s, ops, quota) == s,
+{
 }
 
 } // verus!
