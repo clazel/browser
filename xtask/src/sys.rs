@@ -88,6 +88,11 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     "getrandom",
     "getentropy",
     "BCryptGenRandom",
+    // The DNS servers on Windows, which has no `/etc/resolv.conf`
+    // (`clazel_sys::windows::adapter_addresses`): `GetAdaptersAddresses`
+    // only writes into a caller's buffer, whose octets the proven reader in
+    // `clazel-dns` (`adapters`) reads without following a pointer.
+    "GetAdaptersAddresses",
 ];
 
 /// The system call numbers `syscall` may be given (names as in `libc`).
