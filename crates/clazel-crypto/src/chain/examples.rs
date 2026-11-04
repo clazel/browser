@@ -5,7 +5,8 @@
 //! theorems the mutation certificates in `mutations.json` contradict.
 //!
 //! The verifications themselves are uninterpreted (libcrux) or too large to
-//! evaluate here (RSA 2048, `clazel-pkcs1`'s own examples cover it), so an
+//! evaluate here (RSA 2048 and P-384, `clazel-pkcs1`'s and `clazel-p384`'s
+//! own examples cover them), so an
 //! accepted link is never evaluated; the dispatch to them is covered by the
 //! exec proof, `lemmas::lemma_thm_production_links_verify` and
 //! tests/chain.rs (their mutations are `killed-incidentally`).
@@ -114,9 +115,13 @@ pub proof fn lemma_link_refusals()
         !link_with_key(ex_p256(), ex_sha256_rsa(), seq![], seq![]),
         // An ECDSA signature under an RSA key.
         !link_with_key(ex_rsa(seq![0x01u8, 0x00u8, 0x01u8]), ex_ecdsa_sha256(), seq![], seq![]),
-        // A P-384 issuer key, under either hash (until P17).
+        // A P-384 issuer key, under either hash, with a signature that is
+        // not one Ecdsa-Sig-Value (P17: the key is accepted, the signature
+        // is read first).
         !link_with_key(ex_p384(), ex_ecdsa_sha256(), seq![], seq![]),
         !link_with_key(ex_p384(), ex_ecdsa_sha384(), seq![], seq![]),
+        // An ECDSA signature under an RSA key, with SHA-384.
+        !link_with_key(ex_rsa(seq![0x01u8, 0x00u8, 0x01u8]), ex_ecdsa_sha384(), seq![], seq![]),
         // Ed25519 (RFC 8410 §3): Unsupported.
         !link_with_key(ex_p256(), ex_alg(seq![1nat, 3nat, 101nat, 112nat]), seq![], seq![]),
         // ecdsa-with-SHA256 with NULL parameters (RFC 5758 §3.2): malformed.
@@ -131,6 +136,8 @@ pub proof fn lemma_link_refusals()
         by (compute_only);
     assert(!link_with_key(ex_p384(), ex_ecdsa_sha256(), seq![], seq![])) by (compute_only);
     assert(!link_with_key(ex_p384(), ex_ecdsa_sha384(), seq![], seq![])) by (compute_only);
+    assert(!link_with_key(ex_rsa(seq![0x01u8, 0x00u8, 0x01u8]), ex_ecdsa_sha384(), seq![], seq![]))
+        by (compute_only);
     assert(!link_with_key(ex_p256(), ex_alg(seq![1nat, 3nat, 101nat, 112nat]), seq![], seq![]))
         by (compute_only);
     assert(!link_with_key(ex_p256(), clazel_x509::certificate::spec::AlgorithmIdentifier {
@@ -138,6 +145,37 @@ pub proof fn lemma_link_refusals()
         parameters_der: Some(seq![0x05u8, 0x00u8]) }, seq![], seq![])) by (compute_only);
     assert(!link_with_key(ex_rsa(seq![0x01u8, 0x00u8, 0x00u8]), ex_sha256_rsa(), seq![], seq![]))
         by (compute_only);
+}
+
+/// An Ecdsa-Sig-Value whose r has `n` magnitude octets (0x01, then 0x02
+/// ...: positive, minimal) and whose s is 1.
+pub open spec fn ex_sig(n: nat) -> Seq<u8> {
+    seq![0x30u8, (n + 5) as u8, 0x02u8, n as u8] + Seq::new(n, |i: int| (i + 1) as u8)
+        + seq![0x02u8, 0x01u8, 0x01u8]
+}
+
+/// RFC 3279 §2.2.3 for P-384 (design P17): r and s of up to 48 octets are
+/// read and padded to 48; 49 octets are refused, as is a signature that is
+/// not exactly one SEQUENCE.
+pub proof fn lemma_ecdsa_sig_value_p384_examples()
+    ensures
+        ecdsa_sig_value_p384(ex_sig(48)) == Some((Seq::new(48, |i: int| (i + 1) as u8),
+            Seq::new(47, |i: int| 0u8) + seq![0x01u8])),
+        ecdsa_sig_value_p384(ex_sig(33)) == Some((Seq::new(15, |i: int| 0u8)
+            + Seq::new(33, |i: int| (i + 1) as u8), Seq::new(47, |i: int| 0u8) + seq![0x01u8])),
+        ecdsa_sig_value_p384(ex_sig(49)) is None,
+        ecdsa_sig_value_p384(ex_sig(48) + seq![0x00u8]) is None,
+        // The P-256 decoder refuses the 48-octet r that this one reads.
+        crate::signature::spec::ecdsa_sig_value(ex_sig(48)) is None,
+{
+    assert(ecdsa_sig_value_p384(ex_sig(48)) == Some((Seq::new(48, |i: int| (i + 1) as u8),
+        Seq::new(47, |i: int| 0u8) + seq![0x01u8]))) by (compute_only);
+    assert(ecdsa_sig_value_p384(ex_sig(33)) == Some((Seq::new(15, |i: int| 0u8)
+        + Seq::new(33, |i: int| (i + 1) as u8), Seq::new(47, |i: int| 0u8) + seq![0x01u8])))
+        by (compute_only);
+    assert(ecdsa_sig_value_p384(ex_sig(49)) is None) by (compute_only);
+    assert(ecdsa_sig_value_p384(ex_sig(48) + seq![0x00u8]) is None) by (compute_only);
+    assert(crate::signature::spec::ecdsa_sig_value(ex_sig(48)) is None) by (compute_only);
 }
 
 } // verus!

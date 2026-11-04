@@ -2281,6 +2281,132 @@
         "lemma": "crate::examples::lemma_wire_names()",
         "witness": "wire_to_dotted(seq![4u8, 114, 101, 97, 108, 4, 116, 101, 115, 116, 0]) != Some(seq![114u8, 101, 97, 108, 46, 116, 101, 115, 116])"
       }
+    },
+    {
+      "id": "adapters-oper-status",
+      "file": "src/adapters/spec.rs",
+      "find": "le_at(b, at + adapter_oper_status_at(), 4) == if_oper_status_up()",
+      "replace": "le_at(b, at + adapter_oper_status_at(), 4) != if_oper_status_up()",
+      "expect": "killed",
+      "reason": "Only adapters that are up give servers; lemma_adapters_example_0 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_0()",
+        "witness": "dns_servers(crate::adapters::examples::one_server(1, 16), crate::adapters::examples::base()) != seq![crate::spec::Addr::V4(16843009)]"
+      }
+    },
+    {
+      "id": "adapters-af-inet",
+      "file": "src/adapters/spec.rs",
+      "find": "if len >= sockaddr_in_len() && le_at(b, o, 2) == af_inet() {",
+      "replace": "if len >= sockaddr_in_len() && le_at(b, o, 2) != af_inet() {",
+      "expect": "killed",
+      "reason": "An AF_INET socket address gives its IPv4 address; lemma_adapters_example_0 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_0()",
+        "witness": "dns_servers(crate::adapters::examples::one_server(1, 16), crate::adapters::examples::base()) != seq![crate::spec::Addr::V4(16843009)]"
+      }
+    },
+    {
+      "id": "adapters-sin-addr",
+      "file": "src/adapters/spec.rs",
+      "find": "let a = b.subrange((o + sin_addr_at()) as int, (o + sin_addr_at() + 4) as int);",
+      "replace": "let a = b.subrange(o as int, (o + 4) as int);",
+      "expect": "killed",
+      "reason": "The IPv4 address is sin_addr, at offset 4; lemma_adapters_example_0 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_0()",
+        "witness": "dns_servers(crate::adapters::examples::one_server(1, 16), crate::adapters::examples::base()) != seq![crate::spec::Addr::V4(16843009)]"
+      }
+    },
+    {
+      "id": "adapters-sockaddr-in-len",
+      "file": "src/adapters/spec.rs",
+      "find": "if len >= sockaddr_in_len() && le_at(b, o, 2) == af_inet() {",
+      "replace": "if le_at(b, o, 2) == af_inet() {",
+      "expect": "killed",
+      "reason": "A socket address shorter than a SOCKADDR_IN is not a server; lemma_adapters_example_8 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_8()",
+        "witness": "dns_servers(crate::adapters::examples::one_server(1, 8), crate::adapters::examples::base()) != Seq::<crate::spec::Addr>::empty()"
+      }
+    },
+    {
+      "id": "adapters-af-inet6",
+      "file": "src/adapters/spec.rs",
+      "find": "} else if len >= sockaddr_in6_len() && le_at(b, o, 2) == af_inet6() {",
+      "replace": "} else if len >= sockaddr_in6_len() && le_at(b, o, 2) != af_inet6() {",
+      "expect": "killed",
+      "reason": "An AF_INET6 socket address gives its IPv6 address; lemma_adapters_example_3 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_3()",
+        "witness": "dns_servers(crate::adapters::examples::one_v6(crate::adapters::examples::cloudflare_v6()), crate::adapters::examples::base()) != seq![crate::spec::Addr::V6(0x2606_4700_4700_0000_0000_0000_0000_1111)]"
+      }
+    },
+    {
+      "id": "adapters-scoped-link-local",
+      "file": "src/adapters/spec.rs",
+      "find": "a[0] == 0xFE && a[1] >= 0x80",
+      "replace": "a[0] == 0xFE && a[1] >= 0xC0",
+      "expect": "killed",
+      "reason": "fe80::/10 is scoped and dropped; lemma_adapters_example_4 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_4()",
+        "witness": "dns_servers(crate::adapters::examples::one_v6(crate::adapters::examples::fe80_one()), crate::adapters::examples::base()) != Seq::<crate::spec::Addr>::empty()"
+      }
+    },
+    {
+      "id": "adapters-scoped-none",
+      "file": "src/adapters/spec.rs",
+      "find": "a[0] == 0xFE && a[1] >= 0x80",
+      "replace": "false",
+      "expect": "killed",
+      "reason": "The site-local default is dropped before the IPv4 server; lemma_adapters_example_2 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_2()",
+        "witness": "dns_servers(crate::adapters::examples::fec0_then_v4(), crate::adapters::examples::base()) != seq![crate::spec::Addr::V4(134744072)]"
+      }
+    },
+    {
+      "id": "adapters-next-adapter",
+      "file": "src/adapters/spec.rs",
+      "find": "                    adapters_from(b, base, o, acc2)",
+      "replace": "                    acc2",
+      "expect": "killed",
+      "reason": "The next adapter's servers follow; lemma_adapters_example_5 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_5()",
+        "witness": "dns_servers(crate::adapters::examples::two_adapters(), crate::adapters::examples::base()) != seq![crate::spec::Addr::V4(16843009), crate::spec::Addr::V4(151587081)]"
+      }
+    },
+    {
+      "id": "adapters-next-server",
+      "file": "src/adapters/spec.rs",
+      "find": "                servers_from(b, base, le_at(b, o + server_next_at(), 8), o, acc2)",
+      "replace": "                acc2",
+      "expect": "killed",
+      "reason": "An adapter's next server follows; lemma_adapters_example_2 is false.",
+      "module": "adapters::examples",
+      "certificate": {
+        "file": "src/adapters/lemmas.rs",
+        "lemma": "crate::adapters::examples::lemma_adapters_example_2()",
+        "witness": "dns_servers(crate::adapters::examples::fec0_then_v4(), crate::adapters::examples::base()) != seq![crate::spec::Addr::V4(134744072)]"
+      }
     }
   ]
 }

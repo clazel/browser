@@ -20,7 +20,8 @@ is kept; the private keys were discarded.
 | `rsa2048-sha1.der` | RSA 2048 | sha1WithRSAEncryption | refused |
 | `rsa2048-pss.der` | RSA 2048 | RSASSA-PSS (SHA-256, salt 32) | refused |
 | `p256-sha512.der` | P-256 | ecdsa-with-SHA512 | refused |
-| `p384-sha384.der` | P-384 | ecdsa-with-SHA384 | refused until P17 |
+| `p384-sha384.der` | P-384 | ecdsa-with-SHA384 | verifies (P17) |
+| `p384-sha256.der` | P-384 | ecdsa-with-SHA256 | verifies (P17); generated 2026-11-03 with OpenSSL 3.5.4 (Windows), checked with `openssl verify`, key discarded |
 | `p256-compressed.spki.der` | `p256-sha256.der`'s key, compressed point | (an SPKI, not a certificate) | refused |
 
 To regenerate (new keys give new files; the tests read only these, so they
@@ -40,6 +41,7 @@ openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -pkeyopt rsa_keygen
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -pkeyopt rsa_keygen_pubexp:8589934593 -out rbig.pem
 mk p256-sha256 p256.pem sha256; mk p256-sha384 p256.pem sha384; mk p256-sha512 p256.pem sha512
 mk p384-sha384 p384.pem sha384
+mk p384-sha256 p384.pem sha256
 mk rsa2048-sha256 r2048.pem sha256; mk rsa2048-sha384 r2048.pem sha384
 mk rsa2048-sha512 r2048.pem sha512; mk rsa2048-sha1 r2048.pem sha1
 mk rsa2048-pss r2048.pem sha256 -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:32

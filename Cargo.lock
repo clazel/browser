@@ -155,6 +155,7 @@ name = "clazel-crypto"
 version = "0.0.0"
 dependencies = [
  "clazel-der",
+ "clazel-p384",
  "clazel-pkcs1",
  "clazel-tls",
  "clazel-x509",

@@ -1,7 +1,7 @@
 //! The errors of the shell.
 
 use clazel_crypto::client::Failure;
-use clazel_sys::RandomError;
+use clazel_sys::{Errno, RandomError};
 use std::fmt;
 use std::io;
 
@@ -27,6 +27,8 @@ pub enum ResolveError {
     InvalidName,
     /// `resolv.conf` could not be read.
     ResolvConf(io::ErrorKind),
+    /// `GetAdaptersAddresses` failed, with this Win32 error (Windows).
+    Adapters(Errno),
     /// No `nameserver` line, or none usable.
     NoNameservers,
     /// No nameserver gave an acceptable reply.
