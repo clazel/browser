@@ -8,7 +8,8 @@
 //! `clazel-window`.
 //!
 //! The host's process is not sandboxed and these calls take no page-derived
-//! pointer: [`draw_bgra`] reads a slice whose length it has checked.
+//! pointer: [`draw_bgra`] reads a slice of `u32`, so aligned as the call requires,
+//! whose length it has checked.
 
 use std::ffi::c_void;
 
@@ -22,7 +23,9 @@ const USE_DEFAULT: i32 = i32::MIN;
 /// `PM_REMOVE`.
 const REMOVE: u32 = 1;
 /// `QS_ALLINPUT`.
-const ALL_INPUT: Dword = 0x04FF;
+const ALL_INPUT: Dword = 0x1CFF;
+/// `WM_TIMER`.
+const TIMER: u32 = 0x0113;
 /// `IDC_ARROW`, a resource id in the pointer's place.
 const ARROW: usize = 32512;
 /// `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`.
@@ -162,8 +165,11 @@ unsafe extern "system" {
     fn GetModuleHandleW(name: *const u16) -> Handle;
 }
 
-/// A window this module created. An ended window's handle makes the calls below
-/// fail or report nothing; it reads no memory.
+/// A window this module created. Once [`is_window`] says it has ended, stop using
+/// this: the system may give the same value to a later window (docs IsWindow), and
+/// [`draw_bgra`] would then paint into that one. No caller memory is at risk. A
+/// window can also end between that check and the next call, which no check here
+/// can close, so a caller keeps the gap short.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowHandle(Handle);
 
@@ -204,7 +210,7 @@ pub fn create_window(title: &str) -> Result<WindowHandle, SpawnError> {
     // class allows.
     let cursor = unsafe { LoadCursorW(0, ARROW) };
     let class = WndClassExW {
-        size: 80,
+        size: size_of::<WndClassExW>() as Dword,
         style: 0,
         window_procedure: DefWindowProcW as *const () as usize,
         class_extra: 0,
@@ -277,18 +283,31 @@ pub fn next_message() -> Option<RawMessage> {
     if got == 0 {
         return None;
     }
+    let raw = RawMessage {
+        message: msg.message,
+        w_param: msg.w_param,
+        l_param: msg.l_param,
+    };
+    if !may_dispatch(raw) {
+        return Some(raw);
+    }
     let message: *const Msg = &raw const msg;
     // SAFETY: docs TranslateMessage: `message` points to the MSG PeekMessageW
     // filled; it may post a WM_CHAR and keeps no pointer.
     let _ = unsafe { TranslateMessage(message) };
-    // SAFETY: docs DispatchMessageW: `message` points to the same MSG, and the
-    // procedure it reaches is DefWindowProcW or the system's own.
+    // SAFETY: docs DispatchMessageW: `message` points to the same MSG. It calls
+    // the window procedure, DefWindowProcW or the system's own, or for a WM_TIMER
+    // with a non-null lParam calls that value as a function, which `may_dispatch`
+    // has refused above.
     let _ = unsafe { DispatchMessageW(message) };
-    Some(RawMessage {
-        message: msg.message,
-        w_param: msg.w_param,
-        l_param: msg.l_param,
-    })
+    Some(raw)
+}
+
+/// Whether a message may go to `DispatchMessageW`, which calls a `WM_TIMER`'s
+/// non-null `lParam` as a function (docs DispatchMessageW). This module sets no
+/// timer, so such a message only comes from something that posted it to us.
+fn may_dispatch(message: RawMessage) -> bool {
+    message.message != TIMER || message.l_param == 0
 }
 
 /// Sleep until the calling thread has a message or `milliseconds` pass.
@@ -329,7 +348,7 @@ pub fn client_size(window: WindowHandle) -> Result<(u32, u32), SpawnError> {
     };
     let slot: *mut Rect = &raw mut rect;
     // SAFETY: docs GetClientRect: `slot` points to the live local `rect`, which
-    // the call fills. Any thread may ask.
+    // the call fills. The page sets no condition on the calling thread.
     let ok = unsafe { GetClientRect(window.0, slot) };
     if ok == 0 {
         return Err(last("GetClientRect"));
@@ -355,19 +374,17 @@ pub fn screen_to_client(window: WindowHandle, x: i32, y: i32) -> Result<(i32, i3
 }
 
 /// Copy `width` by `height` pixels to the client area's top left corner:
-/// `pixels` holds rows from the top, each pixel blue, green, red and an ignored
-/// byte. Any other length is `ERROR_INVALID_PARAMETER`. A size of zero draws
+/// `pixels` holds rows from the top, each pixel `0x00RRGGBB`, whose top byte is
+/// ignored. Any other length is `ERROR_INVALID_PARAMETER`. A size of zero draws
 /// nothing.
 pub fn draw_bgra(
     window: WindowHandle,
-    pixels: &[u8],
+    pixels: &[u32],
     width: u32,
     height: u32,
 ) -> Result<(), SpawnError> {
     let invalid = SpawnError::Call("draw_bgra", Errno(INVALID_PARAMETER));
-    let expected = u64::from(width)
-        .checked_mul(u64::from(height))
-        .and_then(|n| n.checked_mul(4));
+    let expected = u64::from(width).checked_mul(u64::from(height));
     if expected != u64::try_from(pixels.len()).ok() {
         return Err(invalid);
     }
@@ -380,7 +397,7 @@ pub fn draw_bgra(
     }
     let info = BitmapInfo {
         header: BitmapInfoHeader {
-            size: 40,
+            size: size_of::<BitmapInfoHeader>() as Dword,
             width: signed_width,
             // Negative: the rows run from the top.
             height: signed_height.saturating_neg(),
@@ -398,7 +415,8 @@ pub fn draw_bgra(
     let head: *const BitmapInfo = &raw const info;
     let bits: *const c_void = pixels.as_ptr().cast();
     // SAFETY: docs GetDC: gives a device context for the window's client area, or
-    // 0 on failure, and is released below. Any thread may ask.
+    // 0 on failure, and is released below on this same thread, as the page
+    // requires. It sets no condition on which thread that is.
     let dc = unsafe { GetDC(window.0) };
     if dc == 0 {
         return Err(last("GetDC"));
@@ -406,8 +424,9 @@ pub fn draw_bgra(
     // SAFETY: docs SetDIBitsToDevice: `dc` is live; `head` points to the live
     // local `info`, a 32-bit BI_RGB top-down header, which reads no colour table;
     // `bits` points to `pixels`, whose length is checked above to be exactly
-    // width × height × 4, and the call reads `height` rows of `width` pixels of
-    // it. 0 is DIB_RGB_COLORS. It keeps no pointer.
+    // width × height `u32`s, and the call reads `height` rows of `width` pixels of
+    // it. Being `u32`s, the rows are DWORD-aligned, as the page requires of scan
+    // lines. 0 is DIB_RGB_COLORS. It keeps no pointer.
     let n = unsafe { SetDIBitsToDevice(dc, 0, 0, width, height, 0, 0, 0, height, bits, head, 0) };
     let failed = (n == 0).then(|| last("SetDIBitsToDevice"));
     // SAFETY: docs ReleaseDC: releases the context GetDC gave above for this same
@@ -425,8 +444,7 @@ mod tests {
 
     #[test]
     fn layouts_match_the_headers() {
-        // WNDCLASSEXW's `cbSize` as written above, and the sizes winuser.h and
-        // wingdi.h give on 64-bit Windows.
+        // The sizes winuser.h and wingdi.h give on 64-bit Windows.
         assert_eq!(size_of::<WndClassExW>(), 80);
         assert_eq!(size_of::<Msg>(), 48);
         assert_eq!(size_of::<Rect>(), 16);
@@ -437,15 +455,36 @@ mod tests {
     #[test]
     fn draw_refuses_a_wrong_length_before_any_call() {
         let handle = WindowHandle(0);
-        let refused = |pixels: &[u8], w, h| {
+        let refused = |pixels: &[u32], w, h| {
             matches!(
                 draw_bgra(handle, pixels, w, h),
                 Err(SpawnError::Call("draw_bgra", Errno(INVALID_PARAMETER)))
             )
         };
-        assert!(refused(&[0; 3], 1, 1));
-        assert!(refused(&[0; 5], 1, 1));
+        assert!(refused(&[0; 2], 1, 1));
         assert!(refused(&[], 1, 1));
-        assert!(refused(&[0; 4], u32::MAX, u32::MAX));
+        assert!(refused(&[0; 3], 2, 2));
+        assert!(refused(&[0; 1], u32::MAX, u32::MAX));
+    }
+
+    #[test]
+    fn a_timer_with_a_function_in_it_is_not_dispatched() {
+        let message = |message, l_param| RawMessage {
+            message,
+            w_param: 0,
+            l_param,
+        };
+        assert!(!may_dispatch(message(TIMER, 0x1000)));
+        assert!(!may_dispatch(message(TIMER, -1)));
+        assert!(may_dispatch(message(TIMER, 0)));
+        // Other messages' lParam is not a function: WM_LBUTTONDOWN's is a point.
+        assert!(may_dispatch(message(0x0201, 0x1000)));
+    }
+
+    #[test]
+    fn the_input_mask_is_the_headers() {
+        // QS_INPUT (mouse, key, raw input, touch, pointer) | QS_POSTMESSAGE |
+        // QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE, from winuser.h.
+        assert_eq!(ALL_INPUT, 0x1C07 | 0x08 | 0x10 | 0x20 | 0x80 | 0x40);
     }
 }

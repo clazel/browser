@@ -44,6 +44,9 @@ pub struct Window {
     size: (u32, u32),
     closed: bool,
     stop: Arc<AtomicBool>,
+    /// Set by the message thread once the window has ended, so that this handle is
+    /// no longer used: the system may give its value to a later window.
+    gone: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -55,6 +58,8 @@ impl Window {
         let (events_tx, events) = channel();
         let stop = Arc::new(AtomicBool::new(false));
         let thread_stop = Arc::clone(&stop);
+        let gone = Arc::new(AtomicBool::new(false));
+        let thread_gone = Arc::clone(&gone);
         let thread = std::thread::Builder::new()
             .name("clazel-window".to_owned())
             .spawn(move || {
@@ -64,7 +69,7 @@ impl Window {
                 match sys::create_window(&title) {
                     Ok(handle) => {
                         let _ = opened_tx.send(Ok(handle));
-                        pump(handle, &events_tx, &thread_stop);
+                        pump(handle, &events_tx, &thread_stop, &thread_gone);
                     }
                     Err(e) => {
                         let _ = opened_tx.send(Err(e));
@@ -84,6 +89,7 @@ impl Window {
             size,
             closed: false,
             stop,
+            gone,
             thread: Some(thread),
         })
     }
@@ -116,6 +122,9 @@ impl Window {
     /// The size, if it has changed since it was last reported. The message thread
     /// cannot report this: it never sees `WM_SIZE`, and it is blocked during a drag.
     fn resized(&mut self) -> Option<Event> {
+        if !self.exists() {
+            return None;
+        }
         let now = sys::client_size(self.handle).ok()?;
         if now == self.size {
             return None;
@@ -128,12 +137,24 @@ impl Window {
     }
 
     /// Copy `width` by `height` pixels to the client area's top left corner, in
-    /// rows from the top, each blue, green, red and an unused byte. The length of
-    /// `pixels` must match. Drawing to a window the user has just closed does
-    /// nothing, since [`Event::Closed`] may still be behind other queued events.
-    pub fn draw(&self, pixels: &[u8], width: u32, height: u32) -> Result<(), Error> {
+    /// rows from the top, each `0x00RRGGBB`. The length of `pixels` must match.
+    /// Drawing to a window the user has just closed does nothing, since
+    /// [`Event::Closed`] may still be behind other queued events.
+    ///
+    /// The handle is checked first, because the system may reuse an ended window's
+    /// handle. A window closed in the instant between the check and the draw is the
+    /// one gap left (`clazel_sys::windows::window::WindowHandle`).
+    pub fn draw(&self, pixels: &[u32], width: u32, height: u32) -> Result<(), Error> {
+        if !self.exists() {
+            return Ok(());
+        }
         let drawn = sys::draw_bgra(self.handle, pixels, width, height);
-        ignore_if_gone(drawn, || sys::is_window(self.handle)).map_err(Error::Os)
+        ignore_if_gone(drawn, || self.exists()).map_err(Error::Os)
+    }
+
+    /// Whether the handle still names this window.
+    fn exists(&self) -> bool {
+        !self.gone.load(Ordering::Relaxed) && sys::is_window(self.handle)
     }
 }
 
@@ -158,7 +179,7 @@ fn ignore_if_gone<E>(drawn: Result<(), E>, exists: impl FnOnce() -> bool) -> Res
 
 /// Read the window's messages until it is gone or `stop` is set. This thread
 /// created the window, so only it can destroy it.
-fn pump(handle: sys::WindowHandle, events: &Sender<Event>, stop: &AtomicBool) {
+fn pump(handle: sys::WindowHandle, events: &Sender<Event>, stop: &AtomicBool, gone: &AtomicBool) {
     loop {
         while let Some(raw) = sys::next_message() {
             if let Some(event) = meaning(handle, raw) {
@@ -168,10 +189,12 @@ fn pump(handle: sys::WindowHandle, events: &Sender<Event>, stop: &AtomicBool) {
             }
         }
         if !sys::is_window(handle) {
+            gone.store(true, Ordering::Relaxed);
             let _ = events.send(Event::Closed);
             return;
         }
         if stop.load(Ordering::Relaxed) {
+            gone.store(true, Ordering::Relaxed);
             // The window existed a moment ago; if the user closed it since, there
             // is nothing left to do.
             let _ = sys::destroy_window(handle);
