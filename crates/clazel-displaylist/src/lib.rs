@@ -18,9 +18,11 @@
 //! - [`exec`]: the encoder, decoder and validator.
 //! - [`lemmas`]: the proofs of those theorems.
 //! - [`examples`]: concrete lists, evaluated on the spec.
+//! - [`independent`]: a second definition of the list, proven equal to the spec.
 
 pub mod contract;
 pub mod examples;
+pub mod independent;
 pub mod exec;
 pub mod lemmas;
 pub mod spec;
