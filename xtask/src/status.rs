@@ -1003,8 +1003,8 @@ mod tests {
             (n == "clazel-crypto")
                 .then(|| "The trust boundary: every call into libcrux, each one axiom.".to_owned())
         })?;
-        // 0 of 29 at Tier 2; 903 Verus obligations; 267 of 277 mutants.
-        assert!(board.contains(">0<tspan font-size=\"14\" class=\"mut\">/29</tspan>"));
+        // 0 of 30 at Tier 2; 903 Verus obligations; 267 of 277 mutants.
+        assert!(board.contains(">0<tspan font-size=\"14\" class=\"mut\">/30</tspan>"));
         assert!(board.contains(">903<"));
         assert!(board.contains(">267<tspan font-size=\"14\" class=\"mut\">/277</tspan>"));
         // 39 + 24 + 5 conformance cases passed in three suites; colons in a
