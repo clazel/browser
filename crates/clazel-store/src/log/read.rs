@@ -541,9 +541,9 @@ pub open spec fn log_view(ts: Seq<Vec<super::exec::OpRef>>) -> Seq<Seq<Op>> {
 }
 
 /// The view of an optional recovery; `None` is a refused file.
-pub open spec fn recovery_view(r: Option<Vec<Vec<super::exec::OpRef>>>) -> Option<Seq<Seq<Op>>> {
+pub open spec fn recovery_view(r: Option<(Vec<Vec<super::exec::OpRef>>, usize)>) -> Option<Seq<Seq<Op>>> {
     match r {
-        Some(ts) => Some(log_view(ts@)),
+        Some((ts, _)) => Some(log_view(ts@)),
         None => None,
     }
 }
@@ -551,10 +551,15 @@ pub open spec fn recovery_view(r: Option<Vec<Vec<super::exec::OpRef>>>) -> Optio
 /// What opening `file` as the log of bucket `identity` recovers: the
 /// transactions of the longest run of valid records after the header,
 /// borrowing their keys and values from `file`, or `None` when the identity
-/// is over its limit or the file does not start with its header.
-pub fn recover<'a>(identity: &[u8], file: &'a [u8]) -> (r: Option<Vec<Vec<super::exec::OpRef<'a>>>>)
+/// is over its limit or the file does not start with its header. With
+/// them comes the length of their log, where the file's valid prefix ends.
+pub fn recover<'a>(identity: &[u8], file: &'a [u8]) -> (r: Option<(Vec<Vec<super::exec::OpRef<'a>>>, usize)>)
     ensures
         super::contract::recover_ensures(identity@, file@, recovery_view(r)),
+        r matches Some((ts, len)) ==> len as nat == encode_log(identity@, log_view(ts@)).len() && encode_log(
+            identity@,
+            log_view(ts@),
+        ).is_prefix_of(file@) && log_ok(log_view(ts@)),
 {
     if identity.len() > 4096 {
         return None;
@@ -581,6 +586,7 @@ pub fn recover<'a>(identity: &[u8], file: &'a [u8]) -> (r: Option<Vec<Vec<super:
             pos as nat == encode_log(identity@, log_view(ts@)).len(),
         ensures
             fits(identity@, file@, log_view(ts@)),
+            pos as nat == encode_log(identity@, log_view(ts@)).len(),
             forall|u: Seq<Seq<Op>>| #[trigger] fits(identity@, file@, u) ==> u.len() <= ts@.len(),
         decreases file.len() - pos,
     {
@@ -633,7 +639,7 @@ pub fn recover<'a>(identity: &[u8], file: &'a [u8]) -> (r: Option<Vec<Vec<super:
     proof {
         super::lemmas::lemma_longest_fit_unique(identity@, file@, log_view(ts@));
     }
-    Some(ts)
+    Some((ts, pos))
 }
 
 } // verus!

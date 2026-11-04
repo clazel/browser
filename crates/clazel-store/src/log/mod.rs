@@ -11,6 +11,8 @@
 //! - [`bucket`]: one bucket's state in memory: get, usage, and commit
 //!   under a quota, proven to meet it.
 //! - [`compact`]: compaction, proven to meet it.
+//! - [`store`]: a bucket's log as the shell keeps it: load, commit and
+//!   compact, proven to meet it.
 //! - [`theorems`]: the design note's theorems 1 to 3 (any prefix, the
 //!   whole file, compaction).
 
@@ -21,4 +23,5 @@ pub mod exec;
 pub mod lemmas;
 pub mod read;
 pub mod spec;
+pub mod store;
 pub mod theorems;

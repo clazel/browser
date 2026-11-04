@@ -100,9 +100,29 @@ pub open spec fn kept(v: Seq<(Key, Seq<u8>)>, op: Op) -> Seq<(Key, Seq<u8>)>
     }
 }
 
+/// The entries as compaction takes them: bottle, key, value.
+pub open spec fn as_entries(v: Seq<(Key, Seq<u8>)>) -> Seq<Entry> {
+    v.map_values(|e: (Key, Seq<u8>)| (e.0.0, e.0.1, e.1))
+}
+
 // ---------------------------------------------------------------------------
 // Lemmas
 // ---------------------------------------------------------------------------
+
+/// Compaction's view of the entries is the same state.
+proof fn lemma_as_entries(v: Seq<(Key, Seq<u8>)>)
+    ensures
+        entries_state(as_entries(v)) == as_state(v),
+    decreases v.len(),
+{
+    if v.len() > 0 {
+        lemma_as_entries(v.drop_last());
+        assert(as_entries(v).drop_last() =~= as_entries(v.drop_last()));
+        assert(as_entries(v).last() == (v.last().0.0, v.last().0.1, v.last().1));
+    } else {
+        assert(as_entries(v) =~= Seq::<Entry>::empty());
+    }
+}
 
 /// The keys of `as_state(v)` are the keys of `v`; with distinct keys, each
 /// one's value is its entry's.
@@ -482,6 +502,48 @@ impl Bucket {
             }
         }
         None
+    }
+
+    /// The entries, borrowed, as [`super::compact::compact`] takes them.
+    pub fn entry_refs(&self) -> (out: Vec<super::compact::EntryRef<'_>>)
+        requires
+            self.wf(),
+        ensures
+            entries_state(super::compact::entries_view(out@)) == self@,
+    {
+        let ghost sv = stored_view(self.entries@);
+        let mut out: Vec<super::compact::EntryRef<'_>> = Vec::new();
+        let mut i: usize = 0;
+        assert(as_entries(sv.take(0)) =~= super::compact::entries_view(out@));
+        while i < self.entries.len()
+            invariant
+                i <= self.entries.len(),
+                sv == stored_view(self.entries@),
+                super::compact::entries_view(out@) == as_entries(sv.take(i as int)),
+            ensures
+                i == self.entries.len(),
+                super::compact::entries_view(out@) == as_entries(sv.take(i as int)),
+            decreases self.entries.len() - i,
+        {
+            let e = match self.entries.get(i) {
+                Some(e) => e,
+                None => break,
+            };
+            out.push(super::compact::EntryRef { bottle: e.bottle, key: e.key.as_slice(), value: e.value.as_slice() });
+            proof {
+                assert(sv[i as int] == e@);
+                assert(as_entries(sv.take(i as int + 1)) =~= as_entries(sv.take(i as int)).push(
+                    (e.bottle as nat, e.key@, e.value@),
+                ));
+                assert(super::compact::entries_view(out@) =~= as_entries(sv.take(i as int + 1)));
+            }
+            i = i.saturating_add(1);
+        }
+        proof {
+            assert(sv.take(i as int) =~= sv);
+            lemma_as_entries(sv);
+        }
+        out
     }
 
     /// Commit the transaction `ops` under a quota of `quota` octets: apply

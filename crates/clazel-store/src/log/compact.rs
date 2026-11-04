@@ -41,6 +41,9 @@ pub fn compact(identity: &[u8], entries: &[EntryRef]) -> (out: Option<Vec<u8>>)
         identity_ok(identity@),
     ensures
         super::contract::compact_ensures(identity@, entries_view(entries@), super::exec::option_view(out)),
+        out matches Some(f) ==> exists|ts: Seq<Seq<Op>>|
+            log_ok(ts) && ts.len() == entries@.len() && f@ == #[trigger] encode_log(identity@, ts) && apply_log(ts)
+                == entries_state(entries_view(entries@)),
 {
     let ghost view = entries_view(entries@);
     let mut file = super::exec::encode_header(identity);
@@ -106,6 +109,7 @@ pub fn compact(identity: &[u8], entries: &[EntryRef]) -> (out: Option<Vec<u8>>)
     proof {
         assert(view.take(i as int) =~= view);
         assert(log_ok(ts) && file@ == encode_log(identity@, ts) && apply_log(ts) == entries_state(view));
+        assert(ts.len() == entries@.len());
     }
     Some(file)
 }

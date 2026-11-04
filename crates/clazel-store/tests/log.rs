@@ -84,13 +84,13 @@ fn recovery() {
         vec![Owned::Put(1, b"a".to_vec(), b"x".to_vec())],
         vec![Owned::Delete(1, b"a".to_vec()), Owned::Clear(3)],
     ];
-    assert_eq!(recover(b"id", &file).map(|ts| owned(&ts)), Some(want));
+    assert_eq!(recover(b"id", &file).map(|(ts, _)| owned(&ts)), Some(want));
 
     // Every torn tail recovers the records that are whole.
     let header_len = encode_header(b"id").len();
     let first_end = log(b"id", &[one]).len();
     for cut in header_len..file.len() {
-        let got = recover(b"id", file.get(..cut).unwrap_or_default()).map(|ts| ts.len());
+        let got = recover(b"id", file.get(..cut).unwrap_or_default()).map(|(ts, _)| ts.len());
         assert_eq!(got, Some(usize::from(cut >= first_end)), "cut at {cut}");
     }
 
@@ -99,21 +99,21 @@ fn recovery() {
     if let Some(o) = bad.last_mut() {
         *o ^= 1;
     }
-    assert_eq!(recover(b"id", &bad).map(|ts| ts.len()), Some(1));
+    assert_eq!(recover(b"id", &bad).map(|(ts, _)| ts.len()), Some(1));
 
     // Records out of sequence: the second numbered 1 again.
     let mut skipped = log(b"id", &[one]);
     skipped.extend_from_slice(&encode_record(1, two).unwrap_or_default());
-    assert_eq!(recover(b"id", &skipped).map(|ts| ts.len()), Some(1));
+    assert_eq!(recover(b"id", &skipped).map(|(ts, _)| ts.len()), Some(1));
 }
 
 #[test]
 fn refused_files() {
     let file = log(b"id", &[]);
-    assert_eq!(recover(b"other", &file).map(|ts| ts.len()), None);
-    assert_eq!(recover(b"id", file.get(..file.len().saturating_sub(1)).unwrap_or_default()).map(|ts| ts.len()), None);
-    assert_eq!(recover(&[0u8; 4097], &file).map(|ts| ts.len()), None);
-    assert_eq!(recover(b"id", &file).map(|ts| ts.len()), Some(0));
+    assert_eq!(recover(b"other", &file).map(|(ts, _)| ts.len()), None);
+    assert_eq!(recover(b"id", file.get(..file.len().saturating_sub(1)).unwrap_or_default()).map(|(ts, _)| ts.len()), None);
+    assert_eq!(recover(&[0u8; 4097], &file).map(|(ts, _)| ts.len()), None);
+    assert_eq!(recover(b"id", &file).map(|(ts, _)| ts.len()), Some(0));
 }
 
 use clazel_store::log::compact::{compact, EntryRef};
@@ -131,7 +131,7 @@ fn compaction() {
         vec![Owned::Put(2, b"a".to_vec(), b"y".to_vec())],
         vec![Owned::Put(1, b"a".to_vec(), b"z".to_vec())],
     ];
-    assert_eq!(recover(b"id", &file).map(|ts| owned(&ts)), Some(want));
+    assert_eq!(recover(b"id", &file).map(|(ts, _)| owned(&ts)), Some(want));
     assert_eq!(compact(b"id", &[]), Some(encode_header(b"id")));
 
     let big = vec![0u8; 67_108_864];
@@ -165,4 +165,49 @@ fn bucket() {
     assert!(b.commit(&[OpRef::Clear { bottle: 1 }], 0));
     assert_eq!(b.usage(), 0);
     assert_eq!(b.get(1, b"ab"), None);
+}
+
+use clazel_store::log::store::BucketLog;
+
+/// The shell's part: open a file, cut it where load says, append records.
+#[test]
+fn shell_round_trip() -> Result<(), &'static str> {
+    let mut file = encode_header(b"id");
+    let (mut log, len) = BucketLog::load(b"id", &file).ok_or("fresh file")?;
+    assert_eq!(len, file.len());
+
+    let r1 = log.commit(&[OpRef::Put { bottle: 1, key: b"a", value: b"one" }], 100).unwrap_or_default();
+    file.extend_from_slice(&r1);
+    let r2 = log.commit(&[OpRef::Put { bottle: 1, key: b"b", value: b"two" }, OpRef::Delete { bottle: 1, key: b"a" }], 100).unwrap_or_default();
+    file.extend_from_slice(&r2);
+    // Refused by the quota: nothing to write, nothing changes.
+    assert_eq!(log.commit(&[OpRef::Put { bottle: 1, key: b"c", value: &[0; 200] }], 100), None);
+    assert_eq!(log.bucket().get(1, b"b"), Some(&b"two"[..]));
+
+    // A torn write after the last record: load cuts it off.
+    let mut torn = file.clone();
+    torn.extend_from_slice(r1.get(..r1.len() / 2).unwrap_or_default());
+    let (again, len) = BucketLog::load(b"id", &torn).ok_or("torn file")?;
+    assert_eq!(len, file.len());
+    assert_eq!(again.bucket().get(1, b"a"), None);
+    assert_eq!(again.bucket().get(1, b"b"), Some(&b"two"[..]));
+    assert_eq!(again.bucket().usage(), 4);
+
+    // Compaction: a new file with the same state.
+    let compacted = log.compact().unwrap_or_default();
+    assert!(compacted.len() < file.len());
+    let (reopened, len) = BucketLog::load(b"id", &compacted).ok_or("compacted file")?;
+    assert_eq!(len, compacted.len());
+    assert_eq!(reopened.bucket().get(1, b"b"), Some(&b"two"[..]));
+    assert_eq!(reopened.bucket().usage(), 4);
+
+    // Commits after compaction continue its numbering.
+    let mut file = compacted;
+    let r3 = log.commit(&[OpRef::Clear { bottle: 1 }], 100).unwrap_or_default();
+    file.extend_from_slice(&r3);
+    let (last, _) = BucketLog::load(b"id", &file).ok_or("after compaction")?;
+    assert_eq!(last.bucket().usage(), 0);
+
+    assert!(BucketLog::load(b"other", &file).is_none());
+    Ok(())
 }
