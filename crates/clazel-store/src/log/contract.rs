@@ -4,7 +4,9 @@
 //! implementation guarantees.
 //!
 //! The executable operation type, and its view as [`Op`], come with the
-//! implementation. These predicates are about the views.
+//! implementation. These predicates are about the views. A bucket's view
+//! is its [`State`]; its executable type, an in-memory index of one
+//! bucket, also comes with the implementation.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -54,6 +56,31 @@ pub open spec fn compact_ensures(identity: Seq<u8>, entries: Seq<Entry>, output:
         None => exists|i: int|
             0 <= i < entries.len() && !transaction_ok((i + 1) as nat, seq![entry_put(#[trigger] entries[i])]),
     }
+}
+
+
+/// Contract for the bucket's `get(bottle: u32, key: &[u8]) -> Option<&[u8]>`:
+/// the value of `key` in `bottle`, if it has one.
+pub open spec fn bucket_get_ensures(s: State, bottle: nat, key: Seq<u8>, output: Option<Seq<u8>>) -> bool {
+    output == if s.dom().contains((bottle, key)) {
+        Some(s[(bottle, key)])
+    } else {
+        None
+    }
+}
+
+/// Contract for the bucket's `usage() -> u64`: exactly [`usage`].
+pub open spec fn bucket_usage_ensures(s: State, output: nat) -> bool {
+    output == usage(s)
+}
+
+/// Contract for the bucket's `commit(ops: &[OpRef], quota: u64) -> bool`
+/// (the note's theorem 4), from state `old` to state `new`: `true`
+/// exactly when the transaction is admitted, and the state is then
+/// [`commit_state`], so a refused transaction changes nothing.
+pub open spec fn bucket_commit_ensures(old: State, ops: Seq<Op>, quota: nat, new: State, output: bool) -> bool {
+    &&& output == admits(old, ops, quota)
+    &&& new == commit_state(old, ops, quota)
 }
 
 } // verus!

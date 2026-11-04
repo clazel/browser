@@ -57,8 +57,16 @@
 //!   records it uses, and in what order, is the implementation's choice.
 //!   The state to write is given as a list of entries, later ones replacing
 //!   earlier ones with the same bottle and key ([`entries_state`]).
-//! - **Quota** (the note's theorem 4) is not here. It comes with its own
-//!   spec, in a commit of its own.
+//! - **Usage** (Storage §6 leaves "storage usage" to the implementation)
+//!   counts the octets of every key and value in the bucket, as Phase 2's
+//!   `localStorage` quota does (`clazel-kernel`'s `entries_size`). Bottle
+//!   numbers and the log's framing are not counted, so usage does not
+//!   change when a file is compacted.
+//! - **Quota** (the note's theorem 4): a transaction is admitted when the
+//!   state it leads to is within the quota, and a refused one leaves the
+//!   state as it was ([`commit_state`]). Only the end state is measured:
+//!   a transaction that passes over the quota and comes back under it (a
+//!   put, then a clear) is admitted.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -321,6 +329,59 @@ pub open spec fn file_state(identity: Seq<u8>, file: Seq<u8>) -> Option<State> {
 /// transactions that builds `s` from an empty bucket.
 pub open spec fn compaction_of(identity: Seq<u8>, s: State, file: Seq<u8>) -> bool {
     exists|ts: Seq<Seq<Op>>| log_ok(ts) && file == #[trigger] encode_log(identity, ts) && apply_log(ts) == s
+}
+
+
+// ---------------------------------------------------------------------------
+// Usage and quota
+// ---------------------------------------------------------------------------
+
+/// The octets one entry counts against the quota: its key and its value.
+pub open spec fn entry_size(k: (nat, Seq<u8>), v: Seq<u8>) -> nat {
+    k.1.len() + v.len()
+}
+
+/// A bucket's usage (Storage §6): the sum of [`entry_size`] over its
+/// entries, taken one at a time in any order (the order does not change a
+/// sum; `lemma_usage_remove` proves it).
+pub open spec fn usage(s: State) -> nat
+    decreases s.dom().len(),
+    via usage_decreases
+{
+    if s.dom().len() == 0 {
+        0
+    } else {
+        let k = s.dom().choose();
+        entry_size(k, s[k]) + usage(s.remove(k))
+    }
+}
+
+/// [`usage`] terminates: removing a key of a nonempty state shrinks its
+/// domain.
+#[verifier::decreases_by]
+proof fn usage_decreases(s: State) {
+    if s.dom().len() != 0 {
+        let k = s.dom().choose();
+        vstd::set::lemma_set_choose_len(s.dom());
+        assert(s.remove(k).dom() =~= s.dom().remove(k));
+        vstd::set::lemma_set_remove_len(s.dom(), k);
+    }
+}
+
+/// Whether a bucket in state `s`, with quota `quota` octets, admits the
+/// transaction `ops`: the state after it is within the quota.
+pub open spec fn admits(s: State, ops: Seq<Op>, quota: nat) -> bool {
+    usage(apply_transaction(s, ops)) <= quota
+}
+
+/// The state after committing `ops` under `quota` (the note's theorem 4):
+/// the transaction applied whole, or refused whole.
+pub open spec fn commit_state(s: State, ops: Seq<Op>, quota: nat) -> State {
+    if admits(s, ops, quota) {
+        apply_transaction(s, ops)
+    } else {
+        s
+    }
 }
 
 } // verus!
