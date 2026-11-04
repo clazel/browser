@@ -14,6 +14,7 @@
 //! - [`read`]: recovery, proven to meet it.
 //! - [`bucket`]: one bucket's state in memory: get, usage, and commit
 //!   under a quota, proven to meet it.
+//! - [`certificates`]: empty; where evaluated kill certificates run.
 //! - [`compact`]: compaction, proven to meet it.
 //! - [`store`]: a bucket's log as the shell keeps it: load, commit and
 //!   compact, proven to meet it.
@@ -22,6 +23,7 @@
 //!   canonicity and refusal.
 
 pub mod bucket;
+pub mod certificates;
 pub mod compact;
 pub mod contract;
 pub mod examples;

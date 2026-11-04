@@ -287,4 +287,150 @@ pub proof fn fact_scan()
     assert(!in_range(o[1].0, seq![], Some(kb())));
 }
 
+
+// ---------------------------------------------------------------------------
+// The record limit, at its exact boundary
+// ---------------------------------------------------------------------------
+
+/// A TLV with a one-octet tag and contents from 2^24 to 2^32 octets takes six
+/// octets more than its contents: one for the tag, and five for the length.
+proof fn lemma_big_tlv(tag: clazel_der::spec::Tag, c: Seq<u8>)
+    requires
+        tag.number < 31,
+        0x100_0000 <= c.len() < 0x1_0000_0000,
+    ensures
+        clazel_der::spec::encode_tlv(tag, c).len() == c.len() + 6,
+{
+    clazel_der::lemmas::lemma_be_bytes_len(c.len(), 4);
+    assert(clazel_der::spec::length_octets(c.len()) == 4);
+}
+
+/// A put of `n` zero octets under an empty key in bottle 0.
+pub open spec fn big(n: nat) -> Op {
+    Op::Put { bottle: 0, key: seq![], value: Seq::new(n, |i: int| 0u8) }
+}
+
+/// Commit 1 of one big put takes 38 octets more than the value.
+pub proof fn lemma_big_record(n: nat)
+    requires
+        0x100_0000 <= n <= 0x800_0000,
+    ensures
+        encode_record(1, seq![big(n)]).len() == n + 38,
+        transaction_ok(1, seq![big(n)]) == (n + 38 <= max_record_len()),
+{
+    clazel_der::lemmas::lemma_pow256_8();
+    let v = Seq::new(n, |i: int| 0u8);
+    let op = big(n);
+    let universal = clazel_der::spec::universal_primitive(clazel_der::spec::OCTET_STRING);
+    let seq_tag = clazel_der::spec::universal_constructed(clazel_der::spec::SEQUENCE);
+    assert(encode_number(0).len() == 3) by (compute_only);
+    assert(encode_number(1).len() == 3) by (compute_only);
+    assert(clazel_der::spec::encode_octet_string(Seq::<u8>::empty()).len() == 2) by (compute_only);
+    lemma_big_tlv(universal, v);
+    let contents = encode_number(0) + clazel_der::spec::encode_octet_string(Seq::<u8>::empty())
+        + clazel_der::spec::encode_octet_string(v);
+    assert(contents.len() == n + 11);
+    lemma_big_tlv(clazel_der::spec::context_specific(0, true), contents);
+    assert(encode_op(op).len() == n + 17);
+    let ops = seq![op];
+    assert(ops.drop_last() =~= Seq::<Op>::empty());
+    assert(ops.last() == op);
+    assert(encode_ops(Seq::<Op>::empty()) =~= Seq::<u8>::empty());
+    assert(encode_ops(ops) =~= encode_op(op));
+    lemma_big_tlv(seq_tag, encode_op(op));
+    let body = record_body(1, ops);
+    assert(body.len() == n + 26);
+    let check = crate::crc32c::spec::crc32c(body);
+    assert(check.len() == 4);
+    let octets = clazel_der::spec::encode_octet_string(check);
+    assert(clazel_der::spec::encode_length(4) == seq![4u8]);
+    assert(octets.len() == 6);
+    lemma_big_tlv(seq_tag, body + octets);
+    assert(encode_record(1, ops).len() == n + 38);
+    assert forall|i: int| 0 <= i < ops.len() implies op_bottle(#[trigger] ops[i]) < clazel_der::spec::pow256(4) by {
+        assert(ops[i] == op);
+    }
+}
+
+/// A record of exactly 64 MiB is valid, and one octet more is not.
+pub proof fn fact_record_limit()
+    ensures
+        encode_record(1, seq![big(67_108_826)]).len() == max_record_len(),
+        transaction_ok(1, seq![big(67_108_826)]),
+        encode_record(1, seq![big(67_108_827)]).len() == max_record_len() + 1,
+        !transaction_ok(1, seq![big(67_108_827)]),
+{
+    lemma_big_record(67_108_826);
+    lemma_big_record(67_108_827);
+}
+
+// ---------------------------------------------------------------------------
+// The clauses of a scan, one at a time
+// ---------------------------------------------------------------------------
+
+/// Two results with keys "a" and "b" meet every clause of a scan of
+/// [`ab`] but the one about values, with no upper bound or with "b" as it
+/// (except that "b" itself is not in that range).
+pub proof fn lemma_scan_shape(o: Seq<(Seq<u8>, Seq<u8>)>)
+    requires
+        o.len() == 2,
+        o[0].0 == ka(),
+        o[1].0 == kb(),
+    ensures
+        forall|i: int, j: int| 0 <= i < j < o.len() ==> key_less(#[trigger] o[i].0, #[trigger] o[j].0),
+        forall|i: int|
+            0 <= i < o.len() ==> {
+                &&& in_range(#[trigger] o[i].0, seq![], None)
+                &&& ab().dom().contains((1nat, o[i].0))
+            },
+        forall|k: Seq<u8>|
+            #[trigger] ab().dom().contains((1nat, k)) && in_range(k, seq![], None) ==> exists|i: int|
+                0 <= i < o.len() && #[trigger] o[i].0 == k,
+        forall|k: Seq<u8>|
+            #[trigger] ab().dom().contains((1nat, k)) && in_range(k, seq![], Some(kb())) ==> exists|i: int|
+                0 <= i < o.len() && #[trigger] o[i].0 == k,
+{
+    lemma_ab_order();
+    assert forall|i: int, j: int| 0 <= i < j < o.len() implies key_less(#[trigger] o[i].0, #[trigger] o[j].0) by {
+        assert(i == 0 && j == 1);
+    }
+    assert forall|k: Seq<u8>| #[trigger] ab().dom().contains((1nat, k)) implies exists|i: int|
+        0 <= i < o.len() && #[trigger] o[i].0 == k by {
+        if k == ka() {
+            assert(o[0].0 == k);
+        } else {
+            assert(k == kb());
+            assert(o[1].0 == k);
+        }
+    }
+}
+
+/// A result outside the bucket's bottle is not a scan, even when its value is
+/// what the map holds there (which is unspecified).
+pub proof fn fact_other_bottle()
+    ensures
+        !is_scan(ab(), 2, seq![], None, seq![(ka(), ab()[(2nat, ka())])]),
+{
+    let o = seq![(ka(), ab()[(2nat, ka())])];
+    assert(!ab().dom().contains((2nat, ka())));
+    assert(o[0].0 == ka());
+}
+
+/// The clauses [`fact_other_bottle`]'s result does meet: only the one about
+/// the bottle fails.
+pub proof fn lemma_other_bottle_shape()
+    ensures
+        forall|i: int, j: int|
+            0 <= i < j < seq![(ka(), ab()[(2nat, ka())])].len() ==> key_less(
+                #[trigger] seq![(ka(), ab()[(2nat, ka())])][i].0,
+                #[trigger] seq![(ka(), ab()[(2nat, ka())])][j].0,
+            ),
+        in_range(ka(), seq![], None),
+        forall|k: Seq<u8>| !(#[trigger] ab().dom().contains((2nat, k))),
+{
+    lemma_ab_order();
+    assert forall|k: Seq<u8>| !(#[trigger] ab().dom().contains((2nat, k))) by {
+    }
+}
+
 } // verus!
