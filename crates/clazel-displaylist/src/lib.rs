@@ -13,8 +13,14 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 //!
 //! - [`spec`]: the items, the bytes and the rules.
-//! - [`contract`]: what the executable code is to be proven to satisfy, and the
-//!   theorems to be proven about the spec.
+//! - [`contract`]: what the executable code is proven to satisfy, and the theorems
+//!   proven about the spec.
+//! - [`exec`]: the encoder, decoder and validator.
+//! - [`lemmas`]: the proofs of those theorems.
+//! - [`examples`]: concrete lists, evaluated on the spec.
 
 pub mod contract;
+pub mod examples;
+pub mod exec;
+pub mod lemmas;
 pub mod spec;

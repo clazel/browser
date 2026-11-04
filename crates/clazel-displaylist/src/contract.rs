@@ -1,6 +1,5 @@
-//! What the executable code is to be proven to satisfy, and the theorems to be proven
-//! about the spec (phase-5.md item 5.17a). Neither the code nor the proofs exist yet:
-//! CLAUDE.md rule 3 has this committed first.
+//! What the executable code is proven to satisfy, and the theorems proven about the
+//! spec (phase-5.md item 5.17a). `lemmas.rs` holds the proofs.
 
 #[allow(unused_imports)]
 use super::spec::*;
