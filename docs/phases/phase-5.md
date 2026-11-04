@@ -1253,15 +1253,36 @@ graphics pipeline, composition surface or second GPU has been tried.
 | The renderer's, unchanged | fails: `CreateDXGIFactory2`, `E_UNEXPECTED` | same |
 | Less-privileged AppContainer, without `WIN32K` | fails: `D3D12CreateDevice`, `DXGI_ERROR_UNSUPPORTED` | clears, then fails: `CreateComputePipelineState`, `E_ACCESSDENIED` |
 | Plain AppContainer, with `WIN32K` | fails as the first row | same |
-| Plain AppContainer, without `WIN32K`, everything else kept | **runs** | **runs** |
+| Plain AppContainer, without `WIN32K`, everything else kept | runs | runs |
+| **Less-privileged AppContainer, without `WIN32K`, with the `registryRead` capability, everything else kept** | **runs** | **runs** |
 
-So two things must go: the `WIN32K` mitigation, and the less-privileged form. Dropping
-`PROHIBIT_DYNAMIC_CODE`, `EXTENSION_POINT_DISABLE` or the job's UI limits changed
-nothing, so they stay. In the row that runs, listing the user's profile was denied,
-but binding a UDP socket and listening on a loopback TCP port were **allowed**, where
-the renderer's form cannot start Winsock. Why the less-privileged form fails was not
-found; if it is a file the driver reads, a grant might recover it. Whether this
-container can connect out was not measured, and 5.26's escape attempts must. The
+**The policy for the GPU process is the last row:** the renderer's whole policy (its
+mitigations, job limits and no children) less `WIN32K` and plus `registryRead`. It ran
+six times on hardware and five on WARP, with the renderer's environment. The
+less-privileged form failed because the driver could not read the registry: without
+the capability, opening `Control\Class`, `GraphicsDrivers` and `Microsoft\DirectX` under
+`HKLM` each gave access denied, and none of `lpacCom`, `lpacPnpNotifications`,
+`lpacAppExperience`, `lpacMedia`, `lpacInstrumentation`, `lpacSessionManagement` or
+`lpacServicesManagement` helped alone. `clazel_sys::windows::spawn` takes no
+capabilities today, so it gains that (`DeriveCapabilitySidsFromName`), audited.
+
+What that process could still do, attempted from inside it:
+
+| Attempt | Result |
+|---------|--------|
+| Bind a UDP socket, listen on or connect to loopback TCP, connect out to the Internet | denied, Winsock `WSAEACCES` |
+| List or write in the user's profile, `Documents` or `AppData\Local` | denied |
+| Open `HKLM\SAM\SAM` or `HKLM\SECURITY` | denied |
+| Open any tested registry key for writing | denied |
+| **Open `HKCU\Software`, `HKCU\Environment` or `HKLM\SOFTWARE` for reading** | **allowed** |
+| List `System32` and the driver store | allowed |
+| Write in `AppData\Local\Packages\<container>\AC`, its own folder | allowed |
+
+That readable registry is this policy's real cost against the renderer's, and a
+compromised GPU process could read what programs store there. A plain AppContainer
+reads the same keys and can bind sockets too, so it has no advantage. The GPU process
+takes its own container name, so that it does not share the writable folder with
+renderers. `WIN32K` stays lost: Direct3D needs it, with or without the capability. The
 lists are found by measuring each driver and are written down with what each
 entry is for; `ioctl` argument filtering is stated per driver or stated as
 absent. Real drivers (Intel, AMD, NVIDIA, Apple) can need different lists, so an
@@ -1606,7 +1627,7 @@ The four biggest first.
   one pull request with proofs, mutations and process tests green.
 - **Three platforms multiply the GPU path.** Windows brings a third raw backend
   and COM vtables to audit, and the GPU process's sandbox is measurably weaker than
-  the renderer's there (5.21a): no `WIN32K` lockdown, and sockets can be bound. Some process tests are
+  the renderer's there (5.21a): no `WIN32K` lockdown, and the registry can be read. Some process tests are
   Unix-only today (README) and must be ported for the exit.
 - **Buffer sharing is platform-specific and unproven here.** IOSurface's Mach port
   from a sandboxed process, composition surfaces from an AppContainer, and dma-buf
