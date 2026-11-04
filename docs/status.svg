@@ -13,13 +13,13 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect width="880" height="186" rx="8" fill="var(--bg)" stroke="var(--line)"/>
 <text x="24" y="50" font-size="24" class="b">18<tspan font-size="14" class="mut">/29</tspan></text>
 <text x="24" y="68" font-size="10.5" class="mut">crates proven correct</text>
-<text x="182" y="50" font-size="24" class="b">9.4k<tspan font-size="14" class="mut"></tspan></text>
+<text x="182" y="50" font-size="24" class="b">9.5k<tspan font-size="14" class="mut"></tspan></text>
 <text x="182" y="68" font-size="10.5" class="mut">Verus proof obligations</text>
-<text x="340" y="50" font-size="24" class="b">1897<tspan font-size="14" class="mut">/1907</tspan></text>
+<text x="340" y="50" font-size="24" class="b">1909<tspan font-size="14" class="mut">/1919</tspan></text>
 <text x="340" y="68" font-size="10.5" class="mut">broken specs caught</text>
 <text x="24" y="114" font-size="24" class="b">901k<tspan font-size="14" class="mut"></tspan></text>
 <text x="24" y="132" font-size="10.5" class="mut">conformance cases, 95 suites</text>
-<text x="182" y="114" font-size="24" class="b">38<tspan font-size="14" class="mut"></tspan></text>
+<text x="182" y="114" font-size="24" class="b">41<tspan font-size="14" class="mut"></tspan></text>
 <text x="182" y="132" font-size="10.5" class="mut">unsafe blocks, all in clazel-sys</text>
 <text x="340" y="114" font-size="24" class="b">21<tspan font-size="14" class="mut"></tspan></text>
 <text x="340" y="132" font-size="10.5" class="mut">axioms, each justified</text>

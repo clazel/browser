@@ -20,15 +20,15 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="32" y="128" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="40" y="146" font-size="12" class="m b">kernel</text>
 <text x="40" y="175" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="40" y="155" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="58.8" height="6" fill="var(--proof)"/><rect x="58.8" width="38.5" height="6" fill="var(--spec)"/><rect x="97.2" width="10.8" height="6" fill="var(--exec)"/></svg>
+<svg x="40" y="155" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="58.8" height="6" fill="var(--proof)"/><rect x="58.8" width="38.4" height="6" fill="var(--spec)"/><rect x="97.2" width="10.8" height="6" fill="var(--exec)"/></svg>
 <text x="40" y="188" font-size="10" class="mut">7.0k cases</text>
 <text x="40" y="199" font-size="10" class="mut">47/47 mut</text>
 <rect x="164" y="128" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="172" y="146" font-size="12" class="m b">fetch</text>
 <text x="172" y="175" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="172" y="155" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="37.4" height="6" fill="var(--proof)"/><rect x="37.4" width="50.6" height="6" fill="var(--spec)"/><rect x="87.9" width="20.1" height="6" fill="var(--exec)"/></svg>
+<svg x="172" y="155" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="39.9" height="6" fill="var(--proof)"/><rect x="39.9" width="49.0" height="6" fill="var(--spec)"/><rect x="88.9" width="19.1" height="6" fill="var(--exec)"/></svg>
 <text x="172" y="188" font-size="10" class="mut">1.7k cases</text>
-<text x="172" y="199" font-size="10" class="mut">64/64 mut</text>
+<text x="172" y="199" font-size="10" class="mut">68/68 mut</text>
 <rect x="296" y="128" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="304" y="146" font-size="12" class="m b">cookie</text>
 <text x="304" y="175" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
@@ -63,14 +63,14 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="296" y="234" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
 <text x="304" y="252" font-size="12" class="m b">tls</text>
 <text x="304" y="281" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
-<svg x="304" y="261" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="35.6" height="6" fill="var(--proof)"/><rect x="35.6" width="47.6" height="6" fill="var(--spec)"/><rect x="83.2" width="24.8" height="6" fill="var(--exec)"/></svg>
+<svg x="304" y="261" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="35.5" height="6" fill="var(--proof)"/><rect x="35.5" width="47.8" height="6" fill="var(--spec)"/><rect x="83.3" width="24.7" height="6" fill="var(--exec)"/></svg>
 <text x="304" y="294" font-size="10" class="mut">82k cases</text>
-<text x="304" y="305" font-size="10" class="mut">210/211 mut</text>
+<text x="304" y="305" font-size="10" class="mut">218/219 mut</text>
 <circle cx="410" cy="248" r="4" fill="var(--bad)"/>
 <rect x="428" y="234" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
 <text x="436" y="252" font-size="12" class="m b">x509</text>
 <text x="436" y="281" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
-<svg x="436" y="261" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="37.7" height="6" fill="var(--proof)"/><rect x="37.7" width="45.7" height="6" fill="var(--spec)"/><rect x="83.5" width="24.5" height="6" fill="var(--exec)"/></svg>
+<svg x="436" y="261" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="38.7" height="6" fill="var(--proof)"/><rect x="38.7" width="47.2" height="6" fill="var(--spec)"/><rect x="85.9" width="22.1" height="6" fill="var(--exec)"/></svg>
 <text x="436" y="294" font-size="10" class="mut">9.8k cases</text>
 <text x="436" y="305" font-size="10" class="mut">273/273 mut</text>
 <rect x="560" y="234" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
@@ -198,9 +198,9 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="756" y="710" font-size="12" class="m b">sys</text>
 <text x="756" y="739" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe</text>
 <rect x="756" y="719" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
-<text x="756" y="752" font-size="10" class="mut">38 unsafe, audited</text>
+<text x="756" y="752" font-size="10" class="mut">41 unsafe, audited</text>
 <rect x="20" y="796" width="864" height="145" rx="10" fill="var(--panel)" stroke="var(--line)"/>
-<text x="32" y="822" font-size="12" class="b">1897 of 1907 broken specs caught by a theorem</text>
+<text x="32" y="822" font-size="12" class="b">1909 of 1919 broken specs caught by a theorem</text>
 <text x="32" y="839" font-size="11" class="mut">9 more (crypto) broke only a proof script: no theorem became false, so they are not counted as coverage.</text>
 <text x="32" y="854" font-size="11" class="mut">1 (tls) survived: a known gap, recorded in mutations.json with what will close it.</text>
 <text x="32" y="880" font-size="12" class="b">21 axioms: proofs taken from other verified libraries</text>
