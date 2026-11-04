@@ -4,6 +4,9 @@
 //! - [`spec`]: the format and the recovery rule.
 //! - [`contract`]: what the executable encoder and recovery will be proven
 //!   to satisfy.
+//! - [`exec`]: the header and record encoders, proven to meet it. Recovery
+//!   is not written yet.
 
 pub mod contract;
+pub mod exec;
 pub mod spec;
