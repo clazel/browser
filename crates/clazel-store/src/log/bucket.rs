@@ -423,7 +423,7 @@ pub proof fn lemma_usage_remove(s: State, k: Key)
 }
 
 /// Adding a new key adds its size.
-proof fn lemma_usage_insert(s: State, k: Key, x: Seq<u8>)
+pub proof fn lemma_usage_insert(s: State, k: Key, x: Seq<u8>)
     requires
         !s.dom().contains(k),
     ensures

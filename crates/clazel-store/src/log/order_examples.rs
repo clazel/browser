@@ -32,4 +32,18 @@ pub proof fn example_key_less()
     assert(!key_less(seq![0x61u8, 0x62], seq![0x61u8, 0x62])) by (compute_only);
 }
 
+/// A range includes `lo` and excludes `hi`.
+pub proof fn example_in_range()
+    ensures
+        in_range(seq![0x61u8], seq![0x61u8], None),
+        !in_range(seq![0x62u8], seq![0x61u8], Some(seq![0x62u8])),
+        !in_range(seq![0x61u8], seq![0x62u8], None),
+        in_range(seq![0x61u8], seq![], Some(seq![0x62u8])),
+{
+    assert(in_range(seq![0x61u8], seq![0x61u8], None)) by (compute_only);
+    assert(!in_range(seq![0x62u8], seq![0x61u8], Some(seq![0x62u8]))) by (compute_only);
+    assert(!in_range(seq![0x61u8], seq![0x62u8], None)) by (compute_only);
+    assert(in_range(seq![0x61u8], seq![], Some(seq![0x62u8]))) by (compute_only);
+}
+
 } // verus!

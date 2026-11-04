@@ -6,6 +6,8 @@
 //!   to satisfy.
 //! - [`examples`]: the format on hand-written octets, evaluated on the spec.
 //! - [`exec`]: the header and record encoders, proven to meet it.
+//! - [`facts`]: proven facts over concrete inputs, which the mutations
+//!   contradict.
 //! - [`lemmas`]: the encodings read apart from the front, so the list
 //!   recovery picks is unique.
 //! - [`order_examples`]: the key order, evaluated on the spec.
@@ -24,6 +26,7 @@ pub mod compact;
 pub mod contract;
 pub mod examples;
 pub mod exec;
+pub mod facts;
 pub mod lemmas;
 pub mod order_examples;
 pub mod read;
