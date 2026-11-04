@@ -1240,12 +1240,28 @@ the device paths opened before entering it, with no `socket` or `connect`, so no
 server or network, and `sendmsg` and `recvmsg` for passing buffer descriptors to the
 host, which the renderer's list deliberately lacks; on macOS, a Seatbelt
 profile with the IOKit and Mach services Metal needs and no WindowServer; on
-Windows, an AppContainer and Job Object, as the renderer has, but not its policy
-unchanged: `crates/clazel-sandbox/src/appcontainer.rs`'s `WIN32K` mitigation removes
-the system calls Direct3D reaches the driver through†, its mitigations assume no
-JIT where drivers and WARP compile shaders†, and whether a less-privileged
-AppContainer can open a GPU at all is unknown. The prototype measures each; what must
-be dropped is written down. The
+Windows, an AppContainer and Job Object with their own container name, as measured
+below.
+
+**Measured on Windows, 2026-11-04**, by a throwaway probe started through
+`clazel_sys::windows::spawn`: one machine (RTX 5060 Ti, and WARP), clearing a texture
+and running one compiled compute shader whose output was read back and checked. No
+graphics pipeline, composition surface or second GPU has been tried.
+
+| Policy | Hardware | WARP |
+|--------|----------|------|
+| The renderer's, unchanged | fails: `CreateDXGIFactory2`, `E_UNEXPECTED` | same |
+| Less-privileged AppContainer, without `WIN32K` | fails: `D3D12CreateDevice`, `DXGI_ERROR_UNSUPPORTED` | clears, then fails: `CreateComputePipelineState`, `E_ACCESSDENIED` |
+| Plain AppContainer, with `WIN32K` | fails as the first row | same |
+| Plain AppContainer, without `WIN32K`, everything else kept | **runs** | **runs** |
+
+So two things must go: the `WIN32K` mitigation, and the less-privileged form. Dropping
+`PROHIBIT_DYNAMIC_CODE`, `EXTENSION_POINT_DISABLE` or the job's UI limits changed
+nothing, so they stay. In the row that runs, listing the user's profile was denied,
+but binding a UDP socket and listening on a loopback TCP port were **allowed**, where
+the renderer's form cannot start Winsock. Why the less-privileged form fails was not
+found; if it is a file the driver reads, a grant might recover it. Whether this
+container can connect out was not measured, and 5.26's escape attempts must. The
 lists are found by measuring each driver and are written down with what each
 entry is for; `ioctl` argument filtering is stated per driver or stated as
 absent. Real drivers (Intel, AMD, NVIDIA, Apple) can need different lists, so an
@@ -1589,9 +1605,8 @@ The four biggest first.
 - **Three tier-2 crates change at once** (5.18, 5.19). As 4.12, each lands as
   one pull request with proofs, mutations and process tests green.
 - **Three platforms multiply the GPU path.** Windows brings a third raw backend
-  and COM vtables to audit, and the sandbox question is sharper there: the
-  renderer's `WIN32K` lockdown probably cannot apply to a GPU process, which would
-  make it noticeably weaker than the renderer's on that OS. Some process tests are
+  and COM vtables to audit, and the GPU process's sandbox is measurably weaker than
+  the renderer's there (5.21a): no `WIN32K` lockdown, and sockets can be bound. Some process tests are
   Unix-only today (README) and must be ported for the exit.
 - **Buffer sharing is platform-specific and unproven here.** IOSurface's Mach port
   from a sandboxed process, composition surfaces from an AppContainer, and dma-buf
