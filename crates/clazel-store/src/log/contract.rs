@@ -83,4 +83,96 @@ pub open spec fn bucket_commit_ensures(old: State, ops: Seq<Op>, quota: nat, new
     &&& new == commit_state(old, ops, quota)
 }
 
+
+// ---------------------------------------------------------------------------
+// A bucket's log: what the shell's file holds
+// ---------------------------------------------------------------------------
+//
+// The executable `BucketLog` keeps a bucket's state with the transactions
+// `written` that its file holds: the shell's file is to be exactly
+// `encode_log(identity, written)`, and the state is `apply_log(written)`.
+// Each operation below says how `written` and the state change, and
+// what the shell must do to the file to keep it that way.
+
+/// The usage a `u64` can count: below 2^64.
+pub open spec fn usage_fits(s: State) -> bool {
+    usage(s) < 0x1_0000_0000_0000_0000
+}
+
+/// Contract for `BucketLog::load(identity: &[u8], file: &[u8])`, which
+/// requires [`identity_ok`] and returns the log and the length of the
+/// file's valid prefix (the shell cuts the file there). `Some((written,
+/// state, len))`: `written` is what [`recovered`] gives, `state` its state,
+/// and `len` the length of its log. `None`: the file is refused, or the
+/// state after some recovered transaction has a usage of 2^64 or more.
+pub open spec fn load_ensures(identity: Seq<u8>, file: Seq<u8>, output: Option<(Seq<Seq<Op>>, State, nat)>) -> bool {
+    match output {
+        Some((written, state, len)) => {
+            &&& recovered(identity, file) == Some(written)
+            &&& state == apply_log(written)
+            &&& len == encode_log(identity, written).len()
+        },
+        None => match recovered(identity, file) {
+            None => true,
+            Some(ts) => exists|k: int| 0 < k <= ts.len() && !usage_fits(#[trigger] apply_log(ts.take(k))),
+        },
+    }
+}
+
+/// Contract for `BucketLog::commit(ops: &[OpRef], quota: u64) ->
+/// Option<Vec<u8>>`, from `(written, state)` to `(written2, state2)`.
+/// `Some(record)`: the transaction is admitted and valid as the next
+/// commit, the shell appends `record` to the file, and both move on by
+/// `ops`. `None`: nothing changes and nothing is written, because the
+/// quota refuses the transaction, it is not valid as the next commit, or
+/// the state after it would have a usage of 2^64 or more.
+pub open spec fn log_commit_ensures(
+    written: Seq<Seq<Op>>,
+    state: State,
+    ops: Seq<Op>,
+    quota: nat,
+    written2: Seq<Seq<Op>>,
+    state2: State,
+    output: Option<Seq<u8>>,
+) -> bool {
+    match output {
+        Some(record) => {
+            &&& admits(state, ops, quota)
+            &&& transaction_ok(written.len() + 1, ops)
+            &&& record == encode_record(written.len() + 1, ops)
+            &&& written2 == written.push(ops)
+            &&& state2 == apply_transaction(state, ops)
+        },
+        None => {
+            &&& written2 == written
+            &&& state2 == state
+            &&& (!admits(state, ops, quota) || !transaction_ok(written.len() + 1, ops) || !usage_fits(
+                apply_transaction(state, ops),
+            ))
+        },
+    }
+}
+
+/// Contract for `BucketLog::compact() -> Option<Vec<u8>>`, from
+/// `written` to `written2`, the state staying `state`. `Some(file)`: the
+/// shell replaces the file with `file`, which is the log of `written2`, a
+/// list that builds the same state. `None`: nothing changes (an entry too
+/// large to have a record of its own).
+pub open spec fn log_compact_ensures(
+    identity: Seq<u8>,
+    written: Seq<Seq<Op>>,
+    state: State,
+    written2: Seq<Seq<Op>>,
+    output: Option<Seq<u8>>,
+) -> bool {
+    match output {
+        Some(file) => {
+            &&& log_ok(written2)
+            &&& file == encode_log(identity, written2)
+            &&& apply_log(written2) == state
+        },
+        None => written2 == written,
+    }
+}
+
 } // verus!
