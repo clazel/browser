@@ -9,8 +9,8 @@
 //! 3. every `unsafe` is a block or an `unsafe extern` block, never an
 //!    `unsafe fn`, `impl` or `trait`;
 //! 4. each `unsafe { }` block holds exactly one call, to a foreign function
-//!    on a fixed list ([`FOREIGN_FUNCTIONS`]; `syscall` only with a number
-//!    from [`SYSCALLS`]), and no pointer dereference;
+//!    on its file's fixed list ([`FOREIGN_FUNCTIONS`]; `syscall` only with a
+//!    number from [`SYSCALLS`]), and no pointer dereference;
 //! 5. each `unsafe` has a `// SAFETY:` comment directly above it that cites
 //!    a man page (`man 2 prctl`);
 //! 6. no raw pointer arithmetic, and no public foreign function: the crate's
@@ -38,29 +38,43 @@ pub const CRATE_NAME: &str = "clazel-sys";
 /// The audit log.
 pub const AUDITS: &str = "docs/SYS-AUDITS.md";
 
-/// Foreign functions `clazel-sys` may declare or call. `syscall` is the
-/// route to `seccomp(2)`, the three `landlock_*` system calls and `ptrace(2)`
-/// on Linux (glibc does not wrap the first four, and its `ptrace` is variadic
-/// with a request type that differs between libcs); it may only be called with a number from
-/// [`SYSCALLS`]. Errno is read with `std::io::Error::last_os_error`, which
-/// is safe, so it needs no entry.
-pub const FOREIGN_FUNCTIONS: &[&str] = &[
-    "sandbox_init",
-    "sandbox_free_error",
+/// What `crates/clazel-sys/src/linux.rs` may call. `syscall` is the route to
+/// `seccomp(2)`, the three `landlock_*` system calls and `ptrace(2)` (glibc does
+/// not wrap the first four, and its `ptrace` is variadic with a request type that
+/// differs between libcs); it may only be called with a number from [`SYSCALLS`].
+const LINUX: &[&str] = &[
     "prctl",
     "syscall",
     "unshare",
     // The escape attempts of the sandbox tests (phase-2.md item 2.16): each
     // returns only whether the OS allowed it. `fork`'s child calls `_exit`
-    // at once. `ptrace` is a foreign function on macOS; on Linux it is
-    // reached through `syscall` with `SYS_ptrace`.
+    // at once.
+    "fork",
+    "_exit",
+    // Cryptographically secure random bytes for the TLS client
+    // (`clazel_sys::fill_random`): the `libc` wrapper with flags 0, not
+    // `syscall`. It only writes into a caller's buffer.
+    "getrandom",
+];
+
+/// What `crates/clazel-sys/src/macos.rs` may declare and call.
+const MACOS: &[&str] = &[
+    "sandbox_init",
+    "sandbox_free_error",
+    // The escape attempts of the sandbox tests, as on Linux. `ptrace` is a
+    // foreign function here.
     "fork",
     "_exit",
     "ptrace",
-    // Windows (`clazel-sys/src/windows.rs`): start a process inside an
-    // AppContainer and a Job Object, check the token, and one escape attempt
-    // (`OpenProcess`, the analogue of `ptrace` attach). Each is documented on
-    // Microsoft Learn, cited as `docs <function>`.
+    // `clazel_sys::fill_random`. It only writes into a caller's buffer.
+    "getentropy",
+];
+
+/// What `crates/clazel-sys/src/windows.rs` may declare and call. Each is
+/// documented on Microsoft Learn, cited as `docs <function>`.
+const WINDOWS: &[&str] = &[
+    // Start a process inside an AppContainer and a Job Object, check the token,
+    // and one escape attempt (`OpenProcess`, the analogue of `ptrace` attach).
     "CreateAppContainerProfile",
     "DeriveAppContainerSidFromAppContainerName",
     "GetLengthSid",
@@ -80,22 +94,20 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     "OpenProcess",
     "OpenProcessToken",
     "GetTokenInformation",
-    // Cryptographically secure random bytes for the TLS client
-    // (`clazel_sys::fill_random`): `getrandom(2)` with flags 0 on Linux (the
-    // `libc` wrapper, not `syscall`), `getentropy(2)` on macOS and
-    // `BCryptGenRandom` with the system-preferred RNG on Windows. Each only
-    // writes into a caller's buffer.
-    "getrandom",
-    "getentropy",
+    // `clazel_sys::fill_random`, with the system-preferred RNG. It only writes
+    // into a caller's buffer.
     "BCryptGenRandom",
     // The DNS servers on Windows, which has no `/etc/resolv.conf`
     // (`clazel_sys::windows::adapter_addresses`): `GetAdaptersAddresses`
     // only writes into a caller's buffer, whose octets the proven reader in
     // `clazel-dns` (`adapters`) reads without following a pointer.
     "GetAdaptersAddresses",
-    // The host's window on Windows (`clazel_sys::windows::window`, phase-5.md
-    // item 5.22a). `DefWindowProcW` is never called from Rust: it is declared so
-    // that its address can be the window procedure.
+];
+
+/// What `crates/clazel-sys/src/windows/window.rs` may declare and call: the host's
+/// window on Windows (phase-5.md item 5.22a). `DefWindowProcW` is never called from
+/// Rust: it is declared so that its address can be the window procedure.
+const WINDOW: &[&str] = &[
     "RegisterClassExW",
     "DefWindowProcW",
     "LoadCursorW",
@@ -116,6 +128,25 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     "SetDIBitsToDevice",
     "GetModuleHandleW",
 ];
+
+/// Foreign functions `clazel-sys` may declare or call, by the file that may do so
+/// (repo-relative). A file not named here may use none, so that an API's calls stay
+/// in its own module and a mistyped path fails the check. Errno is read with
+/// `std::io::Error::last_os_error`, which is safe, so it needs no entry.
+pub const FOREIGN_FUNCTIONS: &[(&str, &[&str])] = &[
+    ("crates/clazel-sys/src/linux.rs", LINUX),
+    ("crates/clazel-sys/src/macos.rs", MACOS),
+    ("crates/clazel-sys/src/windows.rs", WINDOWS),
+    ("crates/clazel-sys/src/windows/window.rs", WINDOW),
+];
+
+/// The foreign functions `path` may use.
+fn permitted_in(path: &str) -> &'static [&'static str] {
+    FOREIGN_FUNCTIONS
+        .iter()
+        .find(|(file, _)| *file == path)
+        .map_or(&[], |(_, names)| *names)
+}
 
 /// The system call numbers `syscall` may be given (names as in `libc`).
 pub const SYSCALLS: &[&str] = &[
@@ -158,16 +189,22 @@ const NOT_CALLS: &[&str] = &[
 pub struct File {
     /// Violations as (1-based line, what).
     pub violations: Vec<(usize, String)>,
+    /// The foreign functions this file may use.
+    permitted: &'static [&'static str],
 }
 
-/// Check one source file of `clazel-sys` against rules 3 to 6.
-pub fn check_source(source: &str) -> Result<File, String> {
+/// Check one source file of `clazel-sys`, at the repo-relative `path`, against
+/// rules 3 to 6.
+pub fn check_source(path: &str, source: &str) -> Result<File, String> {
     let stream: TokenStream = source
         .parse()
         .map_err(|e: proc_macro2::LexError| format!("cannot tokenize: {e}"))?;
     let tokens: Vec<TokenTree> = stream.into_iter().collect();
     let lines: Vec<&str> = source.lines().collect();
-    let mut file = File::default();
+    let mut file = File {
+        permitted: permitted_in(path),
+        ..File::default()
+    };
     walk(&tokens, None, &lines, &mut file);
     file.violations.sort();
     Ok(file)
@@ -325,11 +362,13 @@ fn call_or_turbofish(next: Option<&TokenTree>, tokens: &[TokenTree], k: usize) -
 /// A call `name(args)` inside an `unsafe` block: it must be a permitted
 /// foreign function, and `syscall` only with a permitted number.
 fn check_call(name: &str, args: &Group, line: usize, block: &mut Block, file: &mut File) {
-    if !FOREIGN_FUNCTIONS.contains(&name) {
+    if !file.permitted.contains(&name) {
         flag(
             file,
             line,
-            format!("`{name}` is not a permitted foreign function (see xtask/src/sys.rs)"),
+            format!(
+                "`{name}` is not a permitted foreign function in this file (see xtask/src/sys.rs)"
+            ),
         );
         return;
     }
@@ -382,12 +421,12 @@ fn check_extern(g: &Group, file: &mut File) {
                     Some(TokenTree::Ident(n)) => n.to_string(),
                     _ => String::new(),
                 };
-                if !FOREIGN_FUNCTIONS.contains(&name.as_str()) {
+                if !file.permitted.contains(&name.as_str()) {
                     flag(
                         file,
                         line,
                         format!(
-                            "`{name}` is not a permitted foreign function (see xtask/src/sys.rs)"
+                            "`{name}` is not a permitted foreign function in this file (see xtask/src/sys.rs)"
                         ),
                     );
                 }
@@ -853,8 +892,15 @@ mod tests {
     const SHA_A: &str = "83cafc50284caea07fa8762df04b00cc0af441f25cdf1631d6c30987c65af446";
     const SHA_B: &str = "7f1d2ff4c6e25d8ef7c1b0f7ae5a7b9d5dd1d4f3f2f4ad8a4d0d9e1f2a3b4c5d";
 
+    const LINUX_FILE: &str = "crates/clazel-sys/src/linux.rs";
+    const MACOS_FILE: &str = "crates/clazel-sys/src/macos.rs";
+
     fn violations(src: &str) -> Result<Vec<String>, String> {
-        Ok(check_source(src)?
+        violations_in(LINUX_FILE, src)
+    }
+
+    fn violations_in(path: &str, src: &str) -> Result<Vec<String>, String> {
+        Ok(check_source(path, src)?
             .violations
             .into_iter()
             .map(|(line, what)| format!("{line}: {what}"))
@@ -881,7 +927,29 @@ mod tests {
                      // for the call.\nlet r = unsafe { sandbox_init(p, 0, e) };\n\
                      // SAFETY: man 3 sandbox_init; declared as in <sandbox.h>.\n\
                      unsafe extern \"C\" { fn sandbox_init(a: i32) -> i32; }";
-        assert_eq!(violations(multi)?, Vec::<String>::new());
+        assert_eq!(violations_in(MACOS_FILE, multi)?, Vec::<String>::new());
+        Ok(())
+    }
+
+    #[test]
+    fn planted_foreign_function_of_another_file() -> Result<(), String> {
+        let decl = "// SAFETY: man 3 sandbox_init.\n\
+                    unsafe extern \"C\" { fn sandbox_init(a: i32) -> i32; }";
+        assert_eq!(violations_in(MACOS_FILE, decl)?, Vec::<String>::new());
+        for path in [LINUX_FILE, "crates/clazel-sys/src/lib.rs", "src/macos.rs"] {
+            assert!(
+                violations_in(path, decl)?
+                    .iter()
+                    .any(|m| m.contains("`sandbox_init` is not a permitted")),
+                "{path}"
+            );
+        }
+        let call = good("libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)");
+        assert!(
+            violations_in(MACOS_FILE, &call)?
+                .iter()
+                .any(|m| m.contains("`prctl` is not a permitted"))
+        );
         Ok(())
     }
 

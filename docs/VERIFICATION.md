@@ -258,7 +258,7 @@ precisely. "Audited" means two things, neither of them a human approval:
    - `unsafe_code` is overridden in `clazel-sys` and nowhere else, and only
      that lint;
    - its only dependency is `libc`, pinned exactly;
-   - only foreign functions from a fixed list in `xtask/src/sys.rs` may be
+   - only foreign functions from a fixed list per file in `xtask/src/sys.rs` may be
      declared or called (`sandbox_init`, `sandbox_free_error`, `prctl`,
      `unshare`, and `syscall` with only the numbers of `seccomp` and the three
      `landlock_*` calls);
