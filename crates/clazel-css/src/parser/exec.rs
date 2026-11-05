@@ -7,8 +7,7 @@
 //! twin is a list of [`ValueFrame`]s. [`unwind`] says what the spec's recursion does with
 //! them, so each step of the loop is one unfolding of the spec.
 
-#[allow(unused_imports)]
-use super::contract::{at_index, position_of};
+pub use super::contract::*;
 use super::rows::*;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -1029,7 +1028,10 @@ pub fn read_component_value(
         let (token, after) = read_token(text, flag, at, Ghost(idx));
         let ghost token_view = crate::tokenizer::exec::view_token(token);
         if matches!(token, ExecToken::Eof) || is_ending(&token, ending) {
-            let frame = stack.pop().unwrap();
+            let frame = match stack.pop() {
+                Some(frame) => frame,
+                None => return at,
+            };
             rows.push(ExecRow { pos: frame.pos, start: frame.lo });
             proof {
                 lemma_extends_push(old_rows, before_rows, rows@.last());
@@ -1038,7 +1040,7 @@ pub fn read_component_value(
             if !matches!(token, ExecToken::Eof) {
                 at = after;
             }
-            if stack.len() == 0 {
+            if stack.is_empty() {
                 proof {
                     assert(before_stack[0] == frame);
                     lemma_machine_done(
@@ -1095,11 +1097,11 @@ pub fn read_component_value(
                 assert(before_stack[0] == stack@[0]);
                 lemma_machine_top(text@, flag, rows@, stack@, frames, idx, target);
             }
-            let (parent, _) = crate::tokenizer::exec::next_token(
-                text,
-                stack[stack.len() - 1].pos as usize,
-                flag,
-            );
+            let parent_pos = match stack.as_slice().get(stack.len().saturating_sub(1)) {
+                Some(frame) => frame.pos,
+                None => return at,
+            };
+            let (parent, _) = crate::tokenizer::exec::next_token(text, parent_pos as usize, flag);
             proof {
                 assert(stack@.last() == stack@[stack.len() - 1]);
             }

@@ -172,7 +172,7 @@ pub open spec fn view_tokens(tokens: Seq<ExecToken>) -> Seq<Token> {
 }
 
 /// The code point at `i`, or EOF.
-fn peek(input: &[u32], i: usize) -> (c: u32)
+pub fn peek(input: &[u32], i: usize) -> (c: u32)
     ensures
         c == at(input@, i as int),
 {

@@ -10,8 +10,6 @@
 //! the array. The two agree, because a rule that reaches its `{` always comes back: this
 //! crate is a generic processor, so [`rule_is_valid`] holds.
 
-#[allow(unused_imports)]
-use super::contract::{at_index, position_of};
 use super::exec::*;
 use super::exec_declaration::*;
 use super::exec_lists::*;
@@ -320,7 +318,8 @@ fn custom_step_of(state: u8, token: &ExecToken) -> (r: u8)
         ExecToken::Whitespace => state,
         ExecToken::Ident { value } => {
             if state == 0 {
-                if value.len() >= 2 && value[0] == 0x2D && value[1] == 0x2D {
+                if value.len() >= 2 && crate::tokenizer::exec::peek(value.as_slice(), 0) == 0x2D
+                    && crate::tokenizer::exec::peek(value.as_slice(), 1) == 0x2D {
                     1
                 } else {
                     3
@@ -567,7 +566,6 @@ fn read_qualified_prelude(
             at = next;
         } else {
             state = custom_step_of(state, &token);
-            let leaf = !opens(&token);
             let end = read_component_value(text, false, token, at, next, rows, Ghost(idx));
             proof {
                 let (value, after) = consume_a_component_value(input, idx);
@@ -1778,7 +1776,7 @@ pub fn read_at_head(
     let ghost input = stream_of(text@, false);
     let ghost name = at_name(input, index);
     let lo = rows.len();
-    let (first, next) = read_token(text, false, pos, Ghost(index));
+    let (_, next) = read_token(text, false, pos, Ghost(index));
     let (at, Ghost(j)) = read_at_prelude(text, next, nested, rows, Ghost(index + 1), Ghost(name));
     let hi = rows.len();
     let (token, after) = read_token(text, false, at, Ghost(j));
@@ -2083,13 +2081,22 @@ proof fn lemma_statement_item(
 {
 }
 
+/// How [`read_blocks`] starts.
+#[derive(Clone, Copy)]
+pub struct BlockStart {
+    /// The position after the block's `{`.
+    pub after_open: usize,
+    /// The rule the block belongs to.
+    pub first: ExecItem,
+    /// True if nothing comes of the block.
+    pub discard: bool,
+}
+
 /// "Consume a block" and the rule it makes, with `first` the rule. Every block inside goes
 /// through the one loop: `stack` holds a rule for each block that is open.
 pub fn read_blocks(
     text: &[u32],
-    after_open: usize,
-    first: ExecItem,
-    discard: bool,
+    start: BlockStart,
     rows: &mut Vec<ExecRow>,
     decls: &mut Vec<ExecDeclaration>,
     items: &mut Vec<ExecItem>,
@@ -2098,15 +2105,15 @@ pub fn read_blocks(
 ) -> (r: (usize, Ghost<int>))
     requires
         text_fits(text@),
-        at_index(text@, false, open + 1, after_open as int),
-        after_open <= text.len(),
+        at_index(text@, false, open + 1, start.after_open as int),
+        start.after_open <= text.len(),
         is(next_token(stream_of(text@, false), open), Token::OpenCurly),
-        first.start == old(items).len(),
-        frame_ok(text@, old(rows)@, first, block),
+        start.first.start == old(items).len(),
+        frame_ok(text@, old(rows)@, start.first, block),
         out_wf(out_of(old(rows)@, old(decls)@, old(items)@)),
-        room(text@, old(rows).len() as nat, open + 1, after_open as int),
+        room(text@, old(rows).len() as nat, open + 1, start.after_open as int),
         budget(old(decls).len() as nat, old(items).len() as nat, 0, open),
-        discard == (block is Discard),
+        start.discard == (block is Discard),
     ensures
         ({
             let input = stream_of(text@, false);
@@ -2116,19 +2123,22 @@ pub fn read_blocks(
             &&& r.1@ == after
             &&& after > open
             &&& at_index(text@, false, after, r.0 as int)
-            &&& after_open <= r.0 <= text.len()
+            &&& start.after_open <= r.0 <= text.len()
             &&& out_wf(new)
             &&& out_grows(before, new)
             &&& room(text@, final(rows).len() as nat, after, r.0 as int)
             &&& budget(final(decls).len() as nat, final(items).len() as nat, 0, after)
-            &&& discard ==> final(items)@ == old(items)@
-            &&& !discard ==> final(items).len() > old(items).len()
-            &&& !discard ==> final(items)@.last().start == old(items).len()
-            &&& !discard ==> item_view(text@, new, final(items).len() - 1) == (BlockItem::Rule {
+            &&& start.discard ==> final(items)@ == old(items)@
+            &&& !start.discard ==> final(items).len() > old(items).len()
+            &&& !start.discard ==> final(items)@.last().start == old(items).len()
+            &&& !start.discard ==> item_view(text@, new, final(items).len() - 1) == (BlockItem::Rule {
                 rule: out.unwrap(),
             })
         }),
 {
+    let after_open = start.after_open;
+    let first = start.first;
+    let discard = start.discard;
     let ghost input = stream_of(text@, false);
     let ghost before = out_of(rows@, decls@, items@);
     let ghost target = block_result(input, open, block);
@@ -2172,6 +2182,9 @@ pub fn read_blocks(
             cur <= decls.len(),
             discard == (block is Discard),
             first.start == old(items).len(),
+            after_open == start.after_open,
+            first == start.first,
+            discard == start.discard,
         decreases 2 * tokens_left(text@, false, idx) + stack.len(),
     {
         let ghost o = out_of(rows@, decls@, items@);
@@ -2191,7 +2204,10 @@ pub fn read_blocks(
         } else if matches!(token, ExecToken::Eof) || matches!(token, ExecToken::CloseCurly) {
             flush_declarations(items, decls.len(), cur);
             let ghost f = out_of(rows@, decls@, items@);
-            let frame = stack.pop().unwrap();
+            let frame = match stack.pop() {
+                Some(frame) => frame,
+                None => return (at, Ghost(idx)),
+            };
             let end = if matches!(token, ExecToken::Eof) {
                 at
             } else {
@@ -2200,7 +2216,7 @@ pub fn read_blocks(
             proof {
                 assert(before_stack.last() == frame);
             }
-            if stack.len() == 0 {
+            if stack.is_empty() {
                 proof {
                     assert(before_stack[0] == frame);
                     assert(before_frames.last() == before_frames[0]);

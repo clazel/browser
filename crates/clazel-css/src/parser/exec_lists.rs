@@ -3,8 +3,6 @@
 //! declaration". Each is one `loop` around [`super::exec::read_component_value`], whose
 //! invariant is that the spec's loop gives the same from here.
 
-#[allow(unused_imports)]
-use super::contract::{at_index, position_of};
 use super::exec::*;
 use super::rows::*;
 #[allow(unused_imports)]

@@ -20,11 +20,13 @@ verus! {
 // Contracts of the exec parser
 // ------------------------------------------------------------------------------------
 
-/// What the exec functions need of the input: positions and places in the output arrays,
-/// kept as `u32`, fit. A rule costs at most a few entries for each token it takes, so this
-/// is a good deal more than it needs to be, and 8 times `MAX_BODY`, 64 MiB.
+/// The longest input the parser takes, 8 times `MAX_BODY`, 64 MiB. Positions and places in
+/// the output arrays are `u32`, and a rule costs a few entries for each token it takes.
+pub const MAX_PARSER_INPUT: usize = 0x2000_0000;
+
+/// What the exec functions need of the input.
 pub open spec fn parser_input_requires(input: Seq<u32>) -> bool {
-    input.len() <= 0x2000_0000
+    input.len() <= MAX_PARSER_INPUT
 }
 
 /// True if `pos` is where reading gives token `index` of `text`'s stream.

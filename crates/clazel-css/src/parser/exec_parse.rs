@@ -1,8 +1,6 @@
 //! The parser's entry points, proven to meet [`super::contract`]. Each takes the code points
 //! of a string, runs "filter code points", and reads in lockstep.
 
-#[allow(unused_imports)]
-use super::contract::*;
 use super::exec::*;
 use super::exec_declaration::*;
 use super::exec_lists::*;
@@ -183,9 +181,7 @@ fn read_at_rule(
     } else {
         let (finish, Ghost(next)) = read_blocks(
             text,
-            end,
-            item,
-            false,
+            BlockStart { after_open: end, first: item, discard: false },
             rows,
             decls,
             items,
@@ -266,9 +262,7 @@ fn read_qualified_rule(
     let (finish, Ghost(next)) = if status == 1 {
         read_blocks(
             text,
-            end,
-            item,
-            false,
+            BlockStart { after_open: end, first: item, discard: false },
             rows,
             decls,
             items,
@@ -278,9 +272,7 @@ fn read_qualified_rule(
     } else {
         read_blocks(
             text,
-            end,
-            item,
-            true,
+            BlockStart { after_open: end, first: item, discard: true },
             rows,
             decls,
             items,
@@ -365,7 +357,7 @@ fn read_stylesheet_contents(
             }
             at = end;
         } else {
-            let (pushed, end, Ghost(after)) = read_qualified_rule(
+            let (_, end, Ghost(after)) = read_qualified_rule(
                 text,
                 at,
                 rows,
@@ -376,7 +368,7 @@ fn read_stylesheet_contents(
             proof {
                 let n = out_of(rows@, decls@, items@);
                 let result = consume_a_qualified_rule(input, before, None, false).0;
-                if pushed {
+                if result is Rule {
                     let rule = as_option(result).unwrap();
                     lemma_item_pushed(text@, o, n, 0);
                     lemma_child_rules_push(list, rule);
@@ -759,11 +751,8 @@ pub fn parse_rule(input: &[u32]) -> (r: (ExecParsed, bool))
     let (token, _) = read_token(text.as_slice(), false, start, Ghost(first));
     let mut found = false;
     if !matches!(token, ExecToken::Eof) {
-        let mut have_rule = true;
-        let mut end = start;
-        let ghost mut after = first;
-        if matches!(token, ExecToken::AtKeyword { .. }) {
-            let (e, Ghost(a)) = read_at_rule(
+        let (have_rule, end, Ghost(after)) = if matches!(token, ExecToken::AtKeyword { .. }) {
+            let (e, a) = read_at_rule(
                 text.as_slice(),
                 start,
                 &mut rows,
@@ -771,25 +760,17 @@ pub fn parse_rule(input: &[u32]) -> (r: (ExecParsed, bool))
                 &mut items,
                 Ghost(first),
             );
-            end = e;
-            proof {
-                after = a;
-            }
+            (true, e, a)
         } else {
-            let (pushed, e, Ghost(a)) = read_qualified_rule(
+            read_qualified_rule(
                 text.as_slice(),
                 start,
                 &mut rows,
                 &mut declarations,
                 &mut items,
                 Ghost(first),
-            );
-            have_rule = pushed;
-            end = e;
-            proof {
-                after = a;
-            }
-        }
+            )
+        };
         if have_rule {
             let (last, Ghost(last_index)) = skip_whitespace(
                 text.as_slice(),
@@ -901,7 +882,7 @@ pub fn parse_declaration_list(input: &[u32]) -> (r: ExecParsed)
             at = end;
         } else {
             let ghost before_decls = declarations@;
-            let (some, end, Ghost(after)) = read_declaration(
+            let (_, end, Ghost(after)) = read_declaration(
                 text.as_slice(),
                 start,
                 false,
@@ -912,7 +893,7 @@ pub fn parse_declaration_list(input: &[u32]) -> (r: ExecParsed)
             );
             proof {
                 let n = out_of(rows@, declarations@, Seq::empty());
-                if some {
+                if consume_a_declaration(stream, first, false).0 is Some {
                     let decl = consume_a_declaration(stream, first, false).0.unwrap();
                     let k = before_decls.len() as int;
                     assert forall|j: int| 0 <= j < k implies before_decls[j]

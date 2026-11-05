@@ -9,8 +9,6 @@
 //! remnants are read, and a name that is not custom stops at a `{` with a value before it.
 //! That is what makes `a:b{a:b{…` linear.
 
-#[allow(unused_imports)]
-use super::contract::{at_index, position_of};
 use super::exec::*;
 use super::exec_lists::*;
 use super::rows::*;
@@ -866,15 +864,14 @@ fn lowercase(c: u32) -> (r: u32)
     ensures
         r == ascii_lowercase(c),
 {
-    if 0x41 <= c && c <= 0x5A {
-        c + 0x20
-    } else {
-        c
+    match c {
+        0x41..=0x5A => c.saturating_add(0x20),
+        _ => c,
     }
 }
 
 /// True if `string` is an ASCII case-insensitive match for `target`.
-fn matches_ignoring_case(string: &Vec<u32>, target: &[u32]) -> (r: bool)
+fn matches_ignoring_case(string: &[u32], target: &[u32]) -> (r: bool)
     ensures
         r == ascii_case_insensitive_match(string@, target@),
 {
@@ -889,7 +886,10 @@ fn matches_ignoring_case(string: &Vec<u32>, target: &[u32]) -> (r: bool)
             matches_from(string@, target@, 0) == matches_from(string@, target@, i as int),
         decreases string.len() - i,
     {
-        if lowercase(string[i]) != target[i] {
+        if lowercase(crate::tokenizer::exec::peek(string, i)) != crate::tokenizer::exec::peek(
+            target,
+            i,
+        ) {
             proof {
                 lemma_mismatch(string@, target@, 0, i as int);
             }
@@ -898,7 +898,7 @@ fn matches_ignoring_case(string: &Vec<u32>, target: &[u32]) -> (r: bool)
         proof {
             lemma_match_step(string@, target@, i as int);
         }
-        i = i + 1;
+        i = i.saturating_add(1);
     }
     true
 }
@@ -928,7 +928,7 @@ proof fn lemma_mismatch(string: Seq<u32>, target: Seq<u32>, i: int, k: int)
 }
 
 /// True if `value` is an "important", as a number for a mark.
-fn is_important_word(value: &Vec<u32>) -> (r: bool)
+fn is_important_word(value: &[u32]) -> (r: bool)
     ensures
         r == ascii_case_insensitive_match(value@, important_string()),
 {
@@ -939,6 +939,22 @@ fn is_important_word(value: &Vec<u32>) -> (r: bool)
     matches_ignoring_case(value, word.as_slice())
 }
 
+/// [`item_kind`] of an `<ident-token>`.
+fn ident_kind(value: &[u32]) -> (r: u8)
+    ensures
+        r == (if ascii_case_insensitive_match(value@, important_string()) {
+            2u8
+        } else {
+            0u8
+        }),
+{
+    if is_important_word(value) {
+        2
+    } else {
+        0
+    }
+}
+
 /// [`item_kind`] of a token.
 fn kind_of(token: &ExecToken) -> (r: u8)
     ensures
@@ -947,22 +963,14 @@ fn kind_of(token: &ExecToken) -> (r: u8)
         ),
 {
     match token {
-        ExecToken::Delim { value } => if *value == 0x21 {
-            1
-        } else {
-            0
-        },
-        ExecToken::Ident { value } => if is_important_word(value) {
-            2
-        } else {
-            0
-        },
+        ExecToken::Delim { value: 0x21 } => 1,
+        ExecToken::Ident { value } => ident_kind(value.as_slice()),
         _ => 0,
     }
 }
 
 /// True if `name` is "unicode-range", ASCII case-insensitively.
-fn is_unicode_range_name(name: &Vec<u32>) -> (r: bool)
+fn is_unicode_range_name(name: &[u32]) -> (r: bool)
     ensures
         r == ascii_case_insensitive_match(name@, unicode_range_string()),
 {
@@ -976,11 +984,12 @@ fn is_unicode_range_name(name: &Vec<u32>) -> (r: bool)
 }
 
 /// True if `name` is a custom property name string.
-fn is_custom_name(name: &Vec<u32>) -> (r: bool)
+fn is_custom_name(name: &[u32]) -> (r: bool)
     ensures
         r == is_custom_property_name_string(name@),
 {
-    name.len() >= 2 && name[0] == 0x2D && name[1] == 0x2D
+    name.len() >= 2 && crate::tokenizer::exec::peek(name, 0) == 0x2D
+        && crate::tokenizer::exec::peek(name, 1) == 0x2D
 }
 
 /// What the row of a value read from `token` says it is.
@@ -1023,8 +1032,8 @@ fn copy_of(text: &[u32], from: usize, to: usize) -> (r: Vec<u32>)
             out@ == text@.subrange(from as int, i as int),
         decreases to - i,
     {
-        out.push(text[i]);
-        i = i + 1;
+        out.push(crate::tokenizer::exec::peek(text, i));
+        i = i.saturating_add(1);
         proof {
             assert(out@ =~= text@.subrange(from as int, i as int));
         }
@@ -1042,15 +1051,27 @@ pub open spec fn declaration_result(
     declaration_value(input, start, nested, name)
 }
 
+/// How a declaration's value is to be read.
+#[derive(Clone, Copy)]
+struct ValueRead {
+    /// Where it starts.
+    pos: usize,
+    /// "nested".
+    nested: bool,
+    /// True if the caller goes back on failure.
+    attempt: bool,
+    /// True if the name is a custom property name string.
+    custom: bool,
+    /// True if the name is "unicode-range".
+    unicode: bool,
+    /// Where reading gives the name.
+    name_pos: usize,
+}
+
 /// Steps 5 to 9 of "consume a declaration".
 fn read_declaration_value(
     text: &[u32],
-    pos: usize,
-    nested: bool,
-    attempt: bool,
-    custom: bool,
-    unicode: bool,
-    name_pos: usize,
+    how: ValueRead,
     rows: &mut Vec<ExecRow>,
     decls: &mut Vec<ExecDeclaration>,
     Ghost(start): Ghost<int>,
@@ -1058,19 +1079,24 @@ fn read_declaration_value(
 ) -> (r: (bool, usize, Ghost<int>))
     requires
         text_requires(text@),
-        at_index(text@, false, start, pos as int),
-        pos <= text.len(),
-        name_pos <= text.len(),
-        room(text@, old(rows).len() as nat, start, pos as int),
+        at_index(text@, false, start, how.pos as int),
+        how.pos <= text.len(),
+        how.name_pos <= text.len(),
+        room(text@, old(rows).len() as nat, start, how.pos as int),
         old(decls).len() < u32::MAX,
-        custom == is_custom_property_name_string(name),
-        unicode == ascii_case_insensitive_match(name, unicode_range_string()),
+        how.custom == is_custom_property_name_string(name),
+        how.unicode == ascii_case_insensitive_match(name, unicode_range_string()),
         token_value(
-            ComponentValue::Token { token: token_at(text@, false, name_pos as int) },
+            ComponentValue::Token { token: token_at(text@, false, how.name_pos as int) },
         ) == name,
     ensures
         ({
-            let (decl, after) = declaration_value(stream_of(text@, false), start, nested, name);
+            let (decl, after) = declaration_value(
+                stream_of(text@, false),
+                start,
+                how.nested,
+                name,
+            );
             &&& r.0 == (decl is Some)
             &&& r.0 ==> final(decls).len() == old(decls).len() + 1
             &&& r.0 ==> final(decls)@.drop_last() == old(decls)@
@@ -1081,13 +1107,24 @@ fn read_declaration_value(
             &&& r.0 ==> extends(old(rows)@, final(rows)@)
             &&& !r.0 ==> final(rows)@ == old(rows)@
             &&& !r.0 ==> final(decls)@ == old(decls)@
-            &&& (r.0 || !attempt) ==> r.2@ == after
-            &&& (r.0 || !attempt) ==> at_index(text@, false, after, r.1 as int)
-            &&& (r.0 || !attempt) ==> pos <= r.1 <= text.len()
-            &&& (r.0 || !attempt) ==> after >= start
-            &&& (r.0 || !attempt) ==> room(text@, final(rows).len() as nat, after, r.1 as int)
+            &&& (r.0 || !how.attempt) ==> r.2@ == after
+            &&& (r.0 || !how.attempt) ==> at_index(text@, false, after, r.1 as int)
+            &&& (r.0 || !how.attempt) ==> how.pos <= r.1 <= text.len()
+            &&& (r.0 || !how.attempt) ==> after >= start
+            &&& (r.0 || !how.attempt) ==> room(
+                text@,
+                final(rows).len() as nat,
+                after,
+                r.1 as int,
+            )
         }),
 {
+    let pos = how.pos;
+    let nested = how.nested;
+    let attempt = how.attempt;
+    let custom = how.custom;
+    let unicode = how.unicode;
+    let name_pos = how.name_pos;
     let ghost input = stream_of(text@, false);
     let ghost target = consume_a_list_of_component_values(
         input,
@@ -1156,6 +1193,12 @@ fn read_declaration_value(
             idx > start ==> at >= input.source.unwrap().spans[start].end,
             read_any == (idx > start),
             custom == is_custom_property_name_string(name),
+            pos == how.pos,
+            nested == how.nested,
+            attempt == how.attempt,
+            custom == how.custom,
+            unicode == how.unicode,
+            name_pos == how.name_pos,
         ensures
             is(next_token(input, idx), Token::Eof) || is(next_token(input, idx), Token::Semicolon)
                 || (nested && is(next_token(input, idx), Token::CloseCurly)),
@@ -1222,7 +1265,7 @@ fn read_declaration_value(
                 return (false, pos, Ghost(start));
             }
             let kind = kind_of(&token);
-            let leaf = !opens(&token);
+            let ghost leaf = !opens_a_value(token_view);
             let end = if matches!(token, ExecToken::CloseCurly) {
                 let start_row = rows.len() as u32;
                 rows.push(ExecRow { pos: at as u32, start: start_row });
@@ -1234,7 +1277,7 @@ fn read_declaration_value(
             run_count = if run_count >= 2 {
                 2
             } else {
-                run_count + 1
+                run_count.saturating_add(1)
             };
             let first = Mark { pos: end, h: rows.len(), curly: run_curly, count: run_count, last: kind };
             proof {
@@ -1355,7 +1398,7 @@ fn read_declaration_value(
             lemma_at_start(part@, true);
             crate::tokenizer::lemmas::lemma_loop_bounded(part@, 0, true, Seq::empty());
         }
-        let read = read_list(part.as_slice(), true, 0, 0, false, rows, Ghost(0));
+        let (_, Ghost(read_end)) = read_list(part.as_slice(), true, 0, 0, false, rows, Ghost(0));
         decls.push(
             ExecDeclaration {
                 name_pos: name_pos as u32,
@@ -1384,9 +1427,9 @@ fn read_declaration_value(
                 == consume_the_value_of_a_unicode_range_descriptor(seg));
             // Rows: what the segment added is paid for by its tokens, and it has no more
             // than one for each code point, and the EOF token, which adds no row.
-            assert(read.1@ < stream.tokens.len());
+            assert(read_end < stream.tokens.len());
             assert(stream.tokens.len() <= seg.len() + 1);
-            assert(rows.len() <= lo + read.1@);
+            assert(rows.len() <= lo + read_end);
             assert(seg.len() <= at - pos);
             assert(tokens_left(text@, false, idx) <= tokens_left(text@, false, start));
         }
@@ -1453,7 +1496,11 @@ pub fn read_declaration(
     let (first, next) = read_token(text, false, pos, Ghost(index));
     let ghost first_view = crate::tokenizer::exec::view_token(first);
     let (is_name, custom, unicode) = match &first {
-        ExecToken::Ident { value } => (true, is_custom_name(value), is_unicode_range_name(value)),
+        ExecToken::Ident { value } => (
+            true,
+            is_custom_name(value.as_slice()),
+            is_unicode_range_name(value.as_slice()),
+        ),
         _ => (false, false, false),
     };
     if !is_name {
@@ -1481,12 +1528,7 @@ pub fn read_declaration(
     );
     read_declaration_value(
         text,
-        value_pos,
-        nested,
-        attempt,
-        custom,
-        unicode,
-        pos,
+        ValueRead { pos: value_pos, nested, attempt, custom, unicode, name_pos: pos },
         rows,
         decls,
         Ghost(start),
