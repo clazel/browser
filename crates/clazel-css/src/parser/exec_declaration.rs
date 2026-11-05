@@ -984,7 +984,7 @@ fn is_custom_name(name: &Vec<u32>) -> (r: bool)
 }
 
 /// What the row of a value read from `token` says it is.
-proof fn lemma_value_kind(
+pub proof fn lemma_value_kind(
     text: Seq<u32>,
     rows: Seq<ExecRow>,
     k: int,
