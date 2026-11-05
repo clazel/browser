@@ -129,31 +129,70 @@ pub ghost struct Number {
 /// §4 the output of tokenization.
 pub ghost enum Token {
     /// `<ident-token>`.
-    Ident { value: Seq<u32> },
+    Ident {
+        /// The value.
+        value: Seq<u32>,
+    },
     /// `<function-token>`.
-    Function { value: Seq<u32> },
+    Function {
+        /// The value.
+        value: Seq<u32>,
+    },
     /// `<at-keyword-token>`.
-    AtKeyword { value: Seq<u32> },
-    /// `<hash-token>`. `is_id` is the type flag: true for "id", false for "unrestricted".
-    Hash { value: Seq<u32>, is_id: bool },
+    AtKeyword {
+        /// The value.
+        value: Seq<u32>,
+    },
+    /// `<hash-token>`.
+    Hash {
+        /// The value.
+        value: Seq<u32>,
+        /// The type flag: true for "id", false for "unrestricted".
+        is_id: bool,
+    },
     /// `<string-token>`.
-    String { value: Seq<u32> },
+    String {
+        /// The value.
+        value: Seq<u32>,
+    },
     /// `<bad-string-token>`.
     BadString,
     /// `<url-token>`.
-    Url { value: Seq<u32> },
+    Url {
+        /// The value.
+        value: Seq<u32>,
+    },
     /// `<bad-url-token>`.
     BadUrl,
     /// `<delim-token>`.
-    Delim { value: u32 },
+    Delim {
+        /// The value.
+        value: u32,
+    },
     /// `<number-token>`.
-    Number { number: Number },
+    Number {
+        /// The number.
+        number: Number,
+    },
     /// `<percentage-token>`.
-    Percentage { number: Number },
+    Percentage {
+        /// The number.
+        number: Number,
+    },
     /// `<dimension-token>`.
-    Dimension { number: Number, unit: Seq<u32> },
+    Dimension {
+        /// The number.
+        number: Number,
+        /// The unit.
+        unit: Seq<u32>,
+    },
     /// `<unicode-range-token>`.
-    UnicodeRange { start: nat, end: nat },
+    UnicodeRange {
+        /// The starting code point.
+        start: nat,
+        /// The ending code point.
+        end: nat,
+    },
     /// `<whitespace-token>`.
     Whitespace,
     /// `<CDO-token>`.

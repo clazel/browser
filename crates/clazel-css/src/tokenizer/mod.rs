@@ -2,8 +2,10 @@
 //!
 //! - [`spec`]: the transcription of the standard.
 //! - [`contract`]: what the executable code is proven to satisfy.
+//! - [`exec`]: the tokenizer.
 //! - [`termination`]: why the spec's recursive functions end.
 
 pub mod contract;
+pub mod exec;
 pub mod spec;
 pub mod termination;
