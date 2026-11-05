@@ -24,6 +24,10 @@
 //! - The "Otherwise"s of steps 2 and 3 read as "if the step before returned nothing".
 //!   Step 2 can match the pattern and get failure, and then step 3 is next, as for no
 //!   match at all.
+//! - [`determine_the_fallback_encoding`] calls "get an encoding" for steps 1 and 2 first
+//!   and then decides in [`fallback_from_steps`]. "Get an encoding" has no effects, so
+//!   calling it when step 1 has already returned changes nothing. Keeping the decision
+//!   apart lets [`super::examples`] reach every branch without walking the labels table.
 //! - [`decode_bytes`] is `None` when [`clazel_encoding::hooks::spec::decode`] is: that
 //!   crate has no decoder yet for the encoding the bytes need, and says so rather than
 //!   guess (see its modelling choices). The text has no such case.
@@ -85,29 +89,18 @@ pub open spec fn ascii_string(bytes: Seq<u8>) -> Seq<u32> {
     bytes.map_values(|b: u8| b as u32)
 }
 
-/// §3.2 <https://drafts.csswg.org/css-syntax-3/#determine-the-fallback-encoding>.
-pub open spec fn determine_the_fallback_encoding(
-    stylesheet: Seq<u8>,
-    protocol_label: Option<Seq<u32>>,
+/// What steps 1 to 4 of [`determine_the_fallback_encoding`] return, from what "get an
+/// encoding" gave in steps 1 and 2.
+pub open spec fn fallback_from_steps(
+    from_protocol: Option<clazel_encoding::labels::spec::Encoding>,
+    from_declaration: Option<clazel_encoding::labels::spec::Encoding>,
     environment_encoding: Option<clazel_encoding::labels::spec::Encoding>,
 ) -> clazel_encoding::labels::spec::Encoding {
-    // 1. "If HTTP or equivalent protocol provides an encoding label … get an encoding from
-    // encoding label. If that does not return failure, return it."
-    let from_protocol = match protocol_label {
-        Some(label) => clazel_encoding::labels::spec::get_an_encoding(label),
-        None => None,
-    };
-    // 2. "Otherwise, check stylesheet's byte stream. If the first 1024 bytes of the stream
-    // begin with the hex sequence … then get an encoding from a string formed out of the
-    // sequence of XX bytes, interpreted as ASCII."
-    let from_declaration = match declared_label(first_1024_bytes(stylesheet)) {
-        Some(label) => clazel_encoding::labels::spec::get_an_encoding(ascii_string(label)),
-        None => None,
-    };
     match from_protocol {
+        // 1. "If that does not return failure, return it."
         Some(encoding) => encoding,
         None => match from_declaration {
-            // "If the return value was utf-16be or utf-16le, return utf-8; if it was
+            // 2. "If the return value was utf-16be or utf-16le, return utf-8; if it was
             // anything else except failure, return it."
             Some(encoding) => if encoding == clazel_encoding::labels::spec::Encoding::Utf16Be
                 || encoding == clazel_encoding::labels::spec::Encoding::Utf16Le {
@@ -124,6 +117,28 @@ pub open spec fn determine_the_fallback_encoding(
             },
         },
     }
+}
+
+/// §3.2 <https://drafts.csswg.org/css-syntax-3/#determine-the-fallback-encoding>.
+pub open spec fn determine_the_fallback_encoding(
+    stylesheet: Seq<u8>,
+    protocol_label: Option<Seq<u32>>,
+    environment_encoding: Option<clazel_encoding::labels::spec::Encoding>,
+) -> clazel_encoding::labels::spec::Encoding {
+    // 1. "If HTTP or equivalent protocol provides an encoding label … get an encoding from
+    // encoding label."
+    let from_protocol = match protocol_label {
+        Some(label) => clazel_encoding::labels::spec::get_an_encoding(label),
+        None => None,
+    };
+    // 2. "Otherwise, check stylesheet's byte stream. If the first 1024 bytes of the stream
+    // begin with the hex sequence … then get an encoding from a string formed out of the
+    // sequence of XX bytes, interpreted as ASCII."
+    let from_declaration = match declared_label(first_1024_bytes(stylesheet)) {
+        Some(label) => clazel_encoding::labels::spec::get_an_encoding(ascii_string(label)),
+        None => None,
+    };
+    fallback_from_steps(from_protocol, from_declaration, environment_encoding)
 }
 
 /// §3.2 "decode" a stylesheet's stream of bytes,
