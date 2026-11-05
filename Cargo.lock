@@ -172,6 +172,9 @@ dependencies = [
 [[package]]
 name = "clazel-css"
 version = "0.0.0"
+dependencies = [
+ "vstd",
+]
 
 [[package]]
 name = "clazel-der"

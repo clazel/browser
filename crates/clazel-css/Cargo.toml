@@ -4,14 +4,20 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "CSS parsing for Clazel's Phase 5 browser (phase-5.md items 5.2 to 5.7). Holds only its test data so far."
+description = "CSS parsing for Clazel's Phase 5 browser (phase-5.md items 5.2 to 5.7): CSS Syntax Level 3."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
-# shipped code today, which is nothing: the crate has no code yet. `target-tier`
+# shipped code today, which is nothing yet. `target-tier`
 # is what the policy requires, since this will parse style sheets a page chose.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+
+[package.metadata.verus]
+verify = true
 
 [lints]
 workspace = true
