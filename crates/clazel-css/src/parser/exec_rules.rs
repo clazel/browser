@@ -1057,7 +1057,7 @@ proof fn lemma_rule_start(
         ),
 {
     reveal(rule_machine);
-        reveal(frames_stable);
+    reveal(frames_stable);
     let stack = seq![first];
     let frames = seq![RuleFrame { block, rules: Seq::empty(), decls: Seq::empty() }];
     let hi = o.items.len() as int;
@@ -1113,6 +1113,7 @@ proof fn lemma_rule_rows(
         n.items == o.items,
     ensures
         rule_machine(text, input, n, stack, frames, cur, index, target),
+        out_grows(o, n),
 {
     reveal(rule_machine);
     assert(out_grows(o, n));
@@ -1181,9 +1182,10 @@ proof fn lemma_rule_declaration(
             next,
             target,
         ),
+        out_grows(o, n),
 {
     reveal(rule_machine);
-        let top = frames.last();
+    let top = frames.last();
     let m = frames.len() as int;
     let updated = frames.update(
         m - 1,
@@ -1234,9 +1236,10 @@ proof fn lemma_rule_nothing(
         ),
     ensures
         rule_machine(text, input, o, stack, frames, cur, next, target),
+        next > index,
 {
     reveal(rule_machine);
-        super::termination::lemma_qualified_rule_forward(
+    super::termination::lemma_qualified_rule_forward(
         input,
         index,
         Some(Token::Semicolon),
@@ -1381,7 +1384,7 @@ proof fn lemma_rule_statement(
         ),
 {
     reveal(rule_machine);
-        let top = frames.last();
+    let top = frames.last();
     let m = frames.len() as int;
     let rules = with_declarations(top.rules, top.decls).push(BlockItem::Rule { rule });
     let updated = frames.update(
@@ -1469,7 +1472,7 @@ proof fn lemma_rule_push(
         ),
 {
     reveal(rule_machine);
-        let top = frames.last();
+    let top = frames.last();
     let m = frames.len() as int;
     let flushed = with_declarations(top.rules, top.decls);
     let parent = RuleFrame { block: top.block, rules: flushed, decls: Seq::empty() };
@@ -1574,7 +1577,7 @@ proof fn lemma_rule_close(
         }),
 {
     reveal(rule_machine);
-        let m = frames.len() as int;
+    let m = frames.len() as int;
     let top = frames.last();
     let parent = frames[m - 2];
     let frame = stack.last();
@@ -1698,13 +1701,810 @@ proof fn lemma_rule_done(
         stack.last().start <= o.items.len(),
 {
     reveal(rule_machine);
-        let top = frames.last();
+    let top = frames.last();
     lemma_stable_top(text, o, stack, frames);
     lemma_flushed(text, o, f, stack.last().start as int, cur);
     assert(blocks_contents_loop(input, index, top.rules, top.decls) == (
         with_declarations(top.rules, top.decls),
         index,
     ));
+}
+
+// ------------------------------------------------------------------------------------
+// The heads of rules
+// ------------------------------------------------------------------------------------
+
+/// What the text being parsed must be: small enough that every place fits a `u32`.
+pub open spec fn text_fits(text: Seq<u32>) -> bool {
+    &&& text_requires(text)
+    &&& text.len() <= 0x2000_0000
+    &&& stream_of(text, false).tokens.len() <= text.len() + 1
+}
+
+/// The name of the at-rule at `index`.
+pub open spec fn at_name(input: TokenStream, index: int) -> Seq<u32> {
+    token_value(next_token(input, index))
+}
+
+/// An at-rule, up to the end of a statement or past the `{` of its block.
+fn read_at_head(
+    text: &[u32],
+    pos: usize,
+    nested: bool,
+    rows: &mut Vec<ExecRow>,
+    Ghost(index): Ghost<int>,
+) -> (r: (bool, usize, Ghost<int>, ExecItem))
+    requires
+        text_fits(text@),
+        at_index(text@, false, index, pos as int),
+        pos <= text.len(),
+        is_at_keyword(next_token(stream_of(text@, false), index)),
+        room(text@, old(rows).len() as nat, index, pos as int),
+    ensures
+        ({
+            let input = stream_of(text@, false);
+            let lo = old(rows).len() as int;
+            let hi = final(rows).len() as int;
+            let name = at_name(input, index);
+            let prelude = view_list(text@, false, final(rows)@, lo, hi);
+            &&& extends(old(rows)@, final(rows)@)
+            &&& lo <= hi
+            &&& r.2@ > index
+            &&& pos <= r.1 <= text.len()
+            &&& r.3.pos == pos
+            &&& r.3.lo == lo
+            &&& r.3.hi == hi
+            &&& token_value(
+                ComponentValue::Token { token: token_at(text@, false, pos as int) },
+            ) == name
+            &&& r.0 ==> r.3.kind is StatementAtRule
+            &&& r.0 ==> consume_an_at_rule(input, index, nested) == (
+                Some(Rule::AtRule { name, prelude, child_rules: None }),
+                r.2@,
+            )
+            &&& r.0 ==> at_index(text@, false, r.2@, r.1 as int)
+            &&& r.0 ==> room(text@, hi as nat, r.2@, r.1 as int)
+            &&& !r.0 ==> r.3.kind is BlockAtRule
+            &&& !r.0 ==> is(next_token(input, r.2@), Token::OpenCurly)
+            &&& !r.0 ==> consume_an_at_rule(input, index, nested) == block_result(
+                input,
+                r.2@,
+                Block::AtRule { name, prelude },
+            )
+            &&& !r.0 ==> at_index(text@, false, r.2@ + 1, r.1 as int)
+            &&& !r.0 ==> room(text@, hi as nat, r.2@ + 1, r.1 as int)
+        }),
+{
+    let ghost input = stream_of(text@, false);
+    let ghost name = at_name(input, index);
+    let lo = rows.len();
+    let (first, next) = read_token(text, false, pos, Ghost(index));
+    let (at, Ghost(j)) = read_at_prelude(text, next, nested, rows, Ghost(index + 1), Ghost(name));
+    let hi = rows.len();
+    let (token, after) = read_token(text, false, at, Ghost(j));
+    if matches!(token, ExecToken::OpenCurly) {
+        return (
+            false,
+            after,
+            Ghost(j),
+            ExecItem {
+                kind: ExecItemKind::BlockAtRule,
+                pos: pos as u32,
+                start: 0,
+                lo: lo as u32,
+                hi: hi as u32,
+            },
+        );
+    }
+    let item = ExecItem {
+        kind: ExecItemKind::StatementAtRule,
+        pos: pos as u32,
+        start: 0,
+        lo: lo as u32,
+        hi: hi as u32,
+    };
+    if matches!(token, ExecToken::Semicolon) {
+        (true, after, Ghost(j + 1), item)
+    } else {
+        (true, at, Ghost(j), item)
+    }
+}
+
+/// What a qualified rule's result is as a rule.
+pub open spec fn as_option(result: QualifiedRuleResult) -> Option<Rule> {
+    match result {
+        QualifiedRuleResult::Rule { rule } => Some(rule),
+        _ => None,
+    }
+}
+
+/// A qualified rule, up to where it gives nothing, or past the `{` of its block. The first
+/// result is 0 for nothing, 1 for a block that makes a rule, and 2 for a block to discard.
+fn read_qualified_head(
+    text: &[u32],
+    pos: usize,
+    stop: u8,
+    nested: bool,
+    rows: &mut Vec<ExecRow>,
+    Ghost(index): Ghost<int>,
+) -> (r: (u8, usize, Ghost<int>))
+    requires
+        text_fits(text@),
+        at_index(text@, false, index, pos as int),
+        pos <= text.len(),
+        room(text@, old(rows).len() as nat, index, pos as int),
+    ensures
+        ({
+            let input = stream_of(text@, false);
+            let lo = old(rows).len() as int;
+            let hi = final(rows).len() as int;
+            let prelude = view_list(text@, false, final(rows)@, lo, hi);
+            let (result, after) = consume_a_qualified_rule(input, index, stop_token(stop), nested);
+            &&& extends(old(rows)@, final(rows)@)
+            &&& lo <= hi
+            &&& r.2@ >= index
+            &&& pos <= r.1 <= text.len()
+            &&& r.0 <= 2
+            &&& r.0 == 0 ==> result is Nothing
+            &&& r.0 == 0 ==> r.2@ == after
+            &&& r.0 == 0 ==> final(rows)@ == old(rows)@
+            &&& r.0 == 0 ==> at_index(text@, false, r.2@, r.1 as int)
+            &&& r.0 == 0 ==> room(text@, hi as nat, r.2@, r.1 as int)
+            &&& r.0 != 0 ==> is(next_token(input, r.2@), Token::OpenCurly)
+            &&& r.0 != 0 ==> at_index(text@, false, r.2@ + 1, r.1 as int)
+            &&& r.0 != 0 ==> room(text@, hi as nat, r.2@ + 1, r.1 as int)
+            &&& r.0 == 1 ==> (as_option(result), after) == block_result(
+                input,
+                r.2@,
+                Block::QualifiedRule { prelude },
+            )
+            &&& r.0 == 1 ==> result is Rule
+            &&& r.0 == 2 ==> (as_option(result), after) == block_result(
+                input,
+                r.2@,
+                Block::Discard,
+            )
+            &&& r.0 == 2 ==> !nested
+        }),
+{
+    let ghost input = stream_of(text@, false);
+    let ghost old_rows = rows@;
+    let lo = rows.len();
+    let (at, Ghost(j), state) = read_qualified_prelude(text, pos, stop, nested, rows, Ghost(index));
+    let ghost prelude = view_list(text@, false, rows@, lo as int, rows.len() as int);
+    proof {
+        lemma_custom_prelude(prelude);
+    }
+    let (token, after) = read_token(text, false, at, Ghost(j));
+    if !matches!(token, ExecToken::OpenCurly) {
+        let ghost whole = rows@;
+        rows.truncate(lo);
+        proof {
+            assert(rows@ =~= old_rows) by {
+                assert forall|k: int| 0 <= k < old_rows.len() implies old_rows[k] == rows@[k] by {
+                    assert(old_rows[k] == whole[k]);
+                }
+            }
+        }
+        return (0, at, Ghost(j));
+    }
+    if state == 2 {
+        if nested {
+            let ghost whole = rows@;
+            rows.truncate(lo);
+            proof {
+                assert(rows@ =~= old_rows) by {
+                    assert forall|k: int| 0 <= k < old_rows.len() implies old_rows[k] == rows@[k] by {
+                        assert(old_rows[k] == whole[k]);
+                    }
+                }
+            }
+            let (end, Ghost(k)) = read_remnants(text, false, at, true, Ghost(j));
+            return (0, end, Ghost(k));
+        }
+        return (2, after, Ghost(j));
+    }
+    (1, after, Ghost(j))
+}
+
+// ------------------------------------------------------------------------------------
+// Blocks
+// ------------------------------------------------------------------------------------
+
+/// A rule that came back: "If decls is not empty, append it to rules", then the rule. This
+/// is the at-keyword branch of "consume a block's contents".
+proof fn lemma_contents_at(
+    input: TokenStream,
+    top: RuleFrame,
+    index: int,
+    rule: Rule,
+    next: int,
+)
+    requires
+        is_at_keyword(next_token(input, index)),
+        consume_an_at_rule(input, index, true) == (Some(rule), next),
+    ensures
+        resume(input, top, Some(rule), next) == blocks_contents_loop(
+            input,
+            index,
+            top.rules,
+            top.decls,
+        ),
+{
+    super::termination::lemma_at_rule_advances(input, index, true);
+}
+
+/// Likewise, for the "anything else" branch.
+proof fn lemma_contents_qualified(
+    input: TokenStream,
+    top: RuleFrame,
+    index: int,
+    rule: Rule,
+    next: int,
+)
+    requires
+        is_anything_else(next_token(input, index)),
+        consume_a_declaration(input, index, true).0 is None,
+        consume_a_qualified_rule(input, index, Some(Token::Semicolon), true) == (
+            QualifiedRuleResult::Rule { rule },
+            next,
+        ),
+    ensures
+        resume(input, top, Some(rule), next) == blocks_contents_loop(
+            input,
+            index,
+            top.rules,
+            top.decls,
+        ),
+{
+    super::termination::lemma_qualified_rule_forward(
+        input,
+        index,
+        Some(Token::Semicolon),
+        true,
+        Seq::empty(),
+    );
+}
+
+/// The arrays as they stand.
+pub open spec fn out_of(
+    rows: Seq<ExecRow>,
+    decls: Seq<ExecDeclaration>,
+    items: Seq<ExecItem>,
+) -> Out {
+    Out { rows, decls, items }
+}
+
+/// How much of the arrays' `u32` space a step has used. A token pays for 3 items: a block's
+/// `{` pays for the declarations waiting before it and for the rule and the declarations
+/// inside it, which each open block holds 2 for.
+pub open spec fn budget(decls: nat, items: nat, stack: nat, index: int) -> bool {
+    decls <= index && items + 2 * stack <= 3 * index
+}
+
+/// [`out_grows`] goes through.
+proof fn lemma_grows_chain(a: Out, b: Out, c: Out)
+    requires
+        out_grows(a, b),
+        out_grows(b, c),
+    ensures
+        out_grows(a, c),
+{
+    lemma_extends_chain(a.rows, b.rows, c.rows);
+    assert forall|j: int| 0 <= j < a.decls.len() implies a.decls[j] == c.decls[j] by {
+        assert(a.decls[j] == b.decls[j]);
+    }
+    assert forall|k: int| 0 <= k < a.items.len() implies a.items[k] == c.items[k] by {
+        assert(a.items[k] == b.items[k]);
+    }
+}
+
+/// Nothing grows.
+proof fn lemma_grows_same(o: Out)
+    ensures
+        out_grows(o, o),
+{
+}
+
+/// Cutting the items of `f` back to those of `before`.
+proof fn lemma_cut_items(before: Out, f: Out, n: Out)
+    requires
+        out_wf(f),
+        out_grows(before, f),
+        n.rows == f.rows,
+        n.decls == f.decls,
+        n.items == f.items.subrange(0, before.items.len() as int),
+    ensures
+        out_wf(n),
+        out_grows(before, n),
+        n.items == before.items,
+{
+    assert(n.items =~= before.items);
+    assert forall|k: int| 0 <= k < n.items.len() implies #[trigger] item_wf(n, k) by {
+        assert(item_wf(f, k));
+        assert(n.items[k] == f.items[k]);
+    }
+}
+
+/// The outermost rule goes on the end.
+proof fn lemma_rule_finish(text: Seq<u32>, f: Out, n: Out, first: ExecItem, block: Block)
+    requires
+        out_wf(f),
+        frame_ok(text, f.rows, first, block),
+        first.start <= f.items.len(),
+        !(block is Discard),
+        n == (Out { rows: f.rows, decls: f.decls, items: f.items.push(first) }),
+    ensures
+        out_wf(n),
+        out_grows(f, n),
+        item_view(text, n, f.items.len() as int) == (BlockItem::Rule {
+            rule: outcome(
+                block,
+                items_view(text, f, first.start as int, f.items.len() as int),
+            ).unwrap(),
+        }),
+{
+    let k = f.items.len() as int;
+    assert forall|j: int| 0 <= j < f.items.len() implies f.items[j] == n.items[j] by {}
+    assert forall|j: int| 0 <= j < f.rows.len() implies f.rows[j] == n.rows[j] by {}
+    assert(n.items[k] == first);
+    assert(out_grows(f, n));
+    assert(item_wf(n, k));
+    lemma_wf_grows(f, n);
+    lemma_agree_items(text, f, n, first.start as int, k);
+    lemma_frame_item(
+        text,
+        n,
+        k,
+        block,
+        items_view(text, f, first.start as int, k),
+    );
+}
+
+/// The item of an at-rule with no block.
+proof fn lemma_statement_item(
+    text: Seq<u32>,
+    n: Out,
+    k: int,
+    name: Seq<u32>,
+    prelude: Seq<ComponentValue>,
+)
+    requires
+        0 <= k < n.items.len(),
+        n.items[k].kind is StatementAtRule,
+        token_value(
+            ComponentValue::Token { token: token_at(text, false, n.items[k].pos as int) },
+        ) == name,
+        view_list(text, false, n.rows, n.items[k].lo as int, n.items[k].hi as int) == prelude,
+    ensures
+        item_view(text, n, k) == (BlockItem::Rule {
+            rule: Rule::AtRule { name, prelude, child_rules: None },
+        }),
+{
+}
+
+/// "Consume a block" and the rule it makes, with `first` the rule. Every block inside goes
+/// through the one loop: `stack` holds a rule for each block that is open.
+pub fn read_blocks(
+    text: &[u32],
+    after_open: usize,
+    first: ExecItem,
+    discard: bool,
+    rows: &mut Vec<ExecRow>,
+    decls: &mut Vec<ExecDeclaration>,
+    items: &mut Vec<ExecItem>,
+    Ghost(open): Ghost<int>,
+    Ghost(block): Ghost<Block>,
+) -> (r: (usize, Ghost<int>))
+    requires
+        text_fits(text@),
+        at_index(text@, false, open + 1, after_open as int),
+        after_open <= text.len(),
+        is(next_token(stream_of(text@, false), open), Token::OpenCurly),
+        first.start == old(items).len(),
+        frame_ok(text@, old(rows)@, first, block),
+        out_wf(out_of(old(rows)@, old(decls)@, old(items)@)),
+        room(text@, old(rows).len() as nat, open + 1, after_open as int),
+        budget(old(decls).len() as nat, old(items).len() as nat, 0, open),
+        discard == (block is Discard),
+    ensures
+        ({
+            let input = stream_of(text@, false);
+            let (out, after) = block_result(input, open, block);
+            let before = out_of(old(rows)@, old(decls)@, old(items)@);
+            let new = out_of(final(rows)@, final(decls)@, final(items)@);
+            &&& r.1@ == after
+            &&& after > open
+            &&& at_index(text@, false, after, r.0 as int)
+            &&& after_open <= r.0 <= text.len()
+            &&& out_wf(new)
+            &&& out_grows(before, new)
+            &&& room(text@, final(rows).len() as nat, after, r.0 as int)
+            &&& budget(final(decls).len() as nat, final(items).len() as nat, 0, after)
+            &&& discard ==> final(items)@ == old(items)@
+            &&& !discard ==> final(items).len() > old(items).len()
+            &&& !discard ==> final(items)@.last().start == old(items).len()
+            &&& !discard ==> item_view(text@, new, final(items).len() - 1) == (BlockItem::Rule {
+                rule: out.unwrap(),
+            })
+        }),
+{
+    let ghost input = stream_of(text@, false);
+    let ghost before = out_of(rows@, decls@, items@);
+    let ghost target = block_result(input, open, block);
+    let mut stack: Vec<ExecItem> = Vec::new();
+    stack.push(first);
+    let ghost mut frames = seq![RuleFrame { block, rules: Seq::empty(), decls: Seq::empty() }];
+    let mut cur = decls.len();
+    let mut at = after_open;
+    let ghost mut idx = open + 1;
+    proof {
+        assert(stack@ =~= seq![first]);
+        lemma_rule_start(text@, input, before, first, block, open);
+        lemma_grows_same(before);
+    }
+    loop
+        invariant
+            text_fits(text@),
+            input == stream_of(text@, false),
+            target == block_result(input, open, block),
+            at_index(text@, false, idx, at as int),
+            after_open <= at <= text.len(),
+            idx > open,
+            rule_machine(
+                text@,
+                input,
+                out_of(rows@, decls@, items@),
+                stack@,
+                frames,
+                cur as int,
+                idx,
+                target,
+            ),
+            stack.len() == frames.len(),
+            stack.len() > 0,
+            stack@[0] == first,
+            frames[0].block == block,
+            before == out_of(old(rows)@, old(decls)@, old(items)@),
+            out_grows(before, out_of(rows@, decls@, items@)),
+            room(text@, rows.len() as nat, idx, at as int),
+            budget(decls.len() as nat, items.len() as nat, stack.len() as nat, idx),
+            cur <= decls.len(),
+            discard == (block is Discard),
+            first.start == old(items).len(),
+        decreases 2 * tokens_left(text@, false, idx) + stack.len(),
+    {
+        let ghost o = out_of(rows@, decls@, items@);
+        let ghost before_stack = stack@;
+        let ghost before_frames = frames;
+        let ghost before_idx = idx;
+        let ghost before_cur = cur as int;
+        let ghost top = frames.last();
+        let ghost m = frames.len() as int;
+        let (token, next) = read_token(text, false, at, Ghost(idx));
+        if matches!(token, ExecToken::Whitespace) || matches!(token, ExecToken::Semicolon) {
+            proof {
+                lemma_rule_skip(text@, input, o, stack@, frames, cur as int, idx, target);
+                idx = idx + 1;
+            }
+            at = next;
+        } else if matches!(token, ExecToken::Eof) || matches!(token, ExecToken::CloseCurly) {
+            flush_declarations(items, decls.len(), cur);
+            let ghost f = out_of(rows@, decls@, items@);
+            let frame = stack.pop().unwrap();
+            let end = if matches!(token, ExecToken::Eof) {
+                at
+            } else {
+                next
+            };
+            proof {
+                assert(before_stack.last() == frame);
+            }
+            if stack.len() == 0 {
+                proof {
+                    assert(before_stack[0] == frame);
+                    assert(before_frames.last() == before_frames[0]);
+                    lemma_rule_done(
+                        text@,
+                        input,
+                        o,
+                        f,
+                        before_stack,
+                        before_frames,
+                        before_cur,
+                        before_idx,
+                        target,
+                    );
+                    lemma_grows_chain(before, o, f);
+                }
+                if discard {
+                    items.truncate(first.start as usize);
+                    proof {
+                        lemma_cut_items(before, f, out_of(rows@, decls@, items@));
+                    }
+                } else {
+                    items.push(frame);
+                    proof {
+                        lemma_rule_finish(
+                            text@,
+                            f,
+                            out_of(rows@, decls@, items@),
+                            first,
+                            block,
+                        );
+                        lemma_grows_chain(before, f, out_of(rows@, decls@, items@));
+                    }
+                }
+                return (end, Ghost(target.1));
+            }
+            items.push(frame);
+            proof {
+                let n = out_of(rows@, decls@, items@);
+                let rule = closed_rule(text@, o, before_frames, before_stack, before_cur);
+                lemma_rule_close(
+                    text@,
+                    input,
+                    o,
+                    f,
+                    n,
+                    before_stack,
+                    before_frames,
+                    before_cur,
+                    before_idx,
+                    target,
+                );
+                lemma_grows_chain(before, o, n);
+                assert(stack@ =~= before_stack.drop_last());
+                frames = before_frames.drop_last().update(
+                    m - 2,
+                    RuleFrame {
+                        block: before_frames[m - 2].block,
+                        rules: before_frames[m - 2].rules.push(BlockItem::Rule { rule }),
+                        decls: Seq::empty(),
+                    },
+                );
+                idx = discard_a_token(input, before_idx);
+            }
+            cur = decls.len();
+            at = end;
+        } else if matches!(token, ExecToken::AtKeyword { .. }) {
+            let (done, end, Ghost(after), head) = read_at_head(text, at, true, rows, Ghost(idx));
+            let ghost o1 = out_of(rows@, decls@, items@);
+            let ghost name = at_name(input, before_idx);
+            let ghost prelude = view_list(
+                text@,
+                false,
+                rows@,
+                head.lo as int,
+                rows.len() as int,
+            );
+            proof {
+                lemma_rule_rows(
+                    text@,
+                    input,
+                    o,
+                    o1,
+                    before_stack,
+                    before_frames,
+                    before_cur,
+                    before_idx,
+                    target,
+                );
+            }
+            flush_declarations(items, decls.len(), cur);
+            let ghost f = out_of(rows@, decls@, items@);
+            let start = items.len() as u32;
+            let item = ExecItem { kind: head.kind, pos: head.pos, start, lo: head.lo, hi: head.hi };
+            if done {
+                items.push(item);
+                proof {
+                    let n = out_of(rows@, decls@, items@);
+                    let rule = Rule::AtRule { name, prelude, child_rules: None };
+                    assert(items@.drop_last() =~= f.items);
+                    lemma_statement_item(text@, n, f.items.len() as int, name, prelude);
+                    lemma_rule_statement(
+                        text@,
+                        input,
+                        o1,
+                        f,
+                        n,
+                        before_stack,
+                        before_frames,
+                        before_cur,
+                        before_idx,
+                        target,
+                        rule,
+                        after,
+                    );
+                    lemma_grows_chain(before, o, o1);
+                    lemma_grows_chain(before, o1, n);
+                    frames = before_frames.update(
+                        m - 1,
+                        RuleFrame {
+                            block: top.block,
+                            rules: with_declarations(top.rules, top.decls).push(
+                                BlockItem::Rule { rule },
+                            ),
+                            decls: Seq::empty(),
+                        },
+                    );
+                    idx = after;
+                }
+            } else {
+                stack.push(item);
+                proof {
+                    let child = Block::AtRule { name, prelude };
+                    let result = block_result(input, after, child);
+                    lemma_contents_at(input, top, before_idx, result.0.unwrap(), result.1);
+                    lemma_rule_push(
+                        text@,
+                        input,
+                        o1,
+                        f,
+                        before_stack,
+                        before_frames,
+                        before_cur,
+                        before_idx,
+                        target,
+                        item,
+                        child,
+                        after,
+                    );
+                    lemma_grows_chain(before, o, o1);
+                    lemma_grows_chain(before, o1, f);
+                    frames = before_frames.update(
+                        m - 1,
+                        RuleFrame {
+                            block: top.block,
+                            rules: with_declarations(top.rules, top.decls),
+                            decls: Seq::empty(),
+                        },
+                    ).push(RuleFrame { block: child, rules: Seq::empty(), decls: Seq::empty() });
+                    idx = after + 1;
+                }
+            }
+            cur = decls.len();
+            at = end;
+        } else {
+            let (found, end, Ghost(after)) = read_declaration(
+                text,
+                at,
+                true,
+                true,
+                rows,
+                decls,
+                Ghost(idx),
+            );
+            if found {
+                proof {
+                    let n = out_of(rows@, decls@, items@);
+                    let decl = consume_a_declaration(input, before_idx, true).0.unwrap();
+                    lemma_rule_declaration(
+                        text@,
+                        input,
+                        o,
+                        n,
+                        before_stack,
+                        before_frames,
+                        before_cur,
+                        before_idx,
+                        target,
+                        decl,
+                        after,
+                    );
+                    lemma_grows_chain(before, o, n);
+                    frames = before_frames.update(
+                        m - 1,
+                        RuleFrame {
+                            block: top.block,
+                            rules: top.rules,
+                            decls: top.decls.push(decl),
+                        },
+                    );
+                    idx = after;
+                }
+                at = end;
+            } else {
+                let lo = rows.len();
+                let (status, end2, Ghost(after2)) = read_qualified_head(
+                    text,
+                    at,
+                    1,
+                    true,
+                    rows,
+                    Ghost(idx),
+                );
+                if status == 0 {
+                    proof {
+                        lemma_rule_nothing(
+                            text@,
+                            input,
+                            o,
+                            before_stack,
+                            before_frames,
+                            before_cur,
+                            before_idx,
+                            target,
+                            after2,
+                        );
+                        idx = after2;
+                    }
+                    at = end2;
+                } else {
+                    let ghost o1 = out_of(rows@, decls@, items@);
+                    let ghost prelude = view_list(
+                        text@,
+                        false,
+                        rows@,
+                        lo as int,
+                        rows.len() as int,
+                    );
+                    proof {
+                        lemma_rule_rows(
+                            text@,
+                            input,
+                            o,
+                            o1,
+                            before_stack,
+                            before_frames,
+                            before_cur,
+                            before_idx,
+                            target,
+                        );
+                    }
+                    flush_declarations(items, decls.len(), cur);
+                    let ghost f = out_of(rows@, decls@, items@);
+                    let start = items.len() as u32;
+                    let item = ExecItem {
+                        kind: ExecItemKind::QualifiedRule,
+                        pos: 0,
+                        start,
+                        lo: lo as u32,
+                        hi: rows.len() as u32,
+                    };
+                    stack.push(item);
+                    proof {
+                        let child = Block::QualifiedRule { prelude };
+                        let result = block_result(input, after2, child);
+                        lemma_contents_qualified(
+                            input,
+                            top,
+                            before_idx,
+                            result.0.unwrap(),
+                            result.1,
+                        );
+                        lemma_rule_push(
+                            text@,
+                            input,
+                            o1,
+                            f,
+                            before_stack,
+                            before_frames,
+                            before_cur,
+                            before_idx,
+                            target,
+                            item,
+                            child,
+                            after2,
+                        );
+                        lemma_grows_chain(before, o, o1);
+                        lemma_grows_chain(before, o1, f);
+                        frames = before_frames.update(
+                            m - 1,
+                            RuleFrame {
+                                block: top.block,
+                                rules: with_declarations(top.rules, top.decls),
+                                decls: Seq::empty(),
+                            },
+                        ).push(RuleFrame { block: child, rules: Seq::empty(), decls: Seq::empty() });
+                        idx = after2 + 1;
+                    }
+                    cur = decls.len();
+                    at = end2;
+                }
+            }
+        }
+    }
 }
 
 } // verus!
