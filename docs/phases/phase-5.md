@@ -6,11 +6,11 @@ their selectors are matched against the DOM arena Phase 4 built (Selectors
 Level 4), the cascade gives every element its computed style (CSS Cascade
 Level 4, with HTML §15's user agent style sheet and presentational hints), the
 boxes are laid out as blocks, lines and tables (CSS 2.1 §9, §10, §17, CSS Text
-Level 3), the text is set in fonts read from OpenType files, and a rasterizer
-of our own turns the result into pixels. The host gains a native window on
-macOS and Linux, with an address bar the renderer cannot draw on. The kernel
-keeps its two display theorems in a new shape: a renderer's pixels are shown
-only in its own tab, under the URL the kernel committed there, and never
+Level 3), the text is set in fonts read from OpenType files, and a sandboxed GPU
+process draws the renderer's display list with Metal or Vulkan. The host gains a
+native window on macOS and Linux, with an address bar neither process can draw
+on. The kernel keeps its two display theorems in a new shape: a tab's pixels are
+shown only in that tab, under the URL the kernel committed there, and never
 outside the viewport the host gave it.
 
 *Exit:* `cargo run -p clazel -- browse https://news.ycombinator.com/` opens a
@@ -41,14 +41,15 @@ at the pinned text before a spec header cites them.
 
 Phase 5 is done when all of these hold on macOS arm64 and Linux x86-64:
 
-1. **Tiers**, as 5.0 decides them and `cargo xtask check` accepts. As
-   recommended: `clazel-css` and `clazel-selectors` at **tier 2** (every
+1. **Tiers**, as 5.0 decided them and `cargo xtask check` accepts:
+   `clazel-css` and `clazel-selectors` at **tier 2** (every
    mutation a certified `killed`, conformance tests, an independent
-   transcription each); `clazel-style`, `clazel-font` and `clazel-raster` at
-   **tier 1** (Kani harnesses over all inputs up to stated bounds);
-   `clazel-layout`, `clazel-window`, `clazel-renderer` and `clazel` at tier 0
-   with their items' evidence; `clazel-ipc` and `clazel-kernel` still at tier
-   2 with 5.18's and 5.19's schema and theorems.
+   transcription each); `clazel-displaylist` at **tier 2**, the GPU process's
+   parser of a renderer's bytes; `clazel-style`, `clazel-font` and
+   `clazel-raster` at **tier 1** (Kani harnesses over all inputs up to stated
+   bounds); `clazel-layout`, `clazel-gpu`, `clazel-window`, `clazel-renderer` and
+   `clazel` at tier 0 with their items' evidence; `clazel-ipc` and
+   `clazel-kernel` still at tier 2 with 5.18's and 5.19's schema and theorems.
 2. **Suites**, vendored at pinned commits, run through the shipped code, each
    printing its `clazel-conformance:` line (`xtask/src/conformance.rs`) with
    every expected failure listed by name and reason: CSS syntax, Servo's
@@ -61,9 +62,9 @@ Phase 5 is done when all of these hold on macOS arm64 and Linux x86-64:
    (5.9, 5.10) and kerning against `rustybuzz` (5.11); line breaking,
    Unicode's `LineBreakTest.txt` (5.12); layout and paint, a stated list of
    WPT `css/CSS2/`, `css/css-tables/`, `css/css-text/white-space/` and
-   `quirks/` reftests, both pages of each rendered by our engine and compared
-   pixel for pixel, with WPT's `fuzzy` annotations honoured and nothing else
-   tolerated (5.25).
+   `quirks/` reftests, both pages of each rendered by our engine on the pinned
+   lavapipe and compared pixel for pixel, with WPT's `fuzzy` annotations
+   honoured and nothing else tolerated (5.25).
 3. **Demo.** `cargo run -p clazel -- browse URL` opens a window with an
    address bar the host draws, the page below it, scrolling by wheel and keys,
    and links followed by a click. On `https://news.ycombinator.com/` and a
@@ -77,9 +78,11 @@ Phase 5 is done when all of these hold on macOS arm64 and Linux x86-64:
    kernel (5.0(f)), the demo runs on `http://` sites and the fixture, and this
    criterion says so.
 4. **Kernel theorems** (5.18, 5.19): `theorem_paint_only_own_tab`,
-   `theorem_address_bar_integrity` (the URL shown with a renderer's pixels is
-   the kernel's committed URL for its tab, whatever the renderer sends),
-   `theorem_paint_fits_viewport`, `theorem_paint_is_the_surface`,
+   `theorem_address_bar_integrity` (the URL shown with a tab's pixels is the
+   kernel's committed URL for that tab, whatever the renderer or the GPU process
+   sends), `theorem_paint_fits_viewport`, `theorem_channel_only_own_tab`,
+   `theorem_gpu_exit_contained`,
+   `theorem_gpu_restart_bounded`, `theorem_site_cannot_demote_others`,
    `theorem_input_only_to_own_tab`, `theorem_subfetch_only_to_requester` and
    `theorem_subfetch_credentials`; the Phase 2 to 4 theorems restated over the
    new events and outputs.
@@ -93,7 +96,7 @@ Phase 5 is done when all of these hold on macOS arm64 and Linux x86-64:
    inside its CI limit.
 7. `scripts/verify.sh` exits 0 and CI's full verification is green on the pull
    request that completes the phase; VERIFICATION.md's TCB names the window
-   bindings, the compositor and the system font files; every `clazel-sys`
+   bindings, the compositor, the GPU drivers and the system font files; every `clazel-sys`
    change has an audit row by another session (rule 1).
 
 ## What is proven, and what is assumed
@@ -101,40 +104,51 @@ Phase 5 is done when all of these hold on macOS arm64 and Linux x86-64:
 1. **Proven (Verus, tier 2, as 5.0(a) recommends):** the CSS Syntax 3
    tokenizer and parser as total functions, whole-input and one-step faces
    proven equal; Selectors 4 parsing, matching against the DOM arena and
-   specificity; the codec over the new messages (`clazel-ipc`); and the
-   kernel's paint, input and style sheet fetch theorems (5.18, 5.19).
+   specificity; the codec over the new messages (`clazel-ipc`); the display
+   list's decoder and validator (`clazel-displaylist`); and the kernel's paint,
+   input and style sheet fetch theorems (5.18, 5.19).
 2. **Proven free of panics and overflow (Kani, tier 1):** the property value
    parsers, the cascade and computed values (`clazel-style`); the OpenType
-   table parsers and outline decoding (`clazel-font`); the rasterizer
+   table parsers and outline decoding (`clazel-font`); the glyph mask rasterizer
    (`clazel-raster`). Each harness covers every input up to a bound written in
    the harness and the crate's README; correctness evidence is the conformance
    and differential tests.
 3. **Small and tested (Tier 0, listed in VERIFICATION.md's TCB):** the layout
-   (`clazel-layout`), the renderer's pipeline glue, and the host's window code
-   (`clazel-window`) and event loop. Layout and glue run in the sandbox, so a
-   bug there can mis-render or kill one tab but not break a kernel theorem;
-   their evidence is the reftests, the reference harness and the hostile
-   pages.
+   (`clazel-layout`), the renderer's pipeline glue, the GPU process's drawing
+   code (`clazel-gpu`), and the host's window code (`clazel-window`) and event
+   loop. Layout, glue and drawing run in sandboxes, so a bug there can
+   mis-render or kill one tab but not break a kernel theorem; their evidence is
+   the reftests, the reference harness and the hostile pages.
 4. **Assumed (TCB), new:** the OS windowing system and compositor (AppKit and
    the WindowServer; the X server, or XWayland and a Wayland compositor); the
-   windowing bindings 5.0(e) chooses; GPU drivers only if 5.0(d) brings a GPU
-   in; the system font files read by path (5.0(c)); and, as evidence that the
-   specs match the standards, the suites and engines of the differential
-   tests.
+   windowing bindings 5.0(e) chooses; the system font files read by path
+   (5.0(c)); and, as evidence that the specs match the standards, the suites and
+   engines of the differential tests. **GPU drivers** (Metal; the Vulkan loader
+   and whichever driver it picks, including the lavapipe the release ships) run inside the GPU process, on command buffers
+   derived from a page. They are large, unverified and mostly C, so they are
+   assumed only up to that process's sandbox.
 
-What a bug can and cannot do: style, fonts, layout and raster all run in the
-renderer, inside the sandbox, on bytes a server chose. A bug there can draw
-wrong pixels for its own tab or kill it. It cannot draw outside its tab's
-content area or change the address bar, because the kernel checks the size of
-what it shows (`theorem_paint_fits_viewport`), labels it itself
-(`theorem_address_bar_integrity`), and the host draws the address bar in a
-strip no surface is placed in (5.23, tested in 5.26). The host's window code
-is outside the sandbox and is the one new place where a bug matters to every
-tab; the only page-derived bytes it reads are pixels whose size the kernel has
-checked.
+What a bug can and cannot do: style, fonts and layout run in the renderer,
+inside the sandbox, on bytes a server chose. A bug there can send a wrong display
+list for its own tab or kill it. A compromised renderer can attack the GPU
+process through a list, but `clazel-displaylist`'s proven validator is the only
+way in, the pipelines and shaders are fixed at build time, and a page never
+supplies a shader. If a driver bug is reached anyway, the attacker holds one
+tab's GPU process, with that tab's drawing and whatever its sandbox allows (see
+Risks: that sandbox is necessarily weaker than the renderer's). Neither process
+can draw outside its tab's content area or change the address bar, because neither
+has a window-system connection, the OS clips each surface to a child window the
+host sized and placed outside the address bar's strip (5.23, tested in 5.26), the
+kernel refuses a surface larger than the viewport (`theorem_paint_fits_viewport`)
+and names the URL itself (`theorem_address_bar_integrity`). The host's window code
+is outside the sandbox and is the one new place where a bug matters to every tab;
+it never reads a page-derived byte, and only forwards buffers it does not map to
+the compositor, which is in the TCB.
 
-Not covered by any theorem, and said so: that the page looks right (the
-reftests and the reference harness are the evidence); timing and memory beyond
+Not covered by any theorem, and said so: that the page looks right, and that
+the GPU process's pixels are a faithful drawing of the list (the reftests and the
+reference harness are the evidence); that a surface stays inside its child window,
+which is the OS's clipping, not a theorem; timing and memory beyond
 the stated bounds; `:visited`, which never matches, and `:hover`, which has no
 state yet (5.5); characters no font maps (drawn as `.notdef`); right-to-left
 text (drawn in logical order); and the host's composition of chrome and
@@ -149,12 +163,15 @@ content, which is Tier 0 code with a test, not a theorem.
 | `clazel-style` | 0 (1) | CSS Cascade 4 §4, §6, §7; CSS 2.1 §6; CSS Values 4; CSS Color 4; CSS Fonts 3 §3; Media Queries 4 (subset); CSS Style Attributes; HTML §15.2 to §15.5; Quirks Mode | property value grammars of the subset, shorthands, the user agent style sheet, presentational hints, the cascade, inheritance, computed values as a side table keyed by node id |
 | `clazel-font` | 0 (1) | OpenType 1.9† (font file, collections, `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `loca`, `glyf`, `name`, `OS/2`, `post`, `kern`, `GPOS` type 2; `CFF` per 5.0(c)); Apple TrueType Reference Manual (second text) | the table directory, each table's parser, glyph outlines as quadratic contours, advances, kerning lookups |
 | `clazel-layout` | 0 (0) | CSS 2.1 §8 to §11, §16, §17, Appendix E; CSS Text 3; CSS Tables 3 (auto layout)†; UAX #14; HTML §15.3, §15.4; Quirks Mode §3 | the box tree, block, inline and table formatting, white space, line breaking, font matching and the shaping glue, hit testing, the display list. **Replaces `clazel-text`** (5.0(g)) |
-| `clazel-raster` | 0 (1, per 5.0(d)) | none (ours); the OpenType `glyf` chapter fixes the outline semantics | paths (lines, quadratic Béziers), flattening, anti-aliased coverage, fills, glyph masks, clipping, blending into an RGBA surface |
+| `clazel-raster` | 0 (1) | none (ours); the OpenType `glyf` chapter fixes the outline semantics | glyph outlines to coverage masks in the renderer: flattening and anti-aliased coverage only, no surface, no blending |
+| `clazel-displaylist` | 0 (2) | RFC 8949 §3; ours | the display list's types, its encoder and decoder, and the validator every list passes before any GPU call |
+| `clazel-gpu` | 0 (0) | Vulkan 1.x specification†; Apple's Metal documentation | the GPU process: fixed pipelines and shaders, batching a validated list, a glyph atlas, drawing into shared buffers; Metal and Vulkan backends |
 | `clazel-window` | 0 (0) | X Window System Protocol (X11R7)† on Linux; Apple's AppKit and Core Graphics documentation on macOS | the host's window: open, present a surface, read events; per 5.0(e) |
 | `clazel-ipc` | 2 (exists) | RFC 8949 §3; ours | the messages of 5.18 and 5.19 |
 | `clazel-kernel` | 2 (exists) | ours; Fetch for 5.19's request | viewports, paint routing, input routing, style sheet fetches, the theorems |
 | `clazel-renderer` | 0 (exists) | — | the pipeline of 5.20, inside the sandbox |
-| `clazel-sys` | 0 (exists) | man pages and Apple documentation | per 5.0(e): the macOS window calls, audited |
+| `clazel-sandbox` | 1 (exists) | ours | the GPU process's Seatbelt profile and seccomp list, per OS |
+| `clazel-sys` | 0 (exists) | man pages, Apple documentation and the Vulkan specification | per 5.0(d) and (e): the macOS window calls, Metal and Vulkan calls, audited |
 | `clazel` | 0 (exists) | — | `browse` with a window; the host shell stays under 300 lines |
 
 Each new Tier 1 or Tier 2 crate starts as `tier = 0` with its target, as in
@@ -261,6 +278,9 @@ adds only their effect.
 - **Web fonts** make font files page-controlled bytes; `clazel-font` is
   written for that now (Tier 1, hostile fonts in 5.26) and loads only local
   fonts.
+- **Video and WebGPU (Phase 8)** add producers to 5.18's direct paths and buffers;
+  the kernel still decides and carries no data, which is why this phase is built
+  that way. ROADMAP.md lists WebGL and WebGPU as non-goals "for now".
 - **Nested browsing contexts** are designed in 5.24 and built later.
 - **CSS breadth (Phase 8):** floats, positioning, flexbox, grid, transforms,
   bidi, complex shaping, `@import`, `@supports`.
@@ -270,14 +290,75 @@ adds only their effect.
 Ordered by dependency. Size: S is under a day, M a few days, L a week or more.
 Each item follows CLAUDE.md rule 3 where its crate has a Tier 2 target: spec
 and contracts in one commit, then the implementation and proof. Items in Tier
-1 crates commit the Kani harnesses' statements first. The decisions of 5.0 are
-pending; the items are written for the recommendations and say where another
-choice changes them.
+1 crates commit the Kani harnesses' statements first. The items are written for
+5.0's recommendations; where 5.0 chose otherwise, it says what is out of date.
 
-### 5.0 Decisions for the maintainer (S) — to decide
+### 5.0 Decisions for the maintainer (S) — decided
 
-Nine choices the maintainer makes before the items that depend on them. None
-is taken here; each has options, grounds, costs and a recommendation.
+Nine choices the maintainer makes before the items that depend on them; each
+has options, grounds, costs and a recommendation.
+
+**Decision (2026-11-04), by the maintainer: every recommendation below is
+taken except (d), where the maintainer chose C, a GPU rasterizer, on the ground
+that a CPU rasterizer does not scale to a full browser.** That is:
+
+- (a) **C:** tier 2 for `clazel-css` and `clazel-selectors`, tier 1 for
+  `clazel-style`, with the demo not waiting on the proofs.
+- (b) **A:** what the exit page needs, plus the collapsing border model and
+  `::before` and `::after` if time allows.
+- (c) **C1, S3, H1:** TrueType only; system fonts first, with a bundled family
+  as fallback and for every test, its licence shipped with it; `cmap`, `hmtx`
+  and pair kerning. Which family is bundled is not decided here: 5.1 proposes
+  one, with its licence read.
+- (d) **C:** a GPU rasterizer, in a new sandboxed GPU process; raw Metal and
+  Vulkan through `clazel-sys`, not `wgpu`; CI's exact pixel comparisons on one
+  pinned software Vulkan driver (lavapipe) on Linux, with smoke tests on macOS
+  and real GPUs checked locally. No second drawing backend of ours: the software
+  fallback, a driver blocklist and a crash policy (5.17c, added by the maintainer
+  2026-11-04) use the same GPU code on a software driver.
+- (e) **W1, P2:** raw platform APIs through `clazel-sys` on macOS, our own X11
+  client on Linux; (d) moves raster out of the renderer, so the renderer sends
+  a display list, which replaces P1. P2's objection, that the unsandboxed host
+  would read draw commands, does not apply: the GPU process reads them.
+- (f) Phase 3's TLS is a dependency, not Phase 5 work.
+- (g) **G3:** keep `clazel-text` until 5.26 passes, then delete it.
+- (h) **F1:** same-origin sheets with cookies, cross-origin sheets without
+  credentials.
+- (i) **I1:** design only; `iframe` stays a link.
+
+**Decided with (d), 2026-11-04, by the maintainer:**
+
+- **One GPU process per tab**, not one shared by all tabs. The kernel's theorems
+  then need no trust in the GPU process, because it only ever holds one tab's
+  drawing. A shared process would use less memory, but a compromised one could
+  read or swap every tab's pixels, and each theorem would have to assume it does
+  not. 5.26 measures the memory. A cross-site navigation replaces the tab's GPU
+  process along with its renderer, so the old site's drawing is never in reach of
+  the new site.
+- **Pixels and display lists do not pass through the kernel**, because that cannot
+  carry video or WebGPU in Phase 8: 4K at 60 frames a second is about 2 GB/s. The
+  kernel keeps every decision (who may draw, for which tab, under which URL) and
+  sees only ids and sizes. Lists go from the renderer to its GPU process on a
+  direct socket; pixels go from the GPU process to the OS compositor in shared
+  buffers. 5.18 gives the design.
+
+**Also decided, 2026-11-04, by the maintainer, as following from the above:**
+
+- **The GPU process has no window-system connection, and the host never reads a
+  buffer.** The host only forwards a buffer to the compositor, into a child window
+  the host sized, and the OS clips to it. The address bar lies outside that window,
+  and on X11 any connected client can draw on any window, so no process that reads
+  a page's bytes holds a connection. This replaces the kernel's byte-count check as
+  what keeps a surface inside the content area.
+- **Two buffer paths on Linux.** Zero-copy dma-buf (DRI3 and Present) where the
+  driver and X server support it; otherwise shared memory (MIT-SHM). Lavapipe uses
+  the second, so CI never exercises the first.
+
+**Open, found while recording this:** (g) keeps `clazel-text` until 5.26, but
+5.18 retires `Display` and `Show`, which `clazel-text`'s path uses. 5.18 cannot
+land as written before 5.26 without breaking text-mode `browse` or proving the
+display theorems over both paths in the meantime. Decide which before 5.18
+starts.
 
 **(a) The CSS parser's tier.** VERIFICATION.md requires at least Tier 1 for
 "every other parser of untrusted bytes: CSS, image decoders, font tables";
@@ -871,35 +952,140 @@ rectangle), `visibility: hidden` (painted nothing, still laid out), replaced
 boxes (nothing: the image item exists for Phase 6), and hit regions (each
 link's fragments with its resolved URL, for 5.18's clicks). The display list
 is a flat list of items in paint order, each with integer device-pixel bounds,
-so 5.17 rasterizes only the items that intersect the viewport and a scroll
-re-rasterizes without a relayout.
+so 5.20 sends only the items that intersect the viewport and a scroll draws
+again without a relayout.
 
 Tests: unit tests per item kind; the WPT `CSS2/colors`, `backgrounds`† and
 `text` reftests through 5.25's harness.
 
-### 5.17 Raster (L)
+### 5.17 Glyph masks (M)
 
-`crates/clazel-raster`, per 5.0(d); as recommended, a CPU rasterizer of our
-own, target tier 1. Inputs: a surface size and a scale (1, or 2 for HiDPI), a
-clip stack of integer rectangles, and items: fill a rectangle; fill a path
-(closed contours of lines and quadratic Béziers in 26.6 fixed point, exactly
-the `glyf` outline form) under the non-zero rule; draw a glyph (a path, cached
-as a coverage mask per glyph, size and quarter-pixel offset). Method, each a
-listed choice: Béziers flattened within a quarter pixel; exact-area coverage
-accumulated per scanline (the signed-area method of `font-rs` and
-stb_truetype's second rasterizer), clamped to [0, 1], which equals non-zero
-winding except where contours overlap with opposite orientation; source-over
-blending in 8-bit sRGB, premultiplied, without gamma correction. Output: RGBA8
-premultiplied rows.
+`crates/clazel-raster`, target tier 1, run in the renderer. The GPU draws
+rectangles and textured quads; glyph shapes are turned into coverage masks here,
+as browsers' GPU rasterizers generally also do, so font bytes never reach the
+GPU process, only masks. Input: closed contours of lines and quadratic Béziers
+in 26.6 fixed point, exactly the `glyf` outline form, under the non-zero rule,
+at a quarter-pixel offset. Method, each a listed choice: Béziers flattened
+within a quarter pixel; exact-area coverage accumulated per scanline (the
+signed-area method of `font-rs` and stb_truetype's second rasterizer), clamped
+to [0, 1], which equals non-zero winding except where contours overlap with
+opposite orientation. Output: an 8-bit mask with a stated maximum size.
 
 Kani (tier 1): for every path up to a stated number of segments with any 26.6
-coordinates in `i32`, and every surface up to a stated size, flattening and
-accumulation never panic, overflow or index out of bounds, every coverage is
-in [0, 255], and the blend never overflows. Tests: unit tests per primitive;
-every vendored font's glyphs at 8 to 72 px against `tiny-skia` or
-`ab_glyph_rasterizer` (a `test` row) within one coverage level per pixel, with
-the difference histogram reported; Miri on 64×64 surfaces only, stated in the
-tests. No GPU path unless 5.0(d) decides otherwise.
+coordinates in `i32`, and every mask up to a stated size, flattening and
+accumulation never panic, overflow or index out of bounds, and every coverage is
+in [0, 255]. Tests: unit tests per primitive; every vendored font's glyphs at 8
+to 72 px against `tiny-skia` or `ab_glyph_rasterizer` (a `test` row) within one
+coverage level per pixel, with the difference histogram reported; Miri on 64×64
+masks only, stated in the tests.
+
+### 5.17a The display list codec and validator (L)
+
+`crates/clazel-displaylist`, target tier 2; spec and contracts first (CLAUDE.md
+rule 3). A list is what 5.16 builds, encoded by the renderer and decoded by the
+GPU process, which must assume a compromised renderer wrote it. Items: fill a
+rectangle with a colour under a clip; upload a glyph mask to an id; draw masks by
+id with a colour; push and pop a clip rectangle; the image item Phase 6 fills.
+Coordinates are in device pixels, and nothing carries a shader, a pipeline, a
+buffer offset or anything else a driver would read directly.
+
+Proven: `theorem_decode_total`; `theorem_decode_encode_roundtrip`;
+`theorem_validated_bounds`: a validated list has at most a stated number of items
+and of mask bytes, every clip push has its pop within the stated depth, every
+drawn mask id was uploaded earlier in the list or an earlier frame, and every
+coordinate is in the range `clazel-gpu`'s vertex format holds, which is the whole
+of what `clazel-gpu` relies on. An independent transcription and certified
+mutations per rule, for tier 2. Conformance: a differential is not available for
+a format of ours, so the evidence is round trips on every list the reftests
+produce, and random and mutated bytes against a second decoder written in the
+test.
+
+### 5.17b The GPU process: drawing (L)
+
+`crates/clazel-gpu`, tier 0: a new process started per tab, sandboxed (5.21a),
+with no window-system connection and no network. It takes a validated list and a
+viewport and draws into one of a small ring of shared buffers (5.18), RGBA8. Fixed
+pipelines only (solid rectangles; masks through a glyph atlas), blending
+source-over in 8-bit sRGB, premultiplied, with no gamma correction, a listed
+choice. Clips are scissor rectangles. Shaders are ours and fixed at build time:
+Metal Shading Language and SPIR-V, the SPIR-V compiled from GLSL by tooling that
+never ships, with its output committed and a `cargo xtask check` row confirming
+it matches.
+
+Backends share the batching and differ below a small internal trait: Vulkan on
+Linux, with no WSI extensions because the process presents nothing, exporting
+memory through `VK_KHR_external_memory_fd` and `VK_EXT_external_memory_dma_buf`†
+(extension functions come from `vkGetDeviceProcAddr`, so the checker must learn
+to accept a call through a looked-up function pointer), and `clazel-sys` linking
+only `libvulkan`; Metal on macOS through `objc_msgSend`, drawing into an IOSurface
+as a texture. All
+foreign calls are in `clazel-sys` under rule 1, which is the largest change it
+has had: each Vulkan or Metal function joins `xtask/src/sys.rs`'s list with its
+`// SAFETY:` citation and an independent audit, and the structures passed to
+Vulkan need `#[repr(C)]` declarations written by hand and checked against the
+specification. On the shared-memory path the rows are copied into a mapped buffer;
+the checker forbids pointer arithmetic, so that is one audited call that copies.
+Direct3D 12 for Windows is Phase 8.
+
+A lost device, an out-of-memory or a failed call ends the GPU process, never the
+tab's renderer; what happens next is 5.17c's. Tests: every list item on lavapipe against stored
+pixels; the same on Metal locally; Miri runs the batching with a fake backend and
+no foreign calls, stated in the tests.
+
+### 5.17c Software fallback, driver blocklist, crash policy (M)
+
+`clazel-gpu`, `clazel-kernel` and the release. Bad drivers are common, so a
+machine with a missing, blocked or crashing driver must still show pages.
+
+**Software fallback.** On Linux, the same `clazel-gpu` code runs on Mesa's
+lavapipe, the driver CI pins (5.25), shipped with the release at that same pinned
+version and selected through the Vulkan loader's driver-file setting. So the path
+the fallback takes is the path every CI test takes, with no second drawing
+backend. It is C and C++ and brings LLVM: the release's size grows by a measured
+amount, its licences ship with it, and it is added to VERIFICATION.md's TCB and
+stated in DEPENDENCIES.md (it is not a Cargo package, so the allowlist table does
+not reach it). Its sandbox is 5.21a's without device access, which is stronger
+than the hardware profile's. It is slower; a window shows a host-drawn indicator
+that software drawing is in use, in the address bar strip. On macOS there is no
+software Metal driver to ship, and every supported macOS has Metal, so there is
+no fallback: a Metal failure goes to the notice below, listed.
+
+**Blocklist.** `crates/clazel-gpu/data/blocklist` lists vendor id, device id and
+a driver version range, each with its reason and a link to the evidence, and
+starts empty: an entry is added when a real failure is recorded. The GPU process
+reads the adapter's properties and checks the table **before it reads any list**,
+so no page has touched it yet and its answer can be believed: it sends `GpuReady`
+or `GpuRefused`, and on `GpuRefused` the kernel starts the software mode. A driver
+5.21a's sandbox kills at startup counts as refused. The table ships with the
+release, with no remote updates and nothing reported to any server. `browse
+--gpu=software` and `--gpu=hardware` override it, the second with a warning.
+
+**Crash policy**, in the kernel, as a proven state machine over a new host event
+`GpuExited { tab }`, with the numbers stated once:
+
+1. The GPU process exits: the tab keeps showing its last `Paint`, whose buffer the
+   compositor still holds; the kernel starts a new process in the same mode with a
+   new channel to the renderer, which sends its whole list again.
+2. Three exits for a tab within five minutes: that tab goes to software until it
+   navigates to another site.
+3. Exits from three different sites within five minutes: every tab goes to
+   software for the rest of the run. Counting by site is deliberate: otherwise any
+   one page could crash its own GPU process on purpose and put the whole browser
+   on the slow path.
+4. Software also fails three times, or there is no fallback: the tab stops
+   restarting, and the host draws a notice in the content area with the URL and the
+   reason. Reloading tries once more.
+
+Counts do not outlive a run until 3.10's store exists (listed), so a driver that
+crashes every time costs a few restarts on each launch.
+
+Theorems, with certified mutations: `theorem_gpu_exit_contained` (a GPU process's
+exit changes no other tab's state or output), `theorem_gpu_restart_bounded` (a
+tab's restarts per window never exceed the stated count) and
+`theorem_site_cannot_demote_others` (exits from fewer than three sites never
+change another site's mode). The paint theorems of 5.18 are restated over restarts:
+a message from an exited process's id is never a `Paint`. Tests: the state machine's rows; a fake adapter matching a blocklist entry
+falls to software; a process killed mid-frame through real processes.
 
 ### 5.18 The IPC schema and the kernel: surfaces, viewports and input (L)
 
@@ -908,42 +1094,63 @@ and tag 10 stays unused.
 
 | Tag | Direction | Message | Fields |
 |-----|-----------|---------|--------|
-| 11 | renderer to kernel | `Surface` | title (text), width, height (unsigned) |
-| 12 | renderer to kernel | `SurfaceRows` | bytes (RGBA8 premultiplied rows, at most `max_body_chunk`) |
-| 13 | renderer to kernel | `SurfaceEnd` | |
+| 11 | renderer to kernel | `Title` | title (text) |
+| 15 | GPU process to kernel | `FrameReady` | buffer (unsigned, an id from the ring the host allocated), width, height |
+| 18 | GPU process to kernel | `GpuReady` | software (bool) (5.17c) |
+| 19 | GPU process to kernel | `GpuRefused` | (5.17c) |
 | 108 | kernel to renderer | `Viewport` | width, height (device pixels), scale (1 or 2) |
+| 114 | kernel to GPU process | `GpuViewport` | width, height (device pixels), scale |
 | 109 | kernel to renderer | `Input` | kind (click, scroll, key), x, y, scroll delta as a sign (bool) and magnitude (the CBOR profile has no major type 1: `crates/clazel-ipc/src/cbor/spec.rs`), key |
 
-`clazel-kernel`: per tab, a viewport, set by a new host event `Resize { tab,
-width, height, scale }` and forwarded as `Viewport` to the tab's renderer and
-to any it later spawns; per renderer, a pending surface (the header and the
-rows so far, refused beyond `width × height × 4` bytes). On `SurfaceEnd` with
-exactly that many bytes, and `width` and `height` at most the tab's viewport,
-the output is `Paint { tab, url, title, width, height, pixels }`, `tab` and
-`url` from kernel state; anything else (too large, too short, rows with no
-header, an uncommitted renderer) is a disallowed frame under item 2.10's
-rules. A new host event `Input { tab, input }` becomes a `ToRenderer` for that
-tab's renderer only. `Show` retires with `Display`.
+**The kernel decides; it carries no pixels and no lists.** Three paths:
 
-Theorems, each with certified mutations: `theorem_paint_only_own_tab` (a
-renderer's frames give at most one `Paint`, for its own tab, and no other
-output); `theorem_address_bar_integrity` restated (`Paint.url` is the
-committed URL of the renderer the frames came from, for every message
-content); `theorem_paint_fits_viewport` (`width` and `height` at most the
-tab's viewport and `pixels.len() == width × height × 4`);
-`theorem_paint_is_the_surface` (the pixels are the renderer's rows since its
-`Surface`, in order); `theorem_input_only_to_own_tab`; the Phase 2 to 4
-theorems restated with `Paint`, `Resize` and `Input` in the observations.
-Clicks: the renderer hit-tests 5.16's regions and sends the existing
-`Navigate`, which item 2.11 already treats as the user's. Scrolling: the
-renderer keeps the offset and repaints on `Input`.
+- **Decisions, through the kernel as today:** who is spawned, viewports, which
+  buffer to show, and under which URL. A few small messages a frame.
+- **Lists, renderer to GPU process:** a socket pair the host creates when the
+  kernel's `Spawn` says so, one end inherited by each. The renderer's sandbox gains
+  no rule: its `read` and `write` do not filter by descriptor, and it has no
+  `recvmsg`, and still does not. `stdin` and `stdout` already share the kernel's
+  socket (`crates/clazel-renderer/src/launch.rs`), so a second inherited descriptor
+  needs a new audited call to clear its close-on-exec flag, with the number passed
+  as an argument (`std` has no stable way to do this). The GPU process validates
+  everything it reads (5.17a), so the kernel need not look.
+- **Pixels, GPU process to the OS compositor:** buffers shared across processes, 5.21
+  and 5.22 per OS, which the host forwards and never maps. Descriptors do not enter
+  the kernel, a pure state machine: it sees only the ring's ids. Phase 8's video and
+  WebGPU add producers to these same paths, with no change to the kernel's job.
 
-Pixels travel over the socket and through the kernel's exec copy, simple and
-proven: a 1280×800 surface at scale 1 is 4,096,000 bytes, four frames. 5.26
-measures repaint time; a shared-memory surface (`memfd_create`/`mmap`,
-`shm_open`/`mmap`: new audited `clazel-sys` calls and sandbox rules, and the
-seccomp list deliberately has no `recvmsg` for descriptor passing) is a later
-decision, not this item's.
+`clazel-kernel`: `Policy` (`crates/clazel-kernel/src/spec.rs`) gains the GPU
+process, and `Spawn` says which renderer each is paired with. One GPU process per
+tab, started with the tab's first committed renderer, replaced with it on a
+cross-site navigation. Per tab, a viewport, set by a new host event `Resize { tab,
+width, height, scale }` and forwarded as `Viewport` and `GpuViewport`. A `FrameReady`
+from the tab's current GPU process, with a buffer id in its ring and `width` and
+`height` at most the viewport, gives the output `Paint { tab, url, title, buffer,
+width, height }`, with `tab`, `url` and `title` from kernel state; anything else is
+a disallowed frame under item 2.10's rules. A message from a replaced GPU process
+is dropped, so an old site's frame is never shown under a new URL. Within one site
+a compromised GPU process could show a stale frame under a newer same-site URL,
+which gains nothing the site's own renderer could not draw (listed). The host
+changes the address bar and the surface together on `Paint`. A new host event
+`Input { tab, input }` becomes a `ToRenderer` for that tab's renderer only. `Show`
+retires with `Display`.
+
+Theorems, each with certified mutations: `theorem_paint_only_own_tab` (a GPU
+process's `FrameReady` gives at most one `Paint`, for its own tab, and no other
+output); `theorem_channel_only_own_tab` (a `Spawn` pairs a GPU process only with its
+own tab's current renderer, so no list can reach another tab's);
+`theorem_address_bar_integrity` restated (`Paint.url` is the committed URL of the
+tab, for every message content from either process, and the sender is the process
+paired with that document's site); `theorem_paint_fits_viewport` (`width` and
+`height` at most the tab's viewport); `theorem_input_only_to_own_tab`; the Phase 2
+to 4 theorems restated with `Paint`, `Resize`, `Input` and the GPU process in the
+observations. None assumes the GPU process behaves. What the kernel can no longer
+prove, because it no longer sees the bytes: that the buffer's size matches and that
+the pixels are the ones sent. The compositor and the child window bound the first,
+and the second only ever concerned one tab's own drawing. Clicks: the renderer
+hit-tests 5.16's regions and sends the existing `Navigate`, which item 2.11 already
+treats as the user's. Scrolling: the renderer keeps the offset, sends a new list and
+the GPU process redraws.
 
 ### 5.19 The kernel: style sheet fetches (L)
 
@@ -988,9 +1195,10 @@ order (5.8), send a `FetchStyle` for each `<link rel=stylesheet>` whose
 says for style sheets in `head`†; a sheet that never answers is failed by the
 kernel's timeout on `Tick`); decode each sheet (5.2's §3.2), parse (5.3),
 cascade (5.7) into the computed table, build boxes (5.13), lay out at the
-viewport width (5.14, 5.15), build the display list (5.16), rasterize the
-viewport at the scroll offset (5.17), and send `Surface`, `SurfaceRows`,
-`SurfaceEnd`. On `Viewport`: lay out again and repaint. On `Input`: scroll
+viewport width (5.14, 5.15), build the display list (5.16) for the viewport at
+the scroll offset with the glyph masks it newly needs (5.17), encode it (5.17a),
+and write it to the GPU process's socket, with `Title` to the kernel when the title
+changes. On `Viewport`: lay out again and repaint. On `Input`: scroll
 (clamped to the page) and repaint, or hit-test a click and send `Navigate`.
 `text/plain` documents become one `pre` block styled by the UA sheet; other
 types show the notice, drawn.
@@ -1002,9 +1210,29 @@ today: `crates/clazel-sandbox/src/seatbelt.rs` and `syscalls.rs`), so no
 sandbox rule is added for fonts. The memory bound of 4.13 is extended by the
 style sheets (at most the body limit each, and the per-document count), the
 computed table (one record per node), the box and fragment arenas (a constant
-per node and per glyph), the display list and one surface; stated in the crate
+per node and per glyph), the display list and the glyph masks; stated in the crate
 README with its numbers and measured by 5.26. The renderer stays
 single-threaded (no `clone` in the seccomp allowlist).
+
+### 5.21a The GPU process's sandbox (L)
+
+`clazel-sandbox` and `clazel-gpu`. A GPU driver cannot run in the renderer's
+sandbox: it opens device nodes, issues `ioctl`s, maps device memory and, on
+lavapipe and most drivers, starts threads. Per OS: on Linux, a seccomp list and
+the device paths opened before entering it, with no `socket` or `connect`, so no X
+server or network, and `sendmsg` and `recvmsg` for passing buffer descriptors to the
+host, which the renderer's list deliberately lacks; on macOS, a Seatbelt
+profile with the IOKit and Mach services Metal needs and no WindowServer. The
+lists are found by measuring each driver and are written down with what each
+entry is for; `ioctl` argument filtering is stated per driver or stated as
+absent. Real drivers (Intel, AMD, NVIDIA, Apple) can need different lists, so an
+unlisted driver that the sandbox kills falls to software (5.17c) rather than the
+sandbox widening itself. Lavapipe's profile has no device access, but needs
+threads and executable memory for its compiled shaders, which are our fixed
+shaders, never a page's. This sandbox is weaker than the renderer's, and the
+README says so. Kani: the list builders, as `clazel-sandbox` does now. Tests:
+5.26's escape attempts from inside the GPU process (open a file, connect a
+socket, reach the X server or WindowServer).
 
 ### 5.21 The window on macOS (L)
 
@@ -1018,12 +1246,14 @@ runtime (`objc_getClass`, `sel_registerName`, typed `objc_msgSend`) for
 `NSApplication` (`sharedApplication`, `setActivationPolicy:`,
 `finishLaunching`, `nextEventMatchingMask:untilDate:inMode:dequeue:`,
 `sendEvent:`: a polling loop, so no class or callback is defined in Rust),
-`NSWindow` (create, title, content view, close), the view's layer with
-`contents` set to a `CGImage` from Core Graphics
-(`CGColorSpaceCreateDeviceRGB`, `CGDataProviderCreateWithData`,
-`CGImageCreate` and their releases), and `NSEvent`'s accessors for location,
-buttons, scroll deltas, key codes and characters. No policy lives in
-`clazel-sys`; `clazel-window` decides what to open and what an event means.
+`NSWindow` (create, title, content view, close), a content layer whose `contents`
+is an IOSurface the GPU process draws into, with the address bar in a separate layer
+outside it, and `NSEvent`'s accessors for location, buttons, scroll deltas, key
+codes and characters. Moving an IOSurface between processes takes a Mach port
+(`IOSurfaceCreateMachPort`, `IOSurfaceLookupFromMachPort`†); how a sandboxed process
+gets a port to the host, likely `posix_spawnattr_setspecialport_np`† at spawn, needs
+a prototype before this item is sized. No policy lives in `clazel-sys`;
+`clazel-window` decides what to open and what an event means.
 
 Every change is audited by another session (CLAUDE.md rule 1); the author
 leaves the audit step failing and says so in the pull request, and the README
@@ -1035,8 +1265,13 @@ window (ignored under Miri and without a display, with the reason);
 
 Per 5.0(e); as recommended, an X11 client of our own in safe Rust in
 `clazel-window`, speaking the X Window System Protocol (X11R7, the document
-pinned) over the Unix socket `DISPLAY` names, so no `unsafe` and no shipped
-dependency: connection setup with `MIT-MAGIC-COOKIE-1` from the `XAUTHORITY`
+pinned) over the Unix socket `DISPLAY` names, so no shipped dependency and
+no `unsafe` but one: buffers reach the X server as descriptors over that socket,
+which stable `std` cannot send, so `sendmsg` joins `clazel-sys`, audited. The
+content area is a child window the host sizes, with the address bar outside it, and
+its buffers arrive by DRI3 `PixmapFromBuffer` and Present where offered†, else by
+MIT-SHM `AttachFd` and `ShmPutImage`† on a sealed `memfd` (`F_SEAL_SHRINK`, so no
+hostile process can shrink it under the server). Connection setup with `MIT-MAGIC-COOKIE-1` from the `XAUTHORITY`
 file (whose format we parse), `CreateWindow`, `ChangeProperty` for the title
 and `WM_DELETE_WINDOW`, `MapWindow`, `CreateGC`, `PutImage` in `ZPixmap`
 format split to the maximum request length (`BIG-REQUESTS` if offered), and
@@ -1058,10 +1293,12 @@ reason).
 URL, and loop on window events and kernel outputs. The window is two regions
 the host composes: an address bar strip at the top, drawn by the host from
 `Paint.url` (and an edit field when the user types a URL), and the content
-area below it, where the latest `Paint` for the tab is copied, clipped to the
-content area (its size is already at most the viewport, 5.18). The host draws
+area below it, a child window or layer showing the buffer the latest `Paint` for the
+tab names, which the OS clips to it (its size is already at most the viewport,
+5.18). The host draws
 its own text (the address bar) with `clazel-font`, `clazel-layout`'s shaping
-and `clazel-raster` on a bundled or system font, outside the sandbox; it never
+and `clazel-raster`'s masks, blended into the strip by a few lines of its own
+(the host has no GPU), on a bundled or system font, outside the sandbox; it never
 draws a byte the page chose in the strip. The page's title (from
 `Paint.title`) goes to the window's title bar, after the URL, so that a title
 cannot look like the address. Events: a resize sends `Resize`; a click or
@@ -1075,7 +1312,9 @@ and the loop live in `clazel-window` and `cli/`.
 
 `browse --headless OUT URL` renders one page to a file without a window, as a
 PPM or a PNG with stored (uncompressed) deflate blocks, both written by our
-own code (rule 8); the reference harness (5.25) and CI use it.
+own code (rule 8); the reference harness (5.25) and CI use it. It is the one host
+path that reads a buffer, with an ordinary read of the `memfd`, and it treats the
+bytes as data.
 
 ### 5.24 Nested browsing contexts: design (S)
 
@@ -1095,7 +1334,13 @@ URL as a link.
 
 ### 5.25 Reference rendering harness and reftests (M)
 
-`crates/clazel/tests/reftests.rs` and `xtask`. **Reftests:** each vendored WPT
+`crates/clazel/tests/reftests.rs` and `xtask`. **Driver:** CI's Linux job installs
+one pinned version of Mesa's lavapipe, a software Vulkan driver, and these tests
+fail rather than run on any other; the real GPU code runs, but on a CPU, so exact
+comparison means something. Macs in CI get a smoke test (Metal on a virtual GPU
+is not relied on), and a real GPU is checked locally by a stated command, with
+its result reported, not asserted. A bug only one real driver shows is not caught
+in CI (see Risks). **Reftests:** each vendored WPT
 reftest and its reference (`<link rel=match>` or `mismatch`) are rendered by
 `browse --headless` at 800×600, scale 1, with the bundled font for the generic
 families (so the runner's fonts do not matter), and compared pixel by pixel; a
@@ -1134,7 +1379,7 @@ test.
 - **Through real processes:** an in-process server serves the fixture; a test
   drives `browse --headless` and the kernel: the sheet arrives through
   `FetchStyle` with the page's cookie, a cross-origin sheet without it, the
-  `Paint` equals the stored screenshot, the address bar shows the kernel's
+  buffer the `Paint` names equals the stored screenshot, the address bar shows the kernel's
   URL, and a click navigates.
 - **Hostile pages**, each through a real sandboxed renderer, with the memory
   bound and a stated time limit checked: CSS bombs (a 64 MiB sheet, `{` nested
@@ -1146,9 +1391,12 @@ test.
   `loca`), loaded as a test font; a million-element page, nested and flat; a
   million-column table and `colspan=1000` everywhere; `font-size: 1e9px`,
   `width: 1e9px`, margins of `-1e9px`; a page that tries to draw over the
-  address bar (negative margins; an adversarial renderer sending a surface
-  larger than the viewport, refused; a title shaped like a URL, shown only in
-  the title bar); rows with no header or more rows than announced (the
+  address bar (negative margins; an adversarial GPU process claiming a surface
+  larger than the viewport, refused; one sending a descriptor that is not a buffer,
+  or a buffer too small or truncated, with the host unharmed and the X server
+  refusing it; a title shaped like a URL, shown only in
+  the title bar); a page whose GPU process is killed repeatedly (one tab goes to
+  software, other sites' tabs do not, 5.17c); rows with no header or more rows than announced (the
   renderer is killed).
 - **Phases 2 to 4 kept:** the demo, the escape attempts, the WPT `cookies/`
   rows, `pages.rs` (as box tree dumps, 5.0(g)) and `hostile_pages.rs` pass
@@ -1173,16 +1421,18 @@ delete `clazel-text` per 5.0(g).
           ├─> 5.9 font tables ─> 5.10 outlines, matching ─> 5.11 shaping ───────────────────────────────────┤
           └─> 5.12 white space, line breaking ──────────────────────────────────────────────────────────────┤
 5.13 boxes ─> 5.14 block, inline ─> 5.15 tables ─> 5.16 paint ──────────────────────────────────────────────┤
-5.17 raster ────────────────────────────────────────────────────────────────────────────────────────────────┤
-5.18 IPC + kernel: surfaces, viewports, input ─> 5.19 style sheet fetches ──────────────────────────────────┴─> 5.20 pipeline ─┐
+5.17 glyph masks ───────────────────────────────────────────────────────────────────────────────────────────┤
+5.17a display list ─> 5.17b GPU drawing ─> 5.17c fallback ─> 5.21a GPU sandbox ─────────────────────────────┤
+5.18 IPC + kernel: frames, surfaces, viewports, input ─> 5.19 style sheet fetches ──────────────────────────┴─> 5.20 pipeline ─┐
 5.21 macOS window ─┬─> 5.23 browse with a window ─────────────────────────────────────────────────────────────────────────────┴─> 5.25 harness ─> 5.26 demo ─> 5.27
 5.22 Linux window ─┘
 Phase 3: TLS in the kernel (3.5b, 3.5e to 3.5g, 3.7) ─> the https:// step of 5.26
 5.24 iframe design: any time
 ```
 
-5.1, 5.2, 5.9, 5.12, 5.13 (against a hand-built computed-style table), 5.17
-(with 5.10's outline type), 5.18, 5.21, 5.22 and 5.24 start at once. 5.13 to
+5.1, 5.2, 5.9, 5.12, 5.13 (against a hand-built computed-style table), 5.17 (with
+5.10's outline type), 5.17a, 5.17b, 5.17c, 5.21, 5.21a, 5.22 and 5.24 start at once,
+and 5.18 once the question 5.0 leaves open is answered. 5.13 to
 5.16 take computed style as a parameter (a table of the subset's computed
 values per node), so layout does not wait for the cascade's proofs, as
 Phase 4's tree builder took `TokFns`. The demo (5.26) needs the conformance
@@ -1192,7 +1442,7 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 
 | Item | State |
 |------|-------|
-| 5.0 Decisions | to decide |
+| 5.0 Decisions | taken (2026-11-04), (d) as a GPU rasterizer and the rest as recommended; open: how 5.18 fits with (g) (see 5.0) |
 | 5.1 Inventory and test data | not started |
 | 5.2 CSS tokenizer | not started |
 | 5.3 CSS parser | not started |
@@ -1209,10 +1459,14 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | 5.14 Block and inline layout | not started |
 | 5.15 Table layout | not started |
 | 5.16 Paint | not started |
-| 5.17 Raster | not started |
+| 5.17 Glyph masks | not started |
+| 5.17a Display list codec and validator | not started |
+| 5.17b GPU process: drawing | not started |
+| 5.17c Software fallback, blocklist, crash policy | not started |
 | 5.18 IPC and kernel: surfaces, viewports, input | not started |
 | 5.19 Kernel: style sheet fetches | not started |
 | 5.20 Renderer pipeline | not started |
+| 5.21a GPU process's sandbox | not started |
 | 5.21 Window on macOS | not started |
 | 5.22 Window on Linux | not started |
 | 5.23 `clazel browse` with a window | not started |
@@ -1221,12 +1475,23 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | 5.26 Exit demo, hostile pages, process tests | not started |
 | 5.27 Status and README | not started |
 
-**Phase 5: planned (2026-10-31); decisions in item 5.0 pending.**
+**Phase 5: planned (2026-10-31); decisions in item 5.0 taken (2026-11-04), one
+question about 5.18 still open; no other item started.**
 
 ## Risks
 
-The three biggest first.
+The four biggest first.
 
+- **The GPU path.** 5.0(d) adds what the phase did not have before: a process
+  whose sandbox must let a large C driver reach the hardware, so a driver bug
+  reached by a hostile page is a weaker boundary than the renderer's; two raw
+  backends and hand-written Vulkan structures, by far the largest growth of
+  audited `unsafe`, where a wrong structure layout is undefined behaviour Miri
+  cannot see; and bugs one real driver shows that lavapipe does not, which CI
+  will not catch; that includes the zero-copy dma-buf path, since lavapipe uses
+  shared memory. Mitigation: a proven validator in front of the fixed pipelines, a
+  process per tab, every call audited, measured sandboxes, and a stated local run of
+  the zero-copy path on a real GPU, with its result reported.
 - **Text shaping and fonts.** Text is most of what HN draws, and engines
   differ most there: metrics (`hhea` against `OS/2` typo metrics), kerning,
   quirks-mode line height and anti-aliasing each move glyphs by a pixel, which
@@ -1249,8 +1514,8 @@ The three biggest first.
   behaviour Miri cannot see (it runs no foreign call). Mitigation: 5.0(e)'s W1
   keeps every call under `clazel-sys`'s one-call-per-block rule and an
   independent audit, each signature checked against Apple's header; no Rust
-  callbacks or classes; no `unsafe` at all on Linux; no GPU (5.0(d)); the
-  README states the new count.
+  callbacks or classes; no `unsafe` in the Linux window (the Vulkan calls are
+  the GPU path's, above); the README states the new count.
 - **Phase 3's TLS** (3.5b, 3.5e to 3.5g, 3.7). If it is late, Phase 5 is built
   but exit criterion 3 stays open, and the Status says so (5.0(f)).
 - **The Miri budget.** Phase 4 ended with Miri over its 360-minute limit
@@ -1261,8 +1526,11 @@ The three biggest first.
   guard, answered by restriding, not by ignoring.
 - **Three tier-2 crates change at once** (5.18, 5.19). As 4.12, each lands as
   one pull request with proofs, mutations and process tests green.
-- **Pixels through the kernel** may make scrolling slow; measured in 5.26,
-  with shared memory a later, separately audited decision.
+- **Buffer sharing is platform-specific and unproven here.** IOSurface's Mach port
+  from a sandboxed process, and dma-buf support across X servers, XWayland and
+  drivers (NVIDIA's especially), have not been tried; 5.21 and 5.22 start with a
+  prototype. The kernel's old proof that the pixels are the ones sent is given up,
+  knowingly, for this (5.18).
 - **Copyright of the exit page.** Only counts are stored (5.1), CI uses our
   own fixture (5.26), and real-site screenshots stay local unless the
   maintainer decides otherwise.
