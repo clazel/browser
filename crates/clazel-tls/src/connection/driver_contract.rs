@@ -1,6 +1,8 @@
-//! What the joined client is proven to do: each step is the running machine's
-//! own step, each handoff starts the next machine from exactly what the last
-//! one derived, and plaintext comes from the transducer alone.
+//! What the joined client is proven to do: a step of the Hello or application
+//! stage is the running machine's own step, each handoff starts the next
+//! machine from what the last one derived, and plaintext comes from the
+//! transducer alone. A step of the flight is bounded, not equated: see
+//! [`flight_step_ensures`].
 #[allow(unused_imports)]
 use vstd::prelude::*;
 verus! {
@@ -63,8 +65,9 @@ pub open spec fn hello_step_ensures(m: Models, boot: crate::hello::bootstrap_spe
         }
 }
 
-/// One step of the flight is the dispatcher's own: it consumes what the
-/// dispatcher consumed, and the only way out to the transducer is `Ready`.
+/// One step of the flight: it consumes no more than its input, sends nothing
+/// while it stays in the flight, and the only way out to the transducer is
+/// `Ready`. This does not say the result equals the dispatcher's step.
 pub open spec fn flight_step_ensures(m: Models, before: super::dispatcher_spec::State,
     input: Seq<u8>, consumed: nat, out: super::driver_spec::Step) -> bool
 {
