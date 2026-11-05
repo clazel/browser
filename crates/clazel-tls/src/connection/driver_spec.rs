@@ -139,6 +139,12 @@ pub open spec fn carry_out(f: crate::traffic::spec::Cipher, o: super::post_hands
     }
 }
 
+/// A close during the flight: our sealed close_notify, if any, goes last.
+pub open spec fn flight_closed(wire: Option<Seq<u8>>) -> Step {
+    Step { send: match wire { Some(record) => record, None => seq![] }, deliver: seq![],
+        stage: Stage::Ended, status: Status::Closed }
+}
+
 /// A failure the dispatcher reported: its sealed alert, if any, goes last.
 pub open spec fn flight_failure(description: u8, wire: Option<Seq<u8>>) -> Step {
     match wire {

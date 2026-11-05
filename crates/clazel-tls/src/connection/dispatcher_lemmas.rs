@@ -105,6 +105,20 @@ pub proof fn lemma_flight_failure_sends_alert()
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 42, 21]))) by (compute_only);
 }
 
+/// §6.1: a close during the server's flight sends close_notify at warning
+/// level (1, 0), sealed under the client handshake epoch.
+pub proof fn lemma_flight_close_sends_close_notify()
+    ensures super::dispatcher_spec::closing(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_flight_state()).0
+        == super::dispatcher_spec::Action::Close(Some(seq![23u8, 3, 3, 0, 19,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21])),
+{
+    assert(super::dispatcher_spec::closing(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_flight_state()).0
+        == super::dispatcher_spec::Action::Close(Some(seq![23u8, 3, 3, 0, 19,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]))) by (compute_only);
+}
+
 /// §5.3, §6.2: with five records already sent under the client handshake
 /// epoch, a local error (unexpected_message, 10) is sealed at sequence number
 /// 5, not a number already used: the nonce's last octet is 5.

@@ -125,7 +125,8 @@ pub open spec fn close_ensures(m: Models, before: super::driver_spec::Stage, out
             out == super::driver_spec::carry_out(m.cipher, r.0, r.1)
         },
         super::driver_spec::Stage::Hello(_, _) => out == super::driver_spec::hello_closed(),
-        super::driver_spec::Stage::Flight(_) => out.stage == super::driver_spec::Stage::Ended,
+        super::driver_spec::Stage::Flight(state) => out == super::driver_spec::flight_closed(
+            super::dispatcher_spec::close_wire(super::dispatcher_spec::Ciphers { seal: m.cipher.seal, open: m.cipher.open }, state)),
         super::driver_spec::Stage::Ended => out.send.len() == 0,
     }
 }
