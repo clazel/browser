@@ -1727,7 +1727,7 @@ pub open spec fn at_name(input: TokenStream, index: int) -> Seq<u32> {
 }
 
 /// An at-rule, up to the end of a statement or past the `{` of its block.
-fn read_at_head(
+pub fn read_at_head(
     text: &[u32],
     pos: usize,
     nested: bool,
@@ -1820,7 +1820,7 @@ pub open spec fn as_option(result: QualifiedRuleResult) -> Option<Rule> {
 
 /// A qualified rule, up to where it gives nothing, or past the `{` of its block. The first
 /// result is 0 for nothing, 1 for a block that makes a rule, and 2 for a block to discard.
-fn read_qualified_head(
+pub fn read_qualified_head(
     text: &[u32],
     pos: usize,
     stop: u8,
@@ -1983,7 +1983,7 @@ pub open spec fn budget(decls: nat, items: nat, stack: nat, index: int) -> bool 
 }
 
 /// [`out_grows`] goes through.
-proof fn lemma_grows_chain(a: Out, b: Out, c: Out)
+pub proof fn lemma_grows_chain(a: Out, b: Out, c: Out)
     requires
         out_grows(a, b),
         out_grows(b, c),

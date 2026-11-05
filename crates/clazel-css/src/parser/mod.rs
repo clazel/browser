@@ -12,6 +12,7 @@ pub mod examples;
 pub mod exec;
 pub mod exec_declaration;
 pub mod exec_lists;
+pub mod exec_parse;
 pub mod exec_rules;
 pub mod lemmas;
 pub mod rows;
