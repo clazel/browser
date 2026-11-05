@@ -9,8 +9,9 @@ the same WPT commit as `clazel-encoding`'s suite. To update, copy them from a ne
 commit, change the commit above, and run `cargo xtask testdata`.
 
 `xtask/src/testdata/wpt_css_syntax.rs` converts them into
-`tests/generated/wpt_css_syntax.rs`. `tests/wpt_table.rs` checks the table; item
-5.4's conformance test will run it.
+`tests/generated/wpt_css_syntax.rs`. `tests/wpt_table.rs` checks the table.
+`tests/conformance_tokens.rs` runs `input-preprocessing.html`'s cases; item 5.4's
+conformance test will run the rest.
 
 **Most of this suite cannot be run yet.** These are browser tests, so a page only
 gives us cases where its checks are literal:

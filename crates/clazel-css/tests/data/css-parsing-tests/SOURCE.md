@@ -10,9 +10,10 @@ files from a newer commit, change the commit above, and run `cargo xtask testdat
 
 `xtask/src/testdata/css_parsing_tests.rs` converts them into
 `tests/generated/css_parsing_tests.rs`, a table of 301 cases, all of them. The table
-keeps the JSON values as they are, because `clazel-css` has no types yet (phase-5.md
-item 5.2). `tests/suite_table.rs` checks the table; item 5.4's conformance test will
-map it to our types.
+keeps the JSON values as they are. `tests/suite_table.rs` checks the table.
+`tests/conformance_tokens.rs` runs `component_value_list.json` and
+`one_component_value.json` against the tokenizer; item 5.4's conformance test will
+run the rest, which need the parser.
 
 **This is not an official suite.** The suite's README says it is based on the 2013
 draft of CSS Syntax Level 3, though at least one case is newer (below), and it
