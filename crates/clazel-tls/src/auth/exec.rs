@@ -169,7 +169,7 @@ pub fn profile_extensions(values: &[u16]) -> (out: bool)
 pub fn signature_scheme(scheme: u16) -> (out: bool)
     ensures out == super::spec::signature_scheme(scheme),
 {
-    scheme == 0x0403 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
+    scheme == 0x0403 || scheme == 0x0503 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
         || scheme == 0x0807
 }
 /// RFC 8446 §4.2: every parsed server response answers an actual offer.
