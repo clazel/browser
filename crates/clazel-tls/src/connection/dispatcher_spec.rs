@@ -271,18 +271,23 @@ pub open spec fn fatal_alert(description: u8) -> Seq<u8> {
     crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_FATAL, description })
 }
 
-/// §5.2, §5.3, §6.2: the protected record of the fatal alert, under the
-/// next sequence number of [`alert_epoch`]; None when there is no such
-/// epoch or it cannot seal another record.
-pub open spec fn alert_wire(ciphers: Ciphers, s: State, description: u8) -> Option<Seq<u8>> {
+/// §5.2, §5.3: an alert's protected record, under the next sequence number
+/// of [`alert_epoch`]; None when there is no such epoch or it cannot seal
+/// another record.
+pub open spec fn protected_alert(ciphers: Ciphers, s: State, content: Seq<u8>) -> Option<Seq<u8>> {
     match alert_epoch(s) {
         Some(epoch) => match crate::traffic::spec::send(seal_with(ciphers, epoch), epoch,
-            crate::spec::CT_ALERT, fatal_alert(description), 0) {
+            crate::spec::CT_ALERT, content, 0) {
             (_, Ok(record)) => Some(record),
             (_, Err(_)) => None,
         },
         None => None,
     }
+}
+
+/// §6.2: the protected record of the fatal alert.
+pub open spec fn alert_wire(ciphers: Ciphers, s: State, description: u8) -> Option<Seq<u8>> {
+    protected_alert(ciphers, s, fatal_alert(description))
 }
 
 /// §6, §6.1: the content of our close_notify.
@@ -290,18 +295,9 @@ pub open spec fn close_notify_alert() -> Seq<u8> {
     crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description: crate::spec::CLOSE_NOTIFY })
 }
 
-/// §5.2, §5.3, §6.1: our protected close_notify, under the next sequence
-/// number of [`alert_epoch`]; None when there is no such epoch or it cannot
-/// seal another record.
+/// §6.1: our protected close_notify.
 pub open spec fn close_wire(ciphers: Ciphers, s: State) -> Option<Seq<u8>> {
-    match alert_epoch(s) {
-        Some(epoch) => match crate::traffic::spec::send(seal_with(ciphers, epoch), epoch,
-            crate::spec::CT_ALERT, close_notify_alert(), 0) {
-            (_, Ok(record)) => Some(record),
-            (_, Err(_)) => None,
-        },
-        None => None,
-    }
+    protected_alert(ciphers, s, close_notify_alert())
 }
 
 /// §6.1: close during the flight: our close_notify goes out, if it can, and
