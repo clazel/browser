@@ -165,6 +165,10 @@ impl Window {
     /// The dots per inch of the window's monitor now, 96 being unscaled. `None` once
     /// the window has ended. Nothing reports a change, since `WM_DPICHANGED` goes to
     /// `DefWindowProcW` as `WM_SIZE` does, so a caller asks again.
+    ///
+    /// [`Window::open`] asks for per-monitor awareness. If the process's awareness was
+    /// already set otherwise, the answer follows that setting, and can be 96 on a
+    /// scaled monitor.
     pub fn dpi(&self) -> Option<u32> {
         if !self.exists() {
             return None;
