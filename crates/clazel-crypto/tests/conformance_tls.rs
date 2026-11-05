@@ -730,7 +730,7 @@ fn scripted_server_control_completes_the_handshake() -> TestResult {
 // ---------------------------------------------------------------------------
 
 fn wrong_finished_is_decrypt_error() -> TestResult {
-    let (events, mut client, _) = run_scripted(&ecdsa_chain(), |f| f.flip_last_byte(20))?;
+    let (events, client, _) = run_scripted(&ecdsa_chain(), |f| f.flip_last_byte(20))?;
     assert_eq!(
         last_event(&events),
         Some(&Event::Fail(DECRYPT_ERROR)),
