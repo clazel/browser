@@ -13,6 +13,7 @@ fn main() -> Result<(), clazel_window::Error> {
     let mut shift = 0i32;
     let mut mark = None;
     let mut dirty = true;
+    let mut titled = None;
     loop {
         // Everything already queued is applied before one frame is drawn. Drawing
         // once per event falls behind whenever events outrun frames, and input
@@ -35,6 +36,13 @@ fn main() -> Result<(), clazel_window::Error> {
         if dirty {
             dirty = false;
             let (width, height) = window.size();
+            if titled != Some((width, height)) {
+                titled = Some((width, height));
+                let dpi = window.dpi().unwrap_or(0);
+                window.set_title(&format!(
+                    "Clazel: test pattern, {width}x{height} at {dpi} dpi"
+                ))?;
+            }
             let start = Instant::now();
             let pixels = test_pattern(width, height, shift, mark);
             let built = start.elapsed();

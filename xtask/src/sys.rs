@@ -102,6 +102,8 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     "CreateWindowExW",
     "DestroyWindow",
     "IsWindow",
+    "SetWindowTextW",
+    "GetDpiForWindow",
     "PeekMessageW",
     "TranslateMessage",
     "DispatchMessageW",
