@@ -4,6 +4,7 @@ pub mod dispatcher_contract;
 pub mod dispatcher_lemmas;
 pub mod dispatcher_spec;
 pub mod driver_contract;
+pub mod driver_exec;
 pub mod driver_spec;
 pub mod exec;
 pub mod framing;
