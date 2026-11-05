@@ -109,7 +109,8 @@ enum Stage<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> {
 pub struct Driver<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> {
     stage: Option<Stage<C, K, F, V>>,
     state: State,
-    models: Ghost<contract::Models>,
+    /// The providers, for the contracts.
+    pub models: Ghost<contract::Models>,
 }
 
 /// §5.1, §6: [`spec::plaintext_alert`].
@@ -344,6 +345,20 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
         }
     }
 
+    /// A close during the flight ([`spec::flight_closed`]).
+    fn flight_close(&mut self, wire: Option<Vec<u8>>) -> (out: Output)
+        ensures final(self).wf(), final(self).models() == old(self).models(),
+            contract_step(out, final(self)) == spec::flight_closed(super::exec::wire_view(wire)),
+    {
+        let send = match wire {
+            Some(record) => record,
+            None => Vec::new(),
+        };
+        let deliver = Vec::new();
+        proof { assert(deliver@ =~= seq![]); }
+        self.ended(send, deliver, State::Closed)
+    }
+
     /// The client flight is on its way: acknowledge it, and hand over to the
     /// transducer at `Ready`.
     fn acknowledge(&mut self, mut conn: Connection<C, F, V>, wire: Vec<u8>) -> (out: Output)
@@ -408,7 +423,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             ConnAction::Fail(alert, record) => self.flight_failed(Vec::new(), alert, record),
             ConnAction::PeerAlert(alert) => self.ended(Vec::new(), Vec::new(),
                 State::Failed(Failure { alert, origin: Origin::Peer })),
-            ConnAction::Close => self.ended(Vec::new(), Vec::new(), State::Closed),
+            ConnAction::Close(record) => self.flight_close(record),
         };
         (consumed, out)
     }
@@ -561,7 +576,10 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 let o = app.close_out();
                 self.carry_out(o, app)
             },
-            Some(Stage::Flight { .. }) => self.ended(Vec::new(), Vec::new(), State::Closed),
+            Some(Stage::Flight { mut conn }) => match conn.close_write() {
+                ConnAction::Close(record) => self.flight_close(record),
+                _ => self.ended(Vec::new(), Vec::new(), State::Closed),
+            },
             Some(Stage::Hello { .. }) => self.ended(plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY),
                 Vec::new(), State::Closed),
         }

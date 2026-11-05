@@ -62,8 +62,9 @@ pub enum Action {
     /// RFC 8446 §6: the peer's fatal alert. Nothing is sent in reply, and
     /// every key has been dropped.
     PeerAlert(u8),
-    /// The peer's close_notify arrived during its flight.
-    Close,
+    /// §6.1: the connection closed during the flight, with our sealed
+    /// close_notify, or `None` when no epoch can seal it.
+    Close(Option<Vec<u8>>),
 }
 /// The view of an optional protected record.
 pub open spec fn wire_view(wire: Option<Vec<u8>>) -> Option<Seq<u8>> {
@@ -81,7 +82,8 @@ impl View for Action {
             Action::Fail(alert, wire) => super::dispatcher_spec::Action::Fail(*alert,
                 match wire { Some(bytes) => Some(bytes@), None => None }),
             Action::PeerAlert(alert) => super::dispatcher_spec::Action::PeerAlert(*alert),
-            Action::Close => super::dispatcher_spec::Action::Close,
+            Action::Close(wire) => super::dispatcher_spec::Action::Close(
+                match wire { Some(bytes) => Some(bytes@), None => None }),
         }
     }
 }
@@ -398,13 +400,63 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         Action::PeerAlert(alert)
     }
 
+    /// §6.1: close during the flight. Our close_notify is sealed under the
+    /// settled write epoch, if there is one, and then every key is dropped.
     fn close(&mut self) -> (out: Action)
-        ensures
-            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
-            final(self).wf(), final(self).resources_wf(), final(self)@ == super::dispatcher_spec::closed(), out@ == super::dispatcher_spec::Action::Close,
+        requires old(self).senders_wf(),
+        ensures final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+            (out@, final(self)@) == super::dispatcher_spec::closing(old(self).cipher_models(), old(self)@),
     {
+        let ghost before = self@;
+        let ghost ciphers = self.cipher_models();
+        let mut content: Vec<u8> = Vec::new();
+        crate::encode::write_alert(&mut content, crate::spec::Alert {
+            level: crate::spec::LEVEL_WARNING,
+            description: crate::spec::CLOSE_NOTIFY,
+        });
+        proof {
+            assert(content@ =~= super::dispatcher_spec::close_notify_alert());
+            assert(ciphers.seal == self.factory.functions().seal);
+        }
+        let wire = match self.mode {
+            Mode::Handshake => match self.handshake_sender.as_mut() {
+                Some(sender) => {
+                    let ghost epoch = sender@;
+                    proof { assert(before.handshake_sender == Some(epoch)); }
+                    let sealed = seal_alert(sender, Ghost(ciphers), content.as_slice());
+                    proof {
+                        assert(super::dispatcher_spec::alert_epoch(before) == Some(epoch));
+                        assert(wire_view(sealed) == super::dispatcher_spec::close_wire(ciphers, before));
+                    }
+                    sealed
+                },
+                None => {
+                    proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                    None
+                },
+            },
+            Mode::AwaitClientFlight | Mode::Ready | Mode::Failed | Mode::Closed => {
+                proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                None
+            },
+        };
+        let ghost sent = wire_view(wire);
+        proof { assert(sent == super::dispatcher_spec::close_wire(ciphers, before)); }
         self.terminal(Mode::Closed);
-        Action::Close
+        let out = Action::Close(wire);
+        proof { assert(out@ == super::dispatcher_spec::Action::Close(sent)); }
+        out
+    }
+
+    /// §6.1: close from our side during the flight.
+    pub fn close_write(&mut self) -> (out: Action)
+        requires old(self).resources_wf(), old(self).cipher_bindings_wf(),
+        ensures final(self).wf(),
+            (out@, final(self)@) == super::dispatcher_spec::closing(super::dispatcher_spec::Ciphers {
+                seal: old(self).cipher_functions().seal, open: old(self).cipher_functions().open }, old(self)@),
+    {
+        self.close()
     }
 
     fn protect_client_flight(&mut self, flight: &[u8]) -> (out: Result<Vec<u8>, u8>)
@@ -739,7 +791,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 super::dispatcher_spec::Action::Ready => assert(self@.mode == super::dispatcher_spec::Mode::Ready),
                 super::dispatcher_spec::Action::Fail(_, _) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed)),
                 super::dispatcher_spec::Action::PeerAlert(_) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed)),
-                super::dispatcher_spec::Action::Close => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Closed)),
+                super::dispatcher_spec::Action::Close(_) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Closed)),
                 _ => {},
             }
             assert(super::dispatcher_contract::feed_ensures(old(self)@, input@,

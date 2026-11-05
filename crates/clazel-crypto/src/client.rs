@@ -63,9 +63,8 @@
 //!   handshake has completed (§6.1: "Each party MUST send a "close_notify"
 //!   alert before closing its write side of the connection, unless it has
 //!   already sent some error alert"). During the server's protected flight
-//!   `Connection` seals only fatal alerts, so a close_notify from the server
-//!   there, or [`Client::close`], ends the connection without one: the
-//!   client stops and the caller closes the transport.
+//!   `Connection` seals it under the client handshake epoch, whether the
+//!   server closed or [`Client::close`] was called, and the client stops.
 //!
 //! The joining itself is `clazel_tls::connection::driver_exec::Driver`, generic
 //! over its providers and proven in `driver_contract`. This file fixes the
@@ -202,9 +201,8 @@ impl<'r> Client<'r> {
     /// has completed (RFC 8446 §6.1), after which the server's remaining
     /// data is still delivered until its close_notify (`Closing`). Before
     /// the ServerHello the client sends a plaintext close_notify and stops
-    /// (`Closed`); during the server's protected flight it stops without
-    /// one, since `Connection` seals only fatal alerts there (see the module
-    /// comment, "Alerts").
+    /// (`Closed`); during the server's protected flight it seals one under
+    /// the client handshake epoch and stops (`Closed`).
     pub fn close(&mut self) -> Output {
         self.driver.close()
     }
