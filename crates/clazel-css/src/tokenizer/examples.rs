@@ -198,4 +198,130 @@ pub proof fn lemma_example_number_value()
         by (compute_only);
 }
 
+/// §4.3.3 and §4.3.12: a unit makes a dimension and "%" a percentage, and a "." or an
+/// exponent needs a digit after it.
+pub proof fn lemma_example_numeric_tokens()
+    ensures
+        first(seq![0x31u32, 0x70, 0x78]) == (Token::Dimension { number: plain(seq![0x31u32], true), unit: seq![0x70u32, 0x78] }),
+        first(seq![0x31u32, 0x25]) == (Token::Percentage { number: plain(seq![0x31u32], true) }),
+        after(seq![0x31u32, 0x25]) == 2,
+        first(seq![0x31u32, 0x2E]) == (Token::Number { number: plain(seq![0x31u32], true) }),
+        after(seq![0x31u32, 0x2E]) == 1,
+        after(seq![0x31u32, 0x65, 0x2B]) == 2,
+        first(seq![0x2Bu32, 0x31]) == (Token::Number { number: Number { number_part: seq![0x2Bu32, 0x31], exponent_part: Seq::<u32>::empty(), is_integer: true, sign_character: Some(0x2Bu32) } }),
+{
+    assert(first(seq![0x31u32, 0x70, 0x78]) == (Token::Dimension { number: plain(seq![0x31u32], true), unit: seq![0x70u32, 0x78] })) by (compute_only);
+    assert(first(seq![0x31u32, 0x25]) == (Token::Percentage { number: plain(seq![0x31u32], true) })) by (compute_only);
+    assert(after(seq![0x31u32, 0x25]) == 2) by (compute_only);
+    assert(first(seq![0x31u32, 0x2E]) == (Token::Number { number: plain(seq![0x31u32], true) })) by (compute_only);
+    assert(after(seq![0x31u32, 0x2E]) == 1) by (compute_only);
+    assert(after(seq![0x31u32, 0x65, 0x2B]) == 2) by (compute_only);
+    assert(first(seq![0x2Bu32, 0x31]) == (Token::Number { number: Number { number_part: seq![0x2Bu32, 0x31], exponent_part: Seq::<u32>::empty(), is_integer: true, sign_character: Some(0x2Bu32) } })) by (compute_only);
+}
+
+/// §4.3.9, §4.3.10 and what they decide in §4.3.1.
+pub proof fn lemma_example_starts()
+    ensures
+        first(seq![0x2Bu32, 0x2E]) == (Token::Delim { value: 0x2Bu32 }),
+        first(seq![0x2Eu32, 0x61]) == (Token::Delim { value: 0x2Eu32 }),
+        first(seq![0x2Du32, 0x2D]) == (Token::Ident { value: seq![0x2Du32, 0x2D] }),
+        first(seq![0x2Du32, 0x5C, 0x34, 0x31]) == (Token::Ident { value: seq![0x2Du32, 0x41] }),
+        first(seq![0x5Cu32, 0x0A]) == (Token::Delim { value: 0x5Cu32 }),
+        first(seq![0x61u32, 0x28]) == (Token::Function { value: seq![0x61u32] }),
+        after(seq![0x61u32, 0x28]) == 2,
+        first(seq![0x3Cu32, 0x21, 0x2D, 0x61]) == (Token::Delim { value: 0x3Cu32 }),
+        first(seq![0x40u32, 0x31]) == (Token::Delim { value: 0x40u32 }),
+{
+    assert(first(seq![0x2Bu32, 0x2E]) == (Token::Delim { value: 0x2Bu32 })) by (compute_only);
+    assert(first(seq![0x2Eu32, 0x61]) == (Token::Delim { value: 0x2Eu32 })) by (compute_only);
+    assert(first(seq![0x2Du32, 0x2D]) == (Token::Ident { value: seq![0x2Du32, 0x2D] })) by (compute_only);
+    assert(first(seq![0x2Du32, 0x5C, 0x34, 0x31]) == (Token::Ident { value: seq![0x2Du32, 0x41] })) by (compute_only);
+    assert(first(seq![0x5Cu32, 0x0A]) == (Token::Delim { value: 0x5Cu32 })) by (compute_only);
+    assert(first(seq![0x61u32, 0x28]) == (Token::Function { value: seq![0x61u32] })) by (compute_only);
+    assert(after(seq![0x61u32, 0x28]) == 2) by (compute_only);
+    assert(first(seq![0x3Cu32, 0x21, 0x2D, 0x61]) == (Token::Delim { value: 0x3Cu32 })) by (compute_only);
+    assert(first(seq![0x40u32, 0x31]) == (Token::Delim { value: 0x40u32 })) by (compute_only);
+}
+
+/// §4.3.7: one whitespace after hex digits goes with them, and what is not a code point
+/// is U+FFFD.
+pub proof fn lemma_example_escaped()
+    ensures
+        after(seq![0x5Cu32, 0x34, 0x31, 0x20]) == 4,
+        first(seq![0x5Cu32, 0x30]) == (Token::Ident { value: seq![0xFFFDu32] }),
+        first(seq![0x5Cu32, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30]) == (Token::Ident { value: seq![0xFFFDu32] }),
+        after(seq![0x5Cu32]) == 1,
+{
+    assert(after(seq![0x5Cu32, 0x34, 0x31, 0x20]) == 4) by (compute_only);
+    assert(first(seq![0x5Cu32, 0x30]) == (Token::Ident { value: seq![0xFFFDu32] })) by (compute_only);
+    assert(first(seq![0x5Cu32, 0x31, 0x31, 0x30, 0x30, 0x30, 0x30]) == (Token::Ident { value: seq![0xFFFDu32] })) by (compute_only);
+    assert(after(seq![0x5Cu32]) == 1) by (compute_only);
+}
+
+/// §4.3.5: an escaped newline and a backslash at EOF add nothing, and the other quote is
+/// just a code point.
+pub proof fn lemma_example_strings()
+    ensures
+        first(seq![0x22u32, 0x5C, 0x0A, 0x62, 0x22]) == (Token::String { value: seq![0x62u32] }),
+        first(seq![0x22u32, 0x5C]) == (Token::String { value: Seq::<u32>::empty() }),
+        first(seq![0x22u32, 0x27, 0x22]) == (Token::String { value: seq![0x27u32] }),
+{
+    assert(first(seq![0x22u32, 0x5C, 0x0A, 0x62, 0x22]) == (Token::String { value: seq![0x62u32] })) by (compute_only);
+    assert(first(seq![0x22u32, 0x5C]) == (Token::String { value: Seq::<u32>::empty() })) by (compute_only);
+    assert(first(seq![0x22u32, 0x27, 0x22]) == (Token::String { value: seq![0x27u32] })) by (compute_only);
+}
+
+/// §4.3.4 and §4.3.6: a quote after "url(" makes a function, leaving one whitespace,
+/// and an unquoted url ends at ")".
+pub proof fn lemma_example_url_tokens()
+    ensures
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x22, 0x61, 0x22, 0x29]) == (Token::Function { value: seq![0x75u32, 0x72, 0x6C] }),
+        after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x22, 0x61, 0x22, 0x29]) == 4,
+        after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x20, 0x20, 0x22, 0x61, 0x22, 0x29]) == 5,
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x29]) == (Token::Url { value: seq![0x61u32] }),
+        after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x29]) == 7,
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x5C, 0x29, 0x62, 0x29]) == (Token::Url { value: seq![0x61u32, 0x29, 0x62] }),
+{
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x22, 0x61, 0x22, 0x29]) == (Token::Function { value: seq![0x75u32, 0x72, 0x6C] })) by (compute_only);
+    assert(after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x22, 0x61, 0x22, 0x29]) == 4) by (compute_only);
+    assert(after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x20, 0x20, 0x22, 0x61, 0x22, 0x29]) == 5) by (compute_only);
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x29]) == (Token::Url { value: seq![0x61u32] })) by (compute_only);
+    assert(after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x29]) == 7) by (compute_only);
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x5C, 0x29, 0x62, 0x29]) == (Token::Url { value: seq![0x61u32, 0x29, 0x62] })) by (compute_only);
+}
+
+/// §4.3.6 and §4.3.14: what makes a bad url, and where its remnants end.
+pub proof fn lemma_example_bad_url()
+    ensures
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x62, 0x29]) == (Token::BadUrl),
+        after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x62, 0x29]) == 8,
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x22]) == (Token::BadUrl),
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x27]) == (Token::BadUrl),
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x28]) == (Token::BadUrl),
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x01]) == (Token::BadUrl),
+        first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x5C, 0x0A, 0x29]) == (Token::BadUrl),
+        after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x62, 0x5C, 0x29, 0x29]) == 10,
+{
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x62, 0x29]) == (Token::BadUrl)) by (compute_only);
+    assert(after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x62, 0x29]) == 8) by (compute_only);
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x22]) == (Token::BadUrl)) by (compute_only);
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x27]) == (Token::BadUrl)) by (compute_only);
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x28]) == (Token::BadUrl)) by (compute_only);
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x01]) == (Token::BadUrl)) by (compute_only);
+    assert(first(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x5C, 0x0A, 0x29]) == (Token::BadUrl)) by (compute_only);
+    assert(after(seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, 0x20, 0x62, 0x5C, 0x29, 0x29]) == 10) by (compute_only);
+}
+
+/// "unicode ranges allowed" decides, and a range needs what the text says.
+pub proof fn lemma_example_unicode_ranges()
+    ensures
+        first(seq![0x55u32, 0x2B, 0x31]) == (Token::Ident { value: seq![0x55u32] }),
+        consume_a_token(seq![0x55u32, 0x2B, 0x31, 0x2D, 0x32], 0, true).0 == (Token::UnicodeRange { start: 1, end: 2 }),
+        consume_a_token(seq![0x55u32, 0x2B, 0x67], 0, true).0 == (Token::Ident { value: seq![0x55u32] }),
+{
+    assert(first(seq![0x55u32, 0x2B, 0x31]) == (Token::Ident { value: seq![0x55u32] })) by (compute_only);
+    assert(consume_a_token(seq![0x55u32, 0x2B, 0x31, 0x2D, 0x32], 0, true).0 == (Token::UnicodeRange { start: 1, end: 2 })) by (compute_only);
+    assert(consume_a_token(seq![0x55u32, 0x2B, 0x67], 0, true).0 == (Token::Ident { value: seq![0x55u32] })) by (compute_only);
+}
+
 } // verus!
