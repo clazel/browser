@@ -12,8 +12,9 @@ files from a newer commit, change the commit above, and run `cargo xtask testdat
 `tests/generated/css_parsing_tests.rs`, a table of 301 cases, all of them. The table
 keeps the JSON values as they are. `tests/suite_table.rs` checks the table.
 `tests/conformance_tokens.rs` runs `component_value_list.json` and
-`one_component_value.json` against the tokenizer; item 5.4's conformance test will
-run the rest, which need the parser.
+`one_component_value.json` against the tokenizer, and `tests/conformance_input.rs`
+compares `stylesheet_bytes.json`'s encodings; item 5.4's conformance test will run the
+rest, and those files' rules, which need the parser.
 
 **This is not an official suite.** The suite's README says it is based on the 2013
 draft of CSS Syntax Level 3, though at least one case is newer (below), and it

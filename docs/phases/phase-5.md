@@ -549,7 +549,7 @@ the workspace.
 
 ### 5.2 CSS Syntax: input and tokenizer, spec and contracts (M)
 
-`crates/clazel-css`, module `tokenizer/`. CSS Syntax Level 3, pinned to a
+`crates/clazel-css`, modules `input/` and `tokenizer/`. CSS Syntax Level 3, pinned to a
 dated draft or commit: §3.2† "the input byte stream" (the fallback encoding
 from the BOM, the protocol's `charset`, an `@charset "…";` rule as the exact
 first bytes, the referring document's encoding, else UTF-8; then Encoding §6
