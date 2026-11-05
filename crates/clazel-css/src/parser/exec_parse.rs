@@ -444,4 +444,493 @@ pub fn parse_stylesheet(input: &[u32], Ghost(location): Ghost<Option<Seq<u32>>>)
     parse_stylesheet_contents(input)
 }
 
+/// "Parse a list of component values" of `input`: all of `r.output.rows`.
+pub fn parse_component_values(input: &[u32]) -> (r: ExecParsed)
+    requires
+        parser_input_requires(input@),
+    ensures
+        parse_component_values_ensures(
+            input@,
+            view_list(r.text@, false, r.output.rows@, 0, r.output.rows.len() as int),
+        ),
+{
+    let text = filtered(input);
+    let mut rows: Vec<ExecRow> = Vec::new();
+    proof {
+        lemma_start(text@);
+    }
+    let _ = read_list(text.as_slice(), false, 0, 0, false, &mut rows, Ghost(0));
+    ExecParsed {
+        text,
+        output: ExecOutput { rows, declarations: Vec::new(), items: Vec::new() },
+    }
+}
+
+/// One group of "parse a comma-separated list of component values": rows `.0` up to `.1`.
+pub open spec fn view_groups(
+    text: Seq<u32>,
+    rows: Seq<ExecRow>,
+    groups: Seq<(u32, u32)>,
+) -> Seq<Seq<ComponentValue>> {
+    Seq::new(
+        groups.len(),
+        |i: int| view_list(text, false, rows, groups[i].0 as int, groups[i].1 as int),
+    )
+}
+
+/// "Parse a comma-separated list of component values" of `input`.
+pub fn parse_comma_separated_component_values(input: &[u32]) -> (r: (ExecParsed, Vec<(u32, u32)>))
+    requires
+        parser_input_requires(input@),
+    ensures
+        parse_comma_separated_ensures(
+            input@,
+            view_groups(r.0.text@, r.0.output.rows@, r.1@),
+        ),
+{
+    let text = filtered(input);
+    let ghost input_stream = stream_of(text@, false);
+    let ghost target = parse_a_comma_separated_list_of_component_values(
+        Input::String { string: input@ },
+    );
+    let mut rows: Vec<ExecRow> = Vec::new();
+    let mut groups: Vec<(u32, u32)> = Vec::new();
+    let mut at: usize = 0;
+    let ghost mut idx: int = 0;
+    proof {
+        lemma_start(text@);
+        assert(view_groups(text@, rows@, groups@) =~= Seq::<Seq<ComponentValue>>::empty());
+    }
+    loop
+        invariant
+            text_fits(text@),
+            input_stream == stream_of(text@, false),
+            text@ == filter_code_points(input@),
+            at_index(text@, false, idx, at as int),
+            at <= text.len(),
+            idx >= 0,
+            room(text@, rows.len() as nat, idx, at as int),
+            forall|i: int|
+                0 <= i < groups.len() ==> #[trigger] groups@[i].1 <= rows.len(),
+            comma_separated_list_loop(
+                input_stream,
+                idx,
+                view_groups(text@, rows@, groups@),
+            ) == target,
+            target == parse_a_comma_separated_list_of_component_values(
+                Input::String { string: input@ },
+            ),
+            groups.len() <= idx,
+        decreases tokens_left(text@, false, idx),
+    {
+        let ghost before_rows = rows@;
+        let ghost before = idx;
+        let ghost before_groups = groups@;
+        let (token, _) = read_token(text.as_slice(), false, at, Ghost(idx));
+        if matches!(token, ExecToken::Eof) {
+            return (
+                ExecParsed {
+                    text,
+                    output: ExecOutput { rows, declarations: Vec::new(), items: Vec::new() },
+                },
+                groups,
+            );
+        }
+        let lo = rows.len() as u32;
+        let (end, Ghost(after)) = read_list(
+            text.as_slice(),
+            false,
+            at,
+            2,
+            false,
+            &mut rows,
+            Ghost(idx),
+        );
+        groups.push((lo, rows.len() as u32));
+        let (stop, next) = read_token(text.as_slice(), false, end, Ghost(after));
+        proof {
+            super::termination::theorem_comma_list_moves(input_stream, before);
+            let list = view_list(text@, false, rows@, lo as int, rows.len() as int);
+            let old_view = view_groups(text@, before_rows, before_groups);
+            let new_view = view_groups(text@, rows@, groups@);
+            assert forall|i: int| 0 <= i < before_groups.len() implies new_view[i]
+                == old_view[i] by {
+                assert(groups@[i] == before_groups[i]);
+                assert(before_groups[i].1 <= before_rows.len());
+                assert forall|k: int| 0 <= k < before_groups[i].1 implies before_rows[k]
+                    == rows@[k] by {}
+                lemma_agree_list(
+                    text@,
+                    false,
+                    before_rows,
+                    rows@,
+                    before_groups[i].0 as int,
+                    before_groups[i].1 as int,
+                );
+            }
+            assert(new_view[before_groups.len() as int] == list);
+            assert(new_view =~= old_view.push(list));
+        }
+        if matches!(stop, ExecToken::Eof) {
+            at = end;
+            proof {
+                idx = after;
+            }
+        } else {
+            at = next;
+            proof {
+                idx = after + 1;
+            }
+        }
+    }
+}
+
+/// True if the parse found a value, which is then the last row.
+pub open spec fn found_value(text: Seq<u32>, rows: Seq<ExecRow>, found: bool) -> Option<
+    ComponentValue,
+> {
+    if found {
+        Some(view_value(text, false, rows, rows.len() - 1))
+    } else {
+        None
+    }
+}
+
+/// "Parse a component value" of `input`.
+pub fn parse_component_value(input: &[u32]) -> (r: (ExecParsed, bool))
+    requires
+        parser_input_requires(input@),
+    ensures
+        parse_component_value_ensures(
+            input@,
+            found_value(r.0.text@, r.0.output.rows@, r.1),
+        ),
+{
+    let text = filtered(input);
+    let mut rows: Vec<ExecRow> = Vec::new();
+    proof {
+        lemma_start(text@);
+    }
+    let (start, Ghost(first)) = skip_whitespace(text.as_slice(), false, 0, Ghost(0));
+    let (token, next) = read_token(text.as_slice(), false, start, Ghost(first));
+    let mut found = false;
+    if !matches!(token, ExecToken::Eof) {
+        let end = read_component_value(
+            text.as_slice(),
+            false,
+            token,
+            start,
+            next,
+            &mut rows,
+            Ghost(first),
+        );
+        let ghost after = consume_a_component_value(stream_of(text@, false), first).1;
+        let (last, Ghost(last_index)) = skip_whitespace(text.as_slice(), false, end, Ghost(after));
+        let (eof, _) = read_token(text.as_slice(), false, last, Ghost(last_index));
+        found = matches!(eof, ExecToken::Eof);
+    }
+    (
+        ExecParsed {
+            text,
+            output: ExecOutput { rows, declarations: Vec::new(), items: Vec::new() },
+        },
+        found,
+    )
+}
+
+/// The declaration found, which is the first and only one.
+pub open spec fn found_declaration(
+    text: Seq<u32>,
+    rows: Seq<ExecRow>,
+    decls: Seq<ExecDeclaration>,
+    found: bool,
+) -> Option<Declaration> {
+    if found {
+        Some(view_declaration(text, rows, decls[0]))
+    } else {
+        None
+    }
+}
+
+/// "Parse a declaration" of `input`.
+pub fn parse_declaration(input: &[u32]) -> (r: (ExecParsed, bool))
+    requires
+        parser_input_requires(input@),
+    ensures
+        parse_declaration_ensures(
+            input@,
+            found_declaration(
+                r.0.text@,
+                r.0.output.rows@,
+                r.0.output.declarations@,
+                r.1,
+            ),
+        ),
+{
+    let text = filtered(input);
+    let mut rows: Vec<ExecRow> = Vec::new();
+    let mut declarations: Vec<ExecDeclaration> = Vec::new();
+    proof {
+        lemma_start(text@);
+    }
+    let (start, Ghost(first)) = skip_whitespace(text.as_slice(), false, 0, Ghost(0));
+    let (token, _) = read_token(text.as_slice(), false, start, Ghost(first));
+    let mut found = false;
+    if !matches!(token, ExecToken::Eof) {
+        let (some, end, Ghost(after)) = read_declaration(
+            text.as_slice(),
+            start,
+            false,
+            false,
+            &mut rows,
+            &mut declarations,
+            Ghost(first),
+        );
+        if some {
+            let (last, Ghost(last_index)) = skip_whitespace(
+                text.as_slice(),
+                false,
+                end,
+                Ghost(after),
+            );
+            let (eof, _) = read_token(text.as_slice(), false, last, Ghost(last_index));
+            found = matches!(eof, ExecToken::Eof);
+            proof {
+                assert(declarations@.last() == declarations@[0]);
+            }
+        }
+    }
+    (
+        ExecParsed { text, output: ExecOutput { rows, declarations, items: Vec::new() } },
+        found,
+    )
+}
+
+/// The rule of an item of a block.
+pub open spec fn rule_of_item(item: BlockItem) -> Rule {
+    child_rules_of(seq![item])[0]
+}
+
+/// The rule found, which is the last item.
+pub open spec fn found_rule(
+    text: Seq<u32>,
+    rows: Seq<ExecRow>,
+    decls: Seq<ExecDeclaration>,
+    items: Seq<ExecItem>,
+    found: bool,
+) -> Option<Rule> {
+    if found {
+        Some(
+            rule_of_item(view_item(text, rows, decls, items, items.len() - 1)),
+        )
+    } else {
+        None
+    }
+}
+
+/// "Parse a rule" of `input`.
+pub fn parse_rule(input: &[u32]) -> (r: (ExecParsed, bool))
+    requires
+        parser_input_requires(input@),
+    ensures
+        parse_rule_ensures(
+            input@,
+            found_rule(
+                r.0.text@,
+                r.0.output.rows@,
+                r.0.output.declarations@,
+                r.0.output.items@,
+                r.1,
+            ),
+        ),
+{
+    let text = filtered(input);
+    let ghost stream = stream_of(text@, false);
+    let mut rows: Vec<ExecRow> = Vec::new();
+    let mut declarations: Vec<ExecDeclaration> = Vec::new();
+    let mut items: Vec<ExecItem> = Vec::new();
+    proof {
+        lemma_start(text@);
+        assert(rows@ =~= Seq::<ExecRow>::empty());
+        assert(declarations@ =~= Seq::<ExecDeclaration>::empty());
+        assert(items@ =~= Seq::<ExecItem>::empty());
+    }
+    let (start, Ghost(first)) = skip_whitespace(text.as_slice(), false, 0, Ghost(0));
+    let (token, _) = read_token(text.as_slice(), false, start, Ghost(first));
+    let mut found = false;
+    if !matches!(token, ExecToken::Eof) {
+        let mut have_rule = true;
+        let mut end = start;
+        let ghost mut after = first;
+        if matches!(token, ExecToken::AtKeyword { .. }) {
+            let (e, Ghost(a)) = read_at_rule(
+                text.as_slice(),
+                start,
+                &mut rows,
+                &mut declarations,
+                &mut items,
+                Ghost(first),
+            );
+            end = e;
+            proof {
+                after = a;
+            }
+        } else {
+            let (pushed, e, Ghost(a)) = read_qualified_rule(
+                text.as_slice(),
+                start,
+                &mut rows,
+                &mut declarations,
+                &mut items,
+                Ghost(first),
+            );
+            have_rule = pushed;
+            end = e;
+            proof {
+                after = a;
+            }
+        }
+        if have_rule {
+            let (last, Ghost(last_index)) = skip_whitespace(
+                text.as_slice(),
+                false,
+                end,
+                Ghost(after),
+            );
+            let (eof, _) = read_token(text.as_slice(), false, last, Ghost(last_index));
+            found = matches!(eof, ExecToken::Eof);
+        }
+    }
+    (ExecParsed { text, output: ExecOutput { rows, declarations, items } }, found)
+}
+
+/// "Parse a list of declarations" of `input`: all of `r.output.declarations`.
+pub fn parse_declaration_list(input: &[u32]) -> (r: ExecParsed)
+    requires
+        parser_input_requires(input@),
+    ensures
+        parse_declaration_list_ensures(
+            input@,
+            view_declarations(
+                r.text@,
+                r.output.rows@,
+                r.output.declarations@,
+                0,
+                r.output.declarations.len() as int,
+            ),
+        ),
+{
+    let text = filtered(input);
+    let ghost stream = stream_of(text@, false);
+    let ghost target = parse_a_list_of_declarations(Input::String { string: input@ });
+    let mut rows: Vec<ExecRow> = Vec::new();
+    let mut declarations: Vec<ExecDeclaration> = Vec::new();
+    let mut at: usize = 0;
+    let ghost mut idx: int = 0;
+    proof {
+        lemma_start(text@);
+        assert(view_declarations(text@, rows@, declarations@, 0, 0)
+            =~= Seq::<Declaration>::empty());
+    }
+    loop
+        invariant
+            text_fits(text@),
+            stream == stream_of(text@, false),
+            at_index(text@, false, idx, at as int),
+            at <= text.len(),
+            idx >= 0,
+            room(text@, rows.len() as nat, idx, at as int),
+            declarations.len() <= idx,
+            out_wf(out_of(rows@, declarations@, Seq::empty())),
+            list_of_declarations_loop(
+                stream,
+                idx,
+                view_declarations(text@, rows@, declarations@, 0, declarations.len() as int),
+            ) == target,
+            target == parse_a_list_of_declarations(Input::String { string: input@ }),
+        decreases tokens_left(text@, false, idx),
+    {
+        let ghost o = out_of(rows@, declarations@, Seq::empty());
+        let ghost list = view_declarations(
+            text@,
+            rows@,
+            declarations@,
+            0,
+            declarations.len() as int,
+        );
+        let ghost before = idx;
+        let (token, _) = read_token(text.as_slice(), false, at, Ghost(idx));
+        if matches!(token, ExecToken::Eof) {
+            return ExecParsed {
+                text,
+                output: ExecOutput { rows, declarations, items: Vec::new() },
+            };
+        }
+        proof {
+            super::termination::theorem_declarations_move(stream, idx);
+        }
+        let (start, Ghost(first)) = skip_whitespace(text.as_slice(), false, at, Ghost(idx));
+        let (next_token_read, next) = read_token(text.as_slice(), false, start, Ghost(first));
+        if matches!(next_token_read, ExecToken::Semicolon) {
+            at = next;
+            proof {
+                idx = first + 1;
+            }
+        } else if matches!(next_token_read, ExecToken::AtKeyword { .. }) {
+            let mut scratch_declarations: Vec<ExecDeclaration> = Vec::new();
+            let mut scratch_items: Vec<ExecItem> = Vec::new();
+            proof {
+                assert(out_of(rows@, scratch_declarations@, scratch_items@).decls.len() == 0);
+            }
+            let (end, Ghost(after)) = read_at_rule(
+                text.as_slice(),
+                start,
+                &mut rows,
+                &mut scratch_declarations,
+                &mut scratch_items,
+                Ghost(first),
+            );
+            proof {
+                let n = out_of(rows@, declarations@, Seq::empty());
+                assert(extends(o.rows, n.rows));
+                assert(out_grows(o, n));
+                lemma_wf_grows(o, n);
+                lemma_agree_declarations(text@, o, n, 0, declarations.len() as int);
+                idx = after;
+            }
+            at = end;
+        } else {
+            let ghost before_decls = declarations@;
+            let (some, end, Ghost(after)) = read_declaration(
+                text.as_slice(),
+                start,
+                false,
+                false,
+                &mut rows,
+                &mut declarations,
+                Ghost(first),
+            );
+            proof {
+                let n = out_of(rows@, declarations@, Seq::empty());
+                if some {
+                    let decl = consume_a_declaration(stream, first, false).0.unwrap();
+                    let k = before_decls.len() as int;
+                    assert forall|j: int| 0 <= j < k implies before_decls[j]
+                        == declarations@[j] by {
+                        assert(declarations@.drop_last()[j] == declarations@[j]);
+                    }
+                    assert(declarations@[k] == declarations@.last());
+                    assert(out_grows(o, n));
+                    lemma_wf_grows(o, n);
+                    lemma_agree_declarations(text@, o, n, 0, k);
+                    let longer = view_declarations(text@, rows@, declarations@, 0, k + 1);
+                    assert(longer =~= list.push(decl));
+                }
+                idx = after;
+            }
+            at = end;
+        }
+    }
+}
+
 } // verus!
