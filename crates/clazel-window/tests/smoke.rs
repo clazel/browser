@@ -30,6 +30,14 @@ fn a_window_opens_draws_reports_and_closes() {
             .is_err()
     );
 
+    // The title goes through the message thread, so this also shows it is pumping.
+    let titled = window.set_title("clazel-window smoke test, renamed");
+    assert!(titled.is_ok(), "set_title failed: {titled:?}");
+    assert!(window.set_title("a\0b").is_err());
+
+    let dpi = window.dpi();
+    assert!(dpi.is_some_and(|d| d > 0), "dpi {dpi:?}");
+
     // A new window is told to paint, through the real message thread.
     let deadline = Instant::now() + Duration::from_secs(10);
     let mut exposed = false;
