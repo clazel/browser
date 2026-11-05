@@ -1444,7 +1444,7 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 |------|-------|
 | 5.0 Decisions | taken (2026-11-04), (d) as a GPU rasterizer and the rest as recommended; open: how 5.18 fits with (g) (see 5.0) |
 | 5.1 Inventory and test data | started, not on `main`: `css-parsing-tests`' ten syntax files (301 cases) and WPT `css/css-syntax/` (191 calls read, 23 pages and 1 test not run) vendored in `clazel-css`; no other WPT directories, inventory, Unicode tables, test fonts or dev-dependencies yet |
-| 5.2 CSS tokenizer | built and proven, not on `main`: spec, exec and theorems in `clazel-css`, with the token-level suites passing (61 cases, 3 expected failures); §3.2 decoding and mutations to come |
+| 5.2 CSS tokenizer | built and proven, not on `main`: spec, exec and theorems in `clazel-css`, 17 of 17 mutations killed with certificates, and the token-level suites passing (61 cases, 3 expected failures); §3.2 decoding of the input bytes not started |
 | 5.3 CSS parser | not started |
 | 5.4 CSS syntax evidence | not started |
 | 5.5 Selectors | not started |
