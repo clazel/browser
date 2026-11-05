@@ -1,0 +1,998 @@
+{
+  "mutations": [
+    {
+      "id": "crc-generator",
+      "file": "src/crc32c/spec.rs",
+      "find": "word_bits(0x1edc6f41)",
+      "replace": "word_bits(0x1edc6f43)",
+      "expect": "killed",
+      "reason": "Another polynomial: RFC 7143 §A.4's first example is false.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-divide-only-when-clear",
+      "file": "src/crc32c/spec.rs",
+      "find": "    if r[0] {\n        add(shifted",
+      "replace": "    if !r[0] {\n        add(shifted",
+      "expect": "killed",
+      "reason": "Subtracts G(x) when the top coefficient is 0, which is not division.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-complement-16-bits",
+      "file": "src/crc32c/spec.rs",
+      "find": "if j < 32 { !s[j] }",
+      "replace": "if j < 16 { !s[j] }",
+      "expect": "killed",
+      "reason": "§13.1 step 2 complements the first 32 bits, not 16.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-no-final-complement",
+      "file": "src/crc32c/spec.rs",
+      "find": "let crc = complement(r);",
+      "replace": "let crc = r;",
+      "expect": "killed",
+      "reason": "§13.1 step 5 complements the remainder.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-byte-bits-msb-first",
+      "file": "src/crc32c/spec.rs",
+      "find": "bit_of_value(b as nat, t as nat)",
+      "replace": "bit_of_value(b as nat, (7 - t) as nat)",
+      "expect": "killed",
+      "reason": "Reads §13.1's 'bit 7' as the most significant bit, the trap §11's numbering rules out.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_incrementing()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| i as u8)) != seq![0x4eu8, 0x79, 0xdd, 0x46]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-generator-reversed",
+      "file": "src/crc32c/spec.rs",
+      "find": "bit_of_value(w, (31 - j) as nat)",
+      "replace": "bit_of_value(w, j as nat)",
+      "expect": "killed",
+      "reason": "The generator's coefficients in the wrong order.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-octet-bits-inverted",
+      "file": "src/crc32c/spec.rs",
+      "find": "(if s[0] { 1nat } else { 0nat })",
+      "replace": "(if s[0] { 0nat } else { 1nat })",
+      "expect": "killed",
+      "reason": "A coefficient of 1 is a bit set in the digest octet.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-digest-octet-order",
+      "file": "src/crc32c/spec.rs",
+      "find": "crc.subrange(8 * k, 8 * k + 8)",
+      "replace": "crc.subrange(24 - 8 * k, 32 - 8 * k)",
+      "expect": "killed",
+      "reason": "The digest's octets reversed, so the word is big-endian.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-no-x32-zeros",
+      "file": "src/crc32c/spec.rs",
+      "find": "m + Seq::new(32, |j: int| false)",
+      "replace": "m + Seq::new(31, |j: int| false)",
+      "expect": "killed",
+      "reason": "§13.1 step 3 multiplies by x**32, not x**31.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-add-is-xor",
+      "file": "src/crc32c/spec.rs",
+      "find": "a[j] != b[j]",
+      "replace": "a[j] == b[j]",
+      "expect": "killed",
+      "reason": "Addition over GF(2) is exclusive or.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-remainder-start",
+      "file": "src/crc32c/spec.rs",
+      "find": "        Seq::new(32, |j: int| false)\n    } else {\n        division_step",
+      "replace": "        Seq::new(32, |j: int| true)\n    } else {\n        division_step",
+      "expect": "killed",
+      "reason": "The division starts from a remainder of zero.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "crc-complement-identity",
+      "file": "src/crc32c/spec.rs",
+      "find": "|j: int| !a[j])",
+      "replace": "|j: int| a[j])",
+      "expect": "killed",
+      "reason": "`complement` must flip its bits.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "crate::crc32c::examples::lemma_crc32c_example_zeros()",
+        "witness": "crate::crc32c::spec::crc32c(Seq::new(32, |i: int| 0u8)) != seq![0xaau8, 0x36, 0x91, 0x8a]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-magic",
+      "file": "src/log/spec.rs",
+      "find": "seq![0x63u8, 0x6c,",
+      "replace": "seq![0x64u8, 0x6c,",
+      "expect": "killed",
+      "reason": "The magic is \"clazel-store\".",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_header()",
+        "witness": "encode_header(seq![0x69u8, 0x64]) != seq![0x30u8, 0x15, 0x04, 0x0c, 0x63, 0x6c, 0x61, 0x7a, 0x65, 0x6c, 0x2d, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x02, 0x01, 0x01, 0x04, 0x02, 0x69, 0x64]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "format-version",
+      "file": "src/log/spec.rs",
+      "find": "pub open spec fn version() -> nat {\n    1",
+      "replace": "pub open spec fn version() -> nat {\n    2",
+      "expect": "killed",
+      "reason": "The header's version is 1.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_header()",
+        "witness": "encode_header(seq![0x69u8, 0x64]) != seq![0x30u8, 0x15, 0x04, 0x0c, 0x63, 0x6c, 0x61, 0x7a, 0x65, 0x6c, 0x2d, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x02, 0x01, 0x01, 0x04, 0x02, 0x69, 0x64]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "format-header-identity",
+      "file": "src/log/spec.rs",
+      "find": "+ clazel_der::spec::encode_octet_string(identity),",
+      "replace": "+ clazel_der::spec::encode_octet_string(magic()),",
+      "expect": "killed",
+      "reason": "The header names the bucket, or a file could not be matched to one.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_header()",
+        "witness": "encode_header(seq![0x69u8, 0x64]) != seq![0x30u8, 0x15, 0x04, 0x0c, 0x63, 0x6c, 0x61, 0x7a, 0x65, 0x6c, 0x2d, 0x73, 0x74, 0x6f, 0x72, 0x65, 0x02, 0x01, 0x01, 0x04, 0x02, 0x69, 0x64]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "format-number-width",
+      "file": "src/log/spec.rs",
+      "find": "clazel_der::spec::be_bytes(n, 8)",
+      "replace": "clazel_der::spec::be_bytes(n, 4)",
+      "expect": "killed",
+      "reason": "Commits go up to 2^64 - 1; four octets would truncate them.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_numbers()",
+        "witness": "encode_number(0xffff_ffff_ffff_ffff) != seq![0x02u8, 0x09, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]",
+        "reveal": []
+      }
+    },
+    {
+      "id": "format-put-tag",
+      "file": "src/log/spec.rs",
+      "find": "Op::Put { bottle, key, value } => clazel_der::spec::encode_context(\n            0,",
+      "replace": "Op::Put { bottle, key, value } => clazel_der::spec::encode_context(\n            3,",
+      "expect": "killed",
+      "reason": "`put` is [0].",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-delete-tag",
+      "file": "src/log/spec.rs",
+      "find": "Op::Delete { bottle, key } => clazel_der::spec::encode_context(\n            1,",
+      "replace": "Op::Delete { bottle, key } => clazel_der::spec::encode_context(\n            0,",
+      "expect": "killed",
+      "reason": "`delete` is [1]; [0] would read back as a put.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-clear-tag",
+      "file": "src/log/spec.rs",
+      "find": "encode_context(2, true, encode_number(bottle))",
+      "replace": "encode_context(1, true, encode_number(bottle))",
+      "expect": "killed",
+      "reason": "`clear` is [2]; [1] would read back as a delete.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-clear-primitive",
+      "file": "src/log/spec.rs",
+      "find": "encode_context(2, true, encode_number(bottle))",
+      "replace": "encode_context(2, false, encode_number(bottle))",
+      "expect": "killed",
+      "reason": "IMPLICIT SEQUENCE keeps the constructed form (X.690 §8.14.4).",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-put-swaps-key-value",
+      "file": "src/log/spec.rs",
+      "find": "encode_number(bottle) + clazel_der::spec::encode_octet_string(key)\n                + clazel_der::spec::encode_octet_string(value),",
+      "replace": "encode_number(bottle) + clazel_der::spec::encode_octet_string(value)\n                + clazel_der::spec::encode_octet_string(key),",
+      "expect": "killed",
+      "reason": "A put is bottle, key, value.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-ops-order",
+      "file": "src/log/spec.rs",
+      "find": "encode_ops(ops.drop_last()) + encode_op(ops.last())",
+      "replace": "encode_op(ops.last()) + encode_ops(ops.drop_last())",
+      "expect": "killed",
+      "reason": "Operations are written in order, and a transaction applies them in order.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-body-no-commit",
+      "file": "src/log/spec.rs",
+      "find": "encode_number(commit) + clazel_der::spec::encode_sequence(encode_ops(ops))",
+      "replace": "clazel_der::spec::encode_sequence(encode_ops(ops))",
+      "expect": "killed",
+      "reason": "A record carries its commit.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-ops-not-sequence",
+      "file": "src/log/spec.rs",
+      "find": "encode_number(commit) + clazel_der::spec::encode_sequence(encode_ops(ops))",
+      "replace": "encode_number(commit) + encode_ops(ops)",
+      "expect": "killed",
+      "reason": "`ops` is a SEQUENCE OF.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "format-check-covers-nothing",
+      "file": "src/log/spec.rs",
+      "find": "crate::crc32c::spec::crc32c(body)",
+      "replace": "crate::crc32c::spec::crc32c(seq![])",
+      "expect": "killed",
+      "reason": "The check covers the record's other contents, or it detects no damage.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::examples::example_record()",
+        "witness": "encode_record(7, seq![Op::Put { bottle: 2, key: seq![0x6bu8], value: seq![0x76u8, 0x76] }, Op::Delete { bottle: 128, key: seq![] }, Op::Clear { bottle: 0 }]) != seq![0x30u8, 0x24, 0x02, 0x01, 0x07, 0x30, 0x19, 0xa0, 0x0a, 0x02, 0x01, 0x02, 0x04, 0x01, 0x6b, 0x04, 0x02, 0x76, 0x76, 0xa1, 0x06, 0x02, 0x02, 0x00, 0x80, 0x04, 0x00, 0xa2, 0x03, 0x02, 0x01, 0x00, 0x04, 0x04, 0x72, 0x18, 0x5d, 0x58]",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "limit-record",
+      "file": "src/log/spec.rs",
+      "find": "    67_108_864\n",
+      "replace": "    67_108_865\n",
+      "expect": "killed",
+      "reason": "The design note's limit is 64 MiB.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_limits()",
+        "witness": "max_record_len() != 67_108_864",
+        "reveal": []
+      }
+    },
+    {
+      "id": "limit-identity",
+      "file": "src/log/spec.rs",
+      "find": "    4096\n",
+      "replace": "    4097\n",
+      "expect": "killed",
+      "reason": "The identity limit is 4096 octets.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_limits()",
+        "witness": "max_identity_len() != 4096",
+        "reveal": []
+      }
+    },
+    {
+      "id": "limit-identity-strict",
+      "file": "src/log/spec.rs",
+      "find": "identity.len() <= max_identity_len()",
+      "replace": "identity.len() < max_identity_len()",
+      "expect": "killed",
+      "reason": "An identity of exactly 4096 octets is allowed.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_limits()",
+        "witness": "max_identity_len() == 4096",
+        "reveal": []
+      }
+    },
+    {
+      "id": "valid-commit-zero",
+      "file": "src/log/spec.rs",
+      "find": "&&& 1 <= commit",
+      "replace": "&&& 0 <= commit",
+      "expect": "killed",
+      "reason": "Commits start at 1; a commit of 0 would be accepted.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_transaction(); clazel_der::lemmas::lemma_pow256_8()",
+        "witness": "encode_record(0, seq![]).len() <= max_record_len()",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "valid-commit-limit",
+      "file": "src/log/spec.rs",
+      "find": "&&& commit < clazel_der::spec::pow256(8)",
+      "replace": "&&& commit <= clazel_der::spec::pow256(8)",
+      "expect": "killed",
+      "reason": "Commit 2^64 does not fit eight octets.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_transaction(); clazel_der::lemmas::lemma_pow256_8()",
+        "witness": "encode_record(0x1_0000_0000_0000_0000, seq![]).len() <= max_record_len()",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "valid-bottle-limit",
+      "file": "src/log/spec.rs",
+      "find": "op_bottle(#[trigger] ops[i]) < clazel_der::spec::pow256(4)",
+      "replace": "op_bottle(#[trigger] ops[i]) <= clazel_der::spec::pow256(4)",
+      "expect": "killed",
+      "reason": "Bottle numbers are below 2^32.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_transaction(); clazel_der::lemmas::lemma_pow256_8(); let c = seq![Op::Clear { bottle: 0x1_0000_0000 }]; assert forall|i: int| 0 <= i < c.len() implies op_bottle(#[trigger] c[i]) <= clazel_der::spec::pow256(4) by { assert(c[i] == Op::Clear { bottle: 0x1_0000_0000 }); }",
+        "witness": "encode_record(1, seq![Op::Clear { bottle: 0x1_0000_0000 }]).len() <= max_record_len()",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "valid-record-limit",
+      "file": "src/log/spec.rs",
+      "find": "encode_record(commit, ops).len() <= max_record_len()",
+      "replace": "encode_record(commit, ops).len() <= 0",
+      "expect": "killed",
+      "reason": "A short record is within the limit.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_transaction()",
+        "witness": "encode_record(1, seq![]).len() > 0",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "log-commit-number",
+      "file": "src/log/spec.rs",
+      "find": "encode_record(ts.len(), ts.last())",
+      "replace": "encode_record(ts.len() + 1, ts.last())",
+      "expect": "killed",
+      "reason": "A log's first record has commit 1.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_log(); let l = seq![Seq::<Op>::empty()]; assert(l.drop_last() =~= Seq::<Seq<Op>>::empty()); assert(l.last() =~= Seq::<Op>::empty()); let h = encode_header(seq![]); assert((h + encode_record(1, seq![])).skip(h.len() as int) =~= encode_record(1, seq![])); assert((h + encode_record(2, seq![])).skip(h.len() as int) =~= encode_record(2, seq![])); assert(encode_log(seq![], Seq::<Seq<Op>>::empty()) == h)",
+        "witness": "encode_record(1, seq![]) != encode_record(2, seq![])",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "log-ok-position",
+      "file": "src/log/spec.rs",
+      "find": "transaction_ok((i + 1) as nat, #[trigger] ts[i])",
+      "replace": "transaction_ok(i as nat, #[trigger] ts[i])",
+      "expect": "killed",
+      "reason": "The i-th transaction has commit i + 1.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_transaction(); let l = seq![Seq::<Op>::empty()]; assert(l[0] =~= seq![]); assert(transaction_ok(0nat, l[0]))",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "recover-no-identity-check",
+      "file": "src/log/spec.rs",
+      "find": "if !identity_ok(identity) || !encode_header(identity).is_prefix_of(file) {",
+      "replace": "if !encode_header(identity).is_prefix_of(file) {",
+      "expect": "killed",
+      "reason": "An identity over the limit is refused.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let i = Seq::new(4097, |i: int| 0u8); let f = encode_header(i); assert(f.subrange(0, f.len() as int) =~= f); assert(f.is_prefix_of(f)); assert(!identity_ok(i)); super::theorems::theorem_refusal(i, f)",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "recover-no-header-check",
+      "file": "src/log/spec.rs",
+      "find": "if !identity_ok(identity) || !encode_header(identity).is_prefix_of(file) {",
+      "replace": "if !identity_ok(identity) {",
+      "expect": "killed",
+      "reason": "A file without its header is refused.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let e = Seq::<u8>::empty(); assert(identity_ok(e)); assert(!encode_header(e).is_prefix_of(e)); super::theorems::theorem_refusal(e, e)",
+        "witness": "encode_header(seq![]).len() > 0",
+        "reveal": []
+      }
+    },
+    {
+      "id": "recover-shortest",
+      "file": "src/log/spec.rs",
+      "find": "#[trigger] fits(identity, file, u) ==> u.len() <= ts.len()",
+      "replace": "#[trigger] fits(identity, file, u) ==> ts.len() <= u.len()",
+      "expect": "killed",
+      "reason": "Recovery keeps the longest list, not the shortest: the whole file must recover all of it.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let id = Seq::<u8>::empty(); let l = seq![Seq::<Op>::empty()]; let f = encode_log(id, l); fact_transaction(); fact_log(); super::theorems::theorem_whole(id, l); super::theorems::theorem_refusal(id, f); super::theorems::lemma_recovered(id, f); let n = Seq::<Seq<Op>>::empty(); assert(encode_log(id, n) == encode_header(id)); assert(fits(id, f, n))",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "recover-no-maximum",
+      "file": "src/log/spec.rs",
+      "find": "fits(identity, file, ts) && forall|u: Seq<Seq<Op>>| #[trigger] fits(identity, file, u) ==> u.len() <= ts.len()",
+      "replace": "fits(identity, file, ts)",
+      "expect": "killed",
+      "reason": "Without `longest`, the empty list and the whole list of a file both qualify, so recovery has no one answer.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let id = Seq::<u8>::empty(); let l = seq![Seq::<Op>::empty()]; let f = encode_log(id, l); fact_transaction(); let n = Seq::<Seq<Op>>::empty(); assert(encode_log(id, n) == encode_header(id)); super::lemmas::lemma_encode_log_take(id, l, 0); assert(l.take(0) =~= n); assert(f.subrange(0, f.len() as int) =~= f); assert(fits(id, f, n)); assert(fits(id, f, l)); super::lemmas::lemma_longest_fit_unique(id, f, n); super::lemmas::lemma_longest_fit_unique(id, f, l); assert(n.len() != l.len())",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "state-put-swaps",
+      "file": "src/log/spec.rs",
+      "find": "s.insert((bottle, key), value)",
+      "replace": "s.insert((bottle, value), key)",
+      "expect": "killed",
+      "reason": "A put sets its key to its value.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_put(); assert(((1nat, ka())) != ((1nat, vx())))",
+        "witness": "ka() != vx()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "state-delete-noop",
+      "file": "src/log/spec.rs",
+      "find": "Op::Delete { bottle, key } => s.remove((bottle, key)),",
+      "replace": "Op::Delete { bottle, key } => s,",
+      "expect": "killed",
+      "reason": "A delete removes its key.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_delete(); assert(one().dom().contains((1nat, ka())))",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "state-clear-inverted",
+      "file": "src/log/spec.rs",
+      "find": "|k: (nat, Seq<u8>)| k.0 != bottle",
+      "replace": "|k: (nat, Seq<u8>)| k.0 == bottle",
+      "expect": "killed",
+      "reason": "A clear removes its bottle's keys and leaves the others'.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_clear(); assert(two().dom().contains((1nat, ka())))",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "state-ops-first-only",
+      "file": "src/log/spec.rs",
+      "find": "apply_op(apply_transaction(s, ops.drop_last()), ops.last())",
+      "replace": "apply_op(apply_transaction(s, ops.drop_last()), ops[0])",
+      "expect": "killed",
+      "reason": "A transaction applies each of its operations, so the later put wins.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let p = Op::Put { bottle: 1, key: ka(), value: vx() }; let q = Op::Put { bottle: 1, key: ka(), value: vy() }; let e = Map::<(nat, Seq<u8>), Seq<u8>>::empty(); assert(seq![p, q].drop_last() =~= seq![p]); assert(seq![p].drop_last() =~= Seq::<Op>::empty()); assert(seq![q].drop_last() =~= Seq::<Op>::empty()); assert(apply_transaction(e, Seq::<Op>::empty()) == e); fact_order(); assert(vx() != vy()) by { assert(vx().len() != vy().len()); } assert(seq![p, q][0] == p); assert(seq![p][0] == p); assert(apply_transaction(e, seq![p]) == apply_op(e, p)); assert(apply_transaction(e, seq![p, q]) == apply_op(apply_transaction(e, seq![p]), p))",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "state-log-first-only",
+      "file": "src/log/spec.rs",
+      "find": "apply_transaction(apply_log(ts.drop_last()), ts.last())",
+      "replace": "apply_transaction(apply_log(ts.drop_last()), ts[0])",
+      "expect": "killed",
+      "reason": "A log applies each of its transactions, so the later put wins.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let p = Op::Put { bottle: 1, key: ka(), value: vx() }; let q = Op::Put { bottle: 1, key: ka(), value: vy() }; let e = Map::<(nat, Seq<u8>), Seq<u8>>::empty(); assert(seq![p, q].drop_last() =~= seq![p]); assert(seq![p].drop_last() =~= Seq::<Op>::empty()); assert(seq![q].drop_last() =~= Seq::<Op>::empty()); assert(apply_transaction(e, Seq::<Op>::empty()) == e); fact_order(); assert(vx() != vy()) by { assert(vx().len() != vy().len()); } let ts = seq![seq![p], seq![q]]; assert(ts.drop_last() =~= seq![seq![p]]); assert(seq![seq![p]].drop_last() =~= Seq::<Seq<Op>>::empty()); assert(ts[0] == seq![p]); assert(seq![seq![p]][0] == seq![p]); assert(apply_log(Seq::<Seq<Op>>::empty()) == e); assert(apply_transaction(e, seq![p]) == apply_op(e, p)); let s1 = apply_log(seq![seq![p]]); assert(s1 == apply_op(e, p)); assert(apply_transaction(s1, seq![p]) == apply_op(s1, p)); assert(apply_log(ts) == apply_op(s1, p))",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "state-entries-first-wins",
+      "file": "src/log/spec.rs",
+      "find": "let e = es.last();",
+      "replace": "let e = es[0];",
+      "expect": "killed",
+      "reason": "A later entry replaces an earlier one.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_entries(); let es = seq![(1nat, ka(), vx()), (1nat, ka(), vy())]; assert(es.drop_last() =~= seq![(1nat, ka(), vx())]); assert(es[0] == (1nat, ka(), vx())); assert(seq![(1nat, ka(), vx())][0] == (1nat, ka(), vx())); assert(vx() != vy()) by { assert(vx().len() != vy().len()); }",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "usage-entry-no-key",
+      "file": "src/log/spec.rs",
+      "find": "k.1.len() + v.len()",
+      "replace": "v.len()",
+      "expect": "killed",
+      "reason": "A key's octets count, as in Phase 2's localStorage quota.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_entry_size()",
+        "witness": "entry_size((1nat, ka()), vy()) != 3",
+        "reveal": []
+      }
+    },
+    {
+      "id": "usage-entry-no-value",
+      "file": "src/log/spec.rs",
+      "find": "k.1.len() + v.len()",
+      "replace": "k.1.len()",
+      "expect": "killed",
+      "reason": "A value's octets count.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_entry_size()",
+        "witness": "entry_size((1nat, ka()), vy()) != 3",
+        "reveal": []
+      }
+    },
+    {
+      "id": "usage-empty-nonzero",
+      "file": "src/log/spec.rs",
+      "find": "if s.dom().len() == 0 {\n        0\n",
+      "replace": "if s.dom().len() == 0 {\n        1\n",
+      "expect": "killed",
+      "reason": "An empty bucket uses nothing.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_usage(); let e = Map::<(nat, Seq<u8>), Seq<u8>>::empty(); assert(e.dom() =~= Set::<(nat, Seq<u8>)>::empty()); vstd::set::lemma_set_remove_len(e.dom(), (1nat, ka())); assert(e.dom().len() == 0) by { broadcast use vstd::set::lemma_set_empty_len; }",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "usage-drops-entries",
+      "file": "src/log/spec.rs",
+      "find": "entry_size(k, s[k]) + usage(s.remove(k))",
+      "replace": "usage(s.remove(k))",
+      "expect": "killed",
+      "reason": "Usage sums every entry.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_usage(); let e = Map::<(nat, Seq<u8>), Seq<u8>>::empty(); assert(e.dom() =~= Set::<(nat, Seq<u8>)>::empty()); vstd::set::lemma_set_remove_len(e.dom(), (1nat, ka())); assert(e.dom().len() == 0) by { broadcast use vstd::set::lemma_set_empty_len; } let o = one(); vstd::set::lemma_set_contains_len(o.dom(), (1nat, ka())); vstd::set::lemma_set_choose_len(o.dom()); let c = o.dom().choose(); assert(c == (1nat, ka())); assert(o.remove(c) =~= e)",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "quota-strict",
+      "file": "src/log/spec.rs",
+      "find": "usage(apply_transaction(s, ops)) <= quota",
+      "replace": "usage(apply_transaction(s, ops)) < quota",
+      "expect": "killed",
+      "reason": "A state exactly at the quota is within it.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_quota(); fact_usage(); assert(apply_transaction(one(), Seq::<Op>::empty()) == one())",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "quota-off-by-one",
+      "file": "src/log/spec.rs",
+      "find": "usage(apply_transaction(s, ops)) <= quota",
+      "replace": "usage(apply_transaction(s, ops)) <= quota + 1",
+      "expect": "killed",
+      "reason": "A state one octet over the quota is refused.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_quota(); fact_usage(); assert(apply_transaction(one(), Seq::<Op>::empty()) == one())",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "quota-commit-inverted",
+      "file": "src/log/spec.rs",
+      "find": "    if admits(s, ops, quota) {\n",
+      "replace": "    if !admits(s, ops, quota) {\n",
+      "expect": "killed",
+      "reason": "An admitted transaction applies, and a refused one changes nothing.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_quota(); fact_usage(); let d = Op::Delete { bottle: 1, key: ka() }; let e = Map::<(nat, Seq<u8>), Seq<u8>>::empty(); assert(seq![d].drop_last() =~= Seq::<Op>::empty()); assert(apply_transaction(one(), seq![d]) == apply_op(one(), d)); assert(apply_op(one(), d) =~= e); assert(one().dom().contains((1nat, ka()))); assert(!e.dom().contains((1nat, ka())))",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "order-empty-before-empty",
+      "file": "src/log/spec.rs",
+      "find": "    if a.len() == 0 {\n        b.len() > 0\n",
+      "replace": "    if a.len() == 0 {\n        true\n",
+      "expect": "killed",
+      "reason": "No key comes before itself.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::order_examples::example_key_less()",
+        "witness": "key_less(seq![], seq![])",
+        "reveal": []
+      }
+    },
+    {
+      "id": "order-longer-first",
+      "file": "src/log/spec.rs",
+      "find": "    } else if b.len() == 0 {\n        false\n",
+      "replace": "    } else if b.len() == 0 {\n        true\n",
+      "expect": "killed",
+      "reason": "A prefix comes first.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::order_examples::example_key_less()",
+        "witness": "key_less(seq![0x00u8], seq![])",
+        "reveal": []
+      }
+    },
+    {
+      "id": "order-octets-descending",
+      "file": "src/log/spec.rs",
+      "find": "a[0] < b[0]",
+      "replace": "a[0] > b[0]",
+      "expect": "killed",
+      "reason": "Keys are ordered by octets, ascending.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::order_examples::example_key_less()",
+        "witness": "key_less(seq![0x62u8], seq![0x61u8])",
+        "reveal": []
+      }
+    },
+    {
+      "id": "order-ignores-rest",
+      "file": "src/log/spec.rs",
+      "find": "key_less(a.drop_first(), b.drop_first())",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "Equal first octets decide nothing.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::order_examples::example_key_less()",
+        "witness": "key_less(seq![0x61u8, 0x62], seq![0x61u8, 0x62])",
+        "reveal": []
+      }
+    },
+    {
+      "id": "range-lo-exclusive",
+      "file": "src/log/spec.rs",
+      "find": "&&& !key_less(k, lo)",
+      "replace": "&&& key_less(lo, k)",
+      "expect": "killed",
+      "reason": "`lo` is included.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::order_examples::example_in_range()",
+        "witness": "!in_range(seq![0x61u8], seq![0x61u8], None)",
+        "reveal": []
+      }
+    },
+    {
+      "id": "range-hi-inclusive",
+      "file": "src/log/spec.rs",
+      "find": "Some(h) => key_less(k, h),",
+      "replace": "Some(h) => !key_less(h, k),",
+      "expect": "killed",
+      "reason": "`hi` is not included.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::order_examples::example_in_range()",
+        "witness": "in_range(seq![0x62u8], seq![0x61u8], Some(seq![0x62u8]))",
+        "reveal": []
+      }
+    },
+    {
+      "id": "scan-descending",
+      "file": "src/log/spec.rs",
+      "find": "key_less(#[trigger] out[i].0, #[trigger] out[j].0)",
+      "replace": "key_less(#[trigger] out[j].0, #[trigger] out[i].0)",
+      "expect": "killed",
+      "reason": "A scan returns keys in increasing order.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_scan(); lemma_ab_order(); let o = ab_scan(); assert(o[0].0 == ka() && o[1].0 == kb())",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "valid-record-limit-strict",
+      "file": "src/log/spec.rs",
+      "find": "encode_record(commit, ops).len() <= max_record_len()",
+      "replace": "encode_record(commit, ops).len() < max_record_len()",
+      "expect": "killed",
+      "reason": "A record of exactly 64 MiB is within the limit.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_record_limit()",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "valid-record-limit-over",
+      "file": "src/log/spec.rs",
+      "find": "encode_record(commit, ops).len() <= max_record_len()",
+      "replace": "encode_record(commit, ops).len() <= max_record_len() + 1",
+      "expect": "killed",
+      "reason": "A record one octet over 64 MiB is refused.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_record_limit(); lemma_big_record(67_108_827); clazel_der::lemmas::lemma_pow256_8(); let c = seq![big(67_108_827)]; assert forall|i: int| 0 <= i < c.len() implies op_bottle(#[trigger] c[i]) < clazel_der::spec::pow256(4) by { assert(c[i] == big(67_108_827)); }",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "fits-no-prefix",
+      "file": "src/log/spec.rs",
+      "find": "log_ok(ts) && encode_log(identity, ts).is_prefix_of(file)",
+      "replace": "log_ok(ts)",
+      "expect": "killed",
+      "reason": "A list fits only if its log is in the file, or a whole file would not recover exactly what it holds.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let id = Seq::<u8>::empty(); let e = Seq::<Op>::empty(); let l = seq![e]; let f = encode_log(id, l); fact_transaction(); super::theorems::theorem_whole(id, l); super::theorems::theorem_refusal(id, f); super::theorems::lemma_recovered(id, f); clazel_der::lemmas::lemma_pow256_8(); let u = seq![e, e]; assert forall|i: int| 0 <= i < u.len() implies transaction_ok((i + 1) as nat, #[trigger] u[i]) by { assert(u[i] == e); if i == 0 { assert(transaction_ok(1, l[0])); assert(l[0] == e); } } assert(fits(id, f, u))",
+        "witness": "encode_record(2, seq![]).len() <= max_record_len()",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "fits-no-log-ok",
+      "file": "src/log/spec.rs",
+      "find": "log_ok(ts) && encode_log(identity, ts).is_prefix_of(file)",
+      "replace": "encode_log(identity, ts).is_prefix_of(file)",
+      "expect": "killed",
+      "reason": "A record of an invalid transaction (here a bottle of 2^32) is not recovered: the independent parser stops before it.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "let id = Seq::<u8>::empty(); let u = seq![seq![Op::Clear { bottle: 0x1_0000_0000 }]]; let n = Seq::<Seq<Op>>::empty(); let f = encode_log(id, u); super::lemmas::lemma_encode_log_take(id, u, 0); assert(u.take(0) =~= n); assert(encode_log(id, n) == encode_header(id)); assert(f.subrange(0, f.len() as int) =~= f); assert(fits(id, f, u)); crate::independent::theorem_recovery_equiv(id, f); super::theorems::lemma_recovered(id, f); assert(crate::independent::e_log(Seq::<crate::independent::IRecord>::empty()) =~= n)",
+        "witness": "crate::independent::i_recover(seq![], encode_log(seq![], seq![seq![Op::Clear { bottle: 0x1_0000_0000 }]])) == Some(Seq::<crate::independent::IRecord>::empty())",
+        "reveal": [
+          "vstd::arithmetic::power::pow"
+        ]
+      }
+    },
+    {
+      "id": "scan-no-membership",
+      "file": "src/log/spec.rs",
+      "find": "&&& s.dom().contains((bottle, out[i].0))",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A scan returns only entries of its bottle.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_other_bottle(); lemma_other_bottle_shape(); lemma_ab_order(); let o = seq![(ka(), ab()[(2nat, ka())])]; assert(o[0].0 == ka()); assert forall|i: int| 0 <= i < o.len() implies in_range(#[trigger] o[i].0, seq![], None) by { assert(i == 0); }",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "scan-no-value",
+      "file": "src/log/spec.rs",
+      "find": "&&& s[(bottle, out[i].0)] == out[i].1",
+      "replace": "&&& true",
+      "expect": "killed",
+      "reason": "A scan returns each entry's own value.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_scan(); let w = seq![(ka(), vy()), (kb(), vx())]; lemma_scan_shape(w)",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "scan-no-completeness",
+      "file": "src/log/spec.rs",
+      "find": "    &&& forall|k: Seq<u8>|\n        #[trigger] s.dom().contains((bottle, k)) && in_range(k, lo, hi) ==> exists|i: int|\n            0 <= i < out.len() && #[trigger] out[i].0 == k\n",
+      "replace": "",
+      "expect": "killed",
+      "reason": "A scan returns every entry of the range.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_scan(); lemma_ab_order(); let m = seq![(ka(), vx())]; assert(m[0].0 == ka() && m[0].1 == vx()); assert(((1nat, ka())) != ((1nat, kb()))) by { assert(ka()[0] != kb()[0]); } assert forall|i: int| 0 <= i < m.len() implies { &&& in_range(#[trigger] m[i].0, seq![], None) &&& ab().dom().contains((1nat, m[i].0)) &&& ab()[(1nat, m[i].0)] == m[i].1 } by { assert(i == 0); }",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "scan-ignores-range",
+      "file": "src/log/spec.rs",
+      "find": "&&& in_range(#[trigger] out[i].0, lo, hi)",
+      "replace": "&&& in_range(#[trigger] out[i].0, seq![], None)",
+      "expect": "killed",
+      "reason": "A scan returns only entries inside its range.",
+      "certificate": {
+        "file": "src/log/facts.rs",
+        "lemma": "fact_scan(); let o = ab_scan(); assert(o[0].0 == ka() && o[1].0 == kb()); lemma_scan_shape(o); assert(((1nat, ka())) != ((1nat, kb()))) by { assert(ka()[0] != kb()[0]); } assert forall|i: int| 0 <= i < o.len() implies ab()[(1nat, #[trigger] o[i].0)] == o[i].1 by { assert(o[i].1 == vx()); }",
+        "witness": "ka() != kb()",
+        "reveal": []
+      }
+    },
+    {
+      "id": "range-no-bound-is-empty",
+      "file": "src/log/spec.rs",
+      "find": "        None => true,\n",
+      "replace": "        None => false,\n",
+      "expect": "killed",
+      "reason": "With no upper bound, every key from `lo` on is in range.",
+      "certificate": {
+        "file": "src/log/certificates.rs",
+        "lemma": "super::order_examples::example_in_range()",
+        "witness": "!in_range(seq![0x61u8], seq![0x61u8], None)",
+        "reveal": []
+      }
+    }
+  ]
+}

@@ -45,15 +45,19 @@ running the demo and the escape tests on Linux x86-64 and macOS arm64.
 ## Phase 3: Networking
 Verified HTTP/1.1 parser, DNS, and our own TLS 1.3 client with verified
 crypto from libcrux (decided in phase-3.md item 3.0; rustls was not taken).
-Certificate revocation through a set pushed to the browser (3.5h) and the
-proven store format that keeps it, the cookie jar and the history across
-runs (3.10), both added 2026-11-03.
+Certificate revocation through a set pushed to the browser (3.5h), and a
+generic proven store on the WHATWG Storage model that keeps it, the cookie
+jar, `localStorage` and the history across runs (3.10). Later phases add
+IndexedDB, the Cache API and an HTTP cache to the same store. Both items
+were added 2026-11-03.
 *Exit:* a verified `curl` clone.
 Detailed plan: [phases/phase-3.md](phases/phase-3.md).
 **Status: in progress (started 2026-10-23). The TLS decision (3.0) is
-taken: option B. Everything but TLS is on `main` (HTTP, DNS, the fetch
-client with redirects and cookies, the kernel join, and the `http://` half
-of the `curl` clone); TLS (3.5) is on open pull requests.**
+taken: option B. HTTP, DNS, the fetch client with redirects and cookies, the
+kernel join, the TLS client and the `curl` clone over `http:` and `https:` are
+on `main` (CI's full verification green on bf6a9ea). Left: revocation (3.5h),
+persistent state (3.10), the TLS proofs and tier raises (3.5e to 3.5g), and
+the wrap-up (3.9).**
 
 ## Phase 4: HTML and DOM
 WHATWG tokenizer (proven total and panic-free), tree builder, DOM.

@@ -175,4 +175,27 @@ pub proof fn lemma_example_non_ascii()
     assert(first(seq![0xB7u32]) == (Token::Ident { value: seq![0xB7u32] })) by (compute_only);
 }
 
+/// The value of the number at the start of `input`, as (numerator, denominator).
+pub open spec fn value_of(input: Seq<u32>) -> (int, nat) {
+    number_value(consume_a_number(input, 0).0)
+}
+
+/// §4.3.12 step 6: "12" is 12, "-1.50" is -150/100, "+.5" is 5/10, "1e2" is 100 and
+/// "1.5e-1" is 15/100. The fractions are not reduced.
+pub proof fn lemma_example_number_value()
+    ensures
+        value_of(seq![0x31u32, 0x32]) == (12int, 1nat),
+        value_of(seq![0x2Du32, 0x31, 0x2E, 0x35, 0x30]) == (-150int, 100nat),
+        value_of(seq![0x2Bu32, 0x2E, 0x35]) == (5int, 10nat),
+        value_of(seq![0x31u32, 0x65, 0x32]) == (100int, 1nat),
+        value_of(seq![0x31u32, 0x2E, 0x35, 0x65, 0x2D, 0x31]) == (15int, 100nat),
+{
+    assert(value_of(seq![0x31u32, 0x32]) == (12int, 1nat)) by (compute_only);
+    assert(value_of(seq![0x2Du32, 0x31, 0x2E, 0x35, 0x30]) == (-150int, 100nat)) by (compute_only);
+    assert(value_of(seq![0x2Bu32, 0x2E, 0x35]) == (5int, 10nat)) by (compute_only);
+    assert(value_of(seq![0x31u32, 0x65, 0x32]) == (100int, 1nat)) by (compute_only);
+    assert(value_of(seq![0x31u32, 0x2E, 0x35, 0x65, 0x2D, 0x31]) == (15int, 100nat))
+        by (compute_only);
+}
+
 } // verus!

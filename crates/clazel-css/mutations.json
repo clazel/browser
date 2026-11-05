@@ -220,6 +220,45 @@
         "lemma": "super::lemmas::theorem_tokens_bounded(seq![0x2Cu32])",
         "witness": "tokenize(seq![0x2Cu32]).len() == 3"
       }
+    },
+    {
+      "id": "number-value-drops-sign",
+      "file": "src/tokenizer/spec.rs",
+      "find": "        -digits\n",
+      "replace": "        digits as int\n",
+      "expect": "killed",
+      "reason": "\"-1.50\" would be positive.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_number_value()",
+        "witness": "super::examples::value_of(seq![0x2Du32, 0x31, 0x2E, 0x35, 0x30]) == (150int, 100nat)"
+      }
+    },
+    {
+      "id": "number-value-unscaled-fraction",
+      "file": "src/tokenizer/spec.rs",
+      "find": "let denominator = power_of_ten(fraction.len());",
+      "replace": "let denominator: nat = 1;",
+      "expect": "killed",
+      "reason": "\"+.5\" would be 5.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_number_value()",
+        "witness": "super::examples::value_of(seq![0x2Bu32, 0x2E, 0x35]) == (5int, 1nat)"
+      }
+    },
+    {
+      "id": "number-value-exponent-always-positive",
+      "file": "src/tokenizer/spec.rs",
+      "find": "} else if is_negative(number.exponent_part) {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "reason": "\"1.5e-1\" would be 15, not 0.15.",
+      "certificate": {
+        "file": "src/tokenizer/lemmas.rs",
+        "lemma": "super::examples::lemma_example_number_value()",
+        "witness": "super::examples::value_of(seq![0x31u32, 0x2E, 0x35, 0x65, 0x2D, 0x31]) == (150int, 10nat)"
+      }
     }
   ]
 }

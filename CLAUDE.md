@@ -105,7 +105,7 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
   commit regenerated ones with a change. CI keeps them up to date: after
   every push to `main` whose full verification passes, its `table` job
   writes them from that run's measurements and commits them as
-  github-actions[bot]. `cargo xtask report --changed` still shows locally
+  clazel-status-table[bot]. `cargo xtask report --changed` still shows locally
   what the table would say; a table that differs from what a run measured
   is reported, not a failure. A new crate must be placed in a component
   (`PLACES` in `xtask/src/status.rs`), or `cargo xtask check` fails.
