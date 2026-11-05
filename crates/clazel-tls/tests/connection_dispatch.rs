@@ -20,9 +20,7 @@ use clazel_tls::schedule::crypto::Crypto;
 use clazel_tls::schedule::exec::finished;
 use clazel_tls::traffic::exec::{Decryptor, Encryptor};
 use clazel_tls::traffic::provider::{Factory, KeyedAead};
-use clazel_tls::types::{
-    Certificate, CertificateEntry, CertificateVerify, Extension, NewSessionTicket,
-};
+use clazel_tls::types::{Certificate, CertificateEntry, CertificateVerify, Extension};
 use sha2::{Digest, Sha256};
 
 const HOST: &[u8] = b"dispatch.example.test";
@@ -238,19 +236,6 @@ fn certificate_body() -> Vec<u8> {
 fn encrypted_extensions() -> Vec<u8> {
     let mut output = Vec::new();
     encode::write_encrypted_extensions(&mut output, &[] as &[Extension<'_>]);
-    output
-}
-
-fn ticket_body(lifetime: u32, extensions: Vec<Extension<'_>>) -> Vec<u8> {
-    let ticket = NewSessionTicket {
-        ticket_lifetime: lifetime,
-        ticket_age_add: 0x1234_5678,
-        ticket_nonce: &[0x01],
-        ticket: b"opaque ticket",
-        extensions,
-    };
-    let mut output = Vec::new();
-    encode::write_new_session_ticket(&mut output, &ticket);
     output
 }
 
