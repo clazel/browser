@@ -35,10 +35,12 @@ the tree builder proves of its calls, not a check at run time.
 
 ## Verification
 
-Tier 0 (target: tier 2). The proofs below all go through, but the tier
-stays 0 until CI's full verification is green on them and on the
-tree-construction conformance suite of Phase 4 item 4.11, which is this
-crate's conformance evidence (`tests/conformance*.rs` is not here yet).
+Tier 2 is declared (`tier = 2` in `Cargo.toml`); it becomes real only when
+CI's full verification is green on the pull request that raised it
+(`phase4/dom-conformance-tier2`): until then the list below is the evidence,
+not the tier. The conformance evidence is the crate's own
+`tests/conformance_dom.rs`, in addition to the tree-construction suite that
+`clazel-treebuilder` runs through this arena.
 
 - **Proven (`src/lemmas.rs`):** every operation keeps the tree well formed
   (`wf`): a child's parent lists it and conversely, children lists have no
@@ -68,9 +70,35 @@ crate's conformance evidence (`tests/conformance*.rs` is not here yet).
   a child inserted at the wrong index, `remove` leaving the child listed,
   `reparent_children` reversing the order, the limit off by one), each
   rejected by a certificate Verus checks (`mutations.json`).
-- **Not proven / not yet evidence:** that the spec transcribes the DOM
-  Standard correctly beyond the above; that is what item 4.11's
-  html5lib-tests run checks. `tests/arena.rs` holds ordinary unit tests.
+- **Conformance (`tests/conformance_dom.rs`)**, two suites, each reported
+  by a `clazel-conformance:` line (counts from the last local run):
+  - *html5lib tree-construction trees (WPT)*, 1,967 of 1,967 cases: every
+    expected tree of the vendored suite (the table generated for
+    `clazel-treebuilder`, shared by `include!`, not copied) is read back
+    into an arena using only the arena's own operations (create, template
+    contents, append, append attribute), re-checked clause by clause for the
+    executable statement of `wf` through the readers, printed again by a
+    walk over `children` and `kind`, and compared byte for byte with the
+    original text. No expected failures.
+  - *`markup5ever_rcdom` 0.39.0 differential*, 3,000 of 3,000 random
+    operation sequences of 40 operations (a seeded `SplitMix64`, no `rand`):
+    create, append, insert-before, remove, moving a subtree (22,254 moves,
+    18,664 to another parent, including into template contents),
+    move-all-children, text appends, attributes and mode changes, applied to
+    the arena and to an `RcDom`, with whole trees (the document and every
+    detached subtree) compared after every operation, together with the
+    invariants the arena proves. The oracle is driven by detaching a node
+    first (DOM "adopt"), because `RcDom`'s `append_before_sibling` computes
+    its index before detaching (see the test's module doc).
+  - Under Miri both suites run on a stride of their inputs, and the
+    summary lines are not printed. Miri warns about an integer-to-pointer
+    cast inside `tendril` (the oracle's string type), not in this crate.
+- **Not proven:** that the spec transcribes the DOM Standard correctly
+  beyond the above; the two suites and the independent transcription are
+  the evidence. `tests/arena.rs` holds ordinary unit tests. One restriction
+  the tests respect and the spec leaves to the parser: inserting a template
+  into its own contents is not excluded by `insert_requires` (DOM's
+  host-including ancestor check), so the differential never makes that call.
 - **Modelling choices** (listed at the top of `src/spec.rs`): one arena per
   document; ids are `usize` and never reused; template contents are held
   outside `children`; strings are code points; the operations take the
