@@ -7,8 +7,8 @@
 use std::fs;
 use std::path::PathBuf;
 
-use clazel::store::{Opened, Store, StoreError};
 use clazel_store::log::exec::OpRef;
+use clazel_store_shell::{Opened, Store, StoreError};
 
 /// A new empty directory for one test.
 fn scratch(name: &str) -> PathBuf {

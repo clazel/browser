@@ -6,8 +6,6 @@
 //! exit and stderr (which names a failed sandbox layer) goes to stderr. The network (item 3.7) is
 //! `clazel-net`'s Driver. A `Show` (item 4.12) waits in `shown` for the command loop.
 
-pub mod store;
-
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::mpsc::{Receiver, Sender, channel};
