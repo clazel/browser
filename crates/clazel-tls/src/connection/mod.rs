@@ -3,6 +3,8 @@ pub mod dispatcher_certificates;
 pub mod dispatcher_contract;
 pub mod dispatcher_lemmas;
 pub mod dispatcher_spec;
+pub mod driver_contract;
+pub mod driver_spec;
 pub mod exec;
 pub mod framing;
 pub mod framing_contract;
