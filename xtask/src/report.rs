@@ -33,6 +33,9 @@ pub const HOST_SHELL_LIMIT: usize = 300;
 /// The network shell's source (phase-3.md item 3.8), counted like the host
 /// shell. The plan sets it no limit.
 pub const NET_SHELL_DIR: &str = "crates/clazel-net/src";
+/// The store's shell (phase-3.md item 3.10a), counted the same way. The plan
+/// sets it no limit either.
+pub const STORE_SHELL_DIR: &str = "crates/clazel-store-shell/src";
 
 /// Lines (newline characters, as `wc -l` counts) in the Rust files under `dir`
 /// (a shell's source), or `None` if there is no such directory.
@@ -155,7 +158,7 @@ pub fn rows(block: &str) -> Result<Rows, String> {
 /// The generated block, markers included, with nothing carried over.
 #[cfg(test)]
 pub fn render(table: &Table) -> String {
-    render_with(table, &Rows::new(), None, None)
+    render_with(table, &Rows::new(), None, None, None)
 }
 
 /// The generated block, taking [`CARRIED_COLUMNS`] from `carried` for the
@@ -167,6 +170,7 @@ pub fn render_with(
     carried: &Rows,
     host_shell_count: Option<usize>,
     net_shell_count: Option<usize>,
+    store_shell_count: Option<usize>,
 ) -> String {
     let dash = || "—".to_owned();
     let mut out = vec![BEGIN.to_owned(), HEADER.to_owned(), RULE.to_owned()];
@@ -273,6 +277,13 @@ pub fn render_with(
              decision on its path is a proven function of the crates it calls."
         ));
     }
+    if let Some(n) = store_shell_count {
+        out.push(format!(
+            "⁸ The store's shell (`{STORE_SHELL_DIR}`, item 3.10a: the files, the lock, the syncs \
+             and the renames around `clazel-store`'s proven bucket log) is {n} lines, counted \
+             the same way. It is Tier 0: what a file holds is decided by the crate it calls."
+        ));
+    }
     out.push(END.to_owned());
     out.join("\n")
 }
@@ -356,9 +367,11 @@ mod tests {
         ));
         assert!(!block.contains("⁶ The host shell"));
         assert!(!block.contains("⁷ The network shell"));
-        let with_shell = render_with(&t, &super::Rows::new(), Some(298), Some(1805));
+        assert!(!block.contains("⁸ The store's shell"));
+        let with_shell = render_with(&t, &super::Rows::new(), Some(298), Some(1805), Some(379));
         assert!(with_shell.contains("is 298 lines, counted as `wc -l`"));
         assert!(with_shell.contains("is 1805 lines, counted the same way"));
+        assert!(with_shell.contains("is 379 lines, counted the same way"));
         Ok(())
     }
 
@@ -403,12 +416,12 @@ mod tests {
                 ..Metrics::default()
             },
         );
-        let block = render_with(&later, &old, None, None);
+        let block = render_with(&later, &old, None, None, None);
         assert!(block.contains(
             "| a | 2 (2) | 5 verified, 0 errors | no harnesses | 1 | 0 (0) | 1 / 2 / 3 | 4 / 0 / 0 of 4 | none | 1 of 2 files current |"
         ));
         // Round trip: rendering the full measurement again changes nothing.
-        assert_eq!(render_with(&t, &old, None, None), render(&t));
+        assert_eq!(render_with(&t, &old, None, None, None), render(&t));
         Ok(())
     }
 

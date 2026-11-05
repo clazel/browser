@@ -833,6 +833,10 @@ fn status_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
     if let Some(Err(e)) = net_shell_count.as_ref() {
         r.step("network shell size", Outcome::Fail(vec![e.clone()]));
     }
+    let store_shell_count = report::shell_lines(std::path::Path::new(report::STORE_SHELL_DIR));
+    if let Some(Err(e)) = store_shell_count.as_ref() {
+        r.step("store shell size", Outcome::Fail(vec![e.clone()]));
+    }
     let carried = match only {
         None => report::Rows::new(),
         Some(cs) => {
@@ -886,6 +890,7 @@ fn status_table(r: &mut Runner, write: bool, only: Option<&[Crate]>) {
         &carried,
         host_shell_count.and_then(Result::ok),
         net_shell_count.and_then(Result::ok),
+        store_shell_count.and_then(Result::ok),
     );
     let page = match std::fs::read_to_string(report::STATUS) {
         Ok(t) => t,
