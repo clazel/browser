@@ -1,0 +1,40 @@
+//! An independent transcription of how an X.509 certificate is decoded and
+//! how a host name is matched against it, written from the standards alone,
+//! as evidence for this crate's other transcription (docs/VERIFICATION.md,
+//! "Trust without reviewers"). No equivalence proof exists yet: a different
+//! session writes it afterwards. This module has no exec code.
+//!
+//! Sources, each pinned at the top of the file that uses it: ITU-T X.509
+//! (10/2019), X.501 (10/2019), X.520 (10/2019), X.680, X.681 and X.690
+//! (02/2021), and RFC 6125 with RFC 4985 for one object identifier. X.519,
+//! X.411 and ISO 8601 were not read; the files say where that matters.
+//!
+//! **Not read while writing this module.** In `crates/clazel-x509/src`: every
+//! `spec.rs`, `contract.rs`, `lemmas.rs`, `exec.rs`, `examples.rs`,
+//! `matcher.rs`, `certificates.rs` and `theorems.rs` outside this directory,
+//! and everything under `certificate/`, `tbs/`, `extensions/`, `name/`,
+//! `name_constraints/`, `constraints/`, `policy_constraints/`, `spki/`,
+//! `signature_algorithm/`, `time/`, `leaf/` and `path/`. Also
+//! `crates/clazel-x509/mutations.json`, `crates/clazel-x509/README.md`,
+//! `crates/clazel-x509/tests/`, `crates/clazel-crypto/src/chain/`,
+//! `crates/clazel-crypto/src/join/`, `crates/clazel-der/src/`, and sections
+//! 3.5a and 3.5b of `docs/phases/phase-3.md`. The author did read this
+//! crate's `lib.rs`, whose header names RFC 5280, RFC 9525 and the absence of
+//! a Common Name fallback.
+//!
+//! Nothing here imports another module of this crate, or `clazel-der`; only
+//! `vstd`.
+//!
+//! - `der`: X.690 and the X.680 types.
+//! - `structures`: `Certificate` and what it holds.
+//! - `extensions`: the standard extensions.
+//! - `requirements`: the prose's "shall" clauses.
+//! - `matching`: RFC 6125.
+//! - `examples`: sanity checks that Verus evaluates.
+
+pub mod der;
+pub mod examples;
+pub mod extensions;
+pub mod matching;
+pub mod requirements;
+pub mod structures;
