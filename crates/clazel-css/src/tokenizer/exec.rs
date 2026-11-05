@@ -3,11 +3,7 @@
 //! page chose, and Verus proves no panics, not no stack overflow.
 
 #[allow(unused_imports)]
-use super::contract::*;
-#[allow(unused_imports)]
 use super::spec::*;
-#[allow(unused_imports)]
-use super::termination::*;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -284,15 +280,15 @@ fn starts_unicode_range(first: u32, second: u32, third: u32) -> (r: bool)
 /// Contract for `filter_code_points`: §3.3.
 pub fn filter(input: &[u32]) -> (output: Vec<u32>)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
     ensures
-        filter_ensures(input@, output@),
+        super::contract::filter_ensures(input@, output@),
 {
     let mut output: Vec<u32> = Vec::new();
     let mut pos: usize = 0;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             pos <= input.len(),
             filter_loop(input@, pos as int, output@) == filter_code_points(input@),
         decreases input.len() - pos,
@@ -321,7 +317,7 @@ pub fn filter(input: &[u32]) -> (output: Vec<u32>)
 /// [`end_of_comment`].
 fn read_end_of_comment(input: &[u32], start: usize) -> (r: usize)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         r as int == end_of_comment(input@, start as int),
@@ -330,7 +326,7 @@ fn read_end_of_comment(input: &[u32], start: usize) -> (r: usize)
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             end_of_comment(input@, pos as int) == end_of_comment(input@, start as int),
         decreases input.len() - pos,
@@ -348,7 +344,7 @@ fn read_end_of_comment(input: &[u32], start: usize) -> (r: usize)
 /// [`consume_comments`].
 fn read_comments(input: &[u32], start: usize) -> (r: usize)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         r as int == consume_comments(input@, start as int),
@@ -357,7 +353,7 @@ fn read_comments(input: &[u32], start: usize) -> (r: usize)
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             consume_comments(input@, pos as int) == consume_comments(input@, start as int),
         decreases input.len() - pos,
@@ -373,7 +369,7 @@ fn read_comments(input: &[u32], start: usize) -> (r: usize)
 /// [`consume_whitespace`].
 fn read_whitespace(input: &[u32], start: usize) -> (r: usize)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         r as int == consume_whitespace(input@, start as int),
@@ -382,7 +378,7 @@ fn read_whitespace(input: &[u32], start: usize) -> (r: usize)
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             consume_whitespace(input@, pos as int) == consume_whitespace(input@, start as int),
         decreases input.len() - pos,
@@ -435,7 +431,7 @@ pub open spec fn hex_bound(limit: int) -> nat {
 /// [`consume_hex_digits`].
 fn read_hex_digits(input: &[u32], start: usize, limit: usize, value: u32) -> (r: (u32, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
         limit <= 6,
         value < hex_bound(limit as int),
@@ -455,7 +451,7 @@ fn read_hex_digits(input: &[u32], start: usize, limit: usize, value: u32) -> (r:
     let mut number = value;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             left <= limit <= 6,
             pos - start == limit - left,
@@ -479,7 +475,7 @@ fn read_hex_digits(input: &[u32], start: usize, limit: usize, value: u32) -> (r:
 /// [`consume_escaped_code_point`].
 fn read_escape(input: &[u32], pos: usize) -> (r: (u32, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         pos <= input.len(),
     ensures
         (r.0, r.1 as int) == consume_escaped_code_point(input@, pos as int),
@@ -514,7 +510,7 @@ fn read_escape(input: &[u32], pos: usize) -> (r: (u32, usize))
 /// [`consume_ident_sequence`].
 fn read_ident_sequence(input: &[u32], start: usize) -> (r: (Vec<u32>, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         (r.0@, r.1 as int) == consume_ident_sequence(input@, start as int),
@@ -524,7 +520,7 @@ fn read_ident_sequence(input: &[u32], start: usize) -> (r: (Vec<u32>, usize))
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             consume_ident_sequence_loop(input@, pos as int, result@) == consume_ident_sequence(
                 input@,
@@ -549,7 +545,7 @@ fn read_ident_sequence(input: &[u32], start: usize) -> (r: (Vec<u32>, usize))
 /// [`consume_digits`], appending to `part`.
 fn read_digits(input: &[u32], start: usize, part: &mut Vec<u32>) -> (r: usize)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         (final(part)@, r as int) == consume_digits(input@, start as int, old(part)@),
@@ -558,7 +554,7 @@ fn read_digits(input: &[u32], start: usize, part: &mut Vec<u32>) -> (r: usize)
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             consume_digits(input@, pos as int, part@) == consume_digits(
                 input@,
@@ -580,7 +576,7 @@ fn read_digits(input: &[u32], start: usize, part: &mut Vec<u32>) -> (r: usize)
 /// [`consume_a_number`].
 fn read_number(input: &[u32], start: usize) -> (r: (ExecNumber, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         (view_number(r.0), r.1 as int) == consume_a_number(input@, start as int),
@@ -647,7 +643,7 @@ fn read_number(input: &[u32], start: usize) -> (r: (ExecNumber, usize))
 /// [`consume_a_numeric_token`].
 fn read_numeric_token(input: &[u32], start: usize) -> (r: (ExecToken, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         (view_token(r.0), r.1 as int) == consume_a_numeric_token(input@, start as int),
@@ -671,7 +667,7 @@ fn read_numeric_token(input: &[u32], start: usize) -> (r: (ExecToken, usize))
 /// [`consume_a_string_token`].
 fn read_string_token(input: &[u32], start: usize, ending: u32) -> (r: (ExecToken, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
         ending != EOF,
     ensures
@@ -682,7 +678,7 @@ fn read_string_token(input: &[u32], start: usize, ending: u32) -> (r: (ExecToken
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             ending != EOF,
             consume_string_loop(input@, pos as int, ending, value@) == consume_a_string_token(
@@ -720,7 +716,7 @@ fn read_string_token(input: &[u32], start: usize, ending: u32) -> (r: (ExecToken
 /// [`consume_remnants_of_a_bad_url`].
 fn read_remnants_of_a_bad_url(input: &[u32], start: usize) -> (r: usize)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         r as int == consume_remnants_of_a_bad_url(input@, start as int),
@@ -729,7 +725,7 @@ fn read_remnants_of_a_bad_url(input: &[u32], start: usize) -> (r: usize)
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             consume_remnants_of_a_bad_url(input@, pos as int) == consume_remnants_of_a_bad_url(
                 input@,
@@ -754,7 +750,7 @@ fn read_remnants_of_a_bad_url(input: &[u32], start: usize) -> (r: usize)
 /// [`consume_a_url_token`].
 fn read_url_token(input: &[u32], start: usize) -> (r: (ExecToken, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         (view_token(r.0), r.1 as int) == consume_a_url_token(input@, start as int),
@@ -765,7 +761,7 @@ fn read_url_token(input: &[u32], start: usize) -> (r: (ExecToken, usize))
     let mut pos = first;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= first <= pos <= input.len(),
             first as int == consume_whitespace(input@, start as int),
             consume_url_loop(input@, pos as int, value@) == consume_a_url_token(
@@ -815,7 +811,7 @@ fn read_url_token(input: &[u32], start: usize) -> (r: (ExecToken, usize))
 /// [`consume_whitespace_but_one`].
 fn read_whitespace_but_one(input: &[u32], start: usize) -> (r: usize)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         r as int == consume_whitespace_but_one(input@, start as int),
@@ -824,7 +820,7 @@ fn read_whitespace_but_one(input: &[u32], start: usize) -> (r: usize)
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             consume_whitespace_but_one(input@, pos as int) == consume_whitespace_but_one(
                 input@,
@@ -864,7 +860,7 @@ fn quote(c: u32) -> (r: bool)
 /// [`consume_an_ident_like_token`].
 fn read_ident_like_token(input: &[u32], start: usize) -> (r: (ExecToken, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
         (view_token(r.0), r.1 as int) == consume_an_ident_like_token(input@, start as int),
@@ -890,7 +886,7 @@ fn read_ident_like_token(input: &[u32], start: usize) -> (r: (ExecToken, usize))
 /// [`consume_question_marks`].
 fn read_question_marks(input: &[u32], start: usize, limit: usize) -> (r: usize)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
         limit <= 6,
     ensures
@@ -902,7 +898,7 @@ fn read_question_marks(input: &[u32], start: usize, limit: usize) -> (r: usize)
     let mut pos = start;
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             start <= pos <= input.len(),
             count <= limit <= 6,
             pos == start + count,
@@ -955,7 +951,7 @@ fn replace_marks(value: u32, count: usize, digit_value: u32) -> (r: u32)
 /// [`consume_a_unicode_range_token`].
 fn read_unicode_range_token(input: &[u32], pos: usize) -> (r: (ExecToken, usize))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         pos + 2 <= input.len(),
     ensures
         (view_token(r.0), r.1 as int) == consume_a_unicode_range_token(input@, pos as int),
@@ -992,10 +988,10 @@ pub fn next_token(input: &[u32], start: usize, unicode_ranges_allowed: bool) -> 
     usize,
 ))
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
         start <= input.len(),
     ensures
-        next_token_ensures(
+        super::contract::next_token_ensures(
             input@,
             start as int,
             unicode_ranges_allowed,
@@ -1103,23 +1099,23 @@ pub fn next_token(input: &[u32], start: usize, unicode_ranges_allowed: bool) -> 
 /// token.
 pub fn tokenize_all(input: &[u32]) -> (tokens: Vec<ExecToken>)
     requires
-        input_requires(input@),
+        super::contract::input_requires(input@),
     ensures
-        tokenize_ensures(input@, view_tokens(tokens@)),
+        super::contract::tokenize_ensures(input@, view_tokens(tokens@)),
 {
     let mut tokens: Vec<ExecToken> = Vec::new();
     let mut pos: usize = 0;
     assert(view_tokens(tokens@) =~= Seq::<Token>::empty());
     loop
         invariant
-            input_requires(input@),
+            super::contract::input_requires(input@),
             pos <= input.len(),
             tokenize_loop(input@, pos as int, view_tokens(tokens@)) == tokenize(input@),
         decreases input.len() - pos,
     {
         let (token, next) = next_token(input, pos, false);
         proof {
-            lemma_token_advances(input@, pos as int, false);
+            super::termination::lemma_token_advances(input@, pos as int, false);
         }
         let ghost before = tokens@;
         let is_eof = matches!(token, ExecToken::Eof);
