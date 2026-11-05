@@ -1743,7 +1743,13 @@ pub open spec fn single_clause(items: Seq<ComponentValue>, plus_adjacent: bool) 
 pub open spec fn a_n_plus_b(value: Seq<ComponentValue>) -> Option<(int, int)> {
     let start = first_non_whitespace(value, 0);
     let plus_adjacent = start + 1 < value.len() && !is_whitespace_token(value[start + 1]);
-    let items = without_whitespace(value);
+    a_n_plus_b_items(without_whitespace(value), plus_adjacent)
+}
+
+/// The clauses of `<a-n-plus-b>`, on its items without whitespace.
+pub open spec fn a_n_plus_b_items(items: Seq<ComponentValue>, plus_adjacent: bool) -> Option<
+    (int, int),
+> {
     if items.len() == 0 {
         None
     // odd: "A is 2, B is 1."

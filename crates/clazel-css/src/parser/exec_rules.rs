@@ -228,7 +228,7 @@ pub open spec fn custom_state(list: Seq<ComponentValue>) -> u8
 }
 
 /// [`first_non_whitespace`] of a list with one more item.
-proof fn lemma_fnw_push(list: Seq<ComponentValue>, value: ComponentValue, i: int)
+pub proof fn lemma_fnw_push(list: Seq<ComponentValue>, value: ComponentValue, i: int)
     requires
         0 <= i <= list.len(),
     ensures

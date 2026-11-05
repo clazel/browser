@@ -860,7 +860,7 @@ proof fn lemma_is_important(
 }
 
 /// ASCII lowercase.
-fn lowercase(c: u32) -> (r: u32)
+pub fn lowercase(c: u32) -> (r: u32)
     ensures
         r == ascii_lowercase(c),
 {
@@ -871,7 +871,7 @@ fn lowercase(c: u32) -> (r: u32)
 }
 
 /// True if `string` is an ASCII case-insensitive match for `target`.
-fn matches_ignoring_case(string: &[u32], target: &[u32]) -> (r: bool)
+pub fn matches_ignoring_case(string: &[u32], target: &[u32]) -> (r: bool)
     ensures
         r == ascii_case_insensitive_match(string@, target@),
 {

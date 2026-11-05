@@ -40,7 +40,7 @@ proof fn lemma_filter_len(input: Seq<u32>, pos: int, output: Seq<u32>)
 }
 
 /// "Filter code points", with what reading the result needs of it.
-fn filtered(input: &[u32]) -> (text: Vec<u32>)
+pub fn filtered(input: &[u32]) -> (text: Vec<u32>)
     requires
         parser_input_requires(input@),
     ensures
