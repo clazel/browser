@@ -93,6 +93,26 @@ pub const FOREIGN_FUNCTIONS: &[&str] = &[
     // only writes into a caller's buffer, whose octets the proven reader in
     // `clazel-dns` (`adapters`) reads without following a pointer.
     "GetAdaptersAddresses",
+    // The host's window on Windows (`clazel_sys::windows::window`, phase-5.md
+    // item 5.22a). `DefWindowProcW` is never called from Rust: it is declared so
+    // that its address can be the window procedure.
+    "RegisterClassExW",
+    "DefWindowProcW",
+    "LoadCursorW",
+    "CreateWindowExW",
+    "DestroyWindow",
+    "IsWindow",
+    "PeekMessageW",
+    "TranslateMessage",
+    "DispatchMessageW",
+    "MsgWaitForMultipleObjects",
+    "GetClientRect",
+    "ScreenToClient",
+    "GetDC",
+    "ReleaseDC",
+    "SetProcessDpiAwarenessContext",
+    "SetDIBitsToDevice",
+    "GetModuleHandleW",
 ];
 
 /// The system call numbers `syscall` may be given (names as in `libc`).
