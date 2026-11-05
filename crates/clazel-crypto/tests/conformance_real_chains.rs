@@ -3,7 +3,7 @@
 //! crate's production verifier and through `rustls-webpki`, both with real
 //! signatures and the Mozilla root table.
 //!
-//! The corpus is vendored under `tests/data/real-chains-2026-11-05`, with
+//! The corpus is vendored under `tests/fixtures/real-chains-2026-11-05`, with
 //! `SOURCE.md` saying how it was collected. `certs.der` holds each
 //! certificate once; `chains.tsv` gives each host's chain, in the order the
 //! server sent it, by SHA-256 fingerprint.
@@ -37,8 +37,8 @@ use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use std::sync::Arc;
 use std::time::Duration;
 
-const CERTS: &[u8] = include_bytes!("data/real-chains-2026-11-05/certs.der");
-const CHAINS: &str = include_str!("data/real-chains-2026-11-05/chains.tsv");
+const CERTS: &[u8] = include_bytes!("fixtures/real-chains-2026-11-05/certs.der");
+const CHAINS: &str = include_str!("fixtures/real-chains-2026-11-05/chains.tsv");
 
 /// When the chains were collected, in seconds since the Unix epoch.
 const NOW: u64 = 1_793_895_800;

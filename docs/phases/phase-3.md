@@ -1504,7 +1504,7 @@ and negative cases; it must preserve the original signed TBS bytes and must
 not relax the general DER decoder.
 
 **Measured (2026-11-05):** `clazel-crypto/tests/conformance_real_chains.rs`
-over `tests/data/real-chains-2026-11-05` (`SOURCE.md` there): the chains sent
+over `tests/fixtures/real-chains-2026-11-05` (`SOURCE.md` there): the chains sent
 by the hosts of the top-site measurement, 760 chains and 2,276 certificates
 sent, 868 distinct (709 only ever leaves, 156 only ever later in a chain, 3
 both; 14 are in the root table).
