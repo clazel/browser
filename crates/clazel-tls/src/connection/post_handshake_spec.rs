@@ -51,7 +51,8 @@
 //!    ([`Phase::WriteClosed`]). When both have gone the output ends in
 //!    `Close`. `user_canceled` is not an error alert (§6.1) and changes
 //!    nothing. Every other alert is fatal, whatever its level; TLS 1.3 says
-//!    the level "can safely be ignored" (§6). Data that arrives after the
+//!    the level "can safely be ignored" (§6). It is `PeerAlert`, so the
+//!    caller can tell it from a failure of ours, and never answered. Data that arrives after the
 //!    read side ended is ignored (§6.1: "Any data received after a closure
 //!    alert has been received MUST be ignored"): it is consumed with no
 //!    action. `Closed` (the transport ended) while the read side is open is
@@ -150,6 +151,8 @@ pub enum Action {
     Close,
     /// The connection ended with this alert description.
     Fail(u8),
+    /// §6: the peer's fatal alert ended the connection; it is not answered.
+    PeerAlert(u8),
 }
 
 /// How a step ends the connection, if it does.
@@ -162,6 +165,8 @@ pub enum End {
     Close,
     /// Fatal, with this alert description.
     Fail(u8),
+    /// The peer's fatal alert, with its description.
+    PeerAlert(u8),
 }
 
 /// A step's effects: records sent, in order; plaintext delivered (empty:
@@ -181,7 +186,8 @@ pub open spec fn sends(wires: Seq<Seq<u8>>) -> Seq<Action> {
 }
 
 /// The effects of [`Out`] as the sequence of actions: every `Send`, then the
-/// `Deliver` if there is plaintext, then `PeerClosed`, `Close` or `Fail`.
+/// `Deliver` if there is plaintext, then `PeerClosed`, `Close`, `Fail` or
+/// `PeerAlert`.
 pub open spec fn actions(o: Out) -> Seq<Action> {
     sends(o.wires)
         + (if o.delivered.len() > 0 { seq![Action::Deliver(o.delivered)] } else { seq![] })
@@ -190,6 +196,7 @@ pub open spec fn actions(o: Out) -> Seq<Action> {
             End::PeerClosed => seq![Action::PeerClosed],
             End::Close => seq![Action::Close],
             End::Fail(a) => seq![Action::Fail(a)],
+            End::PeerAlert(a) => seq![Action::PeerAlert(a)],
         })
 }
 
@@ -334,6 +341,11 @@ pub open spec fn send_record(f: crate::traffic::spec::Cipher, ep: crate::traffic
 /// The connection ends with this alert and no record to send (item 5).
 pub open spec fn die(alert: u8) -> (Out, State) {
     (Out { wires: seq![], delivered: seq![], end: End::Fail(alert) }, failed())
+}
+
+/// §6: the peer's fatal alert: not answered, and every key is dropped.
+pub open spec fn peer_alert(description: u8) -> (Out, State) {
+    (Out { wires: seq![], delivered: seq![], end: End::PeerAlert(description) }, failed())
 }
 
 /// §6.2: a fatal error of the local side. The alert is protected with the
@@ -505,10 +517,10 @@ pub open spec fn message(c: crate::schedule::spec::Crypto, f: crate::traffic::sp
     } else {
         match crate::spec::parse_handshake(m, crate::schedule::spec::HASH_LEN as nat) {
             crate::spec::Res::Err(k) => fatal(f, s, crate::spec::alert_of(k)),
-            // §4.6.1: parsed, then ignored (item 7).
-            crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => (quiet(), s),
             crate::spec::Res::Ok(crate::spec::HsMsg::KeyUpdate(r)) => key_update_received(c, f, s, r, last),
-            crate::spec::Res::Ok(_) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),
+            // §4.6.1: parsed, then ignored (item 7). The type check above
+            // leaves only NewSessionTicket here.
+            crate::spec::Res::Ok(_) => (quiet(), s),
         }
     }
 }
@@ -550,7 +562,7 @@ pub open spec fn record(c: crate::schedule::spec::Crypto, f: crate::traffic::spe
         crate::spec::Res::Ok((crate::spec::Event::Alert(a), r)) => {
             if a.description == crate::spec::CLOSE_NOTIFY { peer_closed(s) }
             else if a.description == crate::spec::USER_CANCELED { (quiet(), State { reassembly: r, ..s }) }
-            else { die(a.description) }
+            else { peer_alert(a.description) }
         },
         crate::spec::Res::Ok((crate::spec::Event::Messages(ms), r)) => {
             messages(c, f, State { reassembly: r, ..s }, ms)
