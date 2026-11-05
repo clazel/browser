@@ -380,7 +380,9 @@ fn icann_rules(list: &str) -> Result<usize, String> {
         return Err(format!("expected {END:?} and {PRIVATE:?} once each"));
     }
     let (icann, rest) = list.split_once(END).ok_or("no end of the ICANN section")?;
-    let (between, _) = rest.split_once(PRIVATE).ok_or("no private section after it")?;
+    let (between, _) = rest
+        .split_once(PRIVATE)
+        .ok_or("no private section after it")?;
     let is_rule = |l: &str| !l.trim().is_empty() && !l.trim().starts_with("//");
     if between.lines().any(is_rule) {
         return Err("a rule between the ICANN and private sections".to_owned());
