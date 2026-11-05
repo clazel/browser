@@ -23,22 +23,22 @@ pub proof fn theorem_tokenizer_total(input: Seq<u32>, pos: int, unicode_ranges_a
 
 /// [`tokenize_loop`] adds at most one token per code point left, and the EOF token, and
 /// keeps what it was given.
-proof fn lemma_loop_bounded(input: Seq<u32>, pos: int, tokens: Seq<Token>)
+proof fn lemma_loop_bounded(input: Seq<u32>, pos: int, flag: bool, tokens: Seq<Token>)
     ensures
-        tokenize_loop(input, pos, tokens).len() <= tokens.len() + remaining(input, pos) + 1,
-        tokenize_loop(input, pos, tokens).len() > tokens.len(),
-        tokenize_loop(input, pos, tokens).subrange(0, tokens.len() as int) == tokens,
-        tokenize_loop(input, pos, tokens).last() is Eof,
+        tokenize_loop(input, pos, flag, tokens).len() <= tokens.len() + remaining(input, pos) + 1,
+        tokenize_loop(input, pos, flag, tokens).len() > tokens.len(),
+        tokenize_loop(input, pos, flag, tokens).subrange(0, tokens.len() as int) == tokens,
+        tokenize_loop(input, pos, flag, tokens).last() is Eof,
     decreases remaining(input, pos),
 {
-    super::termination::lemma_token_advances(input, pos, false);
-    let (token, next) = consume_a_token(input, pos, false);
+    super::termination::lemma_token_advances(input, pos, flag);
+    let (token, next) = consume_a_token(input, pos, flag);
     if token is Eof {
         assert(tokens.push(token).subrange(0, tokens.len() as int) =~= tokens);
     } else {
         let pushed = tokens.push(token);
-        lemma_loop_bounded(input, next, pushed);
-        let all = tokenize_loop(input, next, pushed);
+        lemma_loop_bounded(input, next, flag, pushed);
+        let all = tokenize_loop(input, next, flag, pushed);
         assert(all.subrange(0, tokens.len() as int) =~= all.subrange(
             0,
             pushed.len() as int,
@@ -53,7 +53,7 @@ pub proof fn theorem_tokens_bounded(input: Seq<u32>)
     ensures
         tokenize(input).len() <= input.len() + 1,
 {
-    lemma_loop_bounded(input, 0, Seq::empty());
+    lemma_loop_bounded(input, 0, false, Seq::empty());
 }
 
 /// The tokens always end in the EOF token, which the parser reads as the end.
@@ -62,19 +62,24 @@ pub proof fn theorem_tokens_end_in_eof(input: Seq<u32>)
         tokenize(input).len() > 0,
         tokenize(input).last() is Eof,
 {
-    lemma_loop_bounded(input, 0, Seq::empty());
+    lemma_loop_bounded(input, 0, false, Seq::empty());
 }
 
 /// The two faces of the tokenizer agree: one step of "consume a token" and then the rest
 /// is the whole, so a parser can call it "on-demand" (§4's note).
-pub proof fn theorem_step_equals_whole(input: Seq<u32>, pos: int, tokens: Seq<Token>)
+pub proof fn theorem_step_equals_whole(
+    input: Seq<u32>,
+    pos: int,
+    unicode_ranges_allowed: bool,
+    tokens: Seq<Token>,
+)
     ensures
-        tokenize_loop(input, pos, tokens) == ({
-            let (token, next) = consume_a_token(input, pos, false);
+        tokenize_loop(input, pos, unicode_ranges_allowed, tokens) == ({
+            let (token, next) = consume_a_token(input, pos, unicode_ranges_allowed);
             if token is Eof {
                 tokens.push(token)
             } else {
-                tokenize_loop(input, next, tokens.push(token))
+                tokenize_loop(input, next, unicode_ranges_allowed, tokens.push(token))
             }
         }),
 {

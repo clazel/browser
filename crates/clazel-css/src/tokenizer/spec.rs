@@ -31,8 +31,9 @@
 //! - A number's sign is in its [`Number::number_part`], as the text builds it, and in
 //!   [`Number::sign_character`].
 //! - Parse errors change nothing about what is returned, so they are not modelled.
-//! - "Consume a token"'s optional "unicode ranges allowed" is an explicit argument.
-//!   [`tokenize`] passes false, the text's default.
+//! - "Consume a token"'s optional "unicode ranges allowed" is an explicit argument, and
+//!   so is the one [`tokenize_with`] passes on. [`tokenize`] passes false, the text's
+//!   default; only "consume the value of a unicode-range descriptor" passes true.
 //! - "Replace…" in [`filter_code_points`] is one pass over the input for both of the
 //!   text's bullets. The first produces only U+000A and the second only U+FFFD, neither
 //!   of which either bullet replaces, so the order does not matter.
@@ -1145,20 +1146,31 @@ pub open spec fn consume_a_token(input: Seq<u32>, start: int, unicode_ranges_all
 
 /// "repeatedly consume a token from input until an <EOF-token> is reached, pushing each
 /// of the returned tokens into a stream."
-pub open spec fn tokenize_loop(input: Seq<u32>, pos: int, tokens: Seq<Token>) -> Seq<Token>
+pub open spec fn tokenize_loop(
+    input: Seq<u32>,
+    pos: int,
+    unicode_ranges_allowed: bool,
+    tokens: Seq<Token>,
+) -> Seq<Token>
     decreases remaining(input, pos) via tokenize_decreases
 {
-    let (token, next) = consume_a_token(input, pos, false);
+    let (token, next) = consume_a_token(input, pos, unicode_ranges_allowed);
     if token is Eof {
         tokens.push(token)
     } else {
-        tokenize_loop(input, next, tokens.push(token))
+        tokenize_loop(input, next, unicode_ranges_allowed, tokens.push(token))
     }
+}
+
+/// §4 <https://drafts.csswg.org/css-syntax-3/#css-tokenize>, with the "unicode ranges
+/// allowed" that "consume the value of a unicode-range descriptor" sets.
+pub open spec fn tokenize_with(input: Seq<u32>, unicode_ranges_allowed: bool) -> Seq<Token> {
+    tokenize_loop(input, 0, unicode_ranges_allowed, Seq::empty())
 }
 
 /// §4 <https://drafts.csswg.org/css-syntax-3/#css-tokenize>.
 pub open spec fn tokenize(input: Seq<u32>) -> Seq<Token> {
-    tokenize_loop(input, 0, Seq::empty())
+    tokenize_with(input, false)
 }
 
 /// Termination of [`consume_comments`].
@@ -1193,8 +1205,13 @@ pub proof fn consume_url_decreases(input: Seq<u32>, pos: int, value: Seq<u32>) {
 
 /// Termination of [`tokenize_loop`].
 #[via_fn]
-pub proof fn tokenize_decreases(input: Seq<u32>, pos: int, tokens: Seq<Token>) {
-    super::termination::lemma_token_advances(input, pos, false);
+pub proof fn tokenize_decreases(
+    input: Seq<u32>,
+    pos: int,
+    unicode_ranges_allowed: bool,
+    tokens: Seq<Token>,
+) {
+    super::termination::lemma_token_advances(input, pos, unicode_ranges_allowed);
 }
 
 } // verus!
