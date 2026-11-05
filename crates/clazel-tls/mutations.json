@@ -2921,26 +2921,26 @@
       }
     },
     {
-      "id": "ph-user-canceled-benign",
+      "id": "ph-user-canceled-fatal",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "if a.description == crate::spec::CLOSE_NOTIFY { close_connection(f, s) }",
-      "replace": "if a.description == crate::spec::CLOSE_NOTIFY || a.description == crate::spec::USER_CANCELED { close_connection(f, s) }",
+      "find": "else if a.description == crate::spec::USER_CANCELED { (quiet(), State { reassembly: r, ..s }) }",
+      "replace": "else if a.description == crate::spec::USER_CANCELED { die(a.description) }",
       "expect": "killed",
-      "reason": "user_canceled ends the connection in order instead of failing it, although this phase treats every alert but close_notify as fatal: lemma_other_alerts_are_fatal is false.",
+      "reason": "user_canceled fails the connection, although it is not an error alert (RFC 8446 6.1): lemma_user_canceled_changes_nothing is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
-        "lemma": "super::post_handshake_examples::lemma_other_alerts_are_fatal()",
-        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 90]).0.end == super::post_handshake_spec::End::Close"
+        "lemma": "super::post_handshake_examples::lemma_user_canceled_changes_nothing()",
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 90]).0.end == super::post_handshake_spec::End::Fail(90u8)"
       }
     },
     {
       "id": "ph-close-notify-fatal",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "CLOSE_NOTIFY { close_connection(f, s) }",
+      "find": "CLOSE_NOTIFY { peer_closed(s) }",
       "replace": "CLOSE_NOTIFY { die(a.description) }",
       "expect": "killed",
-      "reason": "close_notify fails the connection instead of ending it in order (RFC 8446 6.1): lemma_close_notify_closes is false.",
+      "reason": "close_notify fails the connection instead of ending the read side in order (RFC 8446 6.1): lemma_close_notify_closes is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
@@ -2949,17 +2949,45 @@
       }
     },
     {
-      "id": "ph-close-notify-unanswered",
+      "id": "ph-close-notify-not-sent",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "Out { wires: seq![wire], delivered: seq![], end: End::Close },",
+      "find": "Out { wires: seq![wire], delivered: seq![], end: finish_write(s).0 },",
+      "replace": "Out { wires: seq![], delivered: seq![], end: finish_write(s).0 },",
+      "expect": "killed",
+      "reason": "Our close_notify is not sent before the write side ends (RFC 8446 6.1: MUST send): lemma_local_close is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_local_close()",
+        "witness": "super::post_handshake_spec::close(super::post_handshake_examples::cipher(), super::post_handshake_examples::ready()).0.wires.len() == 0"
+      }
+    },
+    {
+      "id": "ph-peer-close-ends-write",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "Out { wires: seq![], delivered: seq![], end: End::PeerClosed },",
       "replace": "Out { wires: seq![], delivered: seq![], end: End::Close },",
       "expect": "killed",
-      "reason": "The peer's close_notify is not answered with our own (RFC 8446 6.1: MUST respond): lemma_close_notify_closes is false.",
+      "reason": "The peer's close_notify is reported as the end of both directions, although the write side goes on (RFC 8446 6.1): lemma_close_notify_closes is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_close_notify_closes()",
-        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 0]).0.wires.len() == 0"
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 0]).0.end == super::post_handshake_spec::End::Close"
+      }
+    },
+    {
+      "id": "ph-local-close-ends-read",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "(End::Continue, State { phase: Phase::WriteClosed, sender: None, client_secret: seq![], ..s })",
+      "replace": "(End::Close, closed())",
+      "expect": "killed",
+      "reason": "Our close_notify ends the read side too, which can truncate what the server is still sending (RFC 8446 6.1): lemma_local_close is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_local_close()",
+        "witness": "super::post_handshake_spec::close(super::post_handshake_examples::cipher(), super::post_handshake_examples::ready()).0.end == super::post_handshake_spec::End::Close"
       }
     },
     {
@@ -3007,7 +3035,7 @@
     {
       "id": "ph-data-after-end-processed",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "if s.phase == Phase::Open { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }",
+      "find": "if can_read(s) { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }",
       "replace": "receive(c, f, s, wire)",
       "expect": "killed",
       "reason": "Bytes after the connection ended are processed instead of ignored (RFC 8446 6.1): lemma_data_after_the_end_is_ignored is false.",

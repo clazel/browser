@@ -1262,6 +1262,17 @@ not exercised by a test, because no API positions a counter near 2^64 - 1. RFC
 handshake messages are the plaintext of test-cipher records and no RFC 8448
 ciphertext is checked here. `clazel-tls` stays at tier 0.
 
+**The transducer's closure rules (2026-11-05, on `phase3/tls-join`; not run
+through Verus, CI's full verification pending).** The maintainer decided that
+the transducer replaces the dispatcher's `Ready` phase in production, so that
+one machine runs after the handshake and its theorems are about the shipped
+code. As the first step it now follows RFC 8446 §6.1: each direction closes on
+its own (`Phase::WriteClosed`, `Phase::ReadClosed`, `End::PeerClosed`) and
+`user_canceled` changes nothing. The earlier text quoted an immediate
+close_notify reply as a TLS 1.3 requirement, which §6.1 is not. Not yet: the
+handoff from `Connection`, `Client` on the transducer, and the removal of the
+dispatcher's `Ready` phase.
+
 **The dispatcher's own fatal alerts (2026-11-03, on `phase3/tls-own-alerts`,
 stacked on `phase3/tls-net-loop`; local run, no Verus here, not
 CI-verified).** `Connection` (`connection::dispatcher_*`, `exec`) now puts
