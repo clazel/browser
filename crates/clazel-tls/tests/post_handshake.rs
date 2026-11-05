@@ -712,7 +712,7 @@ fn every_other_alert_is_fatal_and_is_not_answered() -> Result<(), String> {
         assert_eq!(consumed, alert.len());
         assert_eq!(
             actions,
-            vec![Action::Fail(description)],
+            vec![Action::PeerAlert(description)],
             "level {level} description {description}"
         );
         assert!(!h.client.is_open());

@@ -69,6 +69,8 @@ pub enum Action {
     Close,
     /// The connection ended with this alert description.
     Fail(u8),
+    /// §6: the peer's fatal alert ended the connection; it is not answered.
+    PeerAlert(u8),
 }
 impl View for Action {
     type V = spec::Action;
@@ -79,6 +81,7 @@ impl View for Action {
             Action::PeerClosed => spec::Action::PeerClosed,
             Action::Close => spec::Action::Close,
             Action::Fail(alert) => spec::Action::Fail(*alert),
+            Action::PeerAlert(alert) => spec::Action::PeerAlert(*alert),
         }
     }
 }
@@ -95,6 +98,8 @@ pub enum End {
     Close,
     /// Fatal, with this alert description.
     Fail(u8),
+    /// The peer's fatal alert, with its description.
+    PeerAlert(u8),
 }
 impl View for End {
     type V = spec::End;
@@ -104,6 +109,7 @@ impl View for End {
             End::PeerClosed => spec::End::PeerClosed,
             End::Close => spec::End::Close,
             End::Fail(alert) => spec::End::Fail(*alert),
+            End::PeerAlert(alert) => spec::End::PeerAlert(*alert),
         }
     }
 }
@@ -185,7 +191,8 @@ impl Out {
 }
 
 /// The actions of an output, in order: every `Send`, the `Deliver` if there is
-/// plaintext, then `PeerClosed`, `Close` or `Fail` ([`spec::actions`]).
+/// plaintext, then `PeerClosed`, `Close`, `Fail` or `PeerAlert`
+/// ([`spec::actions`]).
 fn into_actions(out: Out) -> (r: Vec<Action>)
     ensures crate::types::views(r@) =~= spec::actions(out@),
 {
@@ -236,6 +243,10 @@ fn into_actions(out: Out) -> (r: Vec<Action>)
         End::Fail(alert) => {
             proof { crate::types::lemma_views_push(r@, Action::Fail(alert)); }
             r.push(Action::Fail(alert));
+        },
+        End::PeerAlert(alert) => {
+            proof { crate::types::lemma_views_push(r@, Action::PeerAlert(alert)); }
+            r.push(Action::PeerAlert(alert));
         },
     }
     proof {
@@ -427,6 +438,18 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
     {
         self.terminal(Phase::Failed);
         Out::ending(End::Fail(alert))
+    }
+
+    /// §6: the peer's fatal alert: not answered, and every key is dropped.
+    fn peer_alert(&mut self, description: u8) -> (out: Out)
+        ensures
+            out@ == spec::peer_alert(description).0, final(self)@ == spec::peer_alert(description).1,
+            final(self).resources_wf(), final(self).bound(),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).cipher_functions() == old(self).cipher_functions(),
+    {
+        self.terminal(Phase::Failed);
+        Out::ending(End::PeerAlert(description))
     }
 
     /// §5.2, §5.3: protect `content` under the next sequence number of the
@@ -857,10 +880,10 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         let parsed = crate::handshake::parse_handshake(m, crate::schedule::spec::HASH_LEN);
         match parsed {
             Err(k) => self.fatal(crate::encode::alert_for(k).description),
-            // §4.6.1: parsed, then ignored.
-            Ok(crate::types::HsMsg::NewSessionTicket(_)) => Out::quiet(),
             Ok(crate::types::HsMsg::KeyUpdate(r)) => self.key_update_received(r, last),
-            Ok(_) => self.fatal(crate::spec::UNEXPECTED_MESSAGE),
+            // §4.6.1: parsed, then ignored. The type check above leaves only
+            // NewSessionTicket here.
+            Ok(_) => Out::quiet(),
         }
     }
 
@@ -926,7 +949,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
                     proof { assert(self@ =~= spec::peer_closed(old(self)@).1); }
                     o
                 } else if a.description == crate::spec::USER_CANCELED { Out::quiet() }
-                else { self.die(a.description) }
+                else { self.peer_alert(a.description) }
             },
             Ok(ReassemblyEvent::Messages(ms)) => {
                 proof {

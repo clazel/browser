@@ -2789,8 +2789,8 @@
     {
       "id": "ph-ticket-fatal",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => (quiet(), s),",
-      "replace": "crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
+      "find": "crate::spec::Res::Ok(_) => (quiet(), s),",
+      "replace": "crate::spec::Res::Ok(_) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
       "expect": "killed",
       "reason": "A NewSessionTicket is refused instead of parsed and ignored (RFC 8446 4.6.1): lemma_ticket_ignored is false.",
       "module": "connection::post_handshake_examples",
@@ -2798,6 +2798,20 @@
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_ticket_ignored()",
         "witness": "!(super::post_handshake_examples::msg(super::post_handshake_examples::ticket(), true).0 == super::post_handshake_spec::quiet())"
+      }
+    },
+    {
+      "id": "ph-peer-alert-reported-as-ours",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "else { peer_alert(a.description) }",
+      "replace": "else { die(a.description) }",
+      "expect": "killed",
+      "reason": "A peer's fatal alert is reported as a failure of ours, so the driver cannot say who ended the connection: lemma_other_alerts_are_fatal is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_other_alerts_are_fatal()",
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::Fail(40u8)"
       }
     },
     {
@@ -2827,14 +2841,6 @@
         "lemma": "super::post_handshake_examples::lemma_other_handshake_messages_unexpected()",
         "witness": "super::post_handshake_examples::msg(seq![5u8, 0, 0, 1, 0], true).0.end == super::post_handshake_spec::End::Fail(50u8)"
       }
-    },
-    {
-      "id": "ph-other-parsed-message-ignored",
-      "file": "src/connection/post_handshake_spec.rs",
-      "find": "crate::spec::Res::Ok(_) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
-      "replace": "crate::spec::Res::Ok(_) => (quiet(), s),",
-      "expect": "survives",
-      "reason": "Equivalent: the type check before the parse lets only NewSessionTicket and KeyUpdate through, and both have their own arms, so this arm is unreachable."
     },
     {
       "id": "ph-key-update-keeps-read-secret",
