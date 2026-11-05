@@ -9,12 +9,22 @@ description = "The DOM node tree as an arena (DOM §4.2, §4.4 to §4.14, the pa
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
 
+[dev-dependencies]
+# The independent engine of the differential test (`tests/conformance_dom.rs`,
+# Phase 4 item 4.11): html5ever's reference-counted tree and the parser types it
+# is built from. Test-only (docs/DEPENDENCIES.md, class `test`), at the
+# versions `clazel-treebuilder` uses. markup5ever_rcdom's version is
+# 0.39.0+unofficial; Cargo ignores the build metadata in a requirement.
+html5ever = "=0.39.0"
+markup5ever_rcdom = "=0.39.0"
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
 # the shipped code today; `target-tier` is what the policy requires (Phase 4
-# item 4.0, option A). Tier 0 until CI's full verification is green on the
-# proofs, mutations and the conformance evidence of item 4.11.
+# item 4.0, option A). Raised to 2 in the pull request that added
+# `tests/conformance_dom.rs`; real only once that PR's full CI verification
+# is green (proofs, mutations, conformance, Miri).
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 # Item 4.8's theorems (src/lemmas.rs). `cargo xtask check` fails if one is
 # not defined as a `proof fn` in this crate.

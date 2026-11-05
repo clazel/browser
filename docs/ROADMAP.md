@@ -80,7 +80,8 @@ shaping, raster, and a native window on macOS and Linux.
 *Exit:* **renders news.ycombinator.com correctly**, so the Show HN post can be
 read in the browser it announces.
 Detailed plan: [phases/phase-5.md](phases/phase-5.md).
-**Status: planned (2026-10-31); decisions in item 5.0 pending.**
+**Status: planned (2026-10-31); decisions in item 5.0 taken (2026-11-04), one
+question about 5.18 still open; no other item started.**
 
 ## Phase 6: Images and forms
 PNG, JPEG, GIF and WebP decoders (Tier 1, written in the style of WUFFS), plus

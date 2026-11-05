@@ -190,6 +190,8 @@ dependencies = [
 name = "clazel-dom"
 version = "0.0.0"
 dependencies = [
+ "html5ever",
+ "markup5ever_rcdom",
  "vstd",
 ]
 

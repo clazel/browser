@@ -44,10 +44,11 @@ harnesses), and it reports every crate whose `tier` is below its
 - **Tier 2 required:** the browser kernel (origin isolation, cookie and storage
   policy, permission checks), the IPC message codec, and the parsers for URL,
   HTTP/1.1 framing, encodings, percent-encoding, base64, MIME sniffing, the HTML
-  tokenizer state machine, and the HTML tree builder and the DOM operations
-  it uses (decided in [Phase 4 item 4.0](phases/phase-4.md)).
-- **Tier 1 minimum:** every other parser of untrusted bytes: CSS, image
-  decoders, font tables, JS lexer and parser.
+  tokenizer state machine, the HTML tree builder and the DOM operations it
+  uses (decided in [Phase 4 item 4.0](phases/phase-4.md)), and CSS syntax and
+  selectors (decided in [Phase 5 item 5.0](phases/phase-5.md)).
+- **Tier 1 minimum:** every other parser of untrusted bytes: CSS property
+  values, image decoders, font tables, JS lexer and parser.
 - **Tier 0 minimum:** everything else (layout, paint, JS interpreter, UI).
 
 ## Tools
