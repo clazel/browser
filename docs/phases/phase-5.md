@@ -632,7 +632,7 @@ value is tokenized twice); `theorem_block_ends_agree` ("consume a block" and
 `theorem_spans_in_order`; `theorem_value_end`. §9's round trip is stated for a
 serializer, which the text does not define and no crate has yet.
 
-**How the exec parser reads (settled here, built in 5.4).** The spec keeps the
+**How the exec parser reads (settled here, built in 5.4; `parser/exec*.rs`).** The spec keeps the
 text's form, a stream of every token. The exec parser does not build one.
 
 - *Lockstep, through `next_token`.* The tokens of a sheet of `{` cost 88 bytes
@@ -651,38 +651,49 @@ text's form, a stream of every token. The exec parser does not build one.
   starts where `consume_comments` stops and ends where `next_token` returned, and
   a value's text is the input between its first start and its last end. `Span` is
   the same thing in the spec.
-- *The output is flat rows, not a tree of `Vec`s.* A `Vec` per block would be
+- *The output is flat arrays, not a tree of `Vec`s.* A `Vec` per block would be
   dropped recursively, which overflows the stack on `{` nested a million deep,
-  and costs far more than the tokens. One array of rows in document order, each
-  a kind, the token's start and the row after its subtree (12 bytes), with at
-  most one row per token. A row keeps no token: a reader gets it by calling
-  `next_token` at the row's start, which `theorem_reader` says is the token the
-  spec has. Rows of a unicode-range value read their segment with the flag true.
-- *An explicit stack,* as the plan always said: one `u32` per open block, no
-  recursion, since Verus proves no panics, not no stack overflow. This is the
-  main proof risk of 5.4, since the spec is mutually recursive and the exec is a
-  loop: expect a machine in spec form, proven equal to the recursive spec, then
-  the exec proven equal to the machine.
+  and costs far more than the tokens. A component value is one 8-byte row: where
+  its token is, and where its subtree starts. Rows are in post-order and only
+  ever appended, so a row's kind needs no field: a reader calls `next_token` at
+  the row's position, which `theorem_reader` says is the token the spec has, and
+  a function token or an opening bracket means a block. Rules and lists of
+  declarations are 20-byte items in the same order, and a declaration keeps the
+  rows of its value. `parser/rows.rs` says what each means in terms of the spec.
+- *An explicit stack,* as the plan always said, since Verus proves no panics,
+  not no stack overflow: `read_component_value` for blocks and functions and
+  `read_blocks` for rules. Neither needed a separate machine proven equal to the
+  spec. Each loop carries ghost frames and a spec function, `unwind` and
+  `rule_unwind`, that says what the spec's recursion does with them, and its
+  invariant is that this gives the call's answer, so each step of the loop is one
+  unfolding of the spec's own loops.
 - *Linear time, which the text's form is not.* Parsing as a declaration and
   then again as a rule, as "consume a block's contents" says, is quadratic on
-  nested input: each level of `a{a{a{…` scans all that is left. So the exec
-  takes the "early exits" of the text's implementation note, each to be proven
-  to give the spec's result: a failed declaration skips the remnants, since the
-  mark discards them; a declaration with a name that is not custom stops at the
-  first value that has both a `{}` block and something else; and it steps over
-  a block using a table of closing positions, one `u32` per position of the input,
-  filled in one pass over the tokens, which `theorem_block_ends_agree` justifies. Without the last, `a:{a:{…}b}b` is
-  still quadratic. A custom property cannot fail, so it is parsed once.
+  nested input: each level of `a{a{a{…` scans all that is left. Two of the
+  "early exits" of the text's implementation note are built and proven: a failed
+  declaration skips the remnants, since the mark discards them, and a name that
+  is not custom stops at a `{` with a value before it. `tests/bombs.rs` measures
+  `{`, `a{`, `a b{`, `@a{`, `a:b{`, `--a:b{`, `a:{`, `(`, `[` and `a(`, nested
+  200,000 deep: all linear. **Still quadratic:** a block as the first value of a
+  declaration that then fails, at every level, as in `a{a:{a:{…}b}b}`, which
+  timed out at 50,000 deep. It needs the third exit, stepping over the block with
+  a table of closing positions, which `theorem_block_ends_agree` would justify.
 
 Against 5.26's memory bound, for `B` code points in a sheet (`B` at most 64 Mi,
-`MAX_BODY`, every code point a token at worst): the filtered input `4·B`, the
-rows `12·B`, the stack `4·B`, the table `4·B`. So parsing peaks at `24·B`, 1.5
-GiB for a 64 MiB sheet of `{`, and the `16·B` of input and rows stay, against
-at least `88·B` for the eager token vector alone. Nothing caps the depth or the
-number of rows: the spec has an answer for every sheet, and the bound is linear.
-For scale, 4.13's bound for 64 MiB of words in a page is 1,361 MiB. 5.20 owes
-the total, a limit on sheets per document, since `16·B` is per sheet. These figures are arithmetic
-from the planned rows; 5.26 measures them.
+`MAX_BODY`): the plan's estimate of `24·B` was for rows and was too low, because
+a nested rule costs more than a row. Measured on a release build, sheets of `{`,
+which make one nested rule per code point, peak at 159 MiB for 4 Mi code points
+and 776 MiB for 16 Mi, about `48·B`: the input and its filtered copy `8·B`, the
+items `20·B`, the stack `20·B`, and what `Vec`s hold while they grow. So a 64 MiB
+sheet of `{` would peak near 3 GiB by extrapolation; it was not run on the
+machine that measured this. Against that, the eager token vector needed `88·B`
+before any output existed. Sheets of `(` need less: `8·B` of rows and `8·B` of
+stack. What stays after parsing is the filtered input and the arrays, without
+the stack. Nothing caps the depth or the number of rows: the spec has an answer
+for every sheet, and the bound is linear. 4.13's bound for 64 MiB of words in a
+page is 1,361 MiB, so if 3 GiB for one hostile sheet is too much, 5.20 has to
+choose a limit, and one on nesting would be a difference from the spec that the
+contract must state. 5.20 also owes a limit on sheets per document.
 
 ### 5.4 CSS Syntax: implementation, independent transcription, conformance (L)
 
@@ -1646,8 +1657,8 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | 5.0 Decisions | taken (2026-11-04), (d) as a GPU rasterizer and the rest as recommended; open: how 5.18 fits with (g) (see 5.0) |
 | 5.1 Inventory and test data | started, not on `main`: `css-parsing-tests`' ten syntax files (301 cases) and WPT `css/css-syntax/` (191 calls read, 23 pages and 1 test not run) vendored in `clazel-css`; no other WPT directories, inventory, Unicode tables, test fonts or dev-dependencies yet |
 | 5.2 CSS tokenizer | built and proven, not on `main`: spec, exec and theorems in `clazel-css`, 17 of 17 mutations killed with certificates, and the token-level suites passing (61 cases, 3 expected failures); §3.2 decoding of the input bytes not started |
-| 5.3 CSS parser | spec and contracts written, not on `main`: `parser/spec.rs` from the text pinned in 5.2, every algorithm of §5, §6 and §9.1, with `contract.rs`, 15 evaluated examples and the theorems above; no exec code, so nothing shipped is proven; `theorem_parse_bounded`, `theorem_block_ends_agree`, `theorem_output_preserved`, `theorem_spans_in_order` and `theorem_value_end` stated, not proven |
-| 5.4 CSS syntax evidence | not started |
+| 5.3 CSS parser | built, not on `main`: `parser/spec.rs` from the text pinned in 5.2, every algorithm of §5, §6 and §9.1, with `contract.rs`, evaluated examples and the theorems above; `theorem_parse_bounded`, `theorem_block_ends_agree`, `theorem_output_preserved`, `theorem_spans_in_order` and `theorem_value_end` stated, not proven |
+| 5.4 CSS syntax evidence | started, not on `main`: the exec parser is proven equal to the spec at every entry point, with `tests/conformance_syntax.rs` passing with its expected failures listed, and the parser's mutations; `independent.rs` and the differential against `cssparser` not started; one quadratic shape left, under 5.3 |
 | 5.5 Selectors | not started |
 | 5.6 Property values | not started |
 | 5.7 Cascade and computed values | not started |
