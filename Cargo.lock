@@ -419,6 +419,8 @@ version = "0.0.0"
 dependencies = [
  "clazel-der",
  "clazel-psl",
+ "rustls-pki-types",
+ "rustls-webpki",
  "vstd",
 ]
 
