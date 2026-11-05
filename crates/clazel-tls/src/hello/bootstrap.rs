@@ -220,7 +220,7 @@ impl<C: Crypto> Bootstrap<C> {
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
         ensures
             established_ok(&out),
-           
+
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::after_messages(
@@ -254,7 +254,7 @@ impl<C: Crypto> Bootstrap<C> {
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
         ensures
             established_ok(&out),
-           
+
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::hello_step(
@@ -359,7 +359,7 @@ impl<C: Crypto> Bootstrap<C> {
             bytes.len() <= crate::spec::MAX_PLAINTEXT,
         ensures
             established_ok(&out),
-           
+
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::fragment_step(
@@ -465,7 +465,7 @@ impl<C: Crypto> Bootstrap<C> {
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
         ensures
             established_ok(&out),
-           
+
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::record_step(
@@ -626,7 +626,7 @@ impl<C: Crypto> Bootstrap<C> {
         requires old(self).wf(),
         ensures
             established_ok(&out.1),
-           
+
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).wf(), out.0 <= input.len(),
             super::bootstrap_contract::feed_exec_ensures(old(self).crypto_functions().hash, old(self)@.0,

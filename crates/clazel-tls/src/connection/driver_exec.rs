@@ -11,6 +11,7 @@ use crate::hello::client::Config;
 use crate::hello::key_exchange::KeyExchange;
 use crate::schedule::crypto::Crypto;
 use crate::traffic::provider::{Factory, KeyedAead};
+use core::fmt;
 #[allow(unused_imports)]
 use vstd::prelude::*;
 verus! {
@@ -77,7 +78,7 @@ impl View for State {
 }
 
 /// What a call produced.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Output {
     /// Octets for the transport, in order.
     pub send: Vec<u8>,
@@ -112,7 +113,7 @@ pub struct Driver<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> {
 }
 
 /// §5.1, §6: [`spec::plaintext_alert`].
-fn plaintext_alert(level: u8, description: u8) -> (out: Vec<u8>)
+pub fn plaintext_alert(level: u8, description: u8) -> (out: Vec<u8>)
     ensures out@ == spec::plaintext_alert(level, description),
 {
     let mut out: Vec<u8> = Vec::new();
@@ -602,3 +603,56 @@ pub open spec fn contract_step<C: Crypto, K: KeyExchange, F: Factory, V: Verifie
     spec::Step { send: out.send@, deliver: out.deliver@, stage: after.stage(), status: out.state@ }
 }
 } // verus!
+
+impl State {
+    /// `Closed` or `Failed`: nothing more will be sent or delivered.
+    pub fn is_final(self) -> bool {
+        matches!(self, State::Closed | State::Failed(_))
+    }
+}
+
+impl fmt::Display for Failure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = alert_name(self.alert).unwrap_or("unknown alert");
+        match self.origin {
+            Origin::Sent => write!(f, "{name} ({}), sent to the server", self.alert),
+            Origin::NotSent => write!(f, "{name} ({}), not sent", self.alert),
+            Origin::Peer => write!(f, "{name} ({}), from the server", self.alert),
+            Origin::Truncated => write!(f, "connection closed without close_notify"),
+        }
+    }
+}
+
+/// RFC 8446 §6.2: the name of an `AlertDescription`.
+pub fn alert_name(description: u8) -> Option<&'static str> {
+    Some(match description {
+        0 => "close_notify",
+        10 => "unexpected_message",
+        20 => "bad_record_mac",
+        22 => "record_overflow",
+        40 => "handshake_failure",
+        42 => "bad_certificate",
+        43 => "unsupported_certificate",
+        44 => "certificate_revoked",
+        45 => "certificate_expired",
+        46 => "certificate_unknown",
+        47 => "illegal_parameter",
+        48 => "unknown_ca",
+        49 => "access_denied",
+        50 => "decode_error",
+        51 => "decrypt_error",
+        70 => "protocol_version",
+        71 => "insufficient_security",
+        80 => "internal_error",
+        86 => "inappropriate_fallback",
+        90 => "user_canceled",
+        109 => "missing_extension",
+        110 => "unsupported_extension",
+        112 => "unrecognized_name",
+        113 => "bad_certificate_status_response",
+        115 => "unknown_psk_identity",
+        116 => "certificate_required",
+        120 => "no_application_protocol",
+        _ => return None,
+    })
+}
