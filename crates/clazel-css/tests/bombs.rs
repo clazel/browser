@@ -72,12 +72,16 @@ fn a_block_as_a_value() {
     linear("a:{", "}");
 }
 
-/// A 64 MiB sheet of `{`, for measuring: run it alone in a release build and read the
-/// process's peak memory.
+/// A sheet of `{`, 64 MiB of code points unless `CLAZEL_BOMB_MIB` says otherwise, for
+/// measuring: run it alone in a release build and read the process's peak memory.
 #[test]
 #[ignore = "takes a few seconds and gigabytes; run by hand to measure against 5.26's bound"]
 fn sixty_four_mib_of_curly_brackets() {
-    let sheet = vec![0x7Bu32; 64 * 1024 * 1024];
+    let mib = std::env::var("CLAZEL_BOMB_MIB")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(64);
+    let sheet = vec![0x7Bu32; mib.saturating_mul(1024 * 1024)];
     let start = Instant::now();
     let parsed = parse_stylesheet_contents(&sheet);
     println!(
