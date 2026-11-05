@@ -664,7 +664,10 @@ fn close_notify_ends_delivery_and_leaves_the_write_side_open() -> Result<(), Str
     assert_eq!((consumed, actions), (late.len(), vec![]));
     // §6.1: the write side is still open; the client ends it when it chooses.
     let sent = h.client.send_application(b"more");
-    let wire = sends(&sent).first().map(|w| (*w).clone()).ok_or("no send")?;
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
     assert_eq!(
         h.server_reads(&wire),
         Some((CT_APPLICATION_DATA, b"more".to_vec()))
