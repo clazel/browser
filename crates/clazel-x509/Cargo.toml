@@ -12,7 +12,7 @@ clazel-psl = { path = "../clazel-psl" }
 vstd = "=0.0.0-2026-10-04-0306"
 
 # Test only (docs/DEPENDENCIES.md: never shipped). `rustls-webpki` is the
-# independent engine of `tests/conformance_differential.rs`, built without a
+# independent engine of `tests/limbo/differential.rs`, built without a
 # cryptography provider: the test gives it a stand-in that accepts every
 # signature, as it gives our own path validation.
 [dev-dependencies]
