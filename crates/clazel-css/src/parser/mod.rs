@@ -10,6 +10,7 @@
 pub mod contract;
 pub mod examples;
 pub mod exec;
+pub mod exec_declaration;
 pub mod exec_lists;
 pub mod lemmas;
 pub mod rows;

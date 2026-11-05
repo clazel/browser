@@ -82,7 +82,7 @@ pub fn skip_whitespace(text: &[u32], flag: bool, pos: usize, Ghost(index): Ghost
 }
 
 /// Reading a value added it to the end of every list of `rows`.
-proof fn lemma_value_added(
+pub proof fn lemma_value_added(
     text: Seq<u32>,
     flag: bool,
     old: Seq<ExecRow>,

@@ -134,7 +134,14 @@ pub open spec fn reads(
             spans[i - 1].end
         },
         flag,
-    ) == (tokens[i], spans[i].end)
+    ) == (tokens[i], spans[i].end) && spans[i].start == consume_comments(
+        input,
+        if i <= 0 {
+            0
+        } else {
+            spans[i - 1].end
+        },
+    )
 }
 
 /// [`spans_loop`] and [`tokenize_loop`] walk together, one span for each token read.
@@ -195,6 +202,25 @@ proof fn lemma_spans_walk(
     if !(token is Eof) {
         lemma_spans_walk(input, next, flag, pushed, read);
     }
+}
+
+/// A token's text starts after the comments before it.
+pub proof fn lemma_span_start(string: Seq<u32>, unicode_ranges_allowed: bool, index: int)
+    requires
+        0 <= index < token_stream(string, unicode_ranges_allowed).tokens.len(),
+    ensures
+        ({
+            let source = token_stream(string, unicode_ranges_allowed).source.unwrap();
+            source.spans[index].start == consume_comments(
+                string,
+                super::contract::position_of(source, index),
+            )
+        }),
+{
+    lemma_spans_walk(string, 0, unicode_ranges_allowed, Seq::empty(), Seq::empty());
+    let tokens = tokenize_with(string, unicode_ranges_allowed);
+    let source = token_stream(string, unicode_ranges_allowed).source.unwrap();
+    assert(reads(string, unicode_ranges_allowed, source.spans, tokens, index));
 }
 
 /// See [`super::contract::reader_is_the_stream`].
