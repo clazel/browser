@@ -45,8 +45,9 @@ running the demo and the escape tests on Linux x86-64 and macOS arm64.
 ## Phase 3: Networking
 Verified HTTP/1.1 parser, DNS, and our own TLS 1.3 client with verified
 crypto from libcrux (decided in phase-3.md item 3.0; rustls was not taken).
-The proven store format that keeps the cookie jar and the history across runs
-(3.10), added 2026-11-03.
+A generic proven store on the WHATWG Storage model that keeps the cookie jar,
+`localStorage` and the history across runs (3.10), added 2026-11-03. Later
+phases add IndexedDB, the Cache API and an HTTP cache to the same store.
 *Exit:* a verified `curl` clone.
 Detailed plan: [phases/phase-3.md](phases/phase-3.md).
 **Status: in progress (started 2026-10-23). The TLS decision (3.0) is
