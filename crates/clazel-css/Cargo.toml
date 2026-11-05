@@ -8,6 +8,7 @@ description = "CSS parsing for Clazel's Phase 5 browser (phase-5.md items 5.2 to
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
+clazel-encoding = { path = "../clazel-encoding" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this will
