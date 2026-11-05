@@ -12,13 +12,25 @@
 //!
 //! Dropped constructs are `["error", …]` entries in the suite and nothing at all in the
 //! text, so those entries are left out of what a result is compared with.
+//!
+//! `stylesheet_bytes.json` decodes each case with the encoding the suite names and checks the
+//! rules. Choosing that encoding is §3.2, which is not here, so that half is not checked.
+//!
+//! WPT's pages run through the same code: `anb-parsing.html` and `anb-serialization.html`
+//! through An+B and its serialization, and `urange-parsing.html` through a `unicode-range`
+//! declaration. `input-preprocessing.html` is in `conformance_tokens.rs`.
 
+use clazel_css::parser::exec_anb::{
+    ExecAnB, ExecInteger, ExecPart, read_a_n_plus_b, write_a_n_plus_b,
+};
 use clazel_css::parser::exec_parse::{
     ExecParsed, parse_component_value, parse_component_values, parse_declaration,
     parse_declaration_list, parse_rule, parse_stylesheet_contents,
 };
 use clazel_css::parser::rows::{ExecDeclaration, ExecDeclarationKind, ExecItem, ExecItemKind, ExecRow};
 use clazel_css::tokenizer::exec::{ExecNumber, ExecToken, next_token};
+use clazel_encoding::hooks::decode::decode;
+use clazel_encoding::labels::spec::Encoding;
 use syntax::Json;
 
 /// The `css-parsing-tests` table.
@@ -49,6 +61,30 @@ mod syntax {
     /// The table.
     pub fn cases() -> &'static [Case] {
         CASES
+    }
+}
+
+/// The WPT table.
+mod wpt {
+    /// One helper call of a WPT page.
+    pub struct Case {
+        pub file: &'static str,
+        pub line: usize,
+        pub helper: &'static str,
+        pub input: &'static [u16],
+        pub expected: Option<&'static [u16]>,
+    }
+
+    include!("generated/wpt_css_syntax.rs");
+
+    /// The table.
+    pub fn cases() -> &'static [Case] {
+        WPT
+    }
+
+    /// What could not be read.
+    pub fn not_run() -> &'static [(&'static str, &'static str)] {
+        NOT_RUN
     }
 }
 
@@ -126,15 +162,18 @@ impl Reader<'_> {
         let mut out = Vec::new();
         let mut k = hi;
         while k > lo {
-            out.push(self.value(k - 1));
-            k = self.rows[k - 1].start as usize;
+            let last = k.saturating_sub(1);
+            out.push(self.value(last));
+            k = self.rows.get(last).map_or(lo, |row| row.start as usize);
         }
         out.reverse();
         out
     }
 
     fn value(&self, k: usize) -> Value {
-        let row = self.rows[k];
+        let Some(row) = self.rows.get(k) else {
+            return text("no row");
+        };
         let start = row.start as usize;
         match self.token(row.pos) {
             ExecToken::Ident { value } => tagged("ident", &value),
@@ -208,7 +247,7 @@ fn declaration(parsed: &ExecParsed, decl: &ExecDeclaration) -> Value {
         let start = decl.text_start as usize;
         let end = decl.text_end as usize;
         let rows = Reader {
-            text: &parsed.text[start..end],
+            text: parsed.text.get(start..end).unwrap_or_default(),
             rows: &parsed.output.rows,
             flag: true,
         };
@@ -241,9 +280,9 @@ fn rule(parsed: &ExecParsed, item: &ExecItem, content: Value) -> Value {
 fn top_level(items: &[ExecItem]) -> Vec<ExecItem> {
     let mut out = Vec::new();
     let mut k = items.len();
-    while k > 0 {
-        out.push(items[k - 1]);
-        k = items[k - 1].start as usize;
+    while let Some(item) = items.get(k.wrapping_sub(1)) {
+        out.push(*item);
+        k = item.start as usize;
     }
     out.reverse();
     out
@@ -277,6 +316,17 @@ fn block_contents(
     Value::List(contents)
 }
 
+/// True for an at-rule named `@charset`. §8.3: "any occurrences of an @charset rule must be
+/// treated as an unrecognized rule, and thus dropped as invalid when the stylesheet is
+/// grammar-checked". The parser is a generic processor, so the check is its user's, here
+/// this test's.
+fn is_charset(value: &Value) -> bool {
+    matches!(value, Value::List(list) if list.get(..2).is_some_and(
+        |head| head.first() == Some(&text("at-rule"))
+            && matches!(head.get(1), Some(Value::Text(name))
+                if name.eq_ignore_ascii_case("charset"))))
+}
+
 /// The rules of `parsed`, whose input was `input`.
 fn rules(parsed: &ExecParsed, input: &str) -> Vec<Value> {
     let values = component_values(input);
@@ -287,6 +337,7 @@ fn rules(parsed: &ExecParsed, input: &str) -> Vec<Value> {
             let content = block_contents(&values, &mut at, parsed, item);
             rule(parsed, item, content)
         })
+        .filter(|value| !is_charset(value))
         .collect()
 }
 
@@ -330,22 +381,6 @@ fn same_values(actual: &[Value], expected: &Json) -> bool {
 /// Cases that differ from the pinned text, as (file, index, why). `css-parsing-tests` was
 /// written for the 2013 draft, and records one parser's reading.
 const EXPECTED_FAILURES: &[(&str, usize, &str)] = &[
-    (
-        "stylesheet.json",
-        4,
-        "the suite rejects a late @charset; in the text it is an at-rule like any other, and \
-         whether it is valid is the context's, which a generic processor does not check",
-    ),
-    (
-        "stylesheet.json",
-        5,
-        "as above: the suite rejects @charset, the text does not",
-    ),
-    (
-        "rule_list.json",
-        4,
-        "as above: the suite rejects @charset, the text does not",
-    ),
     (
         "rule_list.json",
         11,
@@ -498,7 +533,10 @@ fn one_declaration(input: &str) -> Value {
     if !found {
         return error("invalid");
     }
-    declaration(&parsed, &parsed.output.declarations[0])
+    match parsed.output.declarations.first() {
+        Some(decl) => declaration(&parsed, decl),
+        None => error("invalid"),
+    }
 }
 
 #[test]
@@ -536,14 +574,14 @@ fn one_value(input: &str) -> Value {
     if !found {
         return error("invalid");
     }
-    reader(&parsed).value(parsed.output.rows.len() - 1)
+    reader(&parsed).value(parsed.output.rows.len().saturating_sub(1))
 }
 
 #[test]
 fn component_value_lists() {
     run(
         "component_value_list.json",
-        "css-parsing-tests component_value_list",
+        "css-parsing-tests component_value_list, parsed",
         |input, expected| same_values(&component_values(input), expected),
         |input| format!("{:?}", component_values(input)),
     );
@@ -553,8 +591,272 @@ fn component_value_lists() {
 fn one_component_values() {
     run(
         "one_component_value.json",
-        "css-parsing-tests one_component_value",
+        "css-parsing-tests one_component_value, parsed",
         |input, expected| same(&one_value(input), expected) || (is_error(expected) && is_error_value(&one_value(input))),
         |input| format!("{:?}", one_value(input)),
     );
+}
+
+/// A part of an An+B result as an integer, whatever its size.
+fn part_value(anb: &ExecAnB, part: ExecPart) -> i128 {
+    let digits = |v: &[u32]| string(v).parse::<i128>().unwrap_or(i128::MAX);
+    match part {
+        ExecPart::Literal { value } => i128::from(value),
+        ExecPart::Value { index, negated } => {
+            let value = match anb.tokens.get(index) {
+                Some(ExecToken::Number { number } | ExecToken::Dimension { number, .. }) => {
+                    digits(&number.number_part)
+                }
+                _ => 0,
+            };
+            if negated { value.saturating_neg() } else { value }
+        }
+        ExecPart::Remainder { index, from } => {
+            let word = match anb.tokens.get(index) {
+                Some(ExecToken::Ident { value }) => value.as_slice(),
+                Some(ExecToken::Dimension { unit, .. }) => unit.as_slice(),
+                _ => &[],
+            };
+            digits(word.get(from..).unwrap_or_default())
+        }
+    }
+}
+
+fn a_n_plus_b(input: &str) -> Option<(i128, i128)> {
+    read_a_n_plus_b(&code_points(input)).map(|anb| (part_value(&anb, anb.a), part_value(&anb, anb.b)))
+}
+
+fn same_a_n_plus_b(input: &str, expected: &Json) -> bool {
+    match (a_n_plus_b(input), expected) {
+        (None, Json::Null) => true,
+        (Some((a, b)), Json::List([Json::Num(ea), Json::Num(eb)])) => {
+            ea.parse::<i128>().is_ok_and(|e| e == a) && eb.parse::<i128>().is_ok_and(|e| e == b)
+        }
+        _ => false,
+    }
+}
+
+#[test]
+fn a_n_plus_b_cases() {
+    run(
+        "An+B.json",
+        "css-parsing-tests An+B",
+        same_a_n_plus_b,
+        |input| format!("{:?}", a_n_plus_b(input)),
+    );
+}
+
+/// What a page wants of `value`, an integer as the serializer takes it.
+fn integer(value: i128) -> ExecInteger {
+    ExecInteger {
+        negative: value < 0,
+        magnitude: u64::try_from(value.unsigned_abs()).unwrap_or(u64::MAX),
+    }
+}
+
+/// The input of a WPT case.
+fn units(input: &[u16]) -> String {
+    String::from_utf16_lossy(input)
+}
+
+/// Runs the cases of `page`, where `actual` gives what the page would see, and `None` is
+/// what it calls invalid.
+fn run_wpt(page: &str, suite: &str, actual: impl Fn(&str) -> Option<String>) {
+    let (mut pass, mut xfail, mut fail, mut total) = (0usize, 0usize, 0usize, 0usize);
+    for case in wpt::cases().iter().filter(|c| c.file == page) {
+        total = total.saturating_add(1);
+        let input = units(case.input);
+        let expected = case.expected.map(units);
+        let expected_failure = WPT_EXPECTED_FAILURES
+            .iter()
+            .any(|(f, i, why)| *f == page && *i == input && !why.is_empty());
+        let got = actual(&input);
+        let matches = match (&got, &expected) {
+            (Some(g), Some(e)) => g.eq_ignore_ascii_case(e),
+            (None, None) => true,
+            _ => false,
+        };
+        if matches {
+            assert!(!expected_failure, "{page} {input:?} now passes");
+            pass = pass.saturating_add(1);
+        } else if expected_failure {
+            xfail = xfail.saturating_add(1);
+        } else {
+            println!("FAILED {page} line {}: {input:?}", case.line);
+            println!("  actual   {got:?}");
+            println!("  expected {expected:?}");
+            fail = fail.saturating_add(1);
+        }
+    }
+    report(suite, pass, xfail, fail, total);
+    assert_eq!(fail, 0, "{suite}");
+}
+
+/// Cases of WPT that differ from the pinned text, as (page, input, why).
+const WPT_EXPECTED_FAILURES: &[(&str, &str, &str)] = &[
+    ("urange-parsing.html", "u/**/+/**/a/**/?", COMMENT_IN_RANGE),
+    ("urange-parsing.html", "u/**/+0a/**/?", COMMENT_IN_RANGE),
+    ("urange-parsing.html", "u/**/+0/**/?", COMMENT_IN_RANGE),
+    ("urange-parsing.html", "u/**/+0/**/-0a", COMMENT_IN_RANGE),
+    ("urange-parsing.html", "u/**/+0/**/-1", COMMENT_IN_RANGE),
+    ("urange-parsing.html", "u/**/+/**/?", COMMENT_IN_RANGE),
+];
+
+/// Why a range with a comment in it is not one.
+const COMMENT_IN_RANGE: &str = "the page tests a <urange> grammar over tokens, where comments can \
+     go between them; the pinned text makes the range one token, read with unicode ranges \
+     allowed, and \"would start a unicode-range\" looks at adjacent code points";
+
+/// What the WPT table could not read stays as it was. This file runs three of its pages,
+/// and the table's one direct `test()` of `urange-parsing.html` is among what is not read.
+#[test]
+fn what_could_not_be_read_stays_listed() {
+    assert!(wpt::not_run().iter().any(|(f, _)| *f == "urange-parsing.html"));
+    assert!(!wpt::not_run().iter().any(|(f, _)| *f == "anb-parsing.html"));
+}
+
+fn serialized_a_n_plus_b(input: &str) -> Option<String> {
+    let (a, b) = a_n_plus_b(input)?;
+    Some(string(&write_a_n_plus_b(integer(a), integer(b))))
+}
+
+#[test]
+fn wpt_a_n_plus_b_parsing() {
+    run_wpt("anb-parsing.html", "WPT css-syntax anb-parsing", serialized_a_n_plus_b);
+}
+
+#[test]
+fn wpt_a_n_plus_b_serialization() {
+    run_wpt(
+        "anb-serialization.html",
+        "WPT css-syntax anb-serialization",
+        serialized_a_n_plus_b,
+    );
+}
+
+/// The value of a `unicode-range` declaration, split at its top-level commas: each entry is
+/// a range if it is one `<unicode-range-token>` of valid code points.
+fn ranges(input: &str) -> Vec<Option<(u32, u32)>> {
+    let mut source = String::from("unicode-range:");
+    source.push_str(input);
+    let (parsed, found) = parse_declaration(&code_points(&source));
+    let list = match parsed.output.declarations.first() {
+        Some(decl) if found => declaration(&parsed, decl),
+        _ => return vec![None],
+    };
+    let Value::List(fields) = list else {
+        return vec![None];
+    };
+    let Some(Value::List(values)) = fields.get(2) else {
+        return vec![None];
+    };
+    values
+        .split(|v| *v == text(","))
+        .map(|group| {
+            let tokens: Vec<&Value> = group.iter().filter(|v| **v != text(" ")).collect();
+            let [Value::List(token)] = tokens.as_slice() else {
+                return None;
+            };
+            match token.as_slice() {
+                [tag, Value::Number(start), Value::Number(end)]
+                    if *tag == text("unicode-range") =>
+                {
+                    let (start, end) = (*start as u32, *end as u32);
+                    (start <= end && end <= 0x10_FFFF).then_some((start, end))
+                }
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+fn same_ranges(input: &str, expected: &Json) -> bool {
+    let actual = ranges(input);
+    let Json::List(entries) = expected else {
+        return false;
+    };
+    actual.len() == entries.len()
+        && actual.iter().zip(entries.iter()).all(|(a, e)| match (a, e) {
+            (None, Json::Null) => true,
+            (Some((s, t)), Json::List([Json::Num(es), Json::Num(et)])) => {
+                es.parse::<u32>().is_ok_and(|e| e == *s) && et.parse::<u32>().is_ok_and(|e| e == *t)
+            }
+            _ => false,
+        })
+}
+
+#[test]
+fn unicode_ranges() {
+    run(
+        "urange.json",
+        "css-parsing-tests urange",
+        same_ranges,
+        |input| format!("{:?}", ranges(input)),
+    );
+}
+
+#[test]
+fn wpt_unicode_ranges() {
+    run_wpt("urange-parsing.html", "WPT css-syntax urange-parsing", |input| {
+        match ranges(input).as_slice() {
+            [Some((start, end))] if start == end => Some(format!("U+{start:X}")),
+            [Some((start, end))] => Some(format!("U+{start:X}-{end:X}")),
+            _ => None,
+        }
+    });
+}
+
+/// The encoding the suite names.
+fn encoding(name: &str) -> Option<Encoding> {
+    match name {
+        "utf-8" => Some(Encoding::Utf8),
+        "utf-16le" => Some(Encoding::Utf16Le),
+        "utf-16be" => Some(Encoding::Utf16Be),
+        "iso-8859-2" => Some(Encoding::Iso8859_2),
+        "iso-8859-5" => Some(Encoding::Iso8859_5),
+        _ => None,
+    }
+}
+
+/// The rules of a sheet's bytes, decoded with the encoding the suite names.
+fn rules_of_bytes(bytes: &str, name: &str) -> Option<Vec<Value>> {
+    let raw: Vec<u8> = bytes.chars().map(|c| c as u32 as u8).collect();
+    let decoded = decode(&raw, encoding(name)?)?;
+    let input: String = decoded
+        .iter()
+        .map(|c| char::from_u32(*c).unwrap_or('\u{FFFD}'))
+        .collect();
+    Some(stylesheet(&input))
+}
+
+#[test]
+fn stylesheet_bytes_rules() {
+    let (mut pass, mut fail, mut total) = (0usize, 0usize, 0usize);
+    for case in syntax::cases()
+        .iter()
+        .filter(|c| c.file == "stylesheet_bytes.json")
+    {
+        total = total.saturating_add(1);
+        let bytes = match &case.input {
+            Json::Obj(fields) => fields.iter().find_map(|(key, value)| match (key, value) {
+                (&"css_bytes", Json::Str(bytes)) => Some(*bytes),
+                _ => None,
+            }),
+            _ => None,
+        };
+        let matches = match (bytes, &case.expected) {
+            (Some(bytes), Json::List([expected, Json::Str(name)])) => {
+                rules_of_bytes(bytes, name).is_some_and(|actual| same_list(&actual, expected))
+            }
+            _ => false,
+        };
+        if matches {
+            pass = pass.saturating_add(1);
+        } else {
+            println!("FAILED stylesheet_bytes.json {}: {:?}", case.index, case.input);
+            fail = fail.saturating_add(1);
+        }
+    }
+    report("css-parsing-tests stylesheet_bytes, rules", pass, 0, fail, total);
+    assert_eq!(fail, 0, "stylesheet_bytes");
 }
