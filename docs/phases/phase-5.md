@@ -1443,7 +1443,7 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | Item | State |
 |------|-------|
 | 5.0 Decisions | taken (2026-11-04), (d) as a GPU rasterizer and the rest as recommended; open: how 5.18 fits with (g) (see 5.0) |
-| 5.1 Inventory and test data | started, not on `main`: `css-parsing-tests`' ten syntax files vendored in `clazel-css` and converted (301 cases); no inventory, WPT, Unicode tables, test fonts or dev-dependencies yet |
+| 5.1 Inventory and test data | started, not on `main`: `css-parsing-tests`' ten syntax files (301 cases) and WPT `css/css-syntax/` (191 calls read, 23 pages and 1 test not run) vendored in `clazel-css`; no other WPT directories, inventory, Unicode tables, test fonts or dev-dependencies yet |
 | 5.2 CSS tokenizer | not started |
 | 5.3 CSS parser | not started |
 | 5.4 CSS syntax evidence | not started |
