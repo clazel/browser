@@ -13,6 +13,7 @@
 //! published as one) and `License:` lines.
 
 mod cbor_appendix_a;
+mod css_parsing_tests;
 mod hash;
 mod html5lib_encoding;
 mod html5lib_tokenizer;
@@ -48,6 +49,11 @@ type Convert = fn(&Path) -> Result<String, String>;
 /// Every suite the converter knows, by directory name, with the files it
 /// expects to find there.
 const CONVERTERS: &[(&str, Convert, &[&str])] = &[
+    (
+        "css-parsing-tests",
+        css_parsing_tests::convert,
+        css_parsing_tests::FILES,
+    ),
     (
         "cbor-appendix-a",
         cbor_appendix_a::convert,
