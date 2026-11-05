@@ -91,18 +91,20 @@ pub struct Output {
 /// The machine that is running.
 enum Stage<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> {
     /// Through the ServerHello, with what the next stage needs.
-    Hello {
-        boot: Bootstrap<C>,
-        crypto: C,
-        exchange: K,
-        factory: F,
-        verifier: V,
-        scalar: Vec<u8>,
-    },
+    Hello { boot: Bootstrap<C>, next: Next<C, K, F, V> },
     /// The server's protected flight.
-    Flight { conn: Connection<C, F, V> },
+    Flight { conn: Box<Connection<C, F, V>> },
     /// Application traffic.
     App { app: PostHandshake<C, F> },
+}
+
+/// What the key exchange and the dispatcher start from.
+struct Next<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> {
+    crypto: C,
+    exchange: K,
+    factory: F,
+    verifier: V,
+    scalar: Vec<u8>,
 }
 
 /// One TLS 1.3 client connection over its providers, without its socket.
@@ -117,20 +119,13 @@ pub struct Driver<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> {
 pub fn plaintext_alert(level: u8, description: u8) -> (out: Vec<u8>)
     ensures out@ == spec::plaintext_alert(level, description),
 {
-    let mut out: Vec<u8> = Vec::new();
-    out.push(crate::spec::CT_ALERT);
-    out.push(3u8);
-    out.push(3u8);
-    out.push(0u8);
-    out.push(2u8);
-    out.push(level);
-    out.push(description);
+    let out: Vec<u8> = vec![crate::spec::CT_ALERT, 3u8, 3u8, 0u8, 2u8, level, description];
     proof { assert(out@ =~= spec::plaintext_alert(level, description)); }
     out
 }
 
 /// The records of `wires`, one after the other ([`spec::concat`]).
-fn concat(wires: &Vec<Vec<u8>>) -> (out: Vec<u8>)
+fn concat(wires: &[Vec<u8>]) -> (out: Vec<u8>)
     ensures out@ == spec::concat(crate::reassemble::views_bytes(wires@)),
 {
     let ghost views = crate::reassemble::views_bytes(wires@);
@@ -181,7 +176,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     /// Our X25519 scalar, while the key exchange is ahead.
     pub closed spec fn scalar(&self) -> Seq<u8> {
         match self.stage {
-            Some(Stage::Hello { scalar, .. }) => scalar@,
+            Some(Stage::Hello { next, .. }) => next.scalar@,
             _ => seq![],
         }
     }
@@ -193,12 +188,12 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     pub closed spec fn wf(&self) -> bool {
         match self.stage {
             None => spec::is_final(self.state@),
-            Some(Stage::Hello { boot, crypto, exchange, factory, verifier, scalar }) => boot.wf()
-                && self.state == State::Handshaking && scalar.len() == 32
+            Some(Stage::Hello { boot, next }) => boot.wf()
+                && self.state == State::Handshaking && next.scalar.len() == 32
                 && boot.crypto_functions() == self.models@.crypto
-                && crypto.functions() == self.models@.crypto
-                && exchange.functions() == self.models@.exchange
-                && factory.functions() == self.models@.cipher,
+                && next.crypto.functions() == self.models@.crypto
+                && next.exchange.functions() == self.models@.exchange
+                && next.factory.functions() == self.models@.cipher,
             Some(Stage::Flight { conn }) => conn.wf() && conn.auth_wf() && conn.resources_wf()
                 && conn.cipher_bindings_wf() && self.state == State::Handshaking
                 && conn.crypto_functions() == self.models@.crypto
@@ -240,7 +235,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 if matches!(boot.acknowledge_send(wire.as_slice()), BootAction::None) {
                     let state = State::Handshaking;
                     let driver = Driver {
-                        stage: Some(Stage::Hello { boot, crypto, exchange, factory, verifier, scalar }),
+                        stage: Some(Stage::Hello { boot, next: Next { crypto, exchange, factory, verifier, scalar } }),
                         state,
                         models: Ghost(models),
                     };
@@ -280,7 +275,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
         ensures final(self).wf(), final(self).models() == old(self).models(),
             contract_step(out, final(self)) == spec::settle(prefix@, deliver@, o@, app@),
     {
-        let wires = concat(&o.wires);
+        let wires = concat(o.wires.as_slice());
         let mut send = prefix;
         let ghost first = send@;
         let mut rest = wires;
@@ -301,7 +296,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             },
             End::Close => self.ended(send, deliver, State::Closed),
             End::Fail(alert) => {
-                let origin = if send.len() > 0 { Origin::Sent } else { Origin::NotSent };
+                let origin = if send.is_empty() { Origin::NotSent } else { Origin::Sent };
                 self.ended(send, deliver, State::Failed(Failure { alert, origin }))
             },
             End::PeerAlert(alert) => {
@@ -321,7 +316,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             contract_step(out, final(self)) == spec::carry_out(old(self).models().cipher, o@, app@),
     {
         if matches!(o.end, End::PeerClosed) {
-            let sent = concat(&o.wires);
+            let sent = concat(o.wires.as_slice());
             let second = app.close_out();
             self.settle(sent, o.delivered, second, app)
         } else {
@@ -350,13 +345,12 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
         ensures final(self).wf(), final(self).models() == old(self).models(),
             contract_step(out, final(self)) == spec::flight_closed(super::exec::wire_view(wire)),
     {
-        let send = match wire {
-            Some(record) => record,
-            None => Vec::new(),
-        };
         let deliver = Vec::new();
         proof { assert(deliver@ =~= seq![]); }
-        self.ended(send, deliver, State::Closed)
+        match wire {
+            Some(record) => self.ended(record, deliver, State::Closed),
+            None => self.ended(Vec::new(), deliver, State::Closed),
+        }
     }
 
     /// The client flight is on its way: acknowledge it, and hand over to the
@@ -413,7 +407,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
         let (consumed, action) = conn.feed(input);
         let out = match action {
             ConnAction::None | ConnAction::Ignored | ConnAction::Cancelled => {
-                self.stage = Some(Stage::Flight { conn });
+                self.stage = Some(Stage::Flight { conn: Box::new(conn) });
                 self.state = State::Handshaking;
                 quiet(State::Handshaking)
             },
@@ -440,24 +434,28 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     }
 
     /// §7.1, §7.3: the key exchange and the handshake epochs, then the dispatcher.
-    fn establish(&mut self, established: crate::hello::client::Established, crypto: C, exchange: K, factory: F,
-        verifier: V, scalar: Vec<u8>) -> (out: Output)
-        requires established.wf(), scalar.len() == 32,
-            crypto.functions() == old(self).models().crypto,
-            exchange.functions() == old(self).models().exchange,
-            factory.functions() == old(self).models().cipher,
+    fn establish(&mut self, established: crate::hello::client::Established, next: Next<C, K, F, V>) -> (out: Output)
+        requires established.wf(), next.scalar.len() == 32,
+            next.crypto.functions() == old(self).models().crypto,
+            next.exchange.functions() == old(self).models().exchange,
+            next.factory.functions() == old(self).models().cipher,
         ensures final(self).wf(), final(self).models() == old(self).models(),
             out.deliver@.len() == 0,
             match final(self).stage() {
                 spec::Stage::Flight(state) => contract::flight_started(old(self).models(),
                     crate::hello::bootstrap_spec::Action::Established(established@.0, established@.1, established@.2),
-                    scalar@, state) && out.send@.len() == 0 && out.state == State::Handshaking,
+                    next.scalar@, state) && out.send@.len() == 0 && out.state == State::Handshaking,
                 spec::Stage::Ended => true,
                 _ => false,
             },
     {
         let ghost e = established@;
         let ghost m = self.models();
+        let crypto = next.crypto;
+        let exchange = next.exchange;
+        let factory = next.factory;
+        let verifier = next.verifier;
+        let scalar = next.scalar;
         match established.into_record_auth(&crypto, &exchange, &factory, scalar.as_slice()) {
             Ok(keys) => {
                 proof {
@@ -474,7 +472,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                     }
                 }
                 let conn = Connection::new(keys, crypto, factory, verifier);
-                self.stage = Some(Stage::Flight { conn });
+                self.stage = Some(Stage::Flight { conn: Box::new(conn) });
                 self.state = State::Handshaking;
                 quiet(State::Handshaking)
             },
@@ -483,23 +481,22 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     }
 
     /// One step through the ServerHello.
-    fn hello_step(&mut self, mut boot: Bootstrap<C>, crypto: C, exchange: K, factory: F, verifier: V,
-        scalar: Vec<u8>, input: &[u8]) -> (out: (usize, Output))
-        requires boot.wf(), scalar.len() == 32,
+    fn hello_step(&mut self, mut boot: Bootstrap<C>, next: Next<C, K, F, V>, input: &[u8]) -> (out: (usize, Output))
+        requires boot.wf(), next.scalar.len() == 32,
             boot.crypto_functions() == old(self).models().crypto,
-            crypto.functions() == old(self).models().crypto,
-            exchange.functions() == old(self).models().exchange,
-            factory.functions() == old(self).models().cipher,
+            next.crypto.functions() == old(self).models().crypto,
+            next.exchange.functions() == old(self).models().exchange,
+            next.factory.functions() == old(self).models().cipher,
         ensures final(self).wf(), final(self).models() == old(self).models(),
             out.0 <= input.len(), out.1.deliver@.len() == 0,
-            contract::hello_step_ensures(old(self).models(), boot@.0, boot@.1, scalar@, input@, out.0 as nat,
+            contract::hello_step_ensures(old(self).models(), boot@.0, boot@.1, next.scalar@, input@, out.0 as nat,
                 contract_step(out.1, final(self))),
     {
         hide(crate::hello::bootstrap_spec::feed);
         let (consumed, action) = boot.feed(input);
         let out = match action {
             BootAction::None => {
-                self.stage = Some(Stage::Hello { boot, crypto, exchange, factory, verifier, scalar });
+                self.stage = Some(Stage::Hello { boot, next });
                 self.state = State::Handshaking;
                 quiet(State::Handshaking)
             },
@@ -507,14 +504,14 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             // change_cipher_spec before it when required (D.4).
             BootAction::Send(wire) => {
                 if matches!(boot.acknowledge_send(wire.as_slice()), BootAction::None) {
-                    self.stage = Some(Stage::Hello { boot, crypto, exchange, factory, verifier, scalar });
+                    self.stage = Some(Stage::Hello { boot, next });
                     self.state = State::Handshaking;
                     Output { send: wire, deliver: Vec::new(), state: State::Handshaking }
                 } else {
                     self.hello_failed(crate::spec::INTERNAL_ERROR)
                 }
             },
-            BootAction::Established(established) => self.establish(established, crypto, exchange, factory, verifier, scalar),
+            BootAction::Established(established) => self.establish(established, next),
             BootAction::Alert(alert) => self.ended(Vec::new(), Vec::new(),
                 State::Failed(Failure { alert, origin: Origin::Peer })),
             BootAction::Fail(alert) => self.hello_failed(alert),
@@ -539,10 +536,8 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 let (consumed, o) = app.step_out(Input::Bytes(input));
                 (consumed, self.carry_out(o, app))
             },
-            Some(Stage::Flight { conn }) => self.flight_step(conn, input),
-            Some(Stage::Hello { boot, crypto, exchange, factory, verifier, scalar }) => {
-                self.hello_step(boot, crypto, exchange, factory, verifier, scalar, input)
-            },
+            Some(Stage::Flight { conn }) => self.flight_step(*conn, input),
+            Some(Stage::Hello { boot, next }) => self.hello_step(boot, next, input),
         }
     }
 
@@ -576,9 +571,12 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 let o = app.close_out();
                 self.carry_out(o, app)
             },
-            Some(Stage::Flight { mut conn }) => match conn.close_write() {
-                ConnAction::Close(record) => self.flight_close(record),
-                _ => self.ended(Vec::new(), Vec::new(), State::Closed),
+            Some(Stage::Flight { conn }) => {
+                let mut conn = *conn;
+                match conn.close_write() {
+                    ConnAction::Close(record) => self.flight_close(record),
+                    _ => self.ended(Vec::new(), Vec::new(), State::Closed),
+                }
             },
             Some(Stage::Hello { .. }) => self.ended(plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY),
                 Vec::new(), State::Closed),
@@ -601,9 +599,12 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                     _ => crate::spec::INTERNAL_ERROR,
                 }
             },
-            Some(Stage::Flight { mut conn }) => match conn.eof() {
-                ConnAction::Fail(alert, _) => alert,
-                _ => crate::spec::INTERNAL_ERROR,
+            Some(Stage::Flight { conn }) => {
+                let mut conn = *conn;
+                match conn.eof() {
+                    ConnAction::Fail(alert, _) => alert,
+                    _ => crate::spec::INTERNAL_ERROR,
+                }
             },
             Some(Stage::Hello { mut boot, .. }) => match boot.eof() {
                 BootAction::Fail(alert) => alert,
