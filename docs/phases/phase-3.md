@@ -37,8 +37,10 @@ Phase 3 is done when all of these hold on macOS arm64 and Linux x86-64:
 5. CLAUDE.md, VERIFICATION.md, DEPENDENCIES.md and the checker match the
    TLS decision recorded in 3.0.
 6. A certificate on the pushed revocation set is refused (3.5h), and the
-   cookie jar, the history and the revocation set survive a restart
-   through the proven store format (3.10). Added 2026-11-03.
+   cookie jar, `localStorage`, the history and the revocation set survive
+   a restart through the proven store (3.10), whose recovery theorem holds
+   for a write cut off at any octet. Added 2026-11-03; `localStorage` and
+   recovery added the same day when 3.10 became generic storage.
 
 ## What is proven, and what is assumed
 
@@ -74,7 +76,8 @@ tries addresses in order).
 | `clazel-tls` | 2 | RFC 8446 §3 to §7, Appendix A.1; RFC 6066 §3 | record layer, handshake messages, key schedule, the client state machine, joined to libcrux |
 | `clazel-fetch` | 2 | (ours); Fetch §4.4 to §4.6 in part; RFC 6265bis §5.2, §5.3, §5.7, §5.8 HTTP parts; RFC 9110 §15.4 | the client state machine: URL to request, response to result, redirects, cookies |
 | `clazel-net` | 0 | — | the network shell: resolver, TCP, TLS I/O; counted like the host shell |
-| (decided in 3.10) | 2 | ours, or DER (X.690) through `clazel-der` | the persistent-state format: the cookie jar, history and revocation set (3.10) |
+| `clazel-store-shell` | 0 | — | the store's shell: its files, lock, syncs and renames; counted like the host shell |
+| (decided in 3.10a.0) | 2 | WHATWG Storage §4, §6; records ours or DER (X.690) through `clazel-der` | the generic store: an ordered key–value store with transactions and a proven recovery, holding the cookie jar, `localStorage`, history and revocation set first (3.10) |
 | `clazel-crlite` | 2 | CRLite, as a pinned `clubcard-crlite` version encodes it (3.5h.0) | the revocation set's parser, its signed records (with their JSON) and the revocation oracle (3.5h) |
 
 Section numbers are from the documents at the time of writing; each spec
@@ -1928,53 +1931,231 @@ Windows in place of `resolv.conf`; `clazel fetch http://example.com/` gets
 has no second transcription of the buffer layout; 32-bit Windows (the layout
 is the 64-bit one, and `clazel-net` refuses to build otherwise).
 
-### 3.10 Persistent state: serialising and storing what outlives a run (L)
+### 3.10 Persistent storage: one store for everything that outlives a run (L, split into 3.10a and 3.10b)
 
-Added 2026-11-03, for 3.5h: a revocation set is useless if it is
-downloaded again on every run. Today nothing outlives a run: the kernel's
-cookie jar starts empty, `clazel fetch` keeps its jar for one fetch, and
-`clazel browse` keeps its back list (`crates/clazel/cli/browse.rs`) in
-memory.
+Added 2026-11-03, for 3.5h, because a revocation set is useless if it is
+downloaded again on every run. Reshaped the same day (maintainer): 3.10 is
+**generic storage**, not one snapshot file per kind of state. Later phases
+will need `localStorage` persisted, IndexedDB, the Cache API, an HTTP cache
+(RFC 9111) and service-worker registrations, and each of them goes into
+this store rather than inventing its own.
 
-What is stored: the **cookie jar** (only cookies whose persistent-flag is
-set: RFC 6265bis §5.7 gives a cookie without `Expires` or `Max-Age` a
-persistent-flag of false, and such a cookie ends with the session), the
-**history** (the URLs the user visited, with their times; what exactly is
-kept, and whether it is per tab or global, is decided here), and the
-**revocation set** with its fetch time and signature (3.5h). Not stored:
-an HTTP cache (RFC 9111 is outside the phase), connections, renderer
-state.
+Today nothing outlives a run:
+- the kernel's cookie jar starts empty;
+- the kernel's `localStorage` is in memory only (Phase 2: an ordered list
+  per origin with a proven 5 MiB quota, `crates/clazel-kernel/src/exec/storage.rs`);
+- `clazel fetch` keeps its jar for one fetch;
+- `clazel browse` keeps its back list (`crates/clazel/cli/browse.rs`) in
+  memory.
 
-- **The format (ours, rule 8; target tier 2):** the file is read back
-  later, and another local program may have changed it, so it is parsed
-  as untrusted bytes. Decide first whether records are DER through
-  `clazel-der` (proven encoders and decoders, round trip and canonicity
-  already proven) or a format of ours. Either way: a versioned header, a
-  spec, an encoder and a decoder proven to it, with **round trip**
-  (decoding what was encoded gives it back), **canonicity** (encoding what
-  was decoded gives the same octets) and **refusal** (anything else is
-  refused, never half-read) as theorems, examples and certified mutations.
-  A decoded record must meet the invariants its consumer requires (a jar
-  must meet `clazel-cookie`'s `jar_in_range` and its uniqueness rules; a
-  revocation set must be one 3.5h's parser accepts), or it is refused.
-- **The kernel decides what is written:** a new output asks the host to
-  store a snapshot of the state the kernel chooses (the jar after
-  dropping expired and session cookies), and loading is an event that is
-  the only way a stored jar enters the kernel. Restate what is affected:
-  the jar theorems hold from a loaded jar as from an empty one, and the
-  store is outside every renderer domain, like the network.
-- **The shell (tier 0):** where the files live (the platform's per-user
-  application data directory), atomic replacement (write a new file, then
-  rename it over the old one), permissions readable by the user only, and
-  one writer at a time. A file that does not decode starts that part
-  empty, says so, and never crashes.
+**The model: the WHATWG Storage Standard** ([storage.spec.whatwg.org](https://storage.spec.whatwg.org/),
+last updated 2026-10-19).
+- **The web-visible part follows §4:**
+  - a *storage shed* (§4.3) maps *storage keys* (§4.2) to *storage
+    shelves* (§4.4);
+  - a shelf holds *storage buckets* (§4.5), each with a mode,
+    "best-effort" or "persistent";
+  - a bucket holds one *storage bottle* (§4.6) per *storage endpoint*
+    (§4.1).
+
+  The registered endpoints are `caches`, `indexedDB`, `localStorage`,
+  `serviceWorkerRegistrations` (type local) and `sessionStorage` (type
+  session). Usage and quota follow §6. A session-type shed is never
+  written to disk.
+- **Browser state no page may reach goes in browser buckets:** the cookie
+  jar, the history and the revocation set. These buckets sit outside
+  every storage key, so no renderer can name them. That is a modelling
+  choice to list in the spec, since the standard covers only what the web
+  can reach.
+- **Consumers name a bottle, never a file.** The store maps (shed, storage
+  key or browser bucket, bucket, endpoint) to a bottle, and a bottle holds
+  ordered keys and values. Adding an endpoint later adds a bottle kind; it
+  needs no change to the format.
+
+#### 3.10a The store (L)
+
+- **3.10a.0 Design note (S), before any code.** Record the choice and its
+  costs, as 3.0 and 3.5h.0 did:
+  - the layout: a log of records with commit points and compaction, or
+    B-tree pages;
+  - the record encoding: DER through `clazel-der`, whose encoders and
+    decoders and their round trip and canonicity are already proven, or a
+    format of ours;
+  - how large values are kept (a revocation set is about 6 MB, a cached
+    response can be larger);
+  - what one file holds (the whole store, or one file per shelf).
+- **The substrate (ours, rule 8; target tier 2): an ordered key–value
+  store with transactions.**
+  - Keys and values are octet strings. Keys are ordered by octets, so
+    IndexedDB's key ordering can later be encoded to preserve that order.
+  - A transaction is a list of puts and deletes over one or more bottles,
+    and it is applied whole or not at all.
+  - Operations: get, range scan, put, delete, commit, and usage per bucket
+    (§6).
+  - The file is parsed as untrusted bytes, since another local program may
+    have changed it.
+- **What is proven:**
+  - *Records.* An encoder and a decoder proven to the spec, with **round
+    trip** (decoding what was encoded gives it back), **canonicity**
+    (encoding what was decoded gives the same octets) and **refusal**
+    (anything else is refused, never half-read).
+  - *Recovery, the main theorem.* Opening any prefix of a file the store
+    wrote gives exactly the state after the last transaction committed in
+    that prefix: never a partial transaction, and never a state that no
+    sequence of commits produced. A prefix models a write the OS cut off at
+    any octet. A file the store did not write is refused, or read as the
+    longest valid prefix (the design note picks one).
+  - *Compaction.* It changes the octets, never the state.
+  - *Quota.* Usage per bucket is computed exactly, and a transaction that
+    would exceed the quota is refused whole. This extends Phase 2's
+    `lemma_quota_push` and `lemma_quota_update`.
+  - Examples, certified mutations, and an independent transcription, as
+    for every tier 2 crate.
+- **The shell (tier 0):**
+  - where the files live (the platform's per-user application data
+    directory);
+  - permissions readable by the user only;
+  - one process at a time (a lock file);
+  - `fsync` at each commit point;
+  - the rename that publishes a compacted file.
+
+  A store that doesn't open starts empty, says so, and never crashes. The
+  old file is kept beside it for the user, not deleted.
 - **Not claimed:** protection against a local attacker who can write the
   user's files (they can replace the browser too), encryption at rest,
-  and a private browsing mode.
-- **Tests:** round trips of real jars and sets; truncated, oversized and
-  hostile files refused; a kernel restarted from a stored jar sends the
-  same `Cookie` fields as before the restart; an interrupted write leaves
-  the old file whole.
+  durability beyond what `fsync` gives on the platform, and a private
+  browsing mode.
+
+**3.10a.0 Design note: accepted by the maintainer, 2026-11-03.** Each
+choice below is followed by what it costs.
+
+- **Layout: an append-only log per bucket, compacted by rewriting.**
+  - *How it works.* Each commit appends one record that holds the whole
+    transaction. Opening the store replays the records in order.
+    Compaction writes the live state as a new log and renames it over the
+    old one.
+  - *Why a log.* Recovery is then a fold over a list of records, which is
+    a short proof. A B-tree changes pages in place, so it needs a
+    write-ahead log anyway, plus proofs of page splits and merges.
+  - *The cost.* A store this size keeps its whole index in memory: about
+    6 MB for the revocation set plus small amounts for the rest. That is
+    no problem in Phase 3. An HTTP cache in gigabytes will need values
+    read from disk by offset, and the record format allows that (each
+    value is one octet string at a known position). The design leaves
+    room for it but doesn't build it.
+  - *Precedent, unchecked here.* Chromium keeps `localStorage` and
+    IndexedDB in LevelDB, which is log-structured; Firefox uses SQLite.
+    Neither is a dependency we may take (rule 8), and neither shapes the
+    proof.
+- **Granularity: one log file per bucket.**
+  - The Storage Standard scopes every endpoint to a bucket (§4.5), and
+    IndexedDB transactions never cross a bucket. So no transaction needs
+    two files, and the recovery theorem is about a single file.
+  - Clearing a site's data deletes its files, and a damaged file loses one
+    bucket, not the whole store.
+  - The file is named by the SHA-256 of its encoded bucket identity (the
+    storage key, or the browser bucket's name, plus the bucket name). The
+    identity is repeated in the header, and a file whose header doesn't
+    match its name is refused.
+  - *The cost.* One file per origin that stores anything, and one `fsync`
+    per bucket that commits.
+- **Records: DER through `clazel-der`.**
+  - `clazel-der` is already tier 2, and its TLV round trip is proven in
+    both directions (`lemma_read_tlv_encode_tlv`,
+    `lemma_encode_tlv_read_tlv`), as is never reading past the input
+    (`lemma_read_tlv_no_overread`). Lengths go up to 2^64.
+  - Whatever the new crate encodes reuses those proofs. A format of our
+    own would need all of them proven again.
+  - The header is
+    `SEQUENCE { magic OCTET STRING "clazel-store", version INTEGER 1, identity OCTET STRING }`.
+  - Each record is
+    `SEQUENCE { commit INTEGER, ops SEQUENCE OF Op, check OCTET STRING (4) }`,
+    where `Op` is one of three context-tagged choices:
+    - `put [0] { bottle, key, value }`;
+    - `delete [1] { bottle, key }`;
+    - `clear [2] { bottle }`.
+
+    `commit` increases by exactly 1 from record to record, and the first
+    record's `commit` is 1. (That last clause was added on 2026-11-04: the
+    independent transcription found this note silent on the first number.)
+  - *The cost.* DER spends a few octets of framing per field. A record's
+    length must be known before it is written, which is fine for a
+    transaction that is already built.
+- **Torn writes: a CRC-32C per record, the Castagnoli polynomial
+  `0x11edc6f41`** (RFC 7143 §13.1, which obsoletes RFC 3720, with test
+  vectors in §A.4). Read §13.1 with §11's convention that bit 0 is the
+  most significant bit: its "bit 7" is the least significant bit, so the
+  CRC is the reflected one.
+  - A crash can leave the tail of the file truncated, or on some file
+    systems holding octets that were never written. The `check` field
+    covers the record's other contents.
+  - Recovery takes the longest run of records, from the header on, that
+    decode, check correctly, and number their commits in sequence. It
+    stops at the first record that fails any of these.
+  - CRC-32C is specified exactly in the spec and proven against it. No
+    cryptographic function is assumed.
+  - *The cost, a modelling choice to list.* Damaged octets that happen to
+    form a valid record with a matching CRC (about 1 in 2^32 for each
+    damaged tail) are taken as a commit. That isn't a defence against an
+    attacker, and none is claimed (see "Not claimed").
+  - If recovery drops any octets, the shell keeps the original file beside
+    the new one and says how much was dropped.
+- **Large values: kept inline, one octet string per value, at most 64 MiB
+  per record.**
+  - The revocation set is one value of about 6 MB.
+  - A value too large for one record is refused, not split. Splitting
+    belongs to the later cache, with values read by offset.
+- **The theorems this gives, in the spec's terms.** Let `state(file)` be
+  the fold of the recovered records over the empty state.
+  1. For every list of transactions `ts` and every prefix `p` of the file
+     written from `ts`, `state(p)` is the state after the first `k`
+     transactions of `ts`, for some `k`.
+  2. When `p` is the whole file, `k` is the length of `ts`.
+  3. Compacting gives a file with the same `state`.
+  4. A transaction that would take a bucket over its quota is refused
+     whole.
+- **The crate:** `clazel-store`, target tier 2. Its spec and
+  contracts come first, in a commit of their own (rule 3). It depends on
+  `clazel-der` and `vstd` only, with SHA-256 for file names taken from the
+  shell's existing crypto, not from the store's spec.
+
+#### 3.10b The first consumers (M, after 3.10a)
+
+- **The kernel decides what is written.**
+  - A new kernel output asks the host to commit a transaction the kernel
+    built, and loading is an event: the only way stored state enters the
+    kernel.
+  - The jar and `localStorage` theorems hold from loaded state as from an
+    empty one. Restate each one that is affected.
+  - The store is outside every renderer domain, like the network.
+- **The cookie jar:** only cookies whose persistent-flag is set. RFC
+  6265bis §5.7 gives a cookie without `Expires` or `Max-Age` a
+  persistent-flag of false, and such a cookie ends with the session.
+  Expired cookies are dropped before writing. A loaded jar must meet
+  `clazel-cookie`'s `jar_in_range` and its uniqueness rules, or it is
+  refused.
+- **`localStorage`:** the `localStorage` bottle of each storage key's
+  default bucket, holding Phase 2's per-origin lists. A loaded list must
+  meet the invariants Phase 2 proved (unique keys, within the 5 MiB
+  quota). `sessionStorage` is never stored.
+- **The history:** the URLs the user visited, with their times. What is
+  kept, and whether it is per tab or global, is decided here.
+- **The revocation set:** 3.5h's set with its fetch time and signature, in
+  a browser bucket. A stored set must be one 3.5h's parser accepts, so
+  this consumer comes last and waits for 3.5h.0's choice.
+- **Not stored in Phase 3:** IndexedDB, the Cache API, an HTTP cache
+  (RFC 9111 is outside the phase), service-worker registrations,
+  connections and renderer state. The design note must show where each of
+  these would go, without building them. WebSQL is out of scope for
+  good: the web platform removed it, and IndexedDB replaces it.
+- **Tests:**
+  - round trips of real jars, `localStorage` lists and sets;
+  - truncated, oversized and hostile files refused or recovered as the
+    recovery theorem says;
+  - a kernel restarted from a stored jar sends the same `Cookie` fields as
+    before the restart, and a page reads back its `localStorage`;
+  - a process killed at every write leaves a store that opens to a
+    committed state (run locally, like the demo).
 
 ### 3.9 Status and README (S)
 
@@ -1992,13 +2173,15 @@ ROADMAP.md.
 3.1 field syntax ─> 3.2 framing ─> 3.3 conformance ──┐                               │
 3.4 DNS ──────────────────────────────────────────────┼─> 3.8 shell + curl clone ─> 3.9
                                                      └─> 3.6 client ─> 3.7 kernel ─┘ │
-3.5g, 3.6, 3.7 ─> 3.10 store ─> 3.5h revocation ──────────────────────────────────────┘
+3.5g, 3.6, 3.7 ─> 3.10a store ─> 3.10b consumers ─> 3.5h revocation ─────────────────┘
 ```
 
 3.1, 3.4, 3.5a, 3.5c and 3.5d start at once; 3.6 can start against
 abstract parameters as soon as 3.1's field types exist; 3.8's `http://`
 half does not wait on TLS. 3.10 and 3.5h (added 2026-11-03) come after the
 `https:` path works: 3.5h's updates are fetched over it and stored by 3.10.
+3.10a needs nothing from TLS and can start at once. In 3.10b only the
+revocation set waits for 3.5h.0's choice.
 
 ## Status
 
@@ -2021,7 +2204,7 @@ half does not wait on TLS. 3.10 and 3.5h (added 2026-11-03) come after the
 | 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. `https:` through the kernel's `Driver` (#93, see 3.8). Open: the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
 | 3.8 Network shell and `curl` clone | built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function; on Windows the DNS servers come from `GetAdaptersAddresses`, read by `clazel-dns`'s proven `adapters` reader (on `main`, #96, CI's full verification green on bf6a9ea, its `clazel-sys` call audited in `docs/SYS-AUDITS.md`). TLS loop built (on `main`, #85, CI's full verification green on 0a6fbec): `TlsConnection` over 3.5f's driver, `NetError::Tls` with the §6.2 alert, `Timeout(Stage::Handshake)`, `tests/tls.rs` against rustls on loopback (ECDSA, RSA, a 100000-octet response, close during the handshake, a stall, another name, an undecryptable response answered with bad_record_mac (#86), bytes that are not TLS). Randomness from the OS (#88): `open` draws from `clazel_sys::fill_random` and fails with `NetError::Random` before opening a socket, `open_with_random` keeps a seeded source for tests, the resolver's query ID comes from the same call, and `tests/tls.rs` has 11 tests (3 with the OS source; CI's full verification green on bf6a9ea). `https:` in `fetch` and `clazel fetch` (on `main`, #90, CI's full verification green on bf6a9ea): `Connect { tls: true }` opens a `TlsConnection` with Mozilla's roots, and any TLS failure (a truncation included) fails the fetch; `tests/tls.rs` adds four `fetch` tests over TLS (a request and response, another name, a truncated close-delimited body, a `Secure` cookie stored and sent). Checked by hand (2026-11-03): https://www.rust-lang.org/ gives 200; example.com, www.google.com, en.wikipedia.org, github.com, www.cloudflare.com, letsencrypt.org, http.cat and https://1.1.1.1/ fail with unknown_ca, each chain having a P-384 issuer key, which `clazel-crypto` refuses until P17 at that time. With P17 merged, the same hosts gave 200 from `fetch_with` in a run by hand (2026-11-03, the system resolver; no test asserts this). `https:` in the kernel's network driver (on `main`, #93, CI's full verification green on bf6a9ea): `Driver` carries out `Connect { tls: true }` with a thread that owns the `TlsConnection` (Mozilla's roots, or `Driver::with_verifier`'s) and takes the request over a channel; a `Close` sends close_notify (sealed by the thread right after the request, written by the driver; on Windows shutting down only the read side does not wake a blocked read) and then shuts the socket down; `tests/tls.rs` adds three driver tests against rustls (a request and response until close_notify, another name refused with bad_certificate, a `Close` while reading that the server reads as a clean close_notify), and `crates/clazel/tests/host.rs` an `https:` navigation through the host and the kernel against rustls (Unix only, like the rest of that file). The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | non-TLS part done (2026-10-29): README.md's Phase 3 note, `cargo xtask report` writes the network shell's line count next to the host shell's (CI's `table` job puts it in the README), this table and ROADMAP.md. Left for when TLS lands: the `https://` demo in the README, the 3.5 rows and marking the phase done |
-| 3.10 Persistent state | planned (2026-11-03): nothing built; the cookie jar, history and revocation set do not outlive a run |
+| 3.10 Persistent storage | planned (2026-11-03), reshaped the same day into generic storage on the WHATWG Storage model. **3.10a store: built** (`clazel-store`, tier 2 claimed on PR #98, pending CI's full verification): the log format, CRC-32C, recovery, compaction, usage and quota, a sorted in-memory bucket with `get` and range scans, the note's four theorems, an independent transcription, conformance against published CRC vectors, `crc` and `der`, and 67 certified mutations; the tier 0 file shell is `clazel-store-shell`. A commit copies its bucket, and the shell has not been tested with a process really killed. **3.10b consumers: not started**, so the cookie jar, `localStorage`, history and revocation set still do not outlive a run |
 
 ## Risks
 
