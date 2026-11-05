@@ -518,7 +518,7 @@ impl Client {
                 events.push(Event::PeerAlert(alert));
                 true
             }
-            Action::Close => {
+            Action::Close(_) => {
                 events.push(Event::Closed);
                 false
             }
