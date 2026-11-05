@@ -235,16 +235,30 @@ pub proof fn lemma_example_block_closes_on_its_mirror()
     )) by (compute_only);
 }
 
+/// The tokens of `a,(b,c),`. A list, not a string, so that a tokenizer mutant that never
+/// gets past a comma cannot stop this file being evaluated.
+pub open spec fn comma_list() -> Seq<ComponentValue> {
+    seq![
+        ident(0x61),
+        token(Token::Comma),
+        token(Token::OpenParen),
+        ident(0x62),
+        token(Token::Comma),
+        ident(0x63),
+        token(Token::CloseParen),
+        token(Token::Comma),
+    ]
+}
+
 /// `a,(b,c),` is two groups: commas count only at the top level, and nothing follows the
 /// last.
 pub proof fn lemma_example_comma_list()
     ensures
-        parse_a_comma_separated_list_of_component_values(
-            Input::String { string: seq![0x61u32, 0x2C, 0x28, 0x62, 0x2C, 0x63, 0x29, 0x2C] },
-        ).len() == 2,
+        parse_a_comma_separated_list_of_component_values(Input::List { list: comma_list() }).len()
+            == 2,
 {
     assert(parse_a_comma_separated_list_of_component_values(
-        Input::String { string: seq![0x61u32, 0x2C, 0x28, 0x62, 0x2C, 0x63, 0x29, 0x2C] },
+        Input::List { list: comma_list() },
     ).len() == 2) by (compute_only);
 }
 
