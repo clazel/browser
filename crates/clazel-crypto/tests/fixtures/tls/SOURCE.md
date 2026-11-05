@@ -20,8 +20,10 @@ uses Mozilla's roots (`join::exec::mozilla`, `clazel_x509::roots::ROOTS`).
 | `intermediate-expired.der` | CA, pathlen 0, expired | RSA 2048 | root | 2019-01-01 to 2021-01-01 |
 | `leaf-under-expired-intermediate.der` | `test.example`; its key is `leaf-ecdsa.key.der` | ECDSA P-256 | `intermediate-expired.der` | 2019-01-01 to 2046-01-01 |
 | `self-signed.der`, `.key.der` | `test.example` leaf, not a CA | ECDSA P-256 | itself (ecdsa-with-SHA256) | 2019-01-01 to 2046-01-01 |
+| `root-p384.der` | second test root, CA, self-signed (added 2026-11-05; `root.der`'s key was discarded, so a P-384 leaf needed a new root) | ECDSA P-384 | itself (ecdsa-with-SHA384) | 2019-01-01 to 2046-01-01 |
+| `leaf-p384.der`, `.key.der` | `test.example`; the server signs CertificateVerify with ecdsa_secp384r1_sha384 | ECDSA P-384 | `root-p384.der` (ecdsa-with-SHA384) | 2019-01-01 to 2046-01-01 |
 
-The test validates at 2026-10-31T12:00:00Z (Unix time 1793448000). The three
+The test validates at 2026-10-31T12:00:00Z (Unix time 1793448000). The four
 chains that should validate were checked with `openssl verify -attime
 1793448000` before the files were kept, so a refusal in the test is the
 client's, never a bad signature.
@@ -70,4 +72,20 @@ for k in leaf-ecdsa leaf-rsa leaf-other-name leaf-expired self-signed; do
 for c in leaf-ecdsa leaf-rsa leaf-other-name; do
   openssl x509 -inform DER -in $c.der -out $c.crt
   openssl verify -attime 1793448000 -CAfile root.crt -untrusted int.crt $c.crt; done
+```
+
+The P-384 root and leaf, added 2026-11-05 with the same OpenSSL, the same `NB`
+and `NA`, and the `ca.ext` and `leaf.ext` above:
+
+```sh
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out root-p384.pem
+openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out leaf-p384.pem
+openssl req -new -key root-p384.pem -subj "/CN=clazel TLS test P-384 root" -out rp.csr
+openssl x509 -req -in rp.csr -signkey root-p384.pem -sha384 -set_serial 20 -not_before $NB -not_after $NA -extfile ca.ext -outform DER -out root-p384.der
+openssl x509 -inform DER -in root-p384.der -out rp.crt
+openssl req -new -key leaf-p384.pem -subj "/CN=test.example" -out lp.csr
+openssl x509 -req -in lp.csr -CA rp.crt -CAkey root-p384.pem -sha384 -set_serial 21 -not_before $NB -not_after $NA -extfile leaf.ext -outform DER -out leaf-p384.der
+openssl pkcs8 -topk8 -nocrypt -in leaf-p384.pem -outform DER -out leaf-p384.key.der
+openssl x509 -inform DER -in leaf-p384.der -out lp.crt
+openssl verify -attime 1793448000 -CAfile rp.crt lp.crt
 ```
