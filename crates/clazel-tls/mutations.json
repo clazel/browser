@@ -2981,6 +2981,146 @@
         "lemma": "super::post_handshake_examples::lemma_actions_order()",
         "witness": "super::post_handshake_spec::actions(super::post_handshake_spec::Out { wires: seq![seq![1u8], seq![2u8]], delivered: seq![3u8], end: super::post_handshake_spec::End::Fail(40u8) }).len() == 3"
       }
+    },
+    {
+      "id": "driver-plaintext-alert-version",
+      "file": "src/connection/driver_spec.rs",
+      "find": "seq![crate::spec::CT_ALERT, 3u8, 3u8, 0u8, 2u8, level, description]",
+      "replace": "seq![crate::spec::CT_ALERT, 3u8, 1u8, 0u8, 2u8, level, description]",
+      "expect": "killed",
+      "reason": "A plaintext alert carries the wrong legacy_record_version (RFC 8446 5.1): lemma_plaintext_alert is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_plaintext_alert()",
+        "witness": "super::driver_spec::plaintext_alert(2, 40) == seq![21u8, 3, 1, 0, 2, 2, 40]"
+      }
+    },
+    {
+      "id": "driver-closing-reported-open",
+      "file": "src/connection/driver_spec.rs",
+      "find": "if s.phase == super::post_handshake_spec::Phase::WriteClosed { Status::Closing } else { Status::Open }",
+      "replace": "Status::Open",
+      "expect": "killed",
+      "reason": "The driver reports Open after our close_notify, so its caller would go on writing: lemma_continue_status is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_continue_status()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::Continue), super::driver_examples::write_closed()).status == super::driver_spec::Status::Open"
+      }
+    },
+    {
+      "id": "driver-peer-close-unanswered",
+      "file": "src/connection/driver_spec.rs",
+      "find": "settle(concat(o.wires), o.delivered, r.0, r.1)",
+      "replace": "settle(concat(o.wires), o.delivered, super::post_handshake_spec::Out { wires: seq![], delivered: seq![], end: r.0.end }, r.1)",
+      "expect": "killed",
+      "reason": "The server's close_notify is not answered with ours in the same step: lemma_peer_close_answered is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_peer_close_answered()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::PeerClosed), super::driver_examples::read_closed()).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-failure-always-sent",
+      "file": "src/connection/driver_spec.rs",
+      "find": "ended(Status::Failed(a, if send.len() > 0 { Origin::Sent } else { Origin::NotSent })),",
+      "replace": "ended(Status::Failed(a, Origin::Sent)),",
+      "expect": "killed",
+      "reason": "A failure with no record claims the alert went out: lemma_origins is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_origins()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::Fail(40u8)), super::post_handshake_spec::failed()).status == super::driver_spec::Status::Failed(40u8, super::driver_spec::Origin::Sent)"
+      }
+    },
+    {
+      "id": "driver-peer-alert-as-ours",
+      "file": "src/connection/driver_spec.rs",
+      "find": "super::post_handshake_spec::End::PeerAlert(a) => ended(Status::Failed(a, Origin::Peer)),",
+      "replace": "super::post_handshake_spec::End::PeerAlert(a) => ended(Status::Failed(a, Origin::NotSent)),",
+      "expect": "killed",
+      "reason": "The server's alert is reported as a failure of ours: lemma_origins is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_origins()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::PeerAlert(40u8)), super::post_handshake_spec::failed()).status == super::driver_spec::Status::Failed(40u8, super::driver_spec::Origin::NotSent)"
+      }
+    },
+    {
+      "id": "driver-flight-alert-dropped",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Some(record) => Step { send: record, deliver: seq![], stage: Stage::Ended,\n            status: Status::Failed(description, Origin::Sent) },",
+      "replace": "Some(record) => Step { send: seq![], deliver: seq![], stage: Stage::Ended,\n            status: Status::Failed(description, Origin::Sent) },",
+      "expect": "killed",
+      "reason": "The dispatcher's sealed alert does not go on the wire (RFC 8446 6.2): lemma_flight_failure is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_failure()",
+        "witness": "super::driver_spec::flight_failure(40, Some(seq![9u8])).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-flight-close-dropped",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Step { send: match wire { Some(record) => record, None => seq![] }, deliver: seq![],",
+      "replace": "Step { send: seq![], deliver: seq![],",
+      "expect": "killed",
+      "reason": "Our sealed close_notify does not go on the wire during the flight (RFC 8446 6.1): lemma_flight_closed is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_closed()",
+        "witness": "super::driver_spec::flight_closed(Some(seq![9u8])).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-hello-close-fatal",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Step { send: plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY), deliver: seq![],",
+      "replace": "Step { send: plaintext_alert(crate::spec::LEVEL_FATAL, crate::spec::CLOSE_NOTIFY), deliver: seq![],",
+      "expect": "killed",
+      "reason": "Our close_notify before the handshake keys goes out at the fatal level: lemma_hello_alerts is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_hello_alerts()",
+        "witness": "super::driver_spec::hello_closed().send == seq![21u8, 3, 3, 0, 2, 2, 0]"
+      }
+    },
+    {
+      "id": "driver-truncation-sent",
+      "file": "src/connection/driver_spec.rs",
+      "find": "status: Status::Failed(description, Origin::Truncated) }",
+      "replace": "status: Status::Failed(description, Origin::NotSent) }",
+      "expect": "killed",
+      "reason": "Truncation is not reported as truncation (RFC 8446 6.1): lemma_nothing_sent is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_nothing_sent()",
+        "witness": "super::driver_spec::truncated(80).status == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::NotSent)"
+      }
+    },
+    {
+      "id": "dispatcher-close-notify-fatal-level",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description: crate::spec::CLOSE_NOTIFY })",
+      "replace": "crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_FATAL, description: crate::spec::CLOSE_NOTIFY })",
+      "expect": "killed",
+      "reason": "A close_notify during the flight goes out at the fatal level: lemma_flight_close_sends_close_notify is false.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_flight_close_sends_close_notify()",
+        "witness": "super::dispatcher_spec::closing(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state()).0 != super::dispatcher_spec::Action::Close(Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]))"
+      }
     }
   ]
 }
