@@ -22,7 +22,9 @@
 //!   (`xn--` and RFC 3492 Punycode); ASCII labels are used as they are
 //!   (the list is already lower case, which is checked);
 //! - rules keep the order they have in the file, which is the order of
-//!   `PSL_RULES`; no sorting.
+//!   `PSL_RULES`; no sorting;
+//! - `PSL_ICANN_RULES_LEN` is how many rules come before the line
+//!   `// ===END ICANN DOMAINS===`, so the ICANN section is the first rows.
 //!
 //! It also rejects, so the tables can rely on it: an empty label; a `*`
 //! anywhere but as the whole leftmost label of a non-exception rule; an
@@ -305,6 +307,7 @@ fn rules(list: &str) -> Result<Vec<Rule>, String> {
 }
 
 fn generate(list: &str) -> Result<String, String> {
+    let icann = icann_rules(list)?;
     let rules = rules(list)?;
     let mut chars: Vec<u8> = Vec::new();
     let mut label_rows: Vec<String> = Vec::new();
@@ -358,8 +361,31 @@ fn generate(list: &str) -> Result<String, String> {
             rows: chars.iter().map(|c| format!("0x{c:X}")).collect(),
         },
     );
+    let _ = writeln!(
+        out,
+        "/// The rules of the list's ICANN section: rows `0 .. PSL_ICANN_RULES_LEN`.\n\
+         pub const PSL_ICANN_RULES_LEN: usize = {icann};\n"
+    );
     let _ = writeln!(out, "}} // verus!");
     Ok(out)
+}
+
+/// How many rules the ICANN section has. The list must be that section, then
+/// the private one, with each marker once and no rule between them.
+fn icann_rules(list: &str) -> Result<usize, String> {
+    const END: &str = "// ===END ICANN DOMAINS===";
+    const PRIVATE: &str = "// ===BEGIN PRIVATE DOMAINS===";
+    let marker = |text: &str| list.lines().filter(|l| l.trim() == text).count();
+    if marker(END) != 1 || marker(PRIVATE) != 1 {
+        return Err(format!("expected {END:?} and {PRIVATE:?} once each"));
+    }
+    let (icann, rest) = list.split_once(END).ok_or("no end of the ICANN section")?;
+    let (between, _) = rest.split_once(PRIVATE).ok_or("no private section after it")?;
+    let is_rule = |l: &str| !l.trim().is_empty() && !l.trim().starts_with("//");
+    if between.lines().any(is_rule) {
+        return Err("a rule between the ICANN and private sections".to_owned());
+    }
+    Ok(rules(icann)?.len())
 }
 
 const HEADER: &str = "\
@@ -379,6 +405,8 @@ const HEADER: &str = "\
 //   Punycode): its `count` labels, from left to right, are rows `first ..
 //   first + count` of PSL_LABELS, and a label is the characters
 //   PSL_CHARS[start .. start + len].
+// - PSL_ICANN_RULES_LEN is how many rules come before the line
+//   `// ===END ICANN DOMAINS===`: the ICANN section is the first rows.
 // - Checked when generating: no empty label; `*` only as the whole leftmost
 //   label of a non-exception rule; no upper-case ASCII letter; an exception
 //   rule has at least two labels; no duplicate rule; no exception rule is a
