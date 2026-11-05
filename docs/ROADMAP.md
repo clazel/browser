@@ -8,10 +8,10 @@ written by AI, and checked by machines.
 workspace builds and its tests pass on Windows, and the renderer runs in an
 AppContainer (a less-privileged one, with a Job Object and process
 mitigations; policy in `clazel-sandbox`'s `appcontainer`, calls in
-`clazel-sys`'s `windows`, started by `clazel-renderer`'s `launch`). The rest of
-phase 8 stays: the proofs (Verus, Kani) and `scripts/verify.sh` are not run
-on Windows, there is no Windows CI job, and the `clazel-sys` change is not
-audited yet (`docs/SYS-AUDITS.md`).
+`clazel-sys`'s `windows`, started by `clazel-renderer`'s `launch`), CI has a base
+Windows job, and Phase 5 adds the window and GPU drawing on Windows. The rest of
+phase 8 stays: the proofs (Verus, Kani) and `scripts/verify.sh` are not run on
+Windows.
 
 **Non-goals for now:** JIT compilation, extensions, DRM, WebGL/WebGPU.
 
@@ -74,7 +74,7 @@ moved to Phase 8.
 
 ## Phase 5: CSS, layout, graphics (the Show HN milestone)
 CSS parsing and cascade, block, inline and table layout, font parsing and
-shaping, raster, and a native window on macOS and Linux.
+shaping, GPU raster, and a native window on macOS, Linux and Windows.
 *Exit:* **renders news.ycombinator.com correctly**, so the Show HN post can be
 read in the browser it announces.
 Detailed plan: [phases/phase-5.md](phases/phase-5.md).
@@ -91,7 +91,7 @@ in safe Rust. DOM bindings.
 *Exit:* common sites work, more slowly than in a JIT-based browser.
 
 ## Phase 8: Windows port, compatibility grind
-Windows CI and proofs (the AppContainer backend exists, see Platforms). WPT score tracking, CSS breadth,
+Windows proofs (the AppContainer backend, base CI job and Phase 5's window exist, see Platforms). WPT score tracking, CSS breadth,
 Web APIs, performance. Also the legacy multi-byte encodings (gb18030 and
 GBK, Big5, ISO-2022-JP, Shift_JIS, EUC-JP, EUC-KR), slipped from Phase 4
 item 4.4 as its item 4.0 allows; until then a page in one of them is not
