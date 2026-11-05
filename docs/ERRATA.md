@@ -431,3 +431,21 @@ it evidently means. Each entry records what we specified instead.
   "MUST"s apply to its bits. See `subscriber_key_usage_ok` in
   `crates/clazel-x509/src/path/independent_profile.rs`.
 - **Reported upstream:** not yet.
+
+## CSS Syntax §5.5.5 "consume a block's contents" never appends its last declarations
+
+- **Spec:** CSS Syntax Module Level 3, Editor's Draft (commit
+  `c410ee5e4d2afe6d8b2e8ce53723b8d1eb3b5b67` of `w3c/csswg-drafts`),
+  <https://drafts.csswg.org/css-syntax-3/#consume-block-contents>
+- **Text:** for `<EOF-token>` and `<}-token>`: "Return rules."
+- **Problem:** declarations collect in decls, which only reaches rules when an
+  at-rule, a rule or an invalid rule error follows it. Read literally, the
+  declarations after the last of those are thrown away, so `a { color: red }`
+  has no declarations at all, and neither does any block with no nested rule.
+  The same section says its result holds "lists of declarations", and "consume a
+  qualified rule" reads the first of them as the rule's declarations.
+- **We specify:** append decls to rules if it is not empty, as the other
+  branches do, then return rules. See `blocks_contents_loop` in
+  `crates/clazel-css/src/parser/spec.rs`, and
+  `lemma_example_declaration_in_a_rule` in its `examples.rs`.
+- **Reported upstream:** not yet.
