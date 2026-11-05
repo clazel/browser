@@ -36,9 +36,9 @@ Phase 3 is done when all of these hold on macOS arm64 and Linux x86-64:
    and the network shell's line count.
 5. CLAUDE.md, VERIFICATION.md, DEPENDENCIES.md and the checker match the
    TLS decision recorded in 3.0.
-6. A certificate on the pushed revocation set is refused (3.5h), and the
-   cookie jar, the history and the revocation set survive a restart
-   through the proven store format (3.10). Added 2026-11-03.
+6. The cookie jar and the history survive a restart through the proven store
+   format (3.10). Added 2026-11-03; revocation (3.5h) moved to Phase 8 on
+   2026-11-05.
 
 ## What is proven, and what is assumed
 
@@ -75,7 +75,7 @@ tries addresses in order).
 | `clazel-fetch` | 2 | (ours); Fetch §4.4 to §4.6 in part; RFC 6265bis §5.2, §5.3, §5.7, §5.8 HTTP parts; RFC 9110 §15.4 | the client state machine: URL to request, response to result, redirects, cookies |
 | `clazel-net` | 0 | — | the network shell: resolver, TCP, TLS I/O; counted like the host shell |
 | (decided in 3.10) | 2 | ours, or DER (X.690) through `clazel-der` | the persistent-state format: the cookie jar, history and revocation set (3.10) |
-| `clazel-crlite` | 2 | CRLite, as a pinned `clubcard-crlite` version encodes it (3.5h.0) | the revocation set's parser, its signed records (with their JSON) and the revocation oracle (3.5h) |
+| `clazel-crlite` (Phase 8) | 2 | CRLite, as a pinned `clubcard-crlite` version encodes it (3.5h.0) | the revocation set's parser, its signed records (with their JSON) and the revocation oracle (3.5h) |
 
 Section numbers are from the documents at the time of writing; each spec
 header pins the exact RFC or commit it transcribes.
@@ -761,7 +761,7 @@ spec take an out-of-range `subrange`, which `compute_only` cannot evaluate; the
 `>` to `>=` change is equivalent). `independent.rs` does not cover it, as it
 does not cover `dotted_to_wire`: it is the decoder's second transcription.
 
-### 3.5 TLS (eight items; 3.0 decided option B; 3.5h added 2026-11-03)
+### 3.5 TLS (eight items; 3.0 decided option B; 3.5h added 2026-11-03, moved to Phase 8 on 2026-11-05)
 
 Our own TLS 1.3 client. Every parser is a pure function over bytes and the
 handshake is a transducer with the cryptography as parameters, joined to
@@ -1453,7 +1453,17 @@ and negative cases; it must preserve the original signed TBS bytes and must
 not relax the general DER decoder. **This measurement and decision are
 pending; no real-certificate prevalence or compatibility result is claimed.**
 
-#### 3.5h Certificate revocation: a pushed set (L, after 3.5g and 3.10)
+#### 3.5h Certificate revocation: a pushed set (L, moved to Phase 8)
+
+**Moved to Phase 8 (maintainer, 2026-11-05).** Nothing here is built, and the
+decisions below stand as the record for when it is picked up. Until then
+production passes `NothingRevoked`, so **a revoked certificate that has not
+expired is accepted**: a known gap. Where 3.10 names the revocation set, that
+part goes with this item. Asking Mozilla comes first: the Remote Settings
+[client specification](https://remote-settings.readthedocs.io/en/main/client-specifications.html)
+strongly discourages new ad-hoc clients and says the team must validate any
+new implementation (read 2026-11-05). No terms for third-party clients were
+found, and no agent contacts Mozilla.
 
 **Decided (maintainer, 2026-11-03): option 1, a revocation set pushed to
 the browser**, in the style of Firefox's CRLite or Chrome's CRLSets, not
@@ -1992,13 +2002,14 @@ ROADMAP.md.
 3.1 field syntax ─> 3.2 framing ─> 3.3 conformance ──┐                               │
 3.4 DNS ──────────────────────────────────────────────┼─> 3.8 shell + curl clone ─> 3.9
                                                      └─> 3.6 client ─> 3.7 kernel ─┘ │
-3.5g, 3.6, 3.7 ─> 3.10 store ─> 3.5h revocation ──────────────────────────────────────┘
+3.5g, 3.6, 3.7 ─> 3.10 store ───────────────────────────────────────────────────────┘
 ```
 
 3.1, 3.4, 3.5a, 3.5c and 3.5d start at once; 3.6 can start against
 abstract parameters as soon as 3.1's field types exist; 3.8's `http://`
-half does not wait on TLS. 3.10 and 3.5h (added 2026-11-03) come after the
-`https:` path works: 3.5h's updates are fetched over it and stored by 3.10.
+half does not wait on TLS. 3.10 (added 2026-11-03) comes after the `https:`
+path works. 3.5h moved to Phase 8, after 3.10: its updates are fetched over
+`https:` and stored by 3.10.
 
 ## Status
 
@@ -2016,7 +2027,7 @@ half does not wait on TLS. 3.10 and 3.5h (added 2026-11-03) come after the
 | 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters, and a post-handshake transducer: spec, contracts, executable, lemmas, 20 witnesses, 20 mutations and 25 passing integration tests (on `main`, #77, CI's full verification green on 797e26b). The dispatcher seals its own fatal alert (§6, §6.2) under the settled write epoch's next sequence number (§5.3) before dropping its keys, in the server's flight and after the handshake, and never answers a peer's alert (`PeerAlert`): spec, contracts, exec, lemmas, 8 new mutations with certificates and 20 dispatcher integration tests (on `main`, #86, 2026-11-03, CI's full verification green on bf6a9ea). Production providers and socket I/O are 3.5f and 3.8; the join of the transducer to the dispatcher remains; tier 0 |
 | 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. Randomness: `clazel_sys::fill_random` exists (Linux `getrandom` with flags 0, macOS `getentropy`, Windows `BCryptGenRandom` with the system-preferred RNG) and is audited (`docs/SYS-AUDITS.md`, source aa66b138); `clazel_net::TlsConnection::open` draws the scalar, ClientHello random and session id from it (on `main`, #88, CI's full verification green on bf6a9ea), and the driver itself still takes them from its caller. The client driver `clazel_crypto::client::Client` (on `main`, #85, CI's full verification green on 0a6fbec): connect/receive/send/close over `Bootstrap`, the key exchange and `Connection`; alerts in plaintext before the handshake keys, and from the ServerHello on the record `Connection` seals itself (#86, 2026-11-03: the driver's copy of the handshake epochs is removed, and a failure after the client Finished now sends its alert), 15 passing tests (8 against rustls, among them bad_record_mac after the handshake read by rustls); a close_notify during the server's flight is not sent, and the join is not proven equal to 3.5e's machine |
 | 3.5g TLS conformance and trust store | first part built (2026-10-31, on `main`, #82, CI's full verification green on bcc4040): `clazel-crypto/tests/conformance_tls.rs`, 17 cases in two suites (5 success and control, 12 hostile): full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello without and with the §4.1.3 downgrade sentinel, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the behaviour it pins); the downgrade sentinel is checked (`illegal_parameter`, 2026-11-02, on `main`, #83, CI's full verification green on 2755dde). `conformance_tls.rs` still assembles the client by hand rather than through 3.5f's driver. Not done: the Mozilla root table check, the local top-site measurement and the real-certificate corpus (no result claimed), HelloRetryRequest and ticket paths against a real server, the tier 2 raises |
-| 3.5h Revocation (pushed set) | planned (2026-11-03): option 1 decided by the maintainer; 3.5h.0 facts checked and written up (2026-11-03); CRLite on its `default` channel, failing open and in a new `clazel-crlite`, decided by the maintainer (2026-11-05); nothing built. Production still passes `NothingRevoked`, so a revoked certificate is accepted |
+| 3.5h Revocation (pushed set) | moved to Phase 8 (2026-11-05); planned (2026-11-03): option 1 decided by the maintainer; 3.5h.0 facts checked and written up (2026-11-03); CRLite on its `default` channel, failing open and in a new `clazel-crlite`, decided by the maintainer (2026-11-05); nothing built. Production still passes `NothingRevoked`, so a revoked certificate is accepted |
 | 3.6 Client state machine | on `main` (#3, #5): transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). `https:` (on `main`, #90, CI's full verification green on bf6a9ea): `https:` URLs get the same request as `http:`, port 443 by default and `Connect.tls` exactly for `https` (RFC 9110 §4.2.2), with `theorem_tls_when_secure` (every `Connect` is the current request's and speaks TLS exactly when the cookie functions see it as secure), 6 new examples and 4 new mutations with certificates; the independent transcription does not cover the connection (port, TLS). Not yet: other request contexts, HSTS, WPT fetch suites (none vendored) |
 | 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. `https:` through the kernel's `Driver` (#93, see 3.8). Open: the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
 | 3.8 Network shell and `curl` clone | built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function; on Windows the DNS servers come from `GetAdaptersAddresses`, read by `clazel-dns`'s proven `adapters` reader (on `main`, #96, CI's full verification green on bf6a9ea, its `clazel-sys` call audited in `docs/SYS-AUDITS.md`). TLS loop built (on `main`, #85, CI's full verification green on 0a6fbec): `TlsConnection` over 3.5f's driver, `NetError::Tls` with the §6.2 alert, `Timeout(Stage::Handshake)`, `tests/tls.rs` against rustls on loopback (ECDSA, RSA, a 100000-octet response, close during the handshake, a stall, another name, an undecryptable response answered with bad_record_mac (#86), bytes that are not TLS). Randomness from the OS (#88): `open` draws from `clazel_sys::fill_random` and fails with `NetError::Random` before opening a socket, `open_with_random` keeps a seeded source for tests, the resolver's query ID comes from the same call, and `tests/tls.rs` has 11 tests (3 with the OS source; CI's full verification green on bf6a9ea). `https:` in `fetch` and `clazel fetch` (on `main`, #90, CI's full verification green on bf6a9ea): `Connect { tls: true }` opens a `TlsConnection` with Mozilla's roots, and any TLS failure (a truncation included) fails the fetch; `tests/tls.rs` adds four `fetch` tests over TLS (a request and response, another name, a truncated close-delimited body, a `Secure` cookie stored and sent). Checked by hand (2026-11-03): https://www.rust-lang.org/ gives 200; example.com, www.google.com, en.wikipedia.org, github.com, www.cloudflare.com, letsencrypt.org, http.cat and https://1.1.1.1/ fail with unknown_ca, each chain having a P-384 issuer key, which `clazel-crypto` refuses until P17 at that time. With P17 merged, the same hosts gave 200 from `fetch_with` in a run by hand (2026-11-03, the system resolver; no test asserts this). `https:` in the kernel's network driver (on `main`, #93, CI's full verification green on bf6a9ea): `Driver` carries out `Connect { tls: true }` with a thread that owns the `TlsConnection` (Mozilla's roots, or `Driver::with_verifier`'s) and takes the request over a channel; a `Close` sends close_notify (sealed by the thread right after the request, written by the driver; on Windows shutting down only the read side does not wake a blocked read) and then shuts the socket down; `tests/tls.rs` adds three driver tests against rustls (a request and response until close_notify, another name refused with bad_certificate, a `Close` while reading that the server reads as a clean close_notify), and `crates/clazel/tests/host.rs` an `https:` navigation through the host and the kernel against rustls (Unix only, like the rest of that file). The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
