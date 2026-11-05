@@ -137,9 +137,11 @@ six-hour limit (`xtask/src/parts.rs`):
   `--write` after `assemble` passed, and commits the regenerated table in
   docs/STATUS.md and the two images drawn from it (`docs/status.svg`,
   which README.md shows, and `docs/status-detail.svg`) to `main` as
-  github-actions[bot] if they changed. So the committed table and images
-  always come from CI's own measurements of a fully verified commit, and no
-  change has to carry them.
+  clazel-status-table[bot] if they changed. So the committed table and
+  images always come from CI's own measurements of a fully verified commit,
+  and no change has to carry them. That app is the one bypass actor on
+  `main`'s ruleset, because every other change arrives through the merge
+  queue. Pushes that touch only these three files start no CI run.
 
 The parts together run exactly the checks of one `cargo xtask verify`, which
 `scripts/verify.sh` and the Docker command in README.md still run on one
