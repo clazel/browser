@@ -137,9 +137,11 @@ six-hour limit (`xtask/src/parts.rs`):
   `--write` after `assemble` passed, and commits the regenerated table in
   docs/STATUS.md and the two images drawn from it (`docs/status.svg`,
   which README.md shows, and `docs/status-detail.svg`) to `main` as
-  github-actions[bot] if they changed. So the committed table and images
-  always come from CI's own measurements of a fully verified commit, and no
-  change has to carry them.
+  clazel-status-table[bot] if they changed. So the committed table and
+  images always come from CI's own measurements of a fully verified commit,
+  and no change has to carry them. That app is the one bypass actor on
+  `main`'s ruleset, because every other change arrives through the merge
+  queue. Pushes that touch only these three files start no CI run.
 
 The parts together run exactly the checks of one `cargo xtask verify`, which
 `scripts/verify.sh` and the Docker command in README.md still run on one
@@ -258,7 +260,7 @@ precisely. "Audited" means two things, neither of them a human approval:
    - `unsafe_code` is overridden in `clazel-sys` and nowhere else, and only
      that lint;
    - its only dependency is `libc`, pinned exactly;
-   - only foreign functions from a fixed list in `xtask/src/sys.rs` may be
+   - only foreign functions from a fixed list per file in `xtask/src/sys.rs` may be
      declared or called (`sandbox_init`, `sandbox_free_error`, `prctl`,
      `unshare`, and `syscall` with only the numbers of `seccomp` and the three
      `landlock_*` calls);

@@ -1,0 +1,23 @@
+[package]
+name = "clazel-displaylist"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The display list (Phase 5 item 5.17a): what a renderer asks the GPU process to draw, its byte format, and the validator every list passes before any GPU call."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is what the policy requires: this is the GPU
+# process's parser of bytes a compromised renderer may have written.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true

@@ -1,0 +1,26 @@
+[package]
+name = "clazel-store-shell"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The store's shell: the files, lock, syncs and renames around clazel-store's proven bucket log."
+
+[dependencies]
+# The proven bucket log the shell keeps in files: every decision about a
+# file's bytes (what a load keeps, what a commit appends, what a compaction
+# writes) is a function of this crate.
+clazel-store = { path = "../clazel-store" }
+# SHA-256 for the files' names.
+clazel-crypto = { path = "../clazel-crypto" }
+
+# Verification tier (docs/VERIFICATION.md). Tier 0 and staying there: this
+# crate does I/O (files, a lock, syncs and renames), which no proof here
+# covers; tests are its evidence, and its line count is in the status table.
+# Phase 3 item 3.10a.
+[package.metadata.clazel]
+tier = 0
+target-tier = 0
+
+[lints]
+workspace = true

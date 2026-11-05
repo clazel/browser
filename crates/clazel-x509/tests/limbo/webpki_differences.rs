@@ -35,7 +35,6 @@ const WEBPKI_DIFFERENCES: &[(&str, &str, &str)] = &[
     ("rfc5280::san::underscore-dns", "webpki", LEAF),
     ("rfc5280::leaf-ku-keycertsign", "webpki", LEAF),
     ("webpki::san::public-suffix-multi-label-wildcard-san", "webpki", LEAF),
-    ("webpki::san::public-suffix-private-namespace-wildcard-san", "webpki", LEAF),
     ("rfc5280::nc::not-allowed-in-ee-noncritical", "webpki", LEAF_CONSTRAINTS),
     ("rfc5280::validity::expired-root", "webpki", EXPIRED_ANCHOR),
     ("rfc5280::eku::ee-without-eku", "webpki", EKU_REQUIRED),

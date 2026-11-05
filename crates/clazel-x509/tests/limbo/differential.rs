@@ -21,7 +21,7 @@
 include!("webpki_differences.rs");
 
 /// Testcases compared, accepted by both, refused by both.
-const COUNTS: (usize, usize, usize) = (9791, 969, 8799);
+const COUNTS: (usize, usize, usize) = (9791, 970, 8799);
 
 /// Accepts every signature of one key and signature algorithm.
 #[derive(Debug)]
