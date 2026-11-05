@@ -43,17 +43,20 @@
 //!    alert received from the peer is `Fail(description)` alone: §6.2 asks
 //!    for no reply. An error raised while sending (a record that is too long)
 //!    is `Fail` alone, because the sending epoch is what failed.
-//! 6. **Alerts.** `close_notify` ends the connection (§6.1): the transducer
-//!    sends its own `close_notify` ("MUST respond with a close_notify alert
-//!    of its own and close down the connection immediately") and the output
-//!    ends in `Close`. Every other alert is fatal, whatever its level and
-//!    even `user_canceled`; TLS 1.3 says the level "can safely be ignored"
-//!    (§6), and this phase has no use for a connection that goes on after
-//!    such an alert. Data that arrives after the connection ended is ignored
-//!    (§6.1: "Any data received after a closure alert has been received MUST
-//!    be ignored"): it is consumed with no action. `Closed` (the transport
-//!    ended) while open is a truncation, `Fail(internal_error)` with no
-//!    alert, because nothing can be sent.
+//! 6. **Alerts.** Each direction closes on its own (§6.1, which drops the
+//!    earlier versions' immediate answer to a `close_notify`). The peer's
+//!    `close_notify` ends the read side: the output ends in `PeerClosed` and
+//!    the write side stays usable ([`Phase::ReadClosed`]). Our `close_notify`
+//!    ends the write side and the read side stays usable
+//!    ([`Phase::WriteClosed`]). When both have gone the output ends in
+//!    `Close`. `user_canceled` is not an error alert (§6.1) and changes
+//!    nothing. Every other alert is fatal, whatever its level; TLS 1.3 says
+//!    the level "can safely be ignored" (§6). Data that arrives after the
+//!    read side ended is ignored (§6.1: "Any data received after a closure
+//!    alert has been received MUST be ignored"): it is consumed with no
+//!    action. `Closed` (the transport ended) while the read side is open is
+//!    a truncation, `Fail(internal_error)` with no alert, because nothing can
+//!    be sent.
 //! 7. **NewSessionTicket (§4.6.1) is parsed, then ignored.** It is read with
 //!    the parser of `spec.rs` (so a malformed one is `decode_error` or
 //!    `illegal_parameter`, as the parser gives) and has no further effect.
@@ -75,7 +78,8 @@
 //!    boundary; if not, then they MUST terminate the connection with an
 //!    "unexpected_message" alert". With `update_requested`, the client then
 //!    sends KeyUpdate(`update_not_requested`) under its current key and moves
-//!    its write secret, key, IV and sequence number on in the same way. An
+//!    its write secret, key, IV and sequence number on in the same way, unless
+//!    its write side has closed (§6.1: nothing is written after it). An
 //!    invalid `request_update` is `illegal_parameter` (the parser's
 //!    `InvalidEnum`). Several KeyUpdates in one connection are fine; each
 //!    needs its own record.
@@ -92,10 +96,9 @@
 //!     2^14 bytes (a longer one is `Fail(record_overflow)`: the caller
 //!     fragments, as `traffic::exec` says); [`update_keys`] is the
 //!     client-initiated KeyUpdate, with or without `update_requested`;
-//!     [`close`] sends `close_notify` and ends the connection without waiting
-//!     for the server's (§6.1: "The initiator of the close need not wait for
-//!     the responding close_notify alert before closing the read side").
-//!     Each does nothing once the connection is not open.
+//!     [`close`] sends `close_notify` and ends the write side; the read side
+//!     goes on until the server's own `close_notify`, which avoids truncation
+//!     (§6.1). Each does nothing once the write side has ended.
 //! 12. **No padding, no early data, no client authentication.** Records are
 //!     sent with zero padding. 0-RTT, `EndOfEarlyData` and post-handshake
 //!     client authentication are out of scope (an `EndOfEarlyData` or
@@ -115,8 +118,13 @@ verus! {
 pub enum Phase {
     /// Application traffic keys are installed in both directions.
     Open,
-    /// The connection ended with `close_notify` or the transport closed
-    /// after one; every key and partial input is dropped.
+    /// Our `close_notify` went out: the send keys are dropped and the server
+    /// can still be read.
+    WriteClosed,
+    /// The server's `close_notify` came in: the receive keys are dropped and
+    /// the client can still write.
+    ReadClosed,
+    /// Both directions closed; every key and partial input is dropped.
     Closed,
     /// Fatal error; every key and partial input is dropped.
     Failed,
@@ -136,7 +144,9 @@ pub enum Action {
     Send(Seq<u8>),
     /// Plaintext application data from the server, in order.
     Deliver(Seq<u8>),
-    /// The connection ended in order (`close_notify`).
+    /// The server's `close_notify`: end of data; the write side goes on.
+    PeerClosed,
+    /// Both directions ended in order (`close_notify`).
     Close,
     /// The connection ended with this alert description.
     Fail(u8),
@@ -146,7 +156,9 @@ pub enum Action {
 pub enum End {
     /// The connection goes on.
     Continue,
-    /// `close_notify`.
+    /// The server's `close_notify`; the write side goes on.
+    PeerClosed,
+    /// Both directions ended with `close_notify`.
     Close,
     /// Fatal, with this alert description.
     Fail(u8),
@@ -169,12 +181,13 @@ pub open spec fn sends(wires: Seq<Seq<u8>>) -> Seq<Action> {
 }
 
 /// The effects of [`Out`] as the sequence of actions: every `Send`, then the
-/// `Deliver` if there is plaintext, then `Close` or `Fail`.
+/// `Deliver` if there is plaintext, then `PeerClosed`, `Close` or `Fail`.
 pub open spec fn actions(o: Out) -> Seq<Action> {
     sends(o.wires)
         + (if o.delivered.len() > 0 { seq![Action::Deliver(o.delivered)] } else { seq![] })
         + (match o.end {
             End::Continue => seq![],
+            End::PeerClosed => seq![Action::PeerClosed],
             End::Close => seq![Action::Close],
             End::Fail(a) => seq![Action::Fail(a)],
         })
@@ -184,9 +197,9 @@ pub open spec fn actions(o: Out) -> Seq<Action> {
 pub struct State {
     /// Whether the connection is live.
     pub phase: Phase,
-    /// Client application send epoch; absent once the connection ended.
+    /// Client application send epoch; absent once the write side ended.
     pub sender: Option<crate::traffic::spec::State>,
-    /// Server application receive epoch; absent once the connection ended.
+    /// Server application receive epoch; absent once the read side ended.
     pub receiver: Option<crate::traffic::spec::State>,
     /// Current `client_application_traffic_secret_N`.
     pub client_secret: Seq<u8>,
@@ -199,10 +212,17 @@ pub struct State {
 /// The state of a connection that has not ended.
 pub open spec fn is_open(s: State) -> bool { s.phase == Phase::Open }
 
+/// The server can still be read.
+pub open spec fn can_read(s: State) -> bool { s.phase == Phase::Open || s.phase == Phase::WriteClosed }
+
+/// The client can still write.
+pub open spec fn can_write(s: State) -> bool { s.phase == Phase::Open || s.phase == Phase::ReadClosed }
+
 /// Lifecycle invariant. Open: both epochs are installed, well formed and not
 /// failed; the send epoch has a next sequence number (item 10: it is never
 /// exhausted); both secrets are `Hash.length` bytes; the reassembly buffer is
-/// within its bound. Ended: nothing is retained.
+/// within its bound. A closed direction holds no epoch or secret, and the rest
+/// is as in `Open`. Ended: nothing is retained.
 pub open spec fn wf(s: State) -> bool {
     match s.phase {
         Phase::Open => match (s.sender, s.receiver) {
@@ -210,6 +230,20 @@ pub open spec fn wf(s: State) -> bool {
                 && tx.next is Some && s.client_secret.len() == crate::schedule::spec::HASH_LEN
                 && s.server_secret.len() == crate::schedule::spec::HASH_LEN
                 && s.reassembly.buf.len() < crate::spec::HANDSHAKE_HEADER + crate::spec::MAX_HANDSHAKE_BODY,
+            _ => false,
+        },
+        Phase::WriteClosed => match (s.sender, s.receiver) {
+            (None, Some(rx)) => crate::traffic::spec::wf(rx) && !rx.failed
+                && s.client_secret.len() == 0
+                && s.server_secret.len() == crate::schedule::spec::HASH_LEN
+                && s.reassembly.buf.len() < crate::spec::HANDSHAKE_HEADER + crate::spec::MAX_HANDSHAKE_BODY,
+            _ => false,
+        },
+        Phase::ReadClosed => match (s.sender, s.receiver) {
+            (Some(tx), None) => crate::traffic::spec::wf(tx) && !tx.failed && tx.next is Some
+                && s.client_secret.len() == crate::schedule::spec::HASH_LEN
+                && s.server_secret.len() == 0
+                && s.reassembly.buf.len() == 0,
             _ => false,
         },
         Phase::Closed | Phase::Failed => s.sender is None && s.receiver is None
@@ -246,6 +280,34 @@ pub open spec fn failed() -> State {
 
 /// The state of a connection that ended in order: all keys dropped.
 pub open spec fn closed() -> State { State { phase: Phase::Closed, ..failed() } }
+
+/// §6.1: the write side has ended. Both have once the read side has too.
+pub open spec fn finish_write(s: State) -> (End, State) {
+    if s.phase == Phase::ReadClosed {
+        (End::Close, closed())
+    } else {
+        (End::Continue, State { phase: Phase::WriteClosed, sender: None, client_secret: seq![], ..s })
+    }
+}
+
+/// §6.1: the server's `close_notify` ended the read side. Both have ended
+/// once the write side has too.
+pub open spec fn peer_closed(s: State) -> (Out, State) {
+    if s.phase == Phase::WriteClosed {
+        (Out { wires: seq![], delivered: seq![], end: End::Close }, closed())
+    } else {
+        (
+            Out { wires: seq![], delivered: seq![], end: End::PeerClosed },
+            State {
+                phase: Phase::ReadClosed,
+                receiver: None,
+                server_secret: seq![],
+                reassembly: crate::spec::reasm_new(),
+                ..s
+            },
+        )
+    }
+}
 
 /// §5.2: the key-explicit AEAD encryption of this epoch's key.
 pub open spec fn seal_of(f: crate::traffic::spec::Cipher, ep: crate::traffic::spec::State)
@@ -292,20 +354,20 @@ pub open spec fn fatal(f: crate::traffic::spec::Cipher, s: State, alert: u8) -> 
     }
 }
 
-/// §6.1: send `close_notify` and end the connection (item 6).
+/// §6.1: send `close_notify` and end the write side (item 6).
 pub open spec fn close_connection(f: crate::traffic::spec::Cipher, s: State) -> (Out, State) {
     match s.sender {
         Some(tx) => {
             let a = crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description: crate::spec::CLOSE_NOTIFY };
             match send_record(f, tx, crate::spec::CT_ALERT, crate::spec::write_alert(a)) {
                 (_, Ok(wire)) => (
-                    Out { wires: seq![wire], delivered: seq![], end: End::Close },
-                    closed(),
+                    Out { wires: seq![wire], delivered: seq![], end: finish_write(s).0 },
+                    finish_write(s).1,
                 ),
-                (_, Err(_)) => (Out { wires: seq![], delivered: seq![], end: End::Close }, closed()),
+                (_, Err(_)) => (Out { wires: seq![], delivered: seq![], end: finish_write(s).0 }, finish_write(s).1),
             }
         },
-        None => (Out { wires: seq![], delivered: seq![], end: End::Close }, closed()),
+        None => (Out { wires: seq![], delivered: seq![], end: finish_write(s).0 }, finish_write(s).1),
     }
 }
 
@@ -330,11 +392,11 @@ pub open spec fn rotated_receiver(c: crate::schedule::spec::Crypto, s: State) ->
 }
 
 /// §4.6.3: send KeyUpdate(`request`) under the current client key, then
-/// update the client write keys (item 9). Nothing if the connection ended.
+/// update the client write keys (item 9). Nothing if the write side ended.
 pub open spec fn send_key_update(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, request: u8)
     -> (Out, State)
 {
-    if s.phase != Phase::Open {
+    if !can_write(s) {
         (quiet(), s)
     } else {
         match s.sender {
@@ -381,11 +443,11 @@ pub open spec fn send_data_record(f: crate::traffic::spec::Cipher, s: State, dat
 pub open spec fn send_application(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, data: Seq<u8>)
     -> (Out, State)
 {
-    if s.phase != Phase::Open {
+    if !can_write(s) {
         (quiet(), s)
     } else if needs_rekey(s) {
         match send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED) {
-            (o1, s1) => if s1.phase == Phase::Open {
+            (o1, s1) => if can_write(s1) {
                 match send_data_record(f, s1, data) {
                     (o2, s2) => (then(o1, o2), s2),
                 }
@@ -408,7 +470,7 @@ pub open spec fn update_keys(c: crate::schedule::spec::Crypto, f: crate::traffic
 
 /// §6.1: the client-initiated close.
 pub open spec fn close(f: crate::traffic::spec::Cipher, s: State) -> (Out, State) {
-    if s.phase == Phase::Open { close_connection(f, s) } else { (quiet(), s) }
+    if can_write(s) { close_connection(f, s) } else { (quiet(), s) }
 }
 
 /// §4.6.3 on receipt of KeyUpdate(`request`), a valid value: the message must
@@ -461,7 +523,7 @@ pub open spec fn messages(c: crate::schedule::spec::Crypto, f: crate::traffic::s
         (quiet(), s)
     } else {
         match message(c, f, s, ms[0], ms.len() == 1) {
-            (o1, s1) => if s1.phase != Phase::Open {
+            (o1, s1) => if !can_read(s1) {
                 (o1, s1)
             } else {
                 match messages(c, f, s1, ms.skip(1)) {
@@ -485,8 +547,10 @@ pub open spec fn record(c: crate::schedule::spec::Crypto, f: crate::traffic::spe
             Out { wires: seq![], delivered: d, end: End::Continue },
             State { reassembly: r, ..s },
         ),
-        crate::spec::Res::Ok((crate::spec::Event::Alert(a), _)) => {
-            if a.description == crate::spec::CLOSE_NOTIFY { close_connection(f, s) } else { die(a.description) }
+        crate::spec::Res::Ok((crate::spec::Event::Alert(a), r)) => {
+            if a.description == crate::spec::CLOSE_NOTIFY { peer_closed(s) }
+            else if a.description == crate::spec::USER_CANCELED { (quiet(), State { reassembly: r, ..s }) }
+            else { die(a.description) }
         },
         crate::spec::Res::Ok((crate::spec::Event::Messages(ms), r)) => {
             messages(c, f, State { reassembly: r, ..s }, ms)
@@ -516,14 +580,14 @@ pub open spec fn receive(c: crate::schedule::spec::Crypto, f: crate::traffic::sp
 }
 
 /// The transducer: `step(state, input) -> (output, state, consumed)`.
-/// After the connection ended, bytes are consumed and ignored (§6.1).
+/// After the read side ended, bytes are consumed and ignored (§6.1).
 pub open spec fn step(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, input: Input) -> (Out, State, nat) {
     match input {
         Input::Bytes(wire) => {
-            if s.phase == Phase::Open { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }
+            if can_read(s) { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }
         },
         Input::Closed => {
-            if s.phase == Phase::Open { consuming(die(crate::spec::INTERNAL_ERROR), 0) } else { (quiet(), s, 0) }
+            if can_read(s) { consuming(die(crate::spec::INTERNAL_ERROR), 0) } else { (quiet(), s, 0) }
         },
     }
 }
