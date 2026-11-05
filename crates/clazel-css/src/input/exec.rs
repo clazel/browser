@@ -77,7 +77,7 @@ fn read_xx_bytes(bytes: &[u8], start: usize) -> (r: usize)
             return pos;
         }
         let b = peek(bytes, pos);
-        if !(b <= 0x21 || (0x23 <= b && b <= 0x7F)) {
+        if b == 0x22 || b > 0x7F {
             return pos;
         }
         // Never saturates: `pos` is below the length.
