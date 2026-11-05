@@ -342,7 +342,7 @@ fn read_end_of_comment(input: &[u32], start: usize) -> (r: usize)
 }
 
 /// [`consume_comments`].
-fn read_comments(input: &[u32], start: usize) -> (r: usize)
+pub fn read_comments(input: &[u32], start: usize) -> (r: usize)
     requires
         super::contract::input_requires(input@),
         start <= input.len(),

@@ -3,8 +3,8 @@
 //! these predicates, so reading these and [`super::spec`] is enough to know what the
 //! implementation guarantees.
 //!
-//! None of the exec functions exist yet: item 5.4 writes them. phase-5.md, under 5.3, says
-//! how they read tokens and what they cost.
+//! phase-5.md, under 5.3, says how the exec functions read tokens and what they cost, and
+//! [`super::rows`] says what they build.
 //!
 //! Each statement below is a `spec fn`, because a `proof fn` with no proof is not allowed.
 //! [`super::lemmas`] proves the ones that say so; the others are not proven.
@@ -20,10 +20,17 @@ verus! {
 // Contracts of the exec parser
 // ------------------------------------------------------------------------------------
 
-/// What the exec functions need of the input: positions, kept as `u32`, and a few code
-/// points past one, fit. A style sheet is at most `MAX_BODY`, 64 MiB.
+/// What the exec functions need of the input: positions and places in the output arrays,
+/// kept as `u32`, fit. A rule costs at most a few entries for each token it takes, so this
+/// is a good deal more than it needs to be, and 8 times `MAX_BODY`, 64 MiB.
 pub open spec fn parser_input_requires(input: Seq<u32>) -> bool {
-    input.len() + 8 <= u32::MAX
+    input.len() <= 0x2000_0000
+}
+
+/// True if `pos` is where reading gives token `index` of `text`'s stream.
+pub open spec fn at_index(text: Seq<u32>, flag: bool, index: int, pos: int) -> bool {
+    let stream = token_stream(text, flag);
+    0 <= index < stream.tokens.len() && pos == position_of(stream.source.unwrap(), index)
 }
 
 /// Contract for `parse_stylesheet(input, location)`.

@@ -10,5 +10,6 @@
 pub mod contract;
 pub mod examples;
 pub mod lemmas;
+pub mod rows;
 pub mod spec;
 pub mod termination;

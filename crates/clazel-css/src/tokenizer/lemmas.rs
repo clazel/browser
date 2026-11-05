@@ -23,7 +23,7 @@ pub proof fn theorem_tokenizer_total(input: Seq<u32>, pos: int, unicode_ranges_a
 
 /// [`tokenize_loop`] adds at most one token per code point left, and the EOF token, and
 /// keeps what it was given.
-proof fn lemma_loop_bounded(input: Seq<u32>, pos: int, flag: bool, tokens: Seq<Token>)
+pub proof fn lemma_loop_bounded(input: Seq<u32>, pos: int, flag: bool, tokens: Seq<Token>)
     ensures
         tokenize_loop(input, pos, flag, tokens).len() <= tokens.len() + remaining(input, pos) + 1,
         tokenize_loop(input, pos, flag, tokens).len() > tokens.len(),
