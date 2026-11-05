@@ -9,7 +9,8 @@
 //!
 //! The host's process is not sandboxed and these calls take no page-derived
 //! pointer: [`draw_bgra`] reads a slice of `u32`, so aligned as the call requires,
-//! whose length it has checked.
+//! whose length it has checked. The text given to [`set_title`] may come from a
+//! page, but it is copied first, and the call reads only that NUL-terminated copy.
 
 use std::ffi::c_void;
 
@@ -101,9 +102,10 @@ struct BitmapInfo {
 #[link(name = "gdi32")]
 #[link(name = "kernel32")]
 // SAFETY: docs RegisterClassExW, DefWindowProcW, LoadCursorW, CreateWindowExW,
-// DestroyWindow, IsWindow, PeekMessageW, TranslateMessage, DispatchMessageW,
-// MsgWaitForMultipleObjects, GetClientRect, ScreenToClient, GetDC, ReleaseDC,
-// SetProcessDpiAwarenessContext (user32, winuser.h); docs SetDIBitsToDevice
+// DestroyWindow, IsWindow, SetWindowTextW, GetDpiForWindow, PeekMessageW,
+// TranslateMessage, DispatchMessageW, MsgWaitForMultipleObjects, GetClientRect,
+// ScreenToClient, GetDC, ReleaseDC, SetProcessDpiAwarenessContext (user32,
+// winuser.h); docs SetDIBitsToDevice
 // (gdi32, wingdi.h); docs GetModuleHandleW (kernel32, libloaderapi.h). The
 // declarations below match those prototypes on 64-bit Windows: `BOOL`,
 // `DWORD`, `UINT` and `int` are 32-bit, `ATOM` is 16-bit, `WPARAM` is
@@ -133,6 +135,8 @@ unsafe extern "system" {
     ) -> Handle;
     fn DestroyWindow(window: Handle) -> Bool;
     fn IsWindow(window: Handle) -> Bool;
+    fn SetWindowTextW(window: Handle, text: *const u16) -> Bool;
+    fn GetDpiForWindow(window: Handle) -> u32;
     fn PeekMessageW(message: *mut Msg, window: Handle, min: u32, max: u32, remove: u32) -> Bool;
     fn TranslateMessage(message: *const Msg) -> Bool;
     fn DispatchMessageW(message: *const Msg) -> isize;
@@ -336,6 +340,30 @@ pub fn destroy_window(window: WindowHandle) -> Result<(), SpawnError> {
         return Err(last("DestroyWindow"));
     }
     Ok(())
+}
+
+/// Set the text of the window's title bar. Text with a NUL in it is refused. The
+/// system sends this to the thread that created the window and waits, so from any
+/// other thread this returns only once that thread reads its messages.
+pub fn set_title(window: WindowHandle, title: &str) -> Result<(), SpawnError> {
+    let text = wide(title)?;
+    let text_ptr = text.as_ptr();
+    // SAFETY: docs SetWindowTextW: `text_ptr` is a NUL-terminated local, live until
+    // the call returns; the window's procedure, DefWindowProcW, copies what it keeps.
+    let ok = unsafe { SetWindowTextW(window.0, text_ptr) };
+    if ok == 0 {
+        return Err(last("SetWindowTextW"));
+    }
+    Ok(())
+}
+
+/// The dots per inch of the window's monitor, 96 being unscaled. `None` if the
+/// handle no longer names a window.
+pub fn window_dpi(window: WindowHandle) -> Option<u32> {
+    // SAFETY: docs GetDpiForWindow: takes a handle and reads no caller memory; an
+    // invalid handle gives 0.
+    let dpi = unsafe { GetDpiForWindow(window.0) };
+    (dpi != 0).then_some(dpi)
 }
 
 /// The client area's width and height in pixels.

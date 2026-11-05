@@ -194,8 +194,8 @@ pub fn scan_crate(c: &Crate) -> Result<CrateScan, String> {
         }
         let sys_crate = c.is_sys();
         if sys_crate {
-            let checked =
-                sys::check_source(&source).map_err(|e| format!("{}: {e}", file.display()))?;
+            let checked = sys::check_source(&relative(&file), &source)
+                .map_err(|e| format!("{}: {e}", file.display()))?;
             for (line, what) in checked.violations {
                 result.violations.push(format!(
                     "{}:{line}: unsafe policy (CLAUDE.md rule 1): {what}",

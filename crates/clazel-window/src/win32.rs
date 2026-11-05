@@ -152,6 +152,30 @@ impl Window {
         ignore_if_gone(drawn, || self.exists()).map_err(Error::Os)
     }
 
+    /// Set the title bar's text. Text with a NUL in it is an error. Like
+    /// [`Window::draw`], this does nothing to a window the user has just closed.
+    pub fn set_title(&self, title: &str) -> Result<(), Error> {
+        if !self.exists() {
+            return Ok(());
+        }
+        let set = sys::set_title(self.handle, title);
+        ignore_if_gone(set, || self.exists()).map_err(Error::Os)
+    }
+
+    /// The dots per inch of the window's monitor now, 96 being unscaled. `None` once
+    /// the window has ended. Nothing reports a change, since `WM_DPICHANGED` goes to
+    /// `DefWindowProcW` as `WM_SIZE` does, so a caller asks again.
+    ///
+    /// [`Window::open`] asks for per-monitor awareness. If the process's awareness was
+    /// already set otherwise, the answer follows that setting, and can be 96 on a
+    /// scaled monitor.
+    pub fn dpi(&self) -> Option<u32> {
+        if !self.exists() {
+            return None;
+        }
+        sys::window_dpi(self.handle)
+    }
+
     /// Whether the handle still names this window.
     fn exists(&self) -> bool {
         !self.gone.load(Ordering::Relaxed) && sys::is_window(self.handle)
