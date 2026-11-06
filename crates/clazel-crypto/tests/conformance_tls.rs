@@ -2,16 +2,12 @@
 //! production would assemble it, against a real TLS 1.3 server, over an
 //! in-memory byte pipe (no sockets).
 //!
-//! **The client** is `clazel_tls::hello::bootstrap::Bootstrap` (ClientHello,
-//! ServerHello), then `Established::into_record_auth` (key exchange and
-//! handshake record keys), then `clazel_tls::connection::exec::Connection`
-//! (the authentication flight, the client Finished, application data,
-//! close_notify), over `clazel_crypto`'s libcrux providers (`Sha256Suite`,
-//! `X25519`, `ChaCha20Poly1305Factory`) and the production
-//! `join::exec::ChainVerifier`, whose trust anchors are the test roots in
-//! `tests/fixtures/tls` (production uses `roots::ROOTS` through
+//! **The client** is production's: `clazel_crypto::client::Client`, the
+//! driver `clazel_net::TlsConnection` runs, over `clazel_crypto`'s libcrux
+//! providers and `join::exec::ChainVerifier`, whose trust anchors are the test
+//! roots in `tests/fixtures/tls` (production uses `roots::ROOTS` through
 //! `join::exec::mozilla`; `ChainVerifier::new` already takes the anchors as a
-//! parameter).
+//! parameter). [`Client`] here only turns its outputs into [`Event`]s.
 //!
 //! **The server** is rustls 0.23.46 with its ring provider, restricted to
 //! TLS 1.3, `TLS_CHACHA20_POLY1305_SHA256` and X25519 (docs/DEPENDENCIES.md:
@@ -20,9 +16,9 @@
 //! traffic keys.
 //!
 //! **Randomness is test-only.** The client's X25519 scalar, ClientHello
-//! random and legacy_session_id come from [`SEED`] through SHA-256, and so do
-//! the server's X25519 scalar. Production has no randomness source yet
-//! (clazel-sys); nothing here is a model for one.
+//! random and legacy_session_id come from [`SEED`] through SHA-256, and so does
+//! the server's X25519 scalar. Production draws them from
+//! `clazel_sys::fill_random`; nothing here is a model for that.
 //!
 //! **The scripted server** (hostile cases) takes the flight a real rustls
 //! server produced for the client's real ClientHello, decrypts it with the
@@ -37,11 +33,9 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
+use clazel_crypto::client::{Client as Driver, Origin, Output, State};
 use clazel_crypto::join::exec::{ChainVerifier, Root};
 use clazel_crypto::provider::{ChaCha20Poly1305Factory, Sha256Suite, X25519};
-use clazel_tls::connection::exec::{Action, Connection, Mode};
-use clazel_tls::hello::bootstrap::{Action as BootAction, Bootstrap};
-use clazel_tls::hello::client::Config;
 use clazel_tls::hello::key_exchange::KeyExchange;
 use clazel_tls::host::exec::Host;
 use clazel_tls::record::encrypt_record;
@@ -327,42 +321,30 @@ impl Server {
 }
 
 // ---------------------------------------------------------------------------
-// The client, assembled as production would
+// The client: production's driver, its outputs as events
 // ---------------------------------------------------------------------------
-
-type Conn = Connection<Sha256Suite, ChaCha20Poly1305Factory, ChainVerifier<'static>>;
 
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
-    /// Octets the client sends to the server (already acknowledged).
+    /// Octets the client sends to the server.
     Send(Vec<u8>),
-    /// The application epochs are installed.
+    /// The handshake completed: the driver is `Open`.
     Ready,
     /// Application plaintext released.
     Deliver(Vec<u8>),
-    /// The peer's close_notify.
-    PeerClosed,
-    /// Both directions closed: the peer's close_notify after ours.
+    /// Both directions closed.
     Closed,
-    /// Fatal: the dispatcher's alert description, for a local error.
+    /// Fatal: the client's own failure, with its alert description.
     Fail(u8),
     /// A fatal alert the peer sent, before or after the handshake keys.
     PeerAlert(u8),
-    /// Anything else of interest.
-    Other(String),
-}
-
-enum Phase {
-    Boot(Box<Bootstrap<Sha256Suite>>),
-    Live(Box<Conn>),
-    Done,
 }
 
 struct Client {
-    phase: Phase,
-    inbox: Vec<u8>,
-    scalar: Vec<u8>,
-    verifier: Option<ChainVerifier<'static>>,
+    driver: Driver<'static>,
+    /// The state of the last output.
+    state: State,
+    /// The X25519 public key the ClientHello carries.
     public: Vec<u8>,
 }
 
@@ -380,193 +362,81 @@ fn anchors() -> ChainVerifier<'static> {
 }
 
 impl Client {
-    /// Returns the client and its ClientHello record. `anchors` is the trust
-    /// store.
+    /// Returns the client and its ClientHello record. `verifier` holds the
+    /// trust store.
     fn start(verifier: ChainVerifier<'static>) -> Result<(Self, Vec<u8>), String> {
-        let scalar = seeded("client x25519 scalar");
-        let public = X25519.public_key(&scalar);
-        let config = Config {
-            host: Host::Dns(HOST.to_vec()),
-            now: NOW,
-            random: seeded("client hello random"),
-            session_id: seeded("client legacy_session_id"),
-            public_key: public.clone(),
-        };
-        let (boot, action) = Bootstrap::start(config, Sha256Suite)
-            .map_err(|alert| format!("Bootstrap::start alert {alert}"))?;
-        let wire = match action {
-            BootAction::Send(wire) => wire,
-            _ => return Err("Bootstrap::start did not send".to_owned()),
-        };
-        let mut client = Client {
-            phase: Phase::Boot(Box::new(boot)),
-            inbox: Vec::new(),
-            scalar,
-            verifier: Some(verifier),
-            public,
-        };
-        if let Phase::Boot(boot) = &mut client.phase {
-            match boot.acknowledge_send(&wire) {
-                BootAction::None => {}
-                _ => return Err("ClientHello acknowledgement refused".to_owned()),
-            }
-        }
-        Ok((client, wire))
-    }
-
-    /// Feed octets from the server; run the dispatcher until it needs more.
-    fn receive(&mut self, bytes: &[u8]) -> Result<Vec<Event>, String> {
-        self.inbox.extend_from_slice(bytes);
-        let mut events = Vec::new();
-        while !self.inbox.is_empty() {
-            let input = std::mem::take(&mut self.inbox);
-            let phase = std::mem::replace(&mut self.phase, Phase::Done);
-            let (consumed, stop) = match phase {
-                Phase::Boot(mut boot) => {
-                    let (consumed, action) = boot.feed(&input);
-                    let mut stop = false;
-                    self.phase = Phase::Boot(boot);
-                    match action {
-                        BootAction::None => {}
-                        BootAction::Send(wire) => {
-                            events.push(Event::Send(wire.clone()));
-                            if let Phase::Boot(boot) = &mut self.phase {
-                                boot.acknowledge_send(&wire);
-                            }
-                        }
-                        BootAction::Established(established) => {
-                            let keys = established.into_record_auth(
-                                &Sha256Suite,
-                                &X25519,
-                                &ChaCha20Poly1305Factory,
-                                &self.scalar,
-                            );
-                            match keys {
-                                Ok(keys) => {
-                                    let verifier = need(self.verifier.take(), "verifier used")?;
-                                    self.phase = Phase::Live(Box::new(Connection::new(
-                                        keys,
-                                        Sha256Suite,
-                                        ChaCha20Poly1305Factory,
-                                        verifier,
-                                    )));
-                                }
-                                Err(alert) => {
-                                    events.push(Event::Fail(alert));
-                                    stop = true;
-                                }
-                            }
-                        }
-                        BootAction::Alert(alert) => {
-                            events.push(Event::PeerAlert(alert));
-                            stop = true;
-                        }
-                        BootAction::Fail(alert) => {
-                            events.push(Event::Fail(alert));
-                            stop = true;
-                        }
-                        BootAction::Close => {
-                            events.push(Event::PeerClosed);
-                            stop = true;
-                        }
+        // The order in which the driver draws its octets.
+        let mut draws = [
+            "client x25519 scalar",
+            "client hello random",
+            "client legacy_session_id",
+        ]
+        .into_iter();
+        let (driver, out) = Driver::connect(
+            Host::Dns(HOST.to_vec()),
+            NOW,
+            verifier,
+            &mut |buf: &mut [u8]| {
+                if let Some(label) = draws.next() {
+                    for (octet, seed) in buf.iter_mut().zip(seeded(label)) {
+                        *octet = seed;
                     }
-                    (consumed, stop)
                 }
-                Phase::Live(mut conn) => {
-                    let (consumed, action) = conn.feed(&input);
-                    let stop = Self::live_action(conn.as_mut(), action, &mut events);
-                    self.phase = Phase::Live(conn);
-                    (consumed, stop)
-                }
-                Phase::Done => return Err("input after the client ended".to_owned()),
-            };
-            if stop {
-                self.inbox.clear();
-                return Ok(events);
-            }
-            let rest = tail(&input, consumed)?;
-            self.inbox = rest.to_vec();
-            if consumed == 0 {
-                break;
-            }
-        }
-        Ok(events)
+            },
+        );
+        let public = X25519.public_key(&seeded("client x25519 scalar"));
+        let state = out.state;
+        Ok((
+            Client {
+                driver,
+                state,
+                public,
+            },
+            out.send,
+        ))
     }
 
-    /// Record one dispatcher action. Every `Send` is acknowledged at once, as
-    /// the network shell does after the write completes. True when fatal.
-    fn live_action(conn: &mut Conn, action: Action, events: &mut Vec<Event>) -> bool {
-        match action {
-            Action::None | Action::Ignored => false,
-            Action::Send(wire) => {
-                events.push(Event::Send(wire.clone()));
-                let ack = if conn.mode() == Mode::AwaitClientFlight {
-                    conn.acknowledge_client_flight(&wire)
-                } else {
-                    conn.acknowledge_key_update(&wire)
-                };
-                Self::live_action(conn, ack, events)
-            }
-            Action::Ready => {
-                events.push(Event::Ready);
-                false
-            }
-            Action::Deliver(data) => {
-                events.push(Event::Deliver(data));
-                false
-            }
-            Action::PeerClosed => {
-                events.push(Event::PeerClosed);
-                false
-            }
-            // The sealed alert record, if any, is checked in `tests/client.rs`
-            // through the driver; this suite records the description.
-            Action::Fail(alert, _) => {
-                events.push(Event::Fail(alert));
-                true
-            }
-            Action::PeerAlert(alert) => {
-                events.push(Event::PeerAlert(alert));
-                true
-            }
-            Action::Close => {
-                events.push(Event::Closed);
-                false
-            }
-            other => {
-                events.push(Event::Other(format!("{other:?}")));
-                false
-            }
+    /// One output as events, in the order the driver produced them.
+    fn events(&mut self, out: Output) -> Vec<Event> {
+        let mut events = Vec::new();
+        if !out.send.is_empty() {
+            events.push(Event::Send(out.send));
         }
+        if self.state == State::Handshaking && out.state == State::Open {
+            events.push(Event::Ready);
+        }
+        if !out.deliver.is_empty() {
+            events.push(Event::Deliver(out.deliver));
+        }
+        match out.state {
+            State::Closed => events.push(Event::Closed),
+            State::Failed(failure) if failure.origin == Origin::Peer => {
+                events.push(Event::PeerAlert(failure.alert));
+            }
+            State::Failed(failure) => events.push(Event::Fail(failure.alert)),
+            _ => {}
+        }
+        self.state = out.state;
+        events
     }
 
-    fn conn(&mut self) -> Result<&mut Conn, String> {
-        match &mut self.phase {
-            Phase::Live(conn) => Ok(conn.as_mut()),
-            _ => Err("client is not past the Hello exchange".to_owned()),
-        }
+    /// Feed octets from the server.
+    fn receive(&mut self, bytes: &[u8]) -> Result<Vec<Event>, String> {
+        let out = self.driver.receive(bytes);
+        Ok(self.events(out))
     }
 
     fn send_application(&mut self, data: &[u8]) -> Result<Vec<u8>, String> {
-        match self.conn()?.send_application(data, 0) {
-            Action::Send(wire) => Ok(wire),
-            other => Err(format!("send_application gave {other:?}")),
-        }
+        let out = self.driver.send(data).map_err(|e| format!("{e:?}"))?;
+        Ok(out.send)
     }
 
     fn close_write(&mut self) -> Result<Vec<u8>, String> {
-        let conn = self.conn()?;
-        match conn.close_write() {
-            Action::Send(wire) => match conn.acknowledge_close_notify(&wire) {
-                Action::WriteClosed => Ok(wire),
-                other => Err(format!("acknowledge_close_notify gave {other:?}")),
-            },
-            other => Err(format!("close_write gave {other:?}")),
-        }
+        Ok(self.driver.close().send)
     }
 
-    fn mode(&mut self) -> Result<Mode, String> {
-        Ok(self.conn()?.mode())
+    fn failed(&self) -> bool {
+        matches!(self.driver.state(), State::Failed(_))
     }
 }
 
@@ -616,8 +486,8 @@ fn connect(cert: &ServerCert) -> Result<(Client, Server), String> {
     if server.conn.is_handshaking() {
         return Err("rustls still handshaking after the client's Finished".to_owned());
     }
-    if client.mode()? != Mode::Ready {
-        return Err("client is not Ready".to_owned());
+    if client.driver.state() != State::Open {
+        return Err("client is not Open".to_owned());
     }
     // The profile (phase-3.md 3.0): TLS 1.3 and ChaCha20-Poly1305 only.
     if server.conn.protocol_version() != Some(rustls::ProtocolVersion::TLSv1_3)
@@ -692,21 +562,20 @@ fn p384_chain_full_handshake_and_application_data() -> TestResult {
     application_round_trip(&p384_chain())
 }
 
-fn client_can_request_a_key_update() -> TestResult {
+fn server_key_update_is_followed() -> TestResult {
     let (mut client, mut server) = connect(&ecdsa_chain())?;
-    let wire = match client.conn()?.request_key_update(true) {
-        Action::Send(wire) => wire,
-        other => return Err(format!("request_key_update gave {other:?}")),
-    };
-    server.feed(&wire)?;
-    assert_eq!(client.conn()?.acknowledge_key_update(&wire), Action::None);
-    // The server answers with its own KeyUpdate (update_requested), then data.
+    server
+        .conn
+        .refresh_traffic_keys()
+        .map_err(|e| e.to_string())?;
     server.write_plaintext(b"after key update")?;
     let events = client.receive(&server.take()?)?;
     assert!(
         events.contains(&Event::Deliver(b"after key update".to_vec())),
         "{events:?}"
     );
+    // Any KeyUpdate the driver answered with goes first, as on the wire.
+    server.feed(&sends(&events))?;
     let reply = client.send_application(b"client after update")?;
     server.feed(&reply)?;
     assert_eq!(server.read_plaintext()?, b"client after update");
@@ -899,7 +768,7 @@ fn scripted_server_control_completes_the_handshake() -> TestResult {
 // ---------------------------------------------------------------------------
 
 fn wrong_finished_is_decrypt_error() -> TestResult {
-    let (events, mut client, _) = run_scripted(&ecdsa_chain(), |f| f.flip_last_byte(20))?;
+    let (events, client, _) = run_scripted(&ecdsa_chain(), |f| f.flip_last_byte(20))?;
     assert_eq!(
         last_event(&events),
         Some(&Event::Fail(DECRYPT_ERROR)),
@@ -907,7 +776,7 @@ fn wrong_finished_is_decrypt_error() -> TestResult {
     );
     assert!(!events.contains(&Event::Ready));
     // Nothing is sent afterwards.
-    assert_eq!(client.mode()?, Mode::Failed);
+    assert!(client.failed());
     Ok(())
 }
 
@@ -930,14 +799,14 @@ fn wrong_certificate_verify_is_decrypt_error() -> TestResult {
 /// RFC 8446 §4.4.3, "If the verification fails, the receiver MUST terminate
 /// the handshake with a "decrypt_error" alert."
 fn wrong_p384_certificate_verify_is_decrypt_error() -> TestResult {
-    let (events, mut client, _) = run_scripted(&p384_chain(), |f| f.flip_last_byte(15))?;
+    let (events, client, _) = run_scripted(&p384_chain(), |f| f.flip_last_byte(15))?;
     assert_eq!(
         last_event(&events),
         Some(&Event::Fail(DECRYPT_ERROR)),
         "{events:?}"
     );
     assert!(!events.contains(&Event::Ready));
-    assert_eq!(client.mode()?, Mode::Failed);
+    assert!(client.failed());
     Ok(())
 }
 
@@ -972,7 +841,7 @@ fn refused_with(cert: &ServerCert, alert: u8) -> TestResult {
     let events = pump(&mut client, &mut server, hello)?;
     assert_eq!(last_event(&events), Some(&Event::Fail(alert)), "{events:?}");
     assert!(!events.contains(&Event::Ready));
-    assert_eq!(client.mode()?, Mode::Failed);
+    assert!(client.failed());
     Ok(())
 }
 
@@ -1065,7 +934,11 @@ fn oversized_records_are_record_overflow() -> TestResult {
     // RFC 8446 §5.1: a plaintext record over 2^14 octets.
     let (mut client, _) = Client::start(anchors())?;
     let events = client.receive(&handshake_record_of(16_385)?)?;
-    assert_eq!(events, vec![Event::Fail(RECORD_OVERFLOW)]);
+    assert_eq!(
+        last_event(&events),
+        Some(&Event::Fail(RECORD_OVERFLOW)),
+        "{events:?}"
+    );
     // §5.2: a protected record over 2^14 + 256 octets, after a real ServerHello.
     for len in [16_641usize, 65_535] {
         let (events, _, _) = run_scripted(&ecdsa_chain(), |f| {
@@ -1277,8 +1150,8 @@ const SUCCESS: &[Case] = &[
         p384_chain_full_handshake_and_application_data,
     ),
     (
-        "client_can_request_a_key_update",
-        client_can_request_a_key_update,
+        "server_key_update_is_followed",
+        server_key_update_is_followed,
     ),
     (
         "scripted_server_control_completes_the_handshake",

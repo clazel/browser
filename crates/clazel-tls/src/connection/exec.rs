@@ -1,5 +1,6 @@
 //! RFC 8446 §5, §7.3 and Appendix A.1: ordered initial-flight dispatch.
 use super::framing::{Buffer, Status as FrameStatus};
+use super::post_handshake_exec::PostHandshake;
 use crate::auth::exec::{Action as AuthAction, Auth, Input as AuthInput};
 use crate::auth::verify::Verifier;
 use crate::reassemble::{Event as ReassemblyEvent, Reassembler};
@@ -20,7 +21,7 @@ pub enum Mode {
     Handshake,
     /// Wait for the client-flight send acknowledgement.
     AwaitClientFlight,
-    /// Application traffic keys are installed.
+    /// The application traffic secrets are derived; call `into_post_handshake`.
     Ready,
     /// Fatal error; all connection secrets are dropped.
     Failed,
@@ -47,18 +48,12 @@ pub enum Action {
     None,
     /// Exact protected client flight awaiting its send acknowledgement.
     Send(Vec<u8>),
-    /// Application epochs installed after the client flight acknowledgement.
+    /// The client flight was acknowledged; call `into_post_handshake`.
     Ready,
-    /// Plaintext released through the Auth delivery gate.
-    Deliver(Vec<u8>),
     /// Permitted dummy compatibility CCS was dropped.
     Ignored,
-    /// The peer's write direction ended; local writes remain open.
-    PeerClosed,
     /// The peer sent a nonfatal user_canceled closure alert.
     Cancelled,
-    /// The local close_notify send was acknowledged; reads remain open.
-    WriteClosed,
     /// RFC 8446 §6.2: a fatal error detected here, with its alert description
     /// and, when a settled write epoch could seal it, the protected fatal
     /// alert record, which the caller sends as the connection's last record.
@@ -67,8 +62,9 @@ pub enum Action {
     /// RFC 8446 §6: the peer's fatal alert. Nothing is sent in reply, and
     /// every key has been dropped.
     PeerAlert(u8),
-    /// Peer close_notify or local close.
-    Close,
+    /// §6.1: the connection closed during the flight, with our sealed
+    /// close_notify, or `None` when no epoch can seal it.
+    Close(Option<Vec<u8>>),
 }
 /// The view of an optional protected record.
 pub open spec fn wire_view(wire: Option<Vec<u8>>) -> Option<Seq<u8>> {
@@ -81,20 +77,18 @@ impl View for Action {
             Action::None => super::dispatcher_spec::Action::None,
             Action::Send(bytes) => super::dispatcher_spec::Action::Send(bytes@),
             Action::Ready => super::dispatcher_spec::Action::Ready,
-            Action::Deliver(bytes) => super::dispatcher_spec::Action::Deliver(bytes@),
             Action::Ignored => super::dispatcher_spec::Action::Ignored,
-            Action::PeerClosed => super::dispatcher_spec::Action::PeerClosed,
             Action::Cancelled => super::dispatcher_spec::Action::Cancelled,
-            Action::WriteClosed => super::dispatcher_spec::Action::WriteClosed,
             Action::Fail(alert, wire) => super::dispatcher_spec::Action::Fail(*alert,
                 match wire { Some(bytes) => Some(bytes@), None => None }),
             Action::PeerAlert(alert) => super::dispatcher_spec::Action::PeerAlert(*alert),
-            Action::Close => super::dispatcher_spec::Action::Close,
+            Action::Close(wire) => super::dispatcher_spec::Action::Close(
+                match wire { Some(bytes) => Some(bytes@), None => None }),
         }
     }
 }
 
-/// Owns both traffic directions and the initial TLS authentication flight.
+/// Owns the handshake epochs and the initial TLS authentication flight.
 pub struct Connection<C: Crypto, F: Factory, V: Verifier> {
     crypto: C,
     factory: F,
@@ -103,19 +97,9 @@ pub struct Connection<C: Crypto, F: Factory, V: Verifier> {
     auth: Option<Auth>,
     handshake_sender: Option<Encryptor<F::Cipher>>,
     handshake_receiver: Option<Decryptor<F::Cipher>>,
-    application_sender: Option<Encryptor<F::Cipher>>,
-    application_receiver: Option<Decryptor<F::Cipher>>,
     master: Vec<u8>,
     client_application_secret: Vec<u8>,
     server_application_secret: Vec<u8>,
-    pending_update_secret: Vec<u8>,
-    pending_update_wire: Vec<u8>,
-    pending_update_request: Option<u8>,
-    pending_update_is_response: bool,
-    response_due: bool,
-    peer_write_closed: bool,
-    local_write_closed: bool,
-    pending_close_wire: Vec<u8>,
     reassembler: Reassembler,
     framer: Buffer,
     ccs_pending: bool,
@@ -132,8 +116,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> {
             auth: match self.auth { Some(auth) => Some(auth@), None => None },
             handshake_sender: match self.handshake_sender { Some(epoch) => Some(epoch@), None => None },
             handshake_receiver: match self.handshake_receiver { Some(epoch) => Some(epoch@), None => None },
-            application_sender: match self.application_sender { Some(epoch) => Some(epoch@), None => None },
-            application_receiver: match self.application_receiver { Some(epoch) => Some(epoch@), None => None },
             master: self.master@,
             client_application_secret: self.client_application_secret@,
             server_application_secret: self.server_application_secret@,
@@ -141,14 +123,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> {
             framing: self.framer@,
             ccs_pending: self.ccs_pending,
             pending_flight: self.pending_flight@,
-            pending_update_secret: self.pending_update_secret@,
-            pending_update_wire: self.pending_update_wire@,
-            pending_update_request: self.pending_update_request,
-            pending_update_is_response: self.pending_update_is_response,
-            response_due: self.response_due,
-            peer_write_closed: self.peer_write_closed,
-            local_write_closed: self.local_write_closed,
-            pending_close_wire: self.pending_close_wire@,
         }
     }
 }
@@ -176,54 +150,6 @@ fn copy_body(bytes: &[u8]) -> (out: Vec<u8>)
     ensures out@ == bytes@,
 {
     vstd::slice::slice_to_vec(bytes)
-}
-
-fn parse_key_update_wire(message: &[u8]) -> Result<u8, u8> {
-    match crate::handshake::parse_handshake(message, crate::schedule::spec::HASH_LEN) {
-        Ok(crate::types::HsMsg::KeyUpdate(request)) => Ok(request),
-        Ok(_) => Err(crate::spec::UNEXPECTED_MESSAGE),
-        Err(error) => Err(crate::encode::alert_for(error).description),
-    }
-}
-
-fn is_discarded_ticket(message: &[u8]) -> (out: bool)
-    ensures out == super::dispatcher_spec::valid_discarded_ticket(message@),
-{
-    if message.len() < crate::spec::HANDSHAKE_HEADER {
-        proof {
-            reveal(super::dispatcher_spec::valid_discarded_ticket);
-            reveal(crate::spec::parse_handshake);
-            assert(!super::dispatcher_spec::valid_discarded_ticket(message@));
-        }
-        return false;
-    }
-    let message_type = crate::reader::byte_at(message, 0);
-    if message_type != crate::spec::HS_NEW_SESSION_TICKET {
-        proof {
-            reveal(super::dispatcher_spec::valid_discarded_ticket);
-            reveal(crate::spec::parse_handshake);
-            assert(message_type == message@[0]);
-            assert(!super::dispatcher_spec::valid_discarded_ticket(message@));
-        }
-        return false;
-    }
-    let parsed = crate::handshake::parse_handshake(message, crate::schedule::spec::HASH_LEN);
-    let out = matches!(&parsed, Ok(crate::types::HsMsg::NewSessionTicket(_)));
-    let ghost parsed_view = crate::types::res_view(parsed);
-    proof {
-        reveal(super::dispatcher_spec::valid_discarded_ticket);
-        reveal(crate::spec::parse_handshake);
-        assert(message_type == message@[0]);
-        assert(message@[0] == crate::spec::HS_NEW_SESSION_TICKET);
-        assert(crate::contract::parse_handshake_ensures(message@,
-            crate::schedule::spec::HASH_LEN as nat, parsed_view));
-        assert(out == match parsed_view {
-            crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => true,
-            _ => false,
-        });
-        assert(out == super::dispatcher_spec::valid_discarded_ticket(message@));
-    }
-    out
 }
 
 /// The key-explicit seal function an AEAD object computes is the factory's
@@ -259,10 +185,8 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     /// Every send epoch is well formed and bound to the factory's seal
     /// function at its key: what sealing a fatal alert needs.
     pub closed spec fn senders_wf(&self) -> bool {
-        (match self.handshake_sender { Some(epoch) => epoch.wf() && forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>|
-            #[trigger] epoch.seal_spec(n, ad, p) == (self.factory.functions().seal)(epoch@.key, n, ad, p), None => true })
-            && (match self.application_sender { Some(epoch) => epoch.wf() && forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>|
-                #[trigger] epoch.seal_spec(n, ad, p) == (self.factory.functions().seal)(epoch@.key, n, ad, p), None => true })
+        match self.handshake_sender { Some(epoch) => epoch.wf() && forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>|
+            #[trigger] epoch.seal_spec(n, ad, p) == (self.factory.functions().seal)(epoch@.key, n, ad, p), None => true }
     }
 
     /// The lifecycle and resource invariant exposed to callers.
@@ -272,8 +196,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     pub closed spec fn resources_wf(&self) -> bool {
         (match self.handshake_sender { Some(epoch) => epoch.wf(), None => true })
             && (match self.handshake_receiver { Some(epoch) => epoch.wf(), None => true })
-            && (match self.application_sender { Some(epoch) => epoch.wf(), None => true })
-            && (match self.application_receiver { Some(epoch) => epoch.wf(), None => true })
             && self.reassembler.wf() && super::framing_spec::wf(self.framer@) && self.framer.wf()
     }
 
@@ -288,10 +210,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             #[trigger] epoch.seal_spec(n, ad, p) == (self.factory.functions().seal)(epoch@.key, n, ad, p), None => true })
             && (match self.handshake_receiver { Some(epoch) => forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>|
                 #[trigger] epoch.open_spec(n, ad, ct) == (self.factory.functions().open)(epoch@.key, n, ad, ct), None => true })
-            && (match self.application_sender { Some(epoch) => forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>|
-                #[trigger] epoch.seal_spec(n, ad, p) == (self.factory.functions().seal)(epoch@.key, n, ad, p), None => true })
-            && (match self.application_receiver { Some(epoch) => forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>|
-                #[trigger] epoch.open_spec(n, ad, ct) == (self.factory.functions().open)(epoch@.key, n, ad, ct), None => true })
     }
 
     /// Abstract key-schedule provider model retained by this connection.
@@ -301,6 +219,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     pub closed spec fn cipher_models(&self) -> super::dispatcher_spec::Ciphers {
         super::dispatcher_spec::cipher_models(self.factory.functions(), self@)
     }
+
+    /// The abstract AEAD functions of this connection's cipher factory.
+    pub closed spec fn cipher_functions(&self) -> crate::traffic::spec::Cipher { self.factory.functions() }
 
     /// Abstract certificate/signature policy retained by this connection.
     pub closed spec fn verifier_functions(&self) -> crate::auth::spec::Verification { self.verifier.functions() }
@@ -312,6 +233,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] keys.seal_spec(n, ad, p) == (factory.functions().seal)(keys@.1.key, n, ad, p),
             forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] keys.open_spec(n, ad, ct) == (factory.functions().open)(keys@.2.key, n, ad, ct),
         ensures out.wf(), out.auth_wf(), out.resources_wf(), out.cipher_bindings_wf(), out@ == super::dispatcher_spec::start(keys@, keys.ccs_pending_spec()),
+            out.crypto_functions() == crypto.functions(), out.cipher_functions() == factory.functions(),
     {
         let ccs_pending = keys.needs_compatibility_ccs();
         let ghost handoff = keys@;
@@ -321,11 +243,8 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         let out = Connection {
             crypto, factory, verifier, mode: Mode::Handshake,
             auth: Some(auth), handshake_sender: Some(sender), handshake_receiver: Some(receiver),
-            application_sender: None, application_receiver: None, master,
+            master,
             client_application_secret: Vec::new(), server_application_secret: Vec::new(),
-            pending_update_secret: Vec::new(), pending_update_wire: Vec::new(),
-            pending_update_request: None, pending_update_is_response: false, response_due: false,
-            peer_write_closed: false, local_write_closed: false, pending_close_wire: Vec::new(),
             reassembler: Reassembler::new(), framer: Buffer::new(), ccs_pending,
             pending_flight: Vec::new(),
         };
@@ -339,8 +258,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             assert(match out.auth { Some(auth) => auth.wf(), None => true });
             assert(match out.handshake_sender { Some(epoch) => epoch.wf(), None => true });
             assert(match out.handshake_receiver { Some(epoch) => epoch.wf(), None => true });
-            assert(match out.application_sender { Some(epoch) => epoch.wf(), None => true });
-            assert(match out.application_receiver { Some(epoch) => epoch.wf(), None => true });
             assert(sender@.key == handoff.1.key);
             assert(receiver@.key == handoff.2.key);
             assert(crate::traffic::contract::seal_preserved(old_seal,
@@ -383,19 +300,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         self.auth = None;
         self.handshake_sender = None;
         self.handshake_receiver = None;
-        self.application_sender = None;
-        self.application_receiver = None;
         self.master.clear();
         self.client_application_secret.clear();
         self.server_application_secret.clear();
-        self.pending_update_secret.clear();
-        self.pending_update_wire.clear();
-        self.pending_update_request = None;
-        self.pending_update_is_response = false;
-        self.response_due = false;
-        self.peer_write_closed = false;
-        self.local_write_closed = false;
-        self.pending_close_wire.clear();
         self.reassembler = Reassembler::new();
         self.framer = Buffer::new();
         self.ccs_pending = false;
@@ -414,7 +321,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     /// is every key dropped.
     fn fail(&mut self, alert: u8) -> (out: Action)
         requires old(self).senders_wf(),
-        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             final(self)@ == super::dispatcher_spec::failed(),
             super::dispatcher_contract::fail_ensures(old(self).cipher_models(), old(self)@, alert, out@, final(self)@),
             final(self).crypto_functions() == old(self).crypto_functions(),
@@ -432,10 +341,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             assert(content@ =~= super::dispatcher_spec::fatal_alert(alert));
             assert(ciphers.seal == self.factory.functions().seal);
         }
-        // §6.1: nothing is written after close_notify, and a KeyUpdate that
-        // awaits acknowledgement leaves the peer's read key unsettled.
-        let settled = !self.local_write_closed && self.pending_close_wire.is_empty()
-            && self.pending_update_request.is_none();
         let wire = match self.mode {
             Mode::Handshake => match self.handshake_sender.as_mut() {
                 Some(sender) => {
@@ -453,31 +358,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                     None
                 },
             },
-            Mode::Ready => if settled {
-                match self.application_sender.as_mut() {
-                    Some(sender) => {
-                        let ghost epoch = sender@;
-                        proof {
-                            assert(before.application_sender == Some(epoch));
-                            assert(super::dispatcher_spec::write_open(before));
-                            assert(super::dispatcher_spec::alert_epoch(before) == Some(epoch));
-                        }
-                        let sealed = seal_alert(sender, Ghost(ciphers), content.as_slice());
-                        proof {
-                            assert(wire_view(sealed) == super::dispatcher_spec::alert_wire(ciphers, before, alert));
-                        }
-                        sealed
-                    },
-                    None => {
-                        proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
-                        None
-                    },
-                }
-            } else {
-                proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
-                None
-            },
-            Mode::AwaitClientFlight | Mode::Failed | Mode::Closed => {
+            Mode::AwaitClientFlight | Mode::Ready | Mode::Failed | Mode::Closed => {
                 proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
                 None
             },
@@ -497,7 +378,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     /// RFC 8446 §6.1: the transport ended before close_notify; nothing is
     /// sent and every key is dropped.
     fn die(&mut self, alert: u8) -> (out: Action)
-        ensures final(self).wf(), final(self).resources_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).resources_wf(),
             (out@, final(self)@) == super::dispatcher_spec::die(alert),
     {
         self.terminal(Mode::Failed);
@@ -507,7 +390,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     /// RFC 8446 §6, §6.2: the peer's fatal alert. It is not answered; every
     /// key is dropped.
     fn peer_alert(&mut self, alert: u8) -> (out: Action)
-        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             (out@, final(self)@) == super::dispatcher_spec::receive_fatal_alert(old(self).cipher_models(),
                 old(self)@, alert),
     {
@@ -515,31 +400,75 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         Action::PeerAlert(alert)
     }
 
+    /// §6.1: close during the flight. Our close_notify is sealed under the
+    /// settled write epoch, if there is one, and then every key is dropped.
     fn close(&mut self) -> (out: Action)
-        ensures final(self).wf(), final(self).resources_wf(), final(self)@ == super::dispatcher_spec::closed(), out@ == super::dispatcher_spec::Action::Close,
+        requires old(self).senders_wf(),
+        ensures final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+            (out@, final(self)@) == super::dispatcher_spec::closing(old(self).cipher_models(), old(self)@),
     {
+        let ghost before = self@;
+        let ghost ciphers = self.cipher_models();
+        let mut content: Vec<u8> = Vec::new();
+        crate::encode::write_alert(&mut content, crate::spec::Alert {
+            level: crate::spec::LEVEL_WARNING,
+            description: crate::spec::CLOSE_NOTIFY,
+        });
+        proof {
+            assert(content@ =~= super::dispatcher_spec::close_notify_alert());
+            assert(ciphers.seal == self.factory.functions().seal);
+        }
+        let wire = match self.mode {
+            Mode::Handshake => match self.handshake_sender.as_mut() {
+                Some(sender) => {
+                    let ghost epoch = sender@;
+                    proof { assert(before.handshake_sender == Some(epoch)); }
+                    let sealed = seal_alert(sender, Ghost(ciphers), content.as_slice());
+                    proof {
+                        assert(super::dispatcher_spec::alert_epoch(before) == Some(epoch));
+                        assert(wire_view(sealed) == super::dispatcher_spec::close_wire(ciphers, before));
+                    }
+                    sealed
+                },
+                None => {
+                    proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                    None
+                },
+            },
+            Mode::AwaitClientFlight | Mode::Ready | Mode::Failed | Mode::Closed => {
+                proof { assert(super::dispatcher_spec::alert_epoch(before) is None); }
+                None
+            },
+        };
+        let ghost sent = wire_view(wire);
+        proof { assert(sent == super::dispatcher_spec::close_wire(ciphers, before)); }
         self.terminal(Mode::Closed);
-        Action::Close
+        let out = Action::Close(wire);
+        proof { assert(out@ == super::dispatcher_spec::Action::Close(sent)); }
+        out
+    }
+
+    /// §6.1: close from our side during the flight.
+    pub fn close_write(&mut self) -> (out: Action)
+        requires old(self).resources_wf(), old(self).cipher_bindings_wf(),
+        ensures final(self).wf(),
+            (out@, final(self)@) == super::dispatcher_spec::closing(super::dispatcher_spec::Ciphers {
+                seal: old(self).cipher_functions().seal, open: old(self).cipher_functions().open }, old(self)@),
+    {
+        self.close()
     }
 
     fn protect_client_flight(&mut self, flight: &[u8]) -> (out: Result<Vec<u8>, u8>)
         requires old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self).mode == Mode::Handshake,
-        ensures final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).resources_wf(), final(self).cipher_bindings_wf(),
             final(self)@.auth == old(self)@.auth,
             final(self)@.handshake_receiver == old(self)@.handshake_receiver,
-            final(self)@.application_sender == old(self)@.application_sender,
-            final(self)@.application_receiver == old(self)@.application_receiver,
             final(self)@.master == old(self)@.master,
             final(self)@.client_application_secret == old(self)@.client_application_secret,
             final(self)@.server_application_secret == old(self)@.server_application_secret,
-            final(self)@.pending_update_secret == old(self)@.pending_update_secret,
-            final(self)@.pending_update_wire == old(self)@.pending_update_wire,
-            final(self)@.pending_update_request == old(self)@.pending_update_request,
-            final(self)@.pending_update_is_response == old(self)@.pending_update_is_response,
-            final(self)@.response_due == old(self)@.response_due,
-            final(self)@.peer_write_closed == old(self)@.peer_write_closed,
-            final(self)@.local_write_closed == old(self)@.local_write_closed,
-            final(self)@.pending_close_wire == old(self)@.pending_close_wire,
             final(self)@.reassembly == old(self)@.reassembly,
             final(self)@.framing == old(self)@.framing,
             final(self)@.mode == old(self)@.mode,
@@ -570,9 +499,10 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             match old(self)@.auth { Some(auth) => auth.phase == crate::auth::spec::Phase::SendFinished, None => false },
             crate::spec::at_message_boundary(old(self)@.reassembly), old(self)@.framing.len() == 0,
             old(self)@.handshake_sender is Some, old(self)@.handshake_receiver is Some,
-            old(self)@.application_sender is None, old(self)@.application_receiver is None,
             old(self)@.master.len() == 32, old(self)@.pending_flight.len() == 0,
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
     {
         let wire = match self.protect_client_flight(flight.as_slice()) {
@@ -589,17 +519,12 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             assert(self@.mode == super::dispatcher_spec::Mode::AwaitClientFlight);
             assert(self@.handshake_sender is Some);
             assert(self@.handshake_receiver is Some);
-            assert(self@.application_sender is None);
-            assert(self@.application_receiver is None);
             assert(self@.master.len() == 32);
             assert(!self.ccs_pending);
             assert(self@.pending_flight.len() > 0);
             assert(self.pending_flight@ == wire@);
             assert(self@.auth is Some);
             assert(match self@.auth { Some(auth) => auth.phase == crate::auth::spec::Phase::SendFinished, None => false });
-            assert(!self@.peer_write_closed);
-            assert(!self@.local_write_closed);
-            assert(self@.pending_close_wire.len() == 0);
             assert(crate::spec::at_message_boundary(self@.reassembly));
             assert(self.framer@.len() == 0);
             assert(self.wf());
@@ -614,7 +539,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
 
     fn run_auth_message(&mut self, typ: u8, body: Vec<u8>) -> (out: Action)
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
     {
         let auth = match self.auth.as_mut() {
@@ -644,7 +571,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
 
     fn process_one(&mut self, message: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
     {
         if message.len() < crate::spec::HANDSHAKE_HEADER { return self.fail(crate::spec::DECODE_ERROR); }
@@ -661,13 +590,15 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
 
     fn process_messages(&mut self, messages: Vec<Vec<u8>>) -> (out: Action)
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
     {
         let mut has_finished = false;
         let mut i: usize = 0;
         while i < messages.len()
-            invariant i <= messages.len(), self.wf(), self.auth_wf(), self.resources_wf(), self.cipher_bindings_wf(), self@.mode == super::dispatcher_spec::Mode::Handshake,
+            invariant i <= messages.len(), self.crypto_functions() == old(self).crypto_functions(), self.cipher_functions() == old(self).cipher_functions(), self.wf(), self.auth_wf(), self.resources_wf(), self.cipher_bindings_wf(), self@.mode == super::dispatcher_spec::Mode::Handshake,
             decreases messages.len() - i,
         {
             let message = match messages.get(i) {
@@ -688,7 +619,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         proof { reveal(Connection::wf); assert(self.wf()); }
         let mut index: usize = 0;
         while index < messages.len()
-            invariant index <= messages.len(), self.wf(), self.auth_wf(), self.resources_wf(), self.cipher_bindings_wf(), self@.mode == super::dispatcher_spec::Mode::Handshake,
+            invariant index <= messages.len(), self.crypto_functions() == old(self).crypto_functions(), self.cipher_functions() == old(self).cipher_functions(), self.wf(), self.auth_wf(), self.resources_wf(), self.cipher_bindings_wf(), self@.mode == super::dispatcher_spec::Mode::Handshake,
             decreases messages.len() - index,
         {
             let message = match messages.get(index) {
@@ -703,39 +634,11 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         Action::None
     }
 
-    fn process_post_handshake_messages(&mut self, messages: Vec<Vec<u8>>) -> (out: Action)
-        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-            old(self)@.mode == super::dispatcher_spec::Mode::Ready,
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-            super::dispatcher_spec::action_refines(out@, final(self)@),
-            super::dispatcher_contract::discarded_ticket_ensures(old(self)@, crate::types::views(messages@), out@, final(self)@),
-    {
-        if messages.is_empty() { return Action::None; }
-        if messages.len() != 1 || !self.reassembler.at_message_boundary() {
-            return self.fail(crate::spec::UNEXPECTED_MESSAGE);
-        }
-        let message = match messages.first() {
-            Some(message) => message,
-            None => return self.fail(crate::spec::DECODE_ERROR),
-        };
-        if is_discarded_ticket(message.as_slice()) {
-            proof {
-                assert(super::dispatcher_spec::valid_discarded_ticket(message@));
-                assert(self@ == old(self)@);
-            }
-            Action::None
-        } else {
-            match parse_key_update_wire(message.as_slice()) {
-                Ok(request) => if request <= 1 { self.receive_key_update(request) }
-                    else { self.fail(crate::spec::ILLEGAL_PARAMETER) },
-                Err(alert) => self.fail(alert),
-            }
-        }
-    }
-
     fn handle_plaintext(&mut self, typ: u8, bytes: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
             super::dispatcher_contract::peer_alert_ensures(old(self).cipher_models(), old(self)@, typ, bytes@,
                 out@, final(self)@),
@@ -760,8 +663,6 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                         assert(self@.auth is Some);
                         assert(self@.handshake_sender is Some);
                         assert(self@.handshake_receiver is Some);
-                        assert(self@.application_sender is None);
-                        assert(self@.application_receiver is None);
                         assert(self@.master.len() == 32);
                         assert(self@.pending_flight.len() == 0);
                         assert(self.wf());
@@ -770,52 +671,13 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                         assert(self.cipher_bindings_wf());
                     }
                     self.process_messages(messages)
-                } else if matches!(self.mode, Mode::Ready) {
-                    proof {
-                        reveal(Connection::wf);
-                        reveal(Connection::state);
-                        reveal(Connection::auth_wf);
-                        reveal(Connection::resources_wf);
-                        reveal(Connection::cipher_bindings_wf);
-                        reveal(super::dispatcher_spec::wf);
-                        assert(self@.mode == super::dispatcher_spec::Mode::Ready);
-                        assert(self@.application_sender is Some);
-                        assert(self@.application_receiver is Some);
-                        assert(self@.auth is Some);
-                        assert(self@.client_application_secret.len() == 32);
-                        assert(self@.server_application_secret.len() == 32);
-                        assert(self.wf());
-                        assert(self.auth_wf());
-                        assert(self.resources_wf());
-                        assert(self.cipher_bindings_wf());
-                    }
-                    self.process_post_handshake_messages(messages)
                 } else { self.fail(crate::spec::UNEXPECTED_MESSAGE) }
             },
-            Ok(ReassemblyEvent::AppData(bytes)) => {
-                if !matches!(self.mode, Mode::Ready) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
-                let auth = match self.auth.as_mut() {
-                    Some(auth) => auth,
-                    None => return self.fail(crate::spec::INTERNAL_ERROR),
-                };
-                match step_auth_exact(auth, &self.crypto, &self.verifier, AuthInput::Application(bytes.as_slice())) {
-                    AuthAction::Deliver(bytes) => Action::Deliver(bytes),
-                    AuthAction::Fail(alert) => self.fail(alert),
-                    AuthAction::Close => self.close(),
-                    _ => self.fail(crate::spec::INTERNAL_ERROR),
-                }
-            },
+            // §5: no application data before the handshake ends.
+            Ok(ReassemblyEvent::AppData(_)) => self.fail(crate::spec::UNEXPECTED_MESSAGE),
             Ok(ReassemblyEvent::Alert(alert)) => {
                 if alert.description == crate::spec::CLOSE_NOTIFY {
-                    if matches!(self.mode, Mode::Ready) {
-                        if self.local_write_closed { self.close() }
-                        else {
-                            self.peer_write_closed = true;
-                            Action::PeerClosed
-                        }
-                    } else {
-                        self.close()
-                    }
+                    self.close()
                 } else if alert.description == crate::spec::USER_CANCELED {
                     Action::Cancelled
                 } else {
@@ -836,7 +698,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
 
     fn handle_record(&mut self, wire: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
             super::dispatcher_contract::ccs_record_ensures(old(self).cipher_models(), wire@, old(self)@, out@, final(self)@),
     {
@@ -863,11 +727,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                         Some(receiver) => receiver.open(wire),
                         None => return self.fail(crate::spec::INTERNAL_ERROR),
                     },
-                    Mode::Ready => match self.application_receiver.as_mut() {
-                        Some(receiver) => receiver.open(wire),
-                        None => return self.fail(crate::spec::INTERNAL_ERROR),
-                    },
-                    Mode::AwaitClientFlight => return Action::None,
+                    Mode::AwaitClientFlight | Mode::Ready => return Action::None,
                     Mode::Failed | Mode::Closed => return Action::None,
                 };
                 match read {
@@ -888,15 +748,12 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     /// caller-owned; the caller must resubmit that suffix after the returned action.
     pub fn feed(&mut self, input: &[u8]) -> (out: (usize, Action))
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(), out.0 <= input.len(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(), out.0 <= input.len(),
             super::dispatcher_contract::feed_ensures(old(self)@, input@, out.0 as nat, out.1@, final(self)@),
     {
-        if self.peer_write_closed {
-            proof { assert(super::dispatcher_contract::feed_ensures(old(self)@,
-                input@, input@.len(), Action::None@, self@)); }
-            return (input.len(), Action::None);
-        }
-        if matches!(self.mode, Mode::AwaitClientFlight | Mode::Failed | Mode::Closed) {
+        if matches!(self.mode, Mode::AwaitClientFlight | Mode::Ready | Mode::Failed | Mode::Closed) {
             return (0, Action::None);
         }
         let (consumed, status) = self.framer.feed(input);
@@ -925,20 +782,16 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             assert(self.wf());
             assert(result.0 as nat <= input@.len());
             assert(old(self)@.mode == super::dispatcher_spec::Mode::AwaitClientFlight ==> result.0 == 0);
+            assert(old(self)@.mode == super::dispatcher_spec::Mode::Ready ==> result.0 == 0);
             match result.1@ {
                 super::dispatcher_spec::Action::Send(wire) => {
-                    if self@.mode == super::dispatcher_spec::Mode::AwaitClientFlight {
-                        assert(self@.pending_flight == wire);
-                    } else {
-                        assert(self@.mode == super::dispatcher_spec::Mode::Ready);
-                        assert(self@.pending_update_wire == wire || self@.pending_close_wire == wire);
-                    }
+                    assert(self@.mode == super::dispatcher_spec::Mode::AwaitClientFlight);
+                    assert(self@.pending_flight == wire);
                 },
                 super::dispatcher_spec::Action::Ready => assert(self@.mode == super::dispatcher_spec::Mode::Ready),
-                super::dispatcher_spec::Action::Deliver(_) => assert(self@.mode == super::dispatcher_spec::Mode::Ready),
                 super::dispatcher_spec::Action::Fail(_, _) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed)),
                 super::dispatcher_spec::Action::PeerAlert(_) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed)),
-                super::dispatcher_spec::Action::Close => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Closed)),
+                super::dispatcher_spec::Action::Close(_) => assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Closed)),
                 _ => {},
             }
             assert(super::dispatcher_contract::feed_ensures(old(self)@, input@,
@@ -947,11 +800,13 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         result
     }
 
-    /// Acknowledge the exact client flight returned by `feed` before either
-    /// direction changes to application traffic keys.
+    /// Acknowledge the exact client flight returned by `feed` before the
+    /// application traffic secrets are derived.
     pub fn acknowledge_client_flight(&mut self, sent: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_contract::acknowledgement_ensures(old(self).crypto_functions(), old(self).verifier_functions(),
                 old(self)@, sent@, out@, final(self)@),
     {
@@ -986,19 +841,9 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             Label::ClientApplication, hash, 32);
         let server_secret = crate::schedule::exec::expand_label(&self.crypto, master,
             Label::ServerApplication, hash, 32);
-        let sender = match Encryptor::new(&self.crypto, &self.factory, client_secret.as_slice()) {
-            Ok(sender) => sender,
-            Err(alert) => return self.fail(alert),
-        };
-        let receiver = match Decryptor::new(&self.crypto, &self.factory, server_secret.as_slice()) {
-            Ok(receiver) => receiver,
-            Err(alert) => return self.fail(alert),
-        };
         let out = Action::Ready;
         self.handshake_sender = None;
         self.handshake_receiver = None;
-        self.application_sender = Some(sender);
-        self.application_receiver = Some(receiver);
         self.client_application_secret = client_secret;
         self.server_application_secret = server_secret;
         self.master.clear();
@@ -1014,477 +859,34 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         out
     }
 
-    /// Protect a KeyUpdate using the current client application epoch. The
-    /// next secret is installed only by `acknowledge_key_update` after the
-    /// caller confirms that these exact wire bytes were sent.
-    fn queue_key_update(&mut self, request: u8, is_response: bool) -> (out: Result<Vec<u8>, u8>)
-        requires old(self).wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-            old(self)@.mode == super::dispatcher_spec::Mode::Ready,
-            old(self)@.pending_update_request is None,
-            super::dispatcher_spec::write_open(old(self)@),
-            request <= 1, (!is_response || request == 0), is_response == old(self)@.response_due,
-        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-            final(self).crypto_functions() == old(self).crypto_functions(),
-            final(self).cipher_models() == old(self).cipher_models(),
-            final(self).verifier_functions() == old(self).verifier_functions(),
+    /// RFC 8446 §7.1, §7.3: the handshake is over, and the post-handshake
+    /// transducer takes over from the two application traffic secrets, both
+    /// directions at sequence number 0. A connection is consumed by this, so
+    /// no second machine holds those secrets.
+    pub fn into_post_handshake(self) -> (out: Result<PostHandshake<C, F>, u8>)
+        requires self.wf(), self@.mode == super::dispatcher_spec::Mode::Ready,
+        ensures
             match out {
-                Ok(wire) => super::dispatcher_spec::prepare_key_update(old(self).crypto_functions(),
-                old(self).cipher_models(),
-                old(self)@, request, is_response) == final(self)@
-                    && wire@ == final(self)@.pending_update_wire
-                    && super::dispatcher_spec::action_refines(super::dispatcher_spec::Action::Send(wire@), final(self)@),
-                Err(_) => super::dispatcher_contract::terminal_ensures(final(self)@, super::dispatcher_spec::Mode::Failed)
-                    && super::dispatcher_spec::prepare_key_update(old(self).crypto_functions(),
-                        old(self).cipher_models(), old(self)@, request, is_response) == super::dispatcher_spec::failed(),
+                Ok(p) => p.wf() && p.crypto_functions() == self.crypto_functions()
+                    && p.cipher_functions() == self.cipher_functions()
+                    && super::dispatcher_contract::handoff_ensures(self.crypto_functions(), self@, Ok(p@)),
+                Err(a) => super::dispatcher_contract::handoff_ensures(self.crypto_functions(), self@, Err(a)),
             },
     {
-        let ghost before = self@;
-        let ghost ciphers = self.cipher_models();
-        if request > 1 || (is_response && request != 0) || self.pending_update_request.is_some() || is_response != self.response_due {
-            return Err(crate::spec::INTERNAL_ERROR);
-        }
-        let next_secret = crate::schedule::exec::update_secret(&self.crypto, self.client_application_secret.as_slice());
-        let mut body = Vec::new();
-        crate::encode::write_key_update(&mut body, request);
-        let mut message = Vec::new();
-        crate::encode::write_handshake(&mut message, crate::spec::HS_KEY_UPDATE, body.as_slice());
-        let wire_result = match self.application_sender.as_mut() {
-            Some(sender) => sender.seal(crate::spec::CT_HANDSHAKE, message.as_slice(), 0),
-            None => Err(crate::spec::INTERNAL_ERROR),
-        };
-        let wire = match wire_result {
-            Ok(wire) => wire,
-            Err(alert) => {
-                self.terminal(Mode::Failed);
-                return Err(alert);
-            },
-        };
-        self.pending_update_secret = next_secret;
-        self.pending_update_wire.extend_from_slice(wire.as_slice());
-        self.pending_update_request = Some(request);
-        self.pending_update_is_response = is_response;
-        if is_response { self.response_due = false; }
-        proof {
-            reveal(Connection::wf);
-            reveal(Connection::state);
-            reveal(super::dispatcher_spec::wf);
-            reveal(super::dispatcher_spec::prepare_key_update);
-            reveal(crate::traffic::contract::send_ensures);
-            reveal(crate::traffic::spec::send);
-            reveal(crate::spec::encrypt_record);
-            reveal(crate::spec::additional_data);
-            assert(next_secret@ == crate::schedule::spec::next_traffic_secret(self.crypto_functions(), before.client_application_secret));
-            assert(next_secret.len() == 32);
-            assert(before.application_sender is Some);
-            assert(body@ == crate::spec::write_key_update(request));
-            assert(message@ == crate::spec::write_handshake(crate::spec::HS_KEY_UPDATE, body@));
-            match before.application_sender {
-                Some(old_sender) => match old_sender.next {
-                Some(n) => assert(wire@ == crate::spec::encrypt_record(
-                    |nonce: Seq<u8>, ad: Seq<u8>, plaintext: Seq<u8>| (ciphers.seal)(old_sender.key, nonce, ad, plaintext),
-                    16, old_sender.iv, n, crate::spec::CT_HANDSHAKE, message@, 0)) by {
-                    reveal(crate::traffic::spec::send);
-                    reveal(crate::spec::encrypt_record);
-                    reveal(crate::spec::additional_data);
-                },
-                None => assert(false),
-                },
-                None => assert(false),
-            }
-            assert(self.pending_update_wire@ == wire@);
-            assert(self.pending_update_secret@ == next_secret@);
-            assert(self.pending_update_request == Some(request));
-            assert(self.pending_update_is_response == is_response);
-            assert(self.response_due == (if is_response { false } else { before.response_due }));
-            assert(self@.mode == super::dispatcher_spec::Mode::Ready);
-            assert(self@.application_sender is Some);
-            assert(self@.application_receiver is Some);
-            assert(match self@.auth { Some(auth) => auth.phase == crate::auth::spec::Phase::Ready, None => false });
-            assert(self.client_application_secret@.len() == 32);
-            assert(self.server_application_secret@.len() == 32);
-            assert(self.pending_update_secret@.len() == 32);
-            assert(self.pending_update_wire@.len() == wire@.len());
-            assert(match self.pending_update_request { Some(r) => r <= 1, None => false });
-            assert(self.pending_update_is_response ==> self.pending_update_request == Some(0));
-            assert(self.pending_flight@.len() == 0);
-            assert(!self.ccs_pending);
-            assert(self.master@.len() == 0);
-            assert(self.wf());
-            assert(self@ == super::dispatcher_spec::prepare_key_update(self.crypto_functions(), ciphers,
-                before, request, is_response));
-        }
-        Ok(wire)
+        PostHandshake::new(self.crypto, self.factory, self.client_application_secret.as_slice(),
+            self.server_application_secret.as_slice())
     }
 
-    /// Handle one complete post-handshake KeyUpdate body. The receive epoch
-    /// changes immediately; a requested response is queued as KeyUpdate(0).
-    fn receive_key_update(&mut self, request: u8) -> (out: Action)
-        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-            old(self)@.mode == super::dispatcher_spec::Mode::Ready, request <= 1,
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-            super::dispatcher_contract::receive_update_ensures(old(self).crypto_functions(),
-                old(self).cipher_models(), old(self)@, request, out@, final(self)@)
-                && match out@ {
-                    super::dispatcher_spec::Action::Send(wire) => final(self)@.pending_update_wire == wire,
-                    _ => true,
-                },
-    {
-        let ghost before = self@;
-        let ghost ciphers = self.cipher_models();
-        if request > 1 { return self.fail(crate::spec::ILLEGAL_PARAMETER); }
-        let next_secret = crate::schedule::exec::update_secret(&self.crypto, self.server_application_secret.as_slice());
-        proof {
-            assert(next_secret.len() == crate::schedule::spec::HASH_LEN);
-            assert(next_secret@ == crate::schedule::spec::next_traffic_secret(self.crypto_functions(), self.server_application_secret@));
-            reveal(crate::traffic::spec::start);
-            assert(crate::traffic::spec::start(self.crypto_functions(), next_secret@) is Ok);
-        }
-        let receiver = match Decryptor::new(&self.crypto, &self.factory, next_secret.as_slice()) {
-            Ok(receiver) => receiver,
-            Err(alert) => return self.fail(alert),
-        };
-        let ghost receiver_view = receiver@;
-        self.application_receiver = Some(receiver);
-        self.server_application_secret = next_secret;
-        // §4.6.3 and §6.1: after our close_notify there is no next record to
-        // precede, so a request owes no response.
-        if request == 1 && !self.local_write_closed && self.pending_close_wire.is_empty() {
-            self.response_due = true;
-        }
-        proof {
-            reveal(Connection::state);
-            reveal(super::dispatcher_spec::receive_key_update);
-            assert(next_secret@ == crate::schedule::spec::next_traffic_secret(self.crypto_functions(), before.server_application_secret));
-            assert(self@.application_receiver == Some(receiver_view));
-            assert(self@ == super::dispatcher_spec::receive_key_update(self.crypto_functions(), before, request));
-        }
-        if self.response_due && self.pending_update_request.is_none() {
-            let out = match self.queue_key_update(0, true) {
-                Ok(wire) => Action::Send(wire),
-                Err(alert) => return self.fail(alert),
-            };
-            proof {
-                reveal(super::dispatcher_spec::receive_key_update_and_respond);
-                assert(self@ == super::dispatcher_spec::receive_key_update_and_respond(self.crypto_functions(), ciphers, before, request));
-                match out@ {
-                    super::dispatcher_spec::Action::Send(wire) => assert(self@.pending_update_wire == wire),
-                    _ => assert(false),
-                }
-                assert(super::dispatcher_spec::action_refines(out@, self@));
-            }
-            out
-        } else {
-            proof {
-                reveal(super::dispatcher_spec::receive_key_update_and_respond);
-                assert(self@ == super::dispatcher_spec::receive_key_update_and_respond(self.crypto_functions(), ciphers, before, request));
-            }
-            Action::None
-        }
-    }
-
-    /// Confirm the exact KeyUpdate record was sent before the send epoch
-    /// changes. If a peer request arrived while it was pending, queue the
-    /// required KeyUpdate(0) immediately after this acknowledgement.
-    pub fn acknowledge_key_update(&mut self, sent: &[u8]) -> (out: Action)
-        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-            super::dispatcher_contract::key_update_ack_ensures(old(self).crypto_functions(),
-                old(self).cipher_models(), old(self)@, sent@, out@, final(self)@),
-    {
-        if !matches!(self.mode, Mode::Ready) || self.pending_update_request.is_none()
-            || sent != self.pending_update_wire.as_slice() {
-            return self.fail(crate::spec::INTERNAL_ERROR);
-        }
-        let ghost before = self@;
-        proof {
-            assert(sent@ =~= before.pending_update_wire);
-            assert(sent@ == before.pending_update_wire);
-            assert(before.pending_update_request is Some);
-        }
-        let ghost ciphers = self.cipher_models();
-        let mut next_secret = Vec::new();
-        next_secret.extend_from_slice(self.pending_update_secret.as_slice());
-        self.pending_update_secret.clear();
-        proof {
-            assert(next_secret.len() == crate::schedule::spec::HASH_LEN);
-            reveal(crate::traffic::spec::start);
-            assert(crate::traffic::spec::start(self.crypto_functions(), next_secret@) is Ok);
-        }
-        let sender = match Encryptor::new(&self.crypto, &self.factory, next_secret.as_slice()) {
-            Ok(sender) => sender,
-            Err(alert) => return self.fail(alert),
-        };
-        let ghost sender_view = sender@;
-        proof {
-            reveal(crate::traffic::contract::start_ensures);
-            reveal(crate::traffic::spec::start);
-            assert(crate::traffic::contract::start_ensures(self.crypto_functions(), next_secret@, Ok(sender_view)));
-            assert(crate::traffic::spec::start(self.crypto_functions(), next_secret@) == Ok(sender_view));
-        }
-        self.application_sender = Some(sender);
-        self.client_application_secret = next_secret;
-        self.pending_update_wire.clear();
-        self.pending_update_request = None;
-        self.pending_update_is_response = false;
-        proof {
-            reveal(Connection::state);
-            reveal(super::dispatcher_spec::acknowledge_key_update);
-            assert(next_secret@ == before.pending_update_secret);
-            assert(self.pending_update_secret@ == seq![]);
-            assert(self.pending_update_wire@ == seq![]);
-            assert(self.pending_update_request is None);
-            assert(!self.pending_update_is_response);
-            assert(self.client_application_secret@ == before.pending_update_secret);
-            assert(self.server_application_secret@ == before.server_application_secret);
-            assert(self@.application_sender == Some(sender_view));
-            assert(self@.application_receiver == before.application_receiver);
-            assert(self@.auth == before.auth);
-            assert(self@.handshake_sender == before.handshake_sender);
-            assert(self@.handshake_receiver == before.handshake_receiver);
-            assert(self@.master == before.master);
-            assert(self@.client_application_secret == before.pending_update_secret);
-            assert(self@.server_application_secret == before.server_application_secret);
-            assert(self@.reassembly == before.reassembly);
-            assert(self@.framing == before.framing);
-            assert(self@.pending_flight == before.pending_flight);
-            assert(self@.ccs_pending == before.ccs_pending);
-            assert(self@.response_due == before.response_due);
-            assert(self@ == super::dispatcher_spec::acknowledge_key_update(self.crypto_functions(), before, sent@));
-        }
-        let ghost acknowledged = self@;
-        if self.response_due {
-            let ghost queued_from = self@;
-            let out = match self.queue_key_update(0, true) {
-                Ok(wire) => Action::Send(wire),
-                Err(alert) => {
-                    proof {
-                        reveal(super::dispatcher_spec::acknowledge_key_update_and_respond);
-                        reveal(super::dispatcher_spec::prepare_key_update);
-                        assert(acknowledged == super::dispatcher_spec::acknowledge_key_update(
-                            self.crypto_functions(), before, sent@));
-                        assert(queued_from == acknowledged);
-                        assert(super::dispatcher_spec::prepare_key_update(
-                            self.crypto_functions(), ciphers, acknowledged, 0, true) == super::dispatcher_spec::failed());
-                        assert(super::dispatcher_spec::acknowledge_key_update_and_respond(
-                            self.crypto_functions(), ciphers, before, sent@) == super::dispatcher_spec::failed());
-                    }
-                    let failed = self.fail(alert);
-                    proof {
-                        reveal(super::dispatcher_contract::key_update_ack_ensures);
-                        assert(super::dispatcher_contract::terminal_ensures(self@, super::dispatcher_spec::Mode::Failed));
-                        assert(failed@ is Fail);
-                        assert(super::dispatcher_contract::key_update_ack_ensures(
-                            old(self).crypto_functions(), old(self).cipher_models(), old(self)@,
-                            sent@, failed@, self@));
-                    }
-                    return failed;
-                },
-            };
-            proof {
-                reveal(super::dispatcher_spec::acknowledge_key_update_and_respond);
-                assert(self@ == super::dispatcher_spec::acknowledge_key_update_and_respond(
-                    self.crypto_functions(), ciphers, before, sent@));
-                match out@ {
-                    super::dispatcher_spec::Action::Send(wire) => assert(self@.pending_update_wire == wire),
-                    _ => assert(false),
-                }
-                assert(super::dispatcher_spec::action_refines(out@, self@));
-            }
-            out
-        } else {
-            proof {
-                reveal(super::dispatcher_spec::acknowledge_key_update_and_respond);
-                assert(self@ == super::dispatcher_spec::acknowledge_key_update_and_respond(
-                    self.crypto_functions(), ciphers, before, sent@));
-            }
-            Action::None
-        }
-    }
-
-    /// Ask the peer to update its send keys, or perform an unrequested local
-    /// update. A new request waits while an earlier KeyUpdate is unacknowledged.
-    pub fn request_key_update(&mut self, request_peer_update: bool) -> (out: Action)
-        requires old(self).wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-    {
-        if !matches!(self.mode, Mode::Ready) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
-        if self.local_write_closed || !self.pending_close_wire.is_empty() { return Action::None; }
-        if self.pending_update_request.is_some() { return Action::None; }
-        if self.response_due {
-            return match self.queue_key_update(0, true) {
-                Ok(wire) => Action::Send(wire),
-                Err(alert) => self.fail(alert),
-            };
-        }
-        let request = if request_peer_update { 1 } else { 0 };
-        match self.queue_key_update(request, false) {
-            Ok(wire) => Action::Send(wire),
-            Err(alert) => self.fail(alert),
-        }
-    }
-
-    /// Protect application bytes only after both Finished conditions and the
-    /// exact client-flight send acknowledgement.
-    pub fn send_application(&mut self, plaintext: &[u8], padding: usize) -> (out: Action)
-        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-    {
-        if !matches!(self.mode, Mode::Ready) { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
-        if self.local_write_closed || !self.pending_close_wire.is_empty() { return Action::None; }
-        if self.pending_update_request.is_some() || self.response_due { return Action::None; }
-        let sender = match self.application_sender.as_mut() {
-            Some(sender) => sender,
-            None => return self.fail(crate::spec::INTERNAL_ERROR),
-        };
-        match sender.seal(crate::spec::CT_APPLICATION_DATA, plaintext, padding) {
-            Ok(wire) => Action::Send(wire),
-            Err(alert) => self.fail(alert),
-        }
-    }
-
-    /// Protect close_notify under the active application epoch. A pending
-    /// KeyUpdate or mandatory response must be acknowledged first; retry this
-    /// call after that send completes. RFC 8446 §6.1 closes only the write side.
-    pub fn close_write(&mut self) -> (out: Action)
-        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-            super::dispatcher_contract::prepare_close_ensures(old(self).crypto_functions(),
-                old(self).cipher_models(), old(self)@, out@, final(self)@),
-    {
-        let ghost before = self@;
-        if !matches!(self.mode, Mode::Ready) || self.local_write_closed
-            || !self.pending_close_wire.is_empty() || self.pending_update_request.is_some()
-            || self.response_due {
-            proof {
-                reveal(super::dispatcher_spec::prepare_close_notify);
-                reveal(super::dispatcher_contract::prepare_close_ensures);
-                assert(self@ == before);
-                assert(self@.mode != super::dispatcher_spec::Mode::Ready
-                    || self@.local_write_closed || self@.pending_close_wire.len() > 0
-                    || self@.pending_update_request is Some || self@.response_due);
-                assert(self@ == super::dispatcher_spec::prepare_close_notify(
-                    self.crypto_functions(), self.cipher_models(), before));
-                assert(super::dispatcher_contract::prepare_close_ensures(
-                    self.crypto_functions(), self.cipher_models(), before,
-                    Action::None@, self@));
-            }
-            return Action::None;
-        }
-        let ghost ciphers = self.cipher_models();
-        let sender = match self.application_sender.as_mut() {
-            Some(sender) => sender,
-            None => return self.fail(crate::spec::INTERNAL_ERROR),
-        };
-        let mut alert = Vec::new();
-        crate::encode::write_alert(&mut alert, crate::spec::Alert {
-            level: crate::spec::LEVEL_WARNING,
-            description: crate::spec::CLOSE_NOTIFY,
-        });
-        let wire_result = sender.seal(crate::spec::CT_ALERT, alert.as_slice(), 0);
-        let wire = match wire_result {
-            Ok(wire) => wire,
-            Err(alert) => return self.fail(alert),
-        };
-        self.pending_close_wire.extend_from_slice(wire.as_slice());
-        let out = Action::Send(wire);
-        proof {
-            reveal(Connection::state);
-            reveal(super::dispatcher_contract::prepare_close_ensures);
-            reveal(super::dispatcher_spec::prepare_close_notify);
-            reveal(crate::traffic::contract::send_ensures);
-            reveal(crate::traffic::spec::send);
-            reveal(crate::traffic::spec::advance);
-            reveal(crate::spec::encrypt_record);
-            reveal(crate::spec::additional_data);
-            assert(before.mode == super::dispatcher_spec::Mode::Ready);
-            assert(!before.local_write_closed);
-            assert(before.pending_close_wire.len() == 0);
-            assert(before.pending_update_request is None);
-            assert(!before.response_due);
-            assert(before.application_sender is Some);
-            assert(alert@ == crate::spec::write_alert(crate::spec::Alert {
-                level: crate::spec::LEVEL_WARNING,
-                description: crate::spec::CLOSE_NOTIFY,
-            }));
-            assert(self.pending_close_wire@ == wire@);
-            assert(self@.pending_close_wire == wire@);
-            match before.application_sender {
-                Some(old_sender) => match old_sender.next {
-                    Some(n) => assert(wire@ == crate::spec::encrypt_record(
-                        |nonce: Seq<u8>, ad: Seq<u8>, plaintext: Seq<u8>| (ciphers.seal)(old_sender.key, nonce, ad, plaintext),
-                        16, old_sender.iv, n, crate::spec::CT_ALERT, alert@, 0)) by {
-                        reveal(crate::traffic::contract::send_ensures);
-                        reveal(crate::traffic::spec::send);
-                        reveal(crate::spec::encrypt_record);
-                        reveal(crate::spec::additional_data);
-                    },
-                    None => assert(false),
-                },
-                None => assert(false),
-            }
-            assert(final(self)@ == super::dispatcher_spec::prepare_close_notify(
-                old(self).crypto_functions(), ciphers, before));
-            assert(super::dispatcher_contract::prepare_close_ensures(
-                old(self).crypto_functions(), old(self).cipher_models(), before,
-                out@, final(self)@));
-        }
-        out
-    }
-
-    /// Commit local write closure only after the exact protected close_notify
-    /// record is acknowledged by the I/O owner.
-    pub fn acknowledge_close_notify(&mut self, sent: &[u8]) -> (out: Action)
-        requires old(self).wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
-        ensures final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
-            super::dispatcher_contract::acknowledge_close_ensures(old(self)@, sent@, out@, final(self)@),
-    {
-        let ghost before = self@;
-        if !matches!(self.mode, Mode::Ready) || self.pending_close_wire.is_empty()
-            || sent != self.pending_close_wire.as_slice() {
-            let out = self.fail(crate::spec::INTERNAL_ERROR);
-            proof {
-                reveal(super::dispatcher_contract::acknowledge_close_ensures);
-                reveal(super::dispatcher_spec::acknowledge_close_notify);
-                assert(final(self)@ == super::dispatcher_spec::failed());
-                // §6.1: once close_notify is sealed no alert follows it.
-                if before.pending_close_wire.len() > 0 {
-                    assert(super::dispatcher_spec::alert_epoch(before) is None);
-                    assert(out@ == super::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR, None));
-                }
-                assert(super::dispatcher_contract::acknowledge_close_ensures(
-                    before, sent@, out@, final(self)@));
-            }
-            return out;
-        }
-        self.pending_close_wire.clear();
-        let out = if self.peer_write_closed {
-            self.close()
-        } else {
-            self.local_write_closed = true;
-            Action::WriteClosed
-        };
-        proof {
-            reveal(super::dispatcher_contract::acknowledge_close_ensures);
-            reveal(super::dispatcher_spec::acknowledge_close_notify);
-            assert(before.pending_close_wire.len() > 0);
-            assert(sent@ == before.pending_close_wire);
-            assert(self.pending_close_wire@ == seq![]);
-            assert(final(self)@ == super::dispatcher_spec::acknowledge_close_notify(before, sent@));
-        }
-        out
-    }
-
-    /// EOF before peer close_notify is truncation; after it, only the read
-    /// direction is closed and the independent write direction remains live.
-    /// RFC 8446 §6.1: the truncation sends no alert, since the peer has
+    /// EOF before the handshake ends is truncation. RFC 8446 §6.1: the truncation sends no alert, since the peer has
     /// closed the connection.
     pub fn eof(&mut self) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).wf(),
             super::dispatcher_contract::truncation_ensures(old(self)@, out@, final(self)@),
     {
         if matches!(self.mode, Mode::Failed | Mode::Closed) { Action::None }
-        else if self.peer_write_closed { Action::PeerClosed }
         else { self.die(crate::spec::INTERNAL_ERROR) }
     }
 }

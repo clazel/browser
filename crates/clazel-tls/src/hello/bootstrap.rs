@@ -70,6 +70,11 @@ impl View for Action {
     }
 }
 
+/// §7.1: an `Established` is one the key agreement may start from.
+pub open spec fn established_ok(a: &Action) -> bool {
+    match a { Action::Established(e) => e.wf(), _ => true }
+}
+
 /// Convert a constructor result to its abstract result.
 pub open spec fn start_view<C: Crypto>(out: Result<(Bootstrap<C>, Action), u8>)
     -> Result<(super::bootstrap_spec::State, super::bootstrap_spec::Action), u8> {
@@ -148,7 +153,9 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn fail(&mut self, alert: u8) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
             final(self).state().hello is None, final(self).state().pending_flight.len() == 0,
             final(self).state().compatibility == old(self).state().compatibility,
             final(self).state().reassembly == old(self).state().reassembly,
@@ -169,7 +176,9 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn close(&mut self) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Closed,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Closed,
             final(self).state().hello is None, final(self).state().pending_flight.len() == 0,
             final(self).state() == super::bootstrap_lemmas::terminal(old(self).state(),
                 super::bootstrap_spec::Mode::Closed, old(self).state().reassembly),
@@ -188,7 +197,9 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn peer_alert(&mut self, description: u8) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).state().mode == super::bootstrap_spec::Mode::Failed,
             final(self).state().hello is None, final(self).state().pending_flight.len() == 0,
             final(self).state() == super::bootstrap_lemmas::terminal(old(self).state(),
                 super::bootstrap_spec::Mode::Failed, old(self).state().reassembly),
@@ -207,7 +218,11 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn handle_messages(&mut self, messages: Vec<Vec<u8>>) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::after_messages(
                 old(self).crypto_functions().hash, old(self).state(),
                 crate::reassemble::views_bytes(messages@)),
@@ -237,7 +252,11 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn handle_hello_message(&mut self, body: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::hello_step(
                 old(self).crypto_functions().hash, old(self).state(), body@),
     {
@@ -315,7 +334,9 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn handle_alert(&mut self, alert: Alert) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == if alert.description == crate::spec::CLOSE_NOTIFY {
                 (super::bootstrap_lemmas::terminal(old(self).state(),
                     super::bootstrap_spec::Mode::Closed, old(self).state().reassembly),
@@ -336,7 +357,11 @@ impl<C: Crypto> Bootstrap<C> {
     fn handle_handshake(&mut self, bytes: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
             bytes.len() <= crate::spec::MAX_PLAINTEXT,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::fragment_step(
                 old(self).crypto_functions().hash, old(self).state(), bytes@),
     {
@@ -382,7 +407,9 @@ impl<C: Crypto> Bootstrap<C> {
     fn handle_alert_record(&mut self, bytes: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
             bytes.len() <= crate::spec::MAX_PLAINTEXT, bytes.len() != 0,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == match crate::spec::read_alert(bytes@) {
                 Some(alert) => super::bootstrap_lemmas::alert_step(old(self).state(),
                     alert.level, alert.description),
@@ -436,7 +463,11 @@ impl<C: Crypto> Bootstrap<C> {
 
     fn handle_record(&mut self, wire: &[u8]) -> (out: Action)
         requires old(self).wf(), old(self).mode == Mode::AwaitServerHello,
-        ensures final(self).wf(), final(self).framer@ == old(self).framer@,
+        ensures
+            established_ok(&out),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), final(self).framer@ == old(self).framer@,
             (final(self).state(), out@) == super::bootstrap_lemmas::record_step(
                 old(self).crypto_functions().hash, old(self).state(), wire@),
     {
@@ -473,6 +504,10 @@ impl<C: Crypto> Bootstrap<C> {
     /// Start with a fresh ClientHello and return the exact plaintext record to send.
     pub fn start(config: Config, crypto: C) -> (out: Result<(Self, Action), u8>)
         ensures super::bootstrap_contract::start_ensures(config@, start_view(out)),
+            match out {
+                Ok((b, _)) => b.wf() && b.crypto_functions() == crypto.functions(),
+                Err(_) => true,
+            },
     {
         let ghost config_view = config@;
         let compatibility = !config.session_id.is_empty();
@@ -512,7 +547,9 @@ impl<C: Crypto> Bootstrap<C> {
     /// Accept only the exact send completion associated with the current flight.
     pub fn acknowledge_send(&mut self, sent: &[u8]) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(),
             super::bootstrap_contract::acknowledge_ensures(old(self).state(), sent@,
                 (final(self).state(), out@)),
     {
@@ -587,7 +624,11 @@ impl<C: Crypto> Bootstrap<C> {
     /// Consume no more than one plaintext record prefix; the caller resubmits the suffix.
     pub fn feed(&mut self, input: &[u8]) -> (out: (usize, Action))
         requires old(self).wf(),
-        ensures final(self).wf(), out.0 <= input.len(),
+        ensures
+            established_ok(&out.1),
+
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(), out.0 <= input.len(),
             super::bootstrap_contract::feed_exec_ensures(old(self).crypto_functions().hash, old(self)@.0,
                 old(self)@.1, input@, out.0 as nat, out.1@, final(self)@.0, final(self)@.1),
     {
@@ -629,7 +670,9 @@ impl<C: Crypto> Bootstrap<C> {
     /// EOF before final ServerHello is a truncation failure.
     pub fn eof(&mut self) -> (out: Action)
         requires old(self).wf(),
-        ensures final(self).wf(),
+        ensures
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).wf(),
             super::bootstrap_contract::eof_ensures(old(self).state(), final(self).state(), out@),
     {
         let ghost before = self.state();

@@ -2423,20 +2423,6 @@
       }
     },
     {
-      "id": "dispatcher-key-update-request-bound",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "if request > 1 || (is_response && request != 0)",
-      "replace": "if request > 2 || (is_response && request != 0)",
-      "expect": "killed",
-      "reason": "RFC 8446 §4.6.3 restricts request_update to 0 or 1; the dispatcher must not queue an out-of-range KeyUpdate.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_key_update_request_is_bounded()",
-        "witness": "super::dispatcher_spec::prepare_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::ciphers(), super::dispatcher_certificates::sample_ready_state(), 2, false) != super::dispatcher_certificates::sample_ready_state()"
-      }
-    },
-    {
       "id": "bootstrap-ccs-dropped-mid-message",
       "file": "src/hello/bootstrap_spec.rs",
       "find": "PeerEvent::Ccs => if crate::spec::at_message_boundary(s.reassembly) {",
@@ -2462,34 +2448,6 @@
         "file": "src/connection/dispatcher_certificates.rs",
         "lemma": "super::dispatcher_lemmas::lemma_compatibility_ccs_not_dropped_mid_message()",
         "witness": "super::dispatcher_spec::compatibility_ccs_dropped(super::dispatcher_spec::Mode::Handshake, Some(crate::auth::spec::Phase::Finished), crate::spec::Reasm { buf: seq![1u8] })"
-      }
-    },
-    {
-      "id": "dispatcher-peer-update-epoch-construction-failure",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "// A derived secret that cannot form a new epoch must not leave a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => failed(),",
-      "replace": "// A derived secret that cannot form a new epoch must not leave a\n        // next-secret/old-key mismatch in the model.\n        Err(_) => s,",
-      "expect": "killed",
-      "reason": "If a derived peer traffic secret cannot construct its receive epoch, the dispatcher model must not retain the old receiver with the new secret.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_key_update_epoch_start_failure_is_terminal()",
-        "witness": "super::dispatcher_spec::receive_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::sample_ready_state(), 0) != super::dispatcher_spec::failed()"
-      }
-    },
-    {
-      "id": "dispatcher-local-update-epoch-construction-failure",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "// Never advance the traffic secret while retaining old keys.\n                Err(_) => failed(),",
-      "replace": "// Never advance the traffic secret while retaining old keys.\n                Err(_) => s,",
-      "expect": "killed",
-      "reason": "If a locally acknowledged KeyUpdate secret cannot construct its send epoch, the dispatcher model must fail instead of retaining old keys.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_key_update_epoch_start_failure_is_terminal()",
-        "witness": "super::dispatcher_spec::acknowledge_key_update(super::dispatcher_certificates::crypto(), super::dispatcher_certificates::sample_bad_update_state(), seq![7u8]) != super::dispatcher_spec::failed()"
       }
     },
     {
@@ -2549,20 +2507,6 @@
       }
     },
     {
-      "id": "connection-peer-close-preserves-local-write-direction",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "else { State { peer_write_closed: true, ..s } }",
-      "replace": "else { closed() }",
-      "expect": "killed",
-      "reason": "RFC 8446 §6.1 says receiving close_notify closes only the peer's write direction; it must not discard local sending state.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_peer_close_is_directional()",
-        "witness": "super::dispatcher_spec::receive_close_notify(super::dispatcher_certificates::sample_ready_state()).application_sender != super::dispatcher_certificates::sample_ready_state().application_sender"
-      }
-    },
-    {
       "id": "auth-unoffered-certificate-extension",
       "file": "src/auth/spec.rs",
       "find": "else if !entries_offered { fail(s, crate::spec::UNSUPPORTED_EXTENSION) }",
@@ -2591,20 +2535,6 @@
       }
     },
     {
-      "id": "dispatcher-key-update-response-after-close",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "response_due: s.response_due || (request == 1 && write_open(s)),",
-      "replace": "response_due: s.response_due || request == 1,",
-      "expect": "killed",
-      "reason": "RFC 8446 §6.1 and §4.6.3: after our close_notify there is no next record, so update_requested must not make a KeyUpdate response due.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_key_update_after_close_owes_no_response()",
-        "witness": "super::dispatcher_spec::receive_key_update(super::dispatcher_certificates::passthrough_crypto(), super::dispatcher_certificates::sample_write_closed_state(), 1).response_due"
-      }
-    },
-    {
       "id": "dispatcher-alert-not-sent-during-flight",
       "file": "src/connection/dispatcher_spec.rs",
       "find": "        Mode::Handshake => s.handshake_sender,",
@@ -2619,20 +2549,6 @@
       }
     },
     {
-      "id": "dispatcher-alert-not-sent-after-handshake",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "        Mode::Ready => if write_open(s) && s.pending_update_request is None {\n            s.application_sender\n",
-      "replace": "        Mode::Ready => if write_open(s) && s.pending_update_request is None {\n            None\n",
-      "expect": "killed",
-      "reason": "RFC 8446 §6.2: after the handshake a local fatal error must send its fatal alert under the current client application epoch; the mutant sends nothing, as the driver's Origin::NotSent did.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_application_failure_sends_alert_at_next_number()",
-        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 10).0 != super::dispatcher_spec::Action::Fail(10u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 10, 21]))"
-      }
-    },
-    {
       "id": "dispatcher-peer-alert-answered",
       "file": "src/connection/dispatcher_spec.rs",
       "find": "    (Action::PeerAlert(description), failed())",
@@ -2642,8 +2558,8 @@
       "module": "connection::dispatcher_lemmas",
       "certificate": {
         "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_peer_alert_not_answered(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 40u8)",
-        "witness": "super::dispatcher_spec::receive_fatal_alert(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 40).0 != super::dispatcher_spec::Action::PeerAlert(40u8)"
+        "lemma": "super::dispatcher_lemmas::lemma_peer_alert_not_answered(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_at(5), 40u8)",
+        "witness": "super::dispatcher_spec::receive_fatal_alert(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_at(5), 40).0 != super::dispatcher_spec::Action::PeerAlert(40u8)"
       }
     },
     {
@@ -2656,8 +2572,8 @@
       "module": "connection::dispatcher_lemmas",
       "certificate": {
         "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_application_failure_sends_alert_at_next_number()",
-        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_ready_at(5), 10).0 != super::dispatcher_spec::Action::Fail(10u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 10, 21]))"
+        "lemma": "super::dispatcher_lemmas::lemma_failure_sends_alert_at_next_number()",
+        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_at(5), 10).0 != super::dispatcher_spec::Action::Fail(10u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 2, 10, 21]))"
       }
     },
     {
@@ -2686,34 +2602,6 @@
         "file": "src/connection/dispatcher_certificates.rs",
         "lemma": "super::dispatcher_lemmas::lemma_flight_failure_sends_alert()",
         "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state(), 42).0 != super::dispatcher_spec::Action::Fail(42u8, Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 42, 21]))"
-      }
-    },
-    {
-      "id": "dispatcher-alert-while-key-update-pending",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "if write_open(s) && s.pending_update_request is None {",
-      "replace": "if write_open(s) {",
-      "expect": "killed",
-      "reason": "While a sealed KeyUpdate awaits acknowledgement the peer's read key is not settled, so no alert may be sealed under the old key; the mutant seals one.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_no_alert_while_update_pending()",
-        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_update_pending(), 10).0 != super::dispatcher_spec::Action::Fail(10u8, None)"
-      }
-    },
-    {
-      "id": "dispatcher-alert-after-close-notify",
-      "file": "src/connection/dispatcher_spec.rs",
-      "find": "if write_open(s) && s.pending_update_request is None {",
-      "replace": "if s.pending_update_request is None {",
-      "expect": "killed",
-      "reason": "RFC 8446 §6.1: nothing is written after our close_notify; the mutant seals a fatal alert after it.",
-      "module": "connection::dispatcher_lemmas",
-      "certificate": {
-        "file": "src/connection/dispatcher_certificates.rs",
-        "lemma": "super::dispatcher_lemmas::lemma_no_alert_after_close_notify()",
-        "witness": "super::dispatcher_spec::fatal(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_close_sent(), 10).0 != super::dispatcher_spec::Action::Fail(10u8, None)"
       }
     },
     {
@@ -2845,8 +2733,8 @@
     {
       "id": "ph-ticket-fatal",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => (quiet(), s),",
-      "replace": "crate::spec::Res::Ok(crate::spec::HsMsg::NewSessionTicket(_)) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
+      "find": "crate::spec::Res::Ok(_) => (quiet(), s),",
+      "replace": "crate::spec::Res::Ok(_) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
       "expect": "killed",
       "reason": "A NewSessionTicket is refused instead of parsed and ignored (RFC 8446 4.6.1): lemma_ticket_ignored is false.",
       "module": "connection::post_handshake_examples",
@@ -2854,6 +2742,20 @@
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_ticket_ignored()",
         "witness": "!(super::post_handshake_examples::msg(super::post_handshake_examples::ticket(), true).0 == super::post_handshake_spec::quiet())"
+      }
+    },
+    {
+      "id": "ph-peer-alert-reported-as-ours",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "else { peer_alert(a.description) }",
+      "replace": "else { die(a.description) }",
+      "expect": "killed",
+      "reason": "A peer's fatal alert is reported as a failure of ours, so the driver cannot say who ended the connection: lemma_other_alerts_are_fatal is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_other_alerts_are_fatal()",
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::Fail(40u8)"
       }
     },
     {
@@ -2883,14 +2785,6 @@
         "lemma": "super::post_handshake_examples::lemma_other_handshake_messages_unexpected()",
         "witness": "super::post_handshake_examples::msg(seq![5u8, 0, 0, 1, 0], true).0.end == super::post_handshake_spec::End::Fail(50u8)"
       }
-    },
-    {
-      "id": "ph-other-parsed-message-ignored",
-      "file": "src/connection/post_handshake_spec.rs",
-      "find": "crate::spec::Res::Ok(_) => fatal(f, s, crate::spec::UNEXPECTED_MESSAGE),",
-      "replace": "crate::spec::Res::Ok(_) => (quiet(), s),",
-      "expect": "survives",
-      "reason": "Equivalent: the type check before the parse lets only NewSessionTicket and KeyUpdate through, and both have their own arms, so this arm is unreachable."
     },
     {
       "id": "ph-key-update-keeps-read-secret",
@@ -2977,26 +2871,26 @@
       }
     },
     {
-      "id": "ph-user-canceled-benign",
+      "id": "ph-user-canceled-fatal",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "if a.description == crate::spec::CLOSE_NOTIFY { close_connection(f, s) }",
-      "replace": "if a.description == crate::spec::CLOSE_NOTIFY || a.description == crate::spec::USER_CANCELED { close_connection(f, s) }",
+      "find": "else if a.description == crate::spec::USER_CANCELED { (quiet(), State { reassembly: r, ..s }) }",
+      "replace": "else if a.description == crate::spec::USER_CANCELED { die(a.description) }",
       "expect": "killed",
-      "reason": "user_canceled ends the connection in order instead of failing it, although this phase treats every alert but close_notify as fatal: lemma_other_alerts_are_fatal is false.",
+      "reason": "user_canceled fails the connection, although it is not an error alert (RFC 8446 6.1): lemma_user_canceled_changes_nothing is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
-        "lemma": "super::post_handshake_examples::lemma_other_alerts_are_fatal()",
-        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 90]).0.end == super::post_handshake_spec::End::Close"
+        "lemma": "super::post_handshake_examples::lemma_user_canceled_changes_nothing()",
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 90]).0.end == super::post_handshake_spec::End::Fail(90u8)"
       }
     },
     {
       "id": "ph-close-notify-fatal",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "CLOSE_NOTIFY { close_connection(f, s) }",
+      "find": "CLOSE_NOTIFY { peer_closed(s) }",
       "replace": "CLOSE_NOTIFY { die(a.description) }",
       "expect": "killed",
-      "reason": "close_notify fails the connection instead of ending it in order (RFC 8446 6.1): lemma_close_notify_closes is false.",
+      "reason": "close_notify fails the connection instead of ending the read side in order (RFC 8446 6.1): lemma_close_notify_closes is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
@@ -3005,17 +2899,45 @@
       }
     },
     {
-      "id": "ph-close-notify-unanswered",
+      "id": "ph-close-notify-not-sent",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "Out { wires: seq![wire], delivered: seq![], end: End::Close },",
+      "find": "Out { wires: seq![wire], delivered: seq![], end: finish_write(s).0 },",
+      "replace": "Out { wires: seq![], delivered: seq![], end: finish_write(s).0 },",
+      "expect": "killed",
+      "reason": "Our close_notify is not sent before the write side ends (RFC 8446 6.1: MUST send): lemma_local_close is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_local_close()",
+        "witness": "super::post_handshake_spec::close(super::post_handshake_examples::cipher(), super::post_handshake_examples::ready()).0.wires.len() == 0"
+      }
+    },
+    {
+      "id": "ph-peer-close-ends-write",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "Out { wires: seq![], delivered: seq![], end: End::PeerClosed },",
       "replace": "Out { wires: seq![], delivered: seq![], end: End::Close },",
       "expect": "killed",
-      "reason": "The peer's close_notify is not answered with our own (RFC 8446 6.1: MUST respond): lemma_close_notify_closes is false.",
+      "reason": "The peer's close_notify is reported as the end of both directions, although the write side goes on (RFC 8446 6.1): lemma_close_notify_closes is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_close_notify_closes()",
-        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 0]).0.wires.len() == 0"
+        "witness": "super::post_handshake_examples::rec(21, seq![1u8, 0]).0.end == super::post_handshake_spec::End::Close"
+      }
+    },
+    {
+      "id": "ph-local-close-ends-read",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "(End::Continue, State { phase: Phase::WriteClosed, sender: None, client_secret: seq![], ..s })",
+      "replace": "(End::Close, closed())",
+      "expect": "killed",
+      "reason": "Our close_notify ends the read side too, which can truncate what the server is still sending (RFC 8446 6.1): lemma_local_close is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_local_close()",
+        "witness": "super::post_handshake_spec::close(super::post_handshake_examples::cipher(), super::post_handshake_examples::ready()).0.end == super::post_handshake_spec::End::Close"
       }
     },
     {
@@ -3063,7 +2985,7 @@
     {
       "id": "ph-data-after-end-processed",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "if s.phase == Phase::Open { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }",
+      "find": "if can_read(s) { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }",
       "replace": "receive(c, f, s, wire)",
       "expect": "killed",
       "reason": "Bytes after the connection ended are processed instead of ignored (RFC 8446 6.1): lemma_data_after_the_end_is_ignored is false.",
@@ -3114,6 +3036,146 @@
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_actions_order()",
         "witness": "super::post_handshake_spec::actions(super::post_handshake_spec::Out { wires: seq![seq![1u8], seq![2u8]], delivered: seq![3u8], end: super::post_handshake_spec::End::Fail(40u8) }).len() == 3"
+      }
+    },
+    {
+      "id": "driver-plaintext-alert-version",
+      "file": "src/connection/driver_spec.rs",
+      "find": "seq![crate::spec::CT_ALERT, 3u8, 3u8, 0u8, 2u8, level, description]",
+      "replace": "seq![crate::spec::CT_ALERT, 3u8, 1u8, 0u8, 2u8, level, description]",
+      "expect": "killed",
+      "reason": "A plaintext alert carries the wrong legacy_record_version (RFC 8446 5.1): lemma_plaintext_alert is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_plaintext_alert()",
+        "witness": "super::driver_spec::plaintext_alert(2, 40) == seq![21u8, 3, 1, 0, 2, 2, 40]"
+      }
+    },
+    {
+      "id": "driver-closing-reported-open",
+      "file": "src/connection/driver_spec.rs",
+      "find": "if s.phase == super::post_handshake_spec::Phase::WriteClosed { Status::Closing } else { Status::Open }",
+      "replace": "Status::Open",
+      "expect": "killed",
+      "reason": "The driver reports Open after our close_notify, so its caller would go on writing: lemma_continue_status is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_continue_status()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::Continue), super::driver_examples::write_closed()).status == super::driver_spec::Status::Open"
+      }
+    },
+    {
+      "id": "driver-peer-close-unanswered",
+      "file": "src/connection/driver_spec.rs",
+      "find": "settle(concat(o.wires), o.delivered, r.0, r.1)",
+      "replace": "settle(concat(o.wires), o.delivered, super::post_handshake_spec::Out { wires: seq![], delivered: seq![], end: r.0.end }, r.1)",
+      "expect": "killed",
+      "reason": "The server's close_notify is not answered with ours in the same step: lemma_peer_close_answered is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_peer_close_answered()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::PeerClosed), super::driver_examples::read_closed()).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-failure-always-sent",
+      "file": "src/connection/driver_spec.rs",
+      "find": "ended(Status::Failed(a, if send.len() > 0 { Origin::Sent } else { Origin::NotSent })),",
+      "replace": "ended(Status::Failed(a, Origin::Sent)),",
+      "expect": "killed",
+      "reason": "A failure with no record claims the alert went out: lemma_origins is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_origins()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::Fail(40u8)), super::post_handshake_spec::failed()).status == super::driver_spec::Status::Failed(40u8, super::driver_spec::Origin::Sent)"
+      }
+    },
+    {
+      "id": "driver-peer-alert-as-ours",
+      "file": "src/connection/driver_spec.rs",
+      "find": "super::post_handshake_spec::End::PeerAlert(a) => ended(Status::Failed(a, Origin::Peer)),",
+      "replace": "super::post_handshake_spec::End::PeerAlert(a) => ended(Status::Failed(a, Origin::NotSent)),",
+      "expect": "killed",
+      "reason": "The server's alert is reported as a failure of ours: lemma_origins is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_origins()",
+        "witness": "super::driver_examples::carried(super::driver_examples::ending(super::post_handshake_spec::End::PeerAlert(40u8)), super::post_handshake_spec::failed()).status == super::driver_spec::Status::Failed(40u8, super::driver_spec::Origin::NotSent)"
+      }
+    },
+    {
+      "id": "driver-flight-alert-dropped",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Some(record) => Step { send: record, deliver: seq![], stage: Stage::Ended,\n            status: Status::Failed(description, Origin::Sent) },",
+      "replace": "Some(record) => Step { send: seq![], deliver: seq![], stage: Stage::Ended,\n            status: Status::Failed(description, Origin::Sent) },",
+      "expect": "killed",
+      "reason": "The dispatcher's sealed alert does not go on the wire (RFC 8446 6.2): lemma_flight_failure is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_failure()",
+        "witness": "super::driver_spec::flight_failure(40, Some(seq![9u8])).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-flight-close-dropped",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Step { send: match wire { Some(record) => record, None => seq![] }, deliver: seq![],",
+      "replace": "Step { send: seq![], deliver: seq![],",
+      "expect": "killed",
+      "reason": "Our sealed close_notify does not go on the wire during the flight (RFC 8446 6.1): lemma_flight_closed is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_closed()",
+        "witness": "super::driver_spec::flight_closed(Some(seq![9u8])).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-hello-close-fatal",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Step { send: plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY), deliver: seq![],",
+      "replace": "Step { send: plaintext_alert(crate::spec::LEVEL_FATAL, crate::spec::CLOSE_NOTIFY), deliver: seq![],",
+      "expect": "killed",
+      "reason": "Our close_notify before the handshake keys goes out at the fatal level: lemma_hello_alerts is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_hello_alerts()",
+        "witness": "super::driver_spec::hello_closed().send == seq![21u8, 3, 3, 0, 2, 2, 0]"
+      }
+    },
+    {
+      "id": "driver-truncation-sent",
+      "file": "src/connection/driver_spec.rs",
+      "find": "status: Status::Failed(description, Origin::Truncated) }",
+      "replace": "status: Status::Failed(description, Origin::NotSent) }",
+      "expect": "killed",
+      "reason": "Truncation is not reported as truncation (RFC 8446 6.1): lemma_nothing_sent is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_nothing_sent()",
+        "witness": "super::driver_spec::truncated(80).status == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::NotSent)"
+      }
+    },
+    {
+      "id": "dispatcher-close-notify-fatal-level",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description: crate::spec::CLOSE_NOTIFY })",
+      "replace": "crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_FATAL, description: crate::spec::CLOSE_NOTIFY })",
+      "expect": "killed",
+      "reason": "A close_notify during the flight goes out at the fatal level: lemma_flight_close_sends_close_notify is false.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_flight_close_sends_close_notify()",
+        "witness": "super::dispatcher_spec::closing(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state()).0 != super::dispatcher_spec::Action::Close(Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]))"
       }
     }
   ]

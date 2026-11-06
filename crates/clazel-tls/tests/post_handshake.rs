@@ -650,17 +650,31 @@ fn change_cipher_spec_after_the_handshake_is_unexpected_message() -> Result<(), 
 }
 
 #[test]
-fn close_notify_is_answered_and_ends_delivery() -> Result<(), String> {
+fn close_notify_ends_delivery_and_leaves_the_write_side_open() -> Result<(), String> {
     let mut h = Harness::new()?;
     let data = h.server_record(CT_APPLICATION_DATA, b"last");
     let alert = h.server_record(CT_ALERT, &[1, CLOSE_NOTIFY]);
     let late = h.server_record(CT_APPLICATION_DATA, b"too late");
     assert_eq!(h.feed(&data), vec![Action::Deliver(b"last".to_vec())]);
     let (consumed, actions) = h.client.step(Input::Bytes(&alert));
-    assert_eq!(consumed, alert.len());
-    assert_eq!(actions.len(), 2);
-    assert_eq!(actions.last(), Some(&Action::Close));
-    let reply = sends(&actions)
+    assert_eq!((consumed, actions), (alert.len(), vec![Action::PeerClosed]));
+    assert!(!h.client.is_open());
+    // Data after the closure alert is ignored (§6.1): consumed, nothing delivered.
+    let (consumed, actions) = h.client.step(Input::Bytes(&late));
+    assert_eq!((consumed, actions), (late.len(), vec![]));
+    // §6.1: the write side is still open; the client ends it when it chooses.
+    let sent = h.client.send_application(b"more");
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"more".to_vec()))
+    );
+    let closing = h.client.close();
+    assert_eq!(closing.last(), Some(&Action::Close));
+    let reply = sends(&closing)
         .first()
         .map(|w| (*w).clone())
         .ok_or("no close_notify")?;
@@ -668,10 +682,6 @@ fn close_notify_is_answered_and_ends_delivery() -> Result<(), String> {
         h.server_reads(&reply),
         Some((CT_ALERT, vec![1, CLOSE_NOTIFY]))
     );
-    assert!(!h.client.is_open());
-    // Data after the closure alert is ignored (§6.1): consumed, nothing delivered.
-    let (consumed, actions) = h.client.step(Input::Bytes(&late));
-    assert_eq!((consumed, actions), (late.len(), vec![]));
     // Neither sending nor closing does anything now; the transport closing is not an error.
     assert_eq!(h.client.send_application(b"x"), vec![]);
     assert_eq!(h.client.update_keys(true), vec![]);
@@ -681,17 +691,28 @@ fn close_notify_is_answered_and_ends_delivery() -> Result<(), String> {
 }
 
 #[test]
+fn user_canceled_changes_nothing() -> Result<(), String> {
+    let mut h = Harness::new()?;
+    let alert = h.server_record(CT_ALERT, &[1, 90]);
+    assert_eq!(h.client.step(Input::Bytes(&alert)), (alert.len(), vec![]));
+    assert!(h.client.is_open());
+    let data = h.server_record(CT_APPLICATION_DATA, b"still here");
+    assert_eq!(h.feed(&data), vec![Action::Deliver(b"still here".to_vec())]);
+    Ok(())
+}
+
+#[test]
 fn every_other_alert_is_fatal_and_is_not_answered() -> Result<(), String> {
-    // handshake_failure, user_canceled, an unknown description, and close_notify at level fatal
-    // is still close_notify (TLS 1.3 ignores the level), so it is not in this list.
-    for (level, description) in [(2u8, 40u8), (1, 90), (1, 40), (2, 200), (1, 0xff)] {
+    // handshake_failure, an unknown description, and close_notify at level fatal is still
+    // close_notify (TLS 1.3 ignores the level), so it is not in this list.
+    for (level, description) in [(2u8, 40u8), (1, 40), (2, 200), (1, 0xff)] {
         let mut h = Harness::new()?;
         let alert = h.server_record(CT_ALERT, &[level, description]);
         let (consumed, actions) = h.client.step(Input::Bytes(&alert));
         assert_eq!(consumed, alert.len());
         assert_eq!(
             actions,
-            vec![Action::Fail(description)],
+            vec![Action::PeerAlert(description)],
             "level {level} description {description}"
         );
         assert!(!h.client.is_open());
@@ -797,7 +818,7 @@ fn the_transport_closing_before_close_notify_is_a_failure_with_no_alert() -> Res
 }
 
 #[test]
-fn the_client_can_close_and_nothing_is_delivered_afterwards() -> Result<(), String> {
+fn the_client_can_close_and_read_until_the_server_closes() -> Result<(), String> {
     let mut h = Harness::new()?;
     let sent = h.client.send_application(b"request");
     let wire = sends(&sent)
@@ -809,8 +830,7 @@ fn the_client_can_close_and_nothing_is_delivered_afterwards() -> Result<(), Stri
         Some((CT_APPLICATION_DATA, b"request".to_vec()))
     );
     let closing = h.client.close();
-    assert_eq!(closing.len(), 2);
-    assert_eq!(closing.last(), Some(&Action::Close));
+    assert_eq!(closing.len(), 1);
     let wire = sends(&closing)
         .first()
         .map(|w| (*w).clone())
@@ -819,9 +839,32 @@ fn the_client_can_close_and_nothing_is_delivered_afterwards() -> Result<(), Stri
         h.server_reads(&wire),
         Some((CT_ALERT, vec![1, CLOSE_NOTIFY]))
     );
-    // The server's reply is ignored; so is anything else.
+    // §6.1: nothing more is written, and a requested KeyUpdate gets no reply.
+    assert_eq!(h.client.send_application(b"x"), vec![]);
+    let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
+    assert_eq!(h.client.step(Input::Bytes(&update)), (update.len(), vec![]));
+    h.server_rotates();
+    // The read side goes on until the server's own close_notify.
+    let data = h.server_record(CT_APPLICATION_DATA, b"response");
+    assert_eq!(h.feed(&data), vec![Action::Deliver(b"response".to_vec())]);
     let reply = h.server_record(CT_ALERT, &[1, CLOSE_NOTIFY]);
-    assert_eq!(h.client.step(Input::Bytes(&reply)), (reply.len(), vec![]));
+    assert_eq!(
+        h.client.step(Input::Bytes(&reply)),
+        (reply.len(), vec![Action::Close])
+    );
+    let late = h.server_record(CT_APPLICATION_DATA, b"too late");
+    assert_eq!(h.client.step(Input::Bytes(&late)), (late.len(), vec![]));
+    Ok(())
+}
+
+#[test]
+fn the_transport_closing_after_our_close_notify_alone_is_a_truncation() -> Result<(), String> {
+    let mut h = Harness::new()?;
+    h.client.close();
+    assert_eq!(
+        h.client.step(Input::Closed),
+        (0, vec![Action::Fail(INTERNAL_ERROR)])
+    );
     Ok(())
 }
 

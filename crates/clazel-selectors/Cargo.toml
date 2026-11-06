@@ -1,0 +1,17 @@
+[package]
+name = "clazel-selectors"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "CSS selectors for Clazel's Phase 5 browser (phase-5.md item 5.5). Holds only its test data so far."
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today, which is nothing: the crate has no code yet. `target-tier`
+# is what the policy requires, since this will parse selectors a page chose.
+[package.metadata.clazel]
+tier = 0
+target-tier = 2
+
+[lints]
+workspace = true
