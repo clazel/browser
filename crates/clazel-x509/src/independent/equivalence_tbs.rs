@@ -325,6 +325,7 @@ pub open spec fn optional_extensions_agree(a: Option<Seq<u8>>, v: Option<Seq<e::
         (Some(p), Some(q)) => {
             &&& x::parse_extensions(p) is Some
             &&& extensions_agree(x::parse_extensions(p)->Some_0, q)
+            &&& forall|k: int| 0 <= k < q.len() ==> extension_in_domain(#[trigger] q[k])
         },
         _ => false,
     }

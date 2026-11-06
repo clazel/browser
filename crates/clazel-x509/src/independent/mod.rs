@@ -51,6 +51,7 @@ pub mod equivalence_matching;
 pub mod equivalence_name;
 pub mod equivalence_name_constraints;
 pub mod equivalence_path;
+pub mod equivalence_requirements;
 pub mod equivalence_signature;
 pub mod equivalence_structures;
 pub mod equivalence_tbs;
