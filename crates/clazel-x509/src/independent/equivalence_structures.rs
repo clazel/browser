@@ -403,7 +403,6 @@ pub proof fn theorem_spki_back(input: Seq<u8>, u: i::Tlv, x: s::SubjectPublicKey
         spki_agree(k::parse_subject_public_key_info(input)->Some_0, x),
 {
     hide(k::parse_rsa_public_key);
-    hide(k::classify_ec_public_key);
     hide(c::parse_algorithm_identifier);
     hide(d::read_bit_string);
     hide(s::decode_algorithm_identifier);
