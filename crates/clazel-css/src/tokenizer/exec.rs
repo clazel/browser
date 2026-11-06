@@ -183,7 +183,7 @@ pub fn peek(input: &[u32], i: usize) -> (c: u32)
 }
 
 /// True if `c` is between `low` and `high` inclusive.
-fn between(c: u32, low: u32, high: u32) -> (r: bool)
+pub fn between(c: u32, low: u32, high: u32) -> (r: bool)
     ensures
         r == (low <= c <= high),
 {

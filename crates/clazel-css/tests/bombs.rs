@@ -37,14 +37,20 @@ fn linear(open: &str, close: &str) {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "minutes under Miri, and Miri has no use for the timing")]
+#[cfg_attr(
+    miri,
+    ignore = "minutes under Miri, and Miri has no use for the timing"
+)]
 fn curly_brackets() {
     linear("{", "");
     linear("{", "}");
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "minutes under Miri, and Miri has no use for the timing")]
+#[cfg_attr(
+    miri,
+    ignore = "minutes under Miri, and Miri has no use for the timing"
+)]
 fn other_brackets() {
     linear("(", "");
     linear("[", "]");
@@ -52,7 +58,10 @@ fn other_brackets() {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "minutes under Miri, and Miri has no use for the timing")]
+#[cfg_attr(
+    miri,
+    ignore = "minutes under Miri, and Miri has no use for the timing"
+)]
 fn rules_inside_rules() {
     linear("a{", "}");
     linear("a b{", "}");
@@ -60,14 +69,20 @@ fn rules_inside_rules() {
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "minutes under Miri, and Miri has no use for the timing")]
+#[cfg_attr(
+    miri,
+    ignore = "minutes under Miri, and Miri has no use for the timing"
+)]
 fn declarations_that_are_rules() {
     linear("a:b{", "}");
     linear("--a:b{", "}");
 }
 
 #[test]
-#[cfg_attr(miri, ignore = "minutes under Miri, and Miri has no use for the timing")]
+#[cfg_attr(
+    miri,
+    ignore = "minutes under Miri, and Miri has no use for the timing"
+)]
 fn a_block_as_a_value() {
     linear("a:{", "}");
 }

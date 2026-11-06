@@ -27,7 +27,9 @@ use clazel_css::parser::exec_parse::{
     ExecParsed, parse_component_value, parse_component_values, parse_declaration,
     parse_declaration_list, parse_rule, parse_stylesheet_contents,
 };
-use clazel_css::parser::rows::{ExecDeclaration, ExecDeclarationKind, ExecItem, ExecItemKind, ExecRow};
+use clazel_css::parser::rows::{
+    ExecDeclaration, ExecDeclarationKind, ExecItem, ExecItemKind, ExecRow,
+};
 use clazel_css::tokenizer::exec::{ExecNumber, ExecToken, next_token};
 use clazel_encoding::hooks::decode::decode;
 use clazel_encoding::labels::spec::Encoding;
@@ -290,12 +292,7 @@ fn top_level(items: &[ExecItem]) -> Vec<ExecItem> {
 
 /// The rule's block as the suite has it: the contents of the `{}` block after its prelude
 /// in `values`, from `*at`, which moves past it.
-fn block_contents(
-    values: &[Value],
-    at: &mut usize,
-    parsed: &ExecParsed,
-    item: &ExecItem,
-) -> Value {
+fn block_contents(values: &[Value], at: &mut usize, parsed: &ExecParsed, item: &ExecItem) -> Value {
     let skip = [text(" "), text("<!--"), text("-->"), text(";")];
     while values.get(*at).is_some_and(|v| skip.contains(v)) {
         *at = at.saturating_add(1);
@@ -404,11 +401,31 @@ const EXPECTED_FAILURES: &[(&str, usize, &str)] = &[
         14,
         "as above: step 5 stops at the first semicolon",
     ),
-    ("one_declaration.json", 15, "whitespace trimmed by steps 4 and 7, as above"),
-    ("one_declaration.json", 16, "whitespace trimmed by steps 4 and 7, as above"),
-    ("one_declaration.json", 17, "whitespace trimmed by step 4, as above"),
-    ("one_declaration.json", 18, "whitespace trimmed by step 4, as above"),
-    ("one_declaration.json", 19, "whitespace trimmed by step 4, as above"),
+    (
+        "one_declaration.json",
+        15,
+        "whitespace trimmed by steps 4 and 7, as above",
+    ),
+    (
+        "one_declaration.json",
+        16,
+        "whitespace trimmed by steps 4 and 7, as above",
+    ),
+    (
+        "one_declaration.json",
+        17,
+        "whitespace trimmed by step 4, as above",
+    ),
+    (
+        "one_declaration.json",
+        18,
+        "whitespace trimmed by step 4, as above",
+    ),
+    (
+        "one_declaration.json",
+        19,
+        "whitespace trimmed by step 4, as above",
+    ),
     (
         "one_declaration.json",
         21,
@@ -455,7 +472,12 @@ fn report(suite: &str, pass: usize, xfail: usize, fail: usize, total: usize) {
 }
 
 /// Runs `file`, whose cases are strings.
-fn run(file: &str, suite: &str, check: impl Fn(&str, &Json) -> bool, show: impl Fn(&str) -> String) {
+fn run(
+    file: &str,
+    suite: &str,
+    check: impl Fn(&str, &Json) -> bool,
+    show: impl Fn(&str) -> String,
+) {
     let (mut pass, mut xfail, mut fail, mut total) = (0usize, 0usize, 0usize, 0usize);
     for case in syntax::cases().iter().filter(|c| c.file == file) {
         total = total.saturating_add(1);
@@ -519,7 +541,10 @@ fn one_rules() {
     run(
         "one_rule.json",
         "css-parsing-tests one_rule",
-        |input, expected| same(&one_rule(input), expected) || (is_error(expected) && is_error_value(&one_rule(input))),
+        |input, expected| {
+            same(&one_rule(input), expected)
+                || (is_error(expected) && is_error_value(&one_rule(input)))
+        },
         |input| format!("{:?}", one_rule(input)),
     );
 }
@@ -544,7 +569,10 @@ fn one_declarations() {
     run(
         "one_declaration.json",
         "css-parsing-tests one_declaration",
-        |input, expected| same(&one_declaration(input), expected) || (is_error(expected) && is_error_value(&one_declaration(input))),
+        |input, expected| {
+            same(&one_declaration(input), expected)
+                || (is_error(expected) && is_error_value(&one_declaration(input)))
+        },
         |input| format!("{:?}", one_declaration(input)),
     );
 }
@@ -592,7 +620,10 @@ fn one_component_values() {
     run(
         "one_component_value.json",
         "css-parsing-tests one_component_value, parsed",
-        |input, expected| same(&one_value(input), expected) || (is_error(expected) && is_error_value(&one_value(input))),
+        |input, expected| {
+            same(&one_value(input), expected)
+                || (is_error(expected) && is_error_value(&one_value(input)))
+        },
         |input| format!("{:?}", one_value(input)),
     );
 }
@@ -609,7 +640,11 @@ fn part_value(anb: &ExecAnB, part: ExecPart) -> i128 {
                 }
                 _ => 0,
             };
-            if negated { value.saturating_neg() } else { value }
+            if negated {
+                value.saturating_neg()
+            } else {
+                value
+            }
         }
         ExecPart::Remainder { index, from } => {
             let word = match anb.tokens.get(index) {
@@ -623,7 +658,8 @@ fn part_value(anb: &ExecAnB, part: ExecPart) -> i128 {
 }
 
 fn a_n_plus_b(input: &str) -> Option<(i128, i128)> {
-    read_a_n_plus_b(&code_points(input)).map(|anb| (part_value(&anb, anb.a), part_value(&anb, anb.b)))
+    read_a_n_plus_b(&code_points(input))
+        .map(|anb| (part_value(&anb, anb.a), part_value(&anb, anb.b)))
 }
 
 fn same_a_n_plus_b(input: &str, expected: &Json) -> bool {
@@ -682,7 +718,10 @@ fn run_wpt(page: &str, suite: &str, actual: impl Fn(&str) -> Option<String>) {
         } else if expected_failure {
             xfail = xfail.saturating_add(1);
         } else {
-            println!("FAILED {page} line {}: {input:?}", case.line);
+            println!(
+                "FAILED {page} line {} {}: {input:?}",
+                case.line, case.helper
+            );
             println!("  actual   {got:?}");
             println!("  expected {expected:?}");
             fail = fail.saturating_add(1);
@@ -711,7 +750,11 @@ const COMMENT_IN_RANGE: &str = "the page tests a <urange> grammar over tokens, w
 /// and the table's one direct `test()` of `urange-parsing.html` is among what is not read.
 #[test]
 fn what_could_not_be_read_stays_listed() {
-    assert!(wpt::not_run().iter().any(|(f, _)| *f == "urange-parsing.html"));
+    assert!(
+        wpt::not_run()
+            .iter()
+            .any(|(f, _)| *f == "urange-parsing.html")
+    );
     assert!(!wpt::not_run().iter().any(|(f, _)| *f == "anb-parsing.html"));
 }
 
@@ -722,7 +765,11 @@ fn serialized_a_n_plus_b(input: &str) -> Option<String> {
 
 #[test]
 fn wpt_a_n_plus_b_parsing() {
-    run_wpt("anb-parsing.html", "WPT css-syntax anb-parsing", serialized_a_n_plus_b);
+    run_wpt(
+        "anb-parsing.html",
+        "WPT css-syntax anb-parsing",
+        serialized_a_n_plus_b,
+    );
 }
 
 #[test]
@@ -776,13 +823,17 @@ fn same_ranges(input: &str, expected: &Json) -> bool {
         return false;
     };
     actual.len() == entries.len()
-        && actual.iter().zip(entries.iter()).all(|(a, e)| match (a, e) {
-            (None, Json::Null) => true,
-            (Some((s, t)), Json::List([Json::Num(es), Json::Num(et)])) => {
-                es.parse::<u32>().is_ok_and(|e| e == *s) && et.parse::<u32>().is_ok_and(|e| e == *t)
-            }
-            _ => false,
-        })
+        && actual
+            .iter()
+            .zip(entries.iter())
+            .all(|(a, e)| match (a, e) {
+                (None, Json::Null) => true,
+                (Some((s, t)), Json::List([Json::Num(es), Json::Num(et)])) => {
+                    es.parse::<u32>().is_ok_and(|e| e == *s)
+                        && et.parse::<u32>().is_ok_and(|e| e == *t)
+                }
+                _ => false,
+            })
 }
 
 #[test]
@@ -797,13 +848,15 @@ fn unicode_ranges() {
 
 #[test]
 fn wpt_unicode_ranges() {
-    run_wpt("urange-parsing.html", "WPT css-syntax urange-parsing", |input| {
-        match ranges(input).as_slice() {
+    run_wpt(
+        "urange-parsing.html",
+        "WPT css-syntax urange-parsing",
+        |input| match ranges(input).as_slice() {
             [Some((start, end))] if start == end => Some(format!("U+{start:X}")),
             [Some((start, end))] => Some(format!("U+{start:X}-{end:X}")),
             _ => None,
-        }
-    });
+        },
+    );
 }
 
 /// The encoding the suite names.
@@ -853,10 +906,19 @@ fn stylesheet_bytes_rules() {
         if matches {
             pass = pass.saturating_add(1);
         } else {
-            println!("FAILED stylesheet_bytes.json {}: {:?}", case.index, case.input);
+            println!(
+                "FAILED stylesheet_bytes.json {}: {:?}",
+                case.index, case.input
+            );
             fail = fail.saturating_add(1);
         }
     }
-    report("css-parsing-tests stylesheet_bytes, rules", pass, 0, fail, total);
+    report(
+        "css-parsing-tests stylesheet_bytes, rules",
+        pass,
+        0,
+        fail,
+        total,
+    );
     assert_eq!(fail, 0, "stylesheet_bytes");
 }

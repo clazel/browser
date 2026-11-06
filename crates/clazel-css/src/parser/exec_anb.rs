@@ -5,7 +5,6 @@
 //! by whoever uses it, as for every other number here.
 
 use super::exec::*;
-use super::exec_rules::*;
 use super::rows::*;
 #[allow(unused_imports)]
 use super::spec::*;
@@ -162,7 +161,7 @@ fn digits_from(string: &[u32], start: usize) -> (r: bool)
         decreases string.len() - i,
     {
         let c = crate::tokenizer::exec::peek(string, i);
-        if c < 0x30 || c > 0x39 {
+        if !crate::tokenizer::exec::between(c, 0x30, 0x39) {
             proof {
                 lemma_digit_fails(string@, start as int, i as int);
             }
@@ -256,16 +255,14 @@ fn read_a_of_n(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<(ExecPar
             }
         }),
 {
+    let start: usize = 0;
     let n: [u32; 1] = [0x6E];
     let dash_n: [u32; 2] = [0x2D, 0x6E];
     proof {
         assert(n@ =~= n_string());
         assert(dash_n@ =~= dash_n_string());
     }
-    let first = match tokens.get(0) {
-        Some(token) => token,
-        None => return None,
-    };
+    let first = tokens.get(start)?;
     if dimension_is(first, n.as_slice()) {
         return Some((ExecPart::Value { index: 0, negated: false }, 1));
     }
@@ -275,12 +272,12 @@ fn read_a_of_n(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<(ExecPar
     if word_is(first, dash_n.as_slice()) {
         return Some((ExecPart::Literal { value: -1 }, 1));
     }
-    if plus_adjacent && delim_is(first, 0x2B) {
-        if let Some(second) = tokens.get(1) {
-            if word_is(second, n.as_slice()) {
-                return Some((ExecPart::Literal { value: 1 }, 2));
-            }
-        }
+    let then_n = match tokens.get(1) {
+        Some(second) => word_is(second, n.as_slice()),
+        None => false,
+    };
+    if plus_adjacent && delim_is(first, 0x2B) && then_n {
+        return Some((ExecPart::Literal { value: 1 }, 2));
     }
     None
 }
@@ -298,16 +295,14 @@ fn read_a_of_n_dash(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<(Ex
             }
         }),
 {
+    let start: usize = 0;
     let n_dash: [u32; 2] = [0x6E, 0x2D];
     let dash_n_dash: [u32; 3] = [0x2D, 0x6E, 0x2D];
     proof {
         assert(n_dash@ =~= n_dash_string());
         assert(dash_n_dash@ =~= dash_n_dash_string());
     }
-    let first = match tokens.get(0) {
-        Some(token) => token,
-        None => return None,
-    };
+    let first = tokens.get(start)?;
     if dimension_is(first, n_dash.as_slice()) {
         return Some((ExecPart::Value { index: 0, negated: false }, 1));
     }
@@ -317,12 +312,12 @@ fn read_a_of_n_dash(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<(Ex
     if word_is(first, dash_n_dash.as_slice()) {
         return Some((ExecPart::Literal { value: -1 }, 1));
     }
-    if plus_adjacent && delim_is(first, 0x2B) {
-        if let Some(second) = tokens.get(1) {
-            if word_is(second, n_dash.as_slice()) {
-                return Some((ExecPart::Literal { value: 1 }, 2));
-            }
-        }
+    let then_n_dash = match tokens.get(1) {
+        Some(second) => word_is(second, n_dash.as_slice()),
+        None => false,
+    };
+    if plus_adjacent && delim_is(first, 0x2B) && then_n_dash {
+        return Some((ExecPart::Literal { value: 1 }, 2));
     }
     None
 }
@@ -338,11 +333,9 @@ fn read_single_clause(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<
 {
     let count = tokens.len();
     let index = count.saturating_sub(1);
-    let last = match tokens.get(index) {
-        Some(token) => token,
-        None => return None,
-    };
-    let plussed = count == 2 && plus_adjacent && match tokens.get(0) {
+    let last = tokens.get(index)?;
+    let start: usize = 0;
+    let plussed = count == 2 && plus_adjacent && match tokens.get(start) {
         Some(first) => delim_is(first, 0x2B),
         None => false,
     };
@@ -365,8 +358,8 @@ fn read_single_clause(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<
             if (count == 1 || plussed) && n_dash_digits(value.as_slice(), 0) {
                 return Some((ExecPart::Literal { value: 1 }, ExecPart::Remainder { index, from: 1 }));
             }
-            if count == 1 && value.len() > 0 && crate::tokenizer::exec::peek(value.as_slice(), 0)
-                == 0x2D && n_dash_digits(value.as_slice(), 1) {
+            if count == 1 && crate::tokenizer::exec::peek(value.as_slice(), 0) == 0x2D
+                && n_dash_digits(value.as_slice(), 1) {
                 return Some(
                     (ExecPart::Literal { value: -1 }, ExecPart::Remainder { index, from: 2 }),
                 );
@@ -389,10 +382,8 @@ fn read_clauses(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<(ExecPa
         assert(even@ =~= seq![0x65u32, 0x76, 0x65, 0x6E]);
     }
     let count = tokens.len();
-    let first = match tokens.get(0) {
-        Some(token) => token,
-        None => return None,
-    };
+    let start: usize = 0;
+    let first = tokens.get(start)?;
     if count == 1 && word_is(first, odd.as_slice()) {
         return Some((ExecPart::Literal { value: 2 }, ExecPart::Literal { value: 1 }));
     }
@@ -405,10 +396,7 @@ fn read_clauses(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<(ExecPa
         );
     }
     let last_index = count.saturating_sub(1);
-    let last = match tokens.get(last_index) {
-        Some(token) => token,
-        None => return None,
-    };
+    let last = tokens.get(last_index)?;
     proof {
         assert(as_values(tokens@).last() == as_values(tokens@)[tokens.len() - 1]);
     }
@@ -424,10 +412,7 @@ fn read_clauses(tokens: &[ExecToken], plus_adjacent: bool) -> (r: Option<(ExecPa
                 return None;
             }
             if count == taken.saturating_add(2) && is_signless(last) {
-                let operator = match tokens.get(taken) {
-                    Some(token) => token,
-                    None => return None,
-                };
+                let operator = tokens.get(taken)?;
                 if delim_is(operator, 0x2B) {
                     return Some((a, ExecPart::Value { index: last_index, negated: false }));
                 }
@@ -565,7 +550,7 @@ proof fn lemma_anb_step(
     let first = first_non_whitespace(list, 0);
     let items = without_whitespace(list);
     lemma_without_push(list, value);
-    lemma_fnw_push(list, value, 0);
+    super::exec_rules::lemma_fnw_push(list, value, 0);
     if first + 1 < list.len() {
         assert(bigger[first + 1] == list[first + 1]);
     }
@@ -636,7 +621,7 @@ pub fn read_a_n_plus_b(input: &[u32]) -> (r: Option<ExecAnB>)
     }
     loop
         invariant
-            text_fits(text@),
+            super::exec_rules::text_fits(text@),
             stream == stream_of(text@, false),
             at_index(text@, false, idx, at as int),
             at <= text.len(),
@@ -731,11 +716,8 @@ pub fn read_a_n_plus_b(input: &[u32]) -> (r: Option<ExecAnB>)
     if too_long || has_block {
         return None;
     }
-    let parts = read_clauses(tokens.as_slice(), adjacent);
-    match parts {
-        Some((a, b)) => Some(ExecAnB { tokens, a, b }),
-        None => None,
-    }
+    let (a, b) = read_clauses(tokens.as_slice(), adjacent)?;
+    Some(ExecAnB { tokens, a, b })
 }
 
 /// An integer, in sign and magnitude, for serialization.
@@ -780,7 +762,7 @@ fn push_digits(n: u64, out: &mut Vec<u32>)
         if value < 10 {
             break;
         }
-        value = value / 10;
+        value /= 10;
     }
     let ghost start = out@;
     let mut i: usize = 0;

@@ -11,7 +11,7 @@ vstd = "=0.0.0-2026-10-04-0306"
 
 [dev-dependencies]
 # Decodes the cases of stylesheet_bytes.json in tests/conformance_syntax.rs.
-clazel-encoding = { path = "../clazel-encoding" }
+clazel-encoding = { path = "../clazel-encoding", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this will
