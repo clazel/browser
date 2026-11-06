@@ -1110,7 +1110,7 @@ pub fn tokenize_all(input: &[u32]) -> (tokens: Vec<ExecToken>)
         invariant
             super::contract::input_requires(input@),
             pos <= input.len(),
-            tokenize_loop(input@, pos as int, view_tokens(tokens@)) == tokenize(input@),
+            tokenize_loop(input@, pos as int, false, view_tokens(tokens@)) == tokenize(input@),
         decreases input.len() - pos,
     {
         let (token, next) = next_token(input, pos, false);

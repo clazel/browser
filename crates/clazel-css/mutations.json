@@ -211,8 +211,8 @@
     {
       "id": "token-doubled",
       "file": "src/tokenizer/spec.rs",
-      "find": "tokenize_loop(input, next, tokens.push(token))",
-      "replace": "tokenize_loop(input, next, tokens.push(token).push(token))",
+      "find": "tokenize_loop(input, next, unicode_ranges_allowed, tokens.push(token))",
+      "replace": "tokenize_loop(input, next, unicode_ranges_allowed, tokens.push(token).push(token))",
       "expect": "killed",
       "reason": "More tokens than code points, so walking them would not be linear.",
       "certificate": {
