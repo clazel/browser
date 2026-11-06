@@ -46,6 +46,7 @@ pub mod equivalence_der;
 pub mod equivalence_examples;
 pub mod equivalence_extensions;
 pub mod equivalence_frame;
+pub mod equivalence_host;
 pub mod equivalence_matching;
 pub mod equivalence_name;
 pub mod equivalence_name_constraints;
