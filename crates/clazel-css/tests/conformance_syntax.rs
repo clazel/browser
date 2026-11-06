@@ -13,13 +13,14 @@
 //! Dropped constructs are `["error", …]` entries in the suite and nothing at all in the
 //! text, so those entries are left out of what a result is compared with.
 //!
-//! `stylesheet_bytes.json` decodes each case with the encoding the suite names and checks the
-//! rules. Choosing that encoding is §3.2, which is not here, so that half is not checked.
+//! `stylesheet_bytes.json` goes from bytes to rules: §3.2 decodes each case, and the rules are
+//! checked here. `conformance_input.rs` checks the encoding it chose.
 //!
 //! WPT's pages run through the same code: `anb-parsing.html` and `anb-serialization.html`
 //! through An+B and its serialization, and `urange-parsing.html` through a `unicode-range`
 //! declaration. `input-preprocessing.html` is in `conformance_tokens.rs`.
 
+use clazel_css::input::exec::decode_stylesheet;
 use clazel_css::parser::exec_anb::{
     ExecAnB, ExecInteger, ExecPart, read_a_n_plus_b, write_a_n_plus_b,
 };
@@ -31,8 +32,7 @@ use clazel_css::parser::rows::{
     ExecDeclaration, ExecDeclarationKind, ExecItem, ExecItemKind, ExecRow,
 };
 use clazel_css::tokenizer::exec::{ExecNumber, ExecToken, next_token};
-use clazel_encoding::hooks::decode::decode;
-use clazel_encoding::labels::spec::Encoding;
+use clazel_encoding::labels::exec::get_an_encoding;
 use syntax::Json;
 
 /// The `css-parsing-tests` table.
@@ -859,22 +859,28 @@ fn wpt_unicode_ranges() {
     );
 }
 
-/// The encoding the suite names.
-fn encoding(name: &str) -> Option<Encoding> {
-    match name {
-        "utf-8" => Some(Encoding::Utf8),
-        "utf-16le" => Some(Encoding::Utf16Le),
-        "utf-16be" => Some(Encoding::Utf16Be),
-        "iso-8859-2" => Some(Encoding::Iso8859_2),
-        "iso-8859-5" => Some(Encoding::Iso8859_5),
+/// The string under `key` in a case of `stylesheet_bytes.json`, if it is not null.
+fn byte_field(input: &Json, key: &str) -> Option<&'static str> {
+    match input {
+        Json::Obj(fields) => fields.iter().find_map(|(k, value)| match value {
+            Json::Str(text) if *k == key => Some(*text),
+            _ => None,
+        }),
         _ => None,
     }
 }
 
-/// The rules of a sheet's bytes, decoded with the encoding the suite names.
-fn rules_of_bytes(bytes: &str, name: &str) -> Option<Vec<Value>> {
-    let raw: Vec<u8> = bytes.chars().map(|c| c as u32 as u8).collect();
-    let decoded = decode(&raw, encoding(name)?)?;
+/// The rules of a case's bytes, decoded by §3.2 with the labels the case gives.
+fn rules_of_bytes(case: &Json) -> Option<Vec<Value>> {
+    let code_points = |text: &str| -> Vec<u32> { text.chars().map(u32::from).collect() };
+    let raw: Vec<u8> = byte_field(case, "css_bytes")?
+        .chars()
+        .map(|c| u8::try_from(u32::from(c)).unwrap_or(0))
+        .collect();
+    let protocol = byte_field(case, "protocol_encoding").map(code_points);
+    let environment =
+        byte_field(case, "environment_encoding").and_then(|l| get_an_encoding(&code_points(l)));
+    let decoded = decode_stylesheet(&raw, protocol.as_deref(), environment)?;
     let input: String = decoded
         .iter()
         .map(|c| char::from_u32(*c).unwrap_or('\u{FFFD}'))
@@ -890,16 +896,9 @@ fn stylesheet_bytes_rules() {
         .filter(|c| c.file == "stylesheet_bytes.json")
     {
         total = total.saturating_add(1);
-        let bytes = match &case.input {
-            Json::Obj(fields) => fields.iter().find_map(|(key, value)| match (key, value) {
-                (&"css_bytes", Json::Str(bytes)) => Some(*bytes),
-                _ => None,
-            }),
-            _ => None,
-        };
-        let matches = match (bytes, &case.expected) {
-            (Some(bytes), Json::List([expected, Json::Str(name)])) => {
-                rules_of_bytes(bytes, name).is_some_and(|actual| same_list(&actual, expected))
+        let matches = match &case.expected {
+            Json::List([expected, _]) => {
+                rules_of_bytes(&case.input).is_some_and(|actual| same_list(&actual, expected))
             }
             _ => false,
         };
