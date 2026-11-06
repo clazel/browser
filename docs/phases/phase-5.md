@@ -549,7 +549,7 @@ the workspace.
 
 ### 5.2 CSS Syntax: input and tokenizer, spec and contracts (M)
 
-`crates/clazel-css`, module `tokenizer/`. CSS Syntax Level 3, pinned to a
+`crates/clazel-css`, modules `input/` and `tokenizer/`. CSS Syntax Level 3, pinned to a
 dated draft or commit: §3.2† "the input byte stream" (the fallback encoding
 from the BOM, the protocol's `charset`, an `@charset "…";` rule as the exact
 first bytes, the referring document's encoding, else UTF-8; then Encoding §6
@@ -1574,8 +1574,8 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 | Item | State |
 |------|-------|
 | 5.0 Decisions | taken (2026-11-04), (d) as a GPU rasterizer and the rest as recommended; open: how 5.18 fits with (g) (see 5.0) |
-| 5.1 Inventory and test data | not started |
-| 5.2 CSS tokenizer | not started |
+| 5.1 Inventory and test data | started, not on `main`: `css-parsing-tests`' ten syntax files (301 cases) and WPT `css/css-syntax/` (191 calls read, 23 pages and 1 test not run) vendored in `clazel-css`; no other WPT directories, inventory, Unicode tables, test fonts or dev-dependencies yet |
+| 5.2 CSS tokenizer | built and proven, not on `main`: spec, exec and theorems in `clazel-css`, 17 of 17 mutations killed with certificates, and the token-level suites passing (61 cases, 3 expected failures); §3.2 decoding of the input bytes not started |
 | 5.3 CSS parser | not started |
 | 5.4 CSS syntax evidence | not started |
 | 5.5 Selectors | not started |

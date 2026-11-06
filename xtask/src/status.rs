@@ -65,6 +65,7 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-treebuilder", Place::Renderer),
     ("clazel-dom", Place::Renderer),
     ("clazel-text", Place::Renderer),
+    ("clazel-css", Place::Renderer),
     ("clazel-displaylist", Place::Primitive),
     ("clazel-encoding", Place::Primitive),
     ("clazel-url", Place::Primitive),
@@ -1036,10 +1037,10 @@ mod tests {
         let mut names: Vec<&str> = PLACES.iter().map(|(n, _)| *n).collect();
         names.push("xtask");
         assert!(placement_problems(&names).is_empty());
-        names.push("clazel-css");
+        names.push("clazel-unplaced");
         assert_eq!(placement_problems(&names).len(), 1);
         let mut rows = table();
-        rows.insert("clazel-css".into(), row(&["clazel-css"]));
+        rows.insert("clazel-unplaced".into(), row(&["clazel-unplaced"]));
         assert!(render(&rows, &|_| None).is_err());
     }
 
