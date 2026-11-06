@@ -19,13 +19,13 @@ use super::equivalence_extensions::*;
 #[cfg(verus_only)]
 use super::equivalence_frame::*;
 #[cfg(verus_only)]
+use super::equivalence_name::*;
+#[cfg(verus_only)]
 use super::equivalence_name_constraints::*;
 #[cfg(verus_only)]
 use super::equivalence_path::*;
 #[cfg(verus_only)]
 use super::equivalence_requirements::*;
-#[cfg(verus_only)]
-use super::equivalence_name::*;
 #[cfg(verus_only)]
 use super::equivalence_structures::*;
 #[cfg(verus_only)]
