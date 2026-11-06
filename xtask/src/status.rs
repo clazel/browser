@@ -45,6 +45,7 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-kernel", Place::Kernel),
     ("clazel-fetch", Place::Kernel),
     ("clazel-cookie", Place::Kernel),
+    ("clazel-store", Place::Kernel),
     ("clazel-origin", Place::Kernel),
     ("clazel-psl", Place::Kernel),
     ("clazel-http", Place::Network),
@@ -56,12 +57,16 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-p384", Place::Network),
     ("clazel-crypto", Place::Network),
     ("clazel-net", Place::Shell),
+    ("clazel-store-shell", Place::Shell),
     ("clazel", Place::Shell),
+    ("clazel-window", Place::Shell),
     ("clazel-renderer", Place::Renderer),
     ("clazel-html", Place::Renderer),
     ("clazel-treebuilder", Place::Renderer),
     ("clazel-dom", Place::Renderer),
     ("clazel-text", Place::Renderer),
+    ("clazel-css", Place::Renderer),
+    ("clazel-displaylist", Place::Primitive),
     ("clazel-encoding", Place::Primitive),
     ("clazel-url", Place::Primitive),
     ("clazel-idna", Place::Primitive),
@@ -1002,8 +1007,12 @@ mod tests {
             (n == "clazel-crypto")
                 .then(|| "The trust boundary: every call into libcrux, each one axiom.".to_owned())
         })?;
-        // 0 of 29 at Tier 2; 903 Verus obligations; 267 of 277 mutants.
-        assert!(board.contains(">0<tspan font-size=\"14\" class=\"mut\">/29</tspan>"));
+        // 0 of every placed crate at Tier 2; 903 Verus obligations; 267 of 277 mutants.
+        let tier_2 = format!(
+            ">0<tspan font-size=\"14\" class=\"mut\">/{}</tspan>",
+            PLACES.len()
+        );
+        assert!(board.contains(&tier_2));
         assert!(board.contains(">903<"));
         assert!(board.contains(">267<tspan font-size=\"14\" class=\"mut\">/277</tspan>"));
         // 39 + 24 + 5 conformance cases passed in three suites; colons in a
@@ -1028,10 +1037,10 @@ mod tests {
         let mut names: Vec<&str> = PLACES.iter().map(|(n, _)| *n).collect();
         names.push("xtask");
         assert!(placement_problems(&names).is_empty());
-        names.push("clazel-css");
+        names.push("clazel-unplaced");
         assert_eq!(placement_problems(&names).len(), 1);
         let mut rows = table();
-        rows.insert("clazel-css".into(), row(&["clazel-css"]));
+        rows.insert("clazel-unplaced".into(), row(&["clazel-unplaced"]));
         assert!(render(&rows, &|_| None).is_err());
     }
 

@@ -321,6 +321,20 @@
         "lemma": "crate::examples::example_cookie_root_registrable()",
         "witness": "cookie_root_of_domain(crate::examples::rules(), crate::examples::dom(seq![crate::examples::l_www(), crate::examples::l_a(), crate::examples::l_com()])) == crate::examples::dom(seq![crate::examples::l_www(), crate::examples::l_a(), crate::examples::l_com()])"
       }
+    },
+    {
+      "id": "icann-rules-are-the-whole-list",
+      "file": "src/table.rs",
+      "module": "lemmas",
+      "find": "psl_rules().take(super::data::PSL_ICANN_RULES_LEN as int)",
+      "replace": "psl_rules()",
+      "expect": "killed",
+      "reason": "The private section counts as ICANN, so `*.github.io` is refused again: lemma_icann_rules_are_a_proper_prefix is false, as the two lists have one length.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "crate::lemmas::lemma_icann_rules_are_a_proper_prefix()",
+        "witness": "crate::data::PSL_ICANN_RULES_LEN < crate::data::PSL_RULES_LEN"
+      }
     }
   ]
 }

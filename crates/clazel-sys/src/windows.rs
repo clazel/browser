@@ -26,6 +26,8 @@ use std::path::Path;
 
 use crate::{Errno, RandomError};
 
+pub mod window;
+
 type Handle = isize;
 type Bool = i32;
 type Dword = u32;

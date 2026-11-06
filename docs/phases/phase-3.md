@@ -37,8 +37,10 @@ Phase 3 is done when all of these hold on macOS arm64 and Linux x86-64:
 5. CLAUDE.md, VERIFICATION.md, DEPENDENCIES.md and the checker match the
    TLS decision recorded in 3.0.
 6. A certificate on the pushed revocation set is refused (3.5h), and the
-   cookie jar, the history and the revocation set survive a restart
-   through the proven store format (3.10). Added 2026-11-03.
+   cookie jar, `localStorage`, the history and the revocation set survive
+   a restart through the proven store (3.10), whose recovery theorem holds
+   for a write cut off at any octet. Added 2026-11-03; `localStorage` and
+   recovery added the same day when 3.10 became generic storage.
 
 ## What is proven, and what is assumed
 
@@ -74,8 +76,9 @@ tries addresses in order).
 | `clazel-tls` | 2 | RFC 8446 §3 to §7, Appendix A.1; RFC 6066 §3 | record layer, handshake messages, key schedule, the client state machine, joined to libcrux |
 | `clazel-fetch` | 2 | (ours); Fetch §4.4 to §4.6 in part; RFC 6265bis §5.2, §5.3, §5.7, §5.8 HTTP parts; RFC 9110 §15.4 | the client state machine: URL to request, response to result, redirects, cookies |
 | `clazel-net` | 0 | — | the network shell: resolver, TCP, TLS I/O; counted like the host shell |
-| (decided in 3.10) | 2 | ours, or DER (X.690) through `clazel-der` | the persistent-state format: the cookie jar, history and revocation set (3.10) |
-| (still to choose) | 2 | CRLite, as a pinned `clubcard-crlite` version encodes it (3.5h.0) | the revocation set's parser and the revocation oracle (3.5h) |
+| `clazel-store-shell` | 0 | — | the store's shell: its files, lock, syncs and renames; counted like the host shell |
+| (decided in 3.10a.0) | 2 | WHATWG Storage §4, §6; records ours or DER (X.690) through `clazel-der` | the generic store: an ordered key–value store with transactions and a proven recovery, holding the cookie jar, `localStorage`, history and revocation set first (3.10) |
+| `clazel-crlite` | 2 | CRLite, as a pinned `clubcard-crlite` version encodes it (3.5h.0) | the revocation set's parser, its signed records (with their JSON) and the revocation oracle (3.5h) |
 
 Section numbers are from the documents at the time of writing; each spec
 header pins the exact RFC or commit it transcribes.
@@ -838,7 +841,7 @@ if its dependency tree allows a `test` row, and as reference text for the
 spec's structure. The signature checks themselves are parameters until
 3.5f.
 
-**As built** (on `main`, `crates/clazel-x509`, `tier = 0`, `target-tier = 2`; the verification counts are in the README table): the decoders (certificate, TBS, SPKI, extensions, names, name and policy constraints, time, signature-algorithm identifiers), RFC 9525 matching, the Mozilla root table (`roots`, from the vendored `certdata.txt`), the leaf checks, and RFC 5280 §6.1 path validation in `src/path/`: the §6.1 transcription (`spec`), the browser profile on top of it (`profile`: only refusals, each marked and sourced), the verdict on one candidate (`verifier`, `exec`) and the bounded depth-first chain search (`search`, `verify_server_chain`). Signature verification is a parameter (`LinkVerifier`); the real one is `clazel-crypto`'s `CertificateLinks`. Revocation is not checked (Phase 8). **x509-limbo** (`tests/conformance_limbo.rs`): every `SERVER` testcase with a DNS or IP peer name runs through `verify_server_chain` with limbo's trusted certificates, validation time and `max_chain_depth` (carried into the generated index by `cargo xtask testdata`) and a link verifier that accepts every signature; limbo's `SUCCESS` or `FAILURE` is compared with the verdict. **9,737 of 9,802 testcases agree** (923 `SUCCESS`, 8,814 `FAILURE`); 65 are expected failures listed by id with a reason in `tests/limbo/expected_failures.rs`, and the test fails if an id appears, vanishes or starts to agree: 10 `CLIENT` testcases; 10 needing CRLs; 4 needing signature verification (3.5f, P11); 3 ML-DSA; 1 `SUCCESS` without a DNS or IP name; 3 deliberate profile refusals of what RFC 5280 alone accepts (a CA certificate as the target, no extKeyUsage on the target); and 34 where limbo asks for the refusal of something that is an issuer-side or CA/Browser Forum certificate-profile rule that no §6.1 step or profile rule checks (authority and subject key identifiers, extension criticality flags, serial zero, subjectAltName criticality, root contents, extra or critical extKeyUsage, the subject commonName, malformed authorityInfoAccess, the target's key type and size, and a 2052-bit RSA root). The run found no disagreement that was a defect of the §6.1 transcription, the profile or the search, so it changed none of them. **What is not checked:** signatures in this crate's own run (the stand-in accepts all, so a `FAILURE` that rests on a signature is listed, not pinned; `clazel-crypto/tests/chain_limbo.rs` runs those cases with the real links); revocation; client-certificate validation; the target's key type and size (a profile gap, listed); that Chrome and Firefox agree with the profile where the profile's source marks a behaviour *unconfirmed*. **Not done for tier 2:** the differential against `rustls-webpki`, the independent transcription of ITU-T X.509 §7 to §12, and the raised tier itself. The path-validation design the doc comments cite (work packages P1 to P12) is not committed anywhere in the repository or its branches.
+**As built** (on `main`, `crates/clazel-x509`, `tier = 0`, `target-tier = 2`; the verification counts are in the README table): the decoders (certificate, TBS, SPKI, extensions, names, name and policy constraints, time, signature-algorithm identifiers), RFC 9525 matching, the Mozilla root table (`roots`, from the vendored `certdata.txt`), the leaf checks, and RFC 5280 §6.1 path validation in `src/path/`: the §6.1 transcription (`spec`), the browser profile on top of it (`profile`: only refusals, each marked and sourced), the verdict on one candidate (`verifier`, `exec`) and the bounded depth-first chain search (`search`, `verify_server_chain`). Signature verification is a parameter (`LinkVerifier`); the real one is `clazel-crypto`'s `CertificateLinks`. Revocation is not checked (Phase 8). **x509-limbo** (`tests/conformance_limbo.rs`): every `SERVER` testcase with a DNS or IP peer name runs through `verify_server_chain` with limbo's trusted certificates, validation time and `max_chain_depth` (carried into the generated index by `cargo xtask testdata`) and a link verifier that accepts every signature; limbo's `SUCCESS` or `FAILURE` is compared with the verdict. **9,736 of 9,802 testcases agree** (923 `SUCCESS`, 8,813 `FAILURE`); 66 are expected failures listed by id with a reason in `tests/limbo/expected_failures.rs`, and the test fails if an id appears, vanishes or starts to agree: 10 `CLIENT` testcases; 10 needing CRLs; 4 needing signature verification (3.5f, P11); 3 ML-DSA; 1 `SUCCESS` without a DNS or IP name; 3 deliberate profile refusals of what RFC 5280 alone accepts (a CA certificate as the target, no extKeyUsage on the target); and 34 where limbo asks for the refusal of something that is an issuer-side or CA/Browser Forum certificate-profile rule that no §6.1 step or profile rule checks (authority and subject key identifiers, extension criticality flags, serial zero, subjectAltName criticality, root contents, extra or critical extKeyUsage, the subject commonName, malformed authorityInfoAccess, the target's key type and size, and a 2052-bit RSA root); and 1 where limbo refuses a wildcard over a suffix in the PSL's private section, which BR 3.2.2.6 and `dns_match` do not. The run found no disagreement that was a defect of the §6.1 transcription, the profile or the search, so it changed none of them. **What is not checked:** signatures in this crate's own run (the stand-in accepts all, so a `FAILURE` that rests on a signature is listed, not pinned; `clazel-crypto/tests/chain_limbo.rs` runs those cases with the real links); revocation; client-certificate validation; the target's key type and size (a profile gap, listed); that Chrome and Firefox agree with the profile where the profile's source marks a behaviour *unconfirmed*. **Not done for tier 2:** the differential against `rustls-webpki`, the independent transcription of ITU-T X.509 §7 to §12, and the raised tier itself. The path-validation design the doc comments cite (work packages P1 to P12) is not committed anywhere in the repository or its branches.
 
 #### 3.5c RSA PKCS#1 v1.5 signature verification (M)
 
@@ -1508,6 +1511,56 @@ fixed, test-only seed through SHA-256.
   local measurement of top sites and the real-certificate corpus below are
   **not run, and no result is claimed**; no crate is raised to tier 2.
 
+**Top-site measurement (2026-11-05, local run, documented not asserted):**
+`crates/clazel-net/examples/tls_survey.rs` ran one handshake with the
+production verifier against each of the top 1,000 domains of the Tranco list
+JZPGY, on port 443, trying `www.<domain>` when the apex gave no answer. Every
+domain that failed then got OpenSSL 3.0.13 control handshakes from the same
+machine: our suite and group, AES with X25519, ChaCha20 with P-256, OpenSSL's
+default TLS 1.3 offer, and TLS 1.2. No server caused a panic.
+
+| Result | Domains |
+|---|---|
+| Handshake completed | 577 |
+| No DNS record for the domain or its `www` (mostly infrastructure domains) | 179 |
+| Has DNS, but OpenSSL's controls got no TLS either | 56 |
+| TLS 1.2 only | 123 |
+| TLS 1.3, needs AES (X25519 is enough) | 15 |
+| TLS 1.3, needs P-256 (ChaCha20 is enough) | 4 |
+| TLS 1.3, needs AES and a group other than X25519 together | 23 |
+| Needs `ecdsa_secp384r1_sha384`, which the ClientHello does not offer | 6 |
+| Refused correctly: the name does not match | 11 |
+| Refused correctly: the chain does not verify in OpenSSL either | 3 |
+| Refused by the public-suffix wildcard rule | 2 |
+| Unstable: airbnb.com's answer changed between runs, for both clients | 1 |
+
+So 577 of the 765 domains with a TLS server answered this client (75%).
+- *TLS 1.2 (16% of the 765)* is the largest group, and 3.0's decision to speak
+  TLS 1.3 only is its cause. Among them, 21 end the handshake with a
+  close_notify rather than an alert.
+- *AES and P-256 (42, 5.5%)* include microsoft.com, bing.com, office.com,
+  live.com, outlook.com, azure.com and ebay.com. This is the "one suite, no
+  AES" risk, and it is material. These controls ran with OpenSSL's signature
+  list, so some may also need the scheme below.
+- *`ecdsa_secp384r1_sha384` (0x0503):* cnn.com, telekom.de, statista.com,
+  namecheap.com, pbs.org and www.kaspersky-labs.com. With our exact signature
+  list OpenSSL fails on each as we do, and adding this scheme makes each
+  succeed. Some servers refuse (40), and others use the scheme unoffered,
+  which we refuse (47); cnn.com ends in 10. `clazel-p384` already checks P-384
+  signatures in chain links, not yet in CertificateVerify.
+- *Public-suffix wildcards:* `dns_match` refused a wildcard over any public
+  suffix, including the PSL's private section, so `*.githubusercontent.com`
+  and `*.github.io` never matched. www.githubusercontent.com and
+  www.wixsite.com were the two in this list, and raw.githubusercontent.com
+  failed the same way. OpenSSL accepts them. Decided (maintainer, 2026-11-05):
+  the veto covers the ICANN section only, as BR 2.3.1 §3.2.2.6 and Chromium's
+  `VerifyHostname` do, and x509-limbo's case refusing such a wildcard is an
+  expected failure. The table above is the run before that change.
+
+Limits: one vantage point on one day, domains rather than the hosts pages
+use, and a domain's apex stands for it unless it gave no answer. The
+list and raw results are not vendored.
+
 **Real-certificate compatibility measurement:** vendor a reproducible corpus
 of complete, original DER chains, with collection date, source, licence and
 SHA-256 fingerprints. Deduplicate certificates by fingerprint, retain their
@@ -1524,8 +1577,29 @@ result. Decide whether to retain strict rejection or introduce a documented
 certificate-profile exception only after recording those measurements and
 the interoperability rationale. Any exception needs its own spec, proofs
 and negative cases; it must preserve the original signed TBS bytes and must
-not relax the general DER decoder. **This measurement and decision are
-pending; no real-certificate prevalence or compatibility result is claimed.**
+not relax the general DER decoder.
+
+**Measured (2026-11-05):** `clazel-crypto/tests/conformance_real_chains.rs`
+over `tests/fixtures/real-chains-2026-11-05` (`SOURCE.md` there): the chains sent
+by the hosts of the top-site measurement, 760 chains and 2,276 certificates
+sent, 868 distinct (709 only ever leaves, 156 only ever later in a chain, 3
+both; 14 are in the root table).
+- *Encoding:* all 868 decode. A separate DER walk, outside the crate's
+  decoders, found no explicit `critical` FALSE and no malformed BOOLEAN, so no
+  extension OID, certificate or chain is affected, and no chain fails for this
+  encoding. `extensions.rs` keeps the strict result's fixture.
+- *Against `rustls-webpki` 0.103.16* (through rustls 0.23.46 and ring, on the
+  same bytes, with real signatures, the same roots, host and time): both accept
+  725 and both refuse 35. The first run differed on 4, where webpki accepted
+  and we refused a wildcard over a suffix in the PSL's private section
+  (www.azurefd.net, www.azureedge.net, www.wixsite.com,
+  www.githubusercontent.com); limiting `dns_match`'s veto to the ICANN section
+  removed them. The test fails on any difference.
+- *Limits:* one day's chains from popular sites, which are mostly recent
+  certificates. It says nothing of older or private ones.
+
+These measurements give no reason for a certificate-profile exception. The
+decision to keep strict rejection is the maintainer's and is not yet recorded.
 
 #### 3.5h Certificate revocation: a pushed set (L, after 3.5g and 3.10)
 
@@ -1554,8 +1628,8 @@ not change.
   transcribing the chosen format with its step numbers, a parser proven to
   it (total, never reads past its input, refuses anything else), examples,
   certified mutations, conformance against the publisher's own files and an
-  independent engine (a `test` row). Crate still to choose
-  (`clazel-x509` or a new one).
+  independent engine (a `test` row). Crate: `clazel-crlite`, new; only
+  the SCT-list parser goes in `clazel-x509`.
 - **The oracle:** `revoked(set, cert)` as a pure spec function of the set
   and the certificate (whatever 3.5h.0's format keys on), an executable one
   proven equal to it, and a `RevocationOracle` holding a set. A theorem: a
@@ -1566,9 +1640,8 @@ not change.
   3.8), its signature checked with the publisher's key by proven code
   before it replaces the stored set (3.10). The schedule and the key are
   3.5h.0's.
-- **Staleness, a modelling choice to record:** what happens with no set,
-  or one older than a bound (browsers fail open: the connection proceeds).
-  Whatever is chosen, `clazel fetch` says how old the set is.
+- **Staleness (decided 2026-11-05, 3.5h.0):** revocation fails open.
+  `clazel fetch` always says how old the set is, or that there is none.
 - **Tests:** a revoked certificate refused end to end (a fixture chain
   with a test set, and, run locally like the demo, a public test site with
   a revoked certificate); a set that does not parse or whose signature
@@ -1747,8 +1820,24 @@ X.509 code its signature needs. The costs to accept:
   no agent contacts Mozilla or Google.
 
 **Decided (maintainer, 2026-11-05): CRLite, `default` channel**, with the
-costs above accepted. Still open: the terms question for Mozilla, the
-staleness rule, and the crate for the parser and oracle.
+costs above accepted. Still open: the terms question for Mozilla.
+
+**Decided (maintainer, 2026-11-05): staleness fails open.**
+- With no set, or one that cannot be used, the connection proceeds with no
+  revocation check, and `clazel fetch` says so.
+- An old set is still used, since what it lists as revoked stays revoked, and
+  one older than 45 days (`max_filter_age_days`) is flagged as stale.
+- `NotCovered` and `NotEnrolled` count as not revoked. Firefox falls back to
+  OCSP there and clazel has none, so this is the accepted gap.
+- Failing closed is not an option: updates arrive over our own `https:`
+  client, so a set that blocked connections could not be replaced. The cost
+  accepted is that a stale set can let a revoked certificate through.
+
+**Decided (maintainer, 2026-11-05): a new crate, `clazel-crlite`, target tier
+2**, for the filter format, the signed records, the JSON parser and canonical
+serializer, and the oracle. None of it is X.509, and the format is declared
+unstable, so its updates stay out of `clazel-x509`. Only the SCT-list parser
+goes in `clazel-x509`. The JSON code moves out if something else needs it.
 
 ### 3.6 The client state machine (L)
 
@@ -1987,53 +2076,231 @@ Windows in place of `resolv.conf`; `clazel fetch http://example.com/` gets
 has no second transcription of the buffer layout; 32-bit Windows (the layout
 is the 64-bit one, and `clazel-net` refuses to build otherwise).
 
-### 3.10 Persistent state: serialising and storing what outlives a run (L)
+### 3.10 Persistent storage: one store for everything that outlives a run (L, split into 3.10a and 3.10b)
 
-Added 2026-11-03, for 3.5h: a revocation set is useless if it is
-downloaded again on every run. Today nothing outlives a run: the kernel's
-cookie jar starts empty, `clazel fetch` keeps its jar for one fetch, and
-`clazel browse` keeps its back list (`crates/clazel/cli/browse.rs`) in
-memory.
+Added 2026-11-03, for 3.5h, because a revocation set is useless if it is
+downloaded again on every run. Reshaped the same day (maintainer): 3.10 is
+**generic storage**, not one snapshot file per kind of state. Later phases
+will need `localStorage` persisted, IndexedDB, the Cache API, an HTTP cache
+(RFC 9111) and service-worker registrations, and each of them goes into
+this store rather than inventing its own.
 
-What is stored: the **cookie jar** (only cookies whose persistent-flag is
-set: RFC 6265bis §5.7 gives a cookie without `Expires` or `Max-Age` a
-persistent-flag of false, and such a cookie ends with the session), the
-**history** (the URLs the user visited, with their times; what exactly is
-kept, and whether it is per tab or global, is decided here), and the
-**revocation set** with its fetch time and signature (3.5h). Not stored:
-an HTTP cache (RFC 9111 is outside the phase), connections, renderer
-state.
+Today nothing outlives a run:
+- the kernel's cookie jar starts empty;
+- the kernel's `localStorage` is in memory only (Phase 2: an ordered list
+  per origin with a proven 5 MiB quota, `crates/clazel-kernel/src/exec/storage.rs`);
+- `clazel fetch` keeps its jar for one fetch;
+- `clazel browse` keeps its back list (`crates/clazel/cli/browse.rs`) in
+  memory.
 
-- **The format (ours, rule 8; target tier 2):** the file is read back
-  later, and another local program may have changed it, so it is parsed
-  as untrusted bytes. Decide first whether records are DER through
-  `clazel-der` (proven encoders and decoders, round trip and canonicity
-  already proven) or a format of ours. Either way: a versioned header, a
-  spec, an encoder and a decoder proven to it, with **round trip**
-  (decoding what was encoded gives it back), **canonicity** (encoding what
-  was decoded gives the same octets) and **refusal** (anything else is
-  refused, never half-read) as theorems, examples and certified mutations.
-  A decoded record must meet the invariants its consumer requires (a jar
-  must meet `clazel-cookie`'s `jar_in_range` and its uniqueness rules; a
-  revocation set must be one 3.5h's parser accepts), or it is refused.
-- **The kernel decides what is written:** a new output asks the host to
-  store a snapshot of the state the kernel chooses (the jar after
-  dropping expired and session cookies), and loading is an event that is
-  the only way a stored jar enters the kernel. Restate what is affected:
-  the jar theorems hold from a loaded jar as from an empty one, and the
-  store is outside every renderer domain, like the network.
-- **The shell (tier 0):** where the files live (the platform's per-user
-  application data directory), atomic replacement (write a new file, then
-  rename it over the old one), permissions readable by the user only, and
-  one writer at a time. A file that does not decode starts that part
-  empty, says so, and never crashes.
+**The model: the WHATWG Storage Standard** ([storage.spec.whatwg.org](https://storage.spec.whatwg.org/),
+last updated 2026-10-19).
+- **The web-visible part follows §4:**
+  - a *storage shed* (§4.3) maps *storage keys* (§4.2) to *storage
+    shelves* (§4.4);
+  - a shelf holds *storage buckets* (§4.5), each with a mode,
+    "best-effort" or "persistent";
+  - a bucket holds one *storage bottle* (§4.6) per *storage endpoint*
+    (§4.1).
+
+  The registered endpoints are `caches`, `indexedDB`, `localStorage`,
+  `serviceWorkerRegistrations` (type local) and `sessionStorage` (type
+  session). Usage and quota follow §6. A session-type shed is never
+  written to disk.
+- **Browser state no page may reach goes in browser buckets:** the cookie
+  jar, the history and the revocation set. These buckets sit outside
+  every storage key, so no renderer can name them. That is a modelling
+  choice to list in the spec, since the standard covers only what the web
+  can reach.
+- **Consumers name a bottle, never a file.** The store maps (shed, storage
+  key or browser bucket, bucket, endpoint) to a bottle, and a bottle holds
+  ordered keys and values. Adding an endpoint later adds a bottle kind; it
+  needs no change to the format.
+
+#### 3.10a The store (L)
+
+- **3.10a.0 Design note (S), before any code.** Record the choice and its
+  costs, as 3.0 and 3.5h.0 did:
+  - the layout: a log of records with commit points and compaction, or
+    B-tree pages;
+  - the record encoding: DER through `clazel-der`, whose encoders and
+    decoders and their round trip and canonicity are already proven, or a
+    format of ours;
+  - how large values are kept (a revocation set is about 6 MB, a cached
+    response can be larger);
+  - what one file holds (the whole store, or one file per shelf).
+- **The substrate (ours, rule 8; target tier 2): an ordered key–value
+  store with transactions.**
+  - Keys and values are octet strings. Keys are ordered by octets, so
+    IndexedDB's key ordering can later be encoded to preserve that order.
+  - A transaction is a list of puts and deletes over one or more bottles,
+    and it is applied whole or not at all.
+  - Operations: get, range scan, put, delete, commit, and usage per bucket
+    (§6).
+  - The file is parsed as untrusted bytes, since another local program may
+    have changed it.
+- **What is proven:**
+  - *Records.* An encoder and a decoder proven to the spec, with **round
+    trip** (decoding what was encoded gives it back), **canonicity**
+    (encoding what was decoded gives the same octets) and **refusal**
+    (anything else is refused, never half-read).
+  - *Recovery, the main theorem.* Opening any prefix of a file the store
+    wrote gives exactly the state after the last transaction committed in
+    that prefix: never a partial transaction, and never a state that no
+    sequence of commits produced. A prefix models a write the OS cut off at
+    any octet. A file the store did not write is refused, or read as the
+    longest valid prefix (the design note picks one).
+  - *Compaction.* It changes the octets, never the state.
+  - *Quota.* Usage per bucket is computed exactly, and a transaction that
+    would exceed the quota is refused whole. This extends Phase 2's
+    `lemma_quota_push` and `lemma_quota_update`.
+  - Examples, certified mutations, and an independent transcription, as
+    for every tier 2 crate.
+- **The shell (tier 0):**
+  - where the files live (the platform's per-user application data
+    directory);
+  - permissions readable by the user only;
+  - one process at a time (a lock file);
+  - `fsync` at each commit point;
+  - the rename that publishes a compacted file.
+
+  A store that doesn't open starts empty, says so, and never crashes. The
+  old file is kept beside it for the user, not deleted.
 - **Not claimed:** protection against a local attacker who can write the
   user's files (they can replace the browser too), encryption at rest,
-  and a private browsing mode.
-- **Tests:** round trips of real jars and sets; truncated, oversized and
-  hostile files refused; a kernel restarted from a stored jar sends the
-  same `Cookie` fields as before the restart; an interrupted write leaves
-  the old file whole.
+  durability beyond what `fsync` gives on the platform, and a private
+  browsing mode.
+
+**3.10a.0 Design note: accepted by the maintainer, 2026-11-03.** Each
+choice below is followed by what it costs.
+
+- **Layout: an append-only log per bucket, compacted by rewriting.**
+  - *How it works.* Each commit appends one record that holds the whole
+    transaction. Opening the store replays the records in order.
+    Compaction writes the live state as a new log and renames it over the
+    old one.
+  - *Why a log.* Recovery is then a fold over a list of records, which is
+    a short proof. A B-tree changes pages in place, so it needs a
+    write-ahead log anyway, plus proofs of page splits and merges.
+  - *The cost.* A store this size keeps its whole index in memory: about
+    6 MB for the revocation set plus small amounts for the rest. That is
+    no problem in Phase 3. An HTTP cache in gigabytes will need values
+    read from disk by offset, and the record format allows that (each
+    value is one octet string at a known position). The design leaves
+    room for it but doesn't build it.
+  - *Precedent, unchecked here.* Chromium keeps `localStorage` and
+    IndexedDB in LevelDB, which is log-structured; Firefox uses SQLite.
+    Neither is a dependency we may take (rule 8), and neither shapes the
+    proof.
+- **Granularity: one log file per bucket.**
+  - The Storage Standard scopes every endpoint to a bucket (§4.5), and
+    IndexedDB transactions never cross a bucket. So no transaction needs
+    two files, and the recovery theorem is about a single file.
+  - Clearing a site's data deletes its files, and a damaged file loses one
+    bucket, not the whole store.
+  - The file is named by the SHA-256 of its encoded bucket identity (the
+    storage key, or the browser bucket's name, plus the bucket name). The
+    identity is repeated in the header, and a file whose header doesn't
+    match its name is refused.
+  - *The cost.* One file per origin that stores anything, and one `fsync`
+    per bucket that commits.
+- **Records: DER through `clazel-der`.**
+  - `clazel-der` is already tier 2, and its TLV round trip is proven in
+    both directions (`lemma_read_tlv_encode_tlv`,
+    `lemma_encode_tlv_read_tlv`), as is never reading past the input
+    (`lemma_read_tlv_no_overread`). Lengths go up to 2^64.
+  - Whatever the new crate encodes reuses those proofs. A format of our
+    own would need all of them proven again.
+  - The header is
+    `SEQUENCE { magic OCTET STRING "clazel-store", version INTEGER 1, identity OCTET STRING }`.
+  - Each record is
+    `SEQUENCE { commit INTEGER, ops SEQUENCE OF Op, check OCTET STRING (4) }`,
+    where `Op` is one of three context-tagged choices:
+    - `put [0] { bottle, key, value }`;
+    - `delete [1] { bottle, key }`;
+    - `clear [2] { bottle }`.
+
+    `commit` increases by exactly 1 from record to record, and the first
+    record's `commit` is 1. (That last clause was added on 2026-11-04: the
+    independent transcription found this note silent on the first number.)
+  - *The cost.* DER spends a few octets of framing per field. A record's
+    length must be known before it is written, which is fine for a
+    transaction that is already built.
+- **Torn writes: a CRC-32C per record, the Castagnoli polynomial
+  `0x11edc6f41`** (RFC 7143 §13.1, which obsoletes RFC 3720, with test
+  vectors in §A.4). Read §13.1 with §11's convention that bit 0 is the
+  most significant bit: its "bit 7" is the least significant bit, so the
+  CRC is the reflected one.
+  - A crash can leave the tail of the file truncated, or on some file
+    systems holding octets that were never written. The `check` field
+    covers the record's other contents.
+  - Recovery takes the longest run of records, from the header on, that
+    decode, check correctly, and number their commits in sequence. It
+    stops at the first record that fails any of these.
+  - CRC-32C is specified exactly in the spec and proven against it. No
+    cryptographic function is assumed.
+  - *The cost, a modelling choice to list.* Damaged octets that happen to
+    form a valid record with a matching CRC (about 1 in 2^32 for each
+    damaged tail) are taken as a commit. That isn't a defence against an
+    attacker, and none is claimed (see "Not claimed").
+  - If recovery drops any octets, the shell keeps the original file beside
+    the new one and says how much was dropped.
+- **Large values: kept inline, one octet string per value, at most 64 MiB
+  per record.**
+  - The revocation set is one value of about 6 MB.
+  - A value too large for one record is refused, not split. Splitting
+    belongs to the later cache, with values read by offset.
+- **The theorems this gives, in the spec's terms.** Let `state(file)` be
+  the fold of the recovered records over the empty state.
+  1. For every list of transactions `ts` and every prefix `p` of the file
+     written from `ts`, `state(p)` is the state after the first `k`
+     transactions of `ts`, for some `k`.
+  2. When `p` is the whole file, `k` is the length of `ts`.
+  3. Compacting gives a file with the same `state`.
+  4. A transaction that would take a bucket over its quota is refused
+     whole.
+- **The crate:** `clazel-store`, target tier 2. Its spec and
+  contracts come first, in a commit of their own (rule 3). It depends on
+  `clazel-der` and `vstd` only, with SHA-256 for file names taken from the
+  shell's existing crypto, not from the store's spec.
+
+#### 3.10b The first consumers (M, after 3.10a)
+
+- **The kernel decides what is written.**
+  - A new kernel output asks the host to commit a transaction the kernel
+    built, and loading is an event: the only way stored state enters the
+    kernel.
+  - The jar and `localStorage` theorems hold from loaded state as from an
+    empty one. Restate each one that is affected.
+  - The store is outside every renderer domain, like the network.
+- **The cookie jar:** only cookies whose persistent-flag is set. RFC
+  6265bis §5.7 gives a cookie without `Expires` or `Max-Age` a
+  persistent-flag of false, and such a cookie ends with the session.
+  Expired cookies are dropped before writing. A loaded jar must meet
+  `clazel-cookie`'s `jar_in_range` and its uniqueness rules, or it is
+  refused.
+- **`localStorage`:** the `localStorage` bottle of each storage key's
+  default bucket, holding Phase 2's per-origin lists. A loaded list must
+  meet the invariants Phase 2 proved (unique keys, within the 5 MiB
+  quota). `sessionStorage` is never stored.
+- **The history:** the URLs the user visited, with their times. What is
+  kept, and whether it is per tab or global, is decided here.
+- **The revocation set:** 3.5h's set with its fetch time and signature, in
+  a browser bucket. A stored set must be one 3.5h's parser accepts, so
+  this consumer comes last and waits for 3.5h.0's choice.
+- **Not stored in Phase 3:** IndexedDB, the Cache API, an HTTP cache
+  (RFC 9111 is outside the phase), service-worker registrations,
+  connections and renderer state. The design note must show where each of
+  these would go, without building them. WebSQL is out of scope for
+  good: the web platform removed it, and IndexedDB replaces it.
+- **Tests:**
+  - round trips of real jars, `localStorage` lists and sets;
+  - truncated, oversized and hostile files refused or recovered as the
+    recovery theorem says;
+  - a kernel restarted from a stored jar sends the same `Cookie` fields as
+    before the restart, and a page reads back its `localStorage`;
+  - a process killed at every write leaves a store that opens to a
+    committed state (run locally, like the demo).
 
 ### 3.9 Status and README (S)
 
@@ -2051,13 +2318,15 @@ ROADMAP.md.
 3.1 field syntax ─> 3.2 framing ─> 3.3 conformance ──┐                               │
 3.4 DNS ──────────────────────────────────────────────┼─> 3.8 shell + curl clone ─> 3.9
                                                      └─> 3.6 client ─> 3.7 kernel ─┘ │
-3.5g, 3.6, 3.7 ─> 3.10 store ─> 3.5h revocation ──────────────────────────────────────┘
+3.5g, 3.6, 3.7 ─> 3.10a store ─> 3.10b consumers ─> 3.5h revocation ─────────────────┘
 ```
 
 3.1, 3.4, 3.5a, 3.5c and 3.5d start at once; 3.6 can start against
 abstract parameters as soon as 3.1's field types exist; 3.8's `http://`
 half does not wait on TLS. 3.10 and 3.5h (added 2026-11-03) come after the
 `https:` path works: 3.5h's updates are fetched over it and stored by 3.10.
+3.10a needs nothing from TLS and can start at once. In 3.10b only the
+revocation set waits for 3.5h.0's choice.
 
 ## Status
 
@@ -2069,18 +2338,18 @@ half does not wait on TLS. 3.10 and 3.5h (added 2026-11-03) come after the
 | 3.3 HTTP conformance | built (`crates/clazel-http/tests/conformance_http.rs`, 7 suites, 0 unexpected failures): httparse differential on 6000 random, 60000 mutated (53915 pass, 6085 expected differences), 136 llhttp-corpus and 44 handcrafted heads (124 + 12 and 29 + 15 expected); the llhttp `test/response` and framing cases, 136 (109 pass, 27 expected failures, each listed with its reason); RFC 9112 §7.1 and §11 cases, 122; 3000 framing-by-construction messages. The llhttp fixtures are vendored under `tests/data/llhttp/` and converted by `cargo xtask testdata` (136 cases). `clazel-http` raised to tier 2 on 2026-10-25 |
 | 3.4 DNS message format | done (2026-10-24): tier 2 (see As built) |
 | 3.5a DER | on `main`; tier 2 (see As built) |
-| 3.5b X.509 and path validation | on `main`; tier 0, target 2 (see As built): decoders, RFC 9525 matching, root table, RFC 5280 §6.1 with the browser profile and the bounded chain search; x509-limbo 9,737 of 9,802 testcases agree with `verify_server_chain` (accept-all signature links), 65 listed expected failures (10 client, 10 CRL, 4 need signatures, 3 ML-DSA, 37 profile or certificate-profile rules); signatures checked by `clazel-crypto`'s links (P-384 issuer keys too, on `main`, #91, CI's full verification green on bf6a9ea, design P17: `clazel-p384` in the links, the 35 P-384 Mozilla roots' self-signatures verify, all 14 limbo online chains validate), no revocation; independent transcriptions on `main` (2026-11-03): X.509 (10/2019) §12 path processing (`path/independent.rs`, #72) and the browser profile (`path/independent_profile.rs`, #73), each with an equivalence proof to the spec on its stated domain (`path/independent_equivalence.rs`, #81, whose excluded inputs are listed in its header; `path/independent_profile_equivalence.rs`, #73, CI's full verification green on e86ebc5); #72 and #81 reached `main` together in f48d601 (CI's full verification green on bf6a9ea). Differential not done |
+| 3.5b X.509 and path validation | on `main`; tier 0, target 2 (see As built): decoders, RFC 9525 matching, root table, RFC 5280 §6.1 with the browser profile and the bounded chain search; x509-limbo 9,736 of 9,802 testcases agree with `verify_server_chain` (accept-all signature links), 66 listed expected failures (10 client, 10 CRL, 4 need signatures, 3 ML-DSA, 38 profile or certificate-profile rules, 1 of them a private-suffix wildcard); signatures checked by `clazel-crypto`'s links (P-384 issuer keys too, on `main`, #91, CI's full verification green on bf6a9ea, design P17: `clazel-p384` in the links, the 35 P-384 Mozilla roots' self-signatures verify, all 14 limbo online chains validate), no revocation; independent transcriptions on `main` (2026-11-03): X.509 (10/2019) §12 path processing (`path/independent.rs`, #72) and the browser profile (`path/independent_profile.rs`, #73), each with an equivalence proof to the spec on its stated domain (`path/independent_equivalence.rs`, #81, whose excluded inputs are listed in its header; `path/independent_profile_equivalence.rs`, #73, CI's full verification green on e86ebc5); #72 and #81 reached `main` together in f48d601 (CI's full verification green on bf6a9ea). Differential not done |
 | 3.5c RSA PKCS#1 v1.5 | on `main`; tier 2 (see As built) |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
 | 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters, and a post-handshake transducer: spec, contracts, executable, lemmas, 20 witnesses, 20 mutations and 25 passing integration tests (on `main`, #77, CI's full verification green on 797e26b). The dispatcher seals its own fatal alert (§6, §6.2) under the settled write epoch's next sequence number (§5.3) before dropping its keys, in the server's flight and after the handshake, and never answers a peer's alert (`PeerAlert`): spec, contracts, exec, lemmas, 8 new mutations with certificates and 20 dispatcher integration tests (on `main`, #86, 2026-11-03, CI's full verification green on bf6a9ea). Production providers and socket I/O are 3.5f and 3.8; the join of the transducer to the dispatcher remains; tier 0 |
 | 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. Randomness: `clazel_sys::fill_random` exists (Linux `getrandom` with flags 0, macOS `getentropy`, Windows `BCryptGenRandom` with the system-preferred RNG) and is audited (`docs/SYS-AUDITS.md`, source aa66b138); `clazel_net::TlsConnection::open` draws the scalar, ClientHello random and session id from it (on `main`, #88, CI's full verification green on bf6a9ea), and the driver itself still takes them from its caller. The client driver `clazel_crypto::client::Client` (on `main`, #85, CI's full verification green on 0a6fbec): connect/receive/send/close over `Bootstrap`, the key exchange and `Connection`; alerts in plaintext before the handshake keys, and from the ServerHello on the record `Connection` seals itself (#86, 2026-11-03: the driver's copy of the handshake epochs is removed, and a failure after the client Finished now sends its alert), 15 passing tests (8 against rustls, among them bad_record_mac after the handshake read by rustls); the join moved into `clazel-tls` as `Driver` (2026-11-05, stacked on #109, not yet on `main`): Hello and application stages proven to be those machines' own steps, the flight step's contract relational rather than exact, close_notify now sent during the flight; `Client`'s input loop and `send` chunking stay tier 0 glue |
-| 3.5g TLS conformance and trust store | first part built (2026-10-31, on `main`, #82, CI's full verification green on bcc4040): `clazel-crypto/tests/conformance_tls.rs`, 17 cases in two suites (5 success and control, 12 hostile): full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello without and with the §4.1.3 downgrade sentinel, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the behaviour it pins); the downgrade sentinel is checked (`illegal_parameter`, 2026-11-02, on `main`, #83, CI's full verification green on 2755dde). `conformance_tls.rs` runs through 3.5f's driver (2026-11-05, stacked on #114). Not done: the Mozilla root table check, the local top-site measurement and the real-certificate corpus (no result claimed), HelloRetryRequest and ticket paths against a real server, the tier 2 raises |
-| 3.5h Revocation (pushed set) | planned (2026-11-03): option 1 decided by the maintainer; 3.5h.0 facts checked and written up (2026-11-03); CRLite on its `default` channel decided by the maintainer (2026-11-05); nothing built. Production still passes `NothingRevoked`, so a revoked certificate is accepted |
+| 3.5g TLS conformance and trust store | first part built (2026-10-31, on `main`, #82, CI's full verification green on bcc4040): `clazel-crypto/tests/conformance_tls.rs`, 17 cases in two suites (5 success and control, 12 hostile): full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello without and with the §4.1.3 downgrade sentinel, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the behaviour it pins); the downgrade sentinel is checked (`illegal_parameter`, 2026-11-02, on `main`, #83, CI's full verification green on 2755dde). `conformance_tls.rs` runs through 3.5f's driver (2026-11-05, stacked on #114). Top-site measurement run locally (2026-11-05, see 3.5g): 577 of the 765 domains with a TLS server completed a handshake. Real-certificate corpus vendored and measured (2026-11-05, see 3.5g): 868 certificates all decode, none with an explicit `critical` FALSE; all 760 chains get the same verdict from `rustls-webpki`. Not done: the Mozilla root table check, HelloRetryRequest and ticket paths against a real server, the tier 2 raises |
+| 3.5h Revocation (pushed set) | planned (2026-11-03): option 1 decided by the maintainer; 3.5h.0 facts checked and written up (2026-11-03); CRLite on its `default` channel, failing open and in a new `clazel-crlite`, decided by the maintainer (2026-11-05); nothing built. Production still passes `NothingRevoked`, so a revoked certificate is accepted |
 | 3.6 Client state machine | on `main` (#3, #5): transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). `https:` (on `main`, #90, CI's full verification green on bf6a9ea): `https:` URLs get the same request as `http:`, port 443 by default and `Connect.tls` exactly for `https` (RFC 9110 §4.2.2), with `theorem_tls_when_secure` (every `Connect` is the current request's and speaks TLS exactly when the cookie functions see it as secure), 6 new examples and 4 new mutations with certificates; the independent transcription does not cover the connection (port, TLS). Not yet: other request contexts, HSTS, WPT fetch suites (none vendored) |
 | 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. `https:` through the kernel's `Driver` (#93, see 3.8). Open: the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
 | 3.8 Network shell and `curl` clone | built: `clazel-net` (resolver, TCP, `fetch` driving 3.6's transducer, so redirects are followed) and `clazel fetch URL`, tested against local servers and checked by hand against http://example.com/. Hostile-server tests built (`clazel-net/tests/hostile.rs`, 11 passing, about 1.5 s, 142 MB peak, nearly all of it the endless chunked body, whose parser keeps both the 64 MiB of octets received and the body decoded from them): bytes that are not HTTP, an endless body (no framing, a Content-Length over the limit, and chunked), chunk sizes of 2^64 and 2^64-1, a field line over 8192 octets, 300 field lines, an immediate close, partial heads, silence and a stalled head (timeout), a short Content-Length. The endless chunked body did not return within 20 s while `ResponseParser` re-parsed its buffer on every feed; the incremental parser (3.2) fixed it. It regressed when `fetch` moved onto 3.6's transducer, which re-parsed everything received on every `Bytes` input; the transducer now feeds the incremental parser (see 3.6's As built), and the test takes under a second. Server tests over real sockets built: the `http-state` parser corpus (`clazel-net/tests/http_state.rs`, 222 rows: 195 pass, 27 expected failures, each with its reason) and the WPT `cookies/` `httpCookieTest` tables (`clazel-net/tests/wpt_cookies.rs`, 167 cases: 157 pass, 10 expected failures), both through `fetch_jar` against an in-process server (2026-10-29). The network shell's line count (`crates/clazel-net/src`, 1805 lines) is in the README table's footnotes, written by `cargo xtask report` (3.9). `resolv.conf` is read by `clazel-dns`'s proven nameserver-line function; on Windows the DNS servers come from `GetAdaptersAddresses`, read by `clazel-dns`'s proven `adapters` reader (on `main`, #96, CI's full verification green on bf6a9ea, its `clazel-sys` call audited in `docs/SYS-AUDITS.md`). TLS loop built (on `main`, #85, CI's full verification green on 0a6fbec): `TlsConnection` over 3.5f's driver, `NetError::Tls` with the §6.2 alert, `Timeout(Stage::Handshake)`, `tests/tls.rs` against rustls on loopback (ECDSA, RSA, a 100000-octet response, close during the handshake, a stall, another name, an undecryptable response answered with bad_record_mac (#86), bytes that are not TLS). Randomness from the OS (#88): `open` draws from `clazel_sys::fill_random` and fails with `NetError::Random` before opening a socket, `open_with_random` keeps a seeded source for tests, the resolver's query ID comes from the same call, and `tests/tls.rs` has 11 tests (3 with the OS source; CI's full verification green on bf6a9ea). `https:` in `fetch` and `clazel fetch` (on `main`, #90, CI's full verification green on bf6a9ea): `Connect { tls: true }` opens a `TlsConnection` with Mozilla's roots, and any TLS failure (a truncation included) fails the fetch; `tests/tls.rs` adds four `fetch` tests over TLS (a request and response, another name, a truncated close-delimited body, a `Secure` cookie stored and sent). Checked by hand (2026-11-03): https://www.rust-lang.org/ gives 200; example.com, www.google.com, en.wikipedia.org, github.com, www.cloudflare.com, letsencrypt.org, http.cat and https://1.1.1.1/ fail with unknown_ca, each chain having a P-384 issuer key, which `clazel-crypto` refuses until P17 at that time. With P17 merged, the same hosts gave 200 from `fetch_with` in a run by hand (2026-11-03, the system resolver; no test asserts this). `https:` in the kernel's network driver (on `main`, #93, CI's full verification green on bf6a9ea): `Driver` carries out `Connect { tls: true }` with a thread that owns the `TlsConnection` (Mozilla's roots, or `Driver::with_verifier`'s) and takes the request over a channel; a `Close` sends close_notify (sealed by the thread right after the request, written by the driver; on Windows shutting down only the read side does not wake a blocked read) and then shuts the socket down; `tests/tls.rs` adds three driver tests against rustls (a request and response until close_notify, another name refused with bad_certificate, a `Close` while reading that the server reads as a clean close_notify), and `crates/clazel/tests/host.rs` an `https:` navigation through the host and the kernel against rustls (Unix only, like the rest of that file). The CNAME target is converted by `clazel-dns`'s proven `wire_to_dotted` (done 2026-10-25, see 3.4); the shell no longer has a conversion of its own |
 | 3.9 Status and README | non-TLS part done (2026-10-29): README.md's Phase 3 note, `cargo xtask report` writes the network shell's line count next to the host shell's (CI's `table` job puts it in the README), this table and ROADMAP.md. Left for when TLS lands: the `https://` demo in the README, the 3.5 rows and marking the phase done |
-| 3.10 Persistent state | planned (2026-11-03): nothing built; the cookie jar, history and revocation set do not outlive a run |
+| 3.10 Persistent storage | planned (2026-11-03), reshaped the same day into generic storage on the WHATWG Storage model. **3.10a store: built** (`clazel-store`, tier 2 claimed on PR #98, pending CI's full verification): the log format, CRC-32C, recovery, compaction, usage and quota, a sorted in-memory bucket with `get` and range scans, the note's four theorems, an independent transcription, conformance against published CRC vectors, `crc` and `der`, and 67 certified mutations; the tier 0 file shell is `clazel-store-shell`. A commit copies its bucket, and the shell has not been tested with a process really killed. **3.10b consumers: not started**, so the cookie jar, `localStorage`, history and revocation set still do not outlive a run |
 
 ## Risks
 
