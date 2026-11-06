@@ -1,6 +1,6 @@
 //! The tokenizer against Servo's `cssparser` (phase-5.md item 5.4), on random and mutated
-//! sheets and every `css-parsing-tests` input. Tokens are compared here; rule structure
-//! needs the parser.
+//! sheets and every `css-parsing-tests` input. Tokens are compared here; rule structure is
+//! not compared yet.
 //!
 //! `cssparser` hands out blocks and functions nested, so our tokens are nested the same
 //! way first, as `tests/conformance_tokens.rs` does. Both engines read the same text,

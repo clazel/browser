@@ -585,19 +585,23 @@ in exec code.
 `clazel-css`, module `parser/`. CSS Syntax §5†, one spec function per
 algorithm, steps numbered: the token stream (§5.3†: "consume a token",
 "discard whitespace", "process", mark and restore as an index); the entry
-points (§5.4†: "parse something according to a CSS grammar", "parse a
-stylesheet", "parse a stylesheet's contents", "parse a block's contents",
-"parse a rule", "parse a declaration", "parse a component value", "parse a
-list of component values", "parse a comma-separated list of component
-values"); the algorithms (§5.5†: "consume a stylesheet's contents", "consume
-an at-rule", "consume a qualified rule", "consume a block", "consume a block's
-contents", "consume a declaration" with `!important` and the custom-property
-case, "consume a list of component values", "consume a component value",
-"consume a simple block", "consume a function"); §6† the An+B microsyntax; and
-§9† serialization, which the tests compare. Output types are the standard's:
-at-rules (name, prelude, optional block), qualified rules (prelude,
-declarations, child rules) and declarations (name, component values, important
-flag).
+points (§5.4†: "normalize into a token stream", "parse something according to
+a CSS grammar", "parse a comma-separated list according to a CSS grammar",
+"parse a stylesheet", "parse a stylesheet's contents", "parse a list of
+declarations", "parse a rule", "parse a declaration", "parse a component
+value", "parse a list of component values", "parse a comma-separated list of
+component values"); the algorithms (§5.5†: "consume a stylesheet's contents",
+"consume an at-rule", "consume a qualified rule", "consume a block", "consume
+a block's contents", "consume a declaration" with `!important` and the
+custom-property case, "consume the remnants of a bad declaration", "consume a
+list of component values", "consume a component value", "consume a simple
+block", "consume a function", "consume the value of a unicode-range
+descriptor"); §6† the An+B microsyntax; and §9† serialization: the table of
+pairs that need a comment and "serialize an `<a-n-plus-b>` value", the only
+algorithm §9 defines. Output types are the standard's: at-rules (name,
+prelude, optional block), qualified rules (prelude, declarations, child rules)
+and declarations (name, component values, important flag, optional original
+text).
 
 The text was restructured between 2021 and 2024 for nesting ("consume a
 block's contents", the mark-and-restore stream); the spec follows the pinned
@@ -605,14 +609,91 @@ text, and the cases where `css-parsing-tests` (written for the 2014 text) and
 `cssparser` expect the older behaviour are listed as expected failures and
 differences.
 
-Modelling choices: as 5.2; "parse something according to a CSS grammar" takes
-the grammar as a parameter (component values to an option), so
-`clazel-selectors` and `clazel-style` pass their own and this crate depends on
-neither. Proven: `theorem_parse_total`; `theorem_parse_bounded` (the output's
-component values number at most the input tokens, so parsing is linear);
-`theorem_blocks_balanced` (each simple block closes on its opening token's
-mirror or EOF). The exec parser iterates with an explicit stack: a CSS bomb is
-`{` repeated, and Verus proves no panics, not no stack overflow.
+Modelling choices: as 5.2, and listed in `parser/spec.rs`; "parse something
+according to a CSS grammar" takes the grammar as a parameter (component values
+to an option), so `clazel-selectors` and `clazel-style` pass their own and this
+crate depends on neither. Two of them change meaning and are marked there.
+"Valid in the current context" is always true, as for the text's "generic
+processor", and `clazel-style` drops what is invalid afterwards; the one visible
+difference is that a declaration invalid for its property stays a declaration
+instead of splitting those around it. "Original source text" is the string
+after "filter code points". The pinned text has one erratum here, in
+`docs/ERRATA.md`: "consume a block's contents" never appends its last
+declarations.
+
+Proven: `theorem_parse_total`; `theorem_blocks_balanced` (each simple block
+closes on its opening token's mirror or EOF); `theorem_reader` (below); and that
+every loop of the spec goes forward (`parser/termination.rs`), which the spec's
+`moved` relies on. Stated in `parser/contract.rs`, proof still to come:
+`theorem_parse_bounded` (the output's component values number at most the code
+points and one, so parsing is linear; not the tokens, since a unicode-range
+value is tokenized twice); `theorem_block_ends_agree` ("consume a block" and
+"consume a simple block" end at the same index); `theorem_output_preserved`;
+`theorem_spans_in_order`; `theorem_value_end`. §9's round trip is stated for a
+serializer, which the text does not define and no crate has yet.
+
+**How the exec parser reads (settled here, built in 5.4; `parser/exec*.rs`).** The spec keeps the
+text's form, a stream of every token. The exec parser does not build one.
+
+- *Lockstep, through `next_token`.* The tokens of a sheet of `{` cost 88 bytes
+  each, so `tokenize_all` on 5.26's 64 MiB sheet needs about 5.5 GiB before any
+  output exists. The parser instead keeps a position in the filtered input.
+  `theorem_reader` proves that reading at the end of the last token gives the
+  stream's next token. "Mark" is keeping a position and "restore" is using it
+  again, so nothing is buffered: `next_token` is a pure function of the input
+  and the position. `tokenize_all` stays, with the flag false, for the
+  token-level suites.
+- *"Unicode ranges allowed"* is an argument of `tokenize_with` in the spec, and
+  `next_token` already takes it. "Consume the value of a unicode-range
+  descriptor" reads its segment in lockstep with the flag true, so `tokenize_all`
+  needs no flag.
+- *Original text.* Lockstep has the positions `tokenize_all` drops: a token
+  starts where `consume_comments` stops and ends where `next_token` returned, and
+  a value's text is the input between its first start and its last end. `Span` is
+  the same thing in the spec.
+- *The output is flat arrays, not a tree of `Vec`s.* A `Vec` per block would be
+  dropped recursively, which overflows the stack on `{` nested a million deep,
+  and costs far more than the tokens. A component value is one 8-byte row: where
+  its token is, and where its subtree starts. Rows are in post-order and only
+  ever appended, so a row's kind needs no field: a reader calls `next_token` at
+  the row's position, which `theorem_reader` says is the token the spec has, and
+  a function token or an opening bracket means a block. Rules and lists of
+  declarations are 20-byte items in the same order, and a declaration keeps the
+  rows of its value. `parser/rows.rs` says what each means in terms of the spec.
+- *An explicit stack,* as the plan always said, since Verus proves no panics,
+  not no stack overflow: `read_component_value` for blocks and functions and
+  `read_blocks` for rules. Neither needed a separate machine proven equal to the
+  spec. Each loop carries ghost frames and a spec function, `unwind` and
+  `rule_unwind`, that says what the spec's recursion does with them, and its
+  invariant is that this gives the call's answer, so each step of the loop is one
+  unfolding of the spec's own loops.
+- *Linear time, which the text's form is not.* Parsing as a declaration and
+  then again as a rule, as "consume a block's contents" says, is quadratic on
+  nested input: each level of `a{a{a{…` scans all that is left. Two of the
+  "early exits" of the text's implementation note are built and proven: a failed
+  declaration skips the remnants, since the mark discards them, and a name that
+  is not custom stops at a `{` with a value before it. `tests/bombs.rs` measures
+  `{`, `a{`, `a b{`, `@a{`, `a:b{`, `--a:b{`, `a:{`, `(`, `[` and `a(`, nested
+  200,000 deep: all linear. **Still quadratic:** a block as the first value of a
+  declaration that then fails, at every level, as in `a{a:{a:{…}b}b}`, which
+  timed out at 50,000 deep. It needs the third exit, stepping over the block with
+  a table of closing positions, which `theorem_block_ends_agree` would justify.
+
+Against 5.26's memory bound, for `B` code points in a sheet (`B` at most 64 Mi,
+`MAX_BODY`): the plan's estimate of `24·B` was for rows and was too low, because
+a nested rule costs more than a row. Measured on a release build, sheets of `{`,
+which make one nested rule per code point, peak at 159 MiB for 4 Mi code points
+and 776 MiB for 16 Mi, about `48·B`: the input and its filtered copy `8·B`, the
+items `20·B`, the stack `20·B`, and what `Vec`s hold while they grow. So a 64 MiB
+sheet of `{` would peak near 3 GiB by extrapolation; it was not run on the
+machine that measured this. Against that, the eager token vector needed `88·B`
+before any output existed. Sheets of `(` need less: `8·B` of rows and `8·B` of
+stack. What stays after parsing is the filtered input and the arrays, without
+the stack. Nothing caps the depth or the number of rows: the spec has an answer
+for every sheet, and the bound is linear. 4.13's bound for 64 MiB of words in a
+page is 1,361 MiB, so if 3 GiB for one hostile sheet is too much, 5.20 has to
+choose a limit, and one on nesting would be a difference from the spec that the
+contract must state. 5.20 also owes a limit on sheets per document.
 
 ### 5.4 CSS Syntax: implementation, independent transcription, conformance (L)
 
@@ -1575,9 +1656,9 @@ tests of 5.4, 5.5 and 5.7, not their proofs or tiers.
 |------|-------|
 | 5.0 Decisions | taken (2026-11-04), (d) as a GPU rasterizer and the rest as recommended; open: how 5.18 fits with (g) (see 5.0) |
 | 5.1 Inventory and test data | started, not on `main`: `css-parsing-tests`' ten syntax files (301 cases) and WPT `css/css-syntax/` (191 calls read, 23 pages and 1 test not run) vendored in `clazel-css`; no other WPT directories, inventory, Unicode tables, test fonts or dev-dependencies yet |
-| 5.2 CSS tokenizer | built and proven, not on `main`: spec, exec and theorems in `clazel-css`, 17 of 17 mutations killed with certificates, and the token-level suites passing (61 cases, 3 expected failures); §3.2 decoding of the input bytes not started |
-| 5.3 CSS parser | not started |
-| 5.4 CSS syntax evidence | not started |
+| 5.2 CSS tokenizer | built and proven, not on `main`: spec, exec and theorems in `clazel-css`, 17 of 17 mutations killed with certificates, and the token-level suites passing (61 cases, 3 expected failures); §3.2 decoding of the input bytes built and proven in `input/` |
+| 5.3 CSS parser | built, not on `main`: `parser/spec.rs` from the text pinned in 5.2, every algorithm of §5, §6 and §9.1, with `contract.rs`, evaluated examples and the theorems above; `theorem_parse_bounded`, `theorem_block_ends_agree`, `theorem_output_preserved`, `theorem_spans_in_order` and `theorem_value_end` stated, not proven |
+| 5.4 CSS syntax evidence | started, not on `main`: the exec parser is proven equal to the spec at every entry point, with `tests/conformance_syntax.rs` passing with its expected failures listed, and the parser's mutations; `independent.rs` not started; the differential against `cssparser` compares tokens, not yet rule structure; one quadratic shape left, under 5.3 |
 | 5.5 Selectors | not started |
 | 5.6 Property values | not started |
 | 5.7 Cascade and computed values | not started |

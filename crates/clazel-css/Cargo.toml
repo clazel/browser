@@ -17,8 +17,8 @@ cssparser = "=0.38.0"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this will
-# parse style sheets a page chose. The tokenizer is proven, but a tier also needs
-# the parser, an independent transcription and full conformance.
+# parse style sheets a page chose. The tokenizer and the parser are proven, but a
+# tier also needs an independent transcription and full conformance.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2

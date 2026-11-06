@@ -264,6 +264,7 @@ pub proof fn lemma_token_advances(input: Seq<u32>, start: int, unicode_ranges_al
             unicode_ranges_allowed,
         ).1 > start,
         consume_a_token(input, start, unicode_ranges_allowed).1 >= start,
+        consume_a_token(input, start, unicode_ranges_allowed).1 >= consume_comments(input, start),
         start >= input.len() ==> consume_a_token(input, start, unicode_ranges_allowed).0 is Eof,
 {
     lemma_comments_advance(input, start);

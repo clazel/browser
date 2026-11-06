@@ -172,7 +172,7 @@ pub open spec fn view_tokens(tokens: Seq<ExecToken>) -> Seq<Token> {
 }
 
 /// The code point at `i`, or EOF.
-fn peek(input: &[u32], i: usize) -> (c: u32)
+pub fn peek(input: &[u32], i: usize) -> (c: u32)
     ensures
         c == at(input@, i as int),
 {
@@ -183,7 +183,7 @@ fn peek(input: &[u32], i: usize) -> (c: u32)
 }
 
 /// True if `c` is between `low` and `high` inclusive.
-fn between(c: u32, low: u32, high: u32) -> (r: bool)
+pub fn between(c: u32, low: u32, high: u32) -> (r: bool)
     ensures
         r == (low <= c <= high),
 {
@@ -342,7 +342,7 @@ fn read_end_of_comment(input: &[u32], start: usize) -> (r: usize)
 }
 
 /// [`consume_comments`].
-fn read_comments(input: &[u32], start: usize) -> (r: usize)
+pub fn read_comments(input: &[u32], start: usize) -> (r: usize)
     requires
         super::contract::input_requires(input@),
         start <= input.len(),
@@ -1110,7 +1110,7 @@ pub fn tokenize_all(input: &[u32]) -> (tokens: Vec<ExecToken>)
         invariant
             super::contract::input_requires(input@),
             pos <= input.len(),
-            tokenize_loop(input@, pos as int, view_tokens(tokens@)) == tokenize(input@),
+            tokenize_loop(input@, pos as int, false, view_tokens(tokens@)) == tokenize(input@),
         decreases input.len() - pos,
     {
         let (token, next) = next_token(input, pos, false);

@@ -1,10 +1,9 @@
 //! The converted `css-parsing-tests` table (phase-5.md item 5.1).
 //!
-//! There is no parser to run the cases through yet, so this checks only the table:
-//! that every file's cases are there, and that a sample of each kind of value came
-//! through the conversion unchanged. Item 5.4's conformance test takes over from
-//! this one, mapping the table to `clazel-css`'s types. No conformance is claimed
-//! here, so this file prints no `clazel-conformance:` line.
+//! This checks only the table: that every file's cases are there, and that a sample of
+//! each kind of value came through the conversion unchanged. `conformance_syntax.rs` runs
+//! the cases through the parser. No conformance is claimed here, so this file prints no
+//! `clazel-conformance:` line.
 
 use Json::{Bool, List, Null, Num, Obj, Str};
 

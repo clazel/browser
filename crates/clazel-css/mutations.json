@@ -211,8 +211,8 @@
     {
       "id": "token-doubled",
       "file": "src/tokenizer/spec.rs",
-      "find": "tokenize_loop(input, next, tokens.push(token))",
-      "replace": "tokenize_loop(input, next, tokens.push(token).push(token))",
+      "find": "tokenize_loop(input, next, unicode_ranges_allowed, tokens.push(token))",
+      "replace": "tokenize_loop(input, next, unicode_ranges_allowed, tokens.push(token).push(token))",
       "expect": "killed",
       "reason": "More tokens than code points, so walking them would not be linear.",
       "certificate": {
@@ -258,6 +258,214 @@
         "file": "src/tokenizer/lemmas.rs",
         "lemma": "super::examples::lemma_example_number_value()",
         "witness": "super::examples::value_of(seq![0x31u32, 0x2E, 0x35, 0x65, 0x2D, 0x31]) == (150int, 10nat)"
+      }
+    },
+    {
+      "id": "contents-drops-last-declarations",
+      "file": "src/parser/spec.rs",
+      "find": "        (with_declarations(rules, decls), index)\n",
+      "replace": "        (rules, index)\n",
+      "expect": "killed",
+      "reason": "The erratum: as written, a rule keeps no declaration after its last child rule.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declaration_in_a_rule()",
+        "witness": "super::examples::first_rule_declarations(seq![0x61u32, 0x7B, 0x62, 0x3A, 0x63, 0x7D]).len() == 0"
+      }
+    },
+    {
+      "id": "first-declarations-not-the-rules",
+      "file": "src/parser/spec.rs",
+      "find": "    if child_rules.len() > 0 && child_rules[0] is Declarations {\n",
+      "replace": "    if false {\n",
+      "expect": "killed",
+      "reason": "A rule's first declarations would be a nested rule.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declaration_in_a_rule()",
+        "witness": "super::examples::first_rule_declarations(seq![0x61u32, 0x7B, 0x62, 0x3A, 0x63, 0x7D]).len() == 0"
+      }
+    },
+    {
+      "id": "block-closes-on-any-curly",
+      "file": "src/parser/spec.rs",
+      "find": "    if is(item, Token::Eof) || is(item, ending_token) {\n        (ComponentValue::SimpleBlock",
+      "replace": "    if is(item, Token::Eof) || is(item, ending_token) || is(item, Token::CloseCurly) {\n        (ComponentValue::SimpleBlock",
+      "expect": "killed",
+      "reason": "A block must end on its mirror.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_block_closes_on_its_mirror()",
+        "witness": "parse_a_component_value(Input::String { string: seq![0x28u32, 0x61, 0x7D, 0x5D, 0x62] }) == None::<ComponentValue>"
+      }
+    },
+    {
+      "id": "important-delim-wrong",
+      "file": "src/parser/spec.rs",
+      "find": "is(value[first], Token::Delim { value: 0x21 })",
+      "replace": "is(value[first], Token::Delim { value: 0x3F })",
+      "expect": "killed",
+      "reason": "\"!important\" would be missed.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_original_text()",
+        "witness": "!parse_a_declaration(Input::String { string: super::examples::custom_declaration() }).unwrap().important"
+      }
+    },
+    {
+      "id": "trailing-whitespace-kept",
+      "file": "src/parser/spec.rs",
+      "find": "    if value.len() > 0 && is_whitespace_token(value.last()) {\n",
+      "replace": "    if false {\n",
+      "expect": "killed",
+      "reason": "Step 7 removes it.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_original_text()",
+        "witness": "parse_a_declaration(Input::String { string: super::examples::custom_declaration() }).unwrap().value.len() != 3"
+      }
+    },
+    {
+      "id": "original-text-to-the-end",
+      "file": "src/parser/spec.rs",
+      "find": "    let value_end = end - (list.len() - value.len());\n",
+      "replace": "    let value_end = end;\n",
+      "expect": "killed",
+      "reason": "The original text is of the tokens of the value, not of what steps 6 and 7 removed.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_original_text()",
+        "witness": "parse_a_declaration(Input::String { string: super::examples::custom_declaration() }).unwrap().original_text.unwrap().len() != 3"
+      }
+    },
+    {
+      "id": "block-and-another-needs-three",
+      "file": "src/parser/spec.rs",
+      "find": "    has_curly_block(value, 0) && non_whitespace_count(value, 0) >= 2\n",
+      "replace": "    has_curly_block(value, 0) && non_whitespace_count(value, 0) >= 3\n",
+      "expect": "killed",
+      "reason": "A {}-block and one other value is no declaration, so it is reparsed as a rule.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_reparsed_as_a_rule()",
+        "witness": "super::examples::first_rule_declarations(seq![0x61u32, 0x7B, 0x62, 0x3A, 0x63, 0x7B, 0x7D, 0x7D]).len() == 1"
+      }
+    },
+    {
+      "id": "custom-property-is-a-rule",
+      "file": "src/parser/spec.rs",
+      "find": "        if prelude_looks_like_a_custom_property(prelude) {\n",
+      "replace": "        if false {\n",
+      "expect": "killed",
+      "reason": "A rule that looks like a custom property gives nothing.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_custom_property_is_no_rule()",
+        "witness": "super::examples::rules(seq![0x2Du32, 0x2D, 0x78, 0x3A, 0x61, 0x7B, 0x7D, 0x62, 0x7B, 0x7D]).len() == 2"
+      }
+    },
+    {
+      "id": "unicode-ranges-not-allowed",
+      "file": "src/parser/spec.rs",
+      "find": "    let tokens = token_stream(input_string, true);\n",
+      "replace": "    let tokens = token_stream(input_string, false);\n",
+      "expect": "killed",
+      "reason": "The descriptor is what \"unicode ranges allowed\" is for.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_unicode_range()",
+        "witness": "parse_a_declaration(Input::String { string: super::examples::unicode_declaration() }).unwrap().value.len() == 3"
+      }
+    },
+    {
+      "id": "nested-at-rule-runs-on",
+      "file": "src/parser/spec.rs",
+      "find": "        if nested {\n            (rule_if_valid(statement), index)\n",
+      "replace": "        if false {\n            (rule_if_valid(statement), index)\n",
+      "expect": "killed",
+      "reason": "A nested at-rule ends at the } of its block.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_nested_at_rule()",
+        "witness": "super::examples::rules(seq![0x61u32, 0x7B, 0x40, 0x62, 0x7D, 0x63, 0x7B, 0x7D]).len() == 1"
+      }
+    },
+    {
+      "id": "remnants-ignore-semicolon",
+      "file": "src/parser/spec.rs",
+      "find": "    if is(item, Token::Eof) || is(item, Token::Semicolon) {\n        discard_a_token(input, index)\n",
+      "replace": "    if is(item, Token::Eof) {\n        discard_a_token(input, index)\n",
+      "expect": "killed",
+      "reason": "Bad remnants end at a semicolon.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_remnants()",
+        "witness": "parse_a_list_of_declarations(Input::String { string: seq![0x7Au32, 0x3B, 0x61, 0x3A, 0x62] }).len() == 0"
+      }
+    },
+    {
+      "id": "cdo-not-discarded",
+      "file": "src/parser/spec.rs",
+      "find": "    } else if is(item, Token::Cdo) || is(item, Token::Cdc) {\n",
+      "replace": "    } else if is(item, Token::Cdc) {\n",
+      "expect": "killed",
+      "reason": "A <CDO-token> between rules is discarded.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_cdo()",
+        "witness": "super::examples::first_rule_prelude(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x61, 0x7B, 0x7D]).len() == 2"
+      }
+    },
+    {
+      "id": "comma-group-doubled",
+      "file": "src/parser/spec.rs",
+      "find": "            groups.push(list),\n",
+      "replace": "            groups.push(list).push(list),\n",
+      "expect": "killed",
+      "reason": "One group for each comma.",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_comma_list()",
+        "witness": "parse_a_comma_separated_list_of_component_values(Input::List { list: super::examples::comma_list() }).len() == 4"
+      }
+    },
+    {
+      "id": "remainder-not-negative",
+      "file": "src/parser/spec.rs",
+      "find": "    -digits_value(string.subrange(start + 1, string.len() as int), 0)\n",
+      "replace": "    digits_value(string.subrange(start + 1, string.len() as int), 0) as int\n",
+      "expect": "killed",
+      "reason": "\"B is negative.\"",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x6Eu32, 0x2D, 0x31]) == Some((1int, 1int))"
+      }
+    },
+    {
+      "id": "plus-may-have-a-space",
+      "file": "src/parser/spec.rs",
+      "find": "    } else if items.len() >= 2 && is_plus(items[0]) && plus_adjacent && is_keyword(\n        items[1],\n        n_string(),\n",
+      "replace": "    } else if items.len() >= 2 && is_plus(items[0]) && is_keyword(\n        items[1],\n        n_string(),\n",
+      "expect": "killed",
+      "reason": "\"there must be no whitespace between the two tokens\".",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_a_n_plus_b()",
+        "witness": "super::examples::anb(seq![0x2Bu32, 0x20, 0x6E]) == Some((1int, 0int))"
+      }
+    },
+    {
+      "id": "serialize-keeps-the-one",
+      "file": "src/parser/spec.rs",
+      "find": "        let result = if a == 1 {\n",
+      "replace": "        let result = if a == 2 {\n",
+      "expect": "killed",
+      "reason": "A of 1 is \"n\".",
+      "certificate": {
+        "file": "src/parser/lemmas.rs",
+        "lemma": "super::examples::lemma_example_serialize_a_n_plus_b()",
+        "witness": "serialize_a_n_plus_b(1, 0) == seq![0x31u32, 0x6E]"
       }
     },
     {
