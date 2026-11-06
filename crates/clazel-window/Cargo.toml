@@ -1,0 +1,21 @@
+[package]
+name = "clazel-window"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The host's window (Phase 5 items 5.21 to 5.22a): open one, read its events, show pixels. Windows so far."
+
+# Every foreign call of the window is in `clazel-sys` (CLAUDE.md rule 1).
+[target.'cfg(windows)'.dependencies]
+clazel-sys = { path = "../clazel-sys" }
+
+# Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The policy's
+# tier for UI is 0; the window runs outside the sandbox, and reads no
+# page-derived byte beyond pixels it copies.
+[package.metadata.clazel]
+tier = 0
+target-tier = 0
+
+[lints]
+workspace = true

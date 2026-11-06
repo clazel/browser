@@ -11,14 +11,21 @@
 //!   complete left-most label (§6.3). Empty labels are rejected.
 //! - The caller supplies IP addresses as exactly 4 or 16 octets. Textual IP
 //!   parsing and host classification are outside this matching function.
-//! - A wildcard suffix is rejected when it is a Public Suffix List public
-//!   suffix. This veto is additional browser policy; RFC 9525 defines the
-//!   matching algorithm but does not require public-suffix filtering. The
-//!   repository's complete table (ICANN and PRIVATE sections) is
-//!   used after lower-casing the ASCII suffix. This prevents wildcards such
-//!   as `*.co.uk`, `*.com`, and `*.github.io` from crossing a registry or
-//!   hosted-service boundary while allowing a registrable suffix such as
-//!   `*.example.co.uk`. PSL exception rules follow the existing PSL spec.
+//! - A wildcard suffix is rejected when it is a public suffix under the
+//!   Public Suffix List's ICANN section. This veto is additional browser
+//!   policy; RFC 9525 defines the matching algorithm but does not require
+//!   public-suffix filtering. Only the ICANN section is used, after
+//!   lower-casing the ASCII suffix: the CA/Browser Forum Baseline Requirements
+//!   2.3.1 §3.2.2.6 say a CA "SHOULD consult the "ICANN DOMAINS" section only,
+//!   not the "PRIVATE DOMAINS" section", and Chromium's
+//!   `X509Certificate::VerifyHostname` does the same
+//!   (`net/cert/x509_certificate.cc`: "prevent *.com or *.co.uk as valid
+//!   presented names, but do not prevent *.appspot.com"). So `*.co.uk` and
+//!   `*.com` are refused, while `*.example.co.uk` and `*.github.io` are
+//!   accepted: one operator holds a private suffix and every name under it.
+//!   A name under an unlisted top-level label is refused, as the PSL's
+//!   default `*` rule makes that label a public suffix. PSL exception rules
+//!   follow the existing PSL spec.
 //! - This slice includes only DNS-ID and IP-ID. SRV-ID, URI-ID, Common Name
 //!   fallback, DER decoding, certificate path validation and trust are out
 //!   of scope.
@@ -111,10 +118,11 @@ pub open spec fn psl_domain_from_ascii(name: Seq<u8>) -> Seq<u32> {
     } else { byte as u32 })
 }
 
-/// True when a DNS wildcard suffix is itself a PSL public suffix.
-pub open spec fn wildcard_suffix_is_public_suffix(name: Seq<u8>) -> bool {
+/// True when a DNS wildcard suffix is itself a public suffix under the PSL's
+/// ICANN section.
+pub open spec fn wildcard_suffix_is_icann_suffix(name: Seq<u8>) -> bool {
     clazel_psl::spec::is_public_suffix(
-        clazel_psl::table::psl_rules(), psl_domain_from_ascii(name))
+        clazel_psl::table::psl_icann_rules(), psl_domain_from_ascii(name))
 }
 
 /// RFC 9525 §6.3's one-label wildcard comparison after the PSL policy gate.
@@ -136,7 +144,7 @@ pub open spec fn dns_match(reference: Seq<u8>, presented: Seq<u8>) -> bool {
     } else if presented.len() > 2 && presented[0] == b'*' && presented[1] == b'.'
         && dns_name_shape(presented.subrange(2, presented.len() as int))
         && no_wildcard_from(presented, 2)
-        && !wildcard_suffix_is_public_suffix(presented.subrange(2, presented.len() as int))
+        && !wildcard_suffix_is_icann_suffix(presented.subrange(2, presented.len() as int))
     { wildcard_matches_reference(reference, presented.subrange(2, presented.len() as int)) }
     else { false }
 }
