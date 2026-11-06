@@ -95,11 +95,11 @@ What the harness covers:
   trusted certificates as anchors, its validation time (the leaf's notBefore
   when it gives none) and its `max_chain_depth` as `max_intermediates` (6
   when it gives none). Limbo's `SUCCESS` or `FAILURE` is compared with the
-  verdict, not the reason. **9,737 of 9,802 testcases agree** (923 `SUCCESS`,
-  8,814 `FAILURE`); the other 65 are listed by id, with a reason, in
+  verdict, not the reason. **9,736 of 9,802 testcases agree** (923 `SUCCESS`,
+  8,813 `FAILURE`); the other 66 are listed by id, with a reason, in
   `tests/limbo/expected_failures.rs`, and the test fails if an id appears or
   vanishes, if a listed case starts to agree, or if a case that disagrees is
-  not listed. (The conformance line reads `pass=9737 xfail=65 fail=0`.)
+  not listed. (The conformance line reads `pass=9736 xfail=66 fail=0`.)
 - None of the certificates of a `SUCCESS` testcase is rejected by a decoder.
 - `tests/path_search_limbo.rs` prints the same run by error class and
   family; it pins nothing.
@@ -112,7 +112,7 @@ means a `FAILURE` that rests on a signature is accepted here. `clazel-crypto`'s
 `tests/chain_limbo.rs` runs the signature-related cases with the real links.
 Revocation is not checked either (no CRL or OCSP: Phase 8).
 
-The 65 listed testcases, by reason:
+The 66 listed testcases, by reason:
 
 | Count | Reason |
 |------:|--------|
@@ -132,8 +132,9 @@ The 65 listed testcases, by reason:
 | 1 | malformed authorityInfoAccess, a non-critical extension kept opaque |
 | 4 | no profile rule on the target's key type or size (BR 6.1.5, p192, DSA, weak RSA, modulus not a multiple of 8) |
 | 1 | a root with a 2052-bit RSA key, accepted by the real links as Chrome, Firefox and webpki do according to `clazel-crypto` |
+| 1 | a wildcard over a suffix in the PSL's private section, which limbo refuses citing the CA/Browser Forum; BR 3.2.2.6 says to consult the ICANN section only |
 
-None of the 65 is a known defect of the section 6.1 code. The profile
+None of the 66 is a known defect of the section 6.1 code. The profile
 refusals and the missing profile rules are choices: `src/path/profile.rs`
 names each, and whether both browsers refuse the cases of the key-type row
 and the zero serial is unconfirmed. Running the whole corpus found no

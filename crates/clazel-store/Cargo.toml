@@ -1,0 +1,31 @@
+[package]
+name = "clazel-store"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The persistent store (item 3.10a): an append-only log of DER records checked by CRC-32C, with a proven recovery, specified in Verus."
+
+[dependencies]
+clazel-der = { path = "../clazel-der" }
+vstd = "=0.0.0-2026-10-04-0306"
+
+# tests/conformance_store.rs (class `test` in docs/DEPENDENCIES.md: never
+# shipped): independent engines for the differential. `crc` computes
+# CRC-32C from its catalogue entry `CRC_32_ISCSI`; `der` (with the same
+# features as clazel-der's) decodes the headers and records we write.
+[dev-dependencies]
+crc = "=3.4.0"
+der = { version = "=0.8.2", default-features = false, features = ["alloc", "oid"] }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
+# the shipped code today; `target-tier` is what the policy requires.
+[package.metadata.clazel]
+tier = 2
+target-tier = 2
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
