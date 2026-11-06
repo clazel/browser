@@ -61,6 +61,14 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | infer | 0.19.0 | test | A file-type detector by magic numbers (bojand/infer), written without the WHATWG standard: the reference in `clazel-mime`'s sniffing differential test (`tests/conformance_sniffing.rs`). Used without default features, so it has no dependencies (`cfb` is optional). |
 | psl-types | 2.0.11 | test | Types of the `publicsuffix` crate's API (no dependencies). |
 | publicsuffix | 2.3.0 | test | An independent Public Suffix List implementation (rust-publicsuffix, used by `cookie_store`), written from the list's own format: the reference engine in `clazel-psl`'s differential test (`tests/conformance_differential.rs`). Used without default features, so it has no `idna` dependency and handles ASCII hosts only; its only dependency is `psl-types`. |
+| cssparser | 0.38.0 | test | Servo's CSS Syntax parser: the reference engine in `clazel-css`'s differential test (`tests/conformance_differential.rs`, phase-5.md item 5.4). It adds the seven packages in the rows below. |
+| cssparser-macros | 0.7.1 | test | Procedural macros of `cssparser` (`match_byte!`). |
+| dtoa | 1.0.11 | test | Float formatting, required by `dtoa-short`. No dependencies. |
+| dtoa-short | 0.3.5 | test | Short float formatting, required by `cssparser`. |
+| phf | 0.14.0 | test | Perfect-hash static maps, required by `cssparser`. A newer major version than the `phf` that `web_atoms` needs. |
+| phf_generator | 0.14.0 | test | The perfect-hash search used by `phf_macros`. |
+| phf_macros | 0.14.0 | test | The `phf_map!` macro, enabled by `cssparser`. |
+| phf_shared | 0.14.0 | test | The hashing shared by `phf` and its generator. |
 | cfg-if | 1.0.5 | shipped | `#[cfg]` helper macro, required by `encoding_rs`. Also reached from libcrux (`clazel-crypto`) through normal edges under `cfg(hax)` or `cfg(valgrind_ct_test)`, which our builds never set, so it is locked there but never compiled into the browser. |
 | percent-encoding | 2.3.2 | test | rust-url's percent-encoding (used by the `url` crate and Servo): a reference engine in `clazel-percent`'s differential test (`tests/conformance_percent.rs`). No dependencies. |
 | form_urlencoded | 1.2.2 | test | rust-url's `application/x-www-form-urlencoded` serializer: the reference for that percent-encode set in the same test. Its only dependency is `percent-encoding`. |

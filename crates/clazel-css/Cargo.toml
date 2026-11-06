@@ -8,15 +8,17 @@ description = "CSS parsing for Clazel's Phase 5 browser (phase-5.md items 5.2 to
 
 [dependencies]
 vstd = "=0.0.0-2026-10-04-0306"
+clazel-encoding = { path = "../clazel-encoding" }
 
+# Servo's CSS parser, the other engine in tests/conformance_differential.rs
+# (class `test` in docs/DEPENDENCIES.md: never shipped).
 [dev-dependencies]
-# Decodes the cases of stylesheet_bytes.json in tests/conformance_syntax.rs.
-clazel-encoding = { path = "../clazel-encoding", version = "=0.0.0" }
+cssparser = "=0.38.0"
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires, since this will
-# parse style sheets a page chose. The tokenizer is proven, but a tier also needs
-# the parser, an independent transcription and full conformance.
+# parse style sheets a page chose. The tokenizer and the parser are proven, but a
+# tier also needs an independent transcription and full conformance.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
