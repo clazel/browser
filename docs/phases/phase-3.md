@@ -1272,9 +1272,21 @@ one machine runs after the handshake and its theorems are about the shipped
 code. As the first step it now follows RFC 8446 §6.1: each direction closes on
 its own (`Phase::WriteClosed`, `Phase::ReadClosed`, `End::PeerClosed`) and
 `user_canceled` changes nothing. The earlier text quoted an immediate
-close_notify reply as a TLS 1.3 requirement, which §6.1 is not. Not yet: the
-handoff from `Connection`, `Client` on the transducer, and the removal of the
-dispatcher's `Ready` phase.
+close_notify reply as a TLS 1.3 requirement, which §6.1 is not.
+
+**The handoff (2026-11-05, on `phase3/tls-join-handoff`; local Verus run, 828
+verified, 0 errors; CI's full verification and the mutation run pending).**
+`Connection` now stops at `Ready`, holding only the two application traffic
+secrets, and `Connection::into_post_handshake` consumes it and starts the
+transducer from them (`dispatcher_contract::handoff_ensures`). `Client` runs
+the transducer after the handshake, so the post-handshake theorems are about
+the shipped code. The dispatcher's KeyUpdate, close and application-data rules
+are gone, with their lemmas, fixtures, tests and eight mutations; the transducer
+has its own for each. It also reports `PeerAlert` apart from its own failures,
+and the unreachable message arm whose mutation could only survive is gone.
+This changes one behaviour: at the last sequence number the send side now
+rekeys, where the dispatcher's seal refused. Not yet: 3.5f's proof that the
+driver equals these machines; `Client` is still tested, not proven.
 
 **The dispatcher's own fatal alerts (2026-11-03, on `main`, #86).** `Connection` (`connection::dispatcher_*`, `exec`) now puts
 the RFC 8446 §6 alert on the wire itself. A fatal error it detects is

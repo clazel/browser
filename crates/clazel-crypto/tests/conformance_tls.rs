@@ -40,6 +40,9 @@ use std::sync::Arc;
 use clazel_crypto::join::exec::{ChainVerifier, Root};
 use clazel_crypto::provider::{ChaCha20Poly1305Factory, Sha256Suite, X25519};
 use clazel_tls::connection::exec::{Action, Connection, Mode};
+use clazel_tls::connection::post_handshake_exec::{
+    Action as AppAction, Input as AppInput, PostHandshake,
+};
 use clazel_tls::hello::bootstrap::{Action as BootAction, Bootstrap};
 use clazel_tls::hello::client::Config;
 use clazel_tls::hello::key_exchange::KeyExchange;
@@ -319,6 +322,7 @@ impl Server {
 // ---------------------------------------------------------------------------
 
 type Conn = Connection<Sha256Suite, ChaCha20Poly1305Factory, ChainVerifier<'static>>;
+type App = PostHandshake<Sha256Suite, ChaCha20Poly1305Factory>;
 
 #[derive(Debug, PartialEq, Eq)]
 enum Event {
@@ -343,6 +347,7 @@ enum Event {
 enum Phase {
     Boot(Box<Bootstrap<Sha256Suite>>),
     Live(Box<Conn>),
+    App(Box<App>),
     Done,
 }
 
@@ -457,7 +462,21 @@ impl Client {
                 Phase::Live(mut conn) => {
                     let (consumed, action) = conn.feed(&input);
                     let stop = Self::live_action(conn.as_mut(), action, &mut events);
-                    self.phase = Phase::Live(conn);
+                    self.phase = if !stop && conn.mode() == Mode::Ready {
+                        // The handshake is over: the transducer takes over.
+                        let app = (*conn)
+                            .into_post_handshake()
+                            .map_err(|alert| format!("handoff alert {alert}"))?;
+                        Phase::App(Box::new(app))
+                    } else {
+                        Phase::Live(conn)
+                    };
+                    (consumed, stop)
+                }
+                Phase::App(mut app) => {
+                    let (consumed, actions) = app.step(AppInput::Bytes(&input));
+                    let stop = Self::app_actions(actions, &mut events);
+                    self.phase = if stop { Phase::Done } else { Phase::App(app) };
                     (consumed, stop)
                 }
                 Phase::Done => return Err("input after the client ended".to_owned()),
@@ -482,23 +501,11 @@ impl Client {
             Action::None | Action::Ignored => false,
             Action::Send(wire) => {
                 events.push(Event::Send(wire.clone()));
-                let ack = if conn.mode() == Mode::AwaitClientFlight {
-                    conn.acknowledge_client_flight(&wire)
-                } else {
-                    conn.acknowledge_key_update(&wire)
-                };
+                let ack = conn.acknowledge_client_flight(&wire);
                 Self::live_action(conn, ack, events)
             }
             Action::Ready => {
                 events.push(Event::Ready);
-                false
-            }
-            Action::Deliver(data) => {
-                events.push(Event::Deliver(data));
-                false
-            }
-            Action::PeerClosed => {
-                events.push(Event::PeerClosed);
                 false
             }
             // The sealed alert record, if any, is checked in `tests/client.rs`
@@ -522,33 +529,58 @@ impl Client {
         }
     }
 
-    fn conn(&mut self) -> Result<&mut Conn, String> {
+    /// Record the transducer's actions. True when fatal.
+    fn app_actions(actions: Vec<AppAction>, events: &mut Vec<Event>) -> bool {
+        let mut fatal = false;
+        for action in actions {
+            match action {
+                AppAction::Send(wire) => events.push(Event::Send(wire)),
+                AppAction::Deliver(data) => events.push(Event::Deliver(data)),
+                AppAction::PeerClosed => events.push(Event::PeerClosed),
+                AppAction::Close => events.push(Event::Closed),
+                AppAction::Fail(alert) => {
+                    events.push(Event::Fail(alert));
+                    fatal = true;
+                }
+                AppAction::PeerAlert(alert) => {
+                    events.push(Event::PeerAlert(alert));
+                    fatal = true;
+                }
+            }
+        }
+        fatal
+    }
+
+    fn app(&mut self) -> Result<&mut App, String> {
         match &mut self.phase {
-            Phase::Live(conn) => Ok(conn.as_mut()),
-            _ => Err("client is not past the Hello exchange".to_owned()),
+            Phase::App(app) => Ok(app.as_mut()),
+            _ => Err("client is not past the handshake".to_owned()),
+        }
+    }
+
+    /// The one record an operation sent.
+    fn one_send(mut actions: Vec<AppAction>) -> Result<Vec<u8>, String> {
+        match (actions.pop(), actions.is_empty()) {
+            (Some(AppAction::Send(wire)), true) => Ok(wire),
+            (other, _) => Err(format!("expected one Send, got {other:?}")),
         }
     }
 
     fn send_application(&mut self, data: &[u8]) -> Result<Vec<u8>, String> {
-        match self.conn()?.send_application(data, 0) {
-            Action::Send(wire) => Ok(wire),
-            other => Err(format!("send_application gave {other:?}")),
-        }
+        Self::one_send(self.app()?.send_application(data))
     }
 
     fn close_write(&mut self) -> Result<Vec<u8>, String> {
-        let conn = self.conn()?;
-        match conn.close_write() {
-            Action::Send(wire) => match conn.acknowledge_close_notify(&wire) {
-                Action::WriteClosed => Ok(wire),
-                other => Err(format!("acknowledge_close_notify gave {other:?}")),
-            },
-            other => Err(format!("close_write gave {other:?}")),
-        }
+        Self::one_send(self.app()?.close())
     }
 
     fn mode(&mut self) -> Result<Mode, String> {
-        Ok(self.conn()?.mode())
+        match &self.phase {
+            Phase::Live(conn) => Ok(conn.mode()),
+            Phase::App(_) => Ok(Mode::Ready),
+            Phase::Done => Ok(Mode::Failed),
+            Phase::Boot(_) => Err("client is not past the Hello exchange".to_owned()),
+        }
     }
 }
 
@@ -672,12 +704,8 @@ fn rsa_chain_full_handshake_and_application_data() -> TestResult {
 
 fn client_can_request_a_key_update() -> TestResult {
     let (mut client, mut server) = connect(&ecdsa_chain())?;
-    let wire = match client.conn()?.request_key_update(true) {
-        Action::Send(wire) => wire,
-        other => return Err(format!("request_key_update gave {other:?}")),
-    };
+    let wire = Client::one_send(client.app()?.update_keys(true))?;
     server.feed(&wire)?;
-    assert_eq!(client.conn()?.acknowledge_key_update(&wire), Action::None);
     // The server answers with its own KeyUpdate (update_requested), then data.
     server.write_plaintext(b"after key update")?;
     let events = client.receive(&server.take()?)?;

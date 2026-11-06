@@ -257,14 +257,14 @@ pub proof fn lemma_other_alerts_are_fatal()
     ensures
         rec(21, seq![2u8, 40]).0
             == (super::post_handshake_spec::Out { wires: seq![], delivered: seq![],
-                end: super::post_handshake_spec::End::Fail(40u8) }),
-        rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::Fail(40u8),
+                end: super::post_handshake_spec::End::PeerAlert(40u8) }),
+        rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::PeerAlert(40u8),
         rec(21, seq![2u8, 40]).1 == super::post_handshake_spec::failed(),
 {
     assert(rec(21, seq![2u8, 40]).0
         == (super::post_handshake_spec::Out { wires: seq![], delivered: seq![],
-            end: super::post_handshake_spec::End::Fail(40u8) })) by (compute_only);
-    assert(rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::Fail(40u8)) by (compute_only);
+            end: super::post_handshake_spec::End::PeerAlert(40u8) })) by (compute_only);
+    assert(rec(21, seq![1u8, 40]).0.end == super::post_handshake_spec::End::PeerAlert(40u8)) by (compute_only);
     assert(rec(21, seq![2u8, 40]).1 == super::post_handshake_spec::failed()) by (compute_only);
 }
 
