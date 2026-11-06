@@ -1,7 +1,7 @@
 //! `matching.rs`'s `certificate_matches_host` over a whole certificate, and
 //! every `MatchChoices`, against what production decides: `leaf/spec.rs`'s
 //! `san_matches_reference`, inside `check_extensions`. `equivalence_matching.rs`
-//! compares one presented name under [`cautious_choices`]; this file lifts that.
+//! compares one presented name under `cautious_choices`; this file lifts that.
 //!
 //! **What each choice does.** On `equivalence_matching.rs`'s domain:
 //! - `wildcard_beyond_left_most`, `partial_label_wildcard`,
@@ -308,8 +308,7 @@ pub proof fn theorem_choices_imply_dns_match(c: MatchChoices, y: Seq<u8>, p: Seq
 }
 
 /// **`wildcard_spans_labels` is the one choice that widens the domain:** only
-/// this direction holds, and `a.b.example.com` against `*.example.com` is the
-/// input that shows the other fails.
+/// this direction holds. `example_choices` shows the other fails.
 pub proof fn theorem_spanning_is_wider(c: MatchChoices, y: Seq<u8>, p: Seq<u8>)
     requires
         c.wildcards,

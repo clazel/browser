@@ -39,11 +39,21 @@
 //!   `_tbs` are its layers, `_signature` compares the two signature
 //!   algorithms, `_matching` compares `dns_match`, and `_examples` gives an
 //!   input for each disagreement and one certificate inside the domain.
+//! - `equivalence_values`, `_name_constraints`: the value decoders of
+//!   `constraints/`, `policy_constraints/` and `name_constraints/`.
+//! - `equivalence_frame`, `_path`: what `parse_path_cert` runs on every
+//!   certificate, in both directions.
+//! - `equivalence_requirements`: `requirements.rs`, predicate by predicate.
+//! - `equivalence_host`: `certificate_matches_host` and every `MatchChoices`.
+//! - `equivalence_exclusions`: what narrows `equivalence.rs`'s exclusions.
+//! - `equivalence_coverage_examples`: an input for each of those differences.
 
 pub mod der;
 pub mod equivalence;
+pub mod equivalence_coverage_examples;
 pub mod equivalence_der;
 pub mod equivalence_examples;
+pub mod equivalence_exclusions;
 pub mod equivalence_extensions;
 pub mod equivalence_frame;
 pub mod equivalence_host;

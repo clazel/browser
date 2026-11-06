@@ -13,7 +13,7 @@
 //! | `version_rules` | always | `theorem_version_rules` |
 //! | `signature_algorithms_agree` | one way: `equivalence_signature.rs`; RSA NULL against absent stays | `theorem_signature_algorithms` |
 //! | `issuer_non_empty` | always | `theorem_issuer_non_empty` |
-//! | `subject_rule` | **not enforced** | [`subject_rule`](super::requirements::subject_rule), below |
+//! | `subject_rule` | **not enforced** | `example_path_conditions_hold` |
 //! | `extensions_acceptable` | any role, for a relying party with every form | `theorem_extensions_acceptable` |
 //! | `no_duplicate_extensions` | always, and stricter: RFC 5280 covers foreign ids | `theorem_no_duplicates` |
 //! | `key_identifiers_non_critical` | any role | `theorem_key_identifiers` |
@@ -160,7 +160,7 @@ pub proof fn lemma_value_in_domain(list: Seq<x::Extension>, v: Seq<e::Extension>
     assert(e::decode_extension_value(y.extn_id, y.extn_value) == Some(y.value));
     assert(a.value.len() < two64());
     lemma_lookups_read(list, k);
-    assert(lemma_ids_ok(y.extn_id, y.extn_value, y.value)) by {
+    assert(value_has_its_id(y.extn_id, y.extn_value, y.value)) by {
         reveal(e::decode_extension_value);
         lemma_value_ids(y.extn_id, y.extn_value, y.value);
     }
@@ -188,8 +188,8 @@ pub proof fn lemma_value_in_domain(list: Seq<x::Extension>, v: Seq<e::Extension>
     }
 }
 
-/// [`lemma_value_ids`]' conclusions, as one predicate.
-pub open spec fn lemma_ids_ok(id: Seq<nat>, input: Seq<u8>, val: e::ExtensionValue) -> bool {
+/// `lemma_value_ids`' conclusions, as one predicate.
+pub open spec fn value_has_its_id(id: Seq<nat>, input: Seq<u8>, val: e::ExtensionValue) -> bool {
     &&& val is BasicConstraints ==> id == e::id_ce_basic_constraints()
     &&& val is KeyUsage ==> id == e::id_ce_key_usage()
     &&& val is ExtKeyUsage ==> id == e::id_ce_ext_key_usage()

@@ -23,7 +23,7 @@
 //! certificate; production goes on. That is the crate's design, not a
 //! disagreement to remove: `path/parsed/spec.rs` says so for the key, and the
 //! Names are compared as octets. So there is no theorem that they agree there,
-//! and the frame's [`CertificateFrame`] says exactly which components are left.
+//! and the frame's `CertificateFrame` says exactly which components are left.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;

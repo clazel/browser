@@ -55,9 +55,10 @@
 //!    only what the path needs; a value nobody reads is accepted, even if
 //!    malformed. `extensions.rs` reads `ENCODED BY der` for all ten, so one
 //!    bad value refuses the whole certificate (open choice 3).
-//!    `theorem_subject_alt_name_fwd` covers subjectAltName's own decoder; the
-//!    decoders of `constraints/`, `name_constraints/` and
-//!    `policy_constraints/` are not compared (see "Not proven").
+//!    `equivalence_values.rs`, `equivalence_name_constraints.rs` and
+//!    `theorem_subject_alt_name_fwd` compare the six values the crate has a
+//!    decoder for, and `equivalence_path.rs` narrows this condition to the
+//!    rest on the production path.
 //!
 //! The transcription reads and the crate refuses ([`certificate_in_domain`]):
 //! 4. **Additions.** The transcription keeps what follows the known components
@@ -94,16 +95,21 @@
 //!     RFC 5280 §4.2 refuses any; X.509 9 speaks of extensions it defines
 //!     (open choice 12).
 //!
+//! **Each condition is one-directional.** Conditions 1 to 3 appear only in
+//! [`theorem_certificate_fwd`] and 4 to 13 only in [`theorem_certificate_back`],
+//! so where one fails the other direction still holds.
+//! `equivalence_exclusions.rs` says which are narrowed, and how.
+//!
+//! **This theorem is about `crate_decode`, not production.** What every
+//! certificate goes through is `equivalence_path.rs`.
+//!
 //! **Not proven.** Listed so that nobody reads the theorem as more than it is:
-//! - The value decoders of `constraints/`, `name_constraints/`,
-//!   `policy_constraints/` and `leaf/`, against those of `extensions.rs`.
-//! - `requirements.rs`, predicate by predicate, except those the domain uses
-//!   and `signature_algorithms_agree` (`equivalence_signature.rs`, which also
-//!   excludes RSA with NULL on one side and absent on the other).
-//! - The nine extension values other than subjectAltName in value: condition 3
-//!   asks only that `extensions.rs` reads them.
 //! - `spki/spec.rs`'s classification of keys, which has no counterpart in the
 //!   transcription; only its refusals are compared.
+//! - The four extension values no decoder of the crate reads:
+//!   authorityKeyIdentifier, subjectKeyIdentifier, certificatePolicies and
+//!   inhibitAnyPolicy. The crate has nothing to compare.
+//! - IP-ID matching: `matching.rs` has no counterpart (RFC 6125 1.7.2).
 //! - Anything executable: both sides are spec functions. `exec.rs` is proven
 //!   against `spec.rs` elsewhere.
 
