@@ -1,10 +1,9 @@
 //! The converted WPT `css/css-syntax/` table (phase-5.md item 5.1).
 //!
-//! There is no parser to run the cases through yet, so this checks only the table:
-//! that each page's cases are there, that a sample came through unchanged, and that
-//! what could not be read is still listed. Item 5.4's conformance test takes over
-//! from this one, so no conformance is claimed here, and this file prints no
-//! `clazel-conformance:` line.
+//! This checks only the table: that each page's cases are there, that a sample came
+//! through unchanged, and that what could not be read is still listed.
+//! `conformance_syntax.rs` runs the cases through the parser, so no conformance is claimed
+//! here, and this file prints no `clazel-conformance:` line.
 
 /// One helper call of a WPT page. A string is UTF-16 code units, as JavaScript has it,
 /// because some inputs are lone surrogates. `expected` is `None` for a parse error.

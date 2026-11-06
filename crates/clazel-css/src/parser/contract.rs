@@ -1,7 +1,7 @@
-//! Contracts the executable parser must be proven to meet, and the statements of the
-//! theorems planned about the spec. Each exec function's `ensures` clause will be one of
-//! these predicates, so reading these and [`super::spec`] is enough to know what the
-//! implementation guarantees.
+//! Contracts the executable parser is proven to meet, and the statements of the theorems
+//! planned about the spec. Each entry point's `ensures` clause is one of these predicates,
+//! so reading these and [`super::spec`] is enough to know what the implementation
+//! guarantees.
 //!
 //! phase-5.md, under 5.3, says how the exec functions read tokens and what they cost, and
 //! [`super::rows`] says what they build.
