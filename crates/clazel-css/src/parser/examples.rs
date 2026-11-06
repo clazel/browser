@@ -38,6 +38,35 @@ pub open spec fn style_rule(
     Rule::QualifiedRule { prelude: seq![ident(c)], declarations, child_rules }
 }
 
+/// The declarations of the sheet's first rule.
+pub open spec fn first_rule_declarations(string: Seq<u32>) -> Seq<Declaration> {
+    match rules(string)[0] {
+        Rule::QualifiedRule { declarations, .. } => declarations,
+        _ => Seq::empty(),
+    }
+}
+
+/// The prelude of the sheet's first rule.
+pub open spec fn first_rule_prelude(string: Seq<u32>) -> Seq<ComponentValue> {
+    match rules(string)[0] {
+        Rule::QualifiedRule { prelude, .. } => prelude,
+        _ => Seq::empty(),
+    }
+}
+
+/// `--x: /**/a b /**/ !important `.
+pub open spec fn custom_declaration() -> Seq<u32> {
+    seq![
+        0x2Du32, 0x2D, 0x78, 0x3A, 0x20, 0x2F, 0x2A, 0x2A, 0x2F, 0x61, 0x20, 0x62, 0x20, 0x2F,
+        0x2A, 0x2A, 0x2F, 0x20, 0x21, 0x69, 0x6D, 0x70, 0x6F, 0x72, 0x74, 0x61, 0x6E, 0x74, 0x20,
+    ]
+}
+
+/// `unicode-range:U+26-2f`.
+pub open spec fn unicode_declaration() -> Seq<u32> {
+    unicode_range_string() + seq![0x3Au32, 0x55, 0x2B, 0x32, 0x36, 0x2D, 0x32, 0x66]
+}
+
 /// `a{b:c}`: the declaration before the closing brace stays, which is the erratum in
 /// [`blocks_contents_loop`].
 pub proof fn lemma_example_declaration_in_a_rule()
@@ -135,13 +164,7 @@ pub proof fn lemma_example_custom_property_is_no_rule()
 pub proof fn lemma_example_original_text()
     ensures
         parse_a_declaration(
-            Input::String {
-                string: seq![
-                    0x2Du32, 0x2D, 0x78, 0x3A, 0x20, 0x2F, 0x2A, 0x2A, 0x2F, 0x61, 0x20, 0x62,
-                    0x20, 0x2F, 0x2A, 0x2A, 0x2F, 0x20, 0x21, 0x69, 0x6D, 0x70, 0x6F, 0x72, 0x74,
-                    0x61, 0x6E, 0x74, 0x20,
-                ],
-            },
+            Input::String { string: custom_declaration() },
         ) == Some(
             Declaration {
                 name: seq![0x2Du32, 0x2D, 0x78],
@@ -152,13 +175,7 @@ pub proof fn lemma_example_original_text()
         ),
 {
     assert(parse_a_declaration(
-        Input::String {
-            string: seq![
-                0x2Du32, 0x2D, 0x78, 0x3A, 0x20, 0x2F, 0x2A, 0x2A, 0x2F, 0x61, 0x20, 0x62, 0x20,
-                0x2F, 0x2A, 0x2A, 0x2F, 0x20, 0x21, 0x69, 0x6D, 0x70, 0x6F, 0x72, 0x74, 0x61,
-                0x6E, 0x74, 0x20,
-            ],
-        },
+        Input::String { string: custom_declaration() },
     ) == Some(
         Declaration {
             name: seq![0x2Du32, 0x2D, 0x78],
@@ -173,11 +190,7 @@ pub proof fn lemma_example_original_text()
 pub proof fn lemma_example_unicode_range()
     ensures
         parse_a_declaration(
-            Input::String {
-                string: unicode_range_string() + seq![
-                    0x3Au32, 0x55, 0x2B, 0x32, 0x36, 0x2D, 0x32, 0x66,
-                ],
-            },
+            Input::String { string: unicode_declaration() },
         ) == Some(
             Declaration {
                 name: unicode_range_string(),
@@ -188,11 +201,7 @@ pub proof fn lemma_example_unicode_range()
         ),
 {
     assert(parse_a_declaration(
-        Input::String {
-            string: unicode_range_string() + seq![
-                0x3Au32, 0x55, 0x2B, 0x32, 0x36, 0x2D, 0x32, 0x66,
-            ],
-        },
+        Input::String { string: unicode_declaration() },
     ) == Some(
         Declaration {
             name: unicode_range_string(),
@@ -260,6 +269,39 @@ pub proof fn lemma_example_comma_list()
     assert(parse_a_comma_separated_list_of_component_values(
         Input::List { list: comma_list() },
     ).len() == 2) by (compute_only);
+}
+
+/// `a{@b}c{}`: a nested at-rule stops at the `}` of the block around it.
+pub proof fn lemma_example_nested_at_rule()
+    ensures
+        rules(seq![0x61u32, 0x7B, 0x40, 0x62, 0x7D, 0x63, 0x7B, 0x7D]).len() == 2,
+{
+    assert(rules(seq![0x61u32, 0x7B, 0x40, 0x62, 0x7D, 0x63, 0x7B, 0x7D]).len() == 2)
+        by (compute_only);
+}
+
+/// `z;a:b`: bad remnants end at the semicolon, and the next declaration is read.
+pub proof fn lemma_example_remnants()
+    ensures
+        parse_a_list_of_declarations(
+            Input::String { string: seq![0x7Au32, 0x3B, 0x61, 0x3A, 0x62] },
+        ).len() == 1,
+{
+    assert(parse_a_list_of_declarations(
+        Input::String { string: seq![0x7Au32, 0x3B, 0x61, 0x3A, 0x62] },
+    ).len() == 1) by (compute_only);
+}
+
+/// `<!--a{}`: a `<CDO-token>` between rules is discarded.
+pub proof fn lemma_example_cdo()
+    ensures
+        rules(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x61, 0x7B, 0x7D]) == seq![
+            style_rule(0x61, Seq::empty(), Seq::empty()),
+        ],
+{
+    assert(rules(seq![0x3Cu32, 0x21, 0x2D, 0x2D, 0x61, 0x7B, 0x7D]) == seq![
+        style_rule(0x61, Seq::empty(), Seq::empty()),
+    ]) by (compute_only);
 }
 
 /// The value of An+B in `string`.
