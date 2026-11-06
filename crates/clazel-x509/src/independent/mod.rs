@@ -51,6 +51,7 @@ pub mod equivalence_signature;
 pub mod equivalence_structures;
 pub mod equivalence_tbs;
 pub mod equivalence_time;
+pub mod equivalence_values;
 pub mod examples;
 pub mod extensions;
 pub mod matching;
