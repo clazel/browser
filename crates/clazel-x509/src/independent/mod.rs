@@ -1,8 +1,9 @@
 //! An independent transcription of how an X.509 certificate is decoded and
 //! how a host name is matched against it, written from the standards alone,
 //! as evidence for this crate's other transcription (docs/VERIFICATION.md,
-//! "Trust without reviewers"). No equivalence proof exists yet: a different
-//! session writes it afterwards. This module has no exec code.
+//! "Trust without reviewers"). A different session proved it equal to the
+//! crate's decoders on a stated domain: `equivalence.rs`. This module has no
+//! exec code.
 //!
 //! Sources, each pinned at the top of the file that uses it: ITU-T X.509
 //! (10/2019), X.501 (10/2019), X.520 (10/2019), X.680, X.681 and X.690
@@ -22,8 +23,10 @@
 //! crate's `lib.rs`, whose header names RFC 5280, RFC 9525 and the absence of
 //! a Common Name fallback.
 //!
-//! Nothing here imports another module of this crate, or `clazel-der`; only
-//! `vstd`.
+//! Nothing in the transcription imports another module of this crate, or
+//! `clazel-der`; only `vstd`. The `equivalence*` files are the exception by
+//! nature: they name both sides, and were written after it, by another
+//! author.
 //!
 //! - `der`: X.690 and the X.680 types.
 //! - `structures`: `Certificate` and what it holds.
@@ -31,8 +34,23 @@
 //! - `requirements`: the prose's "shall" clauses.
 //! - `matching`: RFC 6125.
 //! - `examples`: sanity checks that Verus evaluates.
+//! - `equivalence`: the proof, with its domain and what it leaves unproven.
+//!   `equivalence_der`, `_time`, `_name`, `_structures`, `_extensions` and
+//!   `_tbs` are its layers, `_signature` compares the two signature
+//!   algorithms, `_matching` compares `dns_match`, and `_examples` gives an
+//!   input for each disagreement and one certificate inside the domain.
 
 pub mod der;
+pub mod equivalence;
+pub mod equivalence_der;
+pub mod equivalence_examples;
+pub mod equivalence_extensions;
+pub mod equivalence_matching;
+pub mod equivalence_name;
+pub mod equivalence_signature;
+pub mod equivalence_structures;
+pub mod equivalence_tbs;
+pub mod equivalence_time;
 pub mod examples;
 pub mod extensions;
 pub mod matching;
