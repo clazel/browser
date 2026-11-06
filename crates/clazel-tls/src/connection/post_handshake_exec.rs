@@ -16,7 +16,11 @@ verus! {
 pub enum Phase {
     /// Application traffic keys are installed in both directions.
     Open,
-    /// The connection ended in order.
+    /// Our `close_notify` went out; the server can still be read.
+    WriteClosed,
+    /// The server's `close_notify` came in; the client can still write.
+    ReadClosed,
+    /// Both directions ended in order.
     Closed,
     /// The connection failed.
     Failed,
@@ -26,6 +30,8 @@ impl View for Phase {
     open spec fn view(&self) -> spec::Phase {
         match self {
             Phase::Open => spec::Phase::Open,
+            Phase::WriteClosed => spec::Phase::WriteClosed,
+            Phase::ReadClosed => spec::Phase::ReadClosed,
             Phase::Closed => spec::Phase::Closed,
             Phase::Failed => spec::Phase::Failed,
         }
@@ -57,7 +63,9 @@ pub enum Action {
     Send(Vec<u8>),
     /// Plaintext application data from the server, in order.
     Deliver(Vec<u8>),
-    /// The connection ended in order (`close_notify`).
+    /// The server's `close_notify`: end of data; the write side goes on.
+    PeerClosed,
+    /// Both directions ended in order (`close_notify`).
     Close,
     /// The connection ended with this alert description.
     Fail(u8),
@@ -68,6 +76,7 @@ impl View for Action {
         match self {
             Action::Send(wire) => spec::Action::Send(wire@),
             Action::Deliver(data) => spec::Action::Deliver(data@),
+            Action::PeerClosed => spec::Action::PeerClosed,
             Action::Close => spec::Action::Close,
             Action::Fail(alert) => spec::Action::Fail(*alert),
         }
@@ -80,7 +89,9 @@ impl View for Action {
 pub enum End {
     /// The connection goes on.
     Continue,
-    /// `close_notify`.
+    /// The server's `close_notify`; the write side goes on.
+    PeerClosed,
+    /// Both directions ended with `close_notify`.
     Close,
     /// Fatal, with this alert description.
     Fail(u8),
@@ -90,6 +101,7 @@ impl View for End {
     open spec fn view(&self) -> spec::End {
         match self {
             End::Continue => spec::End::Continue,
+            End::PeerClosed => spec::End::PeerClosed,
             End::Close => spec::End::Close,
             End::Fail(alert) => spec::End::Fail(*alert),
         }
@@ -173,7 +185,7 @@ impl Out {
 }
 
 /// The actions of an output, in order: every `Send`, the `Deliver` if there is
-/// plaintext, then `Close` or `Fail` ([`spec::actions`]).
+/// plaintext, then `PeerClosed`, `Close` or `Fail` ([`spec::actions`]).
 fn into_actions(out: Out) -> (r: Vec<Action>)
     ensures crate::types::views(r@) =~= spec::actions(out@),
 {
@@ -213,6 +225,10 @@ fn into_actions(out: Out) -> (r: Vec<Action>)
     }
     match out.end {
         End::Continue => {},
+        End::PeerClosed => {
+            proof { crate::types::lemma_views_push(r@, Action::PeerClosed); }
+            r.push(Action::PeerClosed);
+        },
         End::Close => {
             proof { crate::types::lemma_views_push(r@, Action::Close); }
             r.push(Action::Close);
@@ -372,6 +388,13 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         matches!(self.phase, Phase::Open)
     }
 
+    /// Which directions are still open.
+    pub fn phase(&self) -> (out: Phase)
+        ensures out@ == self@.phase,
+    {
+        self.phase
+    }
+
     fn terminal(&mut self, phase: Phase)
         requires phase == Phase::Failed || phase == Phase::Closed,
         ensures
@@ -503,8 +526,54 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         }
     }
 
+    /// §6.1: the write side has ended; both have once the read side has too.
+    fn finish_write(&mut self) -> (out: End)
+        requires old(self).resources_wf(), old(self).bound(),
+        ensures
+            out@ == spec::finish_write(old(self)@).0,
+            final(self)@ == spec::finish_write(old(self)@).1,
+            final(self).resources_wf(), final(self).bound(),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).cipher_functions() == old(self).cipher_functions(),
+    {
+        if matches!(self.phase, Phase::ReadClosed) {
+            self.terminal(Phase::Closed);
+            End::Close
+        } else {
+            self.phase = Phase::WriteClosed;
+            self.sender = None;
+            self.client_secret.clear();
+            proof { assert(self@ =~= spec::finish_write(old(self)@).1); }
+            End::Continue
+        }
+    }
+
+    /// §6.1: the server's `close_notify` ended the read side; both have
+    /// ended once the write side has too.
+    fn peer_closed(&mut self) -> (out: Out)
+        requires old(self).resources_wf(), old(self).bound(),
+        ensures
+            out@ == spec::peer_closed(old(self)@).0,
+            final(self)@ == spec::peer_closed(old(self)@).1,
+            final(self).resources_wf(), final(self).bound(),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).cipher_functions() == old(self).cipher_functions(),
+    {
+        if matches!(self.phase, Phase::WriteClosed) {
+            self.terminal(Phase::Closed);
+            Out::ending(End::Close)
+        } else {
+            self.phase = Phase::ReadClosed;
+            self.receiver = None;
+            self.server_secret.clear();
+            self.reassembler = Reassembler::new();
+            proof { assert(self@ =~= spec::peer_closed(old(self)@).1); }
+            Out::ending(End::PeerClosed)
+        }
+    }
+
     /// §6.1: `close_notify` goes out under the current client key, if it can,
-    /// and the connection ends in order.
+    /// and the write side ends.
     fn close_connection(&mut self) -> (out: Out)
         requires old(self).resources_wf(), old(self).bound(),
         ensures
@@ -527,12 +596,14 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         }
         match self.seal_record(crate::spec::CT_ALERT, content.as_slice()) {
             Ok(wire) => {
-                self.terminal(Phase::Closed);
-                Out::one(wire, End::Close)
+                let end = self.finish_write();
+                proof { assert(self@ =~= spec::finish_write(old(self)@).1); }
+                Out::one(wire, end)
             },
             Err(_) => {
-                self.terminal(Phase::Closed);
-                Out::ending(End::Close)
+                let end = self.finish_write();
+                proof { assert(self@ =~= spec::finish_write(old(self)@).1); }
+                Out::ending(end)
             },
         }
     }
@@ -613,7 +684,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).cipher_functions() == old(self).cipher_functions(),
     {
-        if !matches!(self.phase, Phase::Open) { return Out::quiet(); }
+        if !matches!(self.phase, Phase::Open | Phase::ReadClosed) { return Out::quiet(); }
         let mut body: Vec<u8> = Vec::new();
         crate::encode::write_key_update(&mut body, request);
         let mut message: Vec<u8> = Vec::new();
@@ -671,7 +742,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).cipher_functions() == old(self).cipher_functions(),
     {
-        if !matches!(self.phase, Phase::Open) { return Out::quiet(); }
+        if !matches!(self.phase, Phase::Open | Phase::ReadClosed) { return Out::quiet(); }
         let rekey = match self.sender.as_ref() {
             Some(tx) => match tx.next_sequence() {
                 Some(n) => n == u64::MAX,
@@ -681,7 +752,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         };
         if rekey {
             let first = self.send_key_update(crate::spec::UPDATE_NOT_REQUESTED);
-            if !matches!(self.phase, Phase::Open) { return first; }
+            if !matches!(self.phase, Phase::Open | Phase::ReadClosed) { return first; }
             proof {
                 lemma_start_fresh(self.crypto_functions(), self@.client_secret);
                 assert(!spec::needs_rekey(self@));
@@ -722,7 +793,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         into_actions(o)
     }
 
-    /// §6.1: send `close_notify` and end the connection. Nothing if it
+    /// §6.1: send `close_notify` and end the write side. Nothing if it
     /// already ended.
     pub fn close(&mut self) -> (out: Vec<Action>)
         requires old(self).wf(),
@@ -731,14 +802,14 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             super::post_handshake_contract::close_ensures(old(self).cipher_functions(), old(self)@,
                 crate::types::views(out@), final(self)@),
     {
-        let o = if matches!(self.phase, Phase::Open) { self.close_connection() } else { Out::quiet() };
+        let o = if matches!(self.phase, Phase::Open | Phase::ReadClosed) { self.close_connection() } else { Out::quiet() };
         into_actions(o)
     }
 
     /// §4.6.3, §5.1: a valid KeyUpdate that must end its record at a message
     /// boundary; the read keys move on and a requested reply goes out.
     fn key_update_received(&mut self, request: u8, last: bool) -> (out: Out)
-        requires old(self).wf(), old(self)@.phase == spec::Phase::Open,
+        requires old(self).wf(), spec::can_read(old(self)@),
         ensures
             out@ == spec::key_update_received(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, request, last).0,
@@ -768,7 +839,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
 
     /// §4.6: one complete handshake message after the handshake.
     fn message(&mut self, m: &[u8], last: bool) -> (out: Out)
-        requires old(self).wf(), old(self)@.phase == spec::Phase::Open,
+        requires old(self).wf(), spec::can_read(old(self)@),
         ensures
             out@ == spec::message(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, m@, last).0,
@@ -795,7 +866,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
 
     /// The complete messages of one record from index `i`, in order.
     fn messages(&mut self, ms: &Vec<Vec<u8>>, i: usize) -> (out: Out)
-        requires old(self).wf(), old(self)@.phase == spec::Phase::Open, i <= ms.len(),
+        requires old(self).wf(), spec::can_read(old(self)@), i <= ms.len(),
         ensures
             out@ == spec::messages(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, crate::reassemble::views_bytes(ms@).skip(i as int)).0,
@@ -814,7 +885,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             None => return self.die(crate::spec::INTERNAL_ERROR),
         };
         let first = self.message(message.as_slice(), last);
-        if !matches!(self.phase, Phase::Open) { return first; }
+        if !matches!(self.phase, Phase::Open | Phase::WriteClosed) { return first; }
         proof {
             let views = crate::reassemble::views_bytes(ms@);
             assert(views.skip(i as int)[0] == ms@[i as int]@);
@@ -826,7 +897,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
 
     /// §5.1, §6: what one authenticated record does.
     fn record(&mut self, typ: u8, content: &[u8]) -> (out: Out)
-        requires old(self).wf(), old(self)@.phase == spec::Phase::Open, content.len() <= crate::spec::MAX_PLAINTEXT,
+        requires old(self).wf(), spec::can_read(old(self)@), content.len() <= crate::spec::MAX_PLAINTEXT,
         ensures
             out@ == spec::record(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, typ, content@).0,
@@ -850,7 +921,11 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
                 o
             },
             Ok(ReassemblyEvent::Alert(a)) => {
-                if a.description == crate::spec::CLOSE_NOTIFY { self.close_connection() }
+                if a.description == crate::spec::CLOSE_NOTIFY {
+                    let o = self.peer_closed();
+                    proof { assert(self@ =~= spec::peer_closed(old(self)@).1); }
+                    o
+                } else if a.description == crate::spec::USER_CANCELED { Out::quiet() }
                 else { self.die(a.description) }
             },
             Ok(ReassemblyEvent::Messages(ms)) => {
@@ -866,7 +941,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
     /// §5.1–§5.3: authenticate and open the first record of `wire`, and act
     /// on it. Returns what it did and how many input bytes it consumed.
     fn receive(&mut self, wire: &[u8]) -> (r: (Out, usize))
-        requires old(self).wf(), old(self)@.phase == spec::Phase::Open,
+        requires old(self).wf(), spec::can_read(old(self)@),
         ensures
             r.0@ == spec::receive(old(self).crypto_functions(), old(self).cipher_functions(),
                 old(self)@, wire@).0,
@@ -919,7 +994,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
     {
         match input {
             Input::Bytes(wire) => {
-                if matches!(self.phase, Phase::Open) {
+                if matches!(self.phase, Phase::Open | Phase::WriteClosed) {
                     let (o, consumed) = self.receive(wire);
                     (consumed, into_actions(o))
                 } else {
@@ -927,7 +1002,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
                 }
             },
             Input::Closed => {
-                if matches!(self.phase, Phase::Open) {
+                if matches!(self.phase, Phase::Open | Phase::WriteClosed) {
                     let o = self.die(crate::spec::INTERNAL_ERROR);
                     (0, into_actions(o))
                 } else {
