@@ -52,12 +52,17 @@
 #   table     on pushes to main only, after `assemble` passed: writes
 #             docs/STATUS.md's table and the status images from the same
 #             measurements (`verify --part assemble --write`) and, if they
-#             changed, commits them to main as github-actions[bot]. Changes
-#             therefore never need to carry them. It is the only job that
-#             may write to the repository. Its push uses the workflow's own
-#             token, which starts no new CI run. If main has moved on since
-#             the run started, it commits nothing: the newer run updates the
-#             table instead.
+#             changed, commits them to main as clazel-status-table[bot].
+#             Changes therefore never need to carry them. It is the only job
+#             that may write to the repository. main accepts changes only
+#             through the merge queue, and the workflow's own token cannot
+#             bypass that: GitHub Actions is not part of the organization.
+#             So the push uses a token of the organization's
+#             clazel-status-table app, the ruleset's one bypass actor, made
+#             after `cargo xtask` ran so that no project code sees it. Such
+#             a push does start CI, so `push` ignores these three files. If
+#             main has moved on since the run started, it commits nothing:
+#             the newer run updates the table instead.
 #   release   `cargo build --release --locked` of the shipped binaries
 #             (`clazel` and `clazel-renderer`) for Linux x86-64, uploaded as
 #             a tarball with its SHA-256, with `install.sh` and the AppArmor
@@ -85,6 +90,12 @@ name: CI
 on:
   push:
     branches: [main]
+    # The table job's own commits: verifying them again would measure the
+    # same code.
+    paths-ignore:
+      - docs/STATUS.md
+      - docs/status.svg
+      - docs/status-detail.svg
   pull_request:
   workflow_dispatch:
 
@@ -321,11 +332,10 @@ jobs:
       github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    permissions:
-      # Commit the regenerated table and images to main.
-      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust
         run: rustup toolchain install
       - name: Download measurements
@@ -336,9 +346,17 @@ jobs:
           merge-multiple: true
       - name: Write the table and images
         run: cargo xtask verify --part assemble --metrics parts --write
+      - name: Make the app's token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ secrets.STATUS_APP_ID }}
+          private-key: ${{ secrets.STATUS_APP_KEY }}
+          permission-contents: write
       - name: Commit them
         env:
           STATUS_FILES: docs/STATUS.md docs/status.svg docs/status-detail.svg
+          APP_TOKEN: ${{ steps.app.outputs.token }}
         run: |
           if git diff --quiet -- $STATUS_FILES; then
             echo "The status table and images are up to date."
@@ -351,10 +369,10 @@ jobs:
             echo "main has moved on since $GITHUB_SHA; the newer run updates the table."
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "clazel-status-table[bot]"
+          git config user.email "352846828+clazel-status-table[bot]@users.noreply.github.com"
           git commit -m "Update the status table for ${GITHUB_SHA::12}" -- $STATUS_FILES
-          git push origin HEAD:main
+          git push "https://x-access-token:${APP_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
 
   release:
     name: Release build (Linux x86-64)

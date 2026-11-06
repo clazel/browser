@@ -14,6 +14,8 @@
 //   Punycode): its `count` labels, from left to right, are rows `first ..
 //   first + count` of PSL_LABELS, and a label is the characters
 //   PSL_CHARS[start .. start + len].
+// - PSL_ICANN_RULES_LEN is how many rules come before the line
+//   `// ===END ICANN DOMAINS===`: the ICANN section is the first rows.
 // - Checked when generating: no empty label; `*` only as the whole leftmost
 //   label of a non-exception rule; no upper-case ASCII letter; an exception
 //   rule has at least two labels; no duplicate rule; no exception rule is a
@@ -45753,5 +45755,8 @@ pub fn psl_chars_at_exec(i: usize) -> (r: u8)
         }
     }
 }
+
+/// The rules of the list's ICANN section: rows `0 .. PSL_ICANN_RULES_LEN`.
+pub const PSL_ICANN_RULES_LEN: usize = 6949;
 
 } // verus!

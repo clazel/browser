@@ -13,6 +13,7 @@
 //! published as one) and `License:` lines.
 
 mod cbor_appendix_a;
+mod css_parsing_tests;
 mod hash;
 mod html5lib_encoding;
 mod html5lib_tokenizer;
@@ -24,6 +25,7 @@ mod llhttp;
 mod nist_cavp_sigver;
 mod wpt_base64;
 mod wpt_cookies;
+mod wpt_css_syntax;
 mod wpt_encoding;
 mod wpt_encoding_legacy;
 mod wpt_idna;
@@ -48,6 +50,16 @@ type Convert = fn(&Path) -> Result<String, String>;
 /// Every suite the converter knows, by directory name, with the files it
 /// expects to find there.
 const CONVERTERS: &[(&str, Convert, &[&str])] = &[
+    (
+        "wpt-css-syntax",
+        wpt_css_syntax::convert,
+        wpt_css_syntax::FILES,
+    ),
+    (
+        "css-parsing-tests",
+        css_parsing_tests::convert,
+        css_parsing_tests::FILES,
+    ),
     (
         "cbor-appendix-a",
         cbor_appendix_a::convert,
