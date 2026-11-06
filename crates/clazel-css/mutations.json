@@ -259,6 +259,256 @@
         "lemma": "super::examples::lemma_example_number_value()",
         "witness": "super::examples::value_of(seq![0x31u32, 0x2E, 0x35, 0x65, 0x2D, 0x31]) == (150int, 10nat)"
       }
+    },
+    {
+      "id": "window-one-short",
+      "file": "src/input/spec.rs",
+      "find": "    if stylesheet.len() <= 1024 {\n        stylesheet\n    } else {\n        stylesheet.subrange(0, 1024)\n",
+      "replace": "    if stylesheet.len() <= 1023 {\n        stylesheet\n    } else {\n        stylesheet.subrange(0, 1023)\n",
+      "expect": "killed",
+      "reason": "A declaration ending on byte 1024 would not count.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ],
+        "lemma": "super::examples::lemma_example_window()",
+        "witness": "super::examples::alone(super::examples::padded(1009)) == clazel_encoding::labels::spec::Encoding::Utf8"
+      }
+    },
+    {
+      "id": "window-one-long",
+      "file": "src/input/spec.rs",
+      "find": "    if stylesheet.len() <= 1024 {\n        stylesheet\n    } else {\n        stylesheet.subrange(0, 1024)\n",
+      "replace": "    if stylesheet.len() <= 1025 {\n        stylesheet\n    } else {\n        stylesheet.subrange(0, 1025)\n",
+      "expect": "killed",
+      "reason": "A declaration ending on byte 1025 would count.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ],
+        "lemma": "super::examples::lemma_example_window()",
+        "witness": "super::examples::alone(super::examples::padded(1010)) == clazel_encoding::labels::spec::Encoding::Ibm866"
+      }
+    },
+    {
+      "id": "window-not-applied",
+      "file": "src/input/spec.rs",
+      "find": "declared_label(first_1024_bytes(stylesheet))",
+      "replace": "declared_label(stylesheet)",
+      "expect": "killed",
+      "reason": "A declaration could be anywhere in the first bytes of any length.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ],
+        "lemma": "super::examples::lemma_example_window()",
+        "witness": "super::examples::alone(super::examples::padded(1010)) == clazel_encoding::labels::spec::Encoding::Ibm866"
+      }
+    },
+    {
+      "id": "xx-takes-high-bytes",
+      "file": "src/input/spec.rs",
+      "find": "b <= 0x21 || 0x23 <= b <= 0x7F",
+      "replace": "b <= 0x21 || 0x23 <= b",
+      "expect": "killed",
+      "reason": "Bytes from 80 up are not ASCII, so not XX bytes.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_pattern()",
+        "witness": "declared_label(super::examples::declaration(seq![0x80u8])) == Some(seq![0x80u8])"
+      }
+    },
+    {
+      "id": "xx-takes-quote",
+      "file": "src/input/spec.rs",
+      "find": "b <= 0x21 || 0x23 <= b <= 0x7F",
+      "replace": "b <= 0x7F",
+      "expect": "killed",
+      "reason": "The closing quote would be read as part of the label.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ],
+        "lemma": "super::examples::lemma_example_declaration()",
+        "witness": "super::examples::alone(super::examples::declaration(super::examples::label_866())) == clazel_encoding::labels::spec::Encoding::Utf8"
+      }
+    },
+    {
+      "id": "xx-drops-zero",
+      "file": "src/input/spec.rs",
+      "find": "b <= 0x21 || 0x23 <= b <= 0x7F",
+      "replace": "0 < b <= 0x21 || 0x23 <= b <= 0x7F",
+      "expect": "killed",
+      "reason": "XX bytes start at 0.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_pattern()",
+        "witness": "declared_label(super::examples::declaration(seq![0x00u8])) == None::<Seq<u8>>"
+      }
+    },
+    {
+      "id": "xx-drops-7f",
+      "file": "src/input/spec.rs",
+      "find": "b <= 0x21 || 0x23 <= b <= 0x7F",
+      "replace": "b <= 0x21 || 0x23 <= b <= 0x7E",
+      "expect": "killed",
+      "reason": "XX bytes end at 7F, inclusive.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_pattern()",
+        "witness": "declared_label(super::examples::declaration(seq![0x7Fu8])) == None::<Seq<u8>>"
+      }
+    },
+    {
+      "id": "prefix-any-case",
+      "file": "src/input/spec.rs",
+      "find": "seq![0x40u8, 0x63, 0x68,",
+      "replace": "seq![0x40u8, 0x43, 0x68,",
+      "expect": "killed",
+      "reason": "The pattern is exact bytes, lowercase.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_pattern()",
+        "witness": "declared_label(seq![0x40u8, 0x43, 0x68, 0x61, 0x72, 0x73, 0x65, 0x74, 0x20, 0x22, 0x22, 0x3B]) == Some(Seq::<u8>::empty())"
+      }
+    },
+    {
+      "id": "semicolon-not-needed",
+      "file": "src/input/spec.rs",
+      "find": " && bytes[end + 1] == 0x3B",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The pattern ends in 22 3B.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_pattern()",
+        "witness": "declared_label(charset_prefix() + super::examples::label_866() + seq![0x22u8, 0x20]) == Some(super::examples::label_866())"
+      }
+    },
+    {
+      "id": "declared-utf16be-kept",
+      "file": "src/input/spec.rs",
+      "find": "encoding == clazel_encoding::labels::spec::Encoding::Utf16Be\n                || encoding == clazel_encoding::labels::spec::Encoding::Utf16Le {",
+      "replace": "encoding == clazel_encoding::labels::spec::Encoding::Utf16Le {",
+      "expect": "killed",
+      "reason": "A declaration of UTF-16BE would be believed.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declared_utf16()",
+        "witness": "fallback_from_steps(None, Some(clazel_encoding::labels::spec::Encoding::Utf16Be), None) == clazel_encoding::labels::spec::Encoding::Utf16Be"
+      }
+    },
+    {
+      "id": "declared-utf16le-kept",
+      "file": "src/input/spec.rs",
+      "find": "encoding == clazel_encoding::labels::spec::Encoding::Utf16Be\n                || encoding == clazel_encoding::labels::spec::Encoding::Utf16Le {",
+      "replace": "encoding == clazel_encoding::labels::spec::Encoding::Utf16Be {",
+      "expect": "killed",
+      "reason": "A declaration of UTF-16LE would be believed.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_declared_utf16()",
+        "witness": "fallback_from_steps(None, Some(clazel_encoding::labels::spec::Encoding::Utf16Le), None) == clazel_encoding::labels::spec::Encoding::Utf16Le"
+      }
+    },
+    {
+      "id": "protocol-ignored",
+      "file": "src/input/spec.rs",
+      "find": "Some(label) => clazel_encoding::labels::spec::get_an_encoding(label),",
+      "replace": "Some(_) => None,",
+      "expect": "killed",
+      "reason": "The protocol's label comes first.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ],
+        "lemma": "super::examples::lemma_example_order()",
+        "witness": "determine_the_fallback_encoding(super::examples::declaration(super::examples::label_866()), super::examples::given(super::examples::label_ascii()), None) == clazel_encoding::labels::spec::Encoding::Ibm866"
+      }
+    },
+    {
+      "id": "declaration-ignored",
+      "file": "src/input/spec.rs",
+      "find": "Some(label) => clazel_encoding::labels::spec::get_an_encoding(ascii_string(label)),",
+      "replace": "Some(_) => None,",
+      "expect": "killed",
+      "reason": "The sheet's declaration comes second.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ],
+        "lemma": "super::examples::lemma_example_declaration()",
+        "witness": "super::examples::alone(super::examples::declaration(super::examples::label_866())) == clazel_encoding::labels::spec::Encoding::Utf8"
+      }
+    },
+    {
+      "id": "environment-ignored",
+      "file": "src/input/spec.rs",
+      "find": "                Some(encoding) => encoding,\n                // 4.",
+      "replace": "                Some(_) => clazel_encoding::labels::spec::Encoding::Utf8,\n                // 4.",
+      "expect": "killed",
+      "reason": "The referring document's encoding is step 3.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_order()",
+        "witness": "fallback_from_steps(None, None, Some(clazel_encoding::labels::spec::Encoding::Iso8859_2)) == clazel_encoding::labels::spec::Encoding::Utf8"
+      }
+    },
+    {
+      "id": "default-not-utf8",
+      "file": "src/input/spec.rs",
+      "find": "None => clazel_encoding::labels::spec::Encoding::Utf8,",
+      "replace": "None => clazel_encoding::labels::spec::Encoding::Windows1252,",
+      "expect": "killed",
+      "reason": "Step 4 is UTF-8.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "lemma": "super::examples::lemma_example_order()",
+        "witness": "fallback_from_steps(None, None, None) == clazel_encoding::labels::spec::Encoding::Windows1252"
+      }
+    },
+    {
+      "id": "decode-ignores-fallback",
+      "file": "src/input/spec.rs",
+      "find": "clazel_encoding::hooks::spec::decode(stylesheet, fallback)",
+      "replace": "clazel_encoding::hooks::spec::decode(stylesheet, clazel_encoding::labels::spec::Encoding::Utf8)",
+      "expect": "killed",
+      "reason": "The fallback would be worked out and not used.",
+      "certificate": {
+        "file": "src/input/lemmas.rs",
+        "reveal": [
+          "clazel_encoding::labels::data::LABEL_START_0",
+          "clazel_encoding::labels::data::LABEL_LEN_0",
+          "clazel_encoding::labels::data::LABEL_ENCODING_0",
+          "clazel_encoding::labels::data::LABEL_CHARS_0"
+        ],
+        "lemma": "super::examples::lemma_example_decode()",
+        "witness": "decode_bytes(seq![0x41u8, 0x00], super::examples::given(super::examples::label_csunicode()), None) == Some(seq![0x41u32, 0x00u32])"
+      }
     }
   ]
 }
