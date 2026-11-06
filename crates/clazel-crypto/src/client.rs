@@ -63,152 +63,27 @@
 //!   handshake has completed (§6.1: "Each party MUST send a "close_notify"
 //!   alert before closing its write side of the connection, unless it has
 //!   already sent some error alert"). During the server's protected flight
-//!   `Connection` seals only fatal alerts, so a close_notify from the server
-//!   there, or [`Client::close`], ends the connection without one: the
-//!   client stops and the caller closes the transport.
+//!   `Connection` seals it under the client handshake epoch, whether the
+//!   server closed or [`Client::close`] was called, and the client stops.
 //!
-//! Tier 0, plain safe Rust outside `verus!`: shell glue, tested end to end
+//! The joining itself is `clazel_tls::connection::driver_exec::Driver`, generic
+//! over its providers and proven in `driver_contract`. This file fixes the
+//! providers and keeps the input buffer: tier 0, plain safe Rust outside
+//! `verus!`, tested end to end
 //! against rustls (`tests/client.rs`).
 
 use crate::join::exec::ChainVerifier;
 use crate::provider::{ChaCha20Poly1305Factory, Sha256Suite, X25519};
-use clazel_tls::connection::exec::{Action as ConnAction, Connection};
-use clazel_tls::connection::post_handshake_exec::{
-    Action as AppAction, Input as AppInput, Phase as AppPhase, PostHandshake,
-};
-use clazel_tls::hello::bootstrap::{Action as BootAction, Bootstrap};
-use clazel_tls::hello::client::{Config, Established};
+use clazel_tls::connection::driver_exec::Driver;
+pub use clazel_tls::connection::driver_exec::{Failure, Origin, Output, State, alert_name};
+use clazel_tls::hello::client::Config;
 use clazel_tls::hello::key_exchange::KeyExchange;
 use clazel_tls::host::exec::Host;
-use clazel_tls::spec::{
-    CLOSE_NOTIFY, CT_ALERT, INTERNAL_ERROR, LEVEL_FATAL, LEVEL_WARNING, MAX_PLAINTEXT,
-};
-use std::fmt;
+use clazel_tls::spec::MAX_PLAINTEXT;
 
-/// Octets of randomness the client draws per connection: the X25519 scalar
-/// (RFC 7748 §5), the ClientHello random (RFC 8446 §4.1.2) and the
-/// legacy_session_id (Appendix D.4, middlebox compatibility mode).
+/// The scalar, the ClientHello random and the session id: each 32 octets (the
+/// session id for middlebox compatibility, RFC 8446 Appendix D.4).
 const RANDOM_LEN: usize = 32;
-
-/// RFC 8446 §5.1: `legacy_record_version` of every record after the first
-/// ClientHello.
-const RECORD_VERSION: [u8; 2] = [3, 3];
-
-/// The dispatcher this driver runs after the ServerHello.
-type Conn<'r> = Connection<Sha256Suite, ChaCha20Poly1305Factory, ChainVerifier<'r>>;
-
-/// The transducer this driver runs after the handshake.
-type App = PostHandshake<Sha256Suite, ChaCha20Poly1305Factory>;
-
-/// Where the connection is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum State {
-    /// The handshake is running.
-    Handshaking,
-    /// The handshake completed: application data flows both ways.
-    Open,
-    /// Our close_notify has been sent; the server's has not arrived.
-    /// Application data from the server is still delivered.
-    Closing,
-    /// Both close_notify alerts have been seen. Final.
-    Closed,
-    /// The connection failed. Final.
-    Failed(Failure),
-}
-
-impl State {
-    /// `Closed` or `Failed`: nothing more will be sent or delivered.
-    pub fn is_final(self) -> bool {
-        matches!(self, State::Closed | State::Failed(_))
-    }
-}
-
-/// A fatal end of the connection.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Failure {
-    /// The RFC 8446 §6.2 `AlertDescription`.
-    pub alert: u8,
-    /// Who raised it, and whether it went on the wire.
-    pub origin: Origin,
-}
-
-/// Where a [`Failure`] came from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Origin {
-    /// The client detected it, and the fatal alert record is the last
-    /// record in [`Output::send`]: in plaintext before the handshake keys,
-    /// sealed by `Connection` from the ServerHello on, also after the
-    /// handshake.
-    Sent,
-    /// The client detected it, but no alert could be sent: the client could
-    /// not start, or `Connection` held no settled write epoch to seal it
-    /// under (our close_notify was already sealed, or the epoch failed or
-    /// ran out of sequence numbers).
-    NotSent,
-    /// The server sent this fatal alert, before or after the handshake. It
-    /// is not answered.
-    Peer,
-    /// The transport closed before a close_notify (RFC 8446 §6.1
-    /// truncation); nothing was sent.
-    Truncated,
-}
-
-impl fmt::Display for Failure {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = alert_name(self.alert).unwrap_or("unknown alert");
-        match self.origin {
-            Origin::Sent => write!(f, "{name} ({}), sent to the server", self.alert),
-            Origin::NotSent => write!(f, "{name} ({}), not sent", self.alert),
-            Origin::Peer => write!(f, "{name} ({}), from the server", self.alert),
-            Origin::Truncated => write!(f, "connection closed without close_notify"),
-        }
-    }
-}
-
-/// RFC 8446 §6.2: the name of an `AlertDescription`.
-pub fn alert_name(description: u8) -> Option<&'static str> {
-    Some(match description {
-        0 => "close_notify",
-        10 => "unexpected_message",
-        20 => "bad_record_mac",
-        22 => "record_overflow",
-        40 => "handshake_failure",
-        42 => "bad_certificate",
-        43 => "unsupported_certificate",
-        44 => "certificate_revoked",
-        45 => "certificate_expired",
-        46 => "certificate_unknown",
-        47 => "illegal_parameter",
-        48 => "unknown_ca",
-        49 => "access_denied",
-        50 => "decode_error",
-        51 => "decrypt_error",
-        70 => "protocol_version",
-        71 => "insufficient_security",
-        80 => "internal_error",
-        86 => "inappropriate_fallback",
-        90 => "user_canceled",
-        109 => "missing_extension",
-        110 => "unsupported_extension",
-        112 => "unrecognized_name",
-        113 => "bad_certificate_status_response",
-        115 => "unknown_psk_identity",
-        116 => "certificate_required",
-        120 => "no_application_protocol",
-        _ => return None,
-    })
-}
-
-/// What one call produced.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Output {
-    /// Octets to write to the transport, in order.
-    pub send: Vec<u8>,
-    /// Application data from the server, in order.
-    pub deliver: Vec<u8>,
-    /// The state after the call.
-    pub state: State,
-}
 
 /// [`Client::send`] was called while the client cannot send application
 /// data: the handshake is running, our close_notify was sent, or the
@@ -216,36 +91,12 @@ pub struct Output {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NotOpen(pub State);
 
-enum Phase<'r> {
-    /// Phase 1: through the ServerHello.
-    Hello {
-        boot: Box<Bootstrap<Sha256Suite>>,
-        scalar: Vec<u8>,
-        verifier: ChainVerifier<'r>,
-    },
-    /// Phase 3: the protected flight.
-    Live { conn: Box<Conn<'r>> },
-    /// Phase 4: application traffic.
-    App { app: Box<App> },
-    /// `Closed` or `Failed`.
-    Ended,
-}
-
 /// One TLS 1.3 client connection, without its socket. See the module
 /// comment.
 pub struct Client<'r> {
-    phase: Phase<'r>,
-    /// Received octets the current phase has not consumed yet.
+    driver: Driver<Sha256Suite, X25519, ChaCha20Poly1305Factory, ChainVerifier<'r>>,
+    /// Received octets the current machine has not consumed yet.
     inbox: Vec<u8>,
-    state: State,
-}
-
-/// A plaintext alert record (RFC 8446 §5.1, §6).
-fn plaintext_alert(level: u8, description: u8) -> Vec<u8> {
-    let mut out = vec![CT_ALERT];
-    out.extend_from_slice(&RECORD_VERSION);
-    out.extend_from_slice(&[0, 2, level, description]);
-    out
 }
 
 impl<'r> Client<'r> {
@@ -273,110 +124,76 @@ impl<'r> Client<'r> {
             session_id: draw(),
             public_key: X25519.public_key(&scalar),
         };
-        let mut client = Client {
-            phase: Phase::Ended,
-            inbox: Vec::new(),
-            state: State::Handshaking,
-        };
-        let mut out = client.output();
-        match Bootstrap::start(config, Sha256Suite) {
-            Ok((mut boot, BootAction::Send(wire))) => {
-                if matches!(boot.acknowledge_send(&wire), BootAction::None) {
-                    out.send = wire;
-                    client.phase = Phase::Hello {
-                        boot: Box::new(boot),
-                        scalar,
-                        verifier,
-                    };
-                } else {
-                    client.fail(INTERNAL_ERROR, Origin::NotSent);
-                }
-            }
-            Ok(_) => client.fail(INTERNAL_ERROR, Origin::NotSent),
-            Err(alert) => client.fail(alert, Origin::NotSent),
-        }
-        out.state = client.state;
-        (client, out)
+        let (driver, out) = Driver::connect(
+            config,
+            scalar,
+            Sha256Suite,
+            Sha256Suite,
+            X25519,
+            ChaCha20Poly1305Factory,
+            verifier,
+        );
+        let inbox = Vec::new();
+        (Client { driver, inbox }, out)
     }
 
-    /// The current state.
+    /// Where the connection is.
     pub fn state(&self) -> State {
-        self.state
+        self.driver.state()
     }
 
     /// Octets received from the server.
     pub fn receive(&mut self, bytes: &[u8]) -> Output {
-        let mut out = self.output();
-        if self.state.is_final() {
+        let mut out = Output {
+            send: Vec::new(),
+            deliver: Vec::new(),
+            state: self.state(),
+        };
+        if out.state.is_final() {
             return out;
         }
         self.inbox.extend_from_slice(bytes);
-        while !self.inbox.is_empty() && !self.state.is_final() {
-            let consumed = self.step(&mut out);
+        while !self.inbox.is_empty() && !out.state.is_final() {
+            let (consumed, step) = self.driver.step(&self.inbox);
+            out.send.extend_from_slice(&step.send);
+            out.deliver.extend_from_slice(&step.deliver);
+            out.state = step.state;
             self.inbox = self.inbox.get(consumed..).unwrap_or_default().to_vec();
             if consumed == 0 {
                 break;
             }
         }
-        if self.state.is_final() {
+        if out.state.is_final() {
             self.inbox.clear();
         }
-        out.state = self.state;
         out
     }
 
     /// The server closed the transport (end of stream).
     pub fn receive_eof(&mut self) -> Output {
-        let mut out = self.output();
-        let action = match &mut self.phase {
-            Phase::Hello { boot, .. } => match boot.eof() {
-                BootAction::Fail(alert) => Some(alert),
-                _ => None,
-            },
-            // RFC 8446 §6.1: truncation; `Connection` seals no alert for it.
-            Phase::Live { conn } => match conn.eof() {
-                ConnAction::Fail(alert, _) => Some(alert),
-                _ => None,
-            },
-            Phase::App { app } => app.step(AppInput::Closed).1.iter().find_map(|a| match a {
-                AppAction::Fail(alert) => Some(*alert),
-                _ => None,
-            }),
-            Phase::Ended => None,
-        };
-        if let Some(alert) = action {
-            self.fail(alert, Origin::Truncated);
-        } else if !self.state.is_final() {
-            // Neither machine ends a connection on end of stream without an
-            // alert unless the server's close_notify came first, and this
-            // driver answers that at once; nothing else is reachable.
-            self.fail(INTERNAL_ERROR, Origin::Truncated);
-        }
-        out.state = self.state;
-        out
+        self.driver.eof()
     }
 
     /// Protect application data. Data over 2^14 octets goes out in several
     /// records (RFC 8446 §5.1).
     pub fn send(&mut self, data: &[u8]) -> Result<Output, NotOpen> {
-        if self.state != State::Open {
-            return Err(NotOpen(self.state));
+        let state = self.state();
+        if state != State::Open {
+            return Err(NotOpen(state));
         }
-        let mut out = self.output();
-        if let Phase::App { mut app } = std::mem::replace(&mut self.phase, Phase::Ended) {
-            for chunk in data.chunks(MAX_PLAINTEXT) {
-                let actions = app.send_application(chunk);
-                match self.carry_out(app, actions, &mut out) {
-                    Some(live) => app = live,
-                    None => {
-                        out.state = self.state;
-                        return Ok(out);
-                    }
-                }
+        let mut out = Output {
+            send: Vec::new(),
+            deliver: Vec::new(),
+            state,
+        };
+        for chunk in data.chunks(MAX_PLAINTEXT) {
+            let step = self.driver.send(chunk);
+            out.send.extend_from_slice(&step.send);
+            out.state = step.state;
+            if out.state.is_final() {
+                break;
             }
-            self.phase = Phase::App { app };
         }
-        out.state = self.state;
         Ok(out)
     }
 
@@ -384,236 +201,10 @@ impl<'r> Client<'r> {
     /// has completed (RFC 8446 §6.1), after which the server's remaining
     /// data is still delivered until its close_notify (`Closing`). Before
     /// the ServerHello the client sends a plaintext close_notify and stops
-    /// (`Closed`); during the server's protected flight it stops without
-    /// one, since `Connection` seals only fatal alerts there (see the module
-    /// comment, "Alerts").
+    /// (`Closed`); during the server's protected flight it seals one under
+    /// the client handshake epoch and stops (`Closed`).
     pub fn close(&mut self) -> Output {
-        let mut out = self.output();
-        match std::mem::replace(&mut self.phase, Phase::Ended) {
-            Phase::Hello { .. } => {
-                out.send = plaintext_alert(LEVEL_WARNING, CLOSE_NOTIFY);
-                self.state = State::Closed;
-            }
-            Phase::Live { .. } => self.state = State::Closed,
-            Phase::App { mut app } => {
-                let actions = app.close();
-                if let Some(live) = self.carry_out(app, actions, &mut out) {
-                    self.phase = Phase::App { app: live };
-                }
-            }
-            Phase::Ended => {}
-        }
-        out.state = self.state;
-        out
-    }
-
-    fn output(&self) -> Output {
-        Output {
-            send: Vec::new(),
-            deliver: Vec::new(),
-            state: self.state,
-        }
-    }
-
-    fn fail(&mut self, alert: u8, origin: Origin) {
-        self.phase = Phase::Ended;
-        self.state = State::Failed(Failure { alert, origin });
-    }
-
-    /// A local failure `Connection` reported: its sealed fatal alert, if it
-    /// had a settled write epoch to seal it under, is the last record sent.
-    fn fail_sealed(&mut self, alert: u8, wire: Option<Vec<u8>>, out: &mut Output) {
-        let origin = match wire {
-            Some(record) => {
-                out.send.extend_from_slice(&record);
-                Origin::Sent
-            }
-            None => Origin::NotSent,
-        };
-        self.fail(alert, origin);
-    }
-
-    /// Feed the inbox to the current phase once; returns octets consumed.
-    fn step(&mut self, out: &mut Output) -> usize {
-        match std::mem::replace(&mut self.phase, Phase::Ended) {
-            Phase::Hello {
-                mut boot,
-                scalar,
-                verifier,
-            } => {
-                let (consumed, action) = boot.feed(&self.inbox);
-                match action {
-                    BootAction::None => {
-                        self.phase = Phase::Hello {
-                            boot,
-                            scalar,
-                            verifier,
-                        }
-                    }
-                    // A HelloRetryRequest: ClientHello2, with the dummy
-                    // change_cipher_spec before it when required (D.4).
-                    BootAction::Send(wire) => {
-                        if matches!(boot.acknowledge_send(&wire), BootAction::None) {
-                            out.send.extend_from_slice(&wire);
-                            self.phase = Phase::Hello {
-                                boot,
-                                scalar,
-                                verifier,
-                            };
-                        } else {
-                            self.fail_plaintext(INTERNAL_ERROR, out);
-                        }
-                    }
-                    BootAction::Established(established) => {
-                        self.establish(established, &scalar, verifier, out);
-                    }
-                    BootAction::Alert(alert) => self.fail(alert, Origin::Peer),
-                    BootAction::Fail(alert) => self.fail_plaintext(alert, out),
-                    // §6.1: answer close_notify with ours.
-                    BootAction::Close => {
-                        out.send
-                            .extend_from_slice(&plaintext_alert(LEVEL_WARNING, CLOSE_NOTIFY));
-                        self.state = State::Closed;
-                    }
-                }
-                consumed
-            }
-            Phase::Live { mut conn } => {
-                let (consumed, action) = conn.feed(&self.inbox);
-                self.live(conn, action, out);
-                consumed
-            }
-            Phase::App { mut app } => {
-                let (consumed, actions) = app.step(AppInput::Bytes(&self.inbox));
-                if let Some(live) = self.carry_out(app, actions, out) {
-                    self.phase = Phase::App { app: live };
-                }
-                consumed
-            }
-            Phase::Ended => 0,
-        }
-    }
-
-    /// A local failure before the handshake keys: a plaintext fatal alert.
-    fn fail_plaintext(&mut self, alert: u8, out: &mut Output) {
-        out.send
-            .extend_from_slice(&plaintext_alert(LEVEL_FATAL, alert));
-        self.fail(alert, Origin::Sent);
-    }
-
-    /// Phase 2: the key exchange and the handshake epochs, then `Connection`.
-    fn establish(
-        &mut self,
-        established: Established,
-        scalar: &[u8],
-        verifier: ChainVerifier<'r>,
-        out: &mut Output,
-    ) {
-        let (config, transcript, peer) = established.into_parts();
-        // Exactly `Established::into_record_auth`.
-        match clazel_tls::traffic::handshake::start(
-            config,
-            transcript,
-            peer,
-            &Sha256Suite,
-            &X25519,
-            &ChaCha20Poly1305Factory,
-            scalar,
-        ) {
-            Ok(keys) => {
-                let conn = Connection::new(keys, Sha256Suite, ChaCha20Poly1305Factory, verifier);
-                self.phase = Phase::Live {
-                    conn: Box::new(conn),
-                };
-            }
-            Err(alert) => self.fail_plaintext(alert, out),
-        }
-    }
-
-    /// Carry out one `Connection` action.
-    fn live(&mut self, mut conn: Box<Conn<'r>>, action: ConnAction, out: &mut Output) {
-        match action {
-            ConnAction::None | ConnAction::Ignored | ConnAction::Cancelled => {}
-            ConnAction::Send(wire) => {
-                let ack = conn.acknowledge_client_flight(&wire);
-                out.send.extend_from_slice(&wire);
-                return self.live(conn, ack, out);
-            }
-            // The handshake is over: the transducer takes over from here.
-            ConnAction::Ready => {
-                match (*conn).into_post_handshake() {
-                    Ok(app) => {
-                        self.phase = Phase::App { app: Box::new(app) };
-                        self.state = State::Open;
-                    }
-                    Err(alert) => self.fail(alert, Origin::NotSent),
-                }
-                return;
-            }
-            // The server's close_notify came during its flight, where
-            // `Connection` seals no close_notify.
-            ConnAction::Close => self.state = State::Closed,
-            // §6.2: the alert `Connection` sealed before it dropped its keys.
-            ConnAction::Fail(alert, wire) => {
-                self.fail_sealed(alert, wire, out);
-                return;
-            }
-            // §6: the server's fatal alert is not answered.
-            ConnAction::PeerAlert(alert) => {
-                self.fail(alert, Origin::Peer);
-                return;
-            }
-        }
-        if !self.state.is_final() {
-            self.phase = Phase::Live { conn };
-        } else {
-            self.phase = Phase::Ended;
-        }
-    }
-
-    /// Carry out the transducer's actions, in order. The transducer comes
-    /// back unless the connection ended.
-    fn carry_out(
-        &mut self,
-        mut app: Box<App>,
-        actions: Vec<AppAction>,
-        out: &mut Output,
-    ) -> Option<Box<App>> {
-        let mut sent = false;
-        for action in actions {
-            match action {
-                AppAction::Send(wire) => {
-                    out.send.extend_from_slice(&wire);
-                    sent = true;
-                }
-                AppAction::Deliver(data) => out.deliver.extend_from_slice(&data),
-                // §6.1: the server's close_notify; ours follows at once.
-                AppAction::PeerClosed => {
-                    let reply = app.close();
-                    return self.carry_out(app, reply, out);
-                }
-                AppAction::Close => {
-                    self.state = State::Closed;
-                    return None;
-                }
-                // §6.2: the transducer sent the fatal alert just before this,
-                // if it could.
-                AppAction::Fail(alert) => {
-                    let origin = if sent { Origin::Sent } else { Origin::NotSent };
-                    self.fail(alert, origin);
-                    return None;
-                }
-                // §6: the server's fatal alert is not answered.
-                AppAction::PeerAlert(alert) => {
-                    self.fail(alert, Origin::Peer);
-                    return None;
-                }
-            }
-        }
-        if app.phase() == AppPhase::WriteClosed {
-            self.state = State::Closing;
-        }
-        Some(app)
+        self.driver.close()
     }
 }
 
@@ -621,6 +212,8 @@ impl<'r> Client<'r> {
 mod tests {
     use super::*;
     use crate::join::exec::Root;
+    use clazel_tls::connection::driver_exec::plaintext_alert;
+    use clazel_tls::spec::{CLOSE_NOTIFY, INTERNAL_ERROR, LEVEL_FATAL, LEVEL_WARNING};
 
     fn counter() -> impl FnMut(&mut [u8]) {
         let mut next = 0u8;

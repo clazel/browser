@@ -754,7 +754,8 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         }
     }
 
-    fn send_application_out(&mut self, data: &[u8]) -> (out: Out)
+    /// [`Self::send_application`], as its output.
+    pub fn send_application_out(&mut self, data: &[u8]) -> (out: Out)
         requires old(self).wf(),
         ensures
             out@ == spec::send_application(old(self).crypto_functions(), old(self).cipher_functions(),
@@ -816,6 +817,19 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         into_actions(o)
     }
 
+    /// [`Self::close`], as its output.
+    pub fn close_out(&mut self) -> (out: Out)
+        requires old(self).wf(),
+        ensures
+            final(self).wf(),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).cipher_functions() == old(self).cipher_functions(),
+            out@ == spec::close(old(self).cipher_functions(), old(self)@).0,
+            final(self)@ == spec::close(old(self).cipher_functions(), old(self)@).1,
+    {
+        if matches!(self.phase, Phase::Open | Phase::ReadClosed) { self.close_connection() } else { Out::quiet() }
+    }
+
     /// §6.1: send `close_notify` and end the write side. Nothing if it
     /// already ended.
     pub fn close(&mut self) -> (out: Vec<Action>)
@@ -825,7 +839,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             super::post_handshake_contract::close_ensures(old(self).cipher_functions(), old(self)@,
                 crate::types::views(out@), final(self)@),
     {
-        let o = if matches!(self.phase, Phase::Open | Phase::ReadClosed) { self.close_connection() } else { Out::quiet() };
+        let o = self.close_out();
         into_actions(o)
     }
 
@@ -1015,21 +1029,37 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
                 old(self).cipher_functions(), old(self)@, input@, crate::types::views(out.1@),
                 out.0 as nat, final(self)@),
     {
+        let (consumed, o) = self.step_out(input);
+        (consumed, into_actions(o))
+    }
+
+    /// [`Self::step`], as its output.
+    pub fn step_out(&mut self, input: Input<'_>) -> (out: (usize, Out))
+        requires old(self).wf(),
+        ensures
+            final(self).wf(),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).cipher_functions() == old(self).cipher_functions(),
+            out.1@ == spec::step(old(self).crypto_functions(), old(self).cipher_functions(), old(self)@, input@).0,
+            final(self)@ == spec::step(old(self).crypto_functions(), old(self).cipher_functions(), old(self)@, input@).1,
+            out.0 as nat == spec::step(old(self).crypto_functions(), old(self).cipher_functions(), old(self)@, input@).2,
+            out.0 as nat <= super::post_handshake_contract::input_len(input@),
+    {
         match input {
             Input::Bytes(wire) => {
                 if matches!(self.phase, Phase::Open | Phase::WriteClosed) {
                     let (o, consumed) = self.receive(wire);
-                    (consumed, into_actions(o))
+                    (consumed, o)
                 } else {
-                    (wire.len(), into_actions(Out::quiet()))
+                    (wire.len(), Out::quiet())
                 }
             },
             Input::Closed => {
                 if matches!(self.phase, Phase::Open | Phase::WriteClosed) {
                     let o = self.die(crate::spec::INTERNAL_ERROR);
-                    (0, into_actions(o))
+                    (0, o)
                 } else {
-                    (0, into_actions(Out::quiet()))
+                    (0, Out::quiet())
                 }
             },
         }

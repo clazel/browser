@@ -54,9 +54,10 @@
 //!   Appendix D.4 puts the dummy CCS before the client's second flight, which
 //!   the alert replaces, and §5 makes it optional for the peer (it "MUST
 //!   simply drop it"), so the alert record alone is a valid record stream.
-//! - A close_notify from the peer while the server's flight is received
-//!   ends the connection (`Close`) without a close_notify of ours: during
-//!   the handshake this module seals only fatal alerts.
+//! - §6.1: "Each party MUST send a "close_notify" alert before closing its
+//!   write side". A close during the server's flight, the peer's or ours, is
+//!   `Close(wire)`: our close_notify sealed like a fatal alert ([`close_wire`]),
+//!   or `None` where no settled write epoch is held.
 //! - RFC prose and equations have no numbered algorithm steps.
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -97,8 +98,9 @@ pub enum Action {
     /// RFC 8446 §6: the peer's fatal alert. It is not answered, and every key
     /// is dropped.
     PeerAlert(u8),
-    /// The peer's close_notify arrived during its flight.
-    Close,
+    /// §6.1: the connection closed during the flight, with our sealed
+    /// close_notify ([`close_wire`]), or `None` when no epoch can seal it.
+    Close(Option<Seq<u8>>),
 }
 
 /// Connection-owned protocol state after the final ServerHello.
@@ -193,7 +195,7 @@ pub open spec fn action_refines(action: Action, after: State) -> bool {
         Action::Ready => after.mode == Mode::Ready,
         Action::Fail(_, _) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
         Action::PeerAlert(_) => super::dispatcher_contract::terminal_ensures(after, Mode::Failed),
-        Action::Close => super::dispatcher_contract::terminal_ensures(after, Mode::Closed),
+        Action::Close(_) => super::dispatcher_contract::terminal_ensures(after, Mode::Closed),
         Action::Cancelled => true,
         Action::None | Action::Ignored => true,
     }
@@ -269,18 +271,39 @@ pub open spec fn fatal_alert(description: u8) -> Seq<u8> {
     crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_FATAL, description })
 }
 
-/// §5.2, §5.3, §6.2: the protected record of the fatal alert, under the
-/// next sequence number of [`alert_epoch`]; None when there is no such
-/// epoch or it cannot seal another record.
-pub open spec fn alert_wire(ciphers: Ciphers, s: State, description: u8) -> Option<Seq<u8>> {
+/// §5.2, §5.3: an alert's protected record, under the next sequence number
+/// of [`alert_epoch`]; None when there is no such epoch or it cannot seal
+/// another record.
+pub open spec fn protected_alert(ciphers: Ciphers, s: State, content: Seq<u8>) -> Option<Seq<u8>> {
     match alert_epoch(s) {
         Some(epoch) => match crate::traffic::spec::send(seal_with(ciphers, epoch), epoch,
-            crate::spec::CT_ALERT, fatal_alert(description), 0) {
+            crate::spec::CT_ALERT, content, 0) {
             (_, Ok(record)) => Some(record),
             (_, Err(_)) => None,
         },
         None => None,
     }
+}
+
+/// §6.2: the protected record of the fatal alert.
+pub open spec fn alert_wire(ciphers: Ciphers, s: State, description: u8) -> Option<Seq<u8>> {
+    protected_alert(ciphers, s, fatal_alert(description))
+}
+
+/// §6, §6.1: the content of our close_notify.
+pub open spec fn close_notify_alert() -> Seq<u8> {
+    crate::spec::write_alert(crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description: crate::spec::CLOSE_NOTIFY })
+}
+
+/// §6.1: our protected close_notify.
+pub open spec fn close_wire(ciphers: Ciphers, s: State) -> Option<Seq<u8>> {
+    protected_alert(ciphers, s, close_notify_alert())
+}
+
+/// §6.1: close during the flight: our close_notify goes out, if it can, and
+/// every key is dropped.
+pub open spec fn closing(ciphers: Ciphers, s: State) -> (Action, State) {
+    (Action::Close(close_wire(ciphers, s)), closed())
 }
 
 /// §6.2: "Whenever an implementation encounters a fatal error condition, it
