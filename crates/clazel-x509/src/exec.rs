@@ -165,14 +165,14 @@ fn psl_domain_from_ascii_exec(name: &[u8]) -> (result: Vec<u32>)
     result
 }
 
-/// Use the repository's full ICANN and PRIVATE suffix table.
-fn wildcard_suffix_is_public_suffix_exec(name: &[u8]) -> (result: bool)
-    ensures result == wildcard_suffix_is_public_suffix(name@)
+/// Use the ICANN section of the repository's suffix table.
+fn wildcard_suffix_is_icann_suffix_exec(name: &[u8]) -> (result: bool)
+    ensures result == wildcard_suffix_is_icann_suffix(name@)
 {
     let domain = psl_domain_from_ascii_exec(name);
-    let result = clazel_psl::exec::is_public_suffix_exec(domain.as_slice());
+    let result = clazel_psl::exec::is_icann_public_suffix_exec(domain.as_slice());
     proof {
-        reveal(wildcard_suffix_is_public_suffix);
+        reveal(wildcard_suffix_is_icann_suffix);
         assert(domain@ == psl_domain_from_ascii(name@));
     }
     result
@@ -192,7 +192,7 @@ pub fn dns_id_matches_exec(reference: &[u8], presented: &[u8]) -> (result: bool)
     }
     let Some(suffix) = presented.get(2..) else { return false; };
     if !valid_dns_exec(suffix) || !no_wildcard_from_exec(presented, 2) { return false; }
-    if wildcard_suffix_is_public_suffix_exec(suffix) { return false; }
+    if wildcard_suffix_is_icann_suffix_exec(suffix) { return false; }
     let dot = first_dot_exec(reference, 0);
     if dot == 0 || dot >= reference.len() { return false; }
     let Some(suffix_start) = dot.checked_add(1) else { return false; };

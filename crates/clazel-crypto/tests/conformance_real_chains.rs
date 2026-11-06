@@ -47,17 +47,8 @@ const NOW: u64 = 1_793_895_800;
 /// first (leaves), only ever sent later, and those in the root table.
 const COUNTS: (usize, usize, usize, usize, usize, usize) = (760, 2276, 868, 709, 156, 14);
 
-/// `dns_match` refuses a wildcard over any public suffix, the Public Suffix
-/// List's private section included; webpki has no such rule.
-const PRIVATE_SUFFIX: &str = "a wildcard over a suffix in the PSL's private section";
-
 /// (host, which engine accepts, reason), by hand.
-const DIFFERENCES: &[(&str, &str, &str)] = &[
-    ("www.azurefd.net", "webpki", PRIVATE_SUFFIX),
-    ("www.azureedge.net", "webpki", PRIVATE_SUFFIX),
-    ("www.wixsite.com", "webpki", PRIVATE_SUFFIX),
-    ("www.githubusercontent.com", "webpki", PRIVATE_SUFFIX),
-];
+const DIFFERENCES: &[(&str, &str, &str)] = &[];
 
 /// The length of the DER value at the start of `der`, header included.
 fn der_len(der: &[u8]) -> Option<usize> {
