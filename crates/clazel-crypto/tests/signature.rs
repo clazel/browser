@@ -371,6 +371,10 @@ fn wycheproof_p384_sha384_signature() -> Result<Vec<u8>, String> {
 }
 
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "three verifications of about 1,150 group operations each; too slow under Miri"
+)]
 fn ecdsa_p384_sha384_verifies_wycheproof_tc1() -> TestResult {
     let key = wycheproof_p384_spki()?;
     let sig = wycheproof_p384_sha384_signature()?;
@@ -386,6 +390,10 @@ fn ecdsa_p384_sha384_verifies_wycheproof_tc1() -> TestResult {
 /// RFC 8446 §4.2.3: 0x0503 hashes with SHA-384. A signature over the
 /// SHA-256 digest, valid for this key and message, is refused.
 #[test]
+#[cfg_attr(
+    miri,
+    ignore = "a verification is about 1,150 group operations, too slow under Miri"
+)]
 fn ecdsa_p384_sha384_refuses_a_sha256_signature() -> TestResult {
     let sig = hex(
         "3065023100d670d637fcb2da85a22f74ac92939ee2ee5e7d1bb8d6d0afd6f1ef0f
