@@ -48,6 +48,21 @@ pub open spec fn feed_ensures(before: super::dispatcher_spec::State, input: Seq<
         && super::dispatcher_spec::action_refines(action, after)
 }
 
+/// Every feed is the dispatcher's own step ([`super::dispatcher_spec::feed`]),
+/// exactly: the same octets consumed, the same action and the same state.
+pub open spec fn feed_exact(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State, input: Seq<u8>,
+    consumed: nat, action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    (consumed, action, after) == super::dispatcher_spec::feed(c, v, ciphers, before, input)
+}
+
+/// The acknowledgement is [`super::dispatcher_spec::acknowledge`], exactly.
+pub open spec fn acknowledge_exact(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State, sent: Seq<u8>,
+    action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
+    (action, after) == super::dispatcher_spec::acknowledge(c, v, ciphers, before, sent)
+}
+
 /// RFC 8446 §5.1: a valid unprotected compatibility CCS record, in a state
 /// that still holds authentication, is dropped only at a handshake message
 /// boundary; in the middle of a fragmented handshake message it is fatal.

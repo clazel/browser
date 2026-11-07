@@ -14,6 +14,8 @@ pub struct Models {
     pub exchange: crate::hello::join_spec::KeyExchange,
     /// The AEAD.
     pub cipher: crate::traffic::spec::Cipher,
+    /// The certificate and signature checks.
+    pub verification: crate::auth::spec::Verification,
 }
 
 /// §7.1, §7.3: the dispatcher starts from the handshake keys derived from the
@@ -80,6 +82,17 @@ pub open spec fn flight_step_ensures(m: Models, before: super::dispatcher_spec::
                 && out.status == super::driver_spec::Status::Open,
             super::driver_spec::Stage::Ended => super::driver_spec::is_final(out.status),
         }
+}
+
+/// One step of the flight is the dispatcher's own `feed`, exactly: the same
+/// octets consumed, and its action and state carried through `flight_out`. The
+/// executable does not yet meet this: see `flight_step_ensures`.
+pub open spec fn flight_step_exact(m: Models, before: super::dispatcher_spec::State,
+    input: Seq<u8>, consumed: nat, out: super::driver_spec::Step) -> bool
+{
+    let ciphers = super::dispatcher_spec::Ciphers { seal: m.cipher.seal, open: m.cipher.open };
+    let r = super::dispatcher_spec::feed(m.crypto, m.verification, ciphers, before, input);
+    consumed == r.0 && out == super::driver_spec::flight_out(m.crypto, m.verification, ciphers, r.1, r.2)
 }
 
 /// One step of application traffic is the transducer's own, exactly.

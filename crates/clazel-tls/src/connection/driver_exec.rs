@@ -229,6 +229,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             crypto: crypto.functions(),
             exchange: exchange.functions(),
             cipher: factory.functions(),
+            verification: verifier.functions(),
         };
         match Bootstrap::start(config, hello_crypto) {
             Ok((mut boot, BootAction::Send(wire))) => {
