@@ -1765,6 +1765,34 @@
       }
     },
     {
+      "id": "auth-scheme-drops-p384",
+      "file": "src/auth/spec.rs",
+      "find": "scheme == 0x0403 || scheme == 0x0503 ||",
+      "replace": "scheme == 0x0403 ||",
+      "expect": "killed",
+      "reason": "Refuses ecdsa_secp384r1_sha384 in CertificateVerify (RFC 8446 §4.2.3, §4.4.3): every server with a P-384 leaf would end in illegal_parameter, though the client offers the scheme.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_signature_scheme_p384()",
+        "witness": "!signature_scheme(0x0503u16)"
+      }
+    },
+    {
+      "id": "auth-scheme-admits-p521",
+      "file": "src/auth/spec.rs",
+      "find": "scheme == 0x0403 || scheme == 0x0503 ||",
+      "replace": "scheme == 0x0403 || scheme == 0x0503 || scheme == 0x0603 ||",
+      "expect": "killed",
+      "reason": "Admits ecdsa_secp521r1_sha512 (RFC 8446 §4.2.3), which this client neither offers nor can verify.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_signature_scheme_p384()",
+        "witness": "signature_scheme(0x0603u16)"
+      }
+    },
+    {
       "id": "auth-send-becomes-ready",
       "file": "src/auth/spec.rs",
       "find": "record(c, s2, crate::transcript::spec::Kind::Finished, own, Phase::SendFinished)",
@@ -1832,6 +1860,34 @@
         "file": "src/auth/certificates.rs",
         "lemma": "super::examples::lemma_closed_absorbs()",
         "witness": "step(super::examples::crypto(), super::examples::verifier(), State { phase: Phase::Closed, ..super::examples::initial() }, Input::Application(seq![1u8])).1 != Action::None"
+      }
+    },
+    {
+      "id": "hello-offer-drops-p384",
+      "file": "src/hello/client_spec.rs",
+      "find": "seq![0x0403u16, 0x0503u16, 0x0804u16,",
+      "replace": "seq![0x0403u16, 0x0804u16,",
+      "expect": "killed",
+      "reason": "Without ecdsa_secp384r1_sha384 in signature_algorithms (RFC 8446 §4.2.3), servers with a P-384 leaf refuse with handshake_failure or sign with it unoffered (phase-3.md item 3.5g).",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_offers_p384()",
+        "witness": "super::client_spec::signatures()[1] != 0x0503u16"
+      }
+    },
+    {
+      "id": "hello-offer-wrong-p384-code",
+      "file": "src/hello/client_spec.rs",
+      "find": "seq![0x0403u16, 0x0503u16, 0x0804u16,",
+      "replace": "seq![0x0403u16, 0x0603u16, 0x0804u16,",
+      "expect": "killed",
+      "reason": "0x0603 is ecdsa_secp521r1_sha512 (RFC 8446 §4.2.3): offers a scheme the verifier refuses, in place of the one it accepts.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_client_offers_p384()",
+        "witness": "super::client_spec::signatures()[1] == 0x0603u16"
       }
     },
     {

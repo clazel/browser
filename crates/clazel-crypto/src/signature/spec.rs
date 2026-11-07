@@ -3,7 +3,8 @@
 //!
 //! Sources, by step:
 //! - RFC 8446 §4.2.3, SignatureScheme: ecdsa_secp256r1_sha256 (0x0403),
-//!   rsa_pss_rsae_sha256/384/512 (0x0804-0x0806) and ed25519 (0x0807).
+//!   ecdsa_secp384r1_sha384 (0x0503), rsa_pss_rsae_sha256/384/512
+//!   (0x0804-0x0806) and ed25519 (0x0807).
 //!   <https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3>
 //! - RFC 5480 §2.1.1 (id-ecPublicKey, namedCurve secp256r1) and §2.2 (the
 //!   ECPoint), <https://www.rfc-editor.org/rfc/rfc5480#section-2>; RFC 3279
@@ -34,6 +35,17 @@
 //!   DER Ecdsa-Sig-Value with nothing after it; r and s are non-negative
 //!   DER INTEGERs of at most 32 magnitude octets, left-padded to 32. Their
 //!   range 1..n-1 and the point's validity are checked by libcrux.
+//! - ecdsa_secp384r1_sha384: RFC 8446 §4.2.3 binds the scheme to the curve
+//!   as well as the hash, so only a key `clazel_x509::spki` classifies as
+//!   `EcP384` (namedCurve secp384r1, uncompressed point) can verify, and a
+//!   P-256 key under 0x0503 or a P-384 key under 0x0403 is `false`. The
+//!   check is the certificate links' own, `crate::chain::spec::ecdsa_p384_link`:
+//!   r and s of one Ecdsa-Sig-Value of at most 48 magnitude octets each,
+//!   then `clazel_p384::spec::ecdsa_verify` on the SHA-384 digest of the
+//!   §4.4.3 content. So this scheme rests on `clazel-p384`'s proofs and the
+//!   fiat-crypto axioms, not on libcrux, except for the digest
+//!   (`crate::axioms::sha384`). `p384_hash` holds the scheme's code point
+//!   and hash apart from `verify`, so that both can be evaluated.
 //! - RSA-PSS (rsae): only rsaEncryption keys, as RFC 8446 §4.2.3 requires
 //!   for the rsae schemes. The public exponent must be 65537, the only one
 //!   libcrux-rsa 0.0.9 verifies with, and the modulus must be exactly 2048,
@@ -173,6 +185,22 @@ pub open spec fn ecdsa_p256_sha256(spki: clazel_x509::spki::spec::SubjectPublicK
     }
 }
 
+/// RFC 8446 §4.2.3: the hash of the secp384r1 ECDSA scheme `scheme`, the
+/// one such scheme being ecdsa_secp384r1_sha384 (0x0503).
+pub open spec fn p384_hash(scheme: u16) -> Option<clazel_x509::signature_algorithm::spec::EcdsaHash> {
+    if scheme == 0x0503 { Some(clazel_x509::signature_algorithm::spec::EcdsaHash::Sha384) } else { None }
+}
+
+/// ECDSA over secp384r1 with `hash`: only a secp384r1 key verifies.
+pub open spec fn ecdsa_p384(spki: clazel_x509::spki::spec::SubjectPublicKeyInfo,
+    hash: clazel_x509::signature_algorithm::spec::EcdsaHash, input: Seq<u8>, signature: Seq<u8>) -> bool {
+    match spki.public_key {
+        clazel_x509::spki::spec::PublicKey::EcP384(point) =>
+            crate::chain::spec::ecdsa_p384_link(point, hash, input, signature),
+        _ => false,
+    }
+}
+
 /// The RSA modulus sizes libcrux-rsa accepts, with the top bit of the
 /// first octet set so the bit length is exactly 8 times the octet length.
 pub open spec fn modulus_ok(n: Seq<u8>) -> bool {
@@ -286,7 +314,12 @@ pub open spec fn verify(key: Seq<u8>, scheme: u16, input: Seq<u8>, signature: Se
             else if scheme == 0x0805 { rsa_pss_rsae(spki, Hash::Sha384, input, signature) }
             else if scheme == 0x0806 { rsa_pss_rsae(spki, Hash::Sha512, input, signature) }
             else if scheme == 0x0807 { ed25519(spki, input, signature) }
-            else { false },
+            else {
+                match p384_hash(scheme) {
+                    Some(hash) => ecdsa_p384(spki, hash, input, signature),
+                    None => false,
+                }
+            },
     }
 }
 

@@ -74,6 +74,17 @@ pub proof fn lemma_client_cipher()
 {
     assert(super::client_spec::client_hello(config(), seq![]).cipher_suites == seq![0x1303u16]) by (compute_only);
 }
+/// Concrete RFC 8446 requirement: §4.2.3 ecdsa_secp384r1_sha384 is offered,
+/// once, after ecdsa_secp256r1_sha256.
+pub proof fn lemma_client_offers_p384()
+    ensures super::client_spec::signatures().len() == 9,
+        super::client_spec::signatures()[0] == 0x0403u16,
+        super::client_spec::signatures()[1] == 0x0503u16,
+{
+    assert(super::client_spec::signatures().len() == 9) by (compute_only);
+    assert(super::client_spec::signatures()[0] == 0x0403u16) by (compute_only);
+    assert(super::client_spec::signatures()[1] == 0x0503u16) by (compute_only);
+}
 /// Concrete RFC 8446 requirement: client public share.
 pub proof fn lemma_client_public_share()
     ensures super::client_spec::extensions(config(), seq![])[4].data == seq![0u8,36u8,0u8,29u8,0u8,32u8] + Seq::new(32, |i: int| 5u8),

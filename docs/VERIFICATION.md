@@ -206,7 +206,9 @@ We list this openly. Proofs are only as good as their assumptions.
   standard's algorithm, and that it is that algorithm is HACL\*'s proof.
   The axioms cover TLS (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519 and
   the CertificateVerify signatures) and certificate-chain links (SHA-384
-  and SHA-512 digests for RSA PKCS#1 v1.5, and ECDSA P-256 with SHA-384).
+  and SHA-512 digests for RSA PKCS#1 v1.5, and ECDSA P-256 with SHA-384);
+  SHA-384 also hashes the CertificateVerify content of
+  ecdsa_secp384r1_sha384.
   RSA PKCS#1 v1.5 itself is not trusted: it is `clazel-pkcs1`, our own
   proven code, over those digests; nor is ECDSA P-384 (design P17), which
   is `clazel-p384` over the SHA-256 or SHA-384 digest

@@ -5,7 +5,7 @@
 //! **The client** is production's: `clazel_crypto::client::Client`, the
 //! driver `clazel_net::TlsConnection` runs, over `clazel_crypto`'s libcrux
 //! providers and `join::exec::ChainVerifier`, whose trust anchors are the test
-//! root in `tests/fixtures/tls` (production uses `roots::ROOTS` through
+//! roots in `tests/fixtures/tls` (production uses `roots::ROOTS` through
 //! `join::exec::mozilla`; `ChainVerifier::new` already takes the anchors as a
 //! parameter). [`Client`] here only turns its outputs into [`Event`]s.
 //!
@@ -58,9 +58,12 @@ type TestResult = Result<(), String>;
 // ---------------------------------------------------------------------------
 
 static ROOT: &[u8] = include_bytes!("fixtures/tls/root.der");
+static ROOT_P384: &[u8] = include_bytes!("fixtures/tls/root-p384.der");
 static INTERMEDIATE: &[u8] = include_bytes!("fixtures/tls/intermediate.der");
 static LEAF_ECDSA: &[u8] = include_bytes!("fixtures/tls/leaf-ecdsa.der");
 static KEY_ECDSA: &[u8] = include_bytes!("fixtures/tls/leaf-ecdsa.key.der");
+static LEAF_P384: &[u8] = include_bytes!("fixtures/tls/leaf-p384.der");
+static KEY_P384: &[u8] = include_bytes!("fixtures/tls/leaf-p384.key.der");
 static LEAF_RSA: &[u8] = include_bytes!("fixtures/tls/leaf-rsa.der");
 static KEY_RSA: &[u8] = include_bytes!("fixtures/tls/leaf-rsa.key.der");
 static LEAF_OTHER: &[u8] = include_bytes!("fixtures/tls/leaf-other-name.der");
@@ -227,6 +230,15 @@ fn rsa_chain() -> ServerCert {
     }
 }
 
+/// A P-384 leaf: rustls can sign CertificateVerify only with
+/// ecdsa_secp384r1_sha384 (RFC 8446 §4.2.3), so this needs our offer.
+fn p384_chain() -> ServerCert {
+    ServerCert {
+        chain: vec![LEAF_P384],
+        key: KEY_P384,
+    }
+}
+
 fn server_config(cert: &ServerCert) -> Result<Arc<ServerConfig>, String> {
     let provider = CryptoProvider {
         cipher_suites: vec![TLS13_CHACHA20_POLY1305_SHA256],
@@ -337,10 +349,16 @@ struct Client {
 }
 
 fn anchors() -> ChainVerifier<'static> {
-    ChainVerifier::new(&[Root {
-        der: ROOT,
-        server_distrust_after: None,
-    }])
+    ChainVerifier::new(&[
+        Root {
+            der: ROOT,
+            server_distrust_after: None,
+        },
+        Root {
+            der: ROOT_P384,
+            server_distrust_after: None,
+        },
+    ])
 }
 
 impl Client {
@@ -540,6 +558,10 @@ fn rsa_chain_full_handshake_and_application_data() -> TestResult {
     application_round_trip(&rsa_chain())
 }
 
+fn p384_chain_full_handshake_and_application_data() -> TestResult {
+    application_round_trip(&p384_chain())
+}
+
 fn server_key_update_is_followed() -> TestResult {
     let (mut client, mut server) = connect(&ecdsa_chain())?;
     server
@@ -685,6 +707,22 @@ impl Flight {
         }
     }
 
+    /// Set CertificateVerify's algorithm, the two octets after the
+    /// handshake header (RFC 8446 §4.4.3).
+    fn set_certificate_verify_scheme(&mut self, scheme: u16) -> TestResult {
+        let at = self.find(15)?;
+        match self.items.get_mut(at) {
+            Some(Item::Sealed(_, message)) => match message.get_mut(4..6) {
+                Some(octets) => {
+                    octets.copy_from_slice(&scheme.to_be_bytes());
+                    Ok(())
+                }
+                None => Err("short CertificateVerify".to_owned()),
+            },
+            _ => Err("not a sealed item".to_owned()),
+        }
+    }
+
     fn insert(&mut self, at: usize, item: Item) -> TestResult {
         if at > self.items.len() {
             return Err("insert out of range".to_owned());
@@ -714,7 +752,7 @@ fn last_event(events: &[Event]) -> Option<&Event> {
 }
 
 fn scripted_server_control_completes_the_handshake() -> TestResult {
-    for cert in [ecdsa_chain(), rsa_chain()] {
+    for cert in [ecdsa_chain(), rsa_chain(), p384_chain()] {
         let (events, _client, mut server) = run_scripted(&cert, |_| Ok(()))?;
         assert!(events.contains(&Event::Ready), "{events:?}");
         // The re-encrypted flight is byte-identical in content, so the real
@@ -753,6 +791,44 @@ fn wrong_certificate_verify_is_decrypt_error() -> TestResult {
     assert_eq!(
         last_event(&events),
         Some(&Event::Fail(DECRYPT_ERROR)),
+        "{events:?}"
+    );
+    Ok(())
+}
+
+/// RFC 8446 §4.4.3, "If the verification fails, the receiver MUST terminate
+/// the handshake with a "decrypt_error" alert."
+fn wrong_p384_certificate_verify_is_decrypt_error() -> TestResult {
+    let (events, client, _) = run_scripted(&p384_chain(), |f| f.flip_last_byte(15))?;
+    assert_eq!(
+        last_event(&events),
+        Some(&Event::Fail(DECRYPT_ERROR)),
+        "{events:?}"
+    );
+    assert!(!events.contains(&Event::Ready));
+    assert!(client.failed());
+    Ok(())
+}
+
+/// RFC 8446 §4.2.3: a P-384 key's signature relabelled with the P-256
+/// scheme, which is offered, does not verify.
+fn p384_leaf_under_the_p256_scheme_is_decrypt_error() -> TestResult {
+    let (events, _, _) = run_scripted(&p384_chain(), |f| f.set_certificate_verify_scheme(0x0403))?;
+    assert_eq!(
+        last_event(&events),
+        Some(&Event::Fail(DECRYPT_ERROR)),
+        "{events:?}"
+    );
+    Ok(())
+}
+
+/// RFC 8446 §4.4.3: the algorithm "MUST be one offered in the client's
+/// "signature_algorithms" extension". ecdsa_secp521r1_sha512 is not.
+fn unoffered_p521_scheme_is_illegal_parameter() -> TestResult {
+    let (events, _, _) = run_scripted(&p384_chain(), |f| f.set_certificate_verify_scheme(0x0603))?;
+    assert_eq!(
+        last_event(&events),
+        Some(&Event::Fail(ILLEGAL_PARAMETER)),
         "{events:?}"
     );
     Ok(())
@@ -1070,6 +1146,10 @@ const SUCCESS: &[Case] = &[
         rsa_chain_full_handshake_and_application_data,
     ),
     (
+        "p384_chain_full_handshake_and_application_data",
+        p384_chain_full_handshake_and_application_data,
+    ),
+    (
         "server_key_update_is_followed",
         server_key_update_is_followed,
     ),
@@ -1091,6 +1171,18 @@ const HOSTILE: &[Case] = &[
     (
         "wrong_certificate_verify_is_decrypt_error",
         wrong_certificate_verify_is_decrypt_error,
+    ),
+    (
+        "wrong_p384_certificate_verify_is_decrypt_error",
+        wrong_p384_certificate_verify_is_decrypt_error,
+    ),
+    (
+        "p384_leaf_under_the_p256_scheme_is_decrypt_error",
+        p384_leaf_under_the_p256_scheme_is_decrypt_error,
+    ),
+    (
+        "unoffered_p521_scheme_is_illegal_parameter",
+        unoffered_p521_scheme_is_illegal_parameter,
     ),
     (
         "certificate_for_another_name_is_bad_certificate",

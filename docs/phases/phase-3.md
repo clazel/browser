@@ -1546,8 +1546,12 @@ So 577 of the 765 domains with a TLS server answered this client (75%).
   namecheap.com, pbs.org and www.kaspersky-labs.com. With our exact signature
   list OpenSSL fails on each as we do, and adding this scheme makes each
   succeed. Some servers refuse (40), and others use the scheme unoffered,
-  which we refuse (47); cnn.com ends in 10. `clazel-p384` already checks P-384
-  signatures in chain links, not yet in CertificateVerify.
+  which we refuse (47); cnn.com ends in 10. The client now offers and verifies
+  this scheme through `clazel-p384`, as chain links do. Rerun on 2026-11-05 with
+  it: cnn.com, telekom.de, statista.com, namecheap.com and pbs.org complete the
+  handshake; www.kaspersky-labs.com ends in unknown_ca (48), correctly: its chain
+  ends at a private Kaspersky root that is not in Mozilla's store. The table
+  above stays as measured.
 - *Public-suffix wildcards:* `dns_match` refused a wildcard over any public
   suffix, including the PSL's private section, so `*.githubusercontent.com`
   and `*.github.io` never matched. www.githubusercontent.com and

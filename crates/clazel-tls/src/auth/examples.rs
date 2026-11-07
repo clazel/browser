@@ -38,6 +38,16 @@ pub open spec fn verifier() -> Verification {
                 && input == crate::transcript::spec::certificate_verify_input(true, Seq::new(32, |i: int| 30u8)),
     }
 }
+/// §4.2.3: ecdsa_secp384r1_sha384 is a CertificateVerify scheme;
+/// ecdsa_secp521r1_sha512 (0x0603), which is not offered, and the PKCS#1
+/// v1.5 scheme with SHA-384 are not.
+pub proof fn lemma_signature_scheme_p384()
+    ensures signature_scheme(0x0503u16), !signature_scheme(0x0603u16), !signature_scheme(0x0501u16),
+{
+    assert(signature_scheme(0x0503u16)) by (compute_only);
+    assert(!signature_scheme(0x0603u16)) by (compute_only);
+    assert(!signature_scheme(0x0501u16)) by (compute_only);
+}
 /// Constructor context: an abstract negotiated CH/SH prefix and actual offers.
 pub open spec fn initial() -> State {
     State {
