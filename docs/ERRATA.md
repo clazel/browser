@@ -431,3 +431,50 @@ it evidently means. Each entry records what we specified instead.
   "MUST"s apply to its bits. See `subscriber_key_usage_ok` in
   `crates/clazel-x509/src/path/independent_profile.rs`.
 - **Reported upstream:** not yet.
+
+## X.509 §7.2.1 says "v2 or v3" for `extensions` in one comment and "v3" in the next
+
+- **Spec:** Recommendation ITU-T X.509 (10/2019) | ISO/IEC 9594-8:2020,
+  <https://www.itu.int/rec/T-REC-X.509-201910-I/en> (SHA-256
+  `1f4ea2939ecc31a3433c499084d485e770f9b8dcee55a0ba9fe4c27128822e8c`), §7.2.1
+  and Annex A, `TBSCertificate`.
+- **Text:** the version bracket holding `extensions` opens with the comment
+  "if present, version shall be v2 or v3", and is followed by the comment "If
+  present, version shall be v3]]". The prose says: "If the extensions component
+  is present in the public-key certificate, version shall be v3."
+- **Problem:** the two comments disagree, and the `]]` inside the second one is
+  left over. The first was evidently copied from `subjectUniqueIdentifier`
+  above it.
+- **We specify:** v3, as the prose says. See `version_rules` in
+  `crates/clazel-x509/src/independent/requirements.rs`.
+- **Reported upstream:** not yet.
+
+## X.509 §9.3.2.1 leaves no room for the wildcard RFC 6125 §6.4.3 matches
+
+- **Spec:** as above, §9.3.2.1, with RFC 6125 §6.4.3 and §7.2.
+- **Text:** "the dNSName alternative shall be a fully qualified domain name
+  (FQDN). ... a domain name is a sequence of labels in the letters, digits,
+  hyphen (LDH) format separated by dots."
+- **Problem:** `*` is not an LDH character, so read literally no certificate
+  with a wildcard dNSName conforms to X.509, while RFC 6125 §6.4.3 says how a
+  client may match one, and such certificates are in wide use.
+- **We specify:** the ASN.1 type is `IA5String`, and that is what the decoder
+  checks, so a wildcard dNSName decodes. The prose's syntax is a separate
+  predicate, `dns_name_syntax` in
+  `crates/clazel-x509/src/independent/requirements.rs`, which is not part of
+  `certificate_requirements`.
+- **Reported upstream:** not yet.
+
+## X.509 §6.2.1, §9.2.2.1 and Annex A: three slips with no effect on a value
+
+- **Spec:** as above.
+- **Text:** §6.2.1's `SIGNED` ends in `ABSENT } ) }`, one brace too many; Annex
+  A's `SIGNATURE` names its first component `agorithmIdentifier`, and §6.2.1's
+  `algorithmIdentifier`; §9.2.2.1's prose says "authoritySerialNumber" for the
+  component `authorityCertSerialNumber`.
+- **Problem:** typing slips. An ASN.1 compiler would stop at the brace; the
+  names do not reach an encoding.
+- **We specify:** Annex A's `SIGNED`, which has neither slip, and the names
+  `algorithmIdentifier` and `authorityCertSerialNumber`. See `Certificate` in
+  `crates/clazel-x509/src/independent/structures.rs`.
+- **Reported upstream:** not yet.
