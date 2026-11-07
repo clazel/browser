@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="904" height="1085" viewBox="0 0 904 1085" role="img" aria-labelledby="title">
+<svg xmlns="http://www.w3.org/2000/svg" width="904" height="1154" viewBox="0 0 904 1154" role="img" aria-labelledby="title">
 <title id="title">Verification status by component</title>
 <style>
 :root{--bg:#ffffff;--fg:#1f2328;--mut:#59636e;--line:#d1d9e0;--panel:#f6f8fa;
@@ -10,10 +10,10 @@
 text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;fill:var(--fg)}
 .m{font-family:ui-monospace,SFMono-Regular,'SF Mono',Consolas,'Liberation Mono',monospace}.mut{fill:var(--mut)}.b{font-weight:600}
 </style>
-<rect width="904" height="1085" rx="8" fill="var(--bg)" stroke="var(--line)"/>
+<rect width="904" height="1154" rx="8" fill="var(--bg)" stroke="var(--line)"/>
 <text x="20" y="30" font-size="18" class="b">Verification status by component</text>
 <text x="20" y="48" font-size="11.5" class="mut">Each crate sits where it runs. The colour is what is guaranteed about it; the bar splits its lines into proof, spec and exec.</text>
-<rect x="20" y="64" width="676" height="560" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+<rect x="20" y="64" width="676" height="644" rx="10" fill="var(--panel)" stroke="var(--line)"/>
 <text x="32" y="86" font-size="13" class="b">Host process</text>
 <text x="32" y="102" font-size="11" class="mut">the kernel and the network; the only process with I/O</text>
 <text x="32" y="122" font-size="10.5" class="mut"><tspan class="b">KERNEL</tspan>  owns all browser state and decides every change to it</text>
@@ -69,10 +69,9 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="296" y="318" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
 <text x="304" y="336" font-size="12" class="m b">tls</text>
 <text x="304" y="365" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
-<svg x="304" y="345" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="35.5" height="6" fill="var(--proof)"/><rect x="35.5" width="47.8" height="6" fill="var(--spec)"/><rect x="83.3" width="24.7" height="6" fill="var(--exec)"/></svg>
+<svg x="304" y="345" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="34.1" height="6" fill="var(--proof)"/><rect x="34.1" width="48.3" height="6" fill="var(--spec)"/><rect x="82.4" width="25.6" height="6" fill="var(--exec)"/></svg>
 <text x="304" y="378" font-size="10" class="mut">82k cases</text>
-<text x="304" y="389" font-size="10" class="mut">218/219 mut</text>
-<circle cx="410" cy="332" r="4" fill="var(--bad)"/>
+<text x="304" y="389" font-size="10" class="mut">223/223 mut</text>
 <rect x="428" y="318" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
 <text x="436" y="336" font-size="12" class="m b">x509</text>
 <text x="436" y="365" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
@@ -91,9 +90,9 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <svg x="40" y="429" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="62.4" height="6" fill="var(--proof)"/><rect x="62.4" width="34.9" height="6" fill="var(--spec)"/><rect x="97.3" width="10.7" height="6" fill="var(--exec)"/></svg>
 <text x="40" y="462" font-size="10" class="mut">1.1k cases</text>
 <text x="40" y="473" font-size="10" class="mut">54/54 mut</text>
-<rect x="164" y="402" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
+<rect x="164" y="402" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="172" y="420" font-size="12" class="m b">p384</text>
-<text x="172" y="449" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
+<text x="172" y="449" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
 <svg x="172" y="429" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="50.6" height="6" fill="var(--proof)"/><rect x="50.6" width="42.7" height="6" fill="var(--spec)"/><rect x="93.3" width="14.7" height="6" fill="var(--exec)"/></svg>
 <text x="172" y="462" font-size="10" class="mut">16k cases</text>
 <text x="172" y="473" font-size="10" class="mut">53/53 mut</text>
@@ -124,7 +123,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="436" y="555" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe</text>
 <rect x="436" y="535" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
 <text x="436" y="568" font-size="10" class="mut">unverified shell</text>
-<rect x="736" y="64" width="148" height="560" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-dasharray="6 4"/>
+<rect x="736" y="64" width="148" height="644" rx="10" fill="var(--panel)" stroke="var(--line)" stroke-dasharray="6 4"/>
 <text x="748" y="86" font-size="13" class="b">Renderer process</text>
 <text x="748" y="102" font-size="11" class="mut">one per tab, sandboxed</text>
 <rect x="748" y="116" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--t0)" stroke-opacity=".5"/>
@@ -158,91 +157,95 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="748" y="536" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
 <text x="756" y="554" font-size="12" class="m b">css</text>
 <text x="756" y="583" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
-<svg x="756" y="563" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="26.5" height="6" fill="var(--proof)"/><rect x="26.5" width="52.3" height="6" fill="var(--spec)"/><rect x="78.9" width="29.1" height="6" fill="var(--exec)"/></svg>
+<svg x="756" y="563" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="38.3" height="6" fill="var(--proof)"/><rect x="38.3" width="51.0" height="6" fill="var(--spec)"/><rect x="89.4" width="18.6" height="6" fill="var(--exec)"/></svg>
 <text x="756" y="596" font-size="10" class="mut">206k cases</text>
-<text x="756" y="607" font-size="10" class="mut">72/72 mut</text>
+<text x="756" y="607" font-size="10" class="mut">88/88 mut</text>
+<rect x="748" y="620" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
+<text x="756" y="638" font-size="12" class="m b">selectors</text>
+<text x="756" y="667" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
+<rect x="756" y="647" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
+<text x="756" y="680" font-size="10" class="mut">unverified shell</text>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--fg)"/></marker></defs>
-<line x1="698" x2="734" y1="344" y2="344" stroke="var(--fg)" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-<text x="716" y="338" font-size="10" class="mut" text-anchor="middle">IPC</text>
-<rect x="20" y="640" width="676" height="224" rx="10" fill="var(--panel)" stroke="var(--line)"/>
-<text x="32" y="662" font-size="13" class="b">Shared primitives</text>
-<text x="32" y="678" font-size="11" class="mut">linked into both processes</text>
-<rect x="32" y="692" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
-<text x="40" y="710" font-size="12" class="m b">displaylist</text>
-<text x="40" y="739" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
-<svg x="40" y="719" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="40.7" height="6" fill="var(--proof)"/><rect x="40.7" width="50.6" height="6" fill="var(--spec)"/><rect x="91.2" width="16.8" height="6" fill="var(--exec)"/></svg>
-<text x="40" y="752" font-size="10" class="mut">120k cases</text>
-<text x="40" y="763" font-size="10" class="mut">79/79 mut</text>
-<rect x="164" y="692" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
-<text x="172" y="710" font-size="12" class="m b">encoding</text>
-<text x="172" y="739" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="172" y="719" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="27.6" height="6" fill="var(--proof)"/><rect x="27.6" width="47.0" height="6" fill="var(--spec)"/><rect x="74.6" width="33.4" height="6" fill="var(--exec)"/></svg>
-<text x="172" y="752" font-size="10" class="mut">380k cases</text>
-<text x="172" y="763" font-size="10" class="mut">80/80 mut</text>
-<rect x="296" y="692" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
-<text x="304" y="710" font-size="12" class="m b">url</text>
-<text x="304" y="739" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="304" y="719" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="43.7" height="6" fill="var(--proof)"/><rect x="43.7" width="47.5" height="6" fill="var(--spec)"/><rect x="91.2" width="16.8" height="6" fill="var(--exec)"/></svg>
-<text x="304" y="752" font-size="10" class="mut">1.6k cases</text>
-<text x="304" y="763" font-size="10" class="mut">144/144 mut</text>
-<rect x="428" y="692" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
-<text x="436" y="710" font-size="12" class="m b">idna</text>
-<text x="436" y="739" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="436" y="719" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="13.7" height="6" fill="var(--proof)"/><rect x="13.7" width="11.4" height="6" fill="var(--spec)"/><rect x="25.0" width="83.0" height="6" fill="var(--exec)"/></svg>
-<text x="436" y="752" font-size="10" class="mut">2.8k cases</text>
-<text x="436" y="763" font-size="10" class="mut">69/69 mut</text>
-<rect x="560" y="692" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
-<text x="568" y="710" font-size="12" class="m b">percent</text>
-<text x="568" y="739" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="568" y="719" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="32.4" height="6" fill="var(--proof)"/><rect x="32.4" width="56.7" height="6" fill="var(--spec)"/><rect x="89.1" width="18.9" height="6" fill="var(--exec)"/></svg>
-<text x="568" y="752" font-size="10" class="mut">32 cases</text>
-<text x="568" y="763" font-size="10" class="mut">34/34 mut</text>
-<rect x="32" y="776" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
-<text x="40" y="794" font-size="12" class="m b">base64</text>
-<text x="40" y="823" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="40" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="51.3" height="6" fill="var(--proof)"/><rect x="51.3" width="45.0" height="6" fill="var(--spec)"/><rect x="96.3" width="11.7" height="6" fill="var(--exec)"/></svg>
-<text x="40" y="836" font-size="10" class="mut">80 cases</text>
-<text x="40" y="847" font-size="10" class="mut">23/23 mut</text>
+<line x1="698" x2="734" y1="386" y2="386" stroke="var(--fg)" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text x="716" y="380" font-size="10" class="mut" text-anchor="middle">IPC</text>
+<rect x="20" y="724" width="676" height="224" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+<text x="32" y="746" font-size="13" class="b">Shared primitives</text>
+<text x="32" y="762" font-size="11" class="mut">linked into both processes</text>
+<rect x="32" y="776" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
+<text x="40" y="794" font-size="12" class="m b">displaylist</text>
+<text x="40" y="823" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
+<svg x="40" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="40.7" height="6" fill="var(--proof)"/><rect x="40.7" width="50.6" height="6" fill="var(--spec)"/><rect x="91.2" width="16.8" height="6" fill="var(--exec)"/></svg>
+<text x="40" y="836" font-size="10" class="mut">120k cases</text>
+<text x="40" y="847" font-size="10" class="mut">79/79 mut</text>
 <rect x="164" y="776" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
-<text x="172" y="794" font-size="12" class="m b">mime</text>
+<text x="172" y="794" font-size="12" class="m b">encoding</text>
 <text x="172" y="823" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="172" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="36.1" height="6" fill="var(--proof)"/><rect x="36.1" width="44.0" height="6" fill="var(--spec)"/><rect x="80.1" width="27.9" height="6" fill="var(--exec)"/></svg>
-<text x="172" y="836" font-size="10" class="mut">967 cases</text>
-<text x="172" y="847" font-size="10" class="mut">35/35 mut</text>
+<svg x="172" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="27.6" height="6" fill="var(--proof)"/><rect x="27.6" width="47.0" height="6" fill="var(--spec)"/><rect x="74.6" width="33.4" height="6" fill="var(--exec)"/></svg>
+<text x="172" y="836" font-size="10" class="mut">380k cases</text>
+<text x="172" y="847" font-size="10" class="mut">80/80 mut</text>
 <rect x="296" y="776" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
-<text x="304" y="794" font-size="12" class="m b">ipc</text>
+<text x="304" y="794" font-size="12" class="m b">url</text>
 <text x="304" y="823" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
-<svg x="304" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="42.4" height="6" fill="var(--proof)"/><rect x="42.4" width="44.6" height="6" fill="var(--spec)"/><rect x="87.1" width="20.9" height="6" fill="var(--exec)"/></svg>
-<text x="304" y="836" font-size="10" class="mut">80k cases</text>
-<text x="304" y="847" font-size="10" class="mut">80/80 mut</text>
-<rect x="736" y="640" width="148" height="224" rx="10" fill="var(--panel)" stroke="var(--line)"/>
-<text x="748" y="662" font-size="13" class="b">OS boundary</text>
-<text x="748" y="678" font-size="11" class="mut">the only unsafe code</text>
-<rect x="748" y="692" width="124" height="76" rx="6" fill="var(--t1s)" stroke="var(--t1)" stroke-opacity=".5"/>
-<text x="756" y="710" font-size="12" class="m b">sandbox</text>
-<text x="756" y="739" font-size="10.5" class="b" style="fill:var(--t1)">Panic-free</text>
-<rect x="756" y="719" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
-<text x="756" y="752" font-size="10" class="mut">8 Kani harnesses</text>
-<rect x="748" y="776" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--t0)" stroke-opacity=".5"/>
-<text x="756" y="794" font-size="12" class="m b">sys</text>
-<text x="756" y="823" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe</text>
+<svg x="304" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="43.7" height="6" fill="var(--proof)"/><rect x="43.7" width="47.5" height="6" fill="var(--spec)"/><rect x="91.2" width="16.8" height="6" fill="var(--exec)"/></svg>
+<text x="304" y="836" font-size="10" class="mut">1.6k cases</text>
+<text x="304" y="847" font-size="10" class="mut">144/144 mut</text>
+<rect x="428" y="776" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
+<text x="436" y="794" font-size="12" class="m b">idna</text>
+<text x="436" y="823" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
+<svg x="436" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="13.7" height="6" fill="var(--proof)"/><rect x="13.7" width="11.4" height="6" fill="var(--spec)"/><rect x="25.0" width="83.0" height="6" fill="var(--exec)"/></svg>
+<text x="436" y="836" font-size="10" class="mut">2.8k cases</text>
+<text x="436" y="847" font-size="10" class="mut">69/69 mut</text>
+<rect x="560" y="776" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
+<text x="568" y="794" font-size="12" class="m b">percent</text>
+<text x="568" y="823" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
+<svg x="568" y="803" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="32.4" height="6" fill="var(--proof)"/><rect x="32.4" width="56.7" height="6" fill="var(--spec)"/><rect x="89.1" width="18.9" height="6" fill="var(--exec)"/></svg>
+<text x="568" y="836" font-size="10" class="mut">32 cases</text>
+<text x="568" y="847" font-size="10" class="mut">34/34 mut</text>
+<rect x="32" y="860" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
+<text x="40" y="878" font-size="12" class="m b">base64</text>
+<text x="40" y="907" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
+<svg x="40" y="887" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="51.3" height="6" fill="var(--proof)"/><rect x="51.3" width="45.0" height="6" fill="var(--spec)"/><rect x="96.3" width="11.7" height="6" fill="var(--exec)"/></svg>
+<text x="40" y="920" font-size="10" class="mut">80 cases</text>
+<text x="40" y="931" font-size="10" class="mut">23/23 mut</text>
+<rect x="164" y="860" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
+<text x="172" y="878" font-size="12" class="m b">mime</text>
+<text x="172" y="907" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
+<svg x="172" y="887" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="36.1" height="6" fill="var(--proof)"/><rect x="36.1" width="44.0" height="6" fill="var(--spec)"/><rect x="80.1" width="27.9" height="6" fill="var(--exec)"/></svg>
+<text x="172" y="920" font-size="10" class="mut">967 cases</text>
+<text x="172" y="931" font-size="10" class="mut">35/35 mut</text>
+<rect x="296" y="860" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
+<text x="304" y="878" font-size="12" class="m b">ipc</text>
+<text x="304" y="907" font-size="10.5" class="b" style="fill:var(--t2)">Proven correct</text>
+<svg x="304" y="887" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="42.4" height="6" fill="var(--proof)"/><rect x="42.4" width="44.6" height="6" fill="var(--spec)"/><rect x="87.1" width="20.9" height="6" fill="var(--exec)"/></svg>
+<text x="304" y="920" font-size="10" class="mut">80k cases</text>
+<text x="304" y="931" font-size="10" class="mut">80/80 mut</text>
+<rect x="736" y="724" width="148" height="224" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+<text x="748" y="746" font-size="13" class="b">OS boundary</text>
+<text x="748" y="762" font-size="11" class="mut">the only unsafe code</text>
+<rect x="748" y="776" width="124" height="76" rx="6" fill="var(--t1s)" stroke="var(--t1)" stroke-opacity=".5"/>
+<text x="756" y="794" font-size="12" class="m b">sandbox</text>
+<text x="756" y="823" font-size="10.5" class="b" style="fill:var(--t1)">Panic-free</text>
 <rect x="756" y="803" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
-<text x="756" y="836" font-size="10" class="mut">62 unsafe, audited</text>
-<rect x="20" y="880" width="864" height="145" rx="10" fill="var(--panel)" stroke="var(--line)"/>
-<text x="32" y="906" font-size="12" class="b">2141 of 2154 broken specs caught by a theorem</text>
-<text x="32" y="923" font-size="11" class="mut">12 more (crypto) broke only a proof script: no theorem became false, so they are not counted as coverage.</text>
-<text x="32" y="938" font-size="11" class="mut">1 (tls) survived: a known gap, recorded in mutations.json with what will close it.</text>
-<text x="32" y="964" font-size="12" class="b">21 axioms: proofs taken from other verified libraries</text>
-<text x="32" y="981" font-size="11" class="mut">p384, 6: The trust boundary of the field: every call into fiat-crypto, each one axiom.</text>
-<text x="32" y="996" font-size="11" class="mut">crypto, 15: The trust boundary: every call into libcrux, each one axiom.</text>
-<text x="32" y="1011" font-size="11" class="mut">Each sits in its crate's axioms.rs with its justification; the checker rejects any other assumption.</text>
-<rect x="20" y="1039" width="20" height="12" rx="3" fill="var(--t2s)" stroke="var(--t2)"/><text x="46" y="1049" font-size="11" class="mut">Proven correct · Verus, unbounded</text>
-<rect x="240.79999999999998" y="1039" width="20" height="12" rx="3" fill="var(--t1s)" stroke="var(--t1)"/><text x="266.79999999999995" y="1049" font-size="11" class="mut">Panic-free · Kani, on all inputs to a bound</text>
-<rect x="517.5999999999999" y="1039" width="20" height="12" rx="3" fill="var(--t0s)" stroke="var(--t0)"/><text x="543.5999999999999" y="1049" font-size="11" class="mut">Memory safe · safe Rust and tests</text>
-<rect x="738.3999999999999" y="1039" width="20" height="12" rx="3" fill="none" stroke="var(--gap)" stroke-dasharray="3 2"/><text x="764.3999999999999" y="1049" font-size="11" class="mut">below target tier</text>
-<rect x="20" y="1061" width="10" height="8" rx="2" fill="var(--proof)"/><text x="34" y="1069" font-size="11" class="mut">proof</text>
-<rect x="92" y="1061" width="10" height="8" rx="2" fill="var(--spec)"/><text x="106" y="1069" font-size="11" class="mut">spec</text>
-<rect x="164" y="1061" width="10" height="8" rx="2" fill="var(--exec)"/><text x="178" y="1069" font-size="11" class="mut">exec lines</text>
-<circle cx="240" cy="1065" r="4" fill="var(--bad)"/><text x="250" y="1069" font-size="11" class="mut">surviving mutant</text>
-<text x="884" y="1069" font-size="11" class="mut" text-anchor="end">every suite and count: the table below</text>
+<text x="756" y="836" font-size="10" class="mut">8 Kani harnesses</text>
+<rect x="748" y="860" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--t0)" stroke-opacity=".5"/>
+<text x="756" y="878" font-size="12" class="m b">sys</text>
+<text x="756" y="907" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe</text>
+<rect x="756" y="887" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
+<text x="756" y="920" font-size="10" class="mut">62 unsafe, audited</text>
+<rect x="20" y="964" width="864" height="130" rx="10" fill="var(--panel)" stroke="var(--line)"/>
+<text x="32" y="990" font-size="12" class="b">2162 of 2174 broken specs caught by a theorem</text>
+<text x="32" y="1007" font-size="11" class="mut">12 more (crypto) broke only a proof script: no theorem became false, so they are not counted as coverage.</text>
+<text x="32" y="1033" font-size="12" class="b">21 axioms: proofs taken from other verified libraries</text>
+<text x="32" y="1050" font-size="11" class="mut">p384, 6: The trust boundary of the field: every call into fiat-crypto, each one axiom.</text>
+<text x="32" y="1065" font-size="11" class="mut">crypto, 15: The trust boundary: every call into libcrux, each one axiom.</text>
+<text x="32" y="1080" font-size="11" class="mut">Each sits in its crate's axioms.rs with its justification; the checker rejects any other assumption.</text>
+<rect x="20" y="1108" width="20" height="12" rx="3" fill="var(--t2s)" stroke="var(--t2)"/><text x="46" y="1118" font-size="11" class="mut">Proven correct · Verus, unbounded</text>
+<rect x="240.79999999999998" y="1108" width="20" height="12" rx="3" fill="var(--t1s)" stroke="var(--t1)"/><text x="266.79999999999995" y="1118" font-size="11" class="mut">Panic-free · Kani, on all inputs to a bound</text>
+<rect x="517.5999999999999" y="1108" width="20" height="12" rx="3" fill="var(--t0s)" stroke="var(--t0)"/><text x="543.5999999999999" y="1118" font-size="11" class="mut">Memory safe · safe Rust and tests</text>
+<rect x="738.3999999999999" y="1108" width="20" height="12" rx="3" fill="none" stroke="var(--gap)" stroke-dasharray="3 2"/><text x="764.3999999999999" y="1118" font-size="11" class="mut">below target tier</text>
+<rect x="20" y="1130" width="10" height="8" rx="2" fill="var(--proof)"/><text x="34" y="1138" font-size="11" class="mut">proof</text>
+<rect x="92" y="1130" width="10" height="8" rx="2" fill="var(--spec)"/><text x="106" y="1138" font-size="11" class="mut">spec</text>
+<rect x="164" y="1130" width="10" height="8" rx="2" fill="var(--exec)"/><text x="178" y="1138" font-size="11" class="mut">exec lines</text>
+<circle cx="240" cy="1134" r="4" fill="var(--bad)"/><text x="250" y="1138" font-size="11" class="mut">surviving mutant</text>
+<text x="884" y="1138" font-size="11" class="mut" text-anchor="end">every suite and count: the table below</text>
 </svg>
