@@ -449,3 +449,101 @@ it evidently means. Each entry records what we specified instead.
   `crates/clazel-css/src/parser/spec.rs`, and
   `lemma_example_declaration_in_a_rule` in its `examples.rs`.
 - **Reported upstream:** not yet.
+
+## RFC 8446 §4.2 and §6.2 name two alerts for an extension not allowed in a message
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** §4.2: "If an implementation receives an extension which it recognizes
+  and which is not specified for the message in which it appears, it MUST abort the
+  handshake with an 'illegal_parameter' alert." §6.2, unsupported_extension: "Sent
+  by endpoints receiving any handshake message containing an extension known to be
+  prohibited for inclusion in the given handshake message".
+- **Problem:** the same condition, two alerts. §4.3.1 agrees with §4.2 for
+  EncryptedExtensions.
+- **We specify:** `illegal_parameter`, §4.2's MUST, in the clean-room transcription
+  (`recognized_but_not_specified` and `response_block_failures` in
+  `crates/clazel-tls/src/transcription/extensions.rs`). `unsupported_extension`
+  stays for an extension the client did not offer.
+- **Reported upstream:** not yet.
+
+## RFC 8446 §4.1.3's ServerHello cannot hold the older hello it must check
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** §4.1.3: `Extension extensions<6..2^16-1>;` and "TLS 1.3 clients
+  receiving a ServerHello indicating TLS 1.2 or below MUST check that the last 8
+  bytes are not equal to either of these values."
+- **Problem:** a TLS 1.2 ServerHello may have fewer than 6 bytes of extensions, or
+  no extensions field (§4.1.2: "All versions of TLS allow an extensions field to
+  optionally follow the compression_methods field"). Read literally, it fails
+  §4.1.3's structure with `decode_error` before the check that must give
+  `illegal_parameter`, or Appendix D.1's `protocol_version`.
+- **We specify:** the version is detected with the extensions optional and no floor;
+  §4.1.3's structure applies once the message is known to be TLS 1.3 or a
+  HelloRetryRequest (`read_server_hello_any_version` and `receive_server_hello` in
+  `crates/clazel-tls/src/transcription/`).
+- **Reported upstream:** not yet.
+
+## RFC 8446 §4.1.4, §4.2.1 and Appendix D.5 disagree on ServerHello.legacy_version
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** §4.2.1: "If this extension is present, clients MUST ignore the
+  ServerHello.legacy_version value". §4.1.4: "the client MUST check the
+  legacy_version ... as specified in Section 4.1.3". Appendix D.5: "Any endpoint
+  receiving a Hello message with ClientHello.legacy_version or
+  ServerHello.legacy_version set to 0x0300 MUST abort the handshake with a
+  'protocol_version' alert."
+- **Problem:** a HelloRetryRequest "has the same format as a ServerHello message" and
+  must carry supported_versions, so §4.2.1 says to ignore what §4.1.4 says to check.
+  §4.1.3 gives the check no alert. And D.5 aborts on a value §4.2.1 ignores.
+- **We specify:** by specificity, in `key_exchange.rs` of the clean-room transcription:
+  0x0300 always aborts with `protocol_version`; a HelloRetryRequest's other values
+  must be 0x0303, or `illegal_parameter` by §6's note; with supported_versions, a
+  ServerHello's is otherwise ignored.
+- **Reported upstream:** not yet.
+
+## RFC 8446 §5 and §5.1: dropping change_cipher_spec "at any time" against no interleaving
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** §5: "An implementation may receive an unencrypted record of type
+  change_cipher_spec consisting of the single byte value 0x01 at any time after the
+  first ClientHello ... and MUST simply drop it without further processing." §5.1:
+  "if a handshake message is split over two or more records, there MUST NOT be any
+  other records between them."
+- **Problem:** a change_cipher_spec between two fragments of one handshake message
+  meets the first sentence and breaks the second.
+- **We specify:** in the clean-room transcription, the record is dropped and the
+  fragments kept (`receive_record` in
+  `crates/clazel-tls/src/transcription/connection.rs`), because §5's sentence is a
+  receiver's rule explicit about time, and §5.1's binds the sender and gives the
+  receiver no action. This entry was written without reading the earlier entry above
+  on the same subject, only its heading, so that the two readings stay independent;
+  the later equivalence proof decides if they differ.
+- **Reported upstream:** not yet.
+
+## RFC 8446 §5.3: "each record" has no sequence number before a key
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** §5.3: "The appropriate sequence number is incremented by one after reading
+  or writing each record."
+- **Problem:** read literally, the dummy change_cipher_spec of Appendix D.4, unprotected
+  and received while protection is engaged, advances the read number, and every later
+  nonce would then be wrong. §5's "without further processing" contradicts that.
+- **We specify:** the number counts records protected under the key, in the clean-room
+  transcription (`receive_ciphertext` and `send_one` in
+  `crates/clazel-tls/src/transcription/connection.rs`).
+- **Reported upstream:** not yet.
+
+## RFC 8446 §4.4.3's "unless" gives a client nothing to verify with
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** §4.4.3: "the signature algorithm MUST be one offered in the client's
+  'signature_algorithms' extension unless no valid certificate chain can be produced
+  without unsupported algorithms".
+- **Problem:** the exception makes sense for a certificate's signature, which a client
+  may be able to check through other means (§4.4.2.2), not for this message's, which
+  is one the client must itself verify. §4.2.3: each value is one "that the client is
+  willing to verify".
+- **We specify:** a client refuses a CertificateVerify whose algorithm it did not offer,
+  always, with `illegal_parameter` by §6's note (`certificate_verify_failures` in
+  `crates/clazel-tls/src/transcription/authentication.rs`).
+- **Reported upstream:** not yet.
