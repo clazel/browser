@@ -193,11 +193,13 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 && boot.crypto_functions() == self.models@.crypto
                 && next.crypto.functions() == self.models@.crypto
                 && next.exchange.functions() == self.models@.exchange
-                && next.factory.functions() == self.models@.cipher,
+                && next.factory.functions() == self.models@.cipher
+                && next.verifier.functions() == self.models@.verification,
             Some(Stage::Flight { conn }) => conn.wf() && conn.auth_wf() && conn.resources_wf()
                 && conn.cipher_bindings_wf() && self.state == State::Handshaking
                 && conn.crypto_functions() == self.models@.crypto
-                && conn.cipher_functions() == self.models@.cipher,
+                && conn.cipher_functions() == self.models@.cipher
+                && conn.verifier_functions() == self.models@.verification,
             Some(Stage::App { app }) => app.wf() && (self.state == State::Open || self.state == State::Closing)
                 && app.crypto_functions() == self.models@.crypto
                 && app.cipher_functions() == self.models@.cipher,
@@ -224,11 +226,13 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             out.0.models().crypto == crypto.functions(),
             out.0.models().exchange == exchange.functions(),
             out.0.models().cipher == factory.functions(),
+            out.0.models().verification == verifier.functions(),
     {
         let ghost models = contract::Models {
             crypto: crypto.functions(),
             exchange: exchange.functions(),
             cipher: factory.functions(),
+            verification: verifier.functions(),
         };
         match Bootstrap::start(config, hello_crypto) {
             Ok((mut boot, BootAction::Send(wire))) => {
@@ -324,19 +328,25 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
         }
     }
 
-    /// A failure the dispatcher reported, after `prefix` ([`spec::flight_failure`]).
+    /// A failure the dispatcher reported, after `prefix` ([`spec::flight_failure_after`]).
     fn flight_failed(&mut self, prefix: Vec<u8>, alert: u8, wire: Option<Vec<u8>>) -> (out: Output)
         ensures final(self).wf(), final(self).models() == old(self).models(),
             final(self).stage() == spec::Stage::Ended, spec::is_final(out.state@),
             out.deliver@.len() == 0,
+            contract_step(out, final(self)) == spec::flight_failure_after(prefix@, alert, super::exec::wire_view(wire)),
     {
         let mut send = prefix;
+        let ghost first = send@;
+        let deliver = Vec::new();
+        proof { assert(deliver@ =~= seq![]); }
         match wire {
             Some(mut record) => {
+                let ghost second = record@;
                 send.append(&mut record);
-                self.ended(send, Vec::new(), State::Failed(Failure { alert, origin: Origin::Sent }))
+                proof { assert(send@ =~= first + second); }
+                self.ended(send, deliver, State::Failed(Failure { alert, origin: Origin::Sent }))
             },
-            None => self.ended(send, Vec::new(), State::Failed(Failure { alert, origin: Origin::NotSent })),
+            None => self.ended(send, deliver, State::Failed(Failure { alert, origin: Origin::NotSent })),
         }
     }
 
@@ -354,11 +364,12 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     }
 
     /// The client flight is on its way: acknowledge it, and hand over to the
-    /// transducer at `Ready`.
+    /// transducer at `Ready` ([`spec::flight_sent`]).
     fn acknowledge(&mut self, mut conn: Connection<C, F, V>, wire: Vec<u8>) -> (out: Output)
         requires conn.wf(), conn.auth_wf(), conn.resources_wf(), conn.cipher_bindings_wf(),
             conn.crypto_functions() == old(self).models().crypto,
             conn.cipher_functions() == old(self).models().cipher,
+            conn.verifier_functions() == old(self).models().verification,
         ensures final(self).wf(), final(self).models() == old(self).models(),
             out.deliver@.len() == 0,
             match final(self).stage() {
@@ -367,7 +378,12 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 spec::Stage::Ended => spec::is_final(out.state@),
                 _ => false,
             },
+            contract_step(out, final(self)) == spec::flight_sent(old(self).models().crypto, old(self).models().verification,
+                super::dispatcher_spec::Ciphers { seal: old(self).models().cipher.seal, open: old(self).models().cipher.open },
+                wire@, conn@),
     {
+        let deliver = Vec::new();
+        proof { assert(deliver@ =~= seq![]); }
         let ack = conn.acknowledge_client_flight(wire.as_slice());
         match ack {
             ConnAction::Ready => {
@@ -383,21 +399,23 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                         }
                         self.stage = Some(Stage::App { app });
                         self.state = State::Open;
-                        Output { send: wire, deliver: Vec::new(), state: State::Open }
+                        Output { send: wire, deliver, state: State::Open }
                     },
-                    Err(alert) => self.ended(wire, Vec::new(), State::Failed(Failure { alert, origin: Origin::NotSent })),
+                    Err(alert) => self.ended(wire, deliver, State::Failed(Failure { alert, origin: Origin::NotSent })),
                 }
             },
             ConnAction::Fail(alert, record) => self.flight_failed(wire, alert, record),
-            _ => self.ended(wire, Vec::new(), State::Failed(Failure { alert: crate::spec::INTERNAL_ERROR, origin: Origin::NotSent })),
+            _ => self.ended(wire, deliver, State::Failed(Failure { alert: crate::spec::INTERNAL_ERROR, origin: Origin::NotSent })),
         }
     }
 
-    /// One step of the server's flight.
+    /// One step of the server's flight: the dispatcher's `feed`, and what its
+    /// action comes to ([`spec::flight_out`]).
     fn flight_step(&mut self, mut conn: Connection<C, F, V>, input: &[u8]) -> (out: (usize, Output))
         requires conn.wf(), conn.auth_wf(), conn.resources_wf(), conn.cipher_bindings_wf(),
             conn.crypto_functions() == old(self).models().crypto,
             conn.cipher_functions() == old(self).models().cipher,
+            conn.verifier_functions() == old(self).models().verification,
         ensures final(self).wf(), final(self).models() == old(self).models(),
             out.0 <= input.len(), out.1.deliver@.len() == 0,
             contract::flight_step_ensures(old(self).models(), conn@, input@, out.0 as nat,
@@ -405,17 +423,31 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     {
         let ghost before = conn@;
         let (consumed, action) = conn.feed(input);
+        let empty = Vec::new();
+        let none = Vec::new();
+        proof {
+            assert(empty@ =~= seq![]);
+            assert(none@ =~= seq![]);
+        }
         let out = match action {
             ConnAction::None | ConnAction::Ignored | ConnAction::Cancelled => {
                 self.stage = Some(Stage::Flight { conn: Box::new(conn) });
                 self.state = State::Handshaking;
-                quiet(State::Handshaking)
+                Output { send: empty, deliver: none, state: State::Handshaking }
             },
             ConnAction::Send(wire) => self.acknowledge(conn, wire),
-            ConnAction::Ready => self.ended(Vec::new(), Vec::new(),
+            ConnAction::Ready => self.ended(empty, none,
                 State::Failed(Failure { alert: crate::spec::INTERNAL_ERROR, origin: Origin::NotSent })),
-            ConnAction::Fail(alert, record) => self.flight_failed(Vec::new(), alert, record),
-            ConnAction::PeerAlert(alert) => self.ended(Vec::new(), Vec::new(),
+            ConnAction::Fail(alert, record) => {
+                let ghost sealed = super::exec::wire_view(record);
+                let out = self.flight_failed(empty, alert, record);
+                proof {
+                    if let Some(bytes) = sealed { assert(seq![] + bytes =~= bytes); }
+                    assert(spec::flight_failure_after(seq![], alert, sealed) == spec::flight_failure(alert, sealed));
+                }
+                out
+            },
+            ConnAction::PeerAlert(alert) => self.ended(empty, none,
                 State::Failed(Failure { alert, origin: Origin::Peer })),
             ConnAction::Close(record) => self.flight_close(record),
         };
@@ -439,6 +471,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             next.crypto.functions() == old(self).models().crypto,
             next.exchange.functions() == old(self).models().exchange,
             next.factory.functions() == old(self).models().cipher,
+            next.verifier.functions() == old(self).models().verification,
         ensures final(self).wf(), final(self).models() == old(self).models(),
             out.deliver@.len() == 0,
             match final(self).stage() {
@@ -487,6 +520,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             next.crypto.functions() == old(self).models().crypto,
             next.exchange.functions() == old(self).models().exchange,
             next.factory.functions() == old(self).models().cipher,
+            next.verifier.functions() == old(self).models().verification,
         ensures final(self).wf(), final(self).models() == old(self).models(),
             out.0 <= input.len(), out.1.deliver@.len() == 0,
             contract::hello_step_ensures(old(self).models(), boot@.0, boot@.1, next.scalar@, input@, out.0 as nat,

@@ -5,6 +5,30 @@
 use vstd::prelude::*;
 
 verus! {
+/// §5.2: a protected client flight starts with the record header, so it is
+/// never empty, and `AwaitClientFlight` always has something to wait for.
+pub proof fn lemma_protected_flight_nonempty(ciphers: super::dispatcher_spec::Ciphers,
+    s: super::dispatcher_spec::State, flight: Seq<u8>)
+    ensures match super::dispatcher_spec::protect_client_flight(ciphers, s, flight).1 {
+        Ok(wire) => wire.len() > 0,
+        Err(_) => true,
+    },
+{
+    if let Some(sender) = s.handshake_sender {
+        let (_, sealed) = crate::traffic::spec::send(super::dispatcher_spec::seal_with(ciphers, sender), sender,
+            crate::spec::CT_HANDSHAKE, flight, 0);
+        if let Ok(record) = sealed {
+            let n = sender.next->Some_0;
+            let inner = crate::spec::write_inner_plaintext(flight, crate::spec::CT_HANDSHAKE, 0);
+            let ad = crate::spec::additional_data(inner.len() + 16);
+            assert(ad.len() > 0);
+            assert(record ==crate::spec::encrypt_record(super::dispatcher_spec::seal_with(ciphers, sender), 16,
+                sender.iv, n, crate::spec::CT_HANDSHAKE, flight, 0));
+            assert(record.len() >= ad.len());
+        }
+    }
+}
+
 /// RFC 8446 §5.1: a compatibility CCS between the fragments of one handshake
 /// message interleaves another record type and is refused; at a boundary the
 /// same record is still dropped.

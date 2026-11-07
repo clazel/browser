@@ -142,4 +142,81 @@ pub proof fn lemma_nothing_sent()
         == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated)) by (compute_only);
     assert(super::driver_spec::peer_failed(40).send.len() == 0) by (compute_only);
 }
+
+/// The dispatcher's step over its fixtures, carried through the join.
+pub open spec fn carried_flight(action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State)
+    -> super::driver_spec::Step
+{
+    super::driver_spec::flight_out(crate::auth::examples::crypto(), crate::auth::examples::verifier(),
+        super::dispatcher_certificates::flight_ciphers(), action, after)
+}
+
+/// The client flight of `dispatcher_certificates::awaiting`, carried through.
+pub open spec fn flight_went_out() -> super::driver_spec::Step {
+    carried_flight(super::dispatcher_spec::Action::Send(super::dispatcher_certificates::awaiting(false).pending_flight),
+        super::dispatcher_certificates::awaiting(false))
+}
+
+/// The state the acknowledgement of that flight reaches.
+pub open spec fn ready_state() -> super::dispatcher_spec::State {
+    super::dispatcher_certificates::acked(super::dispatcher_certificates::awaiting(false),
+        super::dispatcher_certificates::awaiting(false).pending_flight).1
+}
+
+/// §6: while the dispatcher goes on, the join stays in the flight and sends
+/// nothing: a dropped record, a partial one, or user_canceled.
+pub proof fn lemma_flight_goes_on()
+    ensures
+        carried_flight(super::dispatcher_spec::Action::Cancelled, super::dispatcher_certificates::flight_start()).stage
+            == super::driver_spec::Stage::Flight(super::dispatcher_certificates::flight_start()),
+        carried_flight(super::dispatcher_spec::Action::Cancelled, super::dispatcher_certificates::flight_start()).status
+            == super::driver_spec::Status::Handshaking,
+        carried_flight(super::dispatcher_spec::Action::Ignored, super::dispatcher_certificates::flight_start()).status
+            == super::driver_spec::Status::Handshaking,
+        carried_flight(super::dispatcher_spec::Action::None, super::dispatcher_certificates::flight_start()).send.len() == 0,
+{
+    assert(carried_flight(super::dispatcher_spec::Action::Cancelled, super::dispatcher_certificates::flight_start()).stage
+        == super::driver_spec::Stage::Flight(super::dispatcher_certificates::flight_start())) by (compute_only);
+    assert(carried_flight(super::dispatcher_spec::Action::Cancelled, super::dispatcher_certificates::flight_start()).status
+        == super::driver_spec::Status::Handshaking) by (compute_only);
+    assert(carried_flight(super::dispatcher_spec::Action::Ignored, super::dispatcher_certificates::flight_start()).status
+        == super::driver_spec::Status::Handshaking) by (compute_only);
+    assert(carried_flight(super::dispatcher_spec::Action::None, super::dispatcher_certificates::flight_start()).send.len() == 0) by (compute_only);
+}
+
+/// §6, §6.1: the dispatcher's three ends reach the wire as it said: its sealed
+/// alert, nothing for the server's alert, and its sealed close_notify.
+pub proof fn lemma_flight_ends()
+    ensures
+        carried_flight(super::dispatcher_spec::Action::Fail(40u8, Some(seq![9u8])), super::dispatcher_spec::failed()).send == seq![9u8],
+        carried_flight(super::dispatcher_spec::Action::PeerAlert(40u8), super::dispatcher_spec::failed()).send.len() == 0,
+        carried_flight(super::dispatcher_spec::Action::PeerAlert(40u8), super::dispatcher_spec::failed()).status
+            == super::driver_spec::Status::Failed(40u8, super::driver_spec::Origin::Peer),
+        carried_flight(super::dispatcher_spec::Action::Close(Some(seq![9u8])), super::dispatcher_spec::closed()).send == seq![9u8],
+        carried_flight(super::dispatcher_spec::Action::Close(Some(seq![9u8])), super::dispatcher_spec::closed()).status
+            == super::driver_spec::Status::Closed,
+{
+    assert(carried_flight(super::dispatcher_spec::Action::Fail(40u8, Some(seq![9u8])), super::dispatcher_spec::failed()).send == seq![9u8]) by (compute_only);
+    assert(carried_flight(super::dispatcher_spec::Action::PeerAlert(40u8), super::dispatcher_spec::failed()).send.len() == 0) by (compute_only);
+    assert(carried_flight(super::dispatcher_spec::Action::PeerAlert(40u8), super::dispatcher_spec::failed()).status
+        == super::driver_spec::Status::Failed(40u8, super::driver_spec::Origin::Peer)) by (compute_only);
+    assert(carried_flight(super::dispatcher_spec::Action::Close(Some(seq![9u8])), super::dispatcher_spec::closed()).send == seq![9u8]) by (compute_only);
+    assert(carried_flight(super::dispatcher_spec::Action::Close(Some(seq![9u8])), super::dispatcher_spec::closed()).status
+        == super::driver_spec::Status::Closed) by (compute_only);
+}
+
+/// §4.4.4, §7.3: the client flight goes out and is acknowledged in the same
+/// step (choice 2), and the transducer starts from the application secrets.
+pub proof fn lemma_flight_sent_starts_the_transducer()
+    ensures
+        flight_went_out().send == super::dispatcher_certificates::awaiting(false).pending_flight,
+        flight_went_out().status == super::driver_spec::Status::Open,
+        flight_went_out().stage == super::driver_spec::Stage::App(super::post_handshake_spec::start(
+            crate::auth::examples::crypto(), ready_state().client_application_secret, ready_state().server_application_secret).unwrap()),
+{
+    assert(flight_went_out().send == super::dispatcher_certificates::awaiting(false).pending_flight) by (compute_only);
+    assert(flight_went_out().status == super::driver_spec::Status::Open) by (compute_only);
+    assert(flight_went_out().stage == super::driver_spec::Stage::App(super::post_handshake_spec::start(
+        crate::auth::examples::crypto(), ready_state().client_application_secret, ready_state().server_application_secret).unwrap())) by (compute_only);
+}
 } // verus!

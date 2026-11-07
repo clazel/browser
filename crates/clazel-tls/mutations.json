@@ -3177,6 +3177,328 @@
         "lemma": "super::dispatcher_lemmas::lemma_flight_close_sends_close_notify()",
         "witness": "super::dispatcher_spec::closing(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state()).0 != super::dispatcher_spec::Action::Close(Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]))"
       }
+    },
+    {
+      "id": "dispatcher-feed-drops-partial-record",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "(framed.consumed, Action::None, State { framing: framed.buffer, ..s })",
+      "replace": "(framed.consumed, Action::None, s)",
+      "expect": "killed",
+      "reason": "Consumed octets of an unfinished record are lost, so the caller cannot resubmit them: lemma_feed_keeps_partial_record is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_keeps_partial_record()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_start(), seq![23u8, 3u8]).2.framing != seq![23u8, 3u8]"
+      }
+    },
+    {
+      "id": "dispatcher-feed-takes-whole-input",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "let (action, after) = receive_record(c, v, ciphers, State { framing: seq![], ..s }, framed.buffer);\n                (framed.consumed, action, after)",
+      "replace": "let (action, after) = receive_record(c, v, ciphers, State { framing: seq![], ..s }, framed.buffer);\n                (input.len(), action, after)",
+      "expect": "killed",
+      "reason": "A step claims the octets after its record, which are the next record (RFC 8446 5.1): lemma_feed_stops_at_the_record_boundary is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_stops_at_the_record_boundary()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_start(), seq![20u8, 3, 3, 0, 1, 1, 99]).0 != 6"
+      }
+    },
+    {
+      "id": "dispatcher-feed-keeps-framed-prefix",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "receive_record(c, v, ciphers, State { framing: seq![], ..s }, framed.buffer)",
+      "replace": "receive_record(c, v, ciphers, s, framed.buffer)",
+      "expect": "killed",
+      "reason": "A record that arrived in two calls leaves its prefix in the buffer, which corrupts the next record: lemma_feed_clears_the_framing_buffer is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_clears_the_framing_buffer()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_part_framed(), seq![1u8]).2.framing.len() != 0"
+      }
+    },
+    {
+      "id": "dispatcher-feed-ccs-unchecked",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "Some(_) => receive_compatibility_ccs(ciphers, s),",
+      "replace": "Some(_) => (Action::Ignored, s),",
+      "expect": "killed",
+      "reason": "A compatibility CCS is dropped inside a fragmented handshake message, which RFC 8446 5.1 forbids: lemma_feed_refuses_ccs_mid_message is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_refuses_ccs_mid_message()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_mid_message(), seq![20u8, 3, 3, 0, 1, 1]).2.mode != super::dispatcher_spec::Mode::Failed"
+      }
+    },
+    {
+      "id": "dispatcher-feed-read-epoch-not-advanced",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "let opened = State { handshake_receiver: Some(epoch), ..s };",
+      "replace": "let opened = s;",
+      "expect": "killed",
+      "reason": "The read sequence number does not move on after a record, so the next one is opened under a used nonce (RFC 8446 5.3): lemma_feed_user_canceled_goes_on is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_user_canceled_goes_on()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_start(), super::dispatcher_certificates::record_of(seq![1u8, 90], 21)).2.handshake_receiver != Some(super::dispatcher_certificates::alert_epoch_at(1))"
+      }
+    },
+    {
+      "id": "dispatcher-feed-finished-not-last-accepted",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "&& (messages.len() != 1 || !boundary))",
+      "replace": "&& !boundary)",
+      "expect": "killed",
+      "reason": "A Finished followed by another message in its record is acted on, and the client flight goes out: lemma_feed_finished_must_end_the_record is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_finished_must_end_the_record()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::before_finished(false), super::dispatcher_certificates::record_of(super::dispatcher_certificates::finished() + seq![8u8, 0, 0, 0], 22)).2.mode != super::dispatcher_spec::Mode::Failed"
+      }
+    },
+    {
+      "id": "dispatcher-feed-application-data-accepted",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "crate::spec::Res::Ok((crate::spec::Event::AppData(_), _)) =>\n                fatal(ciphers, s, crate::spec::UNEXPECTED_MESSAGE),",
+      "replace": "crate::spec::Res::Ok((crate::spec::Event::AppData(_), _)) =>\n                (Action::None, s),",
+      "expect": "killed",
+      "reason": "Application data before the handshake ends is dropped instead of refused: lemma_feed_refuses_application_data is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_refuses_application_data()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_start(), super::dispatcher_certificates::record_of(seq![7u8], 23)).2.mode != super::dispatcher_spec::Mode::Failed"
+      }
+    },
+    {
+      "id": "dispatcher-feed-user-canceled-fatal",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "(Action::Cancelled, s)",
+      "replace": "receive_fatal_alert(ciphers, s, alert.description)",
+      "expect": "killed",
+      "reason": "user_canceled ends the connection, though RFC 8446 6.1 does not make it fatal: lemma_feed_user_canceled_goes_on is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_user_canceled_goes_on()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_start(), super::dispatcher_certificates::record_of(seq![1u8, 90], 21)).1 != super::dispatcher_spec::Action::Cancelled"
+      }
+    },
+    {
+      "id": "dispatcher-feed-close-notify-fatal",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "if alert.description == crate::spec::CLOSE_NOTIFY {\n                    closing(ciphers, s)",
+      "replace": "if alert.description == crate::spec::CLOSE_NOTIFY {\n                    receive_fatal_alert(ciphers, s, alert.description)",
+      "expect": "killed",
+      "reason": "The server closing during its flight is reported as its fatal alert and not answered: lemma_feed_close_notify_closes is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_close_notify_closes()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_start(), super::dispatcher_certificates::record_of(seq![1u8, 0], 21)).2.mode != super::dispatcher_spec::Mode::Closed"
+      }
+    },
+    {
+      "id": "dispatcher-feed-peer-alert-ignored",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "                    receive_fatal_alert(ciphers, s, alert.description)\n",
+      "replace": "                    (Action::Cancelled, s)\n",
+      "expect": "killed",
+      "reason": "A fatal alert from the server leaves the handshake running (RFC 8446 6): lemma_feed_peer_alert_is_fatal is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_peer_alert_is_fatal()",
+        "witness": "super::dispatcher_certificates::fed(super::dispatcher_certificates::flight_start(), super::dispatcher_certificates::record_of(seq![2u8, 40], 21)).1 != super::dispatcher_spec::Action::PeerAlert(40u8)"
+      }
+    },
+    {
+      "id": "dispatcher-feed-ccs-after-the-flight",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "compatibility_ccs_record() + record",
+      "replace": "record + compatibility_ccs_record()",
+      "expect": "killed",
+      "reason": "The compatibility CCS follows the client flight instead of preceding it (RFC 8446 D.4): lemma_feed_finished_sends_the_flight is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_finished_sends_the_flight()",
+        "witness": "super::dispatcher_certificates::awaiting(true).pending_flight.take(6) != seq![20u8, 3, 3, 0, 1, 1]"
+      }
+    },
+    {
+      "id": "dispatcher-feed-ccs-never-sent",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "Ok(if s.ccs_pending { compatibility_ccs_record() + record } else { record })",
+      "replace": "Ok(record)",
+      "expect": "killed",
+      "reason": "The compatibility CCS that is owed is not sent (RFC 8446 D.4): lemma_feed_finished_sends_the_flight is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_finished_sends_the_flight()",
+        "witness": "super::dispatcher_certificates::awaiting(true).pending_flight.take(6) != seq![20u8, 3, 3, 0, 1, 1]"
+      }
+    },
+    {
+      "id": "dispatcher-feed-ccs-still-owed",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "(State { ccs_pending: false, ..moved },",
+      "replace": "(moved,",
+      "expect": "killed",
+      "reason": "The compatibility CCS stays owed after it was sent: lemma_feed_finished_sends_the_flight is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_finished_sends_the_flight()",
+        "witness": "super::dispatcher_certificates::awaiting(true).ccs_pending"
+      }
+    },
+    {
+      "id": "dispatcher-feed-write-epoch-not-advanced",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "let moved = State { handshake_sender: Some(after), ..s };",
+      "replace": "let moved = s;",
+      "expect": "killed",
+      "reason": "The write sequence number does not move on after the client flight, so an alert after it would reuse the nonce (RFC 8446 5.3): lemma_feed_finished_sends_the_flight is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_feed_finished_sends_the_flight()",
+        "witness": "super::dispatcher_certificates::awaiting(false).handshake_sender != Some(super::dispatcher_certificates::alert_epoch_at(1))"
+      }
+    },
+    {
+      "id": "dispatcher-feed-acknowledges-any-bytes",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "if s.mode != Mode::AwaitClientFlight || sent != s.pending_flight {",
+      "replace": "if s.mode != Mode::AwaitClientFlight {",
+      "expect": "killed",
+      "reason": "Application keys are derived although the bytes acknowledged are not the client flight: lemma_acknowledge_refuses_other_bytes is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_acknowledge_refuses_other_bytes()",
+        "witness": "super::dispatcher_certificates::acked(super::dispatcher_certificates::awaiting(false), seq![1u8]).1.mode != super::dispatcher_spec::Mode::Failed"
+      }
+    },
+    {
+      "id": "dispatcher-feed-application-secret-label",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "crate::schedule::spec::Label::ClientApplication, next.application_hash, 32),",
+      "replace": "crate::schedule::spec::Label::ServerApplication, next.application_hash, 32),",
+      "expect": "killed",
+      "reason": "The client writes under the server application secret (RFC 8446 7.1): lemma_acknowledge_derives_the_secrets is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_acknowledge_derives_the_secrets()",
+        "witness": "super::dispatcher_certificates::acked(super::dispatcher_certificates::awaiting(false), super::dispatcher_certificates::awaiting(false).pending_flight).1.client_application_secret != crate::schedule::spec::expand_label(crate::auth::examples::crypto(), Seq::new(32, |_i: int| 5u8), crate::schedule::spec::Label::ClientApplication, Seq::new(32, |_i: int| 75u8), 32)"
+      }
+    },
+    {
+      "id": "dispatcher-feed-keeps-the-master-secret",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "master: seq![],\n                        client_application_secret: crate::schedule::spec::expand_label",
+      "replace": "client_application_secret: crate::schedule::spec::expand_label",
+      "expect": "killed",
+      "reason": "The master secret outlives the handshake, which the handoff promises it does not: lemma_acknowledge_derives_the_secrets is false.",
+      "module": "connection::dispatcher_examples",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_examples::lemma_acknowledge_derives_the_secrets()",
+        "witness": "super::dispatcher_certificates::acked(super::dispatcher_certificates::awaiting(false), super::dispatcher_certificates::awaiting(false).pending_flight).1.master.len() != 0"
+      }
+    },
+    {
+      "id": "driver-flight-cancelled-ends",
+      "file": "src/connection/driver_spec.rs",
+      "find": "super::dispatcher_spec::Action::None | super::dispatcher_spec::Action::Ignored\n            | super::dispatcher_spec::Action::Cancelled =>",
+      "replace": "super::dispatcher_spec::Action::Cancelled => peer_failed(90),\n        super::dispatcher_spec::Action::None | super::dispatcher_spec::Action::Ignored =>",
+      "expect": "killed",
+      "reason": "The join ends the connection on a user_canceled the dispatcher went on from: lemma_flight_goes_on is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_goes_on()",
+        "witness": "super::driver_examples::carried_flight(super::dispatcher_spec::Action::Cancelled, super::dispatcher_certificates::flight_start()).status != super::driver_spec::Status::Handshaking"
+      }
+    },
+    {
+      "id": "driver-flight-client-flight-dropped",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Ok(app) => Step { send: wire, deliver: seq![], stage: Stage::App(app), status: Status::Open },",
+      "replace": "Ok(app) => Step { send: seq![], deliver: seq![], stage: Stage::App(app), status: Status::Open },",
+      "expect": "killed",
+      "reason": "The client flight does not reach the wire, and the keys move on as if it had: lemma_flight_sent_starts_the_transducer is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_sent_starts_the_transducer()",
+        "witness": "super::driver_examples::flight_went_out().send != super::dispatcher_certificates::awaiting(false).pending_flight"
+      }
+    },
+    {
+      "id": "driver-flight-transducer-not-started",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Ok(app) => Step { send: wire, deliver: seq![], stage: Stage::App(app), status: Status::Open },",
+      "replace": "Ok(app) => Step { send: wire, deliver: seq![], stage: Stage::Ended, status: Status::Open },",
+      "expect": "killed",
+      "reason": "The join says Open with no machine running: lemma_flight_sent_starts_the_transducer is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_sent_starts_the_transducer()",
+        "witness": "super::driver_examples::flight_went_out().stage != super::driver_spec::Stage::App(super::post_handshake_spec::start(crate::auth::examples::crypto(), super::driver_examples::ready_state().client_application_secret, super::driver_examples::ready_state().server_application_secret).unwrap())"
+      }
+    },
+    {
+      "id": "driver-flight-alert-dropped",
+      "file": "src/connection/driver_spec.rs",
+      "find": "super::dispatcher_spec::Action::Fail(alert, record) => flight_failure(alert, record),",
+      "replace": "super::dispatcher_spec::Action::Fail(alert, record) => flight_failure(alert, None),",
+      "expect": "killed",
+      "reason": "The join loses the alert the dispatcher sealed (RFC 8446 6.2): lemma_flight_ends is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_ends()",
+        "witness": "super::driver_examples::carried_flight(super::dispatcher_spec::Action::Fail(40u8, Some(seq![9u8])), super::dispatcher_spec::failed()).send != seq![9u8]"
+      }
+    },
+    {
+      "id": "driver-flight-peer-alert-answered",
+      "file": "src/connection/driver_spec.rs",
+      "find": "super::dispatcher_spec::Action::PeerAlert(alert) => peer_failed(alert),",
+      "replace": "super::dispatcher_spec::Action::PeerAlert(alert) => flight_failure(alert, Some(seq![9u8])),",
+      "expect": "killed",
+      "reason": "The join answers the fatal alert of the server (RFC 8446 6): lemma_flight_ends is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_ends()",
+        "witness": "super::driver_examples::carried_flight(super::dispatcher_spec::Action::PeerAlert(40u8), super::dispatcher_spec::failed()).send.len() != 0"
+      }
+    },
+    {
+      "id": "driver-flight-close-as-failure",
+      "file": "src/connection/driver_spec.rs",
+      "find": "super::dispatcher_spec::Action::Close(record) => flight_closed(record),",
+      "replace": "super::dispatcher_spec::Action::Close(record) => flight_failure(0, record),",
+      "expect": "killed",
+      "reason": "The join reports a close during the flight as a failure of ours (RFC 8446 6.1): lemma_flight_ends is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_flight_ends()",
+        "witness": "super::driver_examples::carried_flight(super::dispatcher_spec::Action::Close(Some(seq![9u8])), super::dispatcher_spec::closed()).status != super::driver_spec::Status::Closed"
+      }
     }
   ]
 }
