@@ -15,7 +15,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="24" y="68" font-size="10.5" class="mut">crates proven correct</text>
 <text x="182" y="50" font-size="24" class="b">10k<tspan font-size="14" class="mut"></tspan></text>
 <text x="182" y="68" font-size="10.5" class="mut">Verus proof obligations</text>
-<text x="340" y="50" font-size="24" class="b">2162<tspan font-size="14" class="mut">/2174</tspan></text>
+<text x="340" y="50" font-size="24" class="b">2169<tspan font-size="14" class="mut">/2182</tspan></text>
 <text x="340" y="68" font-size="10.5" class="mut">broken specs caught</text>
 <text x="24" y="114" font-size="24" class="b">1.23M<tspan font-size="14" class="mut"></tspan></text>
 <text x="24" y="132" font-size="10.5" class="mut">conformance cases, 125 suites</text>
