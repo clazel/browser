@@ -37,8 +37,10 @@
 //! | `transcript/spec.rs` | [`transcript::theorem_transcript_equivalence`] | proven (accepted steps; the crate's size caps are policy) |
 //! | `traffic/spec.rs`, record protection in `spec.rs` (TLSCiphertext, inner plaintext, nonce) | [`record::theorem_record_protection_equivalence`] | proven (live epoch; accepted sends; the header is the connection's) |
 //! | `Certificate` and the `select` on `msg_type` in `spec.rs` (with vectors, extension blocks, the handshake header) | [`messages::theorem_certificate_select_equivalence`] | proven (syntax; the entries' extension rules are authentication's) |
+//! | `hello/join_spec.rs` `derive`; `auth/spec.rs` Finished values; `dispatcher_spec.rs` `acknowledge` secrets | [`keys::theorem_handshake_keys_equivalence`] | proven (the key values; the state machines around them are not) |
 
 pub mod schedule;
+pub mod keys;
 pub mod messages;
 pub mod record;
 pub mod transcript;
