@@ -786,10 +786,13 @@ fn oversized_and_malformed_records_fail_before_decryption() -> Result<(), String
     let (consumed, actions) = h.client.step(Input::Bytes(&[23, 3, 3, 0x41, 0x01]));
     assert_eq!(consumed, 5);
     check_fatal_alert(&mut h, &actions, RECORD_OVERFLOW)?;
-    // A wrong legacy_record_version.
+    // A legacy_record_version other than 0x0303 is ignored (RFC 8446 section
+    // 5.1) but is part of the additional data (5.2): decryption fails.
     let mut h = Harness::new()?;
-    let (_, actions) = h.client.step(Input::Bytes(&[23, 3, 1, 0, 20]));
-    check_fatal_alert(&mut h, &actions, DECODE_ERROR)?;
+    let mut wire = vec![23u8, 3, 1, 0, 20];
+    wire.extend_from_slice(&[0u8; 20]);
+    let (_, actions) = h.client.step(Input::Bytes(&wire));
+    check_fatal_alert(&mut h, &actions, BAD_RECORD_MAC)?;
     // An unexpected outer type once protected (a plaintext alert).
     let mut h = Harness::new()?;
     let (_, actions) = h.client.step(Input::Bytes(&[21, 3, 3, 0, 2, 1, 0]));

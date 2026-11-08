@@ -15,9 +15,7 @@ use clazel_tls::host::exec::Host;
 use clazel_tls::reassemble::{Event, Reassembler};
 use clazel_tls::record::Aead;
 use clazel_tls::schedule::crypto::Crypto;
-use clazel_tls::spec::{
-    BAD_RECORD_MAC, DECODE_ERROR, INTERNAL_ERROR, RECORD_OVERFLOW, UNEXPECTED_MESSAGE,
-};
+use clazel_tls::spec::{BAD_RECORD_MAC, INTERNAL_ERROR, RECORD_OVERFLOW, UNEXPECTED_MESSAGE};
 use clazel_tls::traffic::exec::{Decryptor, Encryptor, Read};
 use clazel_tls::traffic::provider::{Factory, KeyedAead};
 use clazel_tls::types::Extension;
@@ -525,11 +523,13 @@ fn tamper_reorder_ccs_and_malformed_inner_plaintext_are_terminal() -> Result<(),
     if let Some(version_byte) = bad_version.get_mut(2) {
         *version_byte = 2;
     }
+    // RFC 8446 section 5.1: the version is ignored, but it is part of the
+    // additional data (5.2), so the record does not open.
     assert_eq!(
         framing_receiver.open(&bad_version),
-        Read::Fail(DECODE_ERROR)
+        Read::Fail(BAD_RECORD_MAC)
     );
-    assert_eq!(framing_factory.trace.borrow().opens.len(), 0);
+    assert_eq!(framing_factory.trace.borrow().opens.len(), 1);
     assert_eq!(framing_receiver.open(&first), Read::Fail(INTERNAL_ERROR));
 
     let overflow_factory = ToyFactory::new();
