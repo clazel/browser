@@ -39,6 +39,18 @@
 //! | `Certificate` and the `select` on `msg_type` in `spec.rs` (with vectors, extension blocks, the handshake header) | [`messages::theorem_certificate_select_equivalence`] | proven (syntax; the entries' extension rules are authentication's) |
 //! | `hello/join_spec.rs` `derive`; `auth/spec.rs` Finished values; `dispatcher_spec.rs` `acknowledge` secrets | [`keys::theorem_handshake_keys_equivalence`] | proven (the key values; the state machines around them are not) |
 //! | `auth/spec.rs` `step`, CertificateVerify and Finished | [`auth::theorem_auth_verify_finished_equivalence`] | partial: these two messages; EncryptedExtensions, CertificateRequest and Certificate not proven |
+//! | `hello/spec.rs` (`validate`) | none | not started |
+//! | `hello/client_spec.rs` (the ClientHello sent) | none | not started |
+//! | `hello/bootstrap_spec.rs` | none | not started |
+//! | `traffic/handshake_spec.rs` (`start`) | none | not started (its parts: `keys` and `record` above) |
+//! | `connection/framing_spec.rs` | none | not started |
+//! | `connection/dispatcher_spec.rs` (`feed`, `acknowledge`) | none | not started (its values: `keys` above) |
+//! | `connection/post_handshake_spec.rs` | none | not started |
+//! | `connection/driver_spec.rs` | none | not started |
+//! | `host/spec.rs` | none | nothing to compare: the transcription does not transcribe RFC 6066 |
+//!
+//! The disagreements found so far, and the coverage gaps, are listed in the
+//! pull request that added this module.
 
 pub mod auth;
 pub mod keys;
