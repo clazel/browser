@@ -103,3 +103,4 @@ pub mod rfc8448_data;
 pub mod server_name;
 pub mod state_machine;
 pub mod witnesses;
+pub mod witnesses_extensions;
