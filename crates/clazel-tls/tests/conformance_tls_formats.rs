@@ -708,15 +708,24 @@ fn hand_built_cases() -> Vec<Case> {
     // additional data.
     add(
         "legacy_record_version 0x0304 is ignored",
-        matches!(read_record(&[22, 3, 4, 0, 1, 7], false), ReadOut::Done(Frame::Plain(22, [7]), [])),
+        matches!(
+            read_record(&[22, 3, 4, 0, 1, 7], false),
+            ReadOut::Done(Frame::Plain(22, [7]), [])
+        ),
     );
     add(
         "legacy_record_version 0x0200 is ignored",
-        matches!(read_record(&[22, 2, 0, 0, 1, 7], false), ReadOut::Done(Frame::Plain(22, [7]), [])),
+        matches!(
+            read_record(&[22, 2, 0, 0, 1, 7], false),
+            ReadOut::Done(Frame::Plain(22, [7]), [])
+        ),
     );
     add(
         "legacy_record_version 0x0301 on a protected record keeps its header",
-        matches!(read_record(&[23, 3, 1, 0, 1, 7], true), ReadOut::Done(Frame::Protected([23, 3, 1, 0, 1], [7]), [])),
+        matches!(
+            read_record(&[23, 3, 1, 0, 1, 7], true),
+            ReadOut::Done(Frame::Protected([23, 3, 1, 0, 1], [7]), [])
+        ),
     );
     let mut tampered = encrypt_record(&ToyAead, &IV, 3, 22, &[1, 0, 0, 0], 0);
     if let Some(minor) = tampered.get_mut(2) {
