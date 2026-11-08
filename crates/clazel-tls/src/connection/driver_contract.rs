@@ -1,8 +1,6 @@
-//! What the joined client is proven to do: a step of the Hello or application
-//! stage is the running machine's own step, each handoff starts the next
-//! machine from what the last one derived, and plaintext comes from the
-//! transducer alone. A step of the flight is bounded, not equated: see
-//! [`flight_step_ensures`].
+//! What the joined client is proven to do: a step of any stage is the running
+//! machine's own step, each handoff starts the next machine from what the last
+//! one derived, and plaintext comes from the transducer alone.
 #[allow(unused_imports)]
 use vstd::prelude::*;
 verus! {
@@ -14,6 +12,8 @@ pub struct Models {
     pub exchange: crate::hello::join_spec::KeyExchange,
     /// The AEAD.
     pub cipher: crate::traffic::spec::Cipher,
+    /// The certificate and signature checks.
+    pub verification: crate::auth::spec::Verification,
 }
 
 /// §7.1, §7.3: the dispatcher starts from the handshake keys derived from the
@@ -67,8 +67,8 @@ pub open spec fn hello_step_ensures(m: Models, boot: crate::hello::bootstrap_spe
 
 /// One step of the flight: it consumes no more than its input, sends nothing
 /// while it stays in the flight, and the only way out to the transducer is
-/// `Ready`. This does not say the result equals the dispatcher's step.
-pub open spec fn flight_step_ensures(m: Models, before: super::dispatcher_spec::State,
+/// `Ready`.
+pub open spec fn flight_step_bounds(m: Models, before: super::dispatcher_spec::State,
     input: Seq<u8>, consumed: nat, out: super::driver_spec::Step) -> bool
 {
     consumed <= input.len()
@@ -80,6 +80,23 @@ pub open spec fn flight_step_ensures(m: Models, before: super::dispatcher_spec::
                 && out.status == super::driver_spec::Status::Open,
             super::driver_spec::Stage::Ended => super::driver_spec::is_final(out.status),
         }
+}
+
+/// One step of the flight is the dispatcher's own `feed`, exactly: the same
+/// octets consumed, and its action and state carried through `flight_out`.
+pub open spec fn flight_step_exact(m: Models, before: super::dispatcher_spec::State,
+    input: Seq<u8>, consumed: nat, out: super::driver_spec::Step) -> bool
+{
+    let ciphers = super::dispatcher_spec::Ciphers { seal: m.cipher.seal, open: m.cipher.open };
+    let r = super::dispatcher_spec::feed(m.crypto, m.verification, ciphers, before, input);
+    consumed == r.0 && out == super::driver_spec::flight_out(m.crypto, m.verification, ciphers, r.1, r.2)
+}
+
+/// One step of the flight, exactly and with what that implies spelled out.
+pub open spec fn flight_step_ensures(m: Models, before: super::dispatcher_spec::State,
+    input: Seq<u8>, consumed: nat, out: super::driver_spec::Step) -> bool
+{
+    flight_step_exact(m, before, input, consumed, out) && flight_step_bounds(m, before, input, consumed, out)
 }
 
 /// One step of application traffic is the transducer's own, exactly.

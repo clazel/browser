@@ -1403,17 +1403,27 @@ Proven, for any providers meeting the provider contracts
   it is a plaintext one. `Connection` gained `Action::Close` for this, and the
   earlier limit that nothing was sent there is gone. Both alerts are sealed by
   one spec function, `protected_alert`.
+- **A step of the flight is the dispatcher's own, exactly (2026-11-07, on
+  `phase3/tls-flight-exact`).** Until then no spec function said what one call
+  of the dispatcher does: `feed_ensures` and the driver's old contract were both
+  relational. `dispatcher_spec::feed` and `acknowledge` now say it whole, in the
+  executable's order of checks: framing, the record, its decryption, reassembly,
+  each message through Auth's `step`, the sealed client flight, and at the
+  acknowledgement the application secrets. `Connection::feed` and
+  `acknowledge_client_flight` are proven equal to them (`feed_exact`,
+  `acknowledge_exact`), and `flight_step_exact` says a step of the flight has the
+  octets `feed` consumed and the outcome `driver_spec::flight_out` makes of its
+  action and state. The old bounds stay proven beside it
+  (`flight_step_bounds`). `Models` gained the verification functions, which the
+  step depends on. So "the joined machine equals 3.5e's" now holds for the flight
+  as it does for the Hello and application stages.
 
 **Not proven, and known:**
 
-- **The flight step's contract is relational, not exact.** `flight_step_ensures`
-  says the step consumes no more than its input, stays well formed, sends
-  nothing while it stays in the flight, leaves for the transducer only through
-  `Ready`, and otherwise ends in a final status. It does not say the result
-  equals the dispatcher's `step`; that is `Connection`'s own contract, and the
-  join does not restate it. So "the joined machine equals 3.5e's", as this
-  item's opening words it, is proven for the Hello and application stages and
-  not for the flight.
+- **`Driver::eof` is bounded, not equated.** It ends the connection with a final
+  status and sends and delivers nothing, for each stage. That its alert is the
+  running machine's is not stated, though `Connection::eof` alone meets
+  `truncation_ensures`. The conformance tests check it on the wire (3.5g).
 - **`Client`'s input loop and `send` chunking are tier 0 glue**, plain Rust in
   `clazel-crypto`, outside `verus!`. They are tested, not proven: the `inbox`
   buffering, feeding `Driver::step` until it stops consuming, and splitting
@@ -1460,8 +1470,7 @@ fixed, test-only seed through SHA-256.
   application data both ways (five 3000-octet records each way after the
   first exchange), a client-requested KeyUpdate, and close_notify both ways.
   rustls sends no NewSessionTicket to this client (it offers no
-  `psk_key_exchange_modes`), so ticket handling is covered only by the
-  dispatcher's own tests.
+  `psk_key_exchange_modes`); see "Retry, tickets, fragments and truncation" below.
 - *Hostile servers:* the real rustls flight, decrypted with the handshake
   keys, changed in one place and re-encrypted (the control, unchanged,
   completes the handshake). Each gives the client's `Fail` with the alert in
@@ -1498,15 +1507,54 @@ fixed, test-only seed through SHA-256.
   `clazel-tls/mutations.json` cover the check and each sentinel value; the
   Verus proofs and mutation certificates have not yet run (no Verus on the
   machine that wrote them), and `clazel-tls` stays at tier 0.
-- *Not done:* no HelloRetryRequest, a PSK or a client-certificate request is
-  exercised (the rustls server never sends one for this client; a scripted
-  HRR would need a second key share); no truncated or fragmented-in-flight
-  server flight against a real server beyond the dispatcher's own tests;
-  no X25519 or ChaCha20 independent of ours on the server side (the server's
-  key share uses our libcrux X25519 with a fixed scalar, so that the
-  scripted server can derive the handshake keys; the AEAD, signatures and
-  hashes of rustls's side are ring's, and agree with ours on every record);
-  no socket, no `clazel-net` TLS loop, no `tls: true` in the fetch transducer,
+- *Retry, tickets, fragments and truncation (2026-11-07, on
+  `phase3/tls-flight-exact`; local run, CI's full verification pending).* Ten
+  new cases (4 success, 6 hostile), through the production driver. Which side is
+  real differs by case, so each is stated:
+  - **Fragments, real server.** rustls's own `max_fragment_size` of 64 splits
+    every message of its flight across records, and the client completes the
+    handshake, rustls accepts its Finished and data goes both ways. The same
+    flight, and an unfragmented one, delivered one octet per call, also completes.
+  - **Truncation, real server.** A real flight, fragmented and not, cut inside
+    the first header, one octet before each record's end and at each record's
+    end, then the transport ends: nothing goes out, and the state is `Failed`
+    with internal_error (80) and `Origin::Truncated`. So is the end of the
+    transport after a whole handshake.
+  - **HelloRetryRequest, a script, because rustls will not.** rustls retries only
+    for a group it needs a share of, and sends no cookie. This client offers
+    X25519 and a share for it, and accepts only a cookie retry (any other retry
+    could not legally change its ClientHello), so no real server completes a
+    retry with it. `hello_retry_request_completes` writes the retry itself. rustls,
+    given ClientHello2 as a first hello, supplies the ServerHello,
+    EncryptedExtensions and Certificate. The script replaces the key share and
+    redoes CertificateVerify and Finished over the retried transcript, using
+    ring's X25519, HKDF, HMAC, ECDSA and ChaCha20-Poly1305 through rustls's public
+    provider API, and none of libcrux or `clazel_tls::schedule`. The two agree on
+    the keys, the signature, both Finished messages and application data both
+    ways, and ClientHello2 differs from ClientHello1 by the cookie alone. That is
+    independent evidence for the key schedule's retried transcript, and not a
+    real server's state machine. Refused: a script that leaves the retry out of
+    the transcript (bad_record_mac, 20), a second retry (unexpected_message, 10),
+    and a real rustls HelloRetryRequest, drawn by emptying the shares out of the
+    ClientHello in the pipe, which asks for the group already offered
+    (illegal_parameter, 47, §4.2.8).
+  - **NewSessionTicket, sealed by a script, because rustls will not send one.**
+    After a real rustls handshake, under the application keys and sequence
+    numbers rustls exports (`dangerous_extract_secrets`), the script seals tickets
+    whose body comes from rustls's own ticketer: alone, two in one record (one with
+    an early_data extension), and one across two records. The client reads and
+    ignores them, sending and delivering nothing, and the sequence numbers still
+    agree with ring's afterwards. A truncated ticket is decode_error (50), sealed
+    so that ring reads it.
+  - **No disagreement with the spec** came of these: every case passed on the code
+    as it stood.
+- *Not done:* no PSK or client-certificate request is exercised, and no server
+  state machine carries a HelloRetryRequest through (above); no X25519 or ChaCha20
+  independent of ours on the server side in the cases driven by rustls alone (the
+  server's key share there uses our libcrux X25519 with a fixed scalar, so that the
+  scripted server can derive the handshake keys; the AEAD, signatures and hashes
+  of rustls's side are ring's, and agree with ours on every record; the retry
+  case above uses ring's X25519); no socket, no `clazel-net` TLS loop, no `tls: true` in the fetch transducer,
   no kernel `https:`; the Mozilla root table is not regenerated here; the
   local measurement of top sites and the real-certificate corpus below are
   **not run, and no result is claimed**; no crate is raised to tier 2.
@@ -2346,8 +2394,8 @@ revocation set waits for 3.5h.0's choice.
 | 3.5c RSA PKCS#1 v1.5 | on `main`; tier 2 (see As built) |
 | 3.5d TLS record and handshake formats | built and proven to the level stated in its **As built** paragraph (2026-10-24), `clazel-tls` at tier 0: tier 2 waits for 3.5e and 3.5f and for CI's full run |
 | 3.5e Key schedule and handshake state machine | Non-PSK key schedule, owned ClientHello/retry exchange, server selection, initial authentication and bounded initial connection dispatcher built over provider parameters, and a post-handshake transducer: spec, contracts, executable, lemmas, 20 witnesses, 20 mutations and 25 passing integration tests (on `main`, #77, CI's full verification green on 797e26b). The dispatcher seals its own fatal alert (§6, §6.2) under the settled write epoch's next sequence number (§5.3) before dropping its keys, in the server's flight and after the handshake, and never answers a peer's alert (`PeerAlert`): spec, contracts, exec, lemmas, 8 new mutations with certificates and 20 dispatcher integration tests (on `main`, #86, 2026-11-03, CI's full verification green on bf6a9ea). Production providers and socket I/O are 3.5f and 3.8; the join of the transducer to the dispatcher remains; tier 0 |
-| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. Randomness: `clazel_sys::fill_random` exists (Linux `getrandom` with flags 0, macOS `getentropy`, Windows `BCryptGenRandom` with the system-preferred RNG) and is audited (`docs/SYS-AUDITS.md`, source aa66b138); `clazel_net::TlsConnection::open` draws the scalar, ClientHello random and session id from it (on `main`, #88, CI's full verification green on bf6a9ea), and the driver itself still takes them from its caller. The client driver `clazel_crypto::client::Client` (on `main`, #85, CI's full verification green on 0a6fbec): connect/receive/send/close over `Bootstrap`, the key exchange and `Connection`; alerts in plaintext before the handshake keys, and from the ServerHello on the record `Connection` seals itself (#86, 2026-11-03: the driver's copy of the handshake epochs is removed, and a failure after the client Finished now sends its alert), 15 passing tests (8 against rustls, among them bad_record_mac after the handshake read by rustls); the join moved into `clazel-tls` as `Driver` (2026-11-05, stacked on #109, not yet on `main`): Hello and application stages proven to be those machines' own steps, the flight step's contract relational rather than exact, close_notify now sent during the flight; `Client`'s input loop and `send` chunking stay tier 0 glue |
-| 3.5g TLS conformance and trust store | first part built (2026-10-31, on `main`, #82, CI's full verification green on bcc4040): `clazel-crypto/tests/conformance_tls.rs`, 17 cases in two suites (5 success and control, 12 hostile): full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello without and with the §4.1.3 downgrade sentinel, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the behaviour it pins); the downgrade sentinel is checked (`illegal_parameter`, 2026-11-02, on `main`, #83, CI's full verification green on 2755dde). `conformance_tls.rs` runs through 3.5f's driver (2026-11-05, stacked on #114). Top-site measurement run locally (2026-11-05, see 3.5g): 577 of the 765 domains with a TLS server completed a handshake. Real-certificate corpus vendored and measured (2026-11-05, see 3.5g): 868 certificates all decode, none with an explicit `critical` FALSE; all 760 chains get the same verdict from `rustls-webpki`. Not done: the Mozilla root table check, HelloRetryRequest and ticket paths against a real server, the tier 2 raises |
+| 3.5f Cryptography and the join | Hello-to-authentication and handshake record-key handoffs built over explicit providers; `clazel-crypto` (tier 0) has the libcrux providers (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519), CertificateVerify, the chain-link signatures and the production `Verifier` over `clazel-x509`'s path validation, and 3.5g's test runs them end to end against rustls. Randomness: `clazel_sys::fill_random` exists (Linux `getrandom` with flags 0, macOS `getentropy`, Windows `BCryptGenRandom` with the system-preferred RNG) and is audited (`docs/SYS-AUDITS.md`, source aa66b138); `clazel_net::TlsConnection::open` draws the scalar, ClientHello random and session id from it (on `main`, #88, CI's full verification green on bf6a9ea), and the driver itself still takes them from its caller. The client driver `clazel_crypto::client::Client` (on `main`, #85, CI's full verification green on 0a6fbec): connect/receive/send/close over `Bootstrap`, the key exchange and `Connection`; alerts in plaintext before the handshake keys, and from the ServerHello on the record `Connection` seals itself (#86, 2026-11-03: the driver's copy of the handshake epochs is removed, and a failure after the client Finished now sends its alert), 15 passing tests (8 against rustls, among them bad_record_mac after the handshake read by rustls); the join moved into `clazel-tls` as `Driver` (2026-11-05, stacked on #109, not yet on `main`): Hello and application stages proven to be those machines' own steps, the flight step's contract relational rather than exact, close_notify now sent during the flight; `Client`'s input loop and `send` chunking stay tier 0 glue; a step of the flight proven exactly the dispatcher's `feed` (2026-11-07, on `phase3/tls-flight-exact`, CI's full verification pending) |
+| 3.5g TLS conformance and trust store | first part built (2026-10-31, on `main`, #82, CI's full verification green on bcc4040): `clazel-crypto/tests/conformance_tls.rs`, 17 cases in two suites (5 success and control, 12 hostile): full handshakes with ECDSA and RSA chains against rustls (TLS 1.3, ChaCha20-Poly1305, X25519, the test root as the trust store), application data both ways, KeyUpdate, close_notify, and 12 hostile-server tests (wrong Finished, wrong CertificateVerify, another name, expired leaf and intermediate, self-signed, missing intermediate, empty trust store, oversized records, TLS 1.2 ServerHello without and with the §4.1.3 downgrade sentinel, misplaced CCS) each ending in `Fail` with the §6.2 alert (the 3.5g paragraph lists them and the behaviour it pins); the downgrade sentinel is checked (`illegal_parameter`, 2026-11-02, on `main`, #83, CI's full verification green on 2755dde). `conformance_tls.rs` runs through 3.5f's driver (2026-11-05, stacked on #114). Top-site measurement run locally (2026-11-05, see 3.5g): 577 of the 765 domains with a TLS server completed a handshake. Real-certificate corpus vendored and measured (2026-11-05, see 3.5g): 868 certificates all decode, none with an explicit `critical` FALSE; all 760 chains get the same verdict from `rustls-webpki`. Not done: the Mozilla root table check, HelloRetryRequest and ticket paths against a real server, the tier 2 raises; ten more cases (2026-11-07, on `phase3/tls-flight-exact`, CI's full verification pending): fragmented and truncated flights from a real rustls, a HelloRetryRequest and tickets from a script over ring, see As built |
 | 3.5h Revocation (pushed set) | planned (2026-11-03): option 1 decided by the maintainer; 3.5h.0 facts checked and written up (2026-11-03); CRLite on its `default` channel, failing open and in a new `clazel-crlite`, decided by the maintainer (2026-11-05); nothing built. Production still passes `NothingRevoked`, so a revoked certificate is accepted |
 | 3.6 Client state machine | on `main` (#3, #5): transducer, redirects and cookies proven to their contracts; at most 21 requests, redirect bound, URL changes only by redirect, every `Send` the current request, silence until decided, split invariance for the shipped parser, `theorem_wire_cookies` and `theorem_jar_frame` proven; linear in the response's size; independent transcription of Fetch's redirect and cookie steps proven equal step by step and over whole runs (`theorem_independent_run`); conformance: http-state corpus through the client, 195 pass, 27 expected failures, and a differential of 1500 random redirect chains against rust-url and `cookie_store`; 64 mutations, every one a certified kill; tier 2 (see As built). `https:` (on `main`, #90, CI's full verification green on bf6a9ea): `https:` URLs get the same request as `http:`, port 443 by default and `Connect.tls` exactly for `https` (RFC 9110 §4.2.2), with `theorem_tls_when_secure` (every `Connect` is the current request's and speaks TLS exactly when the cookie functions see it as secure), 6 new examples and 4 new mutations with certificates; the independent transcription does not cover the connection (port, TLS). Not yet: other request contexts, HSTS, WPT fetch suites (none vendored) |
 | 3.7 Kernel integration | on `main` (#6), joined to 3.6 (see As built): the kernel steps 3.6's transducer itself; connections are kernel state (owner tab, endpoint, partition key); `Connect`, `Send`, `Close` outputs and `Net` events; the shell only pipes bytes; `theorem_wire_cookies` carried through the kernel jar, ownership, ending-a-fetch and `Net` attribution theorems, the Phase 2 theorems restated and proven over every fetch, noninterference with the network outside every domain; 40 certified mutations, `clazel-kernel` 503 verified. `https:` through the kernel's `Driver` (#93, see 3.8). Open: the WPT `cookies/` rows that need `Set-Cookie` from HTTP through the kernel (they run through `clazel-net` over sockets, see 3.8, but not through the kernel) |
