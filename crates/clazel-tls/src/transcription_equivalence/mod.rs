@@ -53,6 +53,7 @@
 //! pull request that added this module.
 
 pub mod auth;
+pub mod extensions;
 pub mod keys;
 pub mod messages;
 pub mod record;
