@@ -94,6 +94,7 @@ pub mod extension_bodies;
 pub mod extensions;
 pub mod key_exchange;
 pub mod key_schedule;
+pub mod middlebox;
 pub mod post_handshake;
 pub mod presentation;
 pub mod primitives;
