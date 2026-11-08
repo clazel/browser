@@ -58,6 +58,13 @@
 //!   write side". A close during the server's flight, the peer's or ours, is
 //!   `Close(wire)`: our close_notify sealed like a fatal alert ([`close_wire`]),
 //!   or `None` where no settled write epoch is held.
+//! - [`feed`] is one call whole: the bytes up to the first record boundary, and
+//!   that record's effect. It exists so that "the dispatcher's step" names one
+//!   function, which `Connection::feed` and the join are proven to equal. It
+//!   keeps the executable's order of checks, because a fatal alert seals under
+//!   the send epoch as it stands at that check ([`fatal`]). States where the
+//!   alert cannot differ (a failed receive epoch, a reassembler that refused)
+//!   are not distinguished: [`fatal`] reads only the mode and the send epoch.
 //! - RFC prose and equations have no numbered algorithm steps.
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -347,5 +354,236 @@ pub open spec fn failed() -> State {
 /// Drop every secret and partial input after transport closure.
 pub open spec fn closed() -> State {
     State { mode: Mode::Closed, ..failed() }
+}
+
+// ---------------------------------------------------------------------------
+// One step of the server's flight (`feed`) and the acknowledgement of the
+// client's (`acknowledge`). Everything below is what one call does, whole.
+// ---------------------------------------------------------------------------
+
+/// §5.2: the key-explicit AEAD decryption under one epoch's key.
+pub open spec fn open_with(ciphers: Ciphers, epoch: crate::traffic::spec::State)
+    -> spec_fn(Seq<u8>, Seq<u8>, Seq<u8>) -> Option<Seq<u8>>
+{
+    |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| (ciphers.open)(epoch.key, n, ad, ct)
+}
+
+/// §5.2, §5.3: the client flight under the client handshake epoch's next
+/// sequence number, with the compatibility CCS before it if it is still owed
+/// (Appendix D.4). The epoch moves on whichever way `send` went.
+pub open spec fn protect_client_flight(ciphers: Ciphers, s: State, flight: Seq<u8>) -> (State, Result<Seq<u8>, u8>) {
+    if flight.len() == 0 || flight.len() > crate::spec::MAX_PLAINTEXT { (s, Err(crate::spec::INTERNAL_ERROR)) }
+    else {
+        match s.handshake_sender {
+            None => (s, Err(crate::spec::INTERNAL_ERROR)),
+            Some(sender) => {
+                let (after, sealed) = crate::traffic::spec::send(seal_with(ciphers, sender), sender,
+                    crate::spec::CT_HANDSHAKE, flight, 0);
+                let moved = State { handshake_sender: Some(after), ..s };
+                match sealed {
+                    Err(alert) => (moved, Err(alert)),
+                    Ok(record) => (State { ccs_pending: false, ..moved },
+                        Ok(if s.ccs_pending { compatibility_ccs_record() + record } else { record })),
+                }
+            },
+        }
+    }
+}
+
+/// The client flight is sealed and waits for its acknowledgement.
+pub open spec fn send_flight(ciphers: Ciphers, s: State, flight: Seq<u8>) -> (Action, State) {
+    let (after, sealed) = protect_client_flight(ciphers, s, flight);
+    match sealed {
+        Err(alert) => fatal(ciphers, after, alert),
+        Ok(wire) => (Action::Send(wire), State { mode: Mode::AwaitClientFlight, pending_flight: wire, ..after }),
+    }
+}
+
+/// One whole handshake message through Auth's step (Appendix A.1). §5.1: the
+/// client flight changes keys soon after, so Auth's `Send` needs a boundary
+/// of messages and of records.
+pub open spec fn run_auth(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, typ: u8, body: Seq<u8>) -> (Action, State)
+{
+    match s.auth {
+        None => fatal(ciphers, s, crate::spec::INTERNAL_ERROR),
+        Some(auth) => {
+            let (next, action) = crate::auth::spec::step(c, v, auth, crate::auth::spec::Input::Handshake(typ, body));
+            let stepped = State { auth: Some(next), ..s };
+            match action {
+                crate::auth::spec::Action::None => (Action::None, stepped),
+                crate::auth::spec::Action::Send(flight) => {
+                    if !message_boundary(stepped) || stepped.framing.len() != 0 {
+                        fatal(ciphers, stepped, crate::spec::UNEXPECTED_MESSAGE)
+                    } else {
+                        send_flight(ciphers, stepped, flight)
+                    }
+                },
+                crate::auth::spec::Action::Fail(alert) => fatal(ciphers, stepped, alert),
+                crate::auth::spec::Action::Close => closing(ciphers, stepped),
+                crate::auth::spec::Action::Ready | crate::auth::spec::Action::Deliver(_) =>
+                    fatal(ciphers, stepped, crate::spec::INTERNAL_ERROR),
+            }
+        },
+    }
+}
+
+/// §4: one reassembled message, its header off.
+pub open spec fn process_one(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, message: Seq<u8>) -> (Action, State)
+{
+    if message.len() < crate::spec::HANDSHAKE_HEADER { fatal(ciphers, s, crate::spec::DECODE_ERROR) }
+    else { run_auth(c, v, ciphers, s, message[0], message.skip(crate::spec::HANDSHAKE_HEADER as int)) }
+}
+
+/// The messages of one record, in order, until one has an outward effect.
+pub open spec fn run_messages(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, messages: Seq<Seq<u8>>) -> (Action, State)
+    decreases messages.len(),
+{
+    if messages.len() == 0 { (Action::None, s) }
+    else {
+        let (action, after) = process_one(c, v, ciphers, s, messages[0]);
+        match action {
+            Action::None => run_messages(c, v, ciphers, after, messages.skip(1)),
+            _ => (action, after),
+        }
+    }
+}
+
+/// §4.4.4, §5.1: whether a Finished is anywhere but last, or leaves part of a
+/// message behind it. The key change it leads to falls on a record boundary.
+pub open spec fn finished_out_of_place(messages: Seq<Seq<u8>>, boundary: bool) -> bool
+    decreases messages.len(),
+{
+    if messages.len() == 0 { false }
+    else {
+        (messages[0].len() > 0 && messages[0][0] == crate::spec::HS_FINISHED
+            && (messages.len() != 1 || !boundary))
+            || finished_out_of_place(messages.skip(1), boundary)
+    }
+}
+
+/// The messages a record completed. A misplaced Finished refuses the record
+/// before any of its messages reaches Auth.
+pub open spec fn process_messages(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, messages: Seq<Seq<u8>>) -> (Action, State)
+{
+    if finished_out_of_place(messages, message_boundary(s)) { fatal(ciphers, s, crate::spec::UNEXPECTED_MESSAGE) }
+    else { run_messages(c, v, ciphers, s, messages) }
+}
+
+/// §5, §5.1, §6: the content of one decrypted record.
+pub open spec fn receive_plaintext(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, typ: u8, bytes: Seq<u8>) -> (Action, State)
+{
+    if bytes.len() > crate::spec::MAX_PLAINTEXT { fatal(ciphers, s, crate::spec::RECORD_OVERFLOW) }
+    else {
+        match crate::spec::feed_record(s.reassembly, crate::spec::Record { ctype: typ, fragment: bytes }) {
+            crate::spec::Res::Err(error) => fatal(ciphers, s, crate::spec::alert_of(error)),
+            crate::spec::Res::Ok((crate::spec::Event::Messages(messages), reassembly)) =>
+                process_messages(c, v, ciphers, State { reassembly, ..s }, messages),
+            // §5: no application data before the handshake ends.
+            crate::spec::Res::Ok((crate::spec::Event::AppData(_), _)) =>
+                fatal(ciphers, s, crate::spec::UNEXPECTED_MESSAGE),
+            crate::spec::Res::Ok((crate::spec::Event::Alert(alert), _)) => {
+                if alert.description == crate::spec::CLOSE_NOTIFY {
+                    closing(ciphers, s)
+                } else if alert.description == crate::spec::USER_CANCELED {
+                    (Action::Cancelled, s)
+                } else {
+                    receive_fatal_alert(ciphers, s, alert.description)
+                }
+            },
+            crate::spec::Res::Ok((crate::spec::Event::Ignored, reassembly)) =>
+                (Action::Ignored, State { reassembly, ..s }),
+        }
+    }
+}
+
+/// §5, §5.2: one whole record, off the framing buffer.
+pub open spec fn receive_record(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, wire: Seq<u8>) -> (Action, State)
+{
+    match crate::spec::read_record(wire, true) {
+        crate::spec::Read::Done(crate::spec::Frame::Ccs, _) => match s.auth {
+            None => fatal(ciphers, s, crate::spec::INTERNAL_ERROR),
+            Some(_) => receive_compatibility_ccs(ciphers, s),
+        },
+        crate::spec::Read::Done(crate::spec::Frame::Protected(_, _), _) => match s.handshake_receiver {
+            None => fatal(ciphers, s, crate::spec::INTERNAL_ERROR),
+            Some(receiver) => {
+                let (epoch, read) = crate::traffic::spec::receive(open_with(ciphers, receiver), receiver, wire);
+                let opened = State { handshake_receiver: Some(epoch), ..s };
+                match read {
+                    crate::traffic::spec::Read::Record(typ, bytes, consumed) => {
+                        if consumed != wire.len() { fatal(ciphers, opened, crate::spec::UNEXPECTED_MESSAGE) }
+                        else { receive_plaintext(c, v, ciphers, opened, typ, bytes) }
+                    },
+                    crate::traffic::spec::Read::NeedMore => fatal(ciphers, opened, crate::spec::DECODE_ERROR),
+                    crate::traffic::spec::Read::Fail(alert) => fatal(ciphers, opened, alert),
+                }
+            },
+        },
+        crate::spec::Read::Fail(error) => fatal(ciphers, s, crate::spec::alert_of(error)),
+        _ => fatal(ciphers, s, crate::spec::UNEXPECTED_MESSAGE),
+    }
+}
+
+/// One step of the server's flight: the octets taken from `input`, the action
+/// and the state after it. It takes bytes up to the first record boundary,
+/// and acts only when that record is whole. Outside the flight it does nothing.
+pub open spec fn feed(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, input: Seq<u8>) -> (nat, Action, State)
+{
+    if s.mode != Mode::Handshake { (0, Action::None, s) }
+    else {
+        let framed = super::framing_spec::feed(s.framing, input);
+        match framed.status {
+            super::framing_spec::Status::Pending => (framed.consumed, Action::None, State { framing: framed.buffer, ..s }),
+            super::framing_spec::Status::Fail(alert) => {
+                let (action, after) = fatal(ciphers, s, alert);
+                (framed.consumed, action, after)
+            },
+            super::framing_spec::Status::Complete => {
+                let (action, after) = receive_record(c, v, ciphers, State { framing: seq![], ..s }, framed.buffer);
+                (framed.consumed, action, after)
+            },
+        }
+    }
+}
+
+/// §7.1, §7.3: the exact client flight went out, so the application traffic
+/// secrets are derived from the hash through the server Finished, and the
+/// handshake epochs and the master secret go. Anything else is fatal.
+pub open spec fn acknowledge(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, ciphers: Ciphers,
+    s: State, sent: Seq<u8>) -> (Action, State)
+{
+    if s.mode != Mode::AwaitClientFlight || sent != s.pending_flight { fatal(ciphers, s, crate::spec::INTERNAL_ERROR) }
+    else {
+        match s.auth {
+            None => fatal(ciphers, s, crate::spec::INTERNAL_ERROR),
+            Some(auth) => {
+                let (next, action) = crate::auth::spec::step(c, v, auth, crate::auth::spec::Input::SentFinished);
+                match action {
+                    crate::auth::spec::Action::Ready => (Action::Ready, State {
+                        mode: Mode::Ready,
+                        auth: Some(next),
+                        handshake_sender: None,
+                        handshake_receiver: None,
+                        master: seq![],
+                        client_application_secret: crate::schedule::spec::expand_label(c, s.master,
+                            crate::schedule::spec::Label::ClientApplication, next.application_hash, 32),
+                        server_application_secret: crate::schedule::spec::expand_label(c, s.master,
+                            crate::schedule::spec::Label::ServerApplication, next.application_hash, 32),
+                        pending_flight: seq![],
+                        ..s
+                    }),
+                    crate::auth::spec::Action::Fail(alert) => fatal(ciphers, State { auth: Some(next), ..s }, alert),
+                    _ => fatal(ciphers, State { auth: Some(next), ..s }, crate::spec::INTERNAL_ERROR),
+                }
+            },
+        }
+    }
 }
 } // verus!

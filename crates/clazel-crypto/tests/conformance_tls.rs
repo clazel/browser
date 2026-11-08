@@ -26,6 +26,26 @@
 //! `clazel_tls::schedule`, which the success cases check against rustls),
 //! changes one thing, and re-encrypts it. An unchanged flight (the control
 //! case) completes the handshake.
+//!
+//! **What rustls cannot be made to do** (phase-3.md 3.5g, each case says so):
+//!
+//! - *HelloRetryRequest.* This client offers X25519 and a key share for it, so
+//!   a server that speaks X25519 has no reason to retry, and rustls sends no
+//!   cookie, the only retry this client accepts. So no real server completes a
+//!   retry with this client. `hello_retry_request_completes` is a script: it
+//!   writes the HelloRetryRequest itself; rustls (given ClientHello2 as if it
+//!   were a first hello) contributes the ServerHello, EncryptedExtensions and
+//!   Certificate; and the script redoes the CertificateVerify and the Finished
+//!   over the transcript with the retry in it. Its key share, key schedule,
+//!   signature and AEAD are ring's, through rustls's public provider API, not
+//!   ours, so the keys are derived twice from one transcript by unrelated code.
+//!   `real_rustls_retry_is_refused` is the real thing: a ClientHello with its
+//!   key shares emptied out in the pipe makes rustls send a real
+//!   HelloRetryRequest, which this client must refuse.
+//! - *NewSessionTicket.* rustls sends none to this client (no
+//!   psk_key_exchange_modes, RFC 8446 §4.2.9), so after a real rustls handshake
+//!   the script seals tickets under the application keys rustls itself exports,
+//!   with a ticket body from rustls's own ticketer.
 
 // rustls's ring provider is C and assembly, which Miri cannot run.
 #![cfg(not(miri))]
@@ -33,7 +53,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use clazel_crypto::client::{Client as Driver, Origin, Output, State};
+use clazel_crypto::client::{Client as Driver, Failure, Origin, Output, State};
 use clazel_crypto::join::exec::{ChainVerifier, Root};
 use clazel_crypto::provider::{ChaCha20Poly1305Factory, Sha256Suite, X25519};
 use clazel_tls::hello::key_exchange::KeyExchange;
@@ -46,10 +66,18 @@ use clazel_tls::schedule::exec::{
 use clazel_tls::schedule::spec::Label;
 use clazel_tls::traffic::exec::{Decryptor, Read};
 use clazel_tls::traffic::provider::Factory;
+use rustls::crypto::cipher::{
+    AeadKey, InboundOpaqueMessage, Iv, MessageDecrypter, MessageEncrypter, OutboundChunks,
+    OutboundPlainMessage,
+};
 use rustls::crypto::ring::{cipher_suite::TLS13_CHACHA20_POLY1305_SHA256, default_provider};
+use rustls::crypto::tls13::{HkdfExpander, OkmBlock};
 use rustls::crypto::{ActiveKeyExchange, CryptoProvider, SharedSecret, SupportedKxGroup};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
-use rustls::{NamedGroup, ServerConfig, ServerConnection};
+use rustls::{
+    ConnectionTrafficSecrets, ContentType, NamedGroup, ProtocolVersion, ServerConfig,
+    ServerConnection, SignatureScheme,
+};
 
 type TestResult = Result<(), String>;
 
@@ -88,8 +116,10 @@ const BAD_CERTIFICATE: u8 = 42;
 const CERTIFICATE_EXPIRED: u8 = 45;
 const ILLEGAL_PARAMETER: u8 = 47;
 const UNKNOWN_CA: u8 = 48;
+const DECODE_ERROR: u8 = 50;
 const DECRYPT_ERROR: u8 = 51;
 const PROTOCOL_VERSION: u8 = 70;
+const INTERNAL_ERROR: u8 = 80;
 
 // ---------------------------------------------------------------------------
 // Test-only randomness
@@ -239,7 +269,10 @@ fn p384_chain() -> ServerCert {
     }
 }
 
-fn server_config(cert: &ServerCert) -> Result<Arc<ServerConfig>, String> {
+fn server_config(
+    cert: &ServerCert,
+    tweak: impl FnOnce(&mut ServerConfig),
+) -> Result<Arc<ServerConfig>, String> {
     let provider = CryptoProvider {
         cipher_suites: vec![TLS13_CHACHA20_POLY1305_SHA256],
         kx_groups: vec![&FIXED_X25519],
@@ -251,12 +284,13 @@ fn server_config(cert: &ServerCert) -> Result<Arc<ServerConfig>, String> {
         .map(|der| CertificateDer::from(der.to_vec()))
         .collect();
     let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert.key.to_vec()));
-    let config = ServerConfig::builder_with_provider(Arc::new(provider))
+    let mut config = ServerConfig::builder_with_provider(Arc::new(provider))
         .with_protocol_versions(&[&rustls::version::TLS13])
         .map_err(|e| e.to_string())?
         .with_no_client_auth()
         .with_single_cert(chain, key)
         .map_err(|e| e.to_string())?;
+    tweak(&mut config);
     Ok(Arc::new(config))
 }
 
@@ -266,7 +300,14 @@ struct Server {
 
 impl Server {
     fn new(cert: &ServerCert) -> Result<Self, String> {
-        let conn = ServerConnection::new(server_config(cert)?).map_err(|e| e.to_string())?;
+        Self::configured(cert, |_| {})
+    }
+
+    fn configured(
+        cert: &ServerCert,
+        tweak: impl FnOnce(&mut ServerConfig),
+    ) -> Result<Self, String> {
+        let conn = ServerConnection::new(server_config(cert, tweak)?).map_err(|e| e.to_string())?;
         Ok(Server { conn })
     }
 
@@ -477,7 +518,11 @@ fn pump(client: &mut Client, server: &mut Server, first: Vec<u8>) -> Result<Vec<
 
 /// A full handshake against rustls with `cert`; the client is `Ready`.
 fn connect(cert: &ServerCert) -> Result<(Client, Server), String> {
-    let mut server = Server::new(cert)?;
+    connect_to(Server::new(cert)?)
+}
+
+/// A full handshake against this server; the client is `Ready`.
+fn connect_to(mut server: Server) -> Result<(Client, Server), String> {
     let (mut client, hello) = Client::start(anchors())?;
     let events = pump(&mut client, &mut server, hello)?;
     if !events.contains(&Event::Ready) {
@@ -579,6 +624,746 @@ fn server_key_update_is_followed() -> TestResult {
     let reply = client.send_application(b"client after update")?;
     server.feed(&reply)?;
     assert_eq!(server.read_plaintext()?, b"client after update");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Fragmented and truncated flights from the real server
+// ---------------------------------------------------------------------------
+
+/// The plaintext in `events`, in order.
+fn delivered(events: &[Event]) -> Vec<u8> {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            Event::Deliver(bytes) => Some(bytes.as_slice()),
+            _ => None,
+        })
+        .flatten()
+        .copied()
+        .collect()
+}
+
+/// A real rustls server that fragments everything it sends: 64 octets is its
+/// record limit here, so every message of the flight spans records (RFC 8446
+/// §5.1), and it does this itself.
+fn fragmenting_server() -> Result<Server, String> {
+    Server::configured(&ecdsa_chain(), |config| {
+        config.max_fragment_size = Some(64);
+    })
+}
+
+/// The client's answer to a whole flight is accepted by rustls, and data goes
+/// both ways afterwards.
+fn finish_and_exchange(client: &mut Client, server: &mut Server, answer: &[u8]) -> TestResult {
+    server.feed(answer)?;
+    if server.conn.is_handshaking() {
+        return Err("rustls did not accept the client's Finished".to_owned());
+    }
+    server.write_plaintext(b"after a fragmented flight")?;
+    let events = client.receive(&server.take()?)?;
+    assert_eq!(delivered(&events), b"after a fragmented flight");
+    let wire = client.send_application(b"client reply")?;
+    server.feed(&wire)?;
+    assert_eq!(server.read_plaintext()?, b"client reply");
+    Ok(())
+}
+
+fn server_flight_fragmented_across_records_by_rustls() -> TestResult {
+    let mut server = fragmenting_server()?;
+    let (mut client, hello) = Client::start(anchors())?;
+    server.feed(&hello)?;
+    let flight = server.take()?;
+    // More protected records than the flight has messages: rustls did split them.
+    let protected = split_records(&flight)?
+        .iter()
+        .filter(|record| record.first() == Some(&23))
+        .count();
+    assert!(protected > 8, "rustls sent {protected} protected records");
+    let events = client.receive(&flight)?;
+    assert!(events.contains(&Event::Ready), "{events:?}");
+    let answer = sends(&events);
+    finish_and_exchange(&mut client, &mut server, &answer)
+}
+
+fn server_flight_delivered_one_octet_at_a_time() -> TestResult {
+    for mut server in [Server::new(&ecdsa_chain())?, fragmenting_server()?] {
+        let (mut client, hello) = Client::start(anchors())?;
+        server.feed(&hello)?;
+        let flight = server.take()?;
+        let mut events = Vec::new();
+        for octet in &flight {
+            events.extend(client.receive(core::slice::from_ref(octet))?);
+        }
+        assert!(events.contains(&Event::Ready), "{events:?}");
+        // Nothing but the client flight, which goes out once.
+        assert_eq!(events.len(), 2, "{events:?}");
+        let answer = sends(&events);
+        finish_and_exchange(&mut client, &mut server, &answer)?;
+    }
+    Ok(())
+}
+
+/// RFC 8446 §6.1: a transport that ends before close_notify is a truncation.
+/// Nothing goes on the wire.
+fn truncated_is_refused(client: &mut Client) -> TestResult {
+    let out = client.driver.receive_eof();
+    assert!(out.send.is_empty(), "sent {:?}", out.send);
+    assert_eq!(
+        out.state,
+        State::Failed(Failure {
+            alert: INTERNAL_ERROR,
+            origin: Origin::Truncated,
+        })
+    );
+    Ok(())
+}
+
+/// Every place worth cutting a flight of these records: inside the first
+/// header, after each record, and one octet either side of each record's end.
+fn cut_points(flight: &[u8]) -> Result<Vec<usize>, String> {
+    let mut cuts = vec![0, 3];
+    let mut end = 0usize;
+    for record in split_records(flight)? {
+        end = add(end, record.len())?;
+        cuts.push(need(end.checked_sub(1), "empty record")?);
+        cuts.push(end);
+    }
+    // The last end is the whole flight, which is not a truncation of it.
+    cuts.pop();
+    Ok(cuts)
+}
+
+fn server_flight_truncated_at_every_record_boundary() -> TestResult {
+    for fresh in [
+        Server::new as fn(&ServerCert) -> Result<Server, String>,
+        |_: &ServerCert| fragmenting_server(),
+    ] {
+        // Each connection's own cuts: an ECDSA signature's length varies, so
+        // the flights differ in length.
+        let mut index = 0usize;
+        loop {
+            let mut server = fresh(&ecdsa_chain())?;
+            let (mut client, hello) = Client::start(anchors())?;
+            server.feed(&hello)?;
+            let flight = server.take()?;
+            let cuts = cut_points(&flight)?;
+            let Some(&cut) = cuts.get(index) else {
+                assert!(index > 6, "only {index} cuts");
+                break;
+            };
+            let events = client.receive(head(&flight, cut)?)?;
+            assert!(
+                events.is_empty(),
+                "a cut at {cut} of {} gave {events:?}",
+                flight.len()
+            );
+            truncated_is_refused(&mut client)?;
+            index = add(index, 1)?;
+        }
+    }
+    Ok(())
+}
+
+fn server_gone_after_its_flight_is_truncated() -> TestResult {
+    // The flight is whole and the client Finished sent, then no close_notify.
+    let (mut client, _server) = connect(&ecdsa_chain())?;
+    truncated_is_refused(&mut client)
+}
+
+// ---------------------------------------------------------------------------
+// The independent server side: ring, through rustls's public provider API.
+// Nothing here calls libcrux or `clazel_tls::schedule`.
+// ---------------------------------------------------------------------------
+
+fn suite() -> Result<&'static rustls::Tls13CipherSuite, String> {
+    need(
+        TLS13_CHACHA20_POLY1305_SHA256.tls13(),
+        "not a TLS 1.3 suite",
+    )
+}
+
+fn ring_hash(data: &[u8]) -> Result<Vec<u8>, String> {
+    Ok(suite()?.common.hash_provider.hash(data).as_ref().to_vec())
+}
+
+/// RFC 8446 §7.1 HKDF-Expand-Label, written from the RFC for this test.
+fn expand_label(
+    expander: &dyn HkdfExpander,
+    label: &[u8],
+    context: &[u8],
+    length: u16,
+) -> Result<Vec<u8>, String> {
+    let mut out = vec![0u8; usize::from(length)];
+    let full = u8::try_from(add(6, label.len())?).map_err(|e| e.to_string())?;
+    let context_len = u8::try_from(context.len()).map_err(|e| e.to_string())?;
+    expander
+        .expand_slice(
+            &[
+                &length.to_be_bytes(),
+                &[full],
+                b"tls13 ",
+                label,
+                &[context_len],
+                context,
+            ],
+            &mut out,
+        )
+        .map_err(|_| "HKDF output too long".to_owned())?;
+    Ok(out)
+}
+
+fn expander_for(secret: &[u8]) -> Result<Box<dyn HkdfExpander>, String> {
+    Ok(suite()?
+        .hkdf_provider
+        .expander_for_okm(&OkmBlock::new(secret)))
+}
+
+/// RFC 8446 §7.3: the key and IV of a traffic secret.
+fn traffic_key(secret: &[u8]) -> Result<(AeadKey, Iv), String> {
+    let expander = expander_for(secret)?;
+    let key: [u8; 32] = expand_label(expander.as_ref(), b"key", &[], 32)?
+        .try_into()
+        .map_err(|_| "key length".to_owned())?;
+    let iv: [u8; 12] = expand_label(expander.as_ref(), b"iv", &[], 12)?
+        .try_into()
+        .map_err(|_| "IV length".to_owned())?;
+    Ok((AeadKey::from(key), Iv::from(iv)))
+}
+
+/// One direction under ring's ChaCha20-Poly1305, and its §5.3 sequence number.
+struct RingSender {
+    sealer: Box<dyn MessageEncrypter>,
+    sequence: u64,
+}
+
+impl RingSender {
+    fn new(key: AeadKey, iv: Iv, sequence: u64) -> Result<Self, String> {
+        Ok(RingSender {
+            sealer: suite()?.aead_alg.encrypter(key, iv),
+            sequence,
+        })
+    }
+
+    fn seal(&mut self, typ: ContentType, content: &[u8]) -> Result<Vec<u8>, String> {
+        let message = OutboundPlainMessage {
+            typ,
+            version: ProtocolVersion::TLSv1_2,
+            payload: OutboundChunks::Single(content),
+        };
+        let sealed = self
+            .sealer
+            .encrypt(message, self.sequence)
+            .map_err(|e| e.to_string())?;
+        self.sequence = need(self.sequence.checked_add(1), "sequence overflow")?;
+        Ok(sealed.encode())
+    }
+}
+
+/// The other direction.
+struct RingReceiver {
+    opener: Box<dyn MessageDecrypter>,
+    sequence: u64,
+}
+
+impl RingReceiver {
+    fn new(key: AeadKey, iv: Iv, sequence: u64) -> Result<Self, String> {
+        Ok(RingReceiver {
+            opener: suite()?.aead_alg.decrypter(key, iv),
+            sequence,
+        })
+    }
+
+    /// Open one whole record; its inner type and content.
+    fn open(&mut self, record: &[u8]) -> Result<(ContentType, Vec<u8>), String> {
+        let mut body = tail(record, 5)?.to_vec();
+        let message = InboundOpaqueMessage::new(
+            ContentType::ApplicationData,
+            ProtocolVersion::TLSv1_2,
+            &mut body,
+        );
+        let opened = self
+            .opener
+            .decrypt(message, self.sequence)
+            .map_err(|e| format!("ring did not open the client's record: {e}"))?;
+        let out = (opened.typ, opened.payload.to_vec());
+        self.sequence = need(self.sequence.checked_add(1), "sequence overflow")?;
+        Ok(out)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HelloRetryRequest
+// ---------------------------------------------------------------------------
+
+/// RFC 8446 §4.1.3: SHA-256 of "HelloRetryRequest", the retry's random.
+const HRR_RANDOM: [u8; 32] = [
+    0xCF, 0x21, 0xAD, 0x74, 0xE5, 0x9A, 0x61, 0x11, 0xBE, 0x1D, 0x8C, 0x02, 0x1E, 0x65, 0xB8, 0x91,
+    0xC2, 0xA2, 0x11, 0x16, 0x7A, 0xBB, 0x8C, 0x5E, 0x07, 0x9E, 0x09, 0xE2, 0xC8, 0xA8, 0x33, 0x9C,
+];
+
+/// A handshake message's header on this body.
+fn handshake_message(typ: u8, body: &[u8]) -> Result<Vec<u8>, String> {
+    let len = u32::try_from(body.len()).map_err(|e| e.to_string())?;
+    let mut out = vec![typ];
+    out.extend_from_slice(need(len.to_be_bytes().get(1..), "length")?);
+    out.extend_from_slice(body);
+    Ok(out)
+}
+
+/// §4.1.2: the offset of `legacy_session_id`'s length in a ClientHello body.
+const SESSION_ID_AT: usize = 34;
+
+/// A ClientHello message's session id, and the offset of its extensions'
+/// total length.
+fn client_hello_layout(message: &[u8]) -> Result<(Vec<u8>, usize), String> {
+    let body = tail(message, 4)?;
+    let session_len = usize::from(byte(body, SESSION_ID_AT)?);
+    let session_at = add(SESSION_ID_AT, 1)?;
+    let session = head(tail(body, session_at)?, session_len)?.to_vec();
+    let suites_at = add(session_at, session_len)?;
+    let suites_len = be16(body, suites_at)?;
+    let compression_at = add(add(suites_at, 2)?, suites_len)?;
+    let compression_len = usize::from(byte(body, compression_at)?);
+    let extensions_at = add(add(compression_at, 1)?, compression_len)?;
+    Ok((session, extensions_at))
+}
+
+/// A ClientHello message with one extension cut out, and its lengths fixed.
+fn client_hello_without(message: &[u8], extension: u16) -> Result<Vec<u8>, String> {
+    client_hello_replacing(message, extension, None)
+}
+
+/// A ClientHello message with one extension cut out or its data replaced, and
+/// its lengths fixed.
+fn client_hello_replacing(
+    message: &[u8],
+    extension: u16,
+    data: Option<&[u8]>,
+) -> Result<Vec<u8>, String> {
+    let (_, extensions_at) = client_hello_layout(message)?;
+    let body = tail(message, 4)?;
+    let mut rest = tail(body, add(extensions_at, 2)?)?;
+    let mut kept = Vec::new();
+    while !rest.is_empty() {
+        let total = add(4, be16(rest, 2)?)?;
+        if be16(rest, 0)? != usize::from(extension) {
+            kept.extend_from_slice(head(rest, total)?);
+        } else if let Some(data) = data {
+            let data_len = u16::try_from(data.len()).map_err(|e| e.to_string())?;
+            kept.extend_from_slice(&extension.to_be_bytes());
+            kept.extend_from_slice(&data_len.to_be_bytes());
+            kept.extend_from_slice(data);
+        }
+        rest = tail(rest, total)?;
+    }
+    let kept_len = u16::try_from(kept.len()).map_err(|e| e.to_string())?;
+    let mut out = head(body, extensions_at)?.to_vec();
+    out.extend_from_slice(&kept_len.to_be_bytes());
+    out.extend_from_slice(&kept);
+    handshake_message(1, &out)
+}
+
+/// §4.1.4: a HelloRetryRequest with a cookie, the one retry this client
+/// accepts: its X25519 share is the only group it offers, so no other change
+/// to the ClientHello could be asked for.
+fn hello_retry_request(session: &[u8], cookie: &[u8]) -> Result<Vec<u8>, String> {
+    let cookie_len = u16::try_from(cookie.len()).map_err(|e| e.to_string())?;
+    let data_len = u16::try_from(add(cookie.len(), 2)?).map_err(|e| e.to_string())?;
+    let mut extensions = vec![0, 43, 0, 2, 3, 4, 0, 44];
+    extensions.extend_from_slice(&data_len.to_be_bytes());
+    extensions.extend_from_slice(&cookie_len.to_be_bytes());
+    extensions.extend_from_slice(cookie);
+    let extensions_len = u16::try_from(extensions.len()).map_err(|e| e.to_string())?;
+    let mut body = vec![3, 3];
+    body.extend_from_slice(&HRR_RANDOM);
+    body.push(u8::try_from(session.len()).map_err(|e| e.to_string())?);
+    body.extend_from_slice(session);
+    body.extend_from_slice(&[0x13, 0x03, 0]);
+    body.extend_from_slice(&extensions_len.to_be_bytes());
+    body.extend_from_slice(&extensions);
+    handshake_message(2, &body)
+}
+
+const COOKIE: &[u8] = b"a cookie the client must echo";
+
+/// A client that has answered a HelloRetryRequest: the client, ClientHello1,
+/// the retry, and ClientHello2's record.
+struct Retried {
+    client: Client,
+    hello1: Vec<u8>,
+    retry: Vec<u8>,
+    hello2_record: Vec<u8>,
+}
+
+fn retried_client() -> Result<Retried, String> {
+    let (mut client, hello_record) = Client::start(anchors())?;
+    let hello1 = tail(&hello_record, 5)?.to_vec();
+    let (session, _) = client_hello_layout(&hello1)?;
+    let retry = hello_retry_request(&session, COOKIE)?;
+    let events = client.receive(&plain_record(22, &retry)?)?;
+    let wire = sends(&events);
+    let records = split_records(&wire)?;
+    // Appendix D.4: the session id asks for compatibility mode, so the dummy
+    // change_cipher_spec comes first, once.
+    assert_eq!(records.len(), 2, "{wire:?}");
+    assert_eq!(
+        records.first().map(Vec::as_slice),
+        Some(&[20u8, 3, 3, 0, 1, 1][..])
+    );
+    let hello2_record = need(records.get(1), "no ClientHello2")?.clone();
+    // §4.1.2: ClientHello2 is ClientHello1 and the cookie, nothing else.
+    assert_eq!(
+        client_hello_without(tail(&hello2_record, 5)?, 44)?,
+        hello1,
+        "ClientHello2 changed more than the cookie"
+    );
+    let mut cookie = u16::try_from(COOKIE.len())
+        .map_err(|e| e.to_string())?
+        .to_be_bytes()
+        .to_vec();
+    cookie.extend_from_slice(COOKIE);
+    assert!(
+        tail(&hello2_record, 5)?
+            .windows(cookie.len())
+            .any(|window| window == cookie.as_slice()),
+        "ClientHello2 does not echo the cookie"
+    );
+    Ok(Retried {
+        client,
+        hello1,
+        retry,
+        hello2_record,
+    })
+}
+
+/// The handshake and application secrets of the script's transcript.
+struct RingSecrets {
+    client_handshake: Vec<u8>,
+    server_handshake: Vec<u8>,
+    client_application: Vec<u8>,
+    server_application: Vec<u8>,
+}
+
+/// RFC 8446 §7.1's schedule, from ring's HKDF. `to_server_hello` and
+/// `to_server_finished` are the transcripts of the two derivations.
+fn ring_schedule(
+    shared: &[u8],
+    to_server_hello: &[u8],
+    to_server_finished: &[u8],
+) -> Result<RingSecrets, String> {
+    let hkdf = suite()?.hkdf_provider;
+    let empty = ring_hash(&[])?;
+    let early = hkdf.extract_from_zero_ikm(None);
+    let salt = expand_label(early.as_ref(), b"derived", &empty, 32)?;
+    let handshake = hkdf.extract_from_secret(Some(&salt), shared);
+    let hello_hash = ring_hash(to_server_hello)?;
+    let client_handshake = expand_label(handshake.as_ref(), b"c hs traffic", &hello_hash, 32)?;
+    let server_handshake = expand_label(handshake.as_ref(), b"s hs traffic", &hello_hash, 32)?;
+    let salt = expand_label(handshake.as_ref(), b"derived", &empty, 32)?;
+    let master = hkdf.extract_from_zero_ikm(Some(&salt));
+    let finished_hash = ring_hash(to_server_finished)?;
+    Ok(RingSecrets {
+        client_handshake,
+        server_handshake,
+        client_application: expand_label(master.as_ref(), b"c ap traffic", &finished_hash, 32)?,
+        server_application: expand_label(master.as_ref(), b"s ap traffic", &finished_hash, 32)?,
+    })
+}
+
+/// §4.4.4: Finished for this transcript, with ring's HMAC.
+fn ring_finished(base_key: &[u8], transcript: &[u8]) -> Result<Vec<u8>, String> {
+    let expander = expander_for(base_key)?;
+    let key = expand_label(expander.as_ref(), b"finished", &[], 32)?;
+    let tag = suite()?
+        .hkdf_provider
+        .hmac_sign(&OkmBlock::new(&key), &ring_hash(transcript)?);
+    handshake_message(20, tag.as_ref())
+}
+
+/// §4.4.3: the server's CertificateVerify for this transcript: ring's ECDSA
+/// P-256 with the leaf's key, not anything rustls signed.
+fn ring_certificate_verify(cert: &ServerCert, transcript: &[u8]) -> Result<Vec<u8>, String> {
+    let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(cert.key.to_vec()));
+    let signing =
+        rustls::crypto::ring::sign::any_supported_type(&key).map_err(|e| e.to_string())?;
+    let signer = need(
+        signing.choose_scheme(&[SignatureScheme::ECDSA_NISTP256_SHA256]),
+        "the leaf cannot sign ecdsa_secp256r1_sha256",
+    )?;
+    let mut content = vec![0x20u8; 64];
+    content.extend_from_slice(b"TLS 1.3, server CertificateVerify\0");
+    content.extend_from_slice(&ring_hash(transcript)?);
+    let signature = signer.sign(&content).map_err(|e| e.to_string())?;
+    let signature_len = u16::try_from(signature.len()).map_err(|e| e.to_string())?;
+    let mut body = vec![0x04u8, 0x03];
+    body.extend_from_slice(&signature_len.to_be_bytes());
+    body.extend_from_slice(&signature);
+    handshake_message(15, &body)
+}
+
+/// The server's half of a retried handshake, as far as the client's answer.
+struct RetriedServer {
+    secrets: RingSecrets,
+    /// The whole transcript through the server Finished.
+    transcript: Vec<u8>,
+    events: Vec<Event>,
+    client: Client,
+}
+
+/// Run the scripted server after a HelloRetryRequest. `prefix` is what the
+/// transcript has before ClientHello2: §4.4.1 says the message_hash of
+/// ClientHello1, then the retry.
+fn scripted_retry(
+    prefix: impl FnOnce(&Retried) -> Result<Vec<u8>, String>,
+) -> Result<RetriedServer, String> {
+    let cert = ecdsa_chain();
+    let retried = retried_client()?;
+    let mut transcript = prefix(&retried)?;
+    let Retried {
+        mut client,
+        hello2_record,
+        ..
+    } = retried;
+    // rustls takes ClientHello2 as a first hello: only its messages are used.
+    let (flight, _) = script(&cert, &client, &hello2_record)?;
+    let mut items = flight.items.iter();
+    let server_hello_record = match items.next() {
+        Some(Item::Plain(record)) => record.clone(),
+        _ => return Err("the flight does not start with a ServerHello".to_owned()),
+    };
+    // ring's own X25519, in place of the fixed share rustls was given.
+    let ring_x25519 = rustls::crypto::ring::kx_group::X25519
+        .start()
+        .map_err(|e| e.to_string())?;
+    let ring_public = ring_x25519.pub_key().to_vec();
+    let fixed_public = X25519.public_key(&server_scalar());
+    let mut server_hello = tail(&server_hello_record, 5)?.to_vec();
+    let at = need(
+        server_hello
+            .windows(fixed_public.len())
+            .position(|window| window == fixed_public.as_slice()),
+        "no key share in the ServerHello",
+    )?;
+    need(server_hello.get_mut(at..add(at, 32)?), "short key share")?.copy_from_slice(&ring_public);
+    let shared = ring_x25519
+        .complete(&client.public)
+        .map_err(|e| e.to_string())?;
+    transcript.extend_from_slice(tail(&hello2_record, 5)?);
+    transcript.extend_from_slice(&server_hello);
+    let to_server_hello = transcript.clone();
+
+    // EncryptedExtensions and Certificate are rustls's, unchanged.
+    let mut messages = Vec::new();
+    for item in items {
+        if let Item::Sealed(22, message) = item
+            && matches!(message.first(), Some(8 | 11))
+        {
+            transcript.extend_from_slice(message);
+            messages.push(message.clone());
+        }
+    }
+    let certificate_verify = ring_certificate_verify(&cert, &transcript)?;
+    transcript.extend_from_slice(&certificate_verify);
+    messages.push(certificate_verify);
+    let handshake_only = ring_schedule(shared.secret_bytes(), &to_server_hello, &transcript)?;
+    let finished = ring_finished(&handshake_only.server_handshake, &transcript)?;
+    transcript.extend_from_slice(&finished);
+    messages.push(finished);
+    let secrets = ring_schedule(shared.secret_bytes(), &to_server_hello, &transcript)?;
+
+    let (key, iv) = traffic_key(&secrets.server_handshake)?;
+    let mut sender = RingSender::new(key, iv, 0)?;
+    let mut wire = plain_record(22, &server_hello)?;
+    for message in &messages {
+        wire.extend_from_slice(&sender.seal(ContentType::Handshake, message)?);
+    }
+    let events = client.receive(&wire)?;
+    Ok(RetriedServer {
+        secrets,
+        transcript,
+        events,
+        client,
+    })
+}
+
+/// §4.4.1: `message_hash` of ClientHello1, then the retry.
+fn retry_transcript(retried: &Retried) -> Result<Vec<u8>, String> {
+    let mut transcript = vec![254u8, 0, 0, 32];
+    transcript.extend_from_slice(&ring_hash(&retried.hello1)?);
+    transcript.extend_from_slice(&retried.retry);
+    Ok(transcript)
+}
+
+fn hello_retry_request_completes() -> TestResult {
+    let RetriedServer {
+        secrets,
+        mut transcript,
+        events,
+        mut client,
+    } = scripted_retry(retry_transcript)?;
+    assert!(events.contains(&Event::Ready), "{events:?}");
+    let answer = sends(&events);
+    // Appendix D.4: the change_cipher_spec went before ClientHello2, and no
+    // second one comes now.
+    let records = split_records(&answer)?;
+    assert_eq!(records.len(), 1, "{answer:?}");
+    let (key, iv) = traffic_key(&secrets.client_handshake)?;
+    let (typ, finished) =
+        RingReceiver::new(key, iv, 0)?.open(need(records.first(), "no record")?)?;
+    assert_eq!(typ, ContentType::Handshake);
+    assert_eq!(
+        finished,
+        ring_finished(&secrets.client_handshake, &transcript)?,
+        "the client's Finished disagrees with ring's over the retried transcript"
+    );
+    transcript.extend_from_slice(&finished);
+
+    // Application traffic under ring's secrets, both ways.
+    let (key, iv) = traffic_key(&secrets.server_application)?;
+    let mut to_client = RingSender::new(key, iv, 0)?;
+    let events =
+        client.receive(&to_client.seal(ContentType::ApplicationData, b"after a retry")?)?;
+    assert_eq!(delivered(&events), b"after a retry");
+    let (key, iv) = traffic_key(&secrets.client_application)?;
+    let wire = client.send_application(b"client after a retry")?;
+    let (typ, plain) = RingReceiver::new(key, iv, 0)?.open(&wire)?;
+    assert_eq!(typ, ContentType::ApplicationData);
+    assert_eq!(plain, b"client after a retry");
+    Ok(())
+}
+
+fn retry_left_out_of_the_transcript_is_refused() -> TestResult {
+    // The same script over ClientHello2 alone (§4.4.1 ignored): its keys differ
+    // from the client's, so the first protected record does not open.
+    let run = scripted_retry(|_| Ok(Vec::new()))?;
+    assert_eq!(last_event(&run.events), Some(&Event::Fail(BAD_RECORD_MAC)));
+    assert!(run.client.failed());
+    Ok(())
+}
+
+fn second_hello_retry_request_is_refused() -> TestResult {
+    // §4.1.4: "If a client receives a second HelloRetryRequest in the same
+    // connection [...], it MUST abort the handshake with an
+    // "unexpected_message" alert."
+    let mut retried = retried_client()?;
+    let events = retried.client.receive(&plain_record(22, &retried.retry)?)?;
+    assert_eq!(last_event(&events), Some(&Event::Fail(UNEXPECTED_MESSAGE)));
+    Ok(())
+}
+
+fn real_rustls_retry_is_refused() -> TestResult {
+    // The real thing: with the shares emptied out of the ClientHello's key_share
+    // (a test's tampering, in the pipe), rustls has to ask for one. It asks for
+    // X25519, for which the client did offer a share, and §4.2.8 is plain: "the
+    // client MUST abort the handshake with an "illegal_parameter" alert".
+    let (mut client, hello_record) = Client::start(anchors())?;
+    let tampered = client_hello_replacing(tail(&hello_record, 5)?, 51, Some(&[0, 0]))?;
+    let mut server = Server::new(&ecdsa_chain())?;
+    server.feed(&plain_record(22, &tampered)?)?;
+    let retry = server.take()?;
+    assert_eq!(
+        retry.get(11..43),
+        Some(&HRR_RANDOM[..]),
+        "rustls did not send a HelloRetryRequest"
+    );
+    let events = client.receive(&retry)?;
+    assert_eq!(last_event(&events), Some(&Event::Fail(ILLEGAL_PARAMETER)));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// NewSessionTicket
+// ---------------------------------------------------------------------------
+
+/// §4.6.1: a NewSessionTicket around a ticket body from rustls's own ticketer,
+/// with these extensions.
+fn new_session_ticket(extensions: &[u8]) -> Result<Vec<u8>, String> {
+    let ticketer = rustls::crypto::ring::Ticketer::new().map_err(|e| e.to_string())?;
+    let ticket = need(
+        ticketer.encrypt(b"a resumption state"),
+        "the ticketer refused",
+    )?;
+    let ticket_len = u16::try_from(ticket.len()).map_err(|e| e.to_string())?;
+    let extensions_len = u16::try_from(extensions.len()).map_err(|e| e.to_string())?;
+    let mut body = Vec::new();
+    body.extend_from_slice(&7200u32.to_be_bytes());
+    body.extend_from_slice(&0x0102_0304u32.to_be_bytes());
+    body.extend_from_slice(&[4, 1, 2, 3, 4]);
+    body.extend_from_slice(&ticket_len.to_be_bytes());
+    body.extend_from_slice(&ticket);
+    body.extend_from_slice(&extensions_len.to_be_bytes());
+    body.extend_from_slice(extensions);
+    handshake_message(4, &body)
+}
+
+/// A real rustls handshake, then both directions under the application keys
+/// and sequence numbers rustls exports.
+fn after_real_handshake() -> Result<(Client, RingSender, RingReceiver), String> {
+    let server = Server::configured(&ecdsa_chain(), |config| {
+        config.enable_secret_extraction = true;
+    })?;
+    let (client, server) = connect_to(server)?;
+    let secrets = server
+        .conn
+        .dangerous_extract_secrets()
+        .map_err(|e| e.to_string())?;
+    let (ConnectionTrafficSecrets::Chacha20Poly1305 { key, iv }, tx_sequence) =
+        (secrets.tx.1, secrets.tx.0)
+    else {
+        return Err("rustls negotiated something else".to_owned());
+    };
+    let to_client = RingSender::new(key, iv, tx_sequence)?;
+    let (ConnectionTrafficSecrets::Chacha20Poly1305 { key, iv }, rx_sequence) =
+        (secrets.rx.1, secrets.rx.0)
+    else {
+        return Err("rustls negotiated something else".to_owned());
+    };
+    let from_client = RingReceiver::new(key, iv, rx_sequence)?;
+    Ok((client, to_client, from_client))
+}
+
+fn new_session_ticket_is_read_and_ignored() -> TestResult {
+    let (mut client, mut to_client, mut from_client) = after_real_handshake()?;
+    // One ticket in a record.
+    let ticket = new_session_ticket(&[])?;
+    let events = client.receive(&to_client.seal(ContentType::Handshake, &ticket)?)?;
+    assert_eq!(events, vec![]);
+    // Two in one record, one with an early_data extension (§4.6.1), which this
+    // client did not ask for and does nothing with.
+    let mut two = new_session_ticket(&[0, 42, 0, 4, 0, 0, 4, 0])?;
+    two.extend_from_slice(&ticket);
+    let events = client.receive(&to_client.seal(ContentType::Handshake, &two)?)?;
+    assert_eq!(events, vec![]);
+    // One split across two records (§5.1).
+    let (first, second) = ticket.split_at(10);
+    let mut wire = to_client.seal(ContentType::Handshake, first)?;
+    wire.extend_from_slice(&to_client.seal(ContentType::Handshake, second)?);
+    let events = client.receive(&wire)?;
+    assert_eq!(events, vec![]);
+    // Nothing was delivered or sent, the sequence numbers still agree, and data
+    // goes both ways.
+    let events =
+        client.receive(&to_client.seal(ContentType::ApplicationData, b"after tickets")?)?;
+    assert_eq!(events, vec![Event::Deliver(b"after tickets".to_vec())]);
+    let wire = client.send_application(b"client after tickets")?;
+    let (typ, plain) = from_client.open(&wire)?;
+    assert_eq!(typ, ContentType::ApplicationData);
+    assert_eq!(plain, b"client after tickets");
+    Ok(())
+}
+
+fn malformed_new_session_ticket_is_decode_error() -> TestResult {
+    let (mut client, mut to_client, mut from_client) = after_real_handshake()?;
+    // The body stops inside the ticket's length.
+    let truncated = handshake_message(4, &[0, 0, 0, 1, 0, 0, 0, 1, 0, 0])?;
+    let events = client.receive(&to_client.seal(ContentType::Handshake, &truncated)?)?;
+    assert_eq!(last_event(&events), Some(&Event::Fail(DECODE_ERROR)));
+    // The alert is sealed under the client application key, as ring can read.
+    let wire = sends(&events);
+    let (typ, alert) = from_client.open(&wire)?;
+    assert_eq!(typ, ContentType::Alert);
+    assert_eq!(alert, vec![2, DECODE_ERROR]);
     Ok(())
 }
 
@@ -1161,6 +1946,22 @@ const SUCCESS: &[Case] = &[
         "compatibility_change_cipher_spec_where_rfc_8446_allows_it_is_dropped",
         compatibility_change_cipher_spec_where_rfc_8446_allows_it_is_dropped,
     ),
+    (
+        "server_flight_fragmented_across_records_by_rustls",
+        server_flight_fragmented_across_records_by_rustls,
+    ),
+    (
+        "server_flight_delivered_one_octet_at_a_time",
+        server_flight_delivered_one_octet_at_a_time,
+    ),
+    (
+        "hello_retry_request_completes",
+        hello_retry_request_completes,
+    ),
+    (
+        "new_session_ticket_is_read_and_ignored",
+        new_session_ticket_is_read_and_ignored,
+    ),
 ];
 
 const HOSTILE: &[Case] = &[
@@ -1223,6 +2024,27 @@ const HOSTILE: &[Case] = &[
     (
         "change_cipher_spec_in_the_wrong_place_is_unexpected_message",
         change_cipher_spec_in_the_wrong_place_is_unexpected_message,
+    ),
+    (
+        "server_flight_truncated_at_every_record_boundary",
+        server_flight_truncated_at_every_record_boundary,
+    ),
+    (
+        "server_gone_after_its_flight_is_truncated",
+        server_gone_after_its_flight_is_truncated,
+    ),
+    (
+        "retry_left_out_of_the_transcript_is_refused",
+        retry_left_out_of_the_transcript_is_refused,
+    ),
+    (
+        "second_hello_retry_request_is_refused",
+        second_hello_retry_request_is_refused,
+    ),
+    ("real_rustls_retry_is_refused", real_rustls_retry_is_refused),
+    (
+        "malformed_new_session_ticket_is_decode_error",
+        malformed_new_session_ticket_is_decode_error,
     ),
 ];
 

@@ -130,6 +130,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> {
 fn step_auth<C: Crypto, V: Verifier>(auth: &mut Auth, crypto: &C, verifier: &V, input: AuthInput<'_>) -> (out: AuthAction)
     requires old(auth).wf(),
     ensures final(auth).wf(), crate::auth::contract::send_safe(final(auth)@, out@),
+        crate::auth::contract::step_ensures(crypto.functions(), verifier.functions(), old(auth)@, input@, final(auth)@, out@),
 {
     let out = auth.step(crypto, verifier, input);
     proof {
@@ -181,6 +182,86 @@ fn seal_alert<A: KeyedAead>(sender: &mut Encryptor<A>, Ghost(ciphers): Ghost<sup
     sender.seal(crate::spec::CT_ALERT, content, 0).ok()
 }
 
+/// The key-explicit open function an AEAD object computes is the factory's
+/// function at its key ([`super::dispatcher_spec::open_with`]).
+proof fn lemma_open_with(ciphers: super::dispatcher_spec::Ciphers, epoch: crate::traffic::spec::State,
+    g: spec_fn(Seq<u8>, Seq<u8>, Seq<u8>) -> Option<Seq<u8>>)
+    requires forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] g(n, ad, ct) == (ciphers.open)(epoch.key, n, ad, ct),
+    ensures g == super::dispatcher_spec::open_with(ciphers, epoch),
+{
+    assert(g =~= super::dispatcher_spec::open_with(ciphers, epoch));
+}
+
+/// §5.2, §5.3: seal the client flight under `sender`'s next sequence number.
+fn seal_flight<A: KeyedAead>(sender: &mut Encryptor<A>, Ghost(ciphers): Ghost<super::dispatcher_spec::Ciphers>,
+    flight: &[u8]) -> (out: Result<Vec<u8>, u8>)
+    requires old(sender).wf(),
+        forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] old(sender).seal_spec(n, ad, p)
+            == (ciphers.seal)(old(sender)@.key, n, ad, p),
+    ensures final(sender).wf(),
+        forall|n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| #[trigger] final(sender).seal_spec(n, ad, p)
+            == (ciphers.seal)(final(sender)@.key, n, ad, p),
+        (final(sender)@, crate::traffic::exec::sent_view(out)) == crate::traffic::spec::send(
+            super::dispatcher_spec::seal_with(ciphers, old(sender)@), old(sender)@, crate::spec::CT_HANDSHAKE, flight@, 0),
+{
+    let ghost epoch = sender@;
+    let ghost seal_before = |n: Seq<u8>, ad: Seq<u8>, p: Seq<u8>| sender.seal_spec(n, ad, p);
+    proof { lemma_seal_with(ciphers, epoch, seal_before); }
+    sender.seal(crate::spec::CT_HANDSHAKE, flight, 0)
+}
+
+/// §5.2: open one protected record under `receiver`'s next sequence number.
+fn open_record<A: KeyedAead>(receiver: &mut Decryptor<A>, Ghost(ciphers): Ghost<super::dispatcher_spec::Ciphers>,
+    wire: &[u8]) -> (out: TrafficRead)
+    requires old(receiver).wf(),
+        forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] old(receiver).open_spec(n, ad, ct)
+            == (ciphers.open)(old(receiver)@.key, n, ad, ct),
+    ensures final(receiver).wf(),
+        forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] final(receiver).open_spec(n, ad, ct)
+            == (ciphers.open)(final(receiver)@.key, n, ad, ct),
+        (final(receiver)@, out@) == crate::traffic::spec::receive(
+            super::dispatcher_spec::open_with(ciphers, old(receiver)@), old(receiver)@, wire@),
+{
+    let ghost epoch = receiver@;
+    let ghost open_before = |n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| receiver.open_spec(n, ad, ct);
+    proof { lemma_open_with(ciphers, epoch, open_before); }
+    receiver.open(wire)
+}
+
+/// §4.4.4, §5.1: [`super::dispatcher_spec::finished_out_of_place`].
+fn finished_misplaced(messages: &[Vec<u8>], boundary: bool) -> (out: bool)
+    ensures out == super::dispatcher_spec::finished_out_of_place(crate::reassemble::views_bytes(messages@), boundary),
+{
+    let ghost views = crate::reassemble::views_bytes(messages@);
+    let mut i: usize = 0;
+    proof { assert(views.skip(0) =~= views); }
+    while i < messages.len()
+        invariant
+            i <= messages.len(),
+            views == crate::reassemble::views_bytes(messages@),
+            super::dispatcher_spec::finished_out_of_place(views, boundary)
+                == super::dispatcher_spec::finished_out_of_place(views.skip(i as int), boundary),
+        decreases messages.len() - i,
+    {
+        let ghost rest = views.skip(i as int);
+        let message = match messages.get(i) {
+            Some(message) => message,
+            None => return false,
+        };
+        proof {
+            assert(rest[0] == message@);
+            assert(rest.skip(1) =~= views.skip(i + 1));
+        }
+        if !message.is_empty() && crate::reader::byte_at(message.as_slice(), 0) == crate::spec::HS_FINISHED
+            && (i.saturating_add(1) != messages.len() || !boundary) {
+            return true;
+        }
+        i = i.saturating_add(1);
+    }
+    proof { assert(views.skip(i as int).len() == 0); }
+    false
+}
+
 impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: KeyedAead {
     /// Every send epoch is well formed and bound to the factory's seal
     /// function at its key: what sealing a fatal alert needs.
@@ -197,6 +278,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         (match self.handshake_sender { Some(epoch) => epoch.wf(), None => true })
             && (match self.handshake_receiver { Some(epoch) => epoch.wf(), None => true })
             && self.reassembler.wf() && super::framing_spec::wf(self.framer@) && self.framer.wf()
+            && self.framer.protected_mode()
     }
 
     /// Authentication state remains valid independently of record/key resources.
@@ -234,6 +316,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             forall|n: Seq<u8>, ad: Seq<u8>, ct: Seq<u8>| #[trigger] keys.open_spec(n, ad, ct) == (factory.functions().open)(keys@.2.key, n, ad, ct),
         ensures out.wf(), out.auth_wf(), out.resources_wf(), out.cipher_bindings_wf(), out@ == super::dispatcher_spec::start(keys@, keys.ccs_pending_spec()),
             out.crypto_functions() == crypto.functions(), out.cipher_functions() == factory.functions(),
+            out.verifier_functions() == verifier.functions(),
     {
         let ccs_pending = keys.needs_compatibility_ccs();
         let ghost handoff = keys@;
@@ -380,6 +463,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     fn die(&mut self, alert: u8) -> (out: Action)
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).resources_wf(),
             (out@, final(self)@) == super::dispatcher_spec::die(alert),
     {
@@ -392,6 +476,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     fn peer_alert(&mut self, alert: u8) -> (out: Action)
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             (out@, final(self)@) == super::dispatcher_spec::receive_fatal_alert(old(self).cipher_models(),
                 old(self)@, alert),
@@ -405,6 +490,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     fn close(&mut self) -> (out: Action)
         requires old(self).senders_wf(),
         ensures final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             (out@, final(self)@) == super::dispatcher_spec::closing(old(self).cipher_models(), old(self)@),
     {
@@ -460,35 +546,36 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     }
 
     fn protect_client_flight(&mut self, flight: &[u8]) -> (out: Result<Vec<u8>, u8>)
-        requires old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self).mode == Mode::Handshake,
+        requires old(self).resources_wf(), old(self).cipher_bindings_wf(),
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).resources_wf(), final(self).cipher_bindings_wf(),
-            final(self)@.auth == old(self)@.auth,
-            final(self)@.handshake_receiver == old(self)@.handshake_receiver,
-            final(self)@.master == old(self)@.master,
-            final(self)@.client_application_secret == old(self)@.client_application_secret,
-            final(self)@.server_application_secret == old(self)@.server_application_secret,
-            final(self)@.reassembly == old(self)@.reassembly,
-            final(self)@.framing == old(self)@.framing,
-            final(self)@.mode == old(self)@.mode,
-            final(self)@.pending_flight == old(self)@.pending_flight,
-            match out {
-                Ok(_) => !final(self).ccs_pending && final(self)@.handshake_sender is Some,
-                Err(_) => true,
-            },
+            (final(self)@, crate::traffic::exec::sent_view(out))
+                == super::dispatcher_spec::protect_client_flight(old(self).cipher_models(), old(self)@, flight@),
     {
         if flight.is_empty() || flight.len() > crate::spec::MAX_PLAINTEXT { return Err(crate::spec::INTERNAL_ERROR); }
+        let ghost ciphers = self.cipher_models();
         let sender = match self.handshake_sender.as_mut() {
             Some(sender) => sender,
             None => return Err(crate::spec::INTERNAL_ERROR),
         };
-        let protected = sender.seal(crate::spec::CT_HANDSHAKE, flight, 0)?;
+        let protected = seal_flight(sender, Ghost(ciphers), flight)?;
         let mut out = Vec::new();
         if self.ccs_pending {
             out.extend_from_slice(&[20, 3, 3, 0, 1, 1]);
+            proof { assert(out@ =~= super::dispatcher_spec::compatibility_ccs_record()); }
         }
+        let ghost prefix = out@;
         out.extend_from_slice(protected.as_slice());
+        proof {
+            assert(out@ =~= prefix + protected@);
+            assert(prefix + protected@ =~= if old(self).ccs_pending {
+                super::dispatcher_spec::compatibility_ccs_record() + protected@
+            } else {
+                protected@
+            });
+        }
         self.ccs_pending = false;
         Ok(out)
     }
@@ -502,14 +589,18 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             old(self)@.master.len() == 32, old(self)@.pending_flight.len() == 0,
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
+            (out@, final(self)@) == super::dispatcher_spec::send_flight(old(self).cipher_models(), old(self)@, flight@),
     {
+        let ghost before = self@;
+        let ghost ciphers = self.cipher_models();
         let wire = match self.protect_client_flight(flight.as_slice()) {
             Ok(wire) => wire,
             Err(alert) => return self.fail(alert),
         };
-        if wire.is_empty() { return self.fail(crate::spec::INTERNAL_ERROR); }
+        proof { super::dispatcher_lemmas::lemma_protected_flight_nonempty(ciphers, before, flight@); }
         self.pending_flight.extend_from_slice(wire.as_slice());
         self.mode = Mode::AwaitClientFlight;
         proof {
@@ -521,8 +612,8 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
             assert(self@.handshake_receiver is Some);
             assert(self@.master.len() == 32);
             assert(!self.ccs_pending);
+            assert(self.pending_flight@ =~= wire@);
             assert(self@.pending_flight.len() > 0);
-            assert(self.pending_flight@ == wire@);
             assert(self@.auth is Some);
             assert(match self@.auth { Some(auth) => auth.phase == crate::auth::spec::Phase::SendFinished, None => false });
             assert(crate::spec::at_message_boundary(self@.reassembly));
@@ -541,8 +632,11 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
+            (out@, final(self)@) == super::dispatcher_spec::run_auth(old(self).crypto_functions(), old(self).verifier_functions(),
+                old(self).cipher_models(), old(self)@, typ, body@),
     {
         let auth = match self.auth.as_mut() {
             Some(auth) => auth,
@@ -573,18 +667,17 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
+            (out@, final(self)@) == super::dispatcher_spec::process_one(old(self).crypto_functions(), old(self).verifier_functions(),
+                old(self).cipher_models(), old(self)@, message@),
+            out@ is None ==> final(self)@.mode == super::dispatcher_spec::Mode::Handshake,
     {
         if message.len() < crate::spec::HANDSHAKE_HEADER { return self.fail(crate::spec::DECODE_ERROR); }
-        let typ = match message.first() {
-            Some(value) => *value,
-            None => return self.fail(crate::spec::DECODE_ERROR),
-        };
-        let bytes = match message.get(crate::spec::HANDSHAKE_HEADER..) {
-            Some(body) => body,
-            None => return self.fail(crate::spec::DECODE_ERROR),
-        };
+        let typ = crate::reader::byte_at(message, 0);
+        let bytes = vstd::slice::slice_subrange(message, crate::spec::HANDSHAKE_HEADER, message.len());
+        proof { assert(bytes@ =~= message@.skip(crate::spec::HANDSHAKE_HEADER as int)); }
         self.run_auth_message(typ, copy_body(bytes))
     }
 
@@ -592,56 +685,75 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
+            (out@, final(self)@) == super::dispatcher_spec::process_messages(old(self).crypto_functions(), old(self).verifier_functions(),
+                old(self).cipher_models(), old(self)@, crate::reassemble::views_bytes(messages@)),
     {
-        let mut has_finished = false;
-        let mut i: usize = 0;
-        while i < messages.len()
-            invariant i <= messages.len(), self.crypto_functions() == old(self).crypto_functions(), self.cipher_functions() == old(self).cipher_functions(), self.wf(), self.auth_wf(), self.resources_wf(), self.cipher_bindings_wf(), self@.mode == super::dispatcher_spec::Mode::Handshake,
-            decreases messages.len() - i,
-        {
-            let message = match messages.get(i) {
-                Some(message) => message,
-                None => return self.fail(crate::spec::INTERNAL_ERROR),
-            };
-            if message.first() == Some(&crate::spec::HS_FINISHED) {
-                has_finished = true;
-                if i.saturating_add(1) != messages.len() || !self.reassembler.at_message_boundary() {
-                    return self.fail(crate::spec::UNEXPECTED_MESSAGE);
-                }
-            }
-            i = i.saturating_add(1);
-        }
-        if has_finished && !self.reassembler.at_message_boundary() {
+        hide(super::dispatcher_spec::process_one);
+        hide(super::dispatcher_spec::wf);
+        let ghost views = crate::reassemble::views_bytes(messages@);
+        let ghost c = self.crypto_functions();
+        let ghost v = self.verifier_functions();
+        let ghost ciphers = self.cipher_models();
+        let ghost before = self@;
+        if finished_misplaced(messages.as_slice(), self.reassembler.at_message_boundary()) {
             return self.fail(crate::spec::UNEXPECTED_MESSAGE);
         }
-        proof { reveal(Connection::wf); assert(self.wf()); }
         let mut index: usize = 0;
+        proof { assert(views.skip(0) =~= views); }
         while index < messages.len()
-            invariant index <= messages.len(), self.crypto_functions() == old(self).crypto_functions(), self.cipher_functions() == old(self).cipher_functions(), self.wf(), self.auth_wf(), self.resources_wf(), self.cipher_bindings_wf(), self@.mode == super::dispatcher_spec::Mode::Handshake,
+            invariant
+                index <= messages.len(),
+                views == crate::reassemble::views_bytes(messages@),
+                self.crypto_functions() == c, self.verifier_functions() == v, self.cipher_models() == ciphers,
+                c == old(self).crypto_functions(), v == old(self).verifier_functions(),
+                ciphers == old(self).cipher_models(), before == old(self)@,
+                !super::dispatcher_spec::finished_out_of_place(views, super::dispatcher_spec::message_boundary(before)),
+                self.cipher_functions() == old(self).cipher_functions(),
+                self.wf(), self.auth_wf(), self.resources_wf(), self.cipher_bindings_wf(),
+                self@.mode == super::dispatcher_spec::Mode::Handshake,
+                super::dispatcher_spec::run_messages(c, v, ciphers, before, views)
+                    == super::dispatcher_spec::run_messages(c, v, ciphers, self@, views.skip(index as int)),
             decreases messages.len() - index,
         {
+            let ghost rest = views.skip(index as int);
             let message = match messages.get(index) {
                 Some(message) => message,
                 None => return self.fail(crate::spec::INTERNAL_ERROR),
             };
+            proof {
+                assert(rest[0] == message@);
+                assert(rest.skip(1) =~= views.skip(index + 1));
+            }
+            let ghost at = self@;
             let action = self.process_one(message.as_slice());
+            proof {
+                assert(rest.len() > 0);
+                assert((action@, self@) == super::dispatcher_spec::process_one(c, v, ciphers, at, rest[0]));
+                if !(action@ is None) {
+                    assert(super::dispatcher_spec::run_messages(c, v, ciphers, at, rest) == (action@, self@));
+                }
+            }
             if !matches!(action, Action::None) { return action; }
-            if !matches!(self.mode, Mode::Handshake) { return self.fail(crate::spec::INTERNAL_ERROR); }
             index = index.saturating_add(1);
         }
+        proof { assert(views.skip(index as int).len() == 0); }
         Action::None
     }
 
     fn handle_plaintext(&mut self, typ: u8, bytes: &[u8]) -> (out: Action)
-        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
+        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
             super::dispatcher_contract::peer_alert_ensures(old(self).cipher_models(), old(self)@, typ, bytes@,
                 out@, final(self)@),
+            (out@, final(self)@) == super::dispatcher_spec::receive_plaintext(old(self).crypto_functions(), old(self).verifier_functions(),
+                old(self).cipher_models(), old(self)@, typ, bytes@),
     {
         if bytes.len() > crate::spec::MAX_PLAINTEXT { return self.fail(crate::spec::RECORD_OVERFLOW); }
         let ghost before = self@;
@@ -654,24 +766,22 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         match fed {
             Err(error) => self.fail(crate::encode::alert_for(error).description),
             Ok(ReassemblyEvent::Messages(messages)) => {
-                if matches!(self.mode, Mode::Handshake) {
-                    proof {
-                        reveal(Connection::wf);
-                        reveal(Connection::resources_wf);
-                        reveal(super::dispatcher_spec::wf);
-                        assert(self@.mode == super::dispatcher_spec::Mode::Handshake);
-                        assert(self@.auth is Some);
-                        assert(self@.handshake_sender is Some);
-                        assert(self@.handshake_receiver is Some);
-                        assert(self@.master.len() == 32);
-                        assert(self@.pending_flight.len() == 0);
-                        assert(self.wf());
-                        assert(self.auth_wf());
-                        assert(self.resources_wf());
-                        assert(self.cipher_bindings_wf());
-                    }
-                    self.process_messages(messages)
-                } else { self.fail(crate::spec::UNEXPECTED_MESSAGE) }
+                proof {
+                    reveal(Connection::wf);
+                    reveal(Connection::resources_wf);
+                    reveal(super::dispatcher_spec::wf);
+                    assert(self@.mode == super::dispatcher_spec::Mode::Handshake);
+                    assert(self@.auth is Some);
+                    assert(self@.handshake_sender is Some);
+                    assert(self@.handshake_receiver is Some);
+                    assert(self@.master.len() == 32);
+                    assert(self@.pending_flight.len() == 0);
+                    assert(self.wf());
+                    assert(self.auth_wf());
+                    assert(self.resources_wf());
+                    assert(self.cipher_bindings_wf());
+                }
+                self.process_messages(messages)
             },
             // §5: no application data before the handshake ends.
             Ok(ReassemblyEvent::AppData(_)) => self.fail(crate::spec::UNEXPECTED_MESSAGE),
@@ -697,12 +807,15 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
     }
 
     fn handle_record(&mut self, wire: &[u8]) -> (out: Action)
-        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
+        requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(), old(self)@.mode == super::dispatcher_spec::Mode::Handshake,
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_spec::action_refines(out@, final(self)@),
             super::dispatcher_contract::ccs_record_ensures(old(self).cipher_models(), wire@, old(self)@, out@, final(self)@),
+            (out@, final(self)@) == super::dispatcher_spec::receive_record(old(self).crypto_functions(), old(self).verifier_functions(),
+                old(self).cipher_models(), old(self)@, wire@),
     {
         match crate::record::read_record(wire, true) {
             ReadOut::Done(Frame::Ccs, _) => {
@@ -713,8 +826,7 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 // RFC 8446 §5.1: handshake messages "MUST NOT be interleaved with
                 // other record types", so a compatibility CCS is dropped only at a
                 // message boundary; inside a fragmented message it is fatal.
-                if matches!(self.mode, Mode::Handshake)
-                    && !matches!(auth.phase(), crate::auth::spec::Phase::SendFinished | crate::auth::spec::Phase::Ready)
+                if !matches!(auth.phase(), crate::auth::spec::Phase::SendFinished | crate::auth::spec::Phase::Ready)
                     && self.reassembler.at_message_boundary() {
                     Action::Ignored
                 } else {
@@ -722,14 +834,12 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
                 }
             },
             ReadOut::Done(Frame::Protected(_, _), _) => {
-                let read = match self.mode {
-                    Mode::Handshake => match self.handshake_receiver.as_mut() {
-                        Some(receiver) => receiver.open(wire),
-                        None => return self.fail(crate::spec::INTERNAL_ERROR),
-                    },
-                    Mode::AwaitClientFlight | Mode::Ready => return Action::None,
-                    Mode::Failed | Mode::Closed => return Action::None,
+                let ghost ciphers = self.cipher_models();
+                let receiver = match self.handshake_receiver.as_mut() {
+                    Some(receiver) => receiver,
+                    None => return self.fail(crate::spec::INTERNAL_ERROR),
                 };
+                let read = open_record(receiver, Ghost(ciphers), wire);
                 match read {
                     TrafficRead::Record(typ, bytes, consumed) => {
                         if consumed != wire.len() { return self.fail(crate::spec::UNEXPECTED_MESSAGE); }
@@ -750,8 +860,12 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(), out.0 <= input.len(),
             super::dispatcher_contract::feed_ensures(old(self)@, input@, out.0 as nat, out.1@, final(self)@),
+            super::dispatcher_contract::feed_exact(old(self).crypto_functions(), old(self).verifier_functions(),
+                super::dispatcher_spec::Ciphers { seal: old(self).cipher_functions().seal, open: old(self).cipher_functions().open },
+                old(self)@, input@, out.0 as nat, out.1@, final(self)@),
     {
         if matches!(self.mode, Mode::AwaitClientFlight | Mode::Ready | Mode::Failed | Mode::Closed) {
             return (0, Action::None);
@@ -806,8 +920,12 @@ impl<C: Crypto, F: Factory, V: Verifier> Connection<C, F, V> where F::Cipher: Ke
         requires old(self).wf(), old(self).auth_wf(), old(self).resources_wf(), old(self).cipher_bindings_wf(),
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(), final(self).cipher_functions() == old(self).cipher_functions(),
+            final(self).verifier_functions() == old(self).verifier_functions(),
             final(self).wf(), final(self).auth_wf(), final(self).resources_wf(), final(self).cipher_bindings_wf(),
             super::dispatcher_contract::acknowledgement_ensures(old(self).crypto_functions(), old(self).verifier_functions(),
+                old(self)@, sent@, out@, final(self)@),
+            super::dispatcher_contract::acknowledge_exact(old(self).crypto_functions(), old(self).verifier_functions(),
+                super::dispatcher_spec::Ciphers { seal: old(self).cipher_functions().seal, open: old(self).cipher_functions().open },
                 old(self)@, sent@, out@, final(self)@),
     {
         if !matches!(self.mode, Mode::AwaitClientFlight) || sent != self.pending_flight.as_slice() {

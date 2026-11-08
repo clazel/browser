@@ -155,6 +155,55 @@ pub open spec fn flight_failure(description: u8, wire: Option<Seq<u8>>) -> Step 
     }
 }
 
+/// A failure the dispatcher reported after `prefix` went out, its sealed
+/// alert, if any, last.
+pub open spec fn flight_failure_after(prefix: Seq<u8>, description: u8, wire: Option<Seq<u8>>) -> Step {
+    match wire {
+        Some(record) => Step { send: prefix + record, deliver: seq![], stage: Stage::Ended,
+            status: Status::Failed(description, Origin::Sent) },
+        None => Step { send: prefix, deliver: seq![], stage: Stage::Ended,
+            status: Status::Failed(description, Origin::NotSent) },
+    }
+}
+
+/// Choice 2: the client flight `wire` goes out and is acknowledged in the same
+/// step. At `Ready` the transducer starts from the application traffic secrets
+/// (§7.3), and the dispatcher is gone.
+pub open spec fn flight_sent(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    ciphers: super::dispatcher_spec::Ciphers, wire: Seq<u8>, awaiting: super::dispatcher_spec::State) -> Step
+{
+    let (ack, ready) = super::dispatcher_spec::acknowledge(c, v, ciphers, awaiting, wire);
+    let ended = |status: Status| Step { send: wire, deliver: seq![], stage: Stage::Ended, status };
+    match ack {
+        super::dispatcher_spec::Action::Ready =>
+            match super::post_handshake_spec::start(c, ready.client_application_secret, ready.server_application_secret) {
+                Ok(app) => Step { send: wire, deliver: seq![], stage: Stage::App(app), status: Status::Open },
+                Err(alert) => ended(Status::Failed(alert, Origin::NotSent)),
+            },
+        super::dispatcher_spec::Action::Fail(alert, record) => flight_failure_after(wire, alert, record),
+        _ => ended(Status::Failed(crate::spec::INTERNAL_ERROR, Origin::NotSent)),
+    }
+}
+
+/// What the dispatcher's action and state come to.
+pub open spec fn flight_out(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    ciphers: super::dispatcher_spec::Ciphers, action: super::dispatcher_spec::Action,
+    after: super::dispatcher_spec::State) -> Step
+{
+    match action {
+        super::dispatcher_spec::Action::None | super::dispatcher_spec::Action::Ignored
+            | super::dispatcher_spec::Action::Cancelled =>
+            Step { send: seq![], deliver: seq![], stage: Stage::Flight(after), status: Status::Handshaking },
+        super::dispatcher_spec::Action::Send(wire) => flight_sent(c, v, ciphers, wire, after),
+        // Only the acknowledgement returns `Ready`, never a step of the flight.
+        super::dispatcher_spec::Action::Ready => Step { send: seq![], deliver: seq![], stage: Stage::Ended,
+            status: Status::Failed(crate::spec::INTERNAL_ERROR, Origin::NotSent) },
+        super::dispatcher_spec::Action::Fail(alert, record) => flight_failure(alert, record),
+        super::dispatcher_spec::Action::PeerAlert(alert) => peer_failed(alert),
+        super::dispatcher_spec::Action::Close(record) => flight_closed(record),
+    }
+}
+
 /// A local failure before the handshake keys: choice 4.
 pub open spec fn hello_failure(description: u8) -> Step {
     Step { send: plaintext_alert(crate::spec::LEVEL_FATAL, description), deliver: seq![],
