@@ -62,6 +62,8 @@ use super::alerts::*;
 #[cfg(verus_only)]
 use super::authentication::*;
 #[cfg(verus_only)]
+use super::extension_bodies::*;
+#[cfg(verus_only)]
 use super::extensions::*;
 #[cfg(verus_only)]
 use super::post_handshake::*;
@@ -701,6 +703,8 @@ pub open spec fn server_hello_failures(sent: ClientHello, hello: ServerHello, re
     + response_block_failures(hello.extensions, extension_types(sent.extensions), TableMessage::Sh)
     // §4.2.8.
     + server_share_failures(sent, hello, retry)
+    // §4.2: the bodies of the block (`extension_bodies`), pre_shared_key's among them.
+    + extension_body_failures(sent.extensions, hello.extensions, TableMessage::Sh)
 }
 
 // --------------------------------------------------------------------------
