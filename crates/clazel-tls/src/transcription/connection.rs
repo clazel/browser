@@ -14,11 +14,12 @@
 //!   processing"; §5.1 says "if a handshake message is split over two or more records,
 //!   there MUST NOT be any other records between them". The first is a receiver's
 //!   rule, explicit about time; the second binds the sender and states no receiver
-//!   action. So this model drops the record and keeps the fragments. See
-//!   `docs/ERRATA.md`. **This choice was made after this file's author saw only the
-//!   heading of an existing `docs/ERRATA.md` entry on the same subject** and without
-//!   reading its body. An equivalence that fails here is worth a look rather than
-//!   assumed to be this file's bug or the crate's.
+//!   action. This file's author dropped the record and kept the fragments, after
+//!   seeing only the heading of an existing `docs/ERRATA.md` entry on the same subject.
+//!   **The equivalence author changed that** (see `receive_record`): the record is
+//!   fatal with `unexpected_message` inside a fragmented message, as the crate and
+//!   the one `docs/ERRATA.md` entry now say, because this file already treats §5.1 as
+//!   a receiver's rule for every other interleaved record type.
 //! - An interleaved alert or application data record is `unexpected_message` (§5.1's
 //!   rule, with no conflict) even if the alert is a closure or error one: the check
 //!   comes before the alert is read.
@@ -396,6 +397,18 @@ pub open spec fn receive_record(p: Primitives, connection: Connection, header: R
             Receive::Abort(ClientError::UnexpectedRecordType)
         } else if fragment != seq![0x01u8] {
             Receive::Abort(ClientError::ChangeCipherSpecBadValue)
+        } else if connection.handshake_fragments.len() != 0 {
+            // Changed by the equivalence author (transcription_equivalence), resolving
+            // docs/ERRATA.md "RFC 8446 §5 and §5.1: a compatibility CCS inside a
+            // fragmented handshake message". §5.1: "Handshake messages MUST NOT be
+            // interleaved with other record types. That is, if a handshake message is
+            // split over two or more records, there MUST NOT be any other records
+            // between them." This file already reads that sentence as a receiver's rule
+            // for alert and application data records (`InterleavedRecord`); a
+            // change_cipher_spec record is another record type, and Appendix D.4 puts the
+            // server's at a message boundary ("immediately after its first handshake
+            // message"), so §5's drop is read as applying at a boundary only.
+            Receive::Abort(ClientError::InterleavedRecord)
         } else {
             Receive::Continue(Progress { connection, application_data: seq![], records_to_send: seq![] })
         }

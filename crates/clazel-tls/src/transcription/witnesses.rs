@@ -1124,7 +1124,7 @@ proof fn record_refusals_unprotected()
     // §5.1, §6: one alert exactly.
     // §6: error alerts, by value not level, and unknown ones.
     // §6.1: closure alerts, by value not level, and data after them is ignored.
-    // §5.1: reassembly, interleaving, and the change_cipher_spec exception.
+    // §5.1: reassembly and interleaving, a change_cipher_spec included.
     // §5.1: ServerHello must end its record.
     // §4: the wrong message first; message_hash has no arm of `select`.
     assert(receive_aborted(stream_result(conn_wait_sh(), seq![22u8, 3, 3, 0x40, 0x01]), ClientError::PlaintextTooLong)) by (compute);
@@ -1146,7 +1146,9 @@ proof fn record_refusals_unprotected()
     assert(conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 0]) + plain(99, seq![1u8]))).read_closed) by (compute);
     assert(conn_after(stream_result(conn_wait_sh(), plain(ct_handshake(), seq![2u8, 0]))).handshake_fragments == seq![2u8, 0]) by (compute);
     assert(receive_aborted(stream_result(conn_wait_sh(), plain(ct_handshake(), seq![2u8, 0]) + plain(ct_alert(), seq![1u8, 0])), ClientError::InterleavedRecord)) by (compute);
-    assert(conn_after(stream_result(conn_wait_sh(), plain(ct_handshake(), seq![2u8, 0]) + plain(ct_change_cipher_spec(), seq![1u8]))).handshake_fragments == seq![2u8, 0]) by (compute);
+    // Changed by the equivalence author with `receive_record`: a change_cipher_spec
+    // inside a fragmented message is refused (docs/ERRATA.md).
+    assert(receive_aborted(stream_result(conn_wait_sh(), plain(ct_handshake(), seq![2u8, 0]) + plain(ct_change_cipher_spec(), seq![1u8])), ClientError::InterleavedRecord)) by (compute);
     assert(receive_aborted(stream_result(conn_wait_sh(), plain(ct_handshake(), write_server_hello(toy_server_hello()) + seq![8u8])), ClientError::KeyChangeNotAligned)) by (compute);
     assert(receive_aborted(stream_result(conn_wait_sh(), plain(ct_handshake(), toy_ee())), ClientError::UnexpectedHandshakeMessage)) by (compute);
     assert(receive_aborted(stream_result(conn_wait_sh(), plain(ct_handshake(), write_handshake(ht_message_hash(), toy_bytes(1)))), ClientError::UnexpectedHandshakeMessage)) by (compute);

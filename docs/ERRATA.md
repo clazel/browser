@@ -221,7 +221,23 @@ it evidently means. Each entry records what we specified instead.
   `receive` in `crates/clazel-tls/src/hello/bootstrap_spec.rs` (plaintext
   ServerHello/HRR) and `compatibility_ccs_dropped` in
   `crates/clazel-tls/src/connection/dispatcher_spec.rs` (protected
-  handshake).
+  handshake), and `receive_record` in
+  `crates/clazel-tls/src/transcription/connection.rs` (the clean-room
+  transcription, both phases).
+- **The other reading, and why not.** The clean-room transcription first read
+  it the other way, in an entry of its own written without reading this one:
+  drop the record and keep the fragments, because §5's sentence is a
+  receiver's rule explicit about time and §5.1's binds the sender with no
+  receiver action. The equivalence proof between the two found the
+  disagreement and kept this reading, for three reasons. The transcription
+  itself already reads the same §5.1 sentence as a receiver's rule for an
+  interleaved alert or application data record (`unexpected_message`), and a
+  CCS is "other record types" just as they are. A stream with a CCS inside a
+  message breaks a MUST NOT of §5.1, while one that drops it at a boundary
+  breaks nothing, so refusing loses no conforming peer. And BoringSSL and NSS
+  refuse it, which `crates/clazel-crypto/tests/conformance_tls.rs` pins. The
+  transcription's entry was removed and its `receive_record` changed, with
+  this reasoning at the spot.
 - **Reported upstream:** not yet.
 
 ## FIPS 186-5 §6.4.2 step 3 numbers its two sub-steps "a." and "a."
@@ -499,25 +515,6 @@ it evidently means. Each entry records what we specified instead.
   0x0300 always aborts with `protocol_version`; a HelloRetryRequest's other values
   must be 0x0303, or `illegal_parameter` by §6's note; with supported_versions, a
   ServerHello's is otherwise ignored.
-- **Reported upstream:** not yet.
-
-## RFC 8446 §5 and §5.1: dropping change_cipher_spec "at any time" against no interleaving
-
-- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
-- **Text:** §5: "An implementation may receive an unencrypted record of type
-  change_cipher_spec consisting of the single byte value 0x01 at any time after the
-  first ClientHello ... and MUST simply drop it without further processing." §5.1:
-  "if a handshake message is split over two or more records, there MUST NOT be any
-  other records between them."
-- **Problem:** a change_cipher_spec between two fragments of one handshake message
-  meets the first sentence and breaks the second.
-- **We specify:** in the clean-room transcription, the record is dropped and the
-  fragments kept (`receive_record` in
-  `crates/clazel-tls/src/transcription/connection.rs`), because §5's sentence is a
-  receiver's rule explicit about time, and §5.1's binds the sender and gives the
-  receiver no action. This entry was written without reading the earlier entry above
-  on the same subject, only its heading, so that the two readings stay independent;
-  the later equivalence proof decides if they differ.
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §5.3: "each record" has no sequence number before a key
