@@ -34,5 +34,7 @@
 //! | Crate spec | Theorem | Status |
 //! |------------|---------|--------|
 //! | `schedule/spec.rs` | [`schedule::theorem_schedule_equivalence`] | proven |
+//! | `transcript/spec.rs` | [`transcript::theorem_transcript_equivalence`] | proven (accepted steps; the crate's size caps are policy) |
 
 pub mod schedule;
+pub mod transcript;
