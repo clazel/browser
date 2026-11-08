@@ -479,7 +479,9 @@ it evidently means. Each entry records what we specified instead.
 - **We specify:** `illegal_parameter`, §4.2's MUST, in the clean-room transcription
   (`recognized_but_not_specified` and `response_block_failures` in
   `crates/clazel-tls/src/transcription/extensions.rs`). `unsupported_extension`
-  stays for an extension the client did not offer.
+  stays for an extension the client did not offer. The crate's spec reads it the
+  same way (`ErrKind::ExtensionNotAllowed`, `illegal_parameter`, in
+  `check_extensions` of `crates/clazel-tls/src/spec.rs`).
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §4.1.3's ServerHello cannot hold the older hello it must check
@@ -496,7 +498,10 @@ it evidently means. Each entry records what we specified instead.
 - **We specify:** the version is detected with the extensions optional and no floor;
   §4.1.3's structure applies once the message is known to be TLS 1.3 or a
   HelloRetryRequest (`read_server_hello_any_version` and `receive_server_hello` in
-  `crates/clazel-tls/src/transcription/`).
+  `crates/clazel-tls/src/transcription/`). The crate's spec does the same
+  (`legacy_server_hello_without_supported_versions` in
+  `crates/clazel-tls/src/spec.rs`, `validate` and `below_tls13` in
+  `crates/clazel-tls/src/hello/spec.rs`); that the two agree is not yet proven.
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §4.1.4, §4.2.1 and Appendix D.5 disagree on ServerHello.legacy_version
@@ -515,6 +520,11 @@ it evidently means. Each entry records what we specified instead.
   0x0300 always aborts with `protocol_version`; a HelloRetryRequest's other values
   must be 0x0303, or `illegal_parameter` by §6's note; with supported_versions, a
   ServerHello's is otherwise ignored.
+- **Not resolved: the crate's spec reads it differently.** `hello/spec.rs`
+  never looks at a ServerHello's or HelloRetryRequest's `legacy_version`
+  (§4.2.1's reading, for both), so it accepts 0x0300 that this entry aborts
+  on. The equivalence proof found this and has not resolved it; until one
+  side changes, this entry describes the clean-room transcription only.
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §5.3: "each record" has no sequence number before a key
@@ -527,7 +537,9 @@ it evidently means. Each entry records what we specified instead.
   nonce would then be wrong. §5's "without further processing" contradicts that.
 - **We specify:** the number counts records protected under the key, in the clean-room
   transcription (`receive_ciphertext` and `send_one` in
-  `crates/clazel-tls/src/transcription/connection.rs`).
+  `crates/clazel-tls/src/transcription/connection.rs`). The crate's spec does the
+  same: a compatibility CCS never reaches a `traffic::spec` epoch, so it uses no
+  nonce (`crates/clazel-tls/src/traffic/spec.rs`, `connection/dispatcher_spec.rs`).
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §4.4.3's "unless" gives a client nothing to verify with
@@ -542,5 +554,7 @@ it evidently means. Each entry records what we specified instead.
   willing to verify".
 - **We specify:** a client refuses a CertificateVerify whose algorithm it did not offer,
   always, with `illegal_parameter` by §6's note (`certificate_verify_failures` in
-  `crates/clazel-tls/src/transcription/authentication.rs`).
+  `crates/clazel-tls/src/transcription/authentication.rs`). The crate's spec does
+  the same (`on_verify` in `crates/clazel-tls/src/auth/spec.rs`), and the two are
+  proven equal there (`transcription_equivalence::auth`).
 - **Reported upstream:** not yet.
