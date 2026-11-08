@@ -341,6 +341,8 @@ impl<C: Crypto> Bootstrap<C> {
                 (super::bootstrap_lemmas::terminal(old(self).state(),
                     super::bootstrap_spec::Mode::Closed, old(self).state().reassembly),
                     super::bootstrap_spec::Action::Close)
+            } else if alert.description == crate::spec::USER_CANCELED {
+                (old(self).state(), super::bootstrap_spec::Action::None)
             } else {
                 (super::bootstrap_lemmas::terminal(old(self).state(),
                     super::bootstrap_spec::Mode::Failed, old(self).state().reassembly),
@@ -349,6 +351,8 @@ impl<C: Crypto> Bootstrap<C> {
     {
         if alert.description == crate::spec::CLOSE_NOTIFY {
             self.close()
+        } else if alert.description == crate::spec::USER_CANCELED {
+            Action::None
         } else {
             self.peer_alert(alert.description)
         }

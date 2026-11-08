@@ -43,6 +43,19 @@ pub proof fn lemma_legacy()
 {
     assert(parameters(crate::spec::ServerHello { legacy_version: 0x0304, ..server() }, seq![7u8]) is None) by (compute_only);
 }
+/// Appendix D.5: a legacy_version of 0x0300 aborts with protocol_version;
+/// §4.1.4: a HelloRetryRequest's must be 0x0303 (illegal_parameter), while a
+/// ServerHello's other values are ignored (§4.2.1).
+pub proof fn lemma_legacy_version_checks()
+    ensures
+        parsed(crate::spec::ServerHello { legacy_version: 0x0300, ..server() }, seq![7u8], false) == Err::<Selection, u8>(70u8),
+        parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..request() }, seq![7u8], false) == Err::<Selection, u8>(47u8),
+        parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..server() }, seq![7u8], false) is Ok,
+{
+    assert(parsed(crate::spec::ServerHello { legacy_version: 0x0300, ..server() }, seq![7u8], false) == Err::<Selection, u8>(70u8)) by (compute_only);
+    assert(parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..request() }, seq![7u8], false) == Err::<Selection, u8>(47u8)) by (compute_only);
+    assert(parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..server() }, seq![7u8], false) is Ok) by (compute_only);
+}
 /// §4.1.3: a server Random ending in the TLS 1.2 downgrade sentinel.
 pub open spec fn sentinel_random() -> Seq<u8> {
     Seq::new(24, |i: int| 0u8) + downgrade_tls12()

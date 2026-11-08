@@ -703,18 +703,32 @@ fn hand_built_cases() -> Vec<Case> {
             ReadOut::Done(Frame::Ccs, _)
         ),
     );
-    // 5.1 and 5.2: legacy_record_version.
+    // 5.1 and 5.2: legacy_record_version "MUST be ignored for all
+    // purposes"; a protected record's header, as received, is the
+    // additional data.
     add(
-        "legacy_record_version 0x0304",
-        fails_with(&[22, 3, 4, 0, 1, 7], false, ErrKind::BadLegacyRecordVersion),
+        "legacy_record_version 0x0304 is ignored",
+        matches!(read_record(&[22, 3, 4, 0, 1, 7], false), ReadOut::Done(Frame::Plain(22, [7]), [])),
     );
     add(
-        "legacy_record_version 0x0200",
-        fails_with(&[22, 2, 0, 0, 1, 7], false, ErrKind::BadLegacyRecordVersion),
+        "legacy_record_version 0x0200 is ignored",
+        matches!(read_record(&[22, 2, 0, 0, 1, 7], false), ReadOut::Done(Frame::Plain(22, [7]), [])),
     );
     add(
-        "legacy_record_version 0x0301 on a protected record",
-        fails_with(&[23, 3, 1, 0, 1, 7], true, ErrKind::BadLegacyRecordVersion),
+        "legacy_record_version 0x0301 on a protected record keeps its header",
+        matches!(read_record(&[23, 3, 1, 0, 1, 7], true), ReadOut::Done(Frame::Protected([23, 3, 1, 0, 1], [7]), [])),
+    );
+    let mut tampered = encrypt_record(&ToyAead, &IV, 3, 22, &[1, 0, 0, 0], 0);
+    if let Some(minor) = tampered.get_mut(2) {
+        *minor = 1;
+    }
+    let opened_tampered = match read_record(&tampered, true) {
+        ReadOut::Done(Frame::Protected(h, b), _) => Some(decrypt_record(&ToyAead, &IV, 3, h, b)),
+        _ => None,
+    };
+    add(
+        "a changed legacy_record_version fails as bad_record_mac",
+        matches!(opened_tampered, Some(Err(ErrKind::BadRecordMac))),
     );
     add(
         "legacy_record_version 0x0301 on a first ClientHello",
@@ -1245,11 +1259,11 @@ fn rustls_enum_numbers() {
         ErrKind::Interleaved,
         ErrKind::AllZeroInnerPlaintext,
         ErrKind::BadChangeCipherSpec,
-        ErrKind::BadLegacyRecordVersion,
         ErrKind::HandshakeTooLarge,
         ErrKind::DuplicateExtension,
         ErrKind::ExtensionNotAllowed,
         ErrKind::InvalidEnum,
+        ErrKind::TicketLifetimeTooLong,
         ErrKind::NonEmptyContext,
         ErrKind::MissingExtension,
         ErrKind::BadRecordMac,

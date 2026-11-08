@@ -127,6 +127,8 @@ pub open spec fn alert_step(s: super::bootstrap_spec::State, level: u8, descript
         crate::spec::Res::Ok((_, reassembly)) => {
             if description == crate::spec::CLOSE_NOTIFY {
                 (terminal(s, Mode::Closed, reassembly), Action::Close)
+            } else if description == crate::spec::USER_CANCELED {
+                (super::bootstrap_spec::State { reassembly, ..s }, Action::None)
             } else {
                 (terminal(s, Mode::Failed, reassembly), Action::Alert(description))
             }

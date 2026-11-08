@@ -17,6 +17,9 @@
 //!   and is fatal (unexpected_message) inside a fragmented ServerHello or HRR:
 //!   §5 and §5.1 conflict there; see docs/ERRATA.md. The connection
 //!   dispatcher applies the same rule to protected handshake messages.
+//! - RFC 8446 §6.1: a received user_canceled is not an error alert and
+//!   closes nothing (it "SHOULD be followed by a close_notify"): bootstrap
+//!   goes on reading, as the dispatcher and the post-handshake transducer do.
 //! - Authentication, key derivation, socket I/O, early data and PSK are outside
 //!   this bootstrap model.
 #[allow(unused_imports)]
@@ -48,7 +51,9 @@ pub enum Action {
     Send(Seq<u8>),
     /// Accepted parameters/transcript/share for the existing key-agreement join.
     Established(super::client_spec::Config, crate::transcript::spec::State, Seq<u8>),
-    /// A nonfatal peer alert was received.
+    /// The peer's error alert (§6: any alert but close_notify and
+    /// user_canceled) ended bootstrap. A user_canceled is not one (§6.1):
+    /// it changes nothing, and reading goes on.
     Alert(u8),
     /// Bootstrap failed with a TLS alert description.
     Fail(u8),
@@ -204,6 +209,12 @@ pub open spec fn receive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, event: Pee
                     if description == crate::spec::CLOSE_NOTIFY {
                         (State { mode: Mode::Closed, hello: None, pending_flight: seq![],
                             compatibility: s.compatibility, reassembly }, Action::Close)
+                    } else if description == crate::spec::USER_CANCELED {
+                        // RFC 8446 §6.1: user_canceled "notifies the recipient that the
+                        // sender is canceling the handshake" and "SHOULD be followed by a
+                        // close_notify": it is not an error alert and closes nothing, so
+                        // reading goes on until the close_notify.
+                        (State { reassembly, ..s }, Action::None)
                     } else {
                         (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
                             compatibility: s.compatibility, reassembly }, Action::Alert(description))

@@ -470,6 +470,11 @@ fn parse_new_session_ticket<'a>(body: &'a [u8], _hash_len: usize) -> (r: Result<
         None => return Err(ErrKind::Decode),
         Some(n) => n,
     };
+    // §4.6.1: "Servers MUST NOT use any value greater than 604800 seconds"
+    // ([`super::spec::parse_handshake_body`]).
+    if n.ticket_lifetime > 604800 {
+        return Err(ErrKind::TicketLifetimeTooLong);
+    }
     match check_extensions(n.extensions.as_slice(), MsgKind::Nst) {
         Some(k) => Err(k),
         None => Ok(HsMsg::NewSessionTicket(n)),

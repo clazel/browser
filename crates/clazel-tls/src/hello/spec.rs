@@ -137,14 +137,25 @@ pub open spec fn server_random(body: Seq<u8>) -> Seq<u8> {
 }
 /// §4.1.3/§4.1.4 acceptance after format checks.
 pub open spec fn parsed(sh: crate::spec::ServerHello, session_id: Seq<u8>, retried: bool) -> Result<Selection, u8> {
-    match parameters(sh, session_id) {
-        Some(alert) => Err(alert),
-        None => {
-            let is_retry = crate::spec::is_hello_retry_request(sh);
-            if !offered(sh.extensions, is_retry) { Err(110) }
-            else if is_retry { retry(sh, retried) }
-            else { share(sh) }
-        },
+    // Appendix D.5: "Any endpoint receiving a Hello message with ...
+    // ServerHello.legacy_version set to 0x0300 MUST abort the handshake with a
+    // "protocol_version" alert", more specific than §4.2.1's "MUST ignore".
+    if sh.legacy_version == 0x0300 { Err(crate::spec::PROTOCOL_VERSION) }
+    // §4.1.4: "Upon receipt of a HelloRetryRequest, the client MUST check the
+    // legacy_version ... as specified in Section 4.1.3", which says "the
+    // legacy_version field MUST be set to 0x0303". No alert is named; §6's
+    // note makes a semantically invalid value illegal_parameter.
+    else if crate::spec::is_hello_retry_request(sh) && sh.legacy_version != 0x0303 { Err(crate::spec::ILLEGAL_PARAMETER) }
+    else {
+        match parameters(sh, session_id) {
+            Some(alert) => Err(alert),
+            None => {
+                let is_retry = crate::spec::is_hello_retry_request(sh);
+                if !offered(sh.extensions, is_retry) { Err(110) }
+                else if is_retry { retry(sh, retried) }
+                else { share(sh) }
+            },
+        }
     }
 }
 /// §4.1.3 and §4.1.4: accept one complete ServerHello/HRR body.

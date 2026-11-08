@@ -119,9 +119,10 @@ pub proof fn lemma_ciphertext_limit()
     assert(read_record(seq![23u8, 3, 3, 0x40, 0x01], true) == Read::<Frame>::NeedMore) by (compute_only);
 }
 
-/// §5.1: a handshake record and an alert record are read, with the
-/// versions 0x0303 and (before protection) 0x0301; "MUST NOT" ones are
-/// refused.
+/// §5.1: a handshake record and an alert record are read, whatever their
+/// `legacy_record_version` ("MUST be ignored for all purposes"), and a
+/// protected record's header is kept as received, version included, for
+/// the additional data (§5.2).
 pub proof fn lemma_record_versions()
     ensures
         read_record(seq![22u8, 3, 3, 0, 1, 7], false) == Read::<Frame>::Done(
@@ -136,9 +137,18 @@ pub proof fn lemma_record_versions()
             Frame::Plain(Record { ctype: 21, fragment: seq![2u8, 40] }),
             seq![9u8],
         ),
-        read_record(seq![22u8, 3, 4, 0, 1, 7], false) == Read::<Frame>::Fail(ErrKind::BadLegacyRecordVersion),
-        read_record(seq![22u8, 3, 2, 0, 1, 7], false) == Read::<Frame>::Fail(ErrKind::BadLegacyRecordVersion),
-        read_record(seq![23u8, 3, 1, 0, 1, 7], true) == Read::<Frame>::Fail(ErrKind::BadLegacyRecordVersion),
+        read_record(seq![22u8, 3, 4, 0, 1, 7], false) == Read::<Frame>::Done(
+            Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }),
+            Seq::<u8>::empty(),
+        ),
+        read_record(seq![22u8, 3, 2, 0, 1, 7], false) == Read::<Frame>::Done(
+            Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }),
+            Seq::<u8>::empty(),
+        ),
+        read_record(seq![23u8, 3, 1, 0, 1, 7], true) == Read::<Frame>::Done(
+            Frame::Protected(seq![23u8, 3, 1, 0, 1], seq![7u8]),
+            Seq::<u8>::empty(),
+        ),
         read_record(seq![23u8, 3, 3, 0, 1, 7], true) == Read::<Frame>::Done(
             Frame::Protected(seq![23u8, 3, 3, 0, 1], seq![7u8]),
             Seq::<u8>::empty(),
@@ -156,9 +166,18 @@ pub proof fn lemma_record_versions()
         Frame::Plain(Record { ctype: 21, fragment: seq![2u8, 40] }),
         seq![9u8],
     )) by (compute_only);
-    assert(read_record(seq![22u8, 3, 4, 0, 1, 7], false) == Read::<Frame>::Fail(ErrKind::BadLegacyRecordVersion)) by (compute_only);
-    assert(read_record(seq![22u8, 3, 2, 0, 1, 7], false) == Read::<Frame>::Fail(ErrKind::BadLegacyRecordVersion)) by (compute_only);
-    assert(read_record(seq![23u8, 3, 1, 0, 1, 7], true) == Read::<Frame>::Fail(ErrKind::BadLegacyRecordVersion)) by (compute_only);
+    assert(read_record(seq![22u8, 3, 4, 0, 1, 7], false) == Read::<Frame>::Done(
+            Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }),
+            Seq::<u8>::empty(),
+        )) by (compute_only);
+    assert(read_record(seq![22u8, 3, 2, 0, 1, 7], false) == Read::<Frame>::Done(
+            Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }),
+            Seq::<u8>::empty(),
+        )) by (compute_only);
+    assert(read_record(seq![23u8, 3, 1, 0, 1, 7], true) == Read::<Frame>::Done(
+            Frame::Protected(seq![23u8, 3, 1, 0, 1], seq![7u8]),
+            Seq::<u8>::empty(),
+        )) by (compute_only);
     assert(read_record(seq![23u8, 3, 3, 0, 1, 7], true) == Read::<Frame>::Done(
         Frame::Protected(seq![23u8, 3, 3, 0, 1], seq![7u8]),
         Seq::<u8>::empty(),
@@ -451,7 +470,6 @@ pub proof fn lemma_alert_mapping()
         alert_of(ErrKind::Interleaved) == 10,
         alert_of(ErrKind::AllZeroInnerPlaintext) == 10,
         alert_of(ErrKind::BadChangeCipherSpec) == 10,
-        alert_of(ErrKind::BadLegacyRecordVersion) == 50,
         alert_of(ErrKind::HandshakeTooLarge) == 47,
         alert_of(ErrKind::DuplicateExtension) == 47,
         alert_of(ErrKind::ExtensionNotAllowed) == 47,
@@ -469,7 +487,6 @@ pub proof fn lemma_alert_mapping()
     assert(alert_of(ErrKind::Interleaved) == 10) by (compute_only);
     assert(alert_of(ErrKind::AllZeroInnerPlaintext) == 10) by (compute_only);
     assert(alert_of(ErrKind::BadChangeCipherSpec) == 10) by (compute_only);
-    assert(alert_of(ErrKind::BadLegacyRecordVersion) == 50) by (compute_only);
     assert(alert_of(ErrKind::HandshakeTooLarge) == 47) by (compute_only);
     assert(alert_of(ErrKind::DuplicateExtension) == 47) by (compute_only);
     assert(alert_of(ErrKind::ExtensionNotAllowed) == 47) by (compute_only);

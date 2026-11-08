@@ -1142,7 +1142,8 @@ proof fn record_refusals_unprotected()
     assert(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 40])) == Receive::PeerError(40)) by (compute);
     assert(stream_result(conn_wait_sh(), plain(ct_alert(), seq![2u8, 200])) == Receive::PeerError(200)) by (compute);
     assert(conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![2u8, 0]))).read_closed) by (compute);
-    assert(conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 90]))).read_closed) by (compute);
+    // Changed by the equivalence author: user_canceled closes nothing (§6.1).
+    assert(conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 90]))) == conn_wait_sh()) by (compute);
     assert(conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 0]) + plain(99, seq![1u8]))).read_closed) by (compute);
     assert(conn_after(stream_result(conn_wait_sh(), plain(ct_handshake(), seq![2u8, 0]))).handshake_fragments == seq![2u8, 0]) by (compute);
     assert(receive_aborted(stream_result(conn_wait_sh(), plain(ct_handshake(), seq![2u8, 0]) + plain(ct_alert(), seq![1u8, 0])), ClientError::InterleavedRecord)) by (compute);

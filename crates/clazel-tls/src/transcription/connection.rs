@@ -39,8 +39,9 @@
 //!   reading, by the reader: ServerHello, the server's Finished and KeyUpdate. A
 //!   HelloRetryRequest does not "immediately precede a key change", so the check does
 //!   not cover it. The message's own failures are looked at first.
-//! - Reads after a closure alert are skipped: "Any data received after a closure alert
-//!   has been received MUST be ignored." Writing is still possible: "This does not have
+//! - Reads after a close_notify are skipped: "Any data received after a closure alert
+//!   has been received MUST be ignored." A user_canceled changes nothing (changed by the
+//!   equivalence author; see `receive_alert_content`). Writing is still possible: "This does not have
 //!   any effect on its read side" is the same rule mirrored.
 //! - A fatal alert from the peer ends the run with `PeerError`. Its forgetting of
 //!   secrets (§6 "MUST forget") is not modelled, as a pure function has no memory.
@@ -275,13 +276,22 @@ pub open spec fn receive_alert_content(connection: Connection, content: Seq<u8>)
             // §5.1, §6.
             None => Receive::Abort(ClientError::Malformed),
             Some((_level, description)) =>
-                if is_closure_alert(description) {
+                if description == ad_close_notify() {
                     // §6.1.
                     Receive::Continue(Progress {
                         connection: Connection { read_closed: true, ..connection },
                         application_data: seq![],
                         records_to_send: seq![],
                     })
+                } else if description == ad_user_canceled() {
+                    // Changed by the equivalence author (transcription_equivalence): this
+                    // file closed the read side on user_canceled too. §6.1: user_canceled
+                    // "notifies the recipient that the sender is canceling the handshake for
+                    // some reason unrelated to a protocol failure" and "This alert SHOULD be
+                    // followed by a 'close_notify'", which would be ignored if user_canceled
+                    // had already ended the read side; "Any data received after a closure
+                    // alert" is read as after the close_notify. So it changes nothing.
+                    Receive::Continue(Progress { connection, application_data: seq![], records_to_send: seq![] })
                 } else {
                     // §6: "Upon receiving an error alert, the TLS implementation SHOULD
                     // indicate an error to the application and MUST NOT allow any further

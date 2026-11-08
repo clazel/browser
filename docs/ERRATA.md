@@ -520,11 +520,11 @@ it evidently means. Each entry records what we specified instead.
   0x0300 always aborts with `protocol_version`; a HelloRetryRequest's other values
   must be 0x0303, or `illegal_parameter` by §6's note; with supported_versions, a
   ServerHello's is otherwise ignored.
-- **Not resolved: the crate's spec reads it differently.** `hello/spec.rs`
-  never looks at a ServerHello's or HelloRetryRequest's `legacy_version`
-  (§4.2.1's reading, for both), so it accepts 0x0300 that this entry aborts
-  on. The equivalence proof found this and has not resolved it; until one
-  side changes, this entry describes the clean-room transcription only.
+- **The crate's spec follows it too** (`parsed` in
+  `crates/clazel-tls/src/hello/spec.rs`). It used to ignore the field in both
+  messages, §4.2.1's reading; the equivalence proof found the difference, and
+  the crate was changed to this entry's reading. The HelloRetryRequest check
+  rests on §4.1.4's sentence quoted above, which names the field explicitly.
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §5.3: "each record" has no sequence number before a key

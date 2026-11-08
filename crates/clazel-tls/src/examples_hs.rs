@@ -548,7 +548,14 @@ pub proof fn lemma_server_messages()
         parse_handshake(seq![4u8, 0, 0, 22, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 1, 9, 0, 8, 0, 0x2a, 0, 4, 0, 0, 16, 0], 32) is Ok,
         parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 1, 9, 0, 6, 0, 0x2b, 0, 2, 3, 4], 32)
             == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed),
+        // RFC 8446 section 4.6.1: ticket_lifetime "MUST NOT" exceed 604800.
+        parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x80, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32) is Ok,
+        parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x81, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32)
+            == Res::<HsMsg>::Err(ErrKind::TicketLifetimeTooLong),
 {
+    assert(parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x80, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x81, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32)
+        == Res::<HsMsg>::Err(ErrKind::TicketLifetimeTooLong)) by (compute_only);
     assert(parse_handshake(seq![8u8, 0, 0, 2, 0, 0], 32) == Res::<HsMsg>::Ok(HsMsg::EncryptedExtensions(Seq::<Ext>::empty()))) by (compute_only);
     assert(parse_handshake(seq![8u8, 0, 0, 6, 0, 4, 0, 0, 0, 0], 32)
         == Res::<HsMsg>::Ok(HsMsg::EncryptedExtensions(seq![Ext { etype: 0, data: Seq::<u8>::empty() }]))) by (compute_only);

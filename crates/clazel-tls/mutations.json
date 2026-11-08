@@ -141,12 +141,12 @@
       }
     },
     {
-      "id": "version-0301-only-protected",
+      "id": "record-version-checked",
       "file": "src/spec.rs",
-      "find": "v == 0x0303 || (!protected && v == 0x0301)",
-      "replace": "v == 0x0303 || (protected && v == 0x0301)",
+      "find": "if !ok_type {",
+      "replace": "if !ok_type || be_value(b.subrange(1, 3)) != 0x0303 {",
       "expect": "killed",
-      "reason": "0x0301 is refused on an unprotected record: lemma_record_versions is false.",
+      "reason": "A legacy_record_version other than 0x0303 is refused, which §5.1 says to ignore: lemma_record_versions is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
@@ -155,17 +155,17 @@
       }
     },
     {
-      "id": "version-0303-changed",
+      "id": "protected-header-constant",
       "file": "src/spec.rs",
-      "find": "v == 0x0303 || (!protected && v == 0x0301)",
-      "replace": "v == 0x0304 || (!protected && v == 0x0301)",
+      "find": "Read::Done(Frame::Protected(b.take(5), body), rest)",
+      "replace": "Read::Done(Frame::Protected(additional_data(len), body), rest)",
       "expect": "killed",
-      "reason": "0x0303 is refused: lemma_record_versions is false.",
+      "reason": "A protected record's additional data is the constant 23, 3, 3, len instead of the header received (§5.2): lemma_record_versions is false.",
       "module": "examples",
       "certificate": {
         "file": "src/certificates.rs",
         "lemma": "super::examples::lemma_record_versions()",
-        "witness": "read_record(seq![22u8, 3, 3, 0, 1, 7], false) != Read::<Frame>::Done(Frame::Plain(Record { ctype: 22, fragment: seq![7u8] }), Seq::<u8>::empty())"
+        "witness": "read_record(seq![23u8, 3, 1, 0, 1, 7], true) != Read::<Frame>::Done(Frame::Protected(seq![23u8, 3, 1, 0, 1], seq![7u8]), Seq::<u8>::empty())"
       }
     },
     {
@@ -729,6 +729,20 @@
       }
     },
     {
+      "id": "ticket-lifetime-unchecked",
+      "file": "src/spec.rs",
+      "find": "n.ticket_lifetime > 604800",
+      "replace": "n.ticket_lifetime > 604801",
+      "expect": "killed",
+      "reason": "A ticket_lifetime of 604801 seconds is accepted (§4.6.1): lemma_server_messages is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_server_messages()",
+        "witness": "parse_handshake(seq![4u8, 0, 0, 14, 0, 0x09, 0x3a, 0x81, 0, 0, 0, 6, 0, 0, 1, 9, 0, 0], 32) != Res::<HsMsg>::Err(ErrKind::TicketLifetimeTooLong)"
+      }
+    },
+    {
       "id": "allowed-only-first",
       "file": "src/spec.rs",
       "find": "es.len() == 0 || (extension_allowed(es[0].etype, m) && all_allowed(es.skip(1), m))",
@@ -768,6 +782,34 @@
         "file": "src/hello/mutation_certificates.rs",
         "lemma": "super::certificates::lemma_legacy_server_hello_extensions_without_supported_versions()",
         "witness": "super::spec::validate(Seq::empty(), false, super::certificates::legacy_server_hello_with_extensions(seq![0u8, 0, 0, 0])) != Err(crate::spec::PROTOCOL_VERSION)"
+      }
+    },
+    {
+      "id": "legacy-version-0300-ignored",
+      "file": "src/hello/spec.rs",
+      "find": "if sh.legacy_version == 0x0300 { Err(crate::spec::PROTOCOL_VERSION) }",
+      "replace": "if false { Err(crate::spec::PROTOCOL_VERSION) }",
+      "expect": "killed",
+      "reason": "A ServerHello with legacy_version 0x0300 is accepted (Appendix D.5): lemma_legacy_version_checks is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_legacy_version_checks()",
+        "witness": "super::spec::parsed(crate::spec::ServerHello { legacy_version: 0x0300, ..super::examples::server() }, seq![7u8], false) != Err::<super::spec::Selection, u8>(70u8)"
+      }
+    },
+    {
+      "id": "retry-legacy-version-ignored",
+      "file": "src/hello/spec.rs",
+      "find": "else if crate::spec::is_hello_retry_request(sh) && sh.legacy_version != 0x0303 { Err(crate::spec::ILLEGAL_PARAMETER) }",
+      "replace": "else if false { Err(crate::spec::ILLEGAL_PARAMETER) }",
+      "expect": "killed",
+      "reason": "A HelloRetryRequest with legacy_version 0x0302 is accepted (§4.1.4): lemma_legacy_version_checks is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_legacy_version_checks()",
+        "witness": "super::spec::parsed(crate::spec::ServerHello { legacy_version: 0x0302, ..super::examples::request() }, seq![7u8], false) != Err::<super::spec::Selection, u8>(47u8)"
       }
     },
     {

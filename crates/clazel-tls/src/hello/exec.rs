@@ -155,8 +155,11 @@ fn share<'a>(sh: &ServerHello<'a>) -> (out: Result<Selection<'a>, u8>)
 fn parsed<'a>(sh: ServerHello<'a>, session_id: &[u8], retried: bool) -> (out: Result<Selection<'a>, u8>)
     ensures result_view(out) == super::spec::parsed(sh@, session_id@, retried),
 {
-    if let Some(alert) = parameters(&sh, session_id) { return Err(alert); }
     let is_retry = crate::handshake::is_hello_retry_request(&sh);
+    // Appendix D.5 and §4.1.4 (`super::spec::parsed`).
+    if sh.legacy_version == 0x0300 { return Err(crate::spec::PROTOCOL_VERSION); }
+    if is_retry && sh.legacy_version != 0x0303 { return Err(crate::spec::ILLEGAL_PARAMETER); }
+    if let Some(alert) = parameters(&sh, session_id) { return Err(alert); }
     if !offered(sh.extensions.as_slice(), is_retry) { Err(110) }
     else if is_retry { retry(&sh, retried) }
     else { share(&sh) }
