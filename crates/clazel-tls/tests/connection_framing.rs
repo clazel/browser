@@ -78,7 +78,9 @@ fn maximum_ciphertext_fits_exactly_with_its_header() -> Result<(), String> {
 fn malformed_headers_fail_as_soon_as_header_is_complete() -> Result<(), String> {
     for (header, expected) in [
         (&[22, 3, 3, 0, 1][..], UNEXPECTED_MESSAGE),
-        (&[23, 3, 2, 0, 1][..], clazel_tls::spec::DECODE_ERROR),
+        // legacy_record_version is ignored (RFC 8446 §5.1), so an odd version
+        // fails only for the type.
+        (&[24, 3, 2, 0, 1][..], UNEXPECTED_MESSAGE),
         (&[23, 3, 3, 0x41, 1][..], RECORD_OVERFLOW),
     ] {
         let mut buffer = Buffer::new();
