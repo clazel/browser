@@ -69,6 +69,7 @@ pub open spec fn auth_agrees(p: crate::transcription::primitives::Primitives, s:
     &&& s.config.client_secret == hs.client_handshake_traffic_secret
     &&& s.config.signatures == crate::hello::client_spec::signatures()
     &&& crate::transcription::key_exchange::offered_signature_schemes(hs.hello) == offered_schemes()
+    &&& super::extensions::nats(s.config.extensions) == crate::transcription::extensions::extension_types(hs.hello.extensions)
     &&& (s.requested <==> hs.certificate_request_context is Some)
     &&& (hs.certificate_request_context matches Some(context) ==> context.len() == 0)
     &&& phase_is(s.phase, hs.state)

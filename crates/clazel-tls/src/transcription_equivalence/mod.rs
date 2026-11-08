@@ -38,7 +38,9 @@
 //! | `traffic/spec.rs`, record protection in `spec.rs` (TLSCiphertext, inner plaintext, nonce) | [`record::theorem_record_protection_equivalence`] | proven (live epoch; accepted sends; the header is the connection's) |
 //! | `Certificate` and the `select` on `msg_type` in `spec.rs` (with vectors, extension blocks, the handshake header) | [`messages::theorem_certificate_select_equivalence`] | proven (syntax; the entries' extension rules are authentication's) |
 //! | `hello/join_spec.rs` `derive`; `auth/spec.rs` Finished values; `dispatcher_spec.rs` `acknowledge` secrets | [`keys::theorem_handshake_keys_equivalence`] | proven (the key values; the state machines around them are not) |
-//! | `auth/spec.rs` `step`, CertificateVerify and Finished | [`auth::theorem_auth_verify_finished_equivalence`] | partial: these two messages; EncryptedExtensions, CertificateRequest and Certificate not proven |
+//! | `auth/spec.rs` `step`, CertificateVerify and Finished | [`auth::theorem_auth_verify_finished_equivalence`] | proven |
+//! | `auth/spec.rs` `step`, EncryptedExtensions, CertificateRequest, Certificate | [`auth_flight::theorem_auth_flight_equivalence`] | proven for the expected message type; temporary domain: extension bodies well formed (waiting on clean-room `ext_body_ok`) |
+//! | `spec.rs` §4.2 extension-block rules | [`extensions::theorem_extension_rules_equivalence`] | proven |
 //! | `hello/spec.rs` (`validate`) | none | not started |
 //! | `hello/client_spec.rs` (the ClientHello sent) | none | not started |
 //! | `hello/bootstrap_spec.rs` | none | not started |
@@ -53,6 +55,7 @@
 //! pull request that added this module.
 
 pub mod auth;
+pub mod auth_flight;
 pub mod extensions;
 pub mod keys;
 pub mod messages;
