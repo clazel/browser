@@ -2055,7 +2055,7 @@ pub open spec fn saturate(n: nat) -> nat {
 }
 
 /// Counts added component-wise, each clamped.
-pub open spec fn add(x: Specificity, y: Specificity) -> Specificity {
+pub open spec fn add_specificity(x: Specificity, y: Specificity) -> Specificity {
     Specificity { a: saturate(x.a + y.a), b: saturate(x.b + y.b), c: saturate(x.c + y.c) }
 }
 
@@ -2115,7 +2115,7 @@ pub open spec fn compound_specificity(compound: Seq<Simple>, k: int) -> Specific
     if k <= 0 || k > compound.len() {
         zero()
     } else {
-        add(compound_specificity(compound, k - 1), simple_specificity(compound[k - 1]))
+        add_specificity(compound_specificity(compound, k - 1), simple_specificity(compound[k - 1]))
     }
 }
 
@@ -2126,7 +2126,7 @@ pub open spec fn complex_specificity(c: Complex, n: int) -> Specificity
     if n <= 0 || n > c.compounds.len() {
         zero()
     } else {
-        add(
+        add_specificity(
             complex_specificity(c, n - 1),
             compound_specificity(c.compounds[n - 1], c.compounds[n - 1].len() as int),
         )
