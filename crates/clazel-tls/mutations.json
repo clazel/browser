@@ -2199,6 +2199,20 @@
       }
     },
     {
+      "id": "client-session-id-any-length",
+      "file": "src/hello/client_spec.rs",
+      "find": "(c.session_id.len() == 0 || c.session_id.len() == 32)",
+      "replace": "c.session_id.len() <= 32",
+      "expect": "killed",
+      "reason": "A legacy_session_id of 1 to 31 bytes is accepted and sent, against §4.1.2 (a new 32-byte value in compatibility mode, otherwise a zero-length vector): lemma_session_id_lengths is false.",
+      "module": "hello::client_examples",
+      "certificate": {
+        "file": "src/hello/client_certificates.rs",
+        "lemma": "super::client_examples::lemma_session_id_lengths()",
+        "witness": "super::client_spec::start(super::client_spec::Config { session_id: seq![7u8], ..super::client_examples::config() }) != Err::<(super::client_spec::State, Seq<u8>), u8>(80u8)"
+      }
+    },
+    {
       "id": "client-cipher",
       "file": "src/hello/client_spec.rs",
       "find": "cipher_suites: seq![0x1303u16]",
