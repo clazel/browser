@@ -51,7 +51,7 @@
 //! | `connection/dispatcher_spec.rs` (`feed`, `acknowledge`) | none | not started (its values: `keys` above) |
 //! | `connection/post_handshake_spec.rs` | none | not started |
 //! | `connection/driver_spec.rs` | none | not started |
-//! | `host/spec.rs`; the server_name of `hello/client_spec.rs` `extensions` | [`host::theorem_host_equivalence`] | proven for every host and every text naming it; domain: a `Dns` name is a hostname by the transcription's LDH grammar (the two differ outside it, [`host::lemma_names_outside_the_grammar`]; open) |
+//! | `host/spec.rs`; the server_name of `hello/client_spec.rs` `extensions` | [`host::theorem_host_equivalence`] | proven for every host and every text naming it, no domain; and the crate accepts a `Dns` name exactly when the transcription calls it a hostname (RFC 2181 §11 labels since #139) |
 //!
 //! The disagreements found so far, and the coverage gaps, are listed in the
 //! pull request that added this module.
