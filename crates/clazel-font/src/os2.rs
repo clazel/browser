@@ -1,8 +1,8 @@
 //! `OS/2`, OS/2 and Windows metrics (OpenType 1.9, chapter `os2`).
 //!
 //! <https://learn.microsoft.com/en-us/typography/opentype/otspec190/os2>.
-//! Apple's manual describes the same table ("'OS/2' table") and adds
-//! nothing this crate reads.
+//! Apple's manual lists `OS/2` among its optional tables and adds nothing
+//! this crate reads.
 
 use crate::read::{i16_at, u16_at};
 use crate::{Error, Tag};

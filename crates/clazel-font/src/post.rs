@@ -20,7 +20,9 @@ pub struct Post {
     /// `italicAngle` (`Fixed`, raw 16.16): "Italic angle in
     /// counter-clockwise degrees from the vertical."
     pub italic_angle: i32,
-    /// `underlinePosition`: "the y coordinate of the top of the underline".
+    /// `underlinePosition`: "the suggested distance of the top of the
+    /// underline from the baseline (negative values indicate below
+    /// baseline)".
     pub underline_position: i16,
     /// `underlineThickness`.
     pub underline_thickness: i16,

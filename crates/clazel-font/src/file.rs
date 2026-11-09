@@ -3,9 +3,10 @@
 //! header.
 //!
 //! <https://learn.microsoft.com/en-us/typography/opentype/otspec190/otff>.
-//! Second text: Apple, TrueType Reference Manual, chapter 6, "The font
-//! directory" and "TrueType collections"
-//! (<https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html>).
+//! Second text: Apple, TrueType Reference Manual, chapter 6, "The Font
+//! Directory"
+//! (<https://developer.apple.com/fonts/TrueType-Reference-Manual/RM06/Chap6.html>);
+//! collections are OpenType's alone here.
 //!
 //! Nothing here copies font bytes: a [`TableDirectory`] is the whole file
 //! plus the offset of one face's directory, and [`TableDirectory::table`]
@@ -15,15 +16,18 @@
 use crate::read::{self, add, element, tag_at, u16_at, u32_at, us};
 use crate::{Error, Tag};
 
-/// `sfntVersion` "0x00010000 for fonts containing TrueType outlines".
+/// `sfntVersion` 0x00010000: "OpenType fonts that contain TrueType outlines
+/// should use the value of 0x00010000 for the sfntVersion."
 pub const SFNT_TRUETYPE: u32 = 0x0001_0000;
-/// `sfntVersion` "'OTTO' … for fonts containing CFF data (version 1 or 2)".
+/// `sfntVersion` `'OTTO'`: "OpenType fonts containing CFF data (version 1
+/// or 2) should use 0x4F54544F ('OTTO', when re-interpreted as a Tag)".
 pub const SFNT_OTTO: u32 = u32::from_be_bytes(*b"OTTO");
 /// `sfntVersion` `'true'`, which Apple's manual allows for TrueType
 /// outlines ("The values 'true' (0x74727565) and 0x00010000 are recognized
 /// by OS X and iOS as referring to TrueType fonts"); OpenType's chapter
-/// says it "should not be used" for OpenType fonts, so we accept it as
-/// TrueType and nothing more.
+/// notes Apple's 'true' and 'typ1' and says "These version tags should not
+/// be used for OpenType fonts", so we accept `'true'` as TrueType and
+/// nothing more.
 pub const SFNT_APPLE_TRUE: u32 = u32::from_be_bytes(*b"true");
 /// `ttcTag` of the TTC Header, "Font Collection ID string: 'ttcf'".
 pub const TTC_TAG: u32 = u32::from_be_bytes(*b"ttcf");
@@ -79,9 +83,10 @@ impl<'a> TableDirectory<'a> {
     /// Read the TableDirectory at offset `at` of `file`.
     ///
     /// otff, "Table Directory": `sfntVersion`, then `numTables`, then the
-    /// three search fields, which we do not read ("parsing implementations
-    /// [should] not rely on the searchRange, entrySelector and rangeShift
-    /// fields" is said of `cmap` format 4; we apply it here too and search
+    /// three search fields, which we do not read (the `cmap` chapter says of
+    /// the same fields in format 4 that "it is strongly recommended that
+    /// parsing implementations not rely on the searchRange, entrySelector
+    /// and rangeShift fields in the font"; we apply that here too and search
     /// linearly), then `numTables` TableRecords. All of them must lie in the
     /// file.
     pub fn parse_at(file: &'a [u8], at: usize) -> Result<Self, Error> {

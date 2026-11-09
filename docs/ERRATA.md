@@ -547,3 +547,53 @@ it evidently means. Each entry records what we specified instead.
   always, with `illegal_parameter` by §6's note (`certificate_verify_failures` in
   `crates/clazel-tls/src/transcription/authentication.rs`).
 - **Reported upstream:** not yet.
+
+## OpenType 1.9 `otff`: the checksum sample declares `Endptr` and tests `EndPtr`
+
+- **Spec:** OpenType specification version 1.9, "The OpenType Font File",
+  "Calculating Checksums",
+  <https://learn.microsoft.com/en-us/typography/opentype/otspec190/otff>
+- **Text:** the C sample declares `uint32 *Endptr = Table+((Length+3) & ~3) / sizeof(uint32);`
+  and loops `while (Table < EndPtr)`.
+- **Problem:** C is case-sensitive, so read literally the sample does not
+  compile (`EndPtr` is undeclared). The prose around it is unambiguous: "the
+  unsigned sum of the uint32 units of a given table", with data "treat[ed] …
+  as though it contains zero padding to a length that is a multiple of four".
+- **We specify:** the prose: a wrapping sum of the big-endian `uint32` words,
+  the last zero-padded (`table_checksum` in `crates/clazel-font/src/file.rs`).
+- **Reported upstream:** not yet.
+
+## OpenType 1.9 `cmap` format 4: the example's entrySelector is 4, the formula gives 2
+
+- **Spec:** OpenType specification version 1.9, "cmap — Character to Glyph
+  Index Mapping Table", "Format 4: Segment mapping to delta values",
+  <https://learn.microsoft.com/en-us/typography/opentype/otspec190/cmap>
+- **Text:** the field table defines entrySelector as "Log2 of the maximum
+  power of 2 less than or equal to segCount (log2(searchRange/2), which is
+  equal to floor(log2(segCount)))"; the example that maps "characters 10-20,
+  30-90, and 153-480" has segCountX2 8 (segCount 4), searchRange 8 and
+  entrySelector 4.
+- **Problem:** by the formula, segCount 4 gives entrySelector 2
+  (log2(8/2)); the example's 4 contradicts the field's own definition. Its
+  searchRange (8) and rangeShift (0) are consistent with segCount 4.
+- **We specify:** nothing depends on it: we never read entrySelector, as the
+  chapter recommends ("parsing implementations not rely on the searchRange,
+  entrySelector and rangeShift fields"). The unit test that transcribes the
+  example (`opentype_format4_example` in `crates/clazel-font/src/cmap.rs`)
+  says so.
+- **Reported upstream:** not yet.
+
+## OpenType 1.9 `chapter2` Example 7: "i" is class 0 in the data and "Ascender Class 1" in the comment
+
+- **Spec:** OpenType specification version 1.9, "OpenType Layout Common Table
+  Formats", Example 7 (ClassDefFormat1 Table),
+  <https://learn.microsoft.com/en-us/typography/opentype/otspec190/chapter2>
+- **Text:** the classValueArray row for the ninth glyph reads hex data `0000`,
+  source `0`, comment "iGlyph, Ascender Class 1".
+- **Problem:** the data and the comment disagree. The example's prose says
+  "x-height glyphs are in Class 0, the ascender glyphs are in Class 1"; "i"
+  is an x-height letter, so the data is evidently right and the comment
+  wrong.
+- **We specify:** the data (`chapter2_example_7_class_def_format_1` in
+  `crates/clazel-font/src/layout.rs`).
+- **Reported upstream:** not yet.

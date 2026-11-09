@@ -52,13 +52,14 @@ impl<'a> Coverage<'a> {
 
     /// The Coverage Index of `glyph`, if it is covered.
     ///
-    /// - Format 1, "Individual glyph indices": `coverageFormat`,
-    ///   `glyphCount`, `glyphArray[glyphCount]` "in numerical order"; the
-    ///   index is the glyph's position in the array.
-    /// - Format 2, "Range of glyphs": `coverageFormat`, `rangeCount`,
-    ///   RangeRecords (`startGlyphID`, `endGlyphID`, `startCoverageIndex`)
-    ///   "in Start glyph ID order"; the index is `startCoverageIndex +
-    ///   glyph − startGlyphID`.
+    /// - Format 1: `coverageFormat`, `glyphCount`,
+    ///   `glyphArray[glyphCount]` ("The glyph indices must be in numerical
+    ///   order for binary searching"); the index is the glyph's position in
+    ///   the array.
+    /// - Format 2: `coverageFormat`, `rangeCount`, RangeRecords
+    ///   (`startGlyphID`, `endGlyphID`, `startCoverageIndex`), "Array of
+    ///   glyph ranges — ordered by startGlyphID"; the index is
+    ///   `startCoverageIndex + glyph − startGlyphID`.
     ///
     /// Any other format covers nothing.
     pub fn index(&self, glyph: u16) -> Result<Option<u16>, Error> {
@@ -465,8 +466,9 @@ impl<'a> Gpos<'a> {
 }
 
 /// LookupType 9, "Extension Positioning": `posFormat` 1,
-/// `extensionLookupType`, `extensionOffset` (`Offset32` "from beginning of
-/// ExtensionPosFormat1 subtable"). Only extensions of type 2 are followed;
+/// `extensionLookupType`, `extensionOffset` (`Offset32`, "relative to the
+/// start of the ExtensionPosFormat1 subtable"). Only extensions of type 2
+/// are followed;
 /// "The extensionLookupType field must be set to any lookup type other
 /// than 9", so a nested extension is never followed.
 fn extension(data: &[u8]) -> Result<Option<&[u8]>, Error> {
@@ -640,7 +642,7 @@ mod tests {
     /// chapter2, Example 7: ClassDefFormat1 over the 26 lowercase glyphs
     /// from 0x32 ("a"), x-height 0, ascender 1, descender 2. The hex data
     /// gives class 0 to "i", whose comment says "Ascender Class 1"; we
-    /// follow the data.
+    /// follow the data (docs/ERRATA.md).
     #[test]
     fn chapter2_example_7_class_def_format_1() -> Result<(), Error> {
         let classes = [
