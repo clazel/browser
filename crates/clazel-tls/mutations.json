@@ -743,6 +743,90 @@
       }
     },
     {
+      "id": "request-status-request-body-unchecked",
+      "file": "src/spec.rs",
+      "find": "e.etype == EXT_STATUS_REQUEST && m is Cr {",
+      "replace": "e.etype == EXT_STATUS_REQUEST && m is Cr && false {",
+      "expect": "killed",
+      "reason": "A CertificateRequest's non-empty status_request is accepted (RFC 8446 §4.4.2.1): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 5, 0, 1, 1], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "request-sct-body-unchecked",
+      "file": "src/spec.rs",
+      "find": "e.etype == EXT_SCT && m is Cr {",
+      "replace": "e.etype == EXT_SCT && m is Cr && false {",
+      "expect": "killed",
+      "reason": "A CertificateRequest's non-empty signed_certificate_timestamp is accepted (RFC 6962 §3.3.1, docs/ERRATA.md): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 0x12, 0, 1, 1], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "certificate-authorities-unchecked",
+      "file": "src/spec.rs",
+      "find": "read_certificate_authorities(e.data) is Some",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "A malformed CertificateAuthoritiesExtension is accepted (RFC 8446 §4.2.4): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 2, 7], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "oid-filters-unchecked",
+      "file": "src/spec.rs",
+      "find": "read_oid_filters(e.data) is Some",
+      "replace": "true",
+      "expect": "killed",
+      "reason": "A malformed OIDFilterExtension is accepted (RFC 8446 §4.2.5): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "parse_handshake(seq![13u8, 0, 0, 10, 0, 0, 7, 0, 0x30, 0, 3, 0, 1, 5], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
+      "id": "oid-repeat-allowed",
+      "file": "src/spec.rs",
+      "find": "oids.len() == 0 || (!oid_listed(oids.skip(1), oids[0]) && oids_distinct(oids.skip(1)))",
+      "replace": "oids.len() == 0 || oids_distinct(oids.skip(1))",
+      "expect": "killed",
+      "reason": "A repeated OID in oid_filters is accepted (RFC 8446 §4.2.5): lemma_request_bodies is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_request_bodies()",
+        "witness": "oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0])"
+      }
+    },
+    {
+      "id": "request-repeated-oid-ignored",
+      "file": "src/auth/spec.rs",
+      "find": "else if !filters_distinct { fail(s, crate::spec::ILLEGAL_PARAMETER) }",
+      "replace": "",
+      "expect": "killed",
+      "reason": "The CertificateRequest step ignores a repeated OID (RFC 8446 §4.2.5): lemma_repeated_oid is false.",
+      "module": "auth::examples",
+      "certificate": {
+        "file": "src/auth/certificates.rs",
+        "lemma": "super::examples::lemma_repeated_oid()",
+        "witness": "on_request(super::examples::crypto(), State { phase: Phase::CertificateOrRequest, ..super::examples::initial() }, seq![1u8], true, true, false).1 != Action::Fail(47u8)"
+      }
+    },
+    {
       "id": "allowed-only-first",
       "file": "src/spec.rs",
       "find": "es.len() == 0 || (extension_allowed(es[0].etype, m) && all_allowed(es.skip(1), m))",

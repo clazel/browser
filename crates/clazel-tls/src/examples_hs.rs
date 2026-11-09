@@ -613,4 +613,34 @@ pub proof fn lemma_server_messages()
         == Res::<HsMsg>::Err(ErrKind::ExtensionNotAllowed)) by (compute_only);
 }
 
+/// The bodies of a CertificateRequest's requests: §4.4.2.1's empty
+/// status_request, RFC 6962's empty signed_certificate_timestamp request
+/// (docs/ERRATA.md), §4.2.4's CertificateAuthoritiesExtension and §4.2.5's
+/// OIDFilterExtension, whose OIDs must differ.
+pub proof fn lemma_request_bodies()
+    ensures
+        parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 5, 0, 0], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 5, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 0x12, 0, 0], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 0x12, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 1, 7], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 2, 7], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        parse_handshake(seq![13u8, 0, 0, 17, 0, 0, 14, 0, 0x30, 0, 10, 0, 8, 1, 5, 0, 0, 1, 6, 0, 0], 32) is Ok,
+        parse_handshake(seq![13u8, 0, 0, 10, 0, 0, 7, 0, 0x30, 0, 3, 0, 1, 5], 32) == Res::<HsMsg>::Err(ErrKind::Decode),
+        oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 6, 0, 0]),
+        !oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0]),
+{
+    assert(parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 5, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 5, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 7, 0, 0, 4, 0, 0x12, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 8, 0, 0, 5, 0, 0x12, 0, 1, 1], 32) == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 1, 7], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 12, 0, 0, 9, 0, 0x2f, 0, 5, 0, 3, 0, 2, 7], 32)
+        == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 17, 0, 0, 14, 0, 0x30, 0, 10, 0, 8, 1, 5, 0, 0, 1, 6, 0, 0], 32) is Ok) by (compute_only);
+    assert(parse_handshake(seq![13u8, 0, 0, 10, 0, 0, 7, 0, 0x30, 0, 3, 0, 1, 5], 32) == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+    assert(oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 6, 0, 0])) by (compute_only);
+    assert(!oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0])) by (compute_only);
+}
+
 } // verus!

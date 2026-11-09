@@ -249,6 +249,73 @@ pub proof fn lemma_read_server_name_write(s: ServerName, rest: Seq<u8>)
     super::lemmas_pl::lemma_read_vec_write_vec(s.host_name, 1, 65535, rest);
 }
 
+/// [`oid_listed`] is membership.
+pub proof fn lemma_oid_listed(oids: Seq<Seq<u8>>, oid: Seq<u8>)
+    ensures
+        oid_listed(oids, oid) == (exists|k: int| 0 <= k < oids.len() && oids[k] == oid),
+    decreases oids.len(),
+{
+    if oids.len() > 0 {
+        let tail = oids.skip(1);
+        lemma_oid_listed(tail, oid);
+        if exists|k: int| 0 <= k < oids.len() && oids[k] == oid {
+            let k = choose|k: int| 0 <= k < oids.len() && oids[k] == oid;
+            if k > 0 {
+                assert(tail[k - 1] == oid);
+            }
+        }
+        if exists|k: int| 0 <= k < tail.len() && tail[k] == oid {
+            let k = choose|k: int| 0 <= k < tail.len() && tail[k] == oid;
+            assert(oids[k + 1] == oid);
+        }
+    }
+}
+
+/// [`oids_distinct`] is "no two equal".
+pub proof fn lemma_oids_distinct(oids: Seq<Seq<u8>>)
+    ensures
+        oids_distinct(oids) == (forall|i: int, j: int| 0 <= i < j < oids.len() ==> oids[i] != oids[j]),
+    decreases oids.len(),
+{
+    if oids.len() > 0 {
+        let tail = oids.skip(1);
+        lemma_oids_distinct(tail);
+        lemma_oid_listed(tail, oids[0]);
+        if forall|i: int, j: int| 0 <= i < j < oids.len() ==> oids[i] != oids[j] {
+            assert forall|i: int, j: int| 0 <= i < j < tail.len() implies tail[i] != tail[j] by {
+                assert(oids[i + 1] != oids[j + 1]);
+            }
+            assert forall|k: int| 0 <= k < tail.len() implies tail[k] != oids[0] by {
+                assert(oids[0] != oids[k + 1]);
+            }
+        }
+        if oids_distinct(oids) {
+            assert forall|i: int, j: int| 0 <= i < j < oids.len() implies oids[i] != oids[j] by {
+                if i == 0 {
+                    assert(tail[j - 1] == oids[j]);
+                } else {
+                    assert(tail[i - 1] != tail[j - 1]);
+                }
+            }
+        }
+    }
+}
+
+/// [`read_oid_filter`] reads at least one byte.
+pub proof fn lemma_read_oid_filter_shrinks(b: Seq<u8>)
+    ensures
+        match read_oid_filter(b) {
+            Some((oid, rest)) => rest.len() < b.len(),
+            None => true,
+        },
+{
+    super::lemmas_pl::lemma_pow256_widths();
+    super::lemmas_pl::lemma_read_vec_canonical(b, 1, 255);
+    if let Some((oid, r)) = read_vec(b, 1, 255) {
+        super::lemmas_pl::lemma_read_vec_canonical(r, 0, 65535);
+    }
+}
+
 /// What [`read_server_name`] accepts is one encoding.
 pub proof fn lemma_read_server_name_canonical(b: Seq<u8>)
     ensures
