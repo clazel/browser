@@ -131,4 +131,16 @@ pub proof fn lemma_retry_without_versions()
 {
     assert(validate(seq![7u8], false, retry_body(Seq::empty())) == Err::<Selection, u8>(50u8)) by (compute_only);
     assert(validate(seq![7u8], false, retry_body(seq![0u8, 7u8, 0u8, 44u8, 0u8, 3u8, 0u8, 1u8, 9u8])) == Err::<Selection, u8>(109u8)) by (compute_only);
+}
+/// §4.1.3 and Appendix B.3.1: `Extension extensions<6..2^16-1>`, so a
+/// HelloRetryRequest whose extension block is empty, or holds one empty
+/// extension (4 octets), is malformed (decode_error), not a message whose
+/// supported_versions is missing.
+pub proof fn lemma_retry_short_extensions()
+    ensures
+        validate(seq![7u8], false, retry_body(seq![0u8, 0u8])) == Err::<Selection, u8>(50u8),
+        validate(seq![7u8], false, retry_body(seq![0u8, 4u8, 0x12u8, 0x34u8, 0u8, 0u8])) == Err::<Selection, u8>(50u8),
+{
+    assert(validate(seq![7u8], false, retry_body(seq![0u8, 0u8])) == Err::<Selection, u8>(50u8)) by (compute_only);
+    assert(validate(seq![7u8], false, retry_body(seq![0u8, 4u8, 0x12u8, 0x34u8, 0u8, 0u8])) == Err::<Selection, u8>(50u8)) by (compute_only);
 }} // verus!

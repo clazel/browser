@@ -1920,9 +1920,11 @@ pub open spec fn legacy_server_hello_without_supported_versions(b: Seq<u8>) -> b
 }
 
 /// §4.1.3, the structure of a ServerHello (Appendix B.3.1), as the whole
-/// of a message body. The TLS 1.3 extension field is length-prefixed; its
-/// generic syntax permits empty vectors so negotiation can report the
-/// missing `supported_versions` extension as `protocol_version`.
+/// of a message body: `Extension extensions<6..2^16-1>`, so a block of 0 to
+/// 5 octets is `decode_error`. (A ServerHello without `supported_versions`
+/// is classified by [`legacy_server_hello_without_supported_versions`]
+/// before this parser, so its version is still reported as
+/// `protocol_version`; the floor matters for a HelloRetryRequest.)
 pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
     match read_uint(b, 2) {
         None => None,
@@ -1939,7 +1941,7 @@ pub open spec fn read_server_hello(b: Seq<u8>) -> Option<ServerHello> {
                                     match read_uint(r4, 1) {
                                         None => None,
                                         Some((comp, r5)) => {
-                                            match read_exts(r5, 0, 65535) {
+                                            match read_exts(r5, 6, 65535) {
                                                 None => None,
                                                 Some((exts, r6)) => {
                                                     if r6.len() != 0 {

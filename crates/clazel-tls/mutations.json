@@ -883,6 +883,20 @@
       }
     },
     {
+      "id": "server-hello-extensions-floor-0",
+      "file": "src/spec.rs",
+      "find": "match read_exts(r5, 6, 65535) {",
+      "replace": "match read_exts(r5, 0, 65535) {",
+      "expect": "killed",
+      "reason": "A ServerHello's extension block may be shorter than §4.1.3/B.3.1's `extensions<6..2^16-1>`, so a HelloRetryRequest with an empty block is missing_extension instead of decode_error: lemma_retry_short_extensions is false.",
+      "module": "hello::examples",
+      "certificate": {
+        "file": "src/hello/certificates.rs",
+        "lemma": "super::examples::lemma_retry_short_extensions()",
+        "witness": "super::spec::validate(seq![7u8], false, super::examples::retry_body(seq![0u8, 0u8])) != Err::<super::spec::Selection, u8>(50u8)"
+      }
+    },
+    {
       "id": "hello-retry-missing-versions-protocol-version",
       "file": "src/hello/spec.rs",
       "find": "None => if crate::spec::is_hello_retry_request(sh) { Some(crate::spec::MISSING_EXTENSION) }",
