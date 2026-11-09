@@ -119,6 +119,9 @@ pub mod post;
 mod error;
 mod read;
 
+#[cfg(kani)]
+mod proofs;
+
 pub use error::Error;
 pub use face::Face;
 

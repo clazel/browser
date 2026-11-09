@@ -631,15 +631,47 @@ pub struct Outline {
     pub contour_ends: Vec<usize>,
 }
 
+/// The bounds of a flattening. [`outline`] uses [`Limits::STATED`]; the
+/// Kani harnesses run the same code with smaller ones.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Limits {
+    pub(crate) depth: u8,
+    pub(crate) components: usize,
+    pub(crate) points: usize,
+}
+
+impl Limits {
+    /// [`MAX_COMPONENT_DEPTH`], [`MAX_COMPONENTS`], [`MAX_POINTS`].
+    pub(crate) const STATED: Self = Self {
+        depth: MAX_COMPONENT_DEPTH,
+        components: MAX_COMPONENTS,
+        points: MAX_POINTS,
+    };
+}
+
 /// What a flattening has used so far of its bounds.
 struct Budget {
+    limits: Limits,
     components: usize,
 }
 
 /// Flatten glyph `glyph` into an [`Outline`].
 pub fn outline(glyf: &Glyf<'_>, loca: &Loca<'_>, glyph: u16) -> Result<Outline, Error> {
+    outline_within(glyf, loca, glyph, Limits::STATED)
+}
+
+/// [`outline`] with the given bounds.
+pub(crate) fn outline_within(
+    glyf: &Glyf<'_>,
+    loca: &Loca<'_>,
+    glyph: u16,
+    limits: Limits,
+) -> Result<Outline, Error> {
     let mut out = Outline::default();
-    let mut budget = Budget { components: 0 };
+    let mut budget = Budget {
+        limits,
+        components: 0,
+    };
     append(glyf, loca, glyph, 0, &mut budget, &mut out)?;
     Ok(out)
 }
@@ -657,7 +689,7 @@ fn append(
         Glyph::Empty => Ok(()),
         Glyph::Simple(s) => {
             let base = out.points.len();
-            if add(base, s.num_points())? > MAX_POINTS {
+            if add(base, s.num_points())? > budget.limits.points {
                 return Err(Error::PointCount);
             }
             for p in s.points() {
@@ -671,13 +703,13 @@ fn append(
         }
         Glyph::Composite(c) => {
             let depth = depth.checked_add(1).ok_or(Error::ComponentDepth)?;
-            if depth > MAX_COMPONENT_DEPTH {
+            if depth > budget.limits.depth {
                 return Err(Error::ComponentDepth);
             }
             for component in c.components() {
                 let component = component?;
                 budget.components = add(budget.components, 1)?;
-                if budget.components > MAX_COMPONENTS {
+                if budget.components > budget.limits.components {
                     return Err(Error::ComponentCount);
                 }
                 let base = out.points.len();
@@ -728,4 +760,150 @@ fn place(component: &Component, base: usize, out: &mut Outline) -> Result<(), Er
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::head::LocaFormat;
+
+    /// A simple glyph from the chapter's encoding rules: one contour of
+    /// four points, flags with a repeat, short positive and negative
+    /// vectors, a "same" coordinate and a 16-bit delta.
+    fn square() -> Vec<u8> {
+        let mut g = vec![0, 1, 0, 0, 0, 0, 0, 0, 0, 0];
+        g.extend_from_slice(&[0, 3]); // endPtsOfContours: [3]
+        g.extend_from_slice(&[0, 1, 0xAA]); // one byte of instructions, skipped
+        // Point 0: on, x short positive (10), y 16-bit (0).
+        // Points 1, 2: on, x same, y short positive (20), by REPEAT_FLAG 1.
+        // Point 3: off, x short negative (-10), y same.
+        g.extend_from_slice(&[0x13, 0x3D, 1, 0x22]);
+        g.extend_from_slice(&[10, 10]); // x: +10, then point 3's -10
+        g.extend_from_slice(&[0, 0, 20, 20]); // y: 0 (int16), +20, +20
+        g
+    }
+
+    #[test]
+    fn simple_glyph_flags_and_vectors() -> Result<(), Error> {
+        let g = square();
+        let Glyph::Simple(s) = Glyph::parse(&g)? else {
+            return Err(Error::Truncated);
+        };
+        assert_eq!(
+            (s.num_contours(), s.num_points(), s.end_point(0)?),
+            (1, 4, 3)
+        );
+        let points: Vec<Point> = s.points().collect::<Result<_, _>>()?;
+        let expect = [
+            (10, 0, true),
+            (10, 20, true),
+            (10, 40, true),
+            (0, 40, false),
+        ];
+        for (p, (x, y, on)) in points.iter().zip(expect) {
+            assert_eq!((p.x, p.y, p.on_curve), (x, y, on));
+        }
+        assert_eq!(points.len(), 4);
+        // A repeat that runs past the last point is refused.
+        let mut bad = g.clone();
+        if let Some(b) = bad.get_mut(17) {
+            *b = 5;
+        }
+        assert_eq!(
+            Glyph::parse(&bad).err(),
+            Some(Error::InvalidValue(Tag::GLYF))
+        );
+        // Coordinates past the end of the glyph are refused.
+        bad = g;
+        bad.pop();
+        assert_eq!(Glyph::parse(&bad).err(), Some(Error::Truncated));
+        Ok(())
+    }
+
+    /// `glyf` with glyph 0 the square and glyph 1 a composite of it twice:
+    /// once scaled by 0.5 and offset (scaled offset), once placed by
+    /// matching its point 0 to the first copy's point 2.
+    fn composite_font() -> (Vec<u8>, Vec<u8>) {
+        let mut glyf = square();
+        // Short `loca` offsets are halved, so glyphs start at even offsets
+        // ("the local offsets should be word aligned").
+        glyf.push(0);
+        let start = u16::try_from(glyf.len()).unwrap_or(0);
+        glyf.extend_from_slice(&[0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0]);
+        // ARGS_ARE_XY_VALUES | WE_HAVE_A_SCALE | MORE_COMPONENTS |
+        // SCALED_COMPONENT_OFFSET; glyph 0; offset (100, -4); scale 0.5.
+        glyf.extend_from_slice(&[0x08, 0x2A, 0, 0, 100, 0xFC, 0x20, 0x00]);
+        // Point matching (no ARGS_ARE_XY_VALUES): parent point 2, child 0.
+        glyf.extend_from_slice(&[0x00, 0x00, 0, 0, 2, 0]);
+        let end = u16::try_from(glyf.len()).unwrap_or(0);
+        let loca = [0, start / 2, end / 2]
+            .iter()
+            .flat_map(|v: &u16| v.to_be_bytes())
+            .collect();
+        (glyf, loca)
+    }
+
+    #[test]
+    fn composite_scale_offset_and_point_matching() -> Result<(), Error> {
+        let (glyf_bytes, loca_bytes) = composite_font();
+        let loca = Loca::parse(&loca_bytes, LocaFormat::Short, 2)?;
+        let glyf = Glyf::new(&glyf_bytes);
+        let o = outline(&glyf, &loca, 1)?;
+        let xy: Vec<(i32, i32)> = o.points.iter().map(|p| (p.x, p.y)).collect();
+        // First copy: (x, y) / 2 + (100, -4) / 2.
+        // Second copy: unscaled, moved so its point 0 (10, 0) lands on the
+        // first copy's point 2 (55, 18).
+        assert_eq!(
+            xy,
+            [
+                (55, -2),
+                (55, 8),
+                (55, 18),
+                (50, 18),
+                (55, 18),
+                (55, 38),
+                (55, 58),
+                (45, 58)
+            ]
+        );
+        assert_eq!(o.contour_ends, [4, 8]);
+        Ok(())
+    }
+
+    #[test]
+    fn cycles_end_at_the_depth_bound() -> Result<(), Error> {
+        // Glyph 0 is a composite of itself.
+        let mut glyf_bytes = vec![0xFF, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0];
+        glyf_bytes.extend_from_slice(&[0x00, 0x02, 0, 0, 0, 0]);
+        let loca_bytes = [0, 0, 0, 8];
+        let loca = Loca::parse(&loca_bytes, LocaFormat::Short, 1)?;
+        let glyf = Glyf::new(&glyf_bytes);
+        assert_eq!(outline(&glyf, &loca, 0).err(), Some(Error::ComponentDepth));
+        Ok(())
+    }
+
+    #[test]
+    fn transform_rounds_half_away_from_zero() -> Result<(), Error> {
+        let half = Transform {
+            xx: 8192,
+            yx: 0,
+            xy: 0,
+            yy: 8192,
+        };
+        assert_eq!(half.apply(3, -3)?, (2, -2));
+        assert_eq!(half.apply(1, -1)?, (1, -1));
+        assert_eq!(
+            Transform::IDENTITY.apply(i32::MAX, i32::MIN)?,
+            (i32::MAX, i32::MIN)
+        );
+        // Two of 2.0 overflow i32.
+        let two = Transform {
+            xx: i16::MIN,
+            yx: 0,
+            xy: i16::MIN,
+            yy: 0,
+        };
+        assert_eq!(two.apply(i32::MIN, i32::MIN).err(), Some(Error::Overflow));
+        Ok(())
+    }
 }
