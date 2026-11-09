@@ -20,14 +20,16 @@
 //!   repeats, is followed; see `docs/ERRATA.md`. If an extension is both not
 //!   specified for the message and not offered, both are in the failure list,
 //!   table rule first.
-//! - Extension contents are decoded only where this RFC defines them and a
-//!   client needs them: supported_versions, cookie, signature_algorithms,
-//!   supported_groups, key_share. The contents of status_request and
-//!   signed_certificate_timestamp go to certificate validation unread; those of
-//!   server_name, ALPN and the other RFCs' extensions are opaque.
+//! - This file decodes the contents the client acts on: supported_versions,
+//!   cookie, signature_algorithms, supported_groups, key_share. The syntax of
+//!   every body a server may send, in each message §4.2's table allows it in,
+//!   including the other RFCs' extensions, is in `extension_bodies`; RFC 6066
+//!   §3's server_name is in `server_name`. What the contents of status_request
+//!   and signed_certificate_timestamp mean is certificate validation's.
 //! - supported_groups in EncryptedExtensions is not acted on ("Clients MUST NOT
 //!   act upon any information found in 'supported_groups' prior to successful
-//!   completion of the handshake"), so it is not decoded.
+//!   completion of the handshake"); its syntax is checked
+//!   (`extension_bodies`).
 //! - signature_algorithms_cert is the certificate validator's concern, with the
 //!   rest of chain validation; the model only carries it in the offer.
 

@@ -12,7 +12,8 @@
 //!   first is not observable, and the second has no stated receiver action and
 //!   no effect on a client that does not resume.
 //! - `early_data` in a NewSessionTicket holds "max_early_data_size"; a client
-//!   without 0-RTT never uses it, so its contents are not decoded.
+//!   without 0-RTT never uses it, so only its syntax, a `uint32`, is checked
+//!   (`extension_bodies`).
 //! - §4.6.2 Post-handshake authentication: the profile never offers
 //!   `post_handshake_auth`, so a post-handshake CertificateRequest is always
 //!   `unexpected_message`, as §4.6.2 says.
@@ -24,6 +25,8 @@ use super::extensions::Extension;
 
 #[cfg(verus_only)]
 use super::alerts::*;
+#[cfg(verus_only)]
+use super::extension_bodies::*;
 #[cfg(verus_only)]
 use super::extensions::*;
 #[cfg(verus_only)]
@@ -91,6 +94,8 @@ pub open spec fn new_session_ticket_failures(message: NewSessionTicket) -> Seq<C
     fails_if(message.ticket_lifetime > 604800, ClientError::TicketLifetimeTooLong)
     // "Clients MUST ignore unrecognized extensions", and §4.2's table.
     + block_rules_failures(message.extensions, TableMessage::Nst)
+    // §4.2.10: early_data's `uint32 max_early_data_size` (`extension_bodies`).
+    + extension_body_failures(seq![], message.extensions, TableMessage::Nst)
 }
 
 /// §4.6.1: "The PSK associated with the ticket is computed as:

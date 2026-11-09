@@ -260,6 +260,16 @@ pub enum ClientError {
     /// §4.6.3: "If an implementation receives any other value, it MUST terminate
     /// the connection with an 'illegal_parameter' alert."
     KeyUpdateBadRequest,
+    /// The body of a received extension of this type is well formed but breaks a
+    /// rule of the RFC that defines it. Each rule is in
+    /// `extension_bodies::body_semantics_valid`: RFC 6066 §4 ("if a client
+    /// receives a maximum fragment length negotiation response that differs from
+    /// the length it requested, it MUST also abort the handshake with an
+    /// 'illegal_parameter' alert"), RFC 6520 §2 ("Upon reception of an unknown
+    /// mode, an error Alert message using illegal_parameter ... MUST be sent"),
+    /// RFC 5764 §4.1.3 (its "invalid_parameter"; see the comment there), and the
+    /// rest by §6's note ("syntactically correct but semantically invalid").
+    ExtensionBodyInvalid(nat),
 
     // ----- unsupported_extension -----
     /// §4.2: "Implementations MUST NOT send extension responses if the remote
@@ -378,6 +388,7 @@ pub open spec fn required_alert(error: ClientError) -> nat {
         ClientError::SignatureSchemeKeyMismatch => ad_illegal_parameter(),
         ClientError::TicketLifetimeTooLong => ad_illegal_parameter(),
         ClientError::KeyUpdateBadRequest => ad_illegal_parameter(),
+        ClientError::ExtensionBodyInvalid(_) => ad_illegal_parameter(),
 
         ClientError::ExtensionNotOffered => ad_unsupported_extension(),
 
