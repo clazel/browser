@@ -41,9 +41,9 @@
 //! | `auth/spec.rs` `step`, CertificateVerify and Finished | [`auth::theorem_auth_verify_finished_equivalence`] | proven |
 //! | `auth/spec.rs` `step`, EncryptedExtensions, CertificateRequest, Certificate | [`auth_flight::theorem_auth_flight_equivalence`] | proven for the expected message type, extension bodies included ([`bodies`]); offers are the client's profile |
 //! | `spec.rs` §4.2 extension-block rules | [`extensions::theorem_extension_rules_equivalence`] | proven |
-//! | `spec.rs` `ext_body_ok`, `auth/spec.rs` `request_filters_distinct` | [`bodies::lemma_cr_bodies`], [`bodies::lemma_ee_bodies`] | proven for CertificateRequest (every block) and EncryptedExtensions (the profile's offers); ServerHello and HelloRetryRequest bodies with the hello, NewSessionTicket's with post-handshake |
+//! | `spec.rs` `ext_body_ok`, `auth/spec.rs` `request_filters_distinct` | [`bodies::lemma_cr_bodies`], [`bodies::lemma_ee_bodies`], [`hello::lemma_sh_bodies`], [`hello::lemma_hrr_bodies`] | proven for CertificateRequest (every block), EncryptedExtensions (the profile's offers), ServerHello and HelloRetryRequest (every block, inside the hello theorem); NewSessionTicket's with post-handshake |
 //! | Appendix D.4 client CCS: `bootstrap_spec` before ClientHello2, `handshake_spec::needs_ccs`, `dispatcher_spec` `compatibility_ccs_record`/`protect_client_flight` | [`ccs::theorem_compatibility_ccs`] | partial: the bytes and the placement (once; before ClientHello2 after a retry, else before the encrypted flight), mode = non-empty session ID; not yet tied to the connection streams |
-//! | `hello/spec.rs` (`validate`) | none | not started; the case analysis found two crate differences, one fixed (the HelloRetryRequest Random is examined first) and one open (the extensions floor of 6) |
+//! | `hello/spec.rs` (`validate`); `spec.rs` `read_server_hello` and the legacy preflight | [`hello::theorem_hello_equivalence`] | proven for every body, under the hypotheses that the transcription's ClientHello and retry record are the crate's profile ([`hello::sent_is_profile`], [`hello::retry_is_profile`], to be discharged by the `client_spec` and driver theorems); the two crate differences found are fixed (the HelloRetryRequest Random is examined first; the extensions floor of 6) |
 //! | `hello/client_spec.rs` (the ClientHello sent) | none | not started |
 //! | `hello/bootstrap_spec.rs` | none | not started |
 //! | `traffic/handshake_spec.rs` (`start`) | none | not started (its parts: `keys` and `record` above) |
@@ -61,6 +61,7 @@ pub mod auth_flight;
 pub mod bodies;
 pub mod ccs;
 pub mod extensions;
+pub mod hello;
 pub mod host;
 pub mod keys;
 pub mod messages;
