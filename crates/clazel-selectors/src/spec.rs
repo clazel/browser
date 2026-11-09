@@ -77,9 +77,11 @@
 //! - "Document white space characters" (`:empty`) are CSS Text 3's tabs, spaces and segment
 //!   breaks, which in an HTML document are U+0009, U+000A, U+000C, U+000D and U+0020, the
 //!   characters HTML's inter-element whitespace is made of.
-//! - Specificity components are `nat`s. §17 allows clamping; none is needed, since each
-//!   counts simple selectors of a selector that the exec parser read from at most
-//!   `MAX_PARSER_INPUT` code points.
+//! - **meaning** Specificity components saturate at `u32::MAX` at every addition. §17:
+//!   "implementations may have limitations on the size of A, B, or C. If so, values higher
+//!   than the limit must be clamped to that limit, and not overflow." No selector reaches
+//!   the limit: each component counts simple selectors of a selector read from at most
+//!   `MAX_PARSER_INPUT` (2^29) code points.
 //! - "Represents any index i = An + B for any non-negative integer n" is evaluated
 //!   arithmetically ([`nth_index_matches`]); `lemmas::lemma_nth_index_matches` proves it equal
 //!   to the existential.
@@ -2038,9 +2040,23 @@ pub open spec fn zero() -> Specificity {
     Specificity { a: 0, b: 0, c: 0 }
 }
 
-/// Counts added component-wise.
+/// The limit of each component (modelling choices).
+pub open spec fn specificity_limit() -> nat {
+    0xFFFF_FFFF
+}
+
+/// `n`, "clamped to that limit".
+pub open spec fn saturate(n: nat) -> nat {
+    if n > specificity_limit() {
+        specificity_limit()
+    } else {
+        n
+    }
+}
+
+/// Counts added component-wise, each clamped.
 pub open spec fn add(x: Specificity, y: Specificity) -> Specificity {
-    Specificity { a: x.a + y.a, b: x.b + y.b, c: x.c + y.c }
+    Specificity { a: saturate(x.a + y.a), b: saturate(x.b + y.b), c: saturate(x.c + y.c) }
 }
 
 /// §17: "Specificities are compared by comparing the three components in order: the
