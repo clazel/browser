@@ -43,7 +43,7 @@
 //! | `spec.rs` §4.2 extension-block rules | [`extensions::theorem_extension_rules_equivalence`] | proven |
 //! | `spec.rs` `ext_body_ok`, `auth/spec.rs` `request_filters_distinct` | [`bodies::lemma_cr_bodies`], [`bodies::lemma_ee_bodies`] | proven for CertificateRequest (every block) and EncryptedExtensions (the profile's offers); ServerHello and HelloRetryRequest bodies with the hello, NewSessionTicket's with post-handshake |
 //! | Appendix D.4 client CCS: `bootstrap_spec` before ClientHello2, `handshake_spec::needs_ccs`, `dispatcher_spec` `compatibility_ccs_record`/`protect_client_flight` | [`ccs::theorem_compatibility_ccs`] | partial: the bytes and the placement (once; before ClientHello2 after a retry, else before the encrypted flight), mode = non-empty session ID; not yet tied to the connection streams |
-//! | `hello/spec.rs` (`validate`) | none | not started |
+//! | `hello/spec.rs` (`validate`) | none | not started; the case analysis found two crate differences, one fixed (the HelloRetryRequest Random is examined first) and one open (the extensions floor of 6) |
 //! | `hello/client_spec.rs` (the ClientHello sent) | none | not started |
 //! | `hello/bootstrap_spec.rs` | none | not started |
 //! | `traffic/handshake_spec.rs` (`start`) | none | not started (its parts: `keys` and `record` above) |
