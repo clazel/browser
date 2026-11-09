@@ -44,7 +44,7 @@
 //! | `spec.rs` `ext_body_ok`, `auth/spec.rs` `request_filters_distinct` | [`bodies::lemma_cr_bodies`], [`bodies::lemma_ee_bodies`], [`hello::lemma_sh_bodies`], [`hello::lemma_hrr_bodies`] | proven for CertificateRequest (every block), EncryptedExtensions (the profile's offers), ServerHello and HelloRetryRequest (every block, inside the hello theorem); NewSessionTicket's with post-handshake |
 //! | Appendix D.4 client CCS: `bootstrap_spec` before ClientHello2, `handshake_spec::needs_ccs`, `dispatcher_spec` `compatibility_ccs_record`/`protect_client_flight` | [`ccs::theorem_compatibility_ccs`] | partial: the bytes and the placement (once; before ClientHello2 after a retry, else before the encrypted flight), mode = non-empty session ID; not yet tied to the connection streams |
 //! | `hello/spec.rs` (`validate`); `spec.rs` `read_server_hello` and the legacy preflight | [`hello::theorem_hello_equivalence`] | proven for every body, under the hypotheses that the transcription's ClientHello and retry record are the crate's profile ([`hello::sent_is_profile`], [`hello::retry_is_profile`], to be discharged by the `client_spec` and driver theorems); the two crate differences found are fixed (the HelloRetryRequest Random is examined first; the extensions floor of 6) |
-//! | `hello/client_spec.rs` (the ClientHello sent) | none | not started |
+//! | `hello/client_spec.rs` (the ClientHello sent) | [`client::theorem_client_hello_equivalence`] | partial: for every accepted configuration, the first ClientHello is the transcription's `build_client_hello` of the same inputs, and every ClientHello sent (any cookie) meets [`hello::sent_is_profile`] with the crate's own offers, discharging that hypothesis; not yet: `client_hello_conforms` on it, and ClientHello2 against `second_client_hello` |
 //! | `hello/bootstrap_spec.rs` | none | not started |
 //! | `traffic/handshake_spec.rs` (`start`) | none | not started (its parts: `keys` and `record` above) |
 //! | `connection/framing_spec.rs` | none | not started |
@@ -60,6 +60,7 @@ pub mod auth;
 pub mod auth_flight;
 pub mod bodies;
 pub mod ccs;
+pub mod client;
 pub mod extensions;
 pub mod hello;
 pub mod host;
