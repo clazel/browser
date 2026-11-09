@@ -23,7 +23,11 @@
 //! - RFC 5246 permits a legacy ServerHello to omit its extension field. A
 //!   complete body with that form, or a complete valid extension vector that
 //!   lacks `supported_versions`, is classified as `protocol_version` before
-//!   the TLS 1.3 parser. Malformed/truncated vectors remain `decode_error`.
+//!   the TLS 1.3 parser, unless its Random is the HelloRetryRequest value:
+//!   §4.1.3 examines the Random first, and such a message is a
+//!   HelloRetryRequest, whose missing `supported_versions` is
+//!   `missing_extension` ([`parameters`]). Malformed/truncated vectors
+//!   remain `decode_error`.
 //! - Such a ServerHello "indicat[es] TLS 1.2 or below" (§4.1.3; Appendix D.1:
 //!   without `supported_versions` the server has negotiated a prior
 //!   version), so its `random` is checked for the downgrade sentinels first,
@@ -69,7 +73,13 @@ pub open spec fn offered(es: Seq<crate::spec::Ext>, retry: bool) -> bool
 /// §4.1.3 downgrade sentinel ([`below_tls13`]).
 pub open spec fn parameters(sh: crate::spec::ServerHello, session_id: Seq<u8>) -> Option<u8> {
     match extension(sh.extensions, 43) {
-        None => Some(below_tls13(sh.random)),
+        // §4.1.4: "The server's extensions MUST contain "supported_versions"."
+        // No alert is named; §6.2 missing_extension is "a handshake message
+        // not containing an extension that is mandatory to send for the
+        // offered TLS version". A HelloRetryRequest is a TLS 1.3 message
+        // (its Random says so, §4.1.3), so it does not indicate TLS 1.2.
+        None => if crate::spec::is_hello_retry_request(sh) { Some(crate::spec::MISSING_EXTENSION) }
+            else { Some(below_tls13(sh.random)) },
         Some(data) => match crate::spec::read_supported_versions_sh(data) {
             None => Some(50),
             Some(version) => if version != 0x0304 { Some(47) }
@@ -161,7 +171,12 @@ pub open spec fn parsed(sh: crate::spec::ServerHello, session_id: Seq<u8>, retri
 /// §4.1.3 and §4.1.4: accept one complete ServerHello/HRR body.
 pub open spec fn validate(session_id: Seq<u8>, retried: bool, body: Seq<u8>) -> Result<Selection, u8> {
     if session_id.len() > 32 || body.len() > crate::transcript::spec::MAX_BODY { Err(80) }
-    else if crate::spec::legacy_server_hello_without_supported_versions(body) {
+    // §4.1.3: "Upon receiving a message with type server_hello,
+    // implementations MUST first examine the Random value and, if it matches
+    // this value, process it as described in Section 4.1.4", so a
+    // HelloRetryRequest is never read as a legacy ServerHello.
+    else if crate::spec::legacy_server_hello_without_supported_versions(body)
+        && server_random(body) != crate::spec::hrr_random() {
         // RFC 8446 §4.1.3: without supported_versions the ServerHello
         // indicates TLS 1.2 or below, so the downgrade sentinel decides the
         // alert before the version mismatch does (below_tls13).
