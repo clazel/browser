@@ -3,7 +3,7 @@
 //! built, so that [`super::exec_match::matches`]'s requirements hold of every parse without
 //! the parser itself being proven (see [`super::exec_parse`]).
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::contract::*;
 use super::exec_types::*;
 #[allow(unused_imports)]

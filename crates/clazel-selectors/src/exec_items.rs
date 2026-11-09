@@ -5,7 +5,7 @@
 //! index, so a list's rows are read once, in order, into [`ExecItem`]s, each proven to be the
 //! component value the spec has at that index.
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::contract::*;
 use super::exec_types::item;
 #[allow(unused_imports)]

@@ -3,7 +3,7 @@
 //! the views of what it takes and returns, so reading these and [`super::spec`] is enough to
 //! know what the implementation guarantees.
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::algorithm::*;
 #[allow(unused_imports)]
 use super::spec::*;

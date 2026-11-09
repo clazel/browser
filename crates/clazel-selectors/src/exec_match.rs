@@ -2,9 +2,9 @@
 //! [`super::contract::match_ensures`]: each complex selector runs the algorithm of
 //! [`super::algorithm`], which `lemmas::theorem_match_total` proves gives the spec's answer.
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::algorithm::*;
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::contract::*;
 use super::exec_element::*;
 use super::exec_types::*;

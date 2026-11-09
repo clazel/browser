@@ -1,8 +1,8 @@
 //! Theorems proven about the spec: the statements of [`super::contract`].
 
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::algorithm::*;
-#[allow(unused_imports)]
+#[cfg(verus_only)]
 use super::contract::*;
 #[allow(unused_imports)]
 use super::spec::*;
