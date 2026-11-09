@@ -459,15 +459,31 @@ fn accepts_final_server_hello_after_retry_and_checks_every_truncated_prefix() {
 fn hello_retry_request_without_supported_versions_is_a_retry() {
     // RFC 8446 §4.1.3: the Random is examined first, so a HelloRetryRequest
     // without supported_versions is not a legacy ServerHello.
-    let cookie_only = server_hello(0x0303, &HRR_RANDOM, SESSION_ID, 0x1303, 0, &[(44, &[0, 1, 9])]);
-    assert_eq!(validate(SESSION_ID, false, &cookie_only), Err(MISSING_EXTENSION));
+    let cookie_only = server_hello(
+        0x0303,
+        &HRR_RANDOM,
+        SESSION_ID,
+        0x1303,
+        0,
+        &[(44, &[0, 1, 9])],
+    );
+    assert_eq!(
+        validate(SESSION_ID, false, &cookie_only),
+        Err(MISSING_EXTENSION)
+    );
     // (An empty extension block is not yet decode_error here, though §4.1.3
     // says `extensions<6..2^16-1>`: an open finding of #139.)
     let no_extensions = server_hello(0x0303, &HRR_RANDOM, SESSION_ID, 0x1303, 0, &[]);
-    assert_ne!(validate(SESSION_ID, false, &no_extensions), Err(PROTOCOL_VERSION));
+    assert_ne!(
+        validate(SESSION_ID, false, &no_extensions),
+        Err(PROTOCOL_VERSION)
+    );
     let mut no_field = no_extensions.clone();
     no_field.truncate(no_field.len() - 2);
     assert_eq!(validate(SESSION_ID, false, &no_field), Err(DECODE_ERROR));
     // An ordinary legacy ServerHello is still protocol_version.
-    assert_eq!(validate(SESSION_ID, false, &legacy_server_hello_without_extensions()), Err(PROTOCOL_VERSION));
+    assert_eq!(
+        validate(SESSION_ID, false, &legacy_server_hello_without_extensions()),
+        Err(PROTOCOL_VERSION)
+    );
 }

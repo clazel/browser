@@ -31,7 +31,7 @@ impl Host {
     {
         match self {
             Host::Dns(name) => {
-                if name.len() == 0 || name.len() > 253 {
+                if name.is_empty() || name.len() > 253 {
                     return false;
                 }
                 let mut run: usize = 0;
@@ -68,10 +68,10 @@ impl Host {
                         if b >= 0x80u8 || b == 0x3au8 || run >= 63 {
                             return false;
                         }
-                        run = run + 1;
-                        digits = digits && 0x30u8 <= b && b <= 0x39u8;
+                        run = run.saturating_add(1);
+                        digits = digits && (0x30u8..=0x39u8).contains(&b);
                     }
-                    i = i + 1;
+                    i = i.saturating_add(1);
                 }
                 proof {
                     assert(name@.subrange(i as int, name@.len() as int) =~= Seq::<u8>::empty());
