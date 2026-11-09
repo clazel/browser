@@ -4,11 +4,8 @@
 //! `has_duplicate_extension`, `extension_table`/`any_not_specified` and
 //! `any_not_offered`, for every block and message: [`theorem_extension_rules_equivalence`].
 //!
-//! What is not compared: the crate's `ext_body_ok` (the syntax of the bodies
-//! of extensions it reads). The transcription decodes only the bodies it acts
-//! on; the rest is waiting on a separate clean-room transcription (see the
-//! PR), and the step theorems state `all_bodies_ok` as a temporary domain
-//! condition.
+//! The bodies of the extensions (the crate's `ext_body_ok`, the
+//! transcription's `extension_bodies`) are compared in [`super::bodies`].
 
 #[allow(unused_imports)]
 use vstd::prelude::*;

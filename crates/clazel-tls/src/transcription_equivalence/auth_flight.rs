@@ -13,22 +13,24 @@
 //! transcription's own alert is that of the first. The transcription's lists
 //! (`encrypted_extensions_failures`, `certificate_request_failures`,
 //! `certificate_failures`) hold every failure of the message's checks, not
-//! only the first, so no transcription change was needed. Where the two
-//! orders coincide the alerts are equal, which the theorem then also says.
+//! only the first, so no transcription change was needed. Since #140 the
+//! lists end with the failures of the extension bodies
+//! (`extension_bodies`, compared in [`super::bodies`]), which the crate
+//! checks while parsing, before the context and the offered rule, so the
+//! orders no longer coincide for any of the three messages.
 //!
 //! Domain, and why:
+//! - **The state is one the crate reaches**: its configuration's offers are
+//!   the client's profile (`auth::spec::profile_extensions`, part of the
+//!   crate's own `config_ok`). The client never offers an extension whose
+//!   EncryptedExtensions or Certificate-entry body the crate does not read
+//!   (ALPN, use_srtp, status_request, ...), so both sides refuse one as not
+//!   offered whatever its body.
 //! - **The message is the one the state expects.** A message of another type
 //!   is refused on both sides, but the crate reads its body first, so a
 //!   malformed one is `decode_error` on its side and `unexpected_message` on
 //!   the transcription's. That is the multi-fault case again; it is not
 //!   covered here.
-//! - **Temporary, waiting on a clean-room transcription:** the bodies of the
-//!   extensions the crate reads are well formed (`all_bodies_ok`), in
-//!   EncryptedExtensions and CertificateRequest. The crate checks them
-//!   (`ext_body_ok`: RFC 6066's empty `server_name` response, the syntax of
-//!   `supported_groups`, `signature_algorithms_cert` and the others); the
-//!   transcription does not yet. A separate clean-room session is adding
-//!   them; this condition goes when they land.
 //! - The crate's resource policies do not fire ([`super::auth::within_policy`],
 //!   and an end-entity key of at most 16 KiB).
 //! - Chain validation agrees ([`chain_agrees`]): the crate's validator takes
@@ -202,12 +204,35 @@ pub proof fn lemma_ct_bodies(es: Seq<crate::spec::Ext>)
     }
 }
 
+/// An alert of some failure of a part is an alert of some failure of the
+/// whole list.
+pub proof fn lemma_alert_in_concat(alert: u8, f1: Seq<crate::transcription::alerts::ClientError>,
+    f2: Seq<crate::transcription::alerts::ClientError>)
+    ensures
+        alert_in(alert, f1) ==> alert_in(alert, f1 + f2),
+        alert_in(alert, f2) ==> alert_in(alert, f1 + f2),
+{
+    if alert_in(alert, f1) {
+        let i = choose|i: int| 0 <= i < f1.len() && #[trigger] crate::transcription::alerts::required_alert(f1[i]) == alert as nat;
+        assert((f1 + f2)[i] == f1[i]);
+    }
+    if alert_in(alert, f2) {
+        let i = choose|i: int| 0 <= i < f2.len() && #[trigger] crate::transcription::alerts::required_alert(f2[i]) == alert as nat;
+        assert((f1 + f2)[f1.len() + i] == f2[i]);
+    }
+}
+
 /// The Certificate entries: the crate's first per-entry error is in the
-/// transcription's per-entry failures, and with none, those failures are
-/// all "not offered", present exactly when the crate's offered rule fails.
+/// transcription's per-entry failures; with none, those failures are empty
+/// exactly when the crate's offered rule holds, and otherwise hold its
+/// `unsupported_extension`. The profile matters here: an entry's
+/// extensions that were offered are of no type a Certificate entry allows,
+/// so none has a body the transcription would check.
 pub proof fn lemma_entries(entries: Seq<crate::spec::CertificateEntry>, sent: crate::transcription::key_exchange::ClientHello,
     offers: Seq<u16>)
-    requires super::extensions::nats(offers) == crate::transcription::extensions::extension_types(sent.extensions),
+    requires
+        super::extensions::nats(offers) == crate::transcription::extensions::extension_types(sent.extensions),
+        crate::auth::spec::profile_extensions(offers),
     ensures ({
         let failures = crate::transcription::authentication::certificate_entries_failures(sent,
             entries.map_values(|e: crate::spec::CertificateEntry| super::messages::entry_view(e)));
@@ -215,8 +240,7 @@ pub proof fn lemma_entries(entries: Seq<crate::spec::CertificateEntry>, sent: cr
             Some(k) => crate::spec::alert_of(k) == 47 && alert_in(47, failures),
             None => {
                 &&& (failures.len() == 0) == crate::auth::spec::certificate_extensions_offered(entries, offers)
-                &&& forall|i: int| 0 <= i < failures.len() ==>
-                    failures[i] == crate::transcription::alerts::ClientError::ExtensionNotOffered
+                &&& !crate::auth::spec::certificate_extensions_offered(entries, offers) ==> alert_in(110, failures)
             },
         }
     }),
@@ -231,40 +255,75 @@ pub proof fn lemma_entries(entries: Seq<crate::spec::CertificateEntry>, sent: cr
         lemma_entries(rest, sent, offers);
         let es = first.extensions;
         let ev = super::messages::exts_view(es);
-        let mine = crate::transcription::extensions::response_block_failures(ev,
+        let block = crate::transcription::extensions::response_block_failures(ev,
             crate::transcription::extensions::extension_types(sent.extensions), crate::transcription::extensions::TableMessage::Ct);
+        let bodies = crate::transcription::extension_bodies::extension_body_failures(sent.extensions, ev,
+            crate::transcription::extensions::TableMessage::Ct);
         let tail = crate::transcription::authentication::certificate_entries_failures(sent,
             rest.map_values(|e: crate::spec::CertificateEntry| super::messages::entry_view(e)));
-        assert(failures == mine + tail);
+        assert(view[0] == super::messages::entry_view(first));
+        assert(failures == block + bodies + tail);
         super::extensions::lemma_unique(es);
         super::extensions::lemma_all_allowed(es, crate::spec::MsgKind::Ct);
         super::extensions::lemma_offered(es, offers, crate::spec::MsgKind::Ct);
+        lemma_alert_in_concat(47, block + bodies, tail);
+        lemma_alert_in_concat(110, block + bodies, tail);
+        lemma_alert_in_concat(47, block, bodies);
+        lemma_alert_in_concat(110, block, bodies);
         if crate::spec::exts_unique(es) && crate::spec::all_allowed(es, crate::spec::MsgKind::Ct) {
             lemma_ct_bodies(es);
             assert(crate::spec::check_extensions(es, crate::spec::MsgKind::Ct) is None);
-            match crate::spec::certificate_entries_error(rest) {
-                Some(k) => {
-                    let i = choose|i: int| 0 <= i < tail.len()
-                        && #[trigger] crate::transcription::alerts::required_alert(tail[i]) == 47nat;
-                    assert(failures[mine.len() + i] == tail[i]);
-                },
-                None => {
-                    assert forall|i: int| 0 <= i < failures.len() implies
-                        failures[i] == crate::transcription::alerts::ClientError::ExtensionNotOffered by {
-                        if i >= mine.len() { assert(failures[i] == tail[i - mine.len()]); }
-                    }
-                },
+            if crate::auth::spec::extensions_offered(es, offers) {
+                super::bodies::lemma_ct_offered_empty(es, offers);
+                assert(ev.len() == 0);
+                assert(bodies.len() == 0);
+                assert(block.len() == 0);
+                assert(failures =~= tail);
+            } else {
+                assert(block[0] == crate::transcription::alerts::ClientError::ExtensionNotOffered);
+                assert(crate::transcription::alerts::required_alert(block[0]) == 110nat);
+                assert(alert_in(110, block));
             }
         } else {
-            assert(mine.len() > 0);
-            assert(crate::transcription::alerts::required_alert(mine[0]) == 47nat);
-            assert(failures[0] == mine[0]);
+            assert(block.len() > 0);
+            assert(crate::transcription::alerts::required_alert(block[0]) == 47nat);
+            assert(alert_in(47, block));
         }
     }
 }
 
-/// WAIT_EE: one EncryptedExtensions body. The two orders coincide, so the
-/// alert is the same.
+/// The transcription's failures of an EncryptedExtensions body.
+pub open spec fn ee_failures(hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>)
+    -> Seq<crate::transcription::alerts::ClientError>
+{
+    match crate::transcription::authentication::read_encrypted_extensions(body) {
+        Some(m) => crate::transcription::authentication::encrypted_extensions_failures(hs.hello, m),
+        None => seq![],
+    }
+}
+
+/// The transcription's failures of a CertificateRequest body.
+pub open spec fn cr_failures(body: Seq<u8>) -> Seq<crate::transcription::alerts::ClientError> {
+    match crate::transcription::authentication::read_certificate_request(body) {
+        Some(m) => crate::transcription::authentication::certificate_request_failures(m),
+        None => seq![],
+    }
+}
+
+/// A malformed body: `decode_error` on both sides.
+pub proof fn lemma_malformed_in()
+    ensures alert_in(50, seq![crate::transcription::alerts::ClientError::Malformed]
+        + Seq::<crate::transcription::alerts::ClientError>::empty()),
+{
+    let l = seq![crate::transcription::alerts::ClientError::Malformed] + Seq::<crate::transcription::alerts::ClientError>::empty();
+    assert(l[0] == crate::transcription::alerts::ClientError::Malformed);
+    assert(crate::transcription::alerts::required_alert(l[0]) == 50nat);
+}
+
+/// WAIT_EE: one EncryptedExtensions body. The crate checks the bodies of
+/// its extensions before the offered rule and the transcription after, so
+/// the alerts are compared by membership.
+#[verifier::rlimit(200)]
 pub proof fn lemma_ee(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
     p: crate::transcription::primitives::Primitives, s: crate::auth::spec::State,
     hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>)
@@ -274,11 +333,12 @@ pub proof fn lemma_ee(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
         super::auth::auth_agrees(p, s, hs),
         s.phase == crate::auth::spec::Phase::EncryptedExtensions,
         super::auth::within_policy(s, body),
-        crate::spec::read_encrypted_extensions(body) matches Some(es) ==> crate::spec::all_bodies_ok(es, crate::spec::MsgKind::Ee),
+        crate::auth::spec::profile_extensions(s.config.extensions),
     ensures
-        super::auth::step_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
+        flight_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
             crate::transcription::state_machine::receive_handshake_message(p, hs,
-                crate::transcription::key_exchange::write_handshake(8, body))),
+                crate::transcription::key_exchange::write_handshake(8, body)),
+            ee_failures(hs, body)),
 {
     hide(crate::auth::spec::step);
     hide(crate::transcription::state_machine::receive_handshake_message);
@@ -290,14 +350,50 @@ pub proof fn lemma_ee(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
     lemma_t_receive(p, hs, 8, body);
     lemma_read_ee(body);
     match crate::spec::read_encrypted_extensions(body) {
-        None => {},
+        None => { lemma_malformed_in(); },
         Some(es) => {
+            let offers = s.config.extensions;
+            let ev = super::messages::exts_view(es);
+            let types = crate::transcription::extensions::extension_types(hs.hello.extensions);
+            let dup = crate::transcription::alerts::fails_if(crate::transcription::extensions::has_duplicate_extension(ev),
+                crate::transcription::alerts::ClientError::DuplicateExtension);
+            let nsp = crate::transcription::alerts::fails_if(
+                crate::transcription::extensions::any_not_specified(ev, crate::transcription::extensions::TableMessage::Ee),
+                crate::transcription::alerts::ClientError::ExtensionNotSpecifiedForMessage);
+            let nof = crate::transcription::alerts::fails_if(
+                crate::transcription::extensions::any_not_offered(ev, types, crate::transcription::extensions::TableMessage::Ee),
+                crate::transcription::alerts::ClientError::ExtensionNotOffered);
+            let bf = crate::transcription::extension_bodies::extension_body_failures(hs.hello.extensions, ev,
+                crate::transcription::extensions::TableMessage::Ee);
+            let failures = ee_failures(hs, body);
+            assert(failures == dup + nsp + nof + bf);
             super::extensions::lemma_unique(es);
             super::extensions::lemma_all_allowed(es, crate::spec::MsgKind::Ee);
-            super::extensions::lemma_offered(es, s.config.extensions, crate::spec::MsgKind::Ee);
+            super::extensions::lemma_offered(es, offers, crate::spec::MsgKind::Ee);
+            lemma_alert_in_concat(47, dup, nsp);
+            lemma_alert_in_concat(47, dup + nsp, nof);
+            lemma_alert_in_concat(47, dup + nsp + nof, bf);
+            lemma_alert_in_concat(110, dup + nsp, nof);
+            lemma_alert_in_concat(110, dup + nsp + nof, bf);
+            lemma_alert_in_concat(50, dup + nsp + nof, bf);
+            if dup.len() > 0 { assert(crate::transcription::alerts::required_alert(dup[0]) == 47nat); assert(alert_in(47, dup)); }
+            if nsp.len() > 0 { assert(crate::transcription::alerts::required_alert(nsp[0]) == 47nat); assert(alert_in(47, nsp)); }
+            if nof.len() > 0 { assert(crate::transcription::alerts::required_alert(nof[0]) == 110nat); assert(alert_in(110, nof)); }
+            if crate::spec::all_allowed(es, crate::spec::MsgKind::Ee) {
+                super::bodies::lemma_ee_bodies(es, hs.hello.extensions);
+                if crate::auth::spec::extensions_offered(es, offers) {
+                    super::bodies::lemma_ee_offered_types(es, offers);
+                }
+            }
+            if failures.len() > 0 {
+                lemma_alert_in_concat(47, seq![failures[0]], failures);
+                lemma_alert_in_concat(50, seq![failures[0]], failures);
+                lemma_alert_in_concat(110, seq![failures[0]], failures);
+            }
             if crate::spec::check_extensions(es, crate::spec::MsgKind::Ee) is None
-                && crate::auth::spec::extensions_offered(es, s.config.extensions)
+                && crate::auth::spec::extensions_offered(es, offers)
             {
+                assert(failures.len() == 0);
                 let kind = crate::transcript::spec::Kind::EncryptedExtensions;
                 assert(crate::transcript::spec::step(c.hash, s.transcript, kind, body) is Ok);
                 super::transcript::lemma_step(p, s.transcript, hs.transcript, hs.retry is Some, kind, body);
@@ -307,8 +403,10 @@ pub proof fn lemma_ee(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
     }
 }
 
-/// WAIT_CERT_CR: one CertificateRequest body. The orders coincide in alert
-/// (every check but the missing extension is illegal_parameter).
+/// WAIT_CERT_CR: one CertificateRequest body. The orders differ (the crate
+/// parses every body before it looks at the context), so the alerts are
+/// compared by membership.
+#[verifier::rlimit(200)]
 pub proof fn lemma_cr(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
     p: crate::transcription::primitives::Primitives, s: crate::auth::spec::State,
     hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>)
@@ -318,11 +416,11 @@ pub proof fn lemma_cr(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
         super::auth::auth_agrees(p, s, hs),
         s.phase == crate::auth::spec::Phase::CertificateOrRequest,
         super::auth::within_policy(s, body),
-        crate::spec::read_certificate_request(body) matches Some(r) ==> crate::spec::all_bodies_ok(r.extensions, crate::spec::MsgKind::Cr),
     ensures
-        super::auth::step_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
+        flight_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
             crate::transcription::state_machine::receive_handshake_message(p, hs,
-                crate::transcription::key_exchange::write_handshake(13, body))),
+                crate::transcription::key_exchange::write_handshake(13, body)),
+            cr_failures(body)),
 {
     hide(crate::auth::spec::step);
     hide(crate::transcription::state_machine::receive_handshake_message);
@@ -334,16 +432,48 @@ pub proof fn lemma_cr(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
     lemma_t_receive(p, hs, 13, body);
     lemma_read_cr(body);
     match crate::spec::read_certificate_request(body) {
-        None => {},
+        None => { lemma_malformed_in(); },
         Some(r) => {
             let es = r.extensions;
+            let ev = super::messages::exts_view(es);
+            let ctx = crate::transcription::alerts::fails_if(r.context.len() != 0,
+                crate::transcription::alerts::ClientError::RequestContextNotEmpty);
+            let block = crate::transcription::extensions::block_rules_failures(ev, crate::transcription::extensions::TableMessage::Cr);
+            let sig = match crate::transcription::extensions::find_extension(ev, 13) {
+                None => seq![crate::transcription::alerts::ClientError::SignatureAlgorithmsMissing],
+                Some(data) => crate::transcription::alerts::fails_if(
+                    crate::transcription::extensions::read_signature_scheme_list(data) is None,
+                    crate::transcription::alerts::ClientError::Malformed),
+            };
+            let bf = crate::transcription::extension_bodies::extension_body_failures(seq![], ev,
+                crate::transcription::extensions::TableMessage::Cr);
+            let failures = cr_failures(body);
+            assert(failures == ctx + block + sig + bf);
             super::extensions::lemma_unique(es);
             super::extensions::lemma_all_allowed(es, crate::spec::MsgKind::Cr);
             lemma_find(es, 13);
             lemma_signature_algorithms_body(es);
+            lemma_alert_in_concat(47, ctx, block);
+            lemma_alert_in_concat(47, ctx + block, sig);
+            lemma_alert_in_concat(47, ctx + block + sig, bf);
+            lemma_alert_in_concat(109, ctx + block, sig);
+            lemma_alert_in_concat(109, ctx + block + sig, bf);
+            lemma_alert_in_concat(50, ctx + block + sig, bf);
+            if ctx.len() > 0 { assert(crate::transcription::alerts::required_alert(ctx[0]) == 47nat); assert(alert_in(47, ctx)); }
+            if block.len() > 0 { assert(crate::transcription::alerts::required_alert(block[0]) == 47nat); assert(alert_in(47, block)); }
+            if !crate::spec::has_ext(es, 13) { assert(crate::transcription::alerts::required_alert(sig[0]) == 109nat); assert(alert_in(109, sig)); }
+            if crate::spec::all_allowed(es, crate::spec::MsgKind::Cr) {
+                super::bodies::lemma_cr_bodies(es);
+            }
+            if failures.len() > 0 {
+                lemma_alert_in_concat(47, seq![failures[0]], failures);
+                lemma_alert_in_concat(50, seq![failures[0]], failures);
+                lemma_alert_in_concat(109, seq![failures[0]], failures);
+            }
             if crate::spec::check_extensions(es, crate::spec::MsgKind::Cr) is None && r.context.len() == 0
-                && crate::spec::has_ext(es, 13)
+                && crate::auth::spec::request_filters_distinct(es) && crate::spec::has_ext(es, 13)
             {
+                assert(failures.len() == 0);
                 let kind = crate::transcript::spec::Kind::CertificateRequest;
                 let s1 = crate::auth::spec::State { requested: true, ..s };
                 assert(crate::transcript::spec::step(c.hash, s1.transcript, kind, body) is Ok);
@@ -414,6 +544,7 @@ pub proof fn lemma_certificate(c: crate::schedule::spec::Crypto, v: crate::auth:
         super::auth::within_policy(s, body),
         chain_agrees(v, p, s.config.host, s.config.now),
         (v.chain)(s.config.host, s.config.now, body) matches Ok(key) ==> key.len() <= crate::auth::spec::MAX_KEY,
+        crate::auth::spec::profile_extensions(s.config.extensions),
     ensures
         flight_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(11, body)),
             crate::transcription::state_machine::receive_handshake_message(p, hs,
@@ -474,9 +605,9 @@ pub proof fn lemma_certificate(c: crate::schedule::spec::Crypto, v: crate::auth:
                         assert(crate::transcription::alerts::required_alert((seq![failures[0]] + failures)[0]) == crate::transcription::alerts::required_alert(failures[0]));
                     } else if !crate::auth::spec::certificate_extensions_offered(cert.entries, s.config.extensions) {
                         assert(head.len() == 0);
-                        assert(failures[0] == crate::transcription::alerts::ClientError::ExtensionNotOffered);
-                        assert((seq![failures[0]] + failures)[0] == failures[0]);
-                        assert(crate::transcription::alerts::required_alert((seq![failures[0]] + failures)[0]) == crate::transcription::alerts::required_alert(failures[0]));
+                        lemma_alert_in_concat(110, head, entries_failures);
+                        assert(failures.len() > 0);
+                        lemma_alert_in_concat(110, seq![failures[0]], failures);
                     } else {
                         assert(failures.len() == 0);
                         assert(chain_agrees(v, p, s.config.host, s.config.now));
@@ -522,23 +653,25 @@ pub proof fn theorem_auth_flight_equivalence(c: crate::schedule::spec::Crypto, v
         forall|s: crate::auth::spec::State, hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>|
             #[trigger] super::auth::auth_agrees(p, s, hs) && s.phase == crate::auth::spec::Phase::EncryptedExtensions
                 && super::auth::within_policy(s, body)
-                && (crate::spec::read_encrypted_extensions(body) matches Some(es) ==> crate::spec::all_bodies_ok(es, crate::spec::MsgKind::Ee)) ==>
-                super::auth::step_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
+                && crate::auth::spec::profile_extensions(s.config.extensions) ==>
+                flight_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
                     crate::transcription::state_machine::receive_handshake_message(p, hs,
-                        crate::transcription::key_exchange::write_handshake(8, body))),
+                        crate::transcription::key_exchange::write_handshake(8, body)),
+                    ee_failures(hs, body)),
         forall|s: crate::auth::spec::State, hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>|
             #[trigger] super::auth::auth_agrees(p, s, hs) && s.phase == crate::auth::spec::Phase::CertificateOrRequest
-                && super::auth::within_policy(s, body)
-                && (crate::spec::read_certificate_request(body) matches Some(r) ==> crate::spec::all_bodies_ok(r.extensions, crate::spec::MsgKind::Cr)) ==>
-                super::auth::step_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
+                && super::auth::within_policy(s, body) ==>
+                flight_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
                     crate::transcription::state_machine::receive_handshake_message(p, hs,
-                        crate::transcription::key_exchange::write_handshake(13, body))),
+                        crate::transcription::key_exchange::write_handshake(13, body)),
+                    cr_failures(body)),
         forall|s: crate::auth::spec::State, hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>|
             #[trigger] super::auth::auth_agrees(p, s, hs)
                 && (s.phase == crate::auth::spec::Phase::CertificateOrRequest || s.phase == crate::auth::spec::Phase::Certificate)
                 && super::auth::within_policy(s, body)
                 && chain_agrees(v, p, s.config.host, s.config.now)
-                && ((v.chain)(s.config.host, s.config.now, body) matches Ok(key) ==> key.len() <= crate::auth::spec::MAX_KEY) ==>
+                && ((v.chain)(s.config.host, s.config.now, body) matches Ok(key) ==> key.len() <= crate::auth::spec::MAX_KEY)
+                && crate::auth::spec::profile_extensions(s.config.extensions) ==>
                 flight_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(11, body)),
                     crate::transcription::state_machine::receive_handshake_message(p, hs,
                         crate::transcription::key_exchange::write_handshake(11, body)),
@@ -550,25 +683,27 @@ pub proof fn theorem_auth_flight_equivalence(c: crate::schedule::spec::Crypto, v
     assert forall|s: crate::auth::spec::State, hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>|
         #[trigger] super::auth::auth_agrees(p, s, hs) && s.phase == crate::auth::spec::Phase::EncryptedExtensions
             && super::auth::within_policy(s, body)
-            && (crate::spec::read_encrypted_extensions(body) matches Some(es) ==> crate::spec::all_bodies_ok(es, crate::spec::MsgKind::Ee)) implies
-            super::auth::step_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
+            && crate::auth::spec::profile_extensions(s.config.extensions) implies
+            flight_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
                 crate::transcription::state_machine::receive_handshake_message(p, hs,
-                    crate::transcription::key_exchange::write_handshake(8, body)))
+                    crate::transcription::key_exchange::write_handshake(8, body)),
+                ee_failures(hs, body))
     by { lemma_ee(c, v, p, s, hs, body); }
     assert forall|s: crate::auth::spec::State, hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>|
         #[trigger] super::auth::auth_agrees(p, s, hs) && s.phase == crate::auth::spec::Phase::CertificateOrRequest
-            && super::auth::within_policy(s, body)
-            && (crate::spec::read_certificate_request(body) matches Some(r) ==> crate::spec::all_bodies_ok(r.extensions, crate::spec::MsgKind::Cr)) implies
-            super::auth::step_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
+            && super::auth::within_policy(s, body) implies
+            flight_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
                 crate::transcription::state_machine::receive_handshake_message(p, hs,
-                    crate::transcription::key_exchange::write_handshake(13, body)))
+                    crate::transcription::key_exchange::write_handshake(13, body)),
+                cr_failures(body))
     by { lemma_cr(c, v, p, s, hs, body); }
     assert forall|s: crate::auth::spec::State, hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>|
         #[trigger] super::auth::auth_agrees(p, s, hs)
             && (s.phase == crate::auth::spec::Phase::CertificateOrRequest || s.phase == crate::auth::spec::Phase::Certificate)
             && super::auth::within_policy(s, body)
             && chain_agrees(v, p, s.config.host, s.config.now)
-            && ((v.chain)(s.config.host, s.config.now, body) matches Ok(key) ==> key.len() <= crate::auth::spec::MAX_KEY) implies
+            && ((v.chain)(s.config.host, s.config.now, body) matches Ok(key) ==> key.len() <= crate::auth::spec::MAX_KEY)
+            && crate::auth::spec::profile_extensions(s.config.extensions) implies
             flight_agrees(p, #[trigger] crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(11, body)),
                 crate::transcription::state_machine::receive_handshake_message(p, hs,
                     crate::transcription::key_exchange::write_handshake(11, body)),

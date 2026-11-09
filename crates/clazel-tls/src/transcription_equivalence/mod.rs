@@ -39,8 +39,9 @@
 //! | `Certificate` and the `select` on `msg_type` in `spec.rs` (with vectors, extension blocks, the handshake header) | [`messages::theorem_certificate_select_equivalence`] | proven (syntax; the entries' extension rules are authentication's) |
 //! | `hello/join_spec.rs` `derive`; `auth/spec.rs` Finished values; `dispatcher_spec.rs` `acknowledge` secrets | [`keys::theorem_handshake_keys_equivalence`] | proven (the key values; the state machines around them are not) |
 //! | `auth/spec.rs` `step`, CertificateVerify and Finished | [`auth::theorem_auth_verify_finished_equivalence`] | proven |
-//! | `auth/spec.rs` `step`, EncryptedExtensions, CertificateRequest, Certificate | [`auth_flight::theorem_auth_flight_equivalence`] | proven for the expected message type; temporary domain: extension bodies well formed (waiting on clean-room `ext_body_ok`) |
+//! | `auth/spec.rs` `step`, EncryptedExtensions, CertificateRequest, Certificate | [`auth_flight::theorem_auth_flight_equivalence`] | proven for the expected message type, extension bodies included ([`bodies`]); offers are the client's profile |
 //! | `spec.rs` §4.2 extension-block rules | [`extensions::theorem_extension_rules_equivalence`] | proven |
+//! | `spec.rs` `ext_body_ok`, `auth/spec.rs` `request_filters_distinct` | [`bodies::lemma_cr_bodies`], [`bodies::lemma_ee_bodies`] | proven for CertificateRequest (every block) and EncryptedExtensions (the profile's offers); ServerHello and HelloRetryRequest bodies with the hello, NewSessionTicket's with post-handshake |
 //! | `hello/spec.rs` (`validate`) | none | not started |
 //! | `hello/client_spec.rs` (the ClientHello sent) | none | not started |
 //! | `hello/bootstrap_spec.rs` | none | not started |
@@ -56,6 +57,7 @@
 
 pub mod auth;
 pub mod auth_flight;
+pub mod bodies;
 pub mod extensions;
 pub mod keys;
 pub mod messages;
