@@ -631,8 +631,9 @@ pub struct Outline {
     pub contour_ends: Vec<usize>,
 }
 
-/// The bounds of a flattening. [`outline`] uses [`Limits::STATED`]; the
-/// Kani harnesses run the same code with smaller ones.
+/// The bounds of a flattening. [`outline`] uses [`Limits::STATED`]; a
+/// Kani harness can run the same code with smaller ones (none does yet:
+/// see `src/proofs.rs`).
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Limits {
     pub(crate) depth: u8,
