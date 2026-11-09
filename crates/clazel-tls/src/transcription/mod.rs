@@ -18,6 +18,10 @@
 //!   SHA-256
 //!   `6564d1376d1ec744fc7a9993da15ebc1b9be361908b166091f47ef605c537fba`,
 //!   for the trace values of [`rfc8448_data`] only.
+//! - RFC 6066 §3, §4 and §8, and the RFCs §4.2's table names for the
+//!   extensions a server may send (RFC 5764, 6520, 6962, 7250, 7301), with RFC
+//!   5890, 1123 and 1035 for host names; [`server_name`] and
+//!   [`extension_bodies`] give their hashes or dates.
 //!
 //! Where each section lives:
 //!
@@ -26,6 +30,9 @@
 //! | §3 presentation language | [`presentation`] |
 //! | §4, §4.1 handshake, hellos and their client checks | [`key_exchange`] |
 //! | §4.2 extensions | [`extensions`] |
+//! | §4.2 the bodies of extensions a client receives | [`extension_bodies`] |
+//! | RFC 6066 §3 server_name (§4.4.2.2, §9.2) | [`server_name`] |
+//! | Appendix D.4, the client's sending side; the client's configuration | [`middlebox`] |
 //! | §4.3, §4.4 server parameters, authentication, transcript | [`authentication`] |
 //! | §4.6 post-handshake messages | [`post_handshake`] |
 //! | §5 record layer | [`record`] (wire forms), [`connection`] (receiving) |
@@ -40,11 +47,13 @@
 //! Certificate); the exporter function of §7.5 (the two exporter secrets
 //! are transcribed); finite-field and NIST-curve key shares (§4.2.8.1,
 //! §4.2.8.2's point format, §7.4.1); X.509 path validation; TLS 1.2 and below
-//! beyond detecting and refusing them (§4.1.3, Appendix D.1, D.5); the
-//! compatibility records a client may send (Appendix D.4 makes them
-//! optional); §5.5's advice to rekey before the limits (a SHOULD about when,
-//! with nothing to check); what the contents of an extension other than those
-//! of this RFC mean (server_name, ALPN and so on are opaque bytes here).
+//! beyond detecting and refusing them (§4.1.3, Appendix D.1, D.5); §5.5's
+//! advice to rekey before the limits (a SHOULD about when, with nothing to
+//! check); what the contents of the other RFCs' extensions mean beyond their
+//! syntax and the rules their RFCs give a client (an ALPN protocol, an SCT or an
+//! OCSP response is not interpreted; [`extension_bodies`] lists what is
+//! checked). Appendix D.4's compatibility records, which D.4 makes optional,
+//! are a parameter ([`middlebox::ClientConfig`]).
 //!
 //! Modelling choices that span files. Each file lists its own as well.
 //!
@@ -81,13 +90,17 @@
 pub mod alerts;
 pub mod authentication;
 pub mod connection;
+pub mod extension_bodies;
 pub mod extensions;
 pub mod key_exchange;
 pub mod key_schedule;
+pub mod middlebox;
 pub mod post_handshake;
 pub mod presentation;
 pub mod primitives;
 pub mod record;
 pub mod rfc8448_data;
+pub mod server_name;
 pub mod state_machine;
 pub mod witnesses;
+pub mod witnesses_extensions;

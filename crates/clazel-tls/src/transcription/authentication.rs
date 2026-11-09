@@ -13,9 +13,11 @@
 //! - "The server's certificate_list MUST always be non-empty", and §4.4.2.4 gives
 //!   the alert, `decode_error`, even though the struct's floor is 0. So the
 //!   decoder accepts the empty list and the check is separate.
-//! - Certificate validation (§4.4.2.2, §4.4.2.4) and the OCSP and SCT contents
-//!   (§4.4.2.1) are `Primitives::validate_certificate_chain`, which sees the
-//!   entries, extensions included. MD5 and SHA-1 rejection is part of that.
+//! - Certificate validation (§4.4.2.2, §4.4.2.4) and the meaning of the OCSP
+//!   and SCT contents (§4.4.2.1) are `Primitives::validate_certificate_chain`,
+//!   which sees the entries, extensions included. MD5 and SHA-1 rejection is
+//!   part of that. Their TLS syntax (CertificateStatus,
+//!   SignedCertificateTimestampList) is checked first, in `extension_bodies`.
 //! - **Client certificates**: the model has none. A CertificateRequest in the
 //!   main handshake is checked, and §4.4.2's "If the server requests client
 //!   authentication but no suitable certificate is available, the client MUST
@@ -30,8 +32,10 @@
 //!   "that the client is willing to verify". So a client rejects an un-offered
 //!   scheme, always. See `docs/ERRATA.md`.
 //! - In a CertificateRequest, the contents of extensions other than
-//!   signature_algorithms are not decoded, since a client that always answers
-//!   with no certificate does nothing with them.
+//!   signature_algorithms are decoded for their syntax only
+//!   (`extension_bodies`), since a client that always answers with no
+//!   certificate does nothing with them. The same file checks the syntax of the
+//!   bodies of EncryptedExtensions and of each CertificateEntry.
 //! - EncryptedExtensions' "forbidden extensions" (§4.3.1) are those §4.2's table
 //!   does not specify for EE.
 
@@ -42,6 +46,8 @@ use super::extensions::Extension;
 
 #[cfg(verus_only)]
 use super::alerts::*;
+#[cfg(verus_only)]
+use super::extension_bodies::*;
 #[cfg(verus_only)]
 use super::extensions::*;
 #[cfg(verus_only)]
@@ -83,6 +89,8 @@ pub open spec fn write_encrypted_extensions(message: EncryptedExtensions) -> Seq
 /// 'illegal_parameter' alert." And §4.2's responses rule.
 pub open spec fn encrypted_extensions_failures(sent: ClientHello, message: EncryptedExtensions) -> Seq<ClientError> {
     response_block_failures(message.extensions, extension_types(sent.extensions), TableMessage::Ee)
+        // §4.2: the bodies (`extension_bodies`), RFC 6066 §3's server_name among them.
+        + extension_body_failures(sent.extensions, message.extensions, TableMessage::Ee)
 }
 
 // --------------------------------------------------------------------------
@@ -127,6 +135,8 @@ pub open spec fn certificate_request_failures(message: CertificateRequest) -> Se
         None => seq![ClientError::SignatureAlgorithmsMissing],
         Some(data) => fails_if(read_signature_scheme_list(data) is None, ClientError::Malformed),
     }
+    // §4.2: the bodies (`extension_bodies`). Requests, so no offer is consulted.
+    + extension_body_failures(seq![], message.extensions, TableMessage::Cr)
 }
 
 // --------------------------------------------------------------------------
@@ -250,6 +260,8 @@ pub open spec fn certificate_entries_failures(sent: ClientHello, entries: Seq<Ce
         seq![]
     } else {
         response_block_failures(entries[0].extensions, extension_types(sent.extensions), TableMessage::Ct)
+            // §4.4.2.1 and §4.2: the bodies (`extension_bodies`).
+            + extension_body_failures(sent.extensions, entries[0].extensions, TableMessage::Ct)
             + certificate_entries_failures(sent, entries.subrange(1, entries.len() as int))
     }
 }

@@ -871,7 +871,7 @@ proof fn server_parameters_and_authentication_checks()
             write_certificate(Certificate { certificate_request_context: seq![1u8], certificate_list: seq![CertificateEntry { cert_data: seq![0xEEu8], extensions: seq![] }] })), ClientError::CertificateContextNotEmpty),
         aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_key_share(), seq![])])), ClientError::ExtensionNotSpecifiedForMessage),
         aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_signed_certificate_timestamp(), seq![])])), ClientError::ExtensionNotOffered),
-        after(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_status_request(), seq![])]))).state == ClientState::WaitCv,
+        after(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_status_request(), seq![1u8, 0, 0, 1, 0x30])]))).state == ClientState::WaitCv,
         aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xDDu8], seq![])), ClientError::ChainRejected(ad_unknown_ca())),
         aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), write_handshake(ht_certificate(), seq![0u8, 0, 0, 1])), ClientError::Malformed),
         // §4.4.3.
@@ -904,7 +904,7 @@ proof fn server_parameters_and_authentication_checks()
         write_certificate(Certificate { certificate_request_context: seq![1u8], certificate_list: seq![CertificateEntry { cert_data: seq![0xEEu8], extensions: seq![] }] })), ClientError::CertificateContextNotEmpty)) by (compute);
     assert(aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_key_share(), seq![])])), ClientError::ExtensionNotSpecifiedForMessage)) by (compute);
     assert(aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_signed_certificate_timestamp(), seq![])])), ClientError::ExtensionNotOffered)) by (compute);
-    assert(after(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_status_request(), seq![])]))).state == ClientState::WaitCv) by (compute);
+    assert(after(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xEEu8], seq![ext(ext_status_request(), seq![1u8, 0, 0, 1, 0x30])]))).state == ClientState::WaitCv) by (compute);
     assert(aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), toy_certificate(seq![0xDDu8], seq![])), ClientError::ChainRejected(ad_unknown_ca()))) by (compute);
     assert(aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cert_cr(), write_handshake(ht_certificate(), seq![0u8, 0, 0, 1])), ClientError::Malformed)) by (compute);
     assert(aborted_with(receive_handshake_message(toy_primitives(), hs_wait_cv(), toy_cv(hs_wait_cv(), ecdsa_secp256r1_sha256())), ClientError::SignatureSchemeNotOffered)) by (compute);
