@@ -69,7 +69,7 @@ pub fn read_server_hello<'a>(body: &'a [u8]) -> (r: Option<ServerHello<'a>>)
     let sid = c.vec(0, 32)?;
     let suite = c.u16()?;
     let comp = c.u8()?;
-    let exts = read_exts(&mut c, 0, 65535)?;
+    let exts = read_exts(&mut c, 6, 65535)?;
     if !c.is_empty() {
         return None;
     }

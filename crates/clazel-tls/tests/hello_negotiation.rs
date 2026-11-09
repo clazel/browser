@@ -471,12 +471,23 @@ fn hello_retry_request_without_supported_versions_is_a_retry() {
         validate(SESSION_ID, false, &cookie_only),
         Err(MISSING_EXTENSION)
     );
-    // (An empty extension block is not yet decode_error here, though §4.1.3
-    // says `extensions<6..2^16-1>`: an open finding of #139.)
+    // §4.1.3 and B.3.1: `Extension extensions<6..2^16-1>`, so an empty
+    // block, or one empty extension (4 octets), is decode_error.
     let no_extensions = server_hello(0x0303, &HRR_RANDOM, SESSION_ID, 0x1303, 0, &[]);
-    assert_ne!(
+    assert_eq!(
         validate(SESSION_ID, false, &no_extensions),
-        Err(PROTOCOL_VERSION)
+        Err(DECODE_ERROR)
+    );
+    let four_octets = server_hello(0x0303, &HRR_RANDOM, SESSION_ID, 0x1303, 0, &[(0x1234, &[])]);
+    assert_eq!(
+        validate(SESSION_ID, false, &four_octets),
+        Err(DECODE_ERROR)
+    );
+    // Six octets meet the floor: the block's own alert again.
+    let six_octets = server_hello(0x0303, &HRR_RANDOM, SESSION_ID, 0x1303, 0, &[(0x1234, &[0, 0])]);
+    assert_eq!(
+        validate(SESSION_ID, false, &six_octets),
+        Err(MISSING_EXTENSION)
     );
     let mut no_field = no_extensions.clone();
     no_field.truncate(no_field.len() - 2);
