@@ -20,6 +20,15 @@ clazel-dom = { path = "../clazel-dom" }
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+# Item 5.5's theorems (src/lemmas.rs). `cargo xtask check` fails if one is not
+# defined as a `proof fn` in this crate.
+theorems = [
+    "theorem_parse_total",
+    "theorem_match_total",
+    "theorem_specificity_monotone",
+    "theorem_where_zero",
+    "theorem_is_most_specific",
+]
 
 [package.metadata.verus]
 verify = true
