@@ -50,7 +50,7 @@
 //! | `connection/dispatcher_spec.rs` (`feed`, `acknowledge`) | none | not started (its values: `keys` above) |
 //! | `connection/post_handshake_spec.rs` | none | not started |
 //! | `connection/driver_spec.rs` | none | not started |
-//! | `host/spec.rs` | none | nothing to compare: the transcription does not transcribe RFC 6066 |
+//! | `host/spec.rs`; the server_name of `hello/client_spec.rs` `extensions` | [`host::theorem_host_equivalence`] | proven for every host and every text naming it; domain: a `Dns` name is a hostname by the transcription's LDH grammar (the two differ outside it, [`host::lemma_names_outside_the_grammar`]; open) |
 //!
 //! The disagreements found so far, and the coverage gaps, are listed in the
 //! pull request that added this module.
@@ -59,6 +59,7 @@ pub mod auth;
 pub mod auth_flight;
 pub mod bodies;
 pub mod extensions;
+pub mod host;
 pub mod keys;
 pub mod messages;
 pub mod record;
