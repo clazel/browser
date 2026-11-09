@@ -11,7 +11,8 @@ use clazel_tls::{encode, record};
 use sha2::{Digest, Sha256};
 
 const HOST: &[u8] = b"bootstrap.example.test";
-const SESSION: &[u8] = b"middlebox-id";
+// §4.1.2: compatibility mode's session ID is a 32-byte value.
+const SESSION: &[u8] = &[0x6d; 32];
 const RANDOM: [u8; 32] = [0x35; 32];
 const CLIENT_KEY: [u8; 32] = [0x48; 32];
 const SERVER_KEY: [u8; 32] = [0x5a; 32];

@@ -272,7 +272,7 @@ fn hello_config() -> Config {
         host: Host::Dns(HOST.to_vec()),
         now: 1_800_000_000,
         random: vec![0x11; 32],
-        session_id: vec![0x12; 8],
+        session_id: vec![0x12; 32],
         public_key: PUBLIC.to_vec(),
     }
 }
@@ -304,8 +304,8 @@ fn server_hello_body() -> Vec<u8> {
     extensions.extend_from_slice(&key_data);
     let mut body = vec![3, 3];
     body.extend_from_slice(&[0x33; 32]);
-    body.push(8);
-    body.extend_from_slice(&[0x12; 8]);
+    body.push(32);
+    body.extend_from_slice(&[0x12; 32]);
     body.extend_from_slice(&0x1303u16.to_be_bytes());
     body.push(0);
     body.extend_from_slice(

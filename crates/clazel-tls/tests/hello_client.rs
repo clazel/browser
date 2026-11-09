@@ -10,7 +10,8 @@ use clazel_tls::{encode, handshake};
 use sha2::{Digest, Sha256};
 
 const HOST: &[u8] = b"www.example.test";
-const SESSION_ID: &[u8] = b"client-session";
+// §4.1.2: compatibility mode's session ID is a 32-byte value.
+const SESSION_ID: &[u8] = &[0x63; 32];
 const RANDOM: [u8; 32] = [0x11; 32];
 const PUBLIC_KEY: [u8; 32] = [0x22; 32];
 const SERVER_KEY: [u8; 32] = [0x33; 32];
@@ -280,6 +281,16 @@ fn accepts_profile_bounds_and_rejects_invalid_configuration() -> Result<(), Stri
     invalid.session_id = vec![0; 32];
     invalid.session_id.push(0);
     assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
+    // §4.1.2: a new 32-byte value in compatibility mode, otherwise a
+    // zero-length vector; nothing in between.
+    for length in [1, 8, 31] {
+        let mut invalid = config();
+        invalid.session_id = vec![0x63; length];
+        assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
+    }
+    let mut empty = config();
+    empty.session_id = Vec::new();
+    assert!(Hello::start(empty).is_ok());
     let mut invalid = config();
     invalid.public_key.pop();
     assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
