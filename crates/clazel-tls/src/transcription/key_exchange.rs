@@ -613,6 +613,13 @@ pub open spec fn older_server_hello_failures(hello: ServerHello) -> Seq<ClientEr
         // §4.1.3: "All TLS 1.3 ServerHello messages MUST contain the
         // 'supported_versions' extension."
         seq![ClientError::SupportedVersionsMissing]
+        // Added by the equivalence author (transcription_equivalence), a
+        // completeness change: the list holds every failure that applies. A
+        // version above TLS 1.2 named without supported_versions is one this
+        // client does not support either. §6.2 protocol_version: "The protocol
+        // version the peer has attempted to negotiate is recognized but not
+        // supported."
+        + seq![ClientError::VersionNotSupported]
     }
 }
 
