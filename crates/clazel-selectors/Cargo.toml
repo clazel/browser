@@ -4,14 +4,25 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "CSS selectors for Clazel's Phase 5 browser (phase-5.md item 5.5). Holds only its test data so far."
+description = "CSS selectors for Clazel's Phase 5 browser (phase-5.md item 5.5): Selectors Level 4 parsing, matching against a clazel-dom arena, specificity and serialization."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+# The component values a selector is parsed from (Phase 5 items 5.3 and 5.4).
+clazel-css = { path = "../clazel-css" }
+# The node tree selectors are matched against (Phase 4 item 4.8).
+clazel-dom = { path = "../clazel-dom" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
-# shipped code today, which is nothing: the crate has no code yet. `target-tier`
-# is what the policy requires, since this will parse selectors a page chose.
+# shipped code today; `target-tier` is what the policy requires, since this
+# parses selectors a page chose. Tier 0 until the proofs, an independent
+# transcription and the suites are in, and CI's full verification is green.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+
+[package.metadata.verus]
+verify = true
 
 [lints]
 workspace = true
