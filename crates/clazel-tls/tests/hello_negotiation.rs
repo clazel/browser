@@ -479,12 +479,16 @@ fn hello_retry_request_without_supported_versions_is_a_retry() {
         Err(DECODE_ERROR)
     );
     let four_octets = server_hello(0x0303, &HRR_RANDOM, SESSION_ID, 0x1303, 0, &[(0x1234, &[])]);
-    assert_eq!(
-        validate(SESSION_ID, false, &four_octets),
-        Err(DECODE_ERROR)
-    );
+    assert_eq!(validate(SESSION_ID, false, &four_octets), Err(DECODE_ERROR));
     // Six octets meet the floor: the block's own alert again.
-    let six_octets = server_hello(0x0303, &HRR_RANDOM, SESSION_ID, 0x1303, 0, &[(0x1234, &[0, 0])]);
+    let six_octets = server_hello(
+        0x0303,
+        &HRR_RANDOM,
+        SESSION_ID,
+        0x1303,
+        0,
+        &[(0x1234, &[0, 0])],
+    );
     assert_eq!(
         validate(SESSION_ID, false, &six_octets),
         Err(MISSING_EXTENSION)
