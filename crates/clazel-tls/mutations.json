@@ -2741,16 +2741,16 @@
       "certificate": {
         "file": "src/host/certificates.rs",
         "lemma": "super::examples::lemma_host_bounds()",
-        "witness": "host_ok(Host::Dns(super::examples::name_of(254)))"
+        "witness": "host_ok(Host::Dns(super::examples::labels_of(254)))"
       }
     },
     {
       "id": "host-trailing-dot",
       "file": "src/host/spec.rs",
-      "find": " && name.last() != 0x2eu8",
-      "replace": "",
+      "find": "1 <= run && !digits",
+      "replace": "true",
       "expect": "killed",
-      "reason": "A name ending in a dot is accepted (RFC 6066 §3: \"without a trailing dot\"): lemma_host_bounds is false.",
+      "reason": "A name ending in a dot (an empty last label) is accepted (RFC 6066 §3: \"without a trailing dot\"; RFC 2181 §11): lemma_host_bounds is false.",
       "module": "host::examples",
       "certificate": {
         "file": "src/host/certificates.rs",
@@ -2758,6 +2758,91 @@
         "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8]))"
       }
     },
+    {
+      "id": "host-ipv4-literal",
+      "file": "src/host/spec.rs",
+      "find": "1 <= run && !digits",
+      "replace": "1 <= run",
+      "expect": "killed",
+      "reason": "A name whose last label is all digits (an IPv4 literal, RFC 6066 §3) is accepted: lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![0x31u8, 0x2eu8, 0x32u8]))"
+      }
+    },
+    {
+      "id": "host-label-64",
+      "file": "src/host/spec.rs",
+      "find": "run + 1 <= 63",
+      "replace": "run + 1 <= 64",
+      "expect": "killed",
+      "reason": "A 64-octet label is accepted (RFC 2181 §11: \"between 1 and 63 octets\"): lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(super::examples::name_of(64)))"
+      }
+    },
+    {
+      "id": "host-empty-label",
+      "file": "src/host/spec.rs",
+      "find": "1 <= run && dns_labels_ok(rest.subrange(1, rest.len() as int), 0, true)",
+      "replace": "dns_labels_ok(rest.subrange(1, rest.len() as int), 0, true)",
+      "expect": "killed",
+      "reason": "An empty label is accepted (RFC 2181 §11): lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8, 0x2eu8, 104u8]))"
+      }
+    },
+    {
+      "id": "host-digits-not-reset",
+      "file": "src/host/spec.rs",
+      "find": "dns_labels_ok(rest.subrange(1, rest.len() as int), 0, true)",
+      "replace": "dns_labels_ok(rest.subrange(1, rest.len() as int), 0, digits)",
+      "expect": "killed",
+      "reason": "A label after one with a letter is taken to have one too, so an all-digit last label is accepted: lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![104u8, 0x2eu8, 0x32u8]))"
+      }
+    },
+    {
+      "id": "host-non-ascii",
+      "file": "src/host/spec.rs",
+      "find": "&&& rest[0] < 0x80u8",
+      "replace": "&&& rest[0] <= 0xffu8",
+      "expect": "killed",
+      "reason": "A non-ASCII octet is accepted (RFC 6066 §3: \"using ASCII encoding\"): lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![0xe9u8]))"
+      }
+    },
+    {
+      "id": "host-colon",
+      "file": "src/host/spec.rs",
+      "find": "&&& rest[0] != 0x3au8",
+      "replace": "&&& rest[0] != 0x2eu8",
+      "expect": "killed",
+      "reason": "A name holding a colon (an IPv6 literal, RFC 6066 §3) is accepted: lemma_dns_names is false.",
+      "module": "host::examples",
+      "certificate": {
+        "file": "src/host/certificates.rs",
+        "lemma": "super::examples::lemma_dns_names()",
+        "witness": "host_ok(Host::Dns(seq![0x3au8, 0x3au8, 0x31u8]))"
+      }
+    },
+
     {
       "id": "host-no-ipv6",
       "file": "src/host/spec.rs",
