@@ -215,7 +215,8 @@ fn start_emits_the_fixed_client_profile_and_respects_sni_choice() -> Result<(), 
 #[test]
 fn accepts_profile_bounds_and_rejects_invalid_configuration() -> Result<(), String> {
     let mut maximal = config();
-    maximal.host = Host::Dns(vec![b'h'; 253]);
+    // 253 octets in labels of 63 (RFC 2181 §11).
+    maximal.host = Host::Dns((0..253).map(|i| if i % 64 == 63 { b'.' } else { b'h' }).collect());
     maximal.session_id = vec![0x77; 32];
     let (_, flight) =
         Hello::start(maximal).map_err(|alert| format!("maximum config alert {alert}"))?;
@@ -226,8 +227,23 @@ fn accepts_profile_bounds_and_rejects_invalid_configuration() -> Result<(), Stri
     invalid.host = Host::Dns(Vec::new());
     assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
     let mut invalid = config();
-    invalid.host = Host::Dns(vec![b'h'; 254]);
+    invalid.host = Host::Dns((0..254).map(|i| if i % 64 == 63 { b'.' } else { b'h' }).collect());
     assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)));
+    // RFC 2181 §11: any ASCII label of 1 to 63 octets, not only LDH.
+    for name in [&b"a_b.example"[..], b"-a.example", &[b'h'; 63][..]] {
+        let mut valid = config();
+        valid.host = Host::Dns(name.to_vec());
+        let (_, flight) = Hello::start(valid).map_err(|alert| format!("{name:?} alert {alert}"))?;
+        let hello = client_hello(&flight)?;
+        assert!(extension_data(&hello, 0).is_some());
+    }
+    // An empty or 64-octet label, a non-ASCII octet, and the forms of IPv6
+    // and IPv4 literals (RFC 6066 §3) are the caller's error.
+    for name in [&b"a..b"[..], b".a", &[b'h'; 64][..], b"\xc3\xa9.example", b"::1", b"192.0.2.1", b"a.1"] {
+        let mut invalid = config();
+        invalid.host = Host::Dns(name.to_vec());
+        assert!(matches!(Hello::start(invalid), Err(INTERNAL_ERROR)), "{name:?}");
+    }
     // RFC 6066 §3: HostName has no trailing dot; the caller removes it.
     let mut invalid = config();
     invalid.host = Host::Dns(b"example.test.".to_vec());
