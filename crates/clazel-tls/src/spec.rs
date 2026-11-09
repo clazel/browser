@@ -1517,6 +1517,78 @@ pub open spec fn server_name_ee_ok(data: Seq<u8>) -> bool {
     data.len() == 0
 }
 
+/// RFC 8446 §4.2.4: one `opaque DistinguishedName<1..2^16-1>` of a
+/// CertificateAuthoritiesExtension. Its DER is not read (it names a
+/// certificate authority; this client has no certificate to choose).
+pub open spec fn read_distinguished_name(b: Seq<u8>) -> Option<(Seq<u8>, Seq<u8>)> {
+    read_vec(b, 1, 65535)
+}
+
+/// RFC 8446 §4.2.4: `struct { DistinguishedName authorities<3..2^16-1>; }
+/// CertificateAuthoritiesExtension;`, the whole of `extension_data`.
+pub open spec fn read_certificate_authorities(data: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    match read_vec(data, 3, 65535) {
+        None => None,
+        Some((c, rest)) => if rest.len() != 0 {
+            None
+        } else {
+            read_list(c, |x: Seq<u8>| read_distinguished_name(x))
+        },
+    }
+}
+
+/// RFC 8446 §4.2.5: one `struct { opaque certificate_extension_oid<1..2^8-1>;
+/// opaque certificate_extension_values<0..2^16-1>; } OIDFilter;`, read as
+/// its OID. The values' DER is not read (this client has no certificate to
+/// choose).
+pub open spec fn read_oid_filter(b: Seq<u8>) -> Option<(Seq<u8>, Seq<u8>)> {
+    match read_vec(b, 1, 255) {
+        None => None,
+        Some((oid, r)) => match read_vec(r, 0, 65535) {
+            None => None,
+            Some((values, rest)) => Some((oid, rest)),
+        },
+    }
+}
+
+/// RFC 8446 §4.2.5: `struct { OIDFilter filters<0..2^16-1>; }
+/// OIDFilterExtension;`, the whole of `extension_data`, as its OIDs in order.
+pub open spec fn read_oid_filters(data: Seq<u8>) -> Option<Seq<Seq<u8>>> {
+    match read_vec(data, 0, 65535) {
+        None => None,
+        Some((c, rest)) => if rest.len() != 0 {
+            None
+        } else {
+            read_list(c, |x: Seq<u8>| read_oid_filter(x))
+        },
+    }
+}
+
+/// Whether `oid` is one of `oids`.
+pub open spec fn oid_listed(oids: Seq<Seq<u8>>, oid: Seq<u8>) -> bool
+    decreases oids.len(),
+{
+    oids.len() > 0 && (oids[0] == oid || oid_listed(oids.skip(1), oid))
+}
+
+/// No OID of the list appears again after it, as a recursion;
+/// [`super::lemmas_ext::lemma_oids_distinct`] proves it is "no two equal".
+pub open spec fn oids_distinct(oids: Seq<Seq<u8>>) -> bool
+    decreases oids.len(),
+{
+    oids.len() == 0 || (!oid_listed(oids.skip(1), oids[0]) && oids_distinct(oids.skip(1)))
+}
+
+/// RFC 8446 §4.2.5: "Any given OID MUST NOT appear more than once in the
+/// filters list." True of a body that is not an OIDFilterExtension (that is
+/// [`ext_body_ok`]'s `decode_error`).
+pub open spec fn oid_filters_distinct(data: Seq<u8>) -> bool {
+    match read_oid_filters(data) {
+        None => true,
+        Some(oids) => oids_distinct(oids),
+    }
+}
+
 /// Whether the `extension_data` of `e`, which appears in a message of
 /// kind `m`, is well formed for the extensions this crate reads. Any other
 /// extension is opaque and always well formed.
@@ -1547,6 +1619,21 @@ pub open spec fn ext_body_ok(e: Ext, m: MsgKind) -> bool {
         } else {
             server_name_ee_ok(e.data)
         }
+    } else if e.etype == EXT_STATUS_REQUEST && m is Cr {
+        // §4.4.2.1: "A server MAY request that a client present an OCSP
+        // response with its certificate by sending an empty "status_request"
+        // extension in its CertificateRequest message."
+        e.data.len() == 0
+    } else if e.etype == EXT_SCT && m is Cr {
+        // RFC 6962 §3.3.1's request form, empty "extension_data"; RFC 8446
+        // defines no other (docs/ERRATA.md, "RFC 8446 §4.2:
+        // signed_certificate_timestamp in CertificateRequest has no defined
+        // body").
+        e.data.len() == 0
+    } else if e.etype == EXT_CERTIFICATE_AUTHORITIES {
+        read_certificate_authorities(e.data) is Some
+    } else if e.etype == EXT_OID_FILTERS {
+        read_oid_filters(e.data) is Some
     } else {
         true
     }
