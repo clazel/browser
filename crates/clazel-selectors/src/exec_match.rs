@@ -572,7 +572,91 @@ fn chain_up(arena: &Arena, x: usize) -> (r: Vec<usize>)
     up
 }
 
+/// [`siblings_loop`] over the first `end` of `kids`, with the parent and descendant rows
+/// `rows`.
+fn walk_siblings(
+    arena: &Arena,
+    s: &ExecSelectors,
+    bound: usize,
+    ci: usize,
+    kids: &[usize],
+    end: usize,
+    rows: (&[bool], &[bool]),
+) -> (r: (Vec<bool>, Vec<bool>, Ghost<nat>))
+    requires
+        match_args(arena@, *s, bound as int),
+        ci < s.complexes.len(),
+        complex_wf(view_complex(*s, bound as int, ci as int)),
+        end <= kids@.len(),
+        rows.0@.len() == view_complex(*s, bound as int, ci as int).compounds.len(),
+        rows.1@.len() == rows.0@.len(),
+    ensures
+        ({
+            let w = siblings_loop(
+                arena@,
+                view_complex(*s, bound as int, ci as int),
+                kids@,
+                end as int,
+                rows.0@,
+                rows.1@,
+            );
+            &&& r.0@ == w.previous
+            &&& r.1@ == w.earlier
+            &&& r.2@ == w.work
+            &&& r.0@.len() == rows.0@.len()
+            &&& r.1@.len() == rows.0@.len()
+        }),
+    decreases bound, 2int, 1int,
+{
+    let (m, descendant) = rows;
+    let ghost doc = arena@;
+    let ghost c = view_complex(*s, bound as int, ci as int);
+    let n = m.len();
+    let mut previous = exec_falses(n);
+    let mut earlier = exec_falses(n);
+    let ghost mut inner: nat = 0;
+    let mut j: usize = 0;
+    while j < end
+        invariant
+            match_args(arena@, *s, bound as int),
+            doc == arena@,
+            ci < s.complexes.len(),
+            c == view_complex(*s, bound as int, ci as int),
+            complex_wf(c),
+            n == c.compounds.len(),
+            j <= end <= kids@.len(),
+            m@.len() == n,
+            descendant@.len() == n,
+            previous@ == siblings_loop(doc, c, kids@, j as int, m@, descendant@).previous,
+            earlier@ == siblings_loop(doc, c, kids@, j as int, m@, descendant@).earlier,
+            inner == siblings_loop(doc, c, kids@, j as int, m@, descendant@).work,
+            previous@.len() == n,
+            earlier@.len() == n,
+        decreases end - j,
+    {
+        let sib = *item(kids, j);
+        if element(arena, sib) {
+            let r = row_exec(
+                arena,
+                s,
+                bound,
+                ci,
+                sib,
+                (m, descendant, previous.as_slice(), earlier.as_slice()),
+            );
+            earlier = exec_or(&earlier, &r);
+            previous = r;
+            proof {
+                inner = inner + n as nat;
+            }
+        }
+        j = j.saturating_add(1);
+    }
+    (previous, earlier, Ghost(inner))
+}
+
 /// [`dp_match`]'s answer for the complex selector at `ci` of the list `bound`, and its work.
+#[verifier::spinoff_prover]
 fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usize, x: usize) -> (r: (bool, Ghost<nat>))
     requires
         match_args(arena@, *s, bound as int),
@@ -651,46 +735,15 @@ fn complex_matches_exec(arena: &Arena, s: &ExecSelectors, bound: usize, ci: usiz
             }
             let end = clazel_dom::exec::find(kids, node).unwrap_or_default();
             let ghost target = clazel_dom::spec::index_of(kids@, node);
-            let mut previous = exec_falses(n);
-            let mut earlier = exec_falses(n);
-            let ghost mut inner: nat = 0;
-            let mut j: usize = 0;
-            while j < end
-                invariant
-                    match_args(arena@, *s, bound as int),
-                    doc == arena@,
-                    ci < s.complexes.len(),
-                    c == view_complex(*s, bound as int, ci as int),
-                    complex_wf(c),
-                    n == c.compounds.len(),
-                    j <= end <= kids@.len(),
-                    m@.len() == n,
-                    descendant@.len() == n,
-                    previous@ == siblings_loop(doc, c, kids@, j as int, m@, descendant@).previous,
-                    earlier@ == siblings_loop(doc, c, kids@, j as int, m@, descendant@).earlier,
-                    inner == siblings_loop(doc, c, kids@, j as int, m@, descendant@).work,
-                    previous@.len() == n,
-                    earlier@.len() == n,
-                decreases end - j,
-            {
-                let sib = *item(kids, j);
-                if element(arena, sib) {
-                    let r = row_exec(
-                        arena,
-                        s,
-                        bound,
-                        ci,
-                        sib,
-                        (m.as_slice(), descendant.as_slice(), previous.as_slice(), earlier.as_slice()),
-                    );
-                    earlier = exec_or(&earlier, &r);
-                    previous = r;
-                    proof {
-                        inner = inner + n as nat;
-                    }
-                }
-                j = j.saturating_add(1);
-            }
+            let (previous, earlier, Ghost(inner)) = walk_siblings(
+                arena,
+                s,
+                bound,
+                ci,
+                kids,
+                end,
+                (m.as_slice(), descendant.as_slice()),
+            );
             proof {
                 if end == 0 && target != 0 {
                     assert(target == -1);
