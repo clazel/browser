@@ -101,12 +101,26 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod cmap;
+pub mod face;
 pub mod file;
+pub mod glyf;
+pub mod head;
+pub mod hhea;
+pub mod hmtx;
+pub mod kern;
+pub mod layout;
+pub mod loca;
+pub mod maxp;
+pub mod name;
+pub mod os2;
+pub mod post;
 
 mod error;
 mod read;
 
 pub use error::Error;
+pub use face::Face;
 
 /// A four-byte table or feature tag (otff, "Data Types": "Tag: Array of
 /// four uint8s (length = 32 bits) used to identify a table, design-variation
