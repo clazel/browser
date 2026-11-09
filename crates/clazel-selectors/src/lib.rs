@@ -7,6 +7,8 @@
 //! - [`contract`]: what the exec code is proven to satisfy, and the statements of the
 //!   theorems about the spec.
 //! - [`lemmas`]: the theorems, proven.
+//! - [`examples`]: concrete selectors on a concrete document, evaluated on the spec; the
+//!   kill certificates of `mutations.json`.
 //! - [`exec_types`]: the parsed selectors in memory, and what they mean.
 //! - [`exec_match`]: matching, with [`exec_element`] and [`exec_strings`] for what it asks
 //!   of one element; [`exec_specificity`]: specificity. Both proven equal to the spec.
@@ -21,6 +23,7 @@
 
 pub mod algorithm;
 pub mod contract;
+pub mod examples;
 pub mod exec_check;
 pub mod exec_element;
 pub mod exec_items;

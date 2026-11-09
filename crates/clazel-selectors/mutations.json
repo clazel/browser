@@ -1,0 +1,589 @@
+{
+  "mutations": [
+    {
+      "id": "type-name-case",
+      "file": "src/spec.rs",
+      "find": "        to_ascii_lowercase(name) == local_name_of(doc, x)\n    } else {\n        name == local_name_of(doc, x)",
+      "replace": "        name == local_name_of(doc, x)\n    } else {\n        name == local_name_of(doc, x)",
+      "expect": "killed",
+      "reason": "HTML: a type selector is lowercased before it is compared with an HTML element's name, so P matches p.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_type_name_case()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x50u32], 5)"
+      }
+    },
+    {
+      "id": "no-namespace-ignored",
+      "file": "src/spec.rs",
+      "find": "        NsPrefix::NoNamespace => namespace_of(doc, x) is None,\n    }\n}",
+      "replace": "        NsPrefix::NoNamespace => true,\n    }\n}",
+      "expect": "killed",
+      "reason": "§5.3: |p is an element without a namespace, which an HTML p is not.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_no_namespace_ignored()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x7Cu32, 0x70], 5)"
+      }
+    },
+    {
+      "id": "id-value-ignored",
+      "file": "src/spec.rs",
+      "find": "            value == name\n        },\n    }\n}\n\n// ---",
+      "replace": "            value.len() == name.len()\n        },\n    }\n}\n\n// ---",
+      "expect": "killed",
+      "reason": "§7: #y does not match the element whose ID is x.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_id_value_ignored()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x23u32, 0x79], 3)"
+      }
+    },
+    {
+      "id": "quirks-id-case",
+      "file": "src/spec.rs",
+      "find": "            eq_ignoring_ascii_case(value, name)\n        } else {\n            value == name",
+      "replace": "            value == name\n        } else {\n            value == name",
+      "expect": "killed",
+      "reason": "§7 and HTML: in quirks mode IDs match ASCII case-insensitively, so #X matches id=x.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_quirks_id_case()",
+        "witness": "!super::examples::matches(DocumentMode::Quirks, seq![0x23u32, 0x58], 3)"
+      }
+    },
+    {
+      "id": "quirks-class-case",
+      "file": "src/spec.rs",
+      "find": "            is_one_of_the_words(to_ascii_lowercase(value), to_ascii_lowercase(name))",
+      "replace": "            is_one_of_the_words(value, name)",
+      "expect": "killed",
+      "reason": "§6.6: in quirks mode class names match ASCII case-insensitively, so .C matches class=\"ab c\".",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_quirks_class_case()",
+        "witness": "!super::examples::matches(DocumentMode::Quirks, seq![0x2Eu32, 0x43], 3)"
+      }
+    },
+    {
+      "id": "class-substring",
+      "file": "src/spec.rs",
+      "find": "        } else {\n            is_one_of_the_words(value, name)\n        },",
+      "replace": "        } else {\n            occurs_up_to(value, name, value.len() - name.len())\n        },",
+      "expect": "killed",
+      "reason": "§6.6: a class selector is [class~=v], a whole word: .a does not match class=\"ab c\".",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_class_substring()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x2Eu32, 0x61], 3)"
+      }
+    },
+    {
+      "id": "attr-equals-prefix",
+      "file": "src/spec.rs",
+      "find": "        AttrMatcher::Equals => v == s,",
+      "replace": "        AttrMatcher::Equals => occurs_at(v, s, 0),",
+      "expect": "killed",
+      "reason": "§6.1: [lang=e] needs the whole value, which is \"EN\".",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_attr_equals_prefix()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x6C, 0x61, 0x6E, 0x67, 0x3D, 0x65, 0x5D], 5)"
+      }
+    },
+    {
+      "id": "attr-includes-substring",
+      "file": "src/spec.rs",
+      "find": "        AttrMatcher::Includes => is_one_of_the_words(v, s),",
+      "replace": "        AttrMatcher::Includes => occurs_up_to(v, s, v.len() - s.len()),",
+      "expect": "killed",
+      "reason": "§6.1: [class~=b] needs the word b, and class=\"ab c\" has none.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_attr_includes_substring()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x63, 0x6C, 0x61, 0x73, 0x73, 0x7E, 0x3D, 0x62, 0x5D], 3)"
+      }
+    },
+    {
+      "id": "attr-dashmatch-any",
+      "file": "src/spec.rs",
+      "find": "as int] == 0x2D),",
+      "replace": "as int] != 0x2C),",
+      "expect": "killed",
+      "reason": "§6.1: |=e needs \"e\" or \"e-\" at the start, and \"EN\" is neither.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_attr_dashmatch_any()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x6C, 0x61, 0x6E, 0x67, 0x7C, 0x3D, 0x65, 0x5D], 5)"
+      }
+    },
+    {
+      "id": "attr-prefix-any",
+      "file": "src/spec.rs",
+      "find": "        AttrMatcher::Prefix => s.len() > 0 && occurs_at(v, s, 0),",
+      "replace": "        AttrMatcher::Prefix => s.len() > 0,",
+      "expect": "killed",
+      "reason": "§6.2: [href^=x] needs href to begin with x.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_attr_prefix_any()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x68, 0x72, 0x65, 0x66, 0x5E, 0x3D, 0x78, 0x5D], 6)"
+      }
+    },
+    {
+      "id": "attr-suffix-negated",
+      "file": "src/spec.rs",
+      "find": "        AttrMatcher::Suffix => s.len() > 0 && s.len() <= v.len() && occurs_at(",
+      "replace": "        AttrMatcher::Suffix => s.len() > 0 && s.len() <= v.len() && !occurs_at(",
+      "expect": "killed",
+      "reason": "§6.2: [href$=\"/\"] matches href=\"/\".",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_attr_suffix_negated()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x68, 0x72, 0x65, 0x66, 0x24, 0x3D, 0x22, 0x2F, 0x22, 0x5D], 6)"
+      }
+    },
+    {
+      "id": "attr-substring-empty",
+      "file": "src/spec.rs",
+      "find": "        AttrMatcher::Substring => s.len() > 0 && occurs_up_to(v, s, v.len() - s.len()),",
+      "replace": "        AttrMatcher::Substring => occurs_up_to(v, s, v.len() - s.len()),",
+      "expect": "killed",
+      "reason": "§6.2: \"If val is the empty string then the selector does not represent anything.\"",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_attr_substring_empty()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x68, 0x72, 0x65, 0x66, 0x2A, 0x3D, 0x22, 0x22, 0x5D], 6)"
+      }
+    },
+    {
+      "id": "flag-i-ignored",
+      "file": "src/spec.rs",
+      "find": "                Some(CaseFlag::I) => true,",
+      "replace": "                Some(CaseFlag::I) => false,",
+      "expect": "killed",
+      "reason": "§6.3: [id=X i] matches id=x case-insensitively.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_flag_i_ignored()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x69, 0x64, 0x3D, 0x58, 0x20, 0x69, 0x5D], 3)"
+      }
+    },
+    {
+      "id": "flag-s-ignored",
+      "file": "src/spec.rs",
+      "find": "                Some(CaseFlag::S) => false,",
+      "replace": "                Some(CaseFlag::S) => true,",
+      "expect": "killed",
+      "reason": "§6.3: [lang=en s] is case-sensitive, and the value is \"EN\".",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_flag_s_ignored()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x6C, 0x61, 0x6E, 0x67, 0x3D, 0x65, 0x6E, 0x20, 0x73, 0x5D], 5)"
+      }
+    },
+    {
+      "id": "html-list-without-lang",
+      "file": "src/spec.rs",
+      "find": "    // \"lang\"\n    || name == seq![0x6Cu32, 0x61, 0x6E, 0x67]\n",
+      "replace": "",
+      "expect": "killed",
+      "reason": "HTML §4.16.2 lists lang, so [lang=en] matches lang=EN.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_html_list_without_lang()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x5Bu32, 0x6C, 0x61, 0x6E, 0x67, 0x3D, 0x65, 0x6E, 0x5D], 5)"
+      }
+    },
+    {
+      "id": "visited-matches",
+      "file": "src/spec.rs",
+      "find": "        PseudoClass::Visited => is_hyperlink(doc, x) && is_visited(doc, x),",
+      "replace": "        PseudoClass::Visited => is_hyperlink(doc, x),",
+      "expect": "killed",
+      "reason": ":visited never matches (modelling choice).",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_visited_matches()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x76, 0x69, 0x73, 0x69, 0x74, 0x65, 0x64], 6)"
+      }
+    },
+    {
+      "id": "any-link-never",
+      "file": "src/spec.rs",
+      "find": "        PseudoClass::AnyLink => (is_hyperlink(doc, x) && !is_visited(doc, x)) || (is_hyperlink(",
+      "replace": "        PseudoClass::AnyLink => (false && !is_visited(doc, x)) || (is_hyperlink(",
+      "expect": "killed",
+      "reason": "§9.1: :any-link matches what :link or :visited does: an a with href.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_any_link_never()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x61, 0x6E, 0x79, 0x2D, 0x6C, 0x69, 0x6E, 0x6B], 6)"
+      }
+    },
+    {
+      "id": "link-needs-no-href",
+      "file": "src/spec.rs",
+      "find": "        == seq![0x61u32, 0x72, 0x65, 0x61]) && get_attribute(doc, x, str_href()) is Some",
+      "replace": "        == seq![0x61u32, 0x72, 0x65, 0x61]) && get_attribute(doc, x, str_href()) is None",
+      "expect": "killed",
+      "reason": "HTML §4.16.3: an a with an href attribute matches :link.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_link_needs_no_href()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x6C, 0x69, 0x6E, 0x6B], 6)"
+      }
+    },
+    {
+      "id": "root-is-element",
+      "file": "src/spec.rs",
+      "find": "            Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Document,",
+      "replace": "            Some(p) => p < doc.nodes.len() && doc.nodes[p as int].kind is Element,",
+      "expect": "killed",
+      "reason": "§15.1: :root is the document element, html.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_root_is_element()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x72, 0x6F, 0x6F, 0x74], 1)"
+      }
+    },
+    {
+      "id": "empty-whitespace-counts",
+      "file": "src/spec.rs",
+      "find": "                NodeKind::Text { data } => !all_whitespace(data, 0),",
+      "replace": "                NodeKind::Text { data } => data.len() > 0,",
+      "expect": "killed",
+      "reason": "§15.2: white space does not make an element non-empty.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_empty_whitespace_counts()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x64u32, 0x69, 0x76, 0x3A, 0x65, 0x6D, 0x70, 0x74, 0x79], 3)"
+      }
+    },
+    {
+      "id": "first-child-second",
+      "file": "src/spec.rs",
+      "find": "        PseudoClass::FirstChild => child_index(doc, x, false, false) == 1,",
+      "replace": "        PseudoClass::FirstChild => child_index(doc, x, false, false) == 2,",
+      "expect": "killed",
+      "reason": "§15.3.3: :first-child is :nth-child(1); div is body's first child.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_first_child_second()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x66, 0x69, 0x72, 0x73, 0x74, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64], 3)"
+      }
+    },
+    {
+      "id": "last-child-from-start",
+      "file": "src/spec.rs",
+      "find": "        PseudoClass::LastChild => child_index(doc, x, false, true) == 1,",
+      "replace": "        PseudoClass::LastChild => child_index(doc, x, false, false) == 1,",
+      "expect": "killed",
+      "reason": "§15.3.4: span is body's last child.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_last_child_from_start()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x73u32, 0x70, 0x61, 0x6E, 0x3A, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64], 8)"
+      }
+    },
+    {
+      "id": "only-child-or",
+      "file": "src/spec.rs",
+      "find": "        PseudoClass::OnlyChild => child_index(doc, x, false, false) == 1 && child_index(",
+      "replace": "        PseudoClass::OnlyChild => child_index(doc, x, false, false) == 1 || child_index(",
+      "expect": "killed",
+      "reason": "§15.3.5: div has siblings.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_only_child_or()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x64u32, 0x69, 0x76, 0x3A, 0x6F, 0x6E, 0x6C, 0x79, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64], 3)"
+      }
+    },
+    {
+      "id": "of-type-counts-all",
+      "file": "src/spec.rs",
+      "find": "    is_element(doc, y) && (!of_type || same_type(doc, x, y))",
+      "replace": "    is_element(doc, y)",
+      "expect": "killed",
+      "reason": "§15.4: the first p is the first of its type, though not the first child.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_of_type_counts_all()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x70u32, 0x3A, 0x66, 0x69, 0x72, 0x73, 0x74, 0x2D, 0x6F, 0x66, 0x2D, 0x74, 0x79, 0x70, 0x65], 5)"
+      }
+    },
+    {
+      "id": "nth-ignores-step",
+      "file": "src/spec.rs",
+      "find": "        i >= b && (i - b) % a == 0",
+      "replace": "        i >= b",
+      "expect": "killed",
+      "reason": "§15.3.1: 2n+1 does not take index 2.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_nth_ignores_step()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x6E, 0x74, 0x68, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64, 0x28, 0x32, 0x6E, 0x2B, 0x31, 0x29], 5)"
+      }
+    },
+    {
+      "id": "nth-last-from-start",
+      "file": "src/spec.rs",
+      "find": "                NthKind::LastChild => child_index(doc, x, false, true),",
+      "replace": "                NthKind::LastChild => child_index(doc, x, false, false),",
+      "expect": "killed",
+      "reason": "§15.3.2: :nth-last-child(1) counts from the end.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_nth_last_from_start()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x73u32, 0x70, 0x61, 0x6E, 0x3A, 0x6E, 0x74, 0x68, 0x2D, 0x6C, 0x61, 0x73, 0x74, 0x2D, 0x63, 0x68, 0x69, 0x6C, 0x64, 0x28, 0x31, 0x29], 8)"
+      }
+    },
+    {
+      "id": "is-negated",
+      "file": "src/spec.rs",
+      "find": "        Simple::Is { arg } => match_list(doc, arg, arg.len() as int, x),",
+      "replace": "        Simple::Is { arg } => !match_list(doc, arg, arg.len() as int, x),",
+      "expect": "killed",
+      "reason": "§4.2: :is(p) matches a p.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_is_negated()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x69, 0x73, 0x28, 0x70, 0x29], 5)"
+      }
+    },
+    {
+      "id": "not-not-negated",
+      "file": "src/spec.rs",
+      "find": "        Simple::Not { arg } => !match_list(doc, arg, arg.len() as int, x),",
+      "replace": "        Simple::Not { arg } => match_list(doc, arg, arg.len() as int, x),",
+      "expect": "killed",
+      "reason": "§4.3: p:not(#x) matches a p whose ID is not x.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_not_not_negated()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x70u32, 0x3A, 0x6E, 0x6F, 0x74, 0x28, 0x23, 0x78, 0x29], 5)"
+      }
+    },
+    {
+      "id": "where-always",
+      "file": "src/spec.rs",
+      "find": "        Simple::Where { arg } => match_list(doc, arg, arg.len() as int, x),",
+      "replace": "        Simple::Where { arg } => true,",
+      "expect": "killed",
+      "reason": "§4.4: :where(span) does not match a p.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_where_always()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x77, 0x68, 0x65, 0x72, 0x65, 0x28, 0x73, 0x70, 0x61, 0x6E, 0x29], 5)"
+      }
+    },
+    {
+      "id": "descendant-negated",
+      "file": "src/spec.rs",
+      "find": "                Combinator::Descendant => some_ancestor_matches(",
+      "replace": "                Combinator::Descendant => !some_ancestor_matches(",
+      "expect": "killed",
+      "reason": "§16.1: html p matches a p inside html.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_descendant_negated()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x68u32, 0x74, 0x6D, 0x6C, 0x20, 0x70], 5)"
+      }
+    },
+    {
+      "id": "child-any-parent",
+      "file": "src/spec.rs",
+      "find": "                    Some(p) => is_element(doc, p) && match_complex(doc, c, n - 1, p),",
+      "replace": "                    Some(p) => is_element(doc, p),",
+      "expect": "killed",
+      "reason": "§16.2: html > p needs p's parent to be html.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_child_any_parent()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x68u32, 0x74, 0x6D, 0x6C, 0x20, 0x3E, 0x20, 0x70], 5)"
+      }
+    },
+    {
+      "id": "next-sibling-any-earlier",
+      "file": "src/spec.rs",
+      "find": "                Combinator::NextSibling => previous_element_matches(",
+      "replace": "                Combinator::NextSibling => some_earlier_sibling_matches(",
+      "expect": "killed",
+      "reason": "§16.3: div + a needs div immediately before a.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_next_sibling_any_earlier()",
+        "witness": "super::examples::matches(DocumentMode::NoQuirks, seq![0x64u32, 0x69, 0x76, 0x20, 0x2B, 0x20, 0x61], 6)"
+      }
+    },
+    {
+      "id": "subsequent-sibling-next-only",
+      "file": "src/spec.rs",
+      "find": "                Combinator::SubsequentSibling => some_earlier_sibling_matches(",
+      "replace": "                Combinator::SubsequentSibling => previous_element_matches(",
+      "expect": "killed",
+      "reason": "§16.4: div ~ a needs div anywhere before a.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_subsequent_sibling_next_only()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x64u32, 0x69, 0x76, 0x20, 0x7E, 0x20, 0x61], 6)"
+      }
+    },
+    {
+      "id": "id-counts-b",
+      "file": "src/spec.rs",
+      "find": "        Simple::Id { .. } => Specificity { a: 1, b: 0, c: 0 },",
+      "replace": "        Simple::Id { .. } => Specificity { a: 0, b: 1, c: 0 },",
+      "expect": "killed",
+      "reason": "§17's example: #x34y is a=1 b=0 c=0.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_id_counts_b()",
+        "witness": "!(super::examples::specificity_of(seq![0x23u32, 0x78, 0x33, 0x34, 0x79]) == (Specificity { a: 1, b: 0, c: 0 }))"
+      }
+    },
+    {
+      "id": "class-counts-c",
+      "file": "src/spec.rs",
+      "find": "        Simple::Class { .. } => Specificity { a: 0, b: 1, c: 0 },",
+      "replace": "        Simple::Class { .. } => Specificity { a: 0, b: 0, c: 1 },",
+      "expect": "killed",
+      "reason": "§17's example: LI.red.level is a=0 b=2 c=1.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_class_counts_c()",
+        "witness": "!(super::examples::specificity_of(seq![0x4Cu32, 0x49, 0x2E, 0x72, 0x65, 0x64, 0x2E, 0x6C, 0x65, 0x76, 0x65, 0x6C]) == (Specificity { a: 0, b: 2, c: 1 }))"
+      }
+    },
+    {
+      "id": "attribute-counts-c",
+      "file": "src/spec.rs",
+      "find": "        Simple::Attribute { .. } => Specificity { a: 0, b: 1, c: 0 },",
+      "replace": "        Simple::Attribute { .. } => Specificity { a: 0, b: 0, c: 1 },",
+      "expect": "killed",
+      "reason": "§17's example: H1 + *[REL=up] is a=0 b=1 c=1.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_attribute_counts_c()",
+        "witness": "!(super::examples::specificity_of(seq![0x48u32, 0x31, 0x20, 0x2B, 0x20, 0x2A, 0x5B, 0x52, 0x45, 0x4C, 0x3D, 0x75, 0x70, 0x5D]) == (Specificity { a: 0, b: 1, c: 1 }))"
+      }
+    },
+    {
+      "id": "type-counts-nothing",
+      "file": "src/spec.rs",
+      "find": "        Simple::Type { .. } => Specificity { a: 0, b: 0, c: 1 },",
+      "replace": "        Simple::Type { .. } => Specificity { a: 0, b: 0, c: 0 },",
+      "expect": "killed",
+      "reason": "§17's example: UL OL+LI is a=0 b=0 c=3.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_type_counts_nothing()",
+        "witness": "!(super::examples::specificity_of(seq![0x55u32, 0x4C, 0x20, 0x4F, 0x4C, 0x2B, 0x4C, 0x49]) == (Specificity { a: 0, b: 0, c: 3 }))"
+      }
+    },
+    {
+      "id": "universal-counts",
+      "file": "src/spec.rs",
+      "find": "        Simple::Universal { .. } => zero(),",
+      "replace": "        Simple::Universal { .. } => Specificity { a: 0, b: 0, c: 1 },",
+      "expect": "killed",
+      "reason": "§17: \"ignore the universal selector\"; * is a=0 b=0 c=0.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_universal_counts()",
+        "witness": "!(super::examples::specificity_of(seq![0x2Au32]) == (Specificity { a: 0, b: 0, c: 0 }))"
+      }
+    },
+    {
+      "id": "where-counts-argument",
+      "file": "src/spec.rs",
+      "find": "        Simple::Where { .. } => zero(),",
+      "replace": "        Simple::Where { arg } => list_specificity(arg, arg.len() as int),",
+      "expect": "killed",
+      "reason": "§17's example: .qux:where(em, #foo#bar#baz) is (0,1,0).",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_where_counts_argument()",
+        "witness": "!(super::examples::specificity_of(seq![0x2Eu32, 0x71, 0x75, 0x78, 0x3A, 0x77, 0x68, 0x65, 0x72, 0x65, 0x28, 0x65, 0x6D, 0x2C, 0x20, 0x23, 0x66, 0x6F, 0x6F, 0x23, 0x62, 0x61, 0x72, 0x23, 0x62, 0x61, 0x7A, 0x29]) == (Specificity { a: 0, b: 1, c: 0 }))"
+      }
+    },
+    {
+      "id": "is-sums-arguments",
+      "file": "src/spec.rs",
+      "find": "        most_specific(\n            list_specificity(list, k - 1),",
+      "replace": "        add_specificity(\n            list_specificity(list, k - 1),",
+      "expect": "killed",
+      "reason": "§17's example: :is(em, #foo) is (1,0,0), its most specific argument.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_is_sums_arguments()",
+        "witness": "!(super::examples::specificity_of(seq![0x3Au32, 0x69, 0x73, 0x28, 0x65, 0x6D, 0x2C, 0x20, 0x23, 0x66, 0x6F, 0x6F, 0x29]) == (Specificity { a: 1, b: 0, c: 0 }))"
+      }
+    },
+    {
+      "id": "not-counts-nothing",
+      "file": "src/spec.rs",
+      "find": "        Simple::Not { arg } => list_specificity(arg, arg.len() as int),\n        // \"The specificity of a :where()",
+      "replace": "        Simple::Not { arg } => zero(),\n        // \"The specificity of a :where()",
+      "expect": "killed",
+      "reason": "§17's example: #s12:not(FOO) is a=1 b=0 c=1.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_not_counts_nothing()",
+        "witness": "!(super::examples::specificity_of(seq![0x23u32, 0x73, 0x31, 0x32, 0x3A, 0x6E, 0x6F, 0x74, 0x28, 0x46, 0x4F, 0x4F, 0x29]) == (Specificity { a: 1, b: 0, c: 1 }))"
+      }
+    },
+    {
+      "id": "compare-b-before-a",
+      "file": "src/spec.rs",
+      "find": "    x.a < y.a || (x.a == y.a && (x.b < y.b || (x.b == y.b && x.c <= y.c)))",
+      "replace": "    x.b < y.b || (x.b == y.b && (x.a < y.a || (x.a == y.a && x.c <= y.c)))",
+      "expect": "killed",
+      "reason": "§17 compares A first: :is(.a, #b) takes #b's (1,0,0).",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_compare_b_before_a()",
+        "witness": "!(super::examples::specificity_of(seq![0x3Au32, 0x69, 0x73, 0x28, 0x2E, 0x61, 0x2C, 0x20, 0x23, 0x62, 0x29]) == (Specificity { a: 1, b: 0, c: 0 }))"
+      }
+    },
+    {
+      "id": "pseudo-element-in-not",
+      "file": "src/spec.rs",
+      "find": "        Step::Found { value, next } => if no_pseudo {",
+      "replace": "        Step::Found { value, next } => if false {",
+      "expect": "killed",
+      "reason": "§4.3: pseudo-elements \"are not valid within :not()\".",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_pseudo_element_in_not()",
+        "witness": "super::examples::parses(seq![0x3Au32, 0x6E, 0x6F, 0x74, 0x28, 0x3A, 0x3A, 0x62, 0x65, 0x66, 0x6F, 0x72, 0x65, 0x29])"
+      }
+    },
+    {
+      "id": "unforgiving-not",
+      "file": "src/spec.rs",
+      "find": "            Some(arg) => Some(Simple::Not { arg }),\n            None => None,",
+      "replace": "            Some(arg) => Some(Simple::Not { arg }),\n            None => Some(Simple::Not { arg: Seq::empty() }),",
+      "expect": "killed",
+      "reason": "§4.3: :not() takes a <complex-real-selector-list>, which is not forgiving: :not() is invalid.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_unforgiving_not()",
+        "witness": "super::examples::parses(seq![0x3Au32, 0x6E, 0x6F, 0x74, 0x28, 0x29])"
+      }
+    },
+    {
+      "id": "forgiving-is-strict",
+      "file": "src/spec.rs",
+      "find": "        let kept = match complex_selector(items, i, comma, true) {\n            Some(selector) => acc.push(selector),\n            None => acc,\n        };",
+      "replace": "        let kept = match complex_selector(items, i, comma, true) {\n            Some(selector) => acc.push(selector),\n            None => Seq::empty(),\n        };",
+      "expect": "killed",
+      "reason": "§18.1: a forgiving list keeps the items that parse: :is(p, 0) still matches p.",
+      "certificate": {
+        "file": "src/lemmas.rs",
+        "lemma": "super::examples::lemma_example_forgiving_is_strict()",
+        "witness": "!super::examples::matches(DocumentMode::NoQuirks, seq![0x3Au32, 0x69, 0x73, 0x28, 0x70, 0x2C, 0x20, 0x30, 0x29], 5)"
+      }
+    }
+  ]
+}
