@@ -474,12 +474,11 @@ pub fn certificate_authorities(data: &[u8]) -> (b: bool)
             super::lemmas_pl::lemma_list_after_step(acc, before, |x: Seq<u8>| super::spec::read_distinguished_name(x));
             super::lemmas_pl::lemma_read_vec_canonical(before, 1, 65535);
         }
-        let name = match sub.vec(1, 65535) {
-            Some(n) => n,
-            None => return false,
-        };
+        if sub.vec(1, 65535).is_none() {
+            return false;
+        }
         proof {
-            acc = acc.push(name@);
+            acc = acc.push(super::spec::read_vec(before, 1, 65535)->Some_0.0);
         }
     }
     proof {
@@ -681,9 +680,9 @@ pub fn ext_body_ok(e: &Extension<'_>, m: MsgKind) -> (b: bool)
         } else {
             server_name_ee_ok(e.data)
         }
-    } else if e.etype == EXT_STATUS_REQUEST && matches!(m, MsgKind::Cr) {
-        e.data.is_empty()
-    } else if e.etype == EXT_SCT && matches!(m, MsgKind::Cr) {
+    } else if (e.etype == EXT_STATUS_REQUEST || e.etype == EXT_SCT) && matches!(m, MsgKind::Cr) {
+        // §4.4.2.1's empty status_request and RFC 6962 §3.3.1's empty
+        // signed_certificate_timestamp request.
         e.data.is_empty()
     } else if e.etype == EXT_CERTIFICATE_AUTHORITIES {
         certificate_authorities(e.data)
