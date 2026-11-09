@@ -395,12 +395,15 @@ fn specificity_follows_section_17() {
 
 #[test]
 fn deep_nesting_is_refused_not_overflowed() {
+    // Under Miri 40 levels, still past MAX_NESTING (32): tokenizing 10,000 levels there
+    // takes hours, and what Miri checks is the code path, which 40 already takes.
+    let depth = if cfg!(miri) { 40 } else { 10_000 };
     let mut s = String::new();
-    for _ in 0..10_000 {
+    for _ in 0..depth {
         s.push_str(":is(");
     }
     s.push('a');
-    for _ in 0..10_000 {
+    for _ in 0..depth {
         s.push(')');
     }
     assert!(parse_selector(&cps(&s)).is_none());
