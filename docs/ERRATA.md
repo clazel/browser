@@ -656,23 +656,32 @@ it evidently means. Each entry records what we specified instead.
   type "server_name" in the client hello whenever they locate a server by a
   supported name type."
 - **Problem:** the text forbids IP literals but does not say what a client
-  connecting to one sends, or how it tells a literal from a name.
-- **We specify:** in the clean-room transcription (`host_name_for` in
-  `crates/clazel-tls/src/transcription/server_name.rs`, #140), the client sends the
-  extension exactly when the host is a DNS hostname by RFC 5890 §2.3.1 (LDH labels)
-  with RFC 1123 §2.1, at most 255 octets in wire form, whose last label is not all
-  digits (RFC 1123 §2.1: "a valid host name can never have the dotted-decimal form
-  #.#.#.#, since at least the highest-level component label will be alphabetic");
-  otherwise it sends no server_name extension.
-- **The crate's spec agrees on addresses and differs on names.** Its host is typed
-  (`crates/clazel-tls/src/host/spec.rs`): an IP address never gets the extension,
-  as here, but a `Dns` name gets it whenever it is 1 to 253 octets without a
-  trailing dot, with no label grammar. So a name such as `a_b.example`, which a
-  URL's domain may be, is sent by the crate and not by the transcription. The
-  equivalence proof covers the names on which they agree; which reading to keep is
-  open (#139).
+  connecting to one sends, or how it tells a literal from a name. Nor does it
+  give a hostname grammar: "fully qualified DNS hostname" points at the DNS,
+  whose labels are not limited to letters, digits and hyphens (RFC 2181 §11:
+  "any binary string whatever can be used as the label of any resource
+  record"), and browsers send the names a URL gives, such as `a_b.example`.
+- **We specify:** the client sends the extension exactly when the host is a
+  DNS hostname, read with RFC 2181 §11: labels of "between 1 and 63 octets",
+  each octet ASCII (RFC 6066 §3: "a byte string using ASCII encoding"), at most
+  253 octets of text (RFC 1035 §2.3.4's 255 in wire form), and not an IP
+  literal: no `:` (every IPv6 literal has one) and a last label that is not
+  all digits (RFC 1123 §2.1: "a valid host name can never have the
+  dotted-decimal form #.#.#.#, since at least the highest-level component
+  label will be alphabetic"); otherwise it sends no server_name extension.
+  Refusing names outside RFC 5890's LDH grammar would lose interoperability
+  with no gain in security.
+- **History:** the clean-room transcription (`host_name_for` in
+  `crates/clazel-tls/src/transcription/server_name.rs`, #140) first required
+  RFC 5890 §2.3.1's LDH labels, and the crate's spec
+  (`crates/clazel-tls/src/host/spec.rs`) sent any `Dns` name of 1 to 253
+  octets without a trailing dot. The equivalence proof (#139) found both
+  differences. The maintainer chose to send non-LDH names, so the
+  transcription now reads labels by RFC 2181 §11; and the crate, which sent
+  names with empty or 64-octet labels, non-ASCII octets or the form of an IP
+  literal, now refuses those hosts as the caller's error (`dns_labels_ok`).
+  `host::theorem_host_equivalence` proves the two agree on every host.
 - **Reported upstream:** not yet.
-
 ## RFC 7301 §3.2: no client action for a protocol it did not advertise
 
 - **Spec:** RFC 7301, July 2014, <https://www.rfc-editor.org/rfc/rfc7301>
