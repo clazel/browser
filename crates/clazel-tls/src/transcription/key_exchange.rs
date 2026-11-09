@@ -622,6 +622,19 @@ pub open spec fn older_server_hello_failures(hello: ServerHello) -> Seq<ClientEr
         // version the peer has attempted to negotiate is recognized but not
         // supported."
         + seq![ClientError::VersionNotSupported]
+        // Added by the equivalence author, a reading change decided by the
+        // maintainer on #139 (docs/ERRATA.md, "RFC 8446 §4.1.3: which
+        // ServerHello indicates TLS 1.2 or below"). Such a message, too,
+        // indicates TLS 1.2 or below: §4.2.1, "If this extension is not present,
+        // servers which are compliant with this specification and which also
+        // support TLS 1.2 MUST negotiate TLS 1.2 or prior as specified in
+        // [RFC5246]", so TLS 1.3 is negotiated only through supported_versions,
+        // and no version above 0x0303 is negotiated through legacy_version. So
+        // §4.1.3's check applies: "TLS 1.3 clients receiving a ServerHello
+        // indicating TLS 1.2 or below MUST check that the last 8 bytes are not
+        // equal to either of these values." It stays after the two above, so the
+        // first failure, which the state machine reports, is unchanged.
+        + fails_if(has_downgrade_sentinel(hello.random), ClientError::DowngradeSentinel)
     }
 }
 
