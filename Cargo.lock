@@ -319,6 +319,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-layout"
+version = "0.0.0"
+dependencies = [
+ "clazel-font",
+]
+
+[[package]]
 name = "clazel-mime"
 version = "0.0.0"
 dependencies = [
