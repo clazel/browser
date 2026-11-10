@@ -14,6 +14,7 @@
 
 mod cbor_appendix_a;
 mod css_parsing_tests;
+mod fonts;
 mod hash;
 mod html5lib_encoding;
 mod html5lib_tokenizer;
@@ -66,6 +67,18 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         css_parsing_tests::convert,
         css_parsing_tests::FILES,
     ),
+    ("fonts-dejavu", fonts::convert, fonts::FILES_DEJAVU),
+    (
+        "fonts-source-serif",
+        fonts::convert,
+        fonts::FILES_SOURCE_SERIF,
+    ),
+    (
+        "fonts-source-code-pro",
+        fonts::convert,
+        fonts::FILES_SOURCE_CODE_PRO,
+    ),
+    ("fonts-fontations", fonts::convert, fonts::FILES_FONTATIONS),
     (
         "cbor-appendix-a",
         cbor_appendix_a::convert,
