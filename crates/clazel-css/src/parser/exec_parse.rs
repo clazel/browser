@@ -436,7 +436,9 @@ pub fn parse_stylesheet(input: &[u32], Ghost(location): Ghost<Option<Seq<u32>>>)
     parse_stylesheet_contents(input)
 }
 
-/// "Parse a list of component values" of `input`: all of `r.output.rows`.
+/// "Parse a list of component values" of `input`: all of `r.output.rows`. The text is what
+/// "filter code points" gave, and fits what reading it again needs, so that a caller can
+/// read each row's token (`clazel-selectors` does).
 pub fn parse_component_values(input: &[u32]) -> (r: ExecParsed)
     requires
         parser_input_requires(input@),
@@ -445,6 +447,8 @@ pub fn parse_component_values(input: &[u32]) -> (r: ExecParsed)
             input@,
             view_list(r.text@, false, r.output.rows@, 0, r.output.rows.len() as int),
         ),
+        r.text@ == filter_code_points(input@),
+        super::exec_rules::text_fits(r.text@),
 {
     let text = filtered(input);
     let mut rows: Vec<ExecRow> = Vec::new();

@@ -4,14 +4,34 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "CSS selectors for Clazel's Phase 5 browser (phase-5.md item 5.5). Holds only its test data so far."
+description = "CSS selectors for Clazel's Phase 5 browser (phase-5.md item 5.5): Selectors Level 4 parsing, matching against a clazel-dom arena, specificity and serialization."
+
+[dependencies]
+vstd = "=0.0.0-2026-10-04-0306"
+# The component values a selector is parsed from (Phase 5 items 5.3 and 5.4).
+clazel-css = { path = "../clazel-css" }
+# The node tree selectors are matched against (Phase 4 item 4.8).
+clazel-dom = { path = "../clazel-dom" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
-# shipped code today, which is nothing: the crate has no code yet. `target-tier`
-# is what the policy requires, since this will parse selectors a page chose.
+# shipped code today; `target-tier` is what the policy requires, since this
+# parses selectors a page chose. Tier 0 until the proofs, an independent
+# transcription and the suites are in, and CI's full verification is green.
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
+# Item 5.5's theorems (src/lemmas.rs). `cargo xtask check` fails if one is not
+# defined as a `proof fn` in this crate.
+theorems = [
+    "theorem_parse_total",
+    "theorem_match_total",
+    "theorem_specificity_monotone",
+    "theorem_where_zero",
+    "theorem_is_most_specific",
+]
+
+[package.metadata.verus]
+verify = true
 
 [lints]
 workspace = true
