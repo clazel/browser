@@ -9,6 +9,7 @@ use super::number::{ANGLE_UNITS, Angle, LENGTH_UNITS, Length, LengthUnit, Num};
 
 /// Whether a value may be negative.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
 pub enum Range {
     /// Any value.
     All,

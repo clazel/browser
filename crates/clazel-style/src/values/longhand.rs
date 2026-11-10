@@ -296,7 +296,7 @@ pub const FONT_STRETCH_KEYWORDS: &[&str] = &[
 
 /// CSS Counter Styles 3 §6† and §7†: the predefined counter styles of the subset's lists,
 /// which CSSOM serializes in lower case. Any other `<custom-ident>` is kept as written.
-const COUNTER_STYLES: &[&str] = &[
+pub(crate) const COUNTER_STYLES: &[&str] = &[
     "decimal",
     "decimal-leading-zero",
     "arabic-indic",
@@ -354,7 +354,7 @@ const COUNTER_STYLES: &[&str] = &[
 ];
 
 /// CSS UI 4 §5.1†: `<cursor-predefined>`.
-const CURSORS: &[&str] = &[
+pub(crate) const CURSORS: &[&str] = &[
     "auto",
     "default",
     "none",
@@ -426,12 +426,16 @@ fn color(c: &mut Cursor<'_>, qc: bool) -> Option<Vec<Component>> {
 /// `<family-name>` is `<string> | <custom-ident>+`.
 fn font_family(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
     let mut out = Vec::new();
-    loop {
+    let budget = c.budget();
+    for _ in 0..budget {
         if let Some(s) = string(c) {
             out.push(Component::FamilyName(s));
         } else {
             let mut words: Vec<Vec<u32>> = Vec::new();
-            while let Some(Item::Ident(_)) = c.peek() {
+            for _ in 0..budget {
+                if !matches!(c.peek(), Some(Item::Ident(_))) {
+                    break;
+                }
                 words.push(c.ident()?.to_vec());
             }
             match words.as_slice() {
@@ -452,11 +456,15 @@ fn font_family(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
                     let generic_first = many
                         .first()
                         .is_some_and(|w| GENERIC_FAMILIES.iter().any(|g| eq_ignore_case(w, g)));
-                    if generic_first || many.iter().any(|w| super::is_reserved_ident(w)) {
+                    if generic_first {
                         return None;
                     }
                     let mut name = Vec::new();
-                    for (i, w) in many.iter().enumerate() {
+                    for i in 0..budget {
+                        let Some(w) = many.get(i) else { break };
+                        if super::is_reserved_ident(w) {
+                            return None;
+                        }
                         if i > 0 {
                             name.push(0x20);
                         }
@@ -474,6 +482,7 @@ fn font_family(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
         }
         out.push(Component::Comma);
     }
+    None
 }
 
 /// `font-weight` (CSS Fonts 4 §2.2†): `normal | bold | <number [1,1000]> | bolder | lighter`.
@@ -561,7 +570,8 @@ pub fn text_decoration_line(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
     }
     const LINES: [&str; 4] = ["underline", "overline", "line-through", "blink"];
     let mut seen = [false; 4];
-    while let Some(k) = c.keyword(&LINES) {
+    for _ in 0..c.budget() {
+        let Some(k) = c.keyword(&LINES) else { break };
         let i = LINES.iter().position(|l| *l == k)?;
         let slot = seen.get_mut(i)?;
         if *slot {
@@ -584,7 +594,8 @@ fn text_indent(c: &mut Cursor<'_>, ql: bool) -> Option<Vec<Component>> {
     let mut lp = None;
     let mut hanging = false;
     let mut each_line = false;
-    loop {
+    // At most three parts, and a fourth step that stops.
+    for _ in 0..4 {
         if !hanging && c.eat_keyword("hanging") {
             hanging = true;
         } else if !each_line && c.eat_keyword("each-line") {
@@ -610,9 +621,9 @@ fn text_indent(c: &mut Cursor<'_>, ql: bool) -> Option<Vec<Component>> {
 
 /// `<image>` of the subset (CSS Images 3 §2†): `<url>` or `linear-gradient()` and
 /// `repeating-linear-gradient()` (§3.1†).
-pub fn image(c: &mut Cursor<'_>) -> Option<Component> {
+pub fn image(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
     if let Some(u) = url(c) {
-        return Some(Component::Url(u));
+        return Some(vec![Component::Url(u)]);
     }
     attempt(c, |c| {
         let (name, args) = c.function()?;
@@ -623,8 +634,10 @@ pub fn image(c: &mut Cursor<'_>) -> Option<Component> {
         } else {
             return None;
         };
-        let parts = super::grammar::whole(args, linear_gradient)?;
-        Some(Component::Function(name, parts))
+        let mut out = vec![Component::Open(name)];
+        out.extend(super::grammar::whole(args, linear_gradient)?);
+        out.push(Component::Close);
+        Some(out)
     })
 }
 
@@ -661,7 +674,7 @@ fn linear_gradient(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
     // <length-percentage> hint between two of them; at least two colour stops.
     let mut stops = 0usize;
     let mut last_was_hint = true;
-    loop {
+    for _ in 0..c.budget() {
         if let Some(col) = parse_color(c, false) {
             out.push(Component::Color(col));
             for _ in 0..2 {
@@ -686,7 +699,7 @@ fn linear_gradient(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
         }
         out.push(Component::Comma);
     }
-    if stops < 2 || last_was_hint {
+    if !c.at_end() || stops < 2 || last_was_hint {
         return None;
     }
     Some(out)
@@ -695,17 +708,18 @@ fn linear_gradient(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
 /// `background-image` (CSS Backgrounds 3 §2.3†): `<bg-image>#`, `<bg-image> = none | <image>`.
 fn bg_images(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
     let mut out = Vec::new();
-    loop {
+    for _ in 0..c.budget() {
         if let Some(k) = keyword(c, &["none"]) {
             out.push(k);
         } else {
-            out.push(image(c)?);
+            out.extend(image(c)?);
         }
         if c.at_end() || !c.comma() {
             return Some(out);
         }
         out.push(Component::Comma);
     }
+    None
 }
 
 /// `<repeat-style>` (CSS Backgrounds 3 §2.4†).
@@ -776,7 +790,10 @@ fn list_of(
     f: impl Fn(&mut Cursor<'_>) -> Option<Vec<Component>>,
 ) -> Option<Vec<Component>> {
     let mut out = f(c)?;
-    while !c.at_end() && c.comma() {
+    for _ in 0..c.budget() {
+        if c.at_end() || !c.comma() {
+            break;
+        }
         out.push(Component::Comma);
         out.extend(f(c)?);
     }
@@ -787,7 +804,8 @@ fn list_of(
 /// is not in the subset.
 fn cursor(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
     let mut out = Vec::new();
-    while let Some(u) = url(c) {
+    for _ in 0..c.budget() {
+        let Some(u) = url(c) else { break };
         out.push(Component::Url(u));
         if let Some(x) = number(c, Range::All) {
             out.push(Component::Number(x));
@@ -809,8 +827,11 @@ fn transform(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
         return Some(vec![k]);
     }
     let mut out = Vec::new();
-    while let Some(Item::Function { .. }) = c.peek() {
-        out.push(transform_function(c)?);
+    for _ in 0..c.budget() {
+        if !matches!(c.peek(), Some(Item::Function { .. })) {
+            break;
+        }
+        out.extend(transform_function(c)?);
     }
     if out.is_empty() { None } else { Some(out) }
 }
@@ -852,16 +873,16 @@ enum ArgKind {
     Angle,
 }
 
-fn transform_function(c: &mut Cursor<'_>) -> Option<Component> {
+fn transform_function(c: &mut Cursor<'_>) -> Option<Vec<Component>> {
     let (name, mut args) = c.function()?;
     let i = TRANSFORM_FUNCTIONS
         .iter()
         .position(|(n, _, _, _)| eq_ignore_case(name, n))?;
     let (_, kind, min, max) = TRANSFORM_FUNCTIONS.get(i).copied()?;
     let display = TRANSFORM_NAMES.get(i).copied()?;
-    let mut out = Vec::new();
+    let mut out = vec![Component::Open(display)];
     let mut n = 0usize;
-    loop {
+    for _ in 0..args.budget() {
         let v = match kind {
             ArgKind::Number => number(&mut args, Range::All).map(Component::Number),
             ArgKind::LengthPercentage => length_percentage(&mut args, Range::All, false),
@@ -877,7 +898,8 @@ fn transform_function(c: &mut Cursor<'_>) -> Option<Component> {
         }
         out.push(Component::Comma);
     }
-    (n >= min).then_some(Component::Function(display, out))
+    out.push(Component::Close);
+    (args.at_end() && n >= min).then_some(out)
 }
 
 /// `display` (CSS Display 3 §2†), its single keywords in the subset (phase-5.md item 5.6):

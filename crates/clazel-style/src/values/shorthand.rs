@@ -5,7 +5,7 @@
 //! empty string if none does).
 
 use super::color::{Color, parse_color};
-use super::component::{Component, to_string};
+use super::component::{Component, has_top_level_comma, to_string};
 use super::grammar::{attempt, keyword};
 use super::items::Cursor;
 use super::longhand::{
@@ -83,7 +83,10 @@ impl Shorthand {
 /// Backgrounds 3 §1.1† "the usual 1-to-4 value syntax").
 fn four(c: &mut Cursor<'_>, longhand: L, quirks: bool) -> Option<[Vec<Component>; 4]> {
     let mut v: Vec<Vec<Component>> = Vec::new();
-    while v.len() < 4 && !c.at_end() {
+    for _ in 0..4 {
+        if c.at_end() {
+            break;
+        }
         v.push(longhand.parse(c, quirks)?);
     }
     let get = |i: usize| v.get(i).cloned();
@@ -101,7 +104,10 @@ fn border_side(c: &mut Cursor<'_>) -> Option<[Vec<Component>; 3]> {
     let mut width = None;
     let mut style = None;
     let mut color = None;
-    while !c.at_end() {
+    for _ in 0..c.budget() {
+        if c.at_end() {
+            break;
+        }
         if width.is_none()
             && let Some(w) = attempt(c, |c| L::BorderTopWidth.parse(c, false))
         {
@@ -122,6 +128,9 @@ fn border_side(c: &mut Cursor<'_>) -> Option<[Vec<Component>; 3]> {
         }
         return None;
     }
+    if !c.at_end() {
+        return None;
+    }
     if width.is_none() && style.is_none() && color.is_none() {
         return None;
     }
@@ -136,7 +145,10 @@ fn border_side(c: &mut Cursor<'_>) -> Option<[Vec<Component>; 3]> {
 /// <'text-decoration-thickness'> || <'text-decoration-style'> || <'text-decoration-color'>`.
 fn text_decoration(c: &mut Cursor<'_>) -> Option<[Vec<Component>; 4]> {
     let mut parts: [Option<Vec<Component>>; 4] = [None, None, None, None];
-    while !c.at_end() {
+    for _ in 0..c.budget() {
+        if c.at_end() {
+            break;
+        }
         let [line, thickness, style, color] = &mut parts;
         if line.is_none()
             && let Some(v) = attempt(c, text_decoration_line)
@@ -162,6 +174,9 @@ fn text_decoration(c: &mut Cursor<'_>) -> Option<[Vec<Component>; 4]> {
             *color = Some(vec![Component::Color(col)]);
             continue;
         }
+        return None;
+    }
+    if !c.at_end() {
         return None;
     }
     if parts.iter().all(Option::is_none) {
@@ -258,14 +273,17 @@ fn background(c: &mut Cursor<'_>) -> Option<[Vec<Component>; 8]> {
     let mut repeat = None;
     let mut attachment = None;
     let mut boxes: Vec<Component> = Vec::new();
-    while !c.at_end() {
+    for _ in 0..c.budget() {
+        if c.at_end() {
+            break;
+        }
         if img.is_none() {
             if let Some(k) = keyword(c, &["none"]) {
                 img = Some(vec![k]);
                 continue;
             }
             if let Some(i) = image(c) {
-                img = Some(vec![i]);
+                img = Some(i);
                 continue;
             }
         }
@@ -302,6 +320,9 @@ fn background(c: &mut Cursor<'_>) -> Option<[Vec<Component>; 8]> {
             color = Some(col);
             continue;
         }
+        return None;
+    }
+    if !c.at_end() {
         return None;
     }
     let (origin, clip) = match boxes.as_slice() {
@@ -472,7 +493,7 @@ impl Shorthand {
                         .is_some_and(|l| values.get(i) == Some(&l.initial()))
                 };
                 // A list value (several layers) is not one layer.
-                if values.iter().any(|v| v.contains(&Component::Comma)) {
+                if values.iter().any(|v| has_top_level_comma(v)) {
                     return None;
                 }
                 // CSS Backgrounds 3's order, colour first as WebKit and the text give it.

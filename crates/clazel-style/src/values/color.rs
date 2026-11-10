@@ -282,7 +282,10 @@ fn read_args(mut c: Cursor<'_>) -> Option<([Arg; 4], usize, bool)> {
     out[0] = arg(c.src, first)?;
     n = n.saturating_add(1);
     let legacy = c.peek() == Some(Item::Comma);
-    while !c.at_end() {
+    for _ in 0..c.budget() {
+        if c.at_end() {
+            break;
+        }
         if legacy {
             if !c.comma() {
                 return None;
@@ -294,6 +297,9 @@ fn read_args(mut c: Cursor<'_>) -> Option<([Arg; 4], usize, bool)> {
         let slot = out.get_mut(n)?;
         *slot = arg(c.src, item)?;
         n = n.saturating_add(1);
+    }
+    if !c.at_end() {
+        return None;
     }
     // The legacy syntax has no `none`; the modern one needs three or four.
     if legacy && out.iter().take(n).any(|a| matches!(a, Arg::None)) {
@@ -315,7 +321,7 @@ fn alpha_arg(a: Arg) -> Option<u8> {
 }
 
 /// §5.1 `rgb()` and `rgba()`, which are the same function.
-fn rgb(c: Cursor<'_>) -> Option<Color> {
+pub(crate) fn rgb(c: Cursor<'_>) -> Option<Color> {
     let (args, n, legacy) = read_args(c)?;
     let [r, g, b, a] = args;
     let channels = [r, g, b];
@@ -342,7 +348,7 @@ fn rgb(c: Cursor<'_>) -> Option<Color> {
 
 /// §7.1 "converting HSL colors to sRGB colors", with every quantity in millionths: `h6`
 /// the hue in sixths of a turn in [0, 6), `s` and `l` in [0, 1].
-fn hsl_to_rgb(h6: i64, s: i64, l: i64) -> [u8; 3] {
+pub(crate) fn hsl_to_rgb(h6: i64, s: i64, l: i64) -> [u8; 3] {
     // The text's `f(n) = l - a·max(-1, min(k - 3, 9 - k, 1))`, `k = (n + h/30) mod 12`,
     // `a = s·min(l, 1 - l)`.
     let a = s
@@ -370,7 +376,7 @@ fn hsl_to_rgb(h6: i64, s: i64, l: i64) -> [u8; 3] {
 }
 
 /// §7 `hsl()` and `hsla()`.
-fn hsl(c: Cursor<'_>) -> Option<Color> {
+pub(crate) fn hsl(c: Cursor<'_>) -> Option<Color> {
     let (args, n, legacy) = read_args(c)?;
     let [h, s, l, a] = args;
     // The hue: a number of degrees, or an angle.
@@ -461,7 +467,7 @@ pub fn parse_color(c: &mut Cursor<'_>, quirky: bool) -> Option<Color> {
 }
 
 /// Quirks Mode §3.6†: an ident of 3 or 6 hex digits is that hex colour.
-fn quirky_ident(s: &[u32]) -> Option<Color> {
+pub(crate) fn quirky_ident(s: &[u32]) -> Option<Color> {
     if s.len() == 3 || s.len() == 6 {
         from_hex(s)
     } else {
@@ -475,7 +481,12 @@ fn quirky_ident(s: &[u32]) -> Option<Color> {
 /// digits. The text reads the token's representation; this reads the
 /// number part and the unit after escapes are resolved (a modelling choice: a unit written
 /// with an escape is read as the code point it means).
-fn quirky_number(digits: &[u32], value: Num, signed: bool, unit: &[u32]) -> Option<Color> {
+pub(crate) fn quirky_number(
+    digits: &[u32],
+    value: Num,
+    signed: bool,
+    unit: &[u32],
+) -> Option<Color> {
     let digits = if signed {
         // The sign is "+": a "-" makes a negative number, or "-0", refused below.
         if digits.first() != Some(&0x2B) {

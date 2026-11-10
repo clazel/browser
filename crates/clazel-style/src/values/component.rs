@@ -33,8 +33,12 @@ pub enum Component {
     /// A font family name (CSS Fonts 4 `<family-name>`), its identifiers joined by single
     /// spaces if it was written unquoted.
     FamilyName(Vec<u32>),
-    /// A function and its arguments, as components.
-    Function(&'static str, Vec<Component>),
+    /// The start of a function, with its name: its arguments follow, up to the matching
+    /// [`Component::Close`]. The list is flat rather than nested so that a value owns no
+    /// recursive structure (whose drop the Kani harnesses would have to unwind).
+    Open(&'static str),
+    /// The end of a function.
+    Close,
     /// A comma between list items.
     Comma,
     /// A `/` between two parts of a shorthand.
@@ -171,12 +175,11 @@ pub fn write_component(out: &mut String, c: &Component) {
             out.push(')');
         }
         Component::FamilyName(s) => write_family(out, s),
-        Component::Function(name, args) => {
+        Component::Open(name) => {
             out.push_str(name);
             out.push('(');
-            write_components(out, args);
-            out.push(')');
         }
+        Component::Close => out.push(')'),
         Component::Comma => out.push(','),
         Component::Slash => out.push('/'),
     }
@@ -184,21 +187,37 @@ pub fn write_component(out: &mut String, c: &Component) {
 
 /// Append a list of components, separated as the module says.
 pub fn write_components(out: &mut String, list: &[Component]) {
-    let mut first = true;
+    // True where no space goes before the next component: at the start, after a
+    // separator and after a function's opening parenthesis.
+    let mut tight = true;
     for c in list {
         match c {
             Component::Comma => out.push_str(", "),
             Component::Slash => out.push_str(" / "),
+            Component::Close => out.push(')'),
             _ => {
-                let after_separator = out.ends_with(", ") || out.ends_with(" / ");
-                if !first && !after_separator {
+                if !tight {
                     out.push(' ');
                 }
                 write_component(out, c);
             }
         }
-        first = false;
+        tight = matches!(c, Component::Comma | Component::Slash | Component::Open(_));
     }
+}
+
+/// True if `list` has a comma outside any function: a list of several items.
+pub fn has_top_level_comma(list: &[Component]) -> bool {
+    let mut depth = 0usize;
+    for c in list {
+        match c {
+            Component::Open(_) => depth = depth.saturating_add(1),
+            Component::Close => depth = depth.saturating_sub(1),
+            Component::Comma if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 /// A list of components, serialized.

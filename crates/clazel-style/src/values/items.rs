@@ -135,10 +135,13 @@ pub fn lower(c: u32) -> u32 {
 
 /// True if `s` is `target` (written in lower case), ASCII case-insensitively.
 pub fn eq_ignore_case(s: &[u32], target: &str) -> bool {
+    // The loop runs over `target`, whose length is a constant, so that Kani's unwinding
+    // sees its bound.
     s.len() == target.len()
-        && s.iter()
-            .zip(target.bytes())
-            .all(|(&c, b)| lower(c) == u32::from(b))
+        && target
+            .bytes()
+            .enumerate()
+            .all(|(i, b)| s.get(i).is_some_and(|&c| lower(c) == u32::from(b)))
 }
 
 /// The entry of `table` whose name is `s`, ASCII case-insensitively.
@@ -162,6 +165,13 @@ impl<'a> Cursor<'a> {
             pos: 0,
             end: src.items.len(),
         }
+    }
+
+    /// A bound on the iterations of any loop that consumes an item per iteration, or stops:
+    /// one more than the number of items. Every loop over items is written
+    /// `for _ in 0..c.budget()`, so that its bound is visible to Kani's unwinding.
+    pub fn budget(&self) -> usize {
+        self.src.items.len().saturating_add(1)
     }
 
     /// True if nothing is left.
@@ -280,19 +290,23 @@ fn signed(n: &ExecNumber) -> bool {
     n.sign_character.is_some()
 }
 
-/// The rows of `rows` that make the list `lo .. hi`, first to last: the last value of the
-/// list is row `hi - 1`, and the one before it ends where that one's subtree starts.
+/// The rows of `rows` that make the list `lo .. hi`, last to first (so that popping gives
+/// the first): the last value of the list is row `hi - 1`, and the one before it ends where
+/// that one's subtree starts.
 fn top_level(rows: &[ExecRow], lo: usize, hi: usize) -> Vec<usize> {
     let mut out = Vec::new();
     let mut k = hi;
-    while k > lo {
+    // Each step lowers `k` by at least one, and `k <= hi <= rows.len()` when it matters.
+    for _ in 0..rows.len().saturating_add(1) {
+        if k <= lo {
+            break;
+        }
         let r = k.saturating_sub(1);
         out.push(r);
         let start = rows.get(r).map_or(lo, |row| row.start as usize);
         // A subtree starts at or before its own row; anything else is not a list.
         k = if start <= r && start >= lo { start } else { lo };
     }
-    out.reverse();
     out
 }
 
@@ -304,15 +318,29 @@ impl Values {
             return None;
         }
         let parsed = parse_component_values(input);
-        let text = parsed.text.as_slice();
-        let rows = parsed.output.rows.as_slice();
+        Some(Values::from_rows(
+            parsed.text.as_slice(),
+            parsed.output.rows.as_slice(),
+        ))
+    }
+
+    /// The items of the rows `rows` of `text`, as `clazel-css`'s exec parser leaves them
+    /// (`clazel_css::parser::rows`): rows in post-order, each naming where its token is and
+    /// where its subtree starts. Rows that are not so (a start after the row, a position
+    /// past the text) read as an empty subtree and the end-of-file token, which is dropped.
+    pub fn from_rows(text: &[u32], rows: &[ExecRow]) -> Values {
         let mut out = Values::default();
-        // Each frame: the rows of a list, the next one, and the item whose end it sets.
-        let mut stack: Vec<(Vec<usize>, usize, Option<usize>)> =
-            vec![(top_level(rows, 0, rows.len()), 0, None)];
-        while let Some(frame) = stack.last_mut() {
-            let Some(&r) = frame.0.get(frame.1) else {
-                let owner = frame.2;
+        // Each frame: the rows of a list still to read, last first, and the item whose end
+        // it sets. A row is in at most one frame (the subtrees of a list's values do not
+        // overlap), so there are at most two steps per row and one for the last frame.
+        let mut stack: Vec<(Vec<usize>, Option<usize>)> =
+            vec![(top_level(rows, 0, rows.len()), None)];
+        for _ in 0..rows.len().saturating_mul(2).saturating_add(1) {
+            let Some(frame) = stack.last_mut() else {
+                break;
+            };
+            let Some(r) = frame.0.pop() else {
+                let owner = frame.1;
                 stack.pop();
                 if let Some(i) = owner {
                     let end = u32::try_from(out.items.len()).unwrap_or(u32::MAX);
@@ -324,7 +352,6 @@ impl Values {
                 }
                 continue;
             };
-            frame.1 = frame.1.saturating_add(1);
             let Some(row) = rows.get(r) else { continue };
             let pos = row.pos as usize;
             let token = if pos <= text.len() {
@@ -362,7 +389,7 @@ impl Values {
                     }
                 }
                 ExecToken::Comma => Item::Comma,
-                ExecToken::Whitespace => continue,
+                ExecToken::Whitespace | ExecToken::Eof => continue,
                 _ => Item::Other,
             };
             out.items.push(item);
@@ -373,10 +400,10 @@ impl Values {
                 } else {
                     Vec::new()
                 };
-                stack.push((children, 0, Some(here)));
+                stack.push((children, Some(here)));
             }
         }
-        Some(out)
+        out
     }
 
     /// The items, borrowed.
