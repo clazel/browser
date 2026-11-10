@@ -341,7 +341,8 @@ impl Tally {
 
 #[test]
 fn wpt_property_value_parsing() {
-    // Under Miri a stride of the cases, to finish in about a minute (docs/VERIFICATION.md).
+    // Under Miri a stride of the cases, to finish in about a minute (docs/VERIFICATION.md):
+    // 7 runs 131 of them in 42 s of Miri's time.
     let stride = if cfg!(miri) { 7 } else { 1 };
     let mut t = Tally::default();
     for (k, case) in WPT.iter().enumerate() {
@@ -392,23 +393,27 @@ const QUIRK_CASES: &[(&str, &str, &str)] = &[];
 
 #[test]
 fn wpt_quirks() {
-    let stride = if cfg!(miri) { 11 } else { 1 };
+    // Under Miri a stride of the (mode, case, property) checks, to finish in about a
+    // minute (docs/VERIFICATION.md): 103 runs 118 of them in 32 s of Miri's time, leaving
+    // margin. 103 is prime, so the sample spreads over the three modes, both suites and
+    // every property rather than repeating one column of the loop.
+    let stride = if cfg!(miri) { 103 } else { 1 };
     let mut t = Tally::default();
     let mut k = 0usize;
+    // The properties of the subset, found once: looking each up inside the loop below
+    // cost most of the test's time under Miri.
+    let props: Vec<_> = quirks_table::props()
+        .iter()
+        .filter(|p| property(&cps(p.prop)).is_some())
+        .collect();
     for (mode, quirks) in [
         ("quirks", true),
         ("limited-quirks", false),
         ("no-quirks", false),
     ] {
         for case in quirks_table::cases() {
-            for p in quirks_table::props()
-                .iter()
-                .filter(|p| p.suite == case.suite)
-            {
+            for p in props.iter().filter(|p| p.suite == case.suite) {
                 if case.shorthand && !p.shorthand {
-                    continue;
-                }
-                if property(&cps(p.prop)).is_none() {
                     continue;
                 }
                 k = k.saturating_add(1);
