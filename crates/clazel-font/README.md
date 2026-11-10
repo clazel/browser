@@ -2,7 +2,8 @@
 
 OpenType font files and the TrueType tables a face needs, for
 [Clazel](../../README.md), a web browser whose parsers of untrusted input carry
-machine-checked proofs. Phase 5 item 5.9 (`docs/phases/phase-5.md`).
+machine-checked proofs. Phase 5 items 5.9 (font tables) and 5.10 (glyph
+outlines as paths; `docs/phases/phase-5.md`).
 
 Every byte of a font is read by this crate's own code: it has no dependencies.
 `ttf-parser` and `read-fonts` are dev-dependencies, used only by the
@@ -27,6 +28,17 @@ the modelling choices.
 - `GPOS` LookupType 2 (formats 1 and 2) and 9, with ScriptList, FeatureList,
   LookupList, Coverage and ClassDef formats 1 and 2 and ValueRecord, for the
   `kern` feature.
+
+## Outlines (item 5.10)
+
+`src/outline/` turns a flattened glyph into a `Path`: closed contours of
+on-curve and off-curve points in 26.6 fixed-point pixels at a given size,
+every implied on-curve point between two off-curve points made explicit and
+each contour starting on-curve, so a contour reads as lines and quadratic
+Béziers. `Path` is the input of the glyph rasterizer (`clazel-raster`, item
+5.17), which takes it from this crate. A glyph that cannot be read or
+flattened, or whose scaled coordinates leave `i32`, is an empty path; the
+modelling choices are listed in `src/outline/mod.rs`.
 
 Not read (decision 5.0(c)): `CFF `/`CFF2` (a CFF face is reported
 unsupported), `GSUB`, `GDEF`, variations, colour and bitmap tables, and every
@@ -63,19 +75,28 @@ unwinding checked:
 | `kern_lookup_128` | a format 0 lookup of any pair in any 128-byte table |
 | `coverage_class_def_128` | Coverage and ClassDef lookups of any glyph in any 128-byte table |
 | `pair_pos_48` | a PairPos subtable of either format, any pair, in any 48-byte subtable |
+| `outline_scale_any` | font units to 26.6 for any coordinate, any size and any `unitsPerEm`; a result only for a size ≥ 0 and `unitsPerEm` > 0 |
+| `outline_midpoint_any` | the implied point between any two coordinates lies between them |
+| `outline_contour_start` | a contour's start from any first and last point is on-curve, and is the first (or last) point when that is on-curve |
+| `outline_contour_step` | one step of the contour conversion from any previous and next point: no two consecutive off-curve points (the loop body for every contour length) |
 
 Whole glyphs are checked to their first point or component; the per-step
 harnesses cover the point decoder's and the component reader's loop bodies
 from any state.
 
-**Not done.** Five harnesses do not finish locally, even at very small
+**Not done.** These harnesses do not finish locally, even at very small
 bounds: they time out after 40 minutes or exhaust memory. They are not in the
 crate, and their code is covered only by unit tests and the differential:
 
 - `loca` with `glyf` flattened to an outline;
 - a `name` lookup that decodes the chosen record;
 - `GPOS` from the table header (`kern` lookups and pair adjustment);
-- `Face::parse`.
+- `Face::parse`;
+- item 5.10's whole-contour and whole-path conversions (`push_contour` on 2
+  points, `path_from_outline` on 2 points in 2 contours): past 20 minutes
+  each, and out of memory at 10 GB on 4 points. The start and step
+  harnesses above give well-formedness for every contour length by
+  induction over the loop; the differential test checks every glyph's path.
 
 Each table that `Face::parse` reads, a PairPos subtable, Coverage and ClassDef,
 and the UTF-16BE decoder have their own harnesses. Item 5.9's
