@@ -389,6 +389,32 @@ fn malformed_new_session_ticket_is_a_decode_error() -> Result<(), String> {
     check_fatal_alert(&mut h, &actions, DECODE_ERROR)
 }
 
+/// RFC 8446 §4.2.10: a NewSessionTicket's early_data extension is a
+/// `uint32 max_early_data_size`; any other length is `decode_error`.
+#[test]
+fn new_session_ticket_early_data_is_a_uint32() -> Result<(), String> {
+    let ticket = |data: &[u8]| {
+        let mut ext = vec![0, 42, 0, data.len() as u8];
+        ext.extend_from_slice(data);
+        let mut body = vec![0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, ext.len() as u8];
+        body.extend_from_slice(&ext);
+        let mut m = vec![4, 0, 0, body.len() as u8];
+        m.extend_from_slice(&body);
+        m
+    };
+    let mut h = Harness::new()?;
+    let record = h.server_record(CT_HANDSHAKE, &ticket(&[0, 0, 0x40, 0]));
+    assert_eq!(h.feed(&record), vec![]);
+    assert!(h.client.is_open());
+    for bad in [&[][..], &[0, 1][..], &[0, 0, 0, 0, 1][..]] {
+        let mut h = Harness::new()?;
+        let record = h.server_record(CT_HANDSHAKE, &ticket(bad));
+        let actions = h.feed(&record);
+        check_fatal_alert(&mut h, &actions, DECODE_ERROR)?;
+    }
+    Ok(())
+}
+
 /// The failure sent a protected fatal alert the server can read, then `Fail`.
 fn check_fatal_alert(h: &mut Harness, actions: &[Action], alert: u8) -> Result<(), String> {
     assert_eq!(actions.last(), Some(&Action::Fail(alert)));

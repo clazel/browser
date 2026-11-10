@@ -688,6 +688,9 @@ pub fn ext_body_ok(e: &Extension<'_>, m: MsgKind) -> (b: bool)
         certificate_authorities(e.data)
     } else if e.etype == EXT_OID_FILTERS {
         oid_filters(e.data).is_some()
+    } else if e.etype == EXT_EARLY_DATA && matches!(m, MsgKind::Nst) {
+        // §4.2.10: `uint32 max_early_data_size`.
+        e.data.len() == 4
     } else {
         true
     }
