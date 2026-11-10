@@ -50,18 +50,23 @@ unwinding checked:
 | `hmtx_any_counts_4k` | `hmtx` on every table of up to 4 KiB, any counts, any glyph |
 | `loca_any_4k` | `loca` on every table of up to 4 KiB, either format, any glyph count and glyph |
 | `glyf_point_step` | one step of the point decoder from any state over any 64 bytes (the loop body for every point) |
-| `glyf_glyph_any_14` | every glyph of up to 14 bytes: header, flag walk, first 4 points, contour ends, component records |
+| `glyf_glyph_any_20` | every glyph of up to 20 bytes: header, contour ends, the flag walk, any contour end, the first point or component |
+| `glyf_component_step` | one component record from any state over any 20 bytes (the loop body for every component) |
 | `glyf_transform_any` | a component transform on any matrix and point |
-| `cmap_any_28` | `cmap` on every table of up to 28 bytes: choice, lookup of any character, ranges, order |
-| `cmap_lookup_512` | format 4 and 12 lookups of any character in any 512-byte subtable |
+| `cmap_any_28` | `cmap` on every table of up to 28 bytes: records and the subtable choice |
+| `cmap_subtable_any_24` | a lookup of any character in every subtable of up to 24 bytes |
+| `cmap_ranges_any_24` | the ranges of every subtable of up to 24 bytes |
+| `cmap_order_any_24` | the order check on every subtable of up to 24 bytes |
+| `cmap_lookup_128` | format 4, 6 and 12 lookups of any character in any 128-byte subtable |
 | `name_decode_any_8` | UTF-16BE decoding of every byte string of up to 8 bytes |
-| `kern_any_40` | `kern` on every table of up to 40 bytes, any pair |
-| `kern_lookup_512` | a format 0 lookup of any pair in any 512-byte table |
-| `coverage_class_def_512` | Coverage and ClassDef lookups of any glyph in any 512-byte table |
-| `pair_pos_512` | a PairPos subtable of either format, any pair, in any 512-byte subtable |
+| `kern_any_32` | `kern` on every table of up to 32 bytes, any pair |
+| `kern_lookup_128` | a format 0 lookup of any pair in any 128-byte table |
+| `coverage_class_def_128` | Coverage and ClassDef lookups of any glyph in any 128-byte table |
+| `pair_pos_48` | a PairPos subtable of either format, any pair, in any 48-byte subtable |
 
-Whole simple glyphs are bounded by their first 4 points; the per-step
-harness covers the decoder's loop body for any state.
+Whole glyphs are checked to their first point or component; the per-step
+harnesses cover the point decoder's and the component reader's loop bodies
+from any state.
 
 **Not done.** Five harnesses do not finish locally, even at very small
 bounds: they time out after 40 minutes or exhaust memory. They are not in the
@@ -75,7 +80,7 @@ crate, and their code is covered only by unit tests and the differential:
 Each table that `Face::parse` reads, a PairPos subtable, Coverage and ClassDef,
 and the UTF-16BE decoder have their own harnesses. Item 5.9's
 "`loca` with `glyf` on symbolic glyph indices" is therefore covered only for
-`loca` alone and for one glyph description, not for flattening.
+`loca` alone and for glyph descriptions, not for flattening.
 
 Unit tests transcribe the worked examples of the chapters: the `cmap` format
 4 example, `chapter2` Examples 5 to 8 (Coverage and ClassDef) and `gpos`

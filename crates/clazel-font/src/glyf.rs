@@ -528,9 +528,9 @@ impl Component {
 /// The instructions that may follow are not read.
 #[derive(Debug, Clone, Copy)]
 pub struct Components<'a> {
-    data: &'a [u8],
-    at: usize,
-    done: bool,
+    pub(crate) data: &'a [u8],
+    pub(crate) at: usize,
+    pub(crate) done: bool,
 }
 
 impl Components<'_> {

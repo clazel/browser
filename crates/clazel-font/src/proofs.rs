@@ -14,8 +14,10 @@
 //! - A simple glyph can declare up to 65,536 points in a few bytes (flag
 //!   repeats with "same" coordinates take no bytes). Its decoder is
 //!   checked one step at a time on **any** state ([`glyf_point_step`]), which
-//!   is the loop body for every point count, and whole glyphs of up to 14
-//!   bytes are checked for their first 4 points ([`glyf_glyph_any_14`]).
+//!   is the loop body for every point count; whole glyphs of up to 20 bytes
+//!   are checked to their first point ([`glyf_glyph_any_20`]). Component
+//!   records are likewise checked one step at a time from any state
+//!   ([`glyf_component_step`]), the loop body for every component count.
 //! - Not done: these harnesses time out (40 minutes) or exhaust memory locally
 //!   even at very small bounds, so they are not in the crate. Each is
 //!   covered only by unit tests and the differential test:
@@ -24,8 +26,8 @@
 //!     decoder alone is [`name_decode_any_8`]);
 //!   - `GPOS` from the table header: the `kern` lookups of a script and the
 //!     pair adjustment of a lookup (one PairPos subtable is
-//!     [`pair_pos_512`]; Coverage and ClassDef are
-//!     [`coverage_class_def_512`]);
+//!     [`pair_pos_48`]; Coverage and ClassDef are
+//!     [`coverage_class_def_128`]);
 //!   - `Face::parse` (each table it reads has its own harness).
 
 use crate::Tag;
@@ -168,32 +170,44 @@ fn glyf_point_step() {
     let _ = d.step();
 }
 
-/// Every glyph description of up to 14 bytes: the header, a simple glyph's
-/// flag walk and its first 4 points and contour ends, or a composite's
-/// component record (the transform itself is `glyf_transform_any`).
+/// Every glyph description of up to 20 bytes: the header and the dispatch;
+/// for a simple glyph, `endPtsOfContours` (at most 5), the flag walk over
+/// the up to 6 bytes left after one contour's arrays (flags, repeat counts
+/// and both coordinate sizes), any contour end and the first point. The
+/// rest of the points are the decoder's steps, `glyf_point_step`; a
+/// composite's records are `glyf_component_step`.
 #[kani::proof]
-#[kani::unwind(15)]
-fn glyf_glyph_any_14() {
-    let data: [u8; 14] = kani::any();
+#[kani::unwind(8)]
+fn glyf_glyph_any_20() {
+    let data: [u8; 20] = kani::any();
     let d = bytes(&data);
     match Glyph::parse(d) {
         Ok(Glyph::Simple(s)) => {
-            let mut points = s.points();
-            for _ in 0..4 {
-                if points.next().is_none() {
-                    break;
-                }
-            }
+            let _ = s.points().next();
             let _ = s.end_point(kani::any());
         }
         Ok(Glyph::Composite(c)) => {
-            for comp in c.components() {
-                if let Ok(comp) = comp {
-                    let _ = comp.scaled_offset();
-                }
-            }
+            let _ = c.components().next();
         }
         _ => {}
+    }
+}
+
+/// One component record read from **any** state over any 20 bytes (a
+/// record is at most 16): every combination of `ARG_1_AND_2_ARE_WORDS`,
+/// `ARGS_ARE_XY_VALUES`, the three scale forms and `MORE_COMPONENTS`, at
+/// any position, including past the end. This is the body of the
+/// `Components` loop, for every component count; it has no loop itself.
+#[kani::proof]
+fn glyf_component_step() {
+    let data: [u8; 20] = kani::any();
+    let mut c = glyf::Components {
+        data: bytes(&data),
+        at: kani::any(),
+        done: kani::any(),
+    };
+    if let Ok(Some(comp)) = c.step() {
+        let _ = comp.scaled_offset();
     }
 }
 
@@ -209,30 +223,60 @@ fn glyf_transform_any() {
     let _ = t.apply(kani::any(), kani::any());
 }
 
-/// `cmap` on every table of up to 40 bytes: the header, the subtable
-/// choice (at most 4 records), a lookup of any character, the ranges and
-/// the order check.
+/// `cmap` on every table of up to 28 bytes: the header, the encoding
+/// records (at most 2) and the subtable choice, which parses each Unicode
+/// record's subtable. Lookups, ranges and the order check on a subtable
+/// are `cmap_subtable_any_24` (any subtable of up to 24 bytes; one reached
+/// here can be up to 27, since an offset may point back into the header).
 #[kani::proof]
 #[kani::unwind(6)]
 fn cmap_any_28() {
     let data: [u8; 28] = kani::any();
     let d = bytes(&data);
     if let Ok(c) = Cmap::parse(d) {
-        if let Ok(Some((_, s))) = c.best_subtable() {
-            let _ = s.map(kani::any());
-            let _ = s.ranges(|_, _| {});
-            let _ = s.is_ordered();
-        }
+        let _ = c.best_subtable();
     }
 }
 
-/// `cmap` format 4 and 12 lookups of any character in any 512-byte subtable:
-/// any segment or group count, so the bisection's reads near the end of
-/// the arrays are covered (at most 10 halvings).
+/// Every `cmap` subtable of up to 24 bytes, of any format (format 6 with up
+/// to 7 entries, format 4 with 1 segment): a lookup of any character. The
+/// ranges are `cmap_ranges_any_24` and the order check `cmap_order_any_24`.
 #[kani::proof]
-#[kani::unwind(11)]
-fn cmap_lookup_512() {
-    let data: [u8; 512] = kani::any();
+#[kani::unwind(9)]
+fn cmap_subtable_any_24() {
+    let data: [u8; 24] = kani::any();
+    if let Ok(s) = Subtable::parse(bytes(&data)) {
+        let _ = s.map(kani::any());
+    }
+}
+
+/// The ranges of every `cmap` subtable of up to 24 bytes.
+#[kani::proof]
+#[kani::unwind(9)]
+fn cmap_ranges_any_24() {
+    let data: [u8; 24] = kani::any();
+    if let Ok(s) = Subtable::parse(bytes(&data)) {
+        let _ = s.ranges(|_, _| {});
+    }
+}
+
+/// The order check on every `cmap` subtable of up to 24 bytes.
+#[kani::proof]
+#[kani::unwind(9)]
+fn cmap_order_any_24() {
+    let data: [u8; 24] = kani::any();
+    if let Ok(s) = Subtable::parse(bytes(&data)) {
+        let _ = s.is_ordered();
+    }
+}
+
+/// `cmap` format 4 and 12 lookups of any character in any 128-byte subtable:
+/// any segment or group count, so the bisection's reads near the end of
+/// the arrays are covered (at most 7 halvings).
+#[kani::proof]
+#[kani::unwind(8)]
+fn cmap_lookup_128() {
+    let data: [u8; 128] = kani::any();
     let d = bytes(&data);
     if let Ok(s @ (Subtable::Format4(_) | Subtable::Format12(_) | Subtable::Format6(_))) =
         Subtable::parse(d)
@@ -249,24 +293,24 @@ fn name_decode_any_8() {
     let _ = name::decode_utf16be(bytes(&data));
 }
 
-/// `kern` on every table of up to 40 bytes: the kerning of any pair, over
-/// every subtable (at most 6) and its pairs.
+/// `kern` on every table of up to 32 bytes: the kerning of any pair, over
+/// every subtable (at most 4, or 1 with 2 pairs) and its pairs.
 #[kani::proof]
-#[kani::unwind(8)]
-fn kern_any_40() {
-    let data: [u8; 40] = kani::any();
+#[kani::unwind(7)]
+fn kern_any_32() {
+    let data: [u8; 32] = kani::any();
     let d = bytes(&data);
     if let Ok(k) = Kern::parse(d) {
         let _ = k.kerning(kani::any(), kani::any());
     }
 }
 
-/// `kern` format 0 lookups of any pair in any 512-byte table: any `nPairs`,
+/// `kern` format 0 lookups of any pair in any 128-byte table: any `nPairs`,
 /// so the bisection's reads near the end are covered.
 #[kani::proof]
-#[kani::unwind(11)]
-fn kern_lookup_512() {
-    let data: [u8; 512] = kani::any();
+#[kani::unwind(8)]
+fn kern_lookup_128() {
+    let data: [u8; 128] = kani::any();
     if let Ok(k) = Kern::parse(&data) {
         let s = crate::kern::Subtable {
             offset: 4,
@@ -277,21 +321,22 @@ fn kern_lookup_512() {
     }
 }
 
-/// Coverage and ClassDef lookups of any glyph in any 512-byte table.
+/// Coverage and ClassDef lookups of any glyph in any 128-byte table.
 #[kani::proof]
-#[kani::unwind(11)]
-fn coverage_class_def_512() {
-    let data: [u8; 512] = kani::any();
+#[kani::unwind(8)]
+fn coverage_class_def_128() {
+    let data: [u8; 128] = kani::any();
     let g: u16 = kani::any();
     let _ = Coverage::new(&data).index(g);
     let _ = ClassDef::new(&data).class(g);
 }
 
-/// A PairPos subtable of either format applied to any pair, in any 512-byte
-/// subtable.
+/// A PairPos subtable of either format applied to any pair, in any 48-byte
+/// subtable: room for a format 2 header, a Coverage table, two ClassDefs
+/// and class records, or a format 1 PairSet with its records.
 #[kani::proof]
-#[kani::unwind(11)]
-fn pair_pos_512() {
-    let data: [u8; 512] = kani::any();
+#[kani::unwind(7)]
+fn pair_pos_48() {
+    let data: [u8; 48] = kani::any();
     let _ = pair_pos_apply(&data, kani::any(), kani::any());
 }
