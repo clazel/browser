@@ -43,9 +43,10 @@
 //! | `spec.rs` §4.2 extension-block rules | [`extensions::theorem_extension_rules_equivalence`] | proven |
 //! | `spec.rs` `ext_body_ok`, `auth/spec.rs` `request_filters_distinct` | [`bodies::lemma_cr_bodies`], [`bodies::lemma_ee_bodies`], [`hello::lemma_sh_bodies`], [`hello::lemma_hrr_bodies`] | proven for CertificateRequest (every block), EncryptedExtensions (the profile's offers), ServerHello and HelloRetryRequest (every block, inside the hello theorem); NewSessionTicket's with post-handshake |
 //! | Appendix D.4 client CCS: `bootstrap_spec` before ClientHello2, `handshake_spec::needs_ccs`, `dispatcher_spec` `compatibility_ccs_record`/`protect_client_flight` | [`ccs::theorem_compatibility_ccs`] | partial: the bytes and the placement (once; before ClientHello2 after a retry, else before the encrypted flight), mode = non-empty session ID; not yet tied to the connection streams |
-//! | `hello/spec.rs` (`validate`); `spec.rs` `read_server_hello` and the legacy preflight | [`hello::theorem_hello_equivalence`] | proven for every body, under the hypotheses that the transcription's ClientHello and retry record are the crate's profile ([`hello::sent_is_profile`], [`hello::retry_is_profile`], to be discharged by the `client_spec` and driver theorems); the two crate differences found are fixed (the HelloRetryRequest Random is examined first; the extensions floor of 6) |
+//! | `hello/spec.rs` (`validate`); `spec.rs` `read_server_hello` and the legacy preflight | [`hello::theorem_hello_equivalence`] | proven for every body, under the hypotheses that the transcription's ClientHello and retry record are the crate's profile ([`hello::sent_is_profile`], [`hello::retry_is_profile`]; both discharged for every state the crate's negotiation controller reaches, by [`client`] and [`negotiation`]); the two crate differences found are fixed (the HelloRetryRequest Random is examined first; the extensions floor of 6) |
 //! | `hello/client_spec.rs` (the ClientHello sent) | [`client::theorem_client_hello_equivalence`] | proven: for every accepted configuration, the first ClientHello is the transcription's `build_client_hello` of the same inputs and meets `client_hello_conforms`; every ClientHello sent (any cookie) meets [`hello::sent_is_profile`] with the crate's own offers, discharging that hypothesis; and after every first HelloRetryRequest the crate accepts, the transcription accepts it, keeps [`hello::profile_retry_record`], and the crate's ClientHello2 is `second_client_hello` and meets `second_client_hello_conforms` ([`client::retry_agrees`]) |
-//! | `hello/bootstrap_spec.rs` | none | not started |
+//! | `hello/client_spec.rs` negotiation controller (`start`, `receive`: `validate`, `retry`, `established` and the transcript steps) | [`negotiation::theorem_negotiation_equivalence`] | proven: `start` agrees with `start_handshake` and sends its ClientHello; from agreeing states, on every body, the crate rejects exactly when the transcription aborts (alert in its list), retries exactly when it accepts a HelloRetryRequest (same ClientHello2, record version 0x0303, agreeing states again), and establishes exactly when it accepts the ServerHello (same share, transcripts agree); domain: the crate's resource policies (body, 4 MiB transcript, 4096-octet cookie: `internal_error`) |
+//! | `hello/bootstrap_spec.rs` (the record layer around the controller: acknowledgement gate, CCS, fragments, alerts) | none | not started |
 //! | `traffic/handshake_spec.rs` (`start`) | none | not started (its parts: `keys` and `record` above) |
 //! | `connection/framing_spec.rs` | none | not started |
 //! | `connection/dispatcher_spec.rs` (`feed`, `acknowledge`) | none | not started (its values: `keys` above) |
@@ -66,6 +67,7 @@ pub mod hello;
 pub mod host;
 pub mod keys;
 pub mod messages;
+pub mod negotiation;
 pub mod record;
 pub mod schedule;
 pub mod transcript;
