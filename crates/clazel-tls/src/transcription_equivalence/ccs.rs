@@ -16,9 +16,10 @@
 //! otherwise before the encrypted flight (`ccs_pending`). Both write it exactly
 //! once, before the first batch.
 //!
-//! Not yet proven: that these batches are the records of the two connection
-//! models' streams. That needs the framing, bootstrap and dispatcher
-//! equivalence, which is not started.
+//! Tied to the streams: before ClientHello2, by
+//! [`super::bootstrap::theorem_bootstrap_equivalence`] (the crate's flight
+//! is the flattened `middlebox::client_receive_stream` records). Not yet:
+//! the encrypted flight's, which needs the dispatcher equivalence.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;

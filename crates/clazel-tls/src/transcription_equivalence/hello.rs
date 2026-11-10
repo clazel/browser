@@ -23,9 +23,13 @@
 //! On acceptance, the selection is the same: the cookie's `extension_data`,
 //! or the server's X25519 `key_exchange`.
 //!
-//! Hypotheses, each about the state the two sides are in, and each a fact
-//! of the client's own ClientHello (`hello/client_spec.rs`), not of the
-//! input:
+//! Two conditions on the state the two sides are in, each a fact of the
+//! client's own ClientHello (`hello/client_spec.rs`), not of the input.
+//! Neither is left as a hypothesis: [`super::client`] proves the first for
+//! every ClientHello the crate sends (`lemma_sent_is_profile`), and
+//! [`super::negotiation`] proves both for every state the crate's
+//! negotiation controller reaches (`negotiation_agrees`), which
+//! [`super::bootstrap`] carries through the record layer:
 //! - [`sent_is_profile`]: the transcription's ClientHello offers what the
 //!   crate's profile offers: the crate's session ID, TLS 1.3 only,
 //!   TLS_CHACHA20_POLY1305_SHA256 only, X25519 only with one X25519 share,
