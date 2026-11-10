@@ -933,6 +933,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
     }
 
     /// §5.1, §6: what one authenticated record does.
+    #[verifier::rlimit(30)]
     fn record(&mut self, typ: u8, content: &[u8]) -> (out: Out)
         requires old(self).wf(), spec::can_read(old(self)@), content.len() <= crate::spec::MAX_PLAINTEXT,
         ensures
