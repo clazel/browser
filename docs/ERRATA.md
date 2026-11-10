@@ -501,7 +501,10 @@ it evidently means. Each entry records what we specified instead.
   `crates/clazel-tls/src/transcription/`). The crate's spec does the same
   (`legacy_server_hello_without_supported_versions` in
   `crates/clazel-tls/src/spec.rs`, `validate` and `below_tls13` in
-  `crates/clazel-tls/src/hello/spec.rs`); that the two agree is not yet proven.
+  `crates/clazel-tls/src/hello/spec.rs`). That the two agree is proven by
+  `theorem_hello_equivalence` in
+  `crates/clazel-tls/src/transcription_equivalence/hello.rs` (with
+  `lemma_preflight` for the version detection), for every body.
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §4.1.4, §4.2.1 and Appendix D.5 disagree on ServerHello.legacy_version
