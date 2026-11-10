@@ -163,8 +163,9 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="748" y="620" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
 <text x="756" y="638" font-size="12" class="m b">selectors</text>
 <text x="756" y="667" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
-<rect x="756" y="647" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
-<text x="756" y="680" font-size="10" class="mut">unverified shell</text>
+<svg x="756" y="647" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="24.6" height="6" fill="var(--proof)"/><rect x="24.6" width="47.6" height="6" fill="var(--spec)"/><rect x="72.2" width="35.8" height="6" fill="var(--exec)"/></svg>
+<text x="756" y="680" font-size="10" class="mut">434 cases</text>
+<text x="756" y="691" font-size="10" class="mut">45/45 mut</text>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--fg)"/></marker></defs>
 <line x1="698" x2="734" y1="386" y2="386" stroke="var(--fg)" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
 <text x="716" y="380" font-size="10" class="mut" text-anchor="middle">IPC</text>
@@ -233,7 +234,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="756" y="887" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
 <text x="756" y="920" font-size="10" class="mut">62 unsafe, audited</text>
 <rect x="20" y="964" width="864" height="130" rx="10" fill="var(--panel)" stroke="var(--line)"/>
-<text x="32" y="990" font-size="12" class="b">2192 of 2205 broken specs caught by a theorem</text>
+<text x="32" y="990" font-size="12" class="b">2237 of 2250 broken specs caught by a theorem</text>
 <text x="32" y="1007" font-size="11" class="mut">13 more (crypto) broke only a proof script: no theorem became false, so they are not counted as coverage.</text>
 <text x="32" y="1033" font-size="12" class="b">21 axioms: proofs taken from other verified libraries</text>
 <text x="32" y="1050" font-size="11" class="mut">p384, 6: The trust boundary of the field: every call into fiat-crypto, each one axiom.</text>
