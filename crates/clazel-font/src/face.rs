@@ -139,6 +139,12 @@ impl<'a> Face<'a> {
         crate::glyf::outline(&self.glyf, &self.loca, glyph)
     }
 
+    /// Glyph `glyph` as a path at `size` (26.6 pixels per em), or an empty
+    /// path if it cannot be drawn ([`crate::outline::glyph_path`]).
+    pub fn path(&self, glyph: u16, size: i32) -> crate::outline::Path {
+        crate::outline::glyph_path(self, glyph, size)
+    }
+
     /// An optional table's bytes.
     fn optional(&self, tag: Tag) -> Result<Option<&'a [u8]>, Error> {
         self.directory.table(tag)

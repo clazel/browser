@@ -42,6 +42,8 @@ pub enum Error {
     /// A composite's point-matching arguments name a point that does not
     /// exist in the parent or the child.
     AnchorPoint,
+    /// A glyph was asked for at a negative size ([`crate::outline`]).
+    FontSize,
 }
 
 impl core::fmt::Display for Error {
@@ -60,6 +62,7 @@ impl core::fmt::Display for Error {
             Self::ComponentCount => f.write_str("composite glyph has too many components"),
             Self::PointCount => f.write_str("glyph has too many points"),
             Self::AnchorPoint => f.write_str("composite anchor point out of range"),
+            Self::FontSize => f.write_str("negative font size"),
         }
     }
 }
