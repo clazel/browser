@@ -470,7 +470,7 @@ pub proof fn lemma_alert_mapping()
         alert_of(ErrKind::Interleaved) == 10,
         alert_of(ErrKind::AllZeroInnerPlaintext) == 10,
         alert_of(ErrKind::BadChangeCipherSpec) == 10,
-        alert_of(ErrKind::HandshakeTooLarge) == 47,
+        alert_of(ErrKind::HandshakeTooLarge) == 80,
         alert_of(ErrKind::DuplicateExtension) == 47,
         alert_of(ErrKind::ExtensionNotAllowed) == 47,
         alert_of(ErrKind::InvalidEnum) == 47,
@@ -487,7 +487,7 @@ pub proof fn lemma_alert_mapping()
     assert(alert_of(ErrKind::Interleaved) == 10) by (compute_only);
     assert(alert_of(ErrKind::AllZeroInnerPlaintext) == 10) by (compute_only);
     assert(alert_of(ErrKind::BadChangeCipherSpec) == 10) by (compute_only);
-    assert(alert_of(ErrKind::HandshakeTooLarge) == 47) by (compute_only);
+    assert(alert_of(ErrKind::HandshakeTooLarge) == 80) by (compute_only);
     assert(alert_of(ErrKind::DuplicateExtension) == 47) by (compute_only);
     assert(alert_of(ErrKind::ExtensionNotAllowed) == 47) by (compute_only);
     assert(alert_of(ErrKind::InvalidEnum) == 47) by (compute_only);

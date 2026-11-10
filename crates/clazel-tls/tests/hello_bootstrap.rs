@@ -125,6 +125,24 @@ fn ack_initial(bootstrap: &mut Bootstrap<TestCrypto>, wire: &[u8]) -> Result<(),
     Ok(())
 }
 
+/// RFC 8446 §5.1: "a record containing an initial ClientHello SHOULD have
+/// version 0x0301 ... and a record containing a second ClientHello or a
+/// ServerHello MUST have version 0x0303".
+#[test]
+fn initial_client_hello_record_is_version_0x0301() -> Result<(), String> {
+    for session in [SESSION, &[][..]] {
+        let (_, client_wire) = started(session)?;
+        assert_eq!(client_wire.get(..3), Some(&[22u8, 3, 1][..]));
+        let length = match client_wire.get(3..5) {
+            Some(&[high, low]) => usize::from(u16::from_be_bytes([high, low])),
+            _ => return Err("no record header".to_owned()),
+        };
+        assert_eq!(client_wire.len(), length.checked_add(5).ok_or("length")?);
+        assert_eq!(client_wire.get(5), Some(&1u8));
+    }
+    Ok(())
+}
+
 #[test]
 fn exact_send_ack_gates_peer_input_and_wrong_ack_is_terminal() -> Result<(), String> {
     let (mut bootstrap, client_wire) = started(SESSION)?;

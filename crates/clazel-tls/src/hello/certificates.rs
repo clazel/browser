@@ -149,4 +149,16 @@ pub proof fn lemma_ccs_fatal_mid_message()
             == (awaiting_with_buffer(seq![]), super::bootstrap_spec::Action::None),
 {
 }
+
+/// RFC 8446 §5.1: the initial ClientHello's record has version 0x0301 ("a
+/// record containing an initial ClientHello SHOULD have version 0x0301"),
+/// and the second ClientHello's has 0x0303 ("MUST have version 0x0303").
+pub proof fn lemma_record_versions()
+    ensures
+        super::bootstrap_spec::initial_record(seq![1u8]) == seq![22u8, 3u8, 1u8, 0u8, 1u8, 1u8],
+        super::bootstrap_spec::handshake_record(seq![1u8]) == seq![22u8, 3u8, 3u8, 0u8, 1u8, 1u8],
+{
+    assert(super::bootstrap_spec::initial_record(seq![1u8]) =~= seq![22u8, 3u8, 1u8, 0u8, 1u8, 1u8]) by (compute_only);
+    assert(super::bootstrap_spec::handshake_record(seq![1u8]) =~= seq![22u8, 3u8, 3u8, 0u8, 1u8, 1u8]) by (compute_only);
+}
 }

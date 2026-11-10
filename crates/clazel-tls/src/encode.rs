@@ -426,7 +426,7 @@ pub fn alert_for(k: ErrKind) -> (a: Alert)
         ErrKind::Interleaved => super::spec::UNEXPECTED_MESSAGE,
         ErrKind::AllZeroInnerPlaintext => super::spec::UNEXPECTED_MESSAGE,
         ErrKind::BadChangeCipherSpec => super::spec::UNEXPECTED_MESSAGE,
-        ErrKind::HandshakeTooLarge => super::spec::ILLEGAL_PARAMETER,
+        ErrKind::HandshakeTooLarge => super::spec::INTERNAL_ERROR,
         ErrKind::DuplicateExtension => super::spec::ILLEGAL_PARAMETER,
         ErrKind::ExtensionNotAllowed => super::spec::ILLEGAL_PARAMETER,
         ErrKind::InvalidEnum => super::spec::ILLEGAL_PARAMETER,

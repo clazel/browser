@@ -393,6 +393,20 @@
       }
     },
     {
+      "id": "alert-handshake-too-large",
+      "file": "src/spec.rs",
+      "find": "ErrKind::HandshakeTooLarge => INTERNAL_ERROR,",
+      "replace": "ErrKind::HandshakeTooLarge => ILLEGAL_PARAMETER,",
+      "expect": "killed",
+      "reason": "The crate's handshake-size limit (its resource policy, not a rule the peer broke) maps to illegal_parameter instead of internal_error: lemma_alert_mapping is false.",
+      "module": "examples",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples::lemma_alert_mapping()",
+        "witness": "alert_of(ErrKind::HandshakeTooLarge) != 80"
+      }
+    },
+    {
       "id": "alert-duplicate-extension",
       "file": "src/spec.rs",
       "find": "ErrKind::DuplicateExtension => ILLEGAL_PARAMETER,",
@@ -2616,6 +2630,20 @@
         "file": "src/certificates.rs",
         "lemma": "super::examples::lemma_inner_full_length()",
         "witness": "open_inner_plaintext(Seq::new(16384, |i: int| 42u8) + seq![23u8, 0u8]) != Res::<Record>::Err(ErrKind::RecordOverflow)"
+      }
+    },
+    {
+      "id": "bootstrap-initial-record-version-0303",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "crate::spec::write_plaintext(crate::spec::CT_HANDSHAKE, 0x0301, flight)",
+      "replace": "crate::spec::write_plaintext(crate::spec::CT_HANDSHAKE, 0x0303, flight)",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1: a record containing an initial ClientHello SHOULD have version 0x0301; the mutant writes 0x0303, so lemma_record_versions is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_record_versions()",
+        "witness": "super::bootstrap_spec::initial_record(seq![1u8]) != seq![22u8, 3u8, 1u8, 0u8, 1u8, 1u8]"
       }
     },
     {

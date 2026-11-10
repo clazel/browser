@@ -843,6 +843,10 @@ fn hand_built_cases() -> Vec<Case> {
         parse_err(&[24, 0, 0, 1, 2]) == Some(ErrKind::InvalidEnum),
     );
     add(
+        "the handshake-size cap (a resource policy) is internal_error (80)",
+        alert_number(ErrKind::HandshakeTooLarge) == 80,
+    );
+    add(
         "invalid enum alert is illegal_parameter (47)",
         alert_number(ErrKind::InvalidEnum) == 47,
     );

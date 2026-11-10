@@ -530,7 +530,9 @@ impl<C: Crypto> Bootstrap<C> {
             assert(flight.len() < 65536);
         }
         let mut wire = Vec::new();
-        crate::record::write_plaintext(&mut wire, crate::spec::CT_HANDSHAKE, 0x0303, flight.as_slice());
+        // RFC 8446 §5.1: "a record containing an initial ClientHello SHOULD
+        // have version 0x0301".
+        crate::record::write_plaintext(&mut wire, crate::spec::CT_HANDSHAKE, 0x0301, flight.as_slice());
         let pending = vstd::slice::slice_to_vec(wire.as_slice());
         let driver = Bootstrap {
             crypto,
