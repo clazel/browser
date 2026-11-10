@@ -77,8 +77,8 @@ pub fn convert(dir: &Path) -> Result<String, String> {
         .and_then(|n| n.to_str())
         .ok_or_else(|| format!("{}: no directory name", dir.display()))?;
     let files = files_of(name)?;
-    let source = std::fs::read_to_string(dir.join("SOURCE.md"))
-        .map_err(|e| format!("SOURCE.md: {e}"))?;
+    let source =
+        std::fs::read_to_string(dir.join("SOURCE.md")).map_err(|e| format!("SOURCE.md: {e}"))?;
     let mut out = String::new();
     let _ = writeln!(
         out,
