@@ -484,9 +484,14 @@ pub enum ErrKind {
     /// "unexpected_message" alert".
     BadChangeCipherSpec,
     /// A handshake message longer than this crate's stated limit (see
-    /// [`MAX_HANDSHAKE_BODY`]). RFC 8446 names no alert for
-    /// this; `illegal_parameter` is what OpenSSL and BoringSSL send for
-    /// an excessive message size.
+    /// [`MAX_HANDSHAKE_BODY`]). §4's `uint24 length` allows such a
+    /// message, so the peer has broken no rule: the limit is this crate's
+    /// resource policy. Alert `internal_error` (§6.2: "An internal error
+    /// unrelated to the peer or the correctness of the protocol (such as a
+    /// memory allocation failure) makes it impossible to continue").
+    /// OpenSSL and BoringSSL send `illegal_parameter`, which §6.2 keeps for
+    /// a field "out of range or inconsistent with other fields"; this
+    /// length is in range.
     HandshakeTooLarge,
     /// §4.2: "There MUST NOT be more than one extension of the same type
     /// in a given extension block." Alert `illegal_parameter` (the rule is
@@ -537,7 +542,7 @@ pub open spec fn alert_of(k: ErrKind) -> u8 {
         ErrKind::Interleaved => UNEXPECTED_MESSAGE,
         ErrKind::AllZeroInnerPlaintext => UNEXPECTED_MESSAGE,
         ErrKind::BadChangeCipherSpec => UNEXPECTED_MESSAGE,
-        ErrKind::HandshakeTooLarge => ILLEGAL_PARAMETER,
+        ErrKind::HandshakeTooLarge => INTERNAL_ERROR,
         ErrKind::DuplicateExtension => ILLEGAL_PARAMETER,
         ErrKind::ExtensionNotAllowed => ILLEGAL_PARAMETER,
         ErrKind::InvalidEnum => ILLEGAL_PARAMETER,

@@ -131,9 +131,21 @@ pub open spec fn wf(s: State) -> bool {
     && s.reassembly.buf.len() < crate::spec::HANDSHAKE_HEADER + crate::spec::MAX_HANDSHAKE_BODY
 }
 
-/// Wrap one handshake flight in a TLSPlaintext record, RFC 8446 §5.1.
+/// Wrap one handshake flight in a TLSPlaintext record, RFC 8446 §5.1: the
+/// record of the second ClientHello, whose version "MUST" be 0x0303 ("a
+/// record containing a second ClientHello or a ServerHello MUST have
+/// version 0x0303").
 pub open spec fn handshake_record(flight: Seq<u8>) -> Seq<u8> {
     crate::spec::write_plaintext(crate::spec::CT_HANDSHAKE, 0x0303, flight)
+}
+
+/// The record of the initial ClientHello, RFC 8446 §5.1: "a record
+/// containing an initial ClientHello SHOULD have version 0x0301 (reflecting
+/// TLS 1.0)" (and `legacy_record_version`: "MUST be set to 0x0303 for all
+/// records ... other than an initial ClientHello ..., where it MAY also be
+/// 0x0301"). The SHOULD is followed.
+pub open spec fn initial_record(flight: Seq<u8>) -> Seq<u8> {
+    crate::spec::write_plaintext(crate::spec::CT_HANDSHAKE, 0x0301, flight)
 }
 
 /// RFC 8446 §4.1.2 and §5.1: build the ClientHello and emit its exact record.
@@ -141,7 +153,7 @@ pub open spec fn start(c: super::client_spec::Config) -> Result<(State, Action),
     match super::client_spec::start(c) {
         Err(alert) => Err(alert),
         Ok((hello, flight)) => {
-            let wire = handshake_record(flight);
+            let wire = initial_record(flight);
             Ok((State {
                 mode: Mode::AwaitClientHelloSend,
                 hello: Some(hello),
