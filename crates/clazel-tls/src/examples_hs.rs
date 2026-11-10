@@ -646,4 +646,19 @@ pub proof fn lemma_request_bodies()
     assert(!oid_filters_distinct(seq![0u8, 8, 1, 5, 0, 0, 1, 5, 0, 0])) by (compute_only);
 }
 
+/// RFC 8446 §4.2.10: a NewSessionTicket's early_data extension is
+/// `struct { uint32 max_early_data_size; } EarlyDataIndication`. Four
+/// octets are accepted; two are `decode_error`.
+pub proof fn lemma_ticket_early_data()
+    ensures
+        parse_handshake(seq![4u8, 0, 0, 22, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 8, 0, 42, 0, 4, 0, 0, 0, 1], 32) is Ok,
+        parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 6, 0, 42, 0, 2, 0, 1], 32)
+            == Res::<HsMsg>::Err(ErrKind::Decode),
+{
+    assert(parse_handshake(seq![4u8, 0, 0, 22, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 8, 0, 42, 0, 4, 0, 0, 0, 1], 32) is Ok)
+        by (compute_only);
+    assert(parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 6, 0, 42, 0, 2, 0, 1], 32)
+        == Res::<HsMsg>::Err(ErrKind::Decode)) by (compute_only);
+}
+
 } // verus!

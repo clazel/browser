@@ -743,6 +743,20 @@
       }
     },
     {
+      "id": "ticket-early-data-unchecked",
+      "file": "src/spec.rs",
+      "find": "e.etype == EXT_EARLY_DATA && m is Nst {",
+      "replace": "e.etype == EXT_EARLY_DATA && m is Nst && false {",
+      "expect": "killed",
+      "reason": "A NewSessionTicket's early_data body that is not a uint32 is accepted (RFC 8446 §4.2.10): lemma_ticket_early_data is false.",
+      "module": "examples_hs",
+      "certificate": {
+        "file": "src/certificates.rs",
+        "lemma": "super::examples_hs::lemma_ticket_early_data()",
+        "witness": "parse_handshake(seq![4u8, 0, 0, 20, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, 6, 0, 42, 0, 2, 0, 1], 32) != Res::<HsMsg>::Err(ErrKind::Decode)"
+      }
+    },
+    {
       "id": "request-status-request-body-unchecked",
       "file": "src/spec.rs",
       "find": "e.etype == EXT_STATUS_REQUEST && m is Cr {",

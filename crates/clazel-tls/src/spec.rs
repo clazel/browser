@@ -1634,6 +1634,10 @@ pub open spec fn ext_body_ok(e: Ext, m: MsgKind) -> bool {
         read_certificate_authorities(e.data) is Some
     } else if e.etype == EXT_OID_FILTERS {
         read_oid_filters(e.data) is Some
+    } else if e.etype == EXT_EARLY_DATA && m is Nst {
+        // §4.2.10: in a NewSessionTicket, "struct { uint32
+        // max_early_data_size; } EarlyDataIndication", exactly four octets.
+        e.data.len() == 4
     } else {
         true
     }
