@@ -1,5 +1,5 @@
 //! Differential test of `clazel-font` against two independent engines,
-//! `ttf-parser` and `read-fonts` (phase-5.md item 5.9).
+//! `ttf-parser` and `read-fonts` (phase-5.md items 5.9 and 5.10).
 //!
 //! Three suites, each printing one `clazel-conformance:` line
 //! (`xtask/src/conformance.rs`):
@@ -7,6 +7,7 @@
 //! - **vendored fonts**: every font under `tests/data/`, every face of each.
 //!   A unit is one check: a table record, a metric, a `cmap` entry, a glyph's
 //!   advance and side bearing, a glyph's raw description, a glyph's outline,
+//!   a glyph's 26.6 path and its well-formedness,
 //!   a `kern` pair, a `GPOS` pair adjustment.
 //! - **system fonts**: the same checks on every font file under the runner's
 //!   font directories (ignored under Miri, which forbids opening files). Its
@@ -26,7 +27,11 @@
 //! description against `read-fonts` (a simple glyph's contour ends and
 //! points, a composite's component records) and its flattened outline
 //! against `ttf-parser`'s, segment by segment, after turning our quadratic
-//! contours into segments with `ttf-parser`'s own rule; every pair of every
+//! contours into segments with `ttf-parser`'s own rule; every glyph's 26.6
+//! path (item 5.10) at one of four sizes, which must be well formed, against
+//! `ttf-parser`'s outline scaled to that size, contour by contour as cycles
+//! of lines and quadratics (a glyph is one more unit for this, and one for
+//! well-formedness); every pair of every
 //! `kern` format 0 subtable; and, for each `kern`-feature lookup of the
 //! `latn` and `DFLT` scripts, the pair adjustment of every pair from a set
 //! of glyphs.
@@ -51,6 +56,7 @@ use std::collections::BTreeMap;
 
 use clazel_font::glyf::{Component, Glyph, Outline, Placement};
 use clazel_font::layout::{PairValue, ValueRecord};
+use clazel_font::outline::{Path, PathPoint, try_glyph_path};
 use clazel_font::{Error, Face, Tag, file::FontFile};
 use read_fonts::TableProvider;
 use read_fonts::types::{GlyphId, GlyphId16};
@@ -74,6 +80,12 @@ const EXPECTED: &[(&str, &str)] = &[
     (
         "ttf-parser-single-point",
         "ttf-parser draws a simple glyph with exactly one point as empty, also as a component",
+    ),
+    (
+        "ttf-parser-lone-off-curve",
+        "a contour of exactly one point, off-curve: ttf-parser draws nothing for it; our 26.6 \
+         path (item 5.10) keeps it as a quadratic from the implied on-curve point (the point \
+         itself) back to itself, which covers no area. Only the path comparison counts it",
     ),
     (
         "ttf-parser-missing-component",
@@ -947,30 +959,37 @@ fn compare_glyphs(
         let ours = face.outline(g);
         let mut theirs = Segs::default();
         let drawn = ttf.outline_glyph(gid, &mut theirs).is_some();
-        match ours {
+        let theirs = if drawn { theirs.0 } else { Vec::new() };
+        // Why the engines may disagree on this glyph, if they may.
+        let shape_kind = if shape.point_matching {
+            Some("ttf-parser-point-matching")
+        } else if shape.scaled_offset {
+            Some("ttf-parser-scaled-offset")
+        } else if shape.transform_depth > 1 {
+            Some("nested-transform")
+        } else if shape.scale_flags {
+            Some("ttf-parser-scale-flags")
+        } else if shape.single_point {
+            Some("ttf-parser-single-point")
+        } else {
+            None
+        };
+        let err_kind = |e: &Error| match e {
+            Error::ComponentDepth if shape.depth < 32 && drawn => Some("depth"),
+            _ if shape.unreadable && drawn => Some("ttf-parser-missing-component"),
+            _ if shape.point_matching => Some("ttf-parser-point-matching"),
+            _ => Some("acceptance"),
+        };
+        match &ours {
             Ok(o) => {
-                let mine = segments(&o);
-                let theirs = if drawn { theirs.0 } else { Vec::new() };
+                let mine = segments(o);
                 let tol = if shape.transformed { 1.0 } else { 0.0 };
-                let kind = if shape.point_matching {
-                    Some("ttf-parser-point-matching")
-                } else if shape.scaled_offset {
-                    Some("ttf-parser-scaled-offset")
-                } else if shape.transform_depth > 1 {
-                    Some("nested-transform")
-                } else if shape.scale_flags {
-                    Some("ttf-parser-scale-flags")
-                } else if shape.single_point {
-                    Some("ttf-parser-single-point")
-                } else if o
-                    .points
-                    .iter()
-                    .any(|p| i16::try_from(p.x).is_err() || i16::try_from(p.y).is_err())
-                {
-                    Some("i16-wrap")
-                } else {
-                    None
-                };
+                let kind = shape_kind.or_else(|| {
+                    o.points
+                        .iter()
+                        .any(|p| i16::try_from(p.x).is_err() || i16::try_from(p.y).is_err())
+                        .then_some("i16-wrap")
+                });
                 t.check(same_segments(&mine, &theirs, tol), kind, || {
                     ctx(&format!(
                         "glyph {g} outline: {} vs {} segments",
@@ -980,18 +999,145 @@ fn compare_glyphs(
                 });
             }
             Err(e) => {
-                let kind = match e {
-                    Error::ComponentDepth if shape.depth < 32 && drawn => Some("depth"),
-                    _ if shape.unreadable && drawn => Some("ttf-parser-missing-component"),
-                    _ if shape.point_matching => Some("ttf-parser-point-matching"),
-                    _ => Some("acceptance"),
-                };
-                t.check(!drawn, kind, || {
+                t.check(!drawn, err_kind(e), || {
                     ctx(&format!("glyph {g} outline: ours {e}, ttf-parser draws it"))
                 });
             }
         }
+
+        // The glyph as a 26.6 path (item 5.10) against ttf-parser's outline
+        // scaled to the same size, one size per glyph in turn. The path must
+        // be well formed whatever the glyph; where we draw nothing (a
+        // flattening error, or coordinates past i32 in 26.6), ttf-parser
+        // must draw nothing either, with the same expected kinds as above.
+        let size = usize::from(g)
+            .checked_rem(SIZES.len())
+            .and_then(|i| SIZES.get(i))
+            .copied()
+            .unwrap_or(1024);
+        let path = face.path(g, size);
+        t.check(path.is_well_formed(), None, || {
+            ctx(&format!(
+                "glyph {g} path at {size}/64 px is not well formed"
+            ))
+        });
+        let scale = size as f32 / f32::from(face.units_per_em());
+        match try_glyph_path(face, g, size) {
+            Ok(_) => {
+                let kind = shape_kind.or_else(|| {
+                    ours.as_ref()
+                        .is_ok_and(|o| {
+                            o.points
+                                .iter()
+                                .any(|p| i16::try_from(p.x).is_err() || i16::try_from(p.y).is_err())
+                        })
+                        .then_some("i16-wrap")
+                });
+                // Rounding a point to 1/64 px moves it by at most half a
+                // unit, and an implied point by at most one; a transformed
+                // component's points are rounded to whole font units first.
+                let tol = 1.01 + if shape.transformed { scale } else { 0.0 };
+                let lone = path
+                    .contours()
+                    .any(|c| matches!(c, [p, q] if p.on_curve && !q.on_curve && (p.x, p.y) == (q.x, q.y)));
+                let kind = kind.or_else(|| lone.then_some("ttf-parser-lone-off-curve"));
+                let mine = path_cycles(&path);
+                let theirs = scaled_cycles(&theirs, scale);
+                t.check(same_cycles(&mine, &theirs, tol), kind, || {
+                    ctx(&format!(
+                        "glyph {g} path at {size}/64 px: {} vs {} contours",
+                        mine.len(),
+                        theirs.len()
+                    ))
+                });
+            }
+            Err(e) => {
+                t.check(path.points.is_empty() && !drawn, err_kind(&e), || {
+                    ctx(&format!("glyph {g} path: ours {e}, ttf-parser draws it"))
+                });
+            }
+        }
     }
+}
+
+/// The sizes the 26.6 paths are compared at, in 1/64 px per em: 9, 16,
+/// 37.5 and 200 px.
+const SIZES: [i32; 4] = [576, 1024, 2400, 12_800];
+
+/// A segment of a closed contour: a line to a point, or a quadratic
+/// Bézier through a control point to a point.
+#[derive(Debug, Clone, Copy)]
+enum Step {
+    Line(f32, f32),
+    Quad(f32, f32, f32, f32),
+}
+
+/// Our path as cycles of segments, one per contour, from its on-curve
+/// start; the closing line is explicit, as ttf-parser draws it.
+fn path_cycles(path: &Path) -> Vec<Vec<Step>> {
+    path.contours()
+        .map(|c| {
+            let f = |p: &PathPoint| (p.x as f32, p.y as f32);
+            let mut out = Vec::new();
+            let mut i = 1usize;
+            while i <= c.len() {
+                let next = i.saturating_add(1);
+                match c.get(i).or(c.first()) {
+                    Some(p) if p.on_curve || i == c.len() => {
+                        let (x, y) = f(p);
+                        out.push(Step::Line(x, y));
+                        i = next;
+                    }
+                    Some(ctrl) => {
+                        let (cx, cy) = f(ctrl);
+                        let end = c.get(next).or(c.first()).map(f).unwrap_or((cx, cy));
+                        out.push(Step::Quad(cx, cy, end.0, end.1));
+                        i = next.saturating_add(1);
+                    }
+                    None => break,
+                }
+            }
+            out
+        })
+        .collect()
+}
+
+/// ttf-parser's segments as cycles, scaled from font units to 26.6.
+fn scaled_cycles(segs: &[Seg], k: f32) -> Vec<Vec<Step>> {
+    let mut out = Vec::new();
+    let mut current = Vec::new();
+    for s in segs {
+        match *s {
+            Seg::Move(..) => current = Vec::new(),
+            Seg::Line(x, y) => current.push(Step::Line(x * k, y * k)),
+            Seg::Quad(a, b, x, y) => current.push(Step::Quad(a * k, b * k, x * k, y * k)),
+            Seg::Close => out.push(std::mem::take(&mut current)),
+        }
+    }
+    out
+}
+
+/// Whether two lists of cycles agree contour by contour, each pair equal
+/// up to where the cycle starts, within `tol` on every coordinate.
+fn same_cycles(a: &[Vec<Step>], b: &[Vec<Step>], tol: f32) -> bool {
+    let near = |x: f32, y: f32| (x - y).abs() <= tol;
+    let same = |s: &Step, t: &Step| match (s, t) {
+        (Step::Line(a, b), Step::Line(c, d)) => near(*a, *c) && near(*b, *d),
+        (Step::Quad(a, b, c, d), Step::Quad(e, f, g, h)) => {
+            near(*a, *e) && near(*b, *f) && near(*c, *g) && near(*d, *h)
+        }
+        _ => false,
+    };
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(x, y)| {
+            x.len() == y.len()
+                && (x.is_empty()
+                    || (0..y.len()).any(|r| {
+                        x.iter()
+                            .zip(y.iter().cycle().skip(r))
+                            .all(|(s, t)| same(s, t))
+                    }))
+        })
 }
 
 fn compare_kern(

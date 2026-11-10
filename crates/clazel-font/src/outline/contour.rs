@@ -38,23 +38,44 @@ pub fn push_contour(points: &[PathPoint], out: &mut Vec<PathPoint>) -> Result<bo
     let (Some(first), Some((last, but_last))) = (points.first(), points.split_last()) else {
         return Ok(false);
     };
-    let (start, rest) = if first.on_curve {
-        (*first, points.get(1..).ok_or(Error::Truncated)?)
+    let start = contour_start(first, last);
+    let rest = if first.on_curve {
+        points.get(1..).ok_or(Error::Truncated)?
     } else if last.on_curve {
-        (*last, but_last)
+        but_last
     } else {
-        (implied(last, first), points)
+        points
     };
     out.push(start);
     let mut previous = start;
     for p in rest {
-        if !previous.on_curve && !p.on_curve {
-            out.push(implied(&previous, p));
-        }
-        out.push(*p);
+        push_point(&previous, p, out);
         previous = *p;
     }
     Ok(true)
+}
+
+/// [`push_contour`]'s start: the first point if it is on-curve, else the
+/// last if that is, else the implied point between the last and the first.
+/// Always on-curve.
+pub(crate) fn contour_start(first: &PathPoint, last: &PathPoint) -> PathPoint {
+    if first.on_curve {
+        *first
+    } else if last.on_curve {
+        *last
+    } else {
+        implied(last, first)
+    }
+}
+
+/// One step of [`push_contour`]'s loop: append `p`, which follows
+/// `previous` in the contour, preceded by the implied on-curve point between
+/// them when both are off-curve.
+pub(crate) fn push_point(previous: &PathPoint, p: &PathPoint, out: &mut Vec<PathPoint>) {
+    if !previous.on_curve && !p.on_curve {
+        out.push(implied(previous, p));
+    }
+    out.push(*p);
 }
 
 #[cfg(test)]
