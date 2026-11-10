@@ -55,8 +55,6 @@
 //! transcription counterpart, as `connection.rs` leaves transport closure
 //! out of scope).
 
-#[allow(unused_imports)]
-use vstd::prelude::*;
 #[cfg(verus_only)]
 use crate::hello::bootstrap_spec::{Action, Mode, State};
 #[cfg(verus_only)]
@@ -69,6 +67,8 @@ use crate::transcription::middlebox::{ClientConnection, ClientReceive};
 use crate::transcription::primitives::Primitives;
 #[cfg(verus_only)]
 use crate::transcription::state_machine::HandshakeStep;
+#[allow(unused_imports)]
+use vstd::prelude::*;
 
 verus! {
 
