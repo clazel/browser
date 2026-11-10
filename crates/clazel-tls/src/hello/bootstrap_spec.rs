@@ -17,6 +17,17 @@
 //!   and is fatal (unexpected_message) inside a fragmented ServerHello or HRR:
 //!   §5 and §5.1 conflict there; see docs/ERRATA.md. The connection
 //!   dispatcher applies the same rule to protected handshake messages.
+//! - RFC 8446 §5.1: "Handshake messages MAY be coalesced into a single
+//!   TLSPlaintext record", and the alignment rule ("all messages immediately
+//!   preceding a key change align with a record boundary") does not cover a
+//!   HelloRetryRequest, which precedes no key change. So the messages that
+//!   follow an accepted HelloRetryRequest in its record are kept
+//!   ([`State::retained`]), with the unfinished one's bytes in the
+//!   reassembly state, and are processed, in order, once ClientHello2 is
+//!   acknowledged: the acknowledgement gate means nothing the server sent is
+//!   consumed before the flight that answers what came before it. After a
+//!   ServerHello, which precedes the handshake key change, any following byte
+//!   is `unexpected_message`, after the ServerHello's own checks.
 //! - RFC 8446 §6.1: a received user_canceled is not an error alert and
 //!   closes nothing (it "SHOULD be followed by a close_notify"): bootstrap
 //!   goes on reading, as the dispatcher and the post-handshake transducer do.
@@ -99,6 +110,10 @@ pub struct State {
     pub compatibility: bool,
     /// Partial handshake-message bytes retained by the existing reassembly model.
     pub reassembly: crate::spec::Reasm,
+    /// §5.1: the complete handshake messages that followed an accepted
+    /// HelloRetryRequest in its record, in order, processed once ClientHello2
+    /// is acknowledged (empty in every other mode).
+    pub retained: Seq<Seq<u8>>,
 }
 
 /// Bootstrap state is well-formed and does not retain live negotiation state
@@ -129,6 +144,7 @@ pub open spec fn wf(s: State) -> bool {
         None => true,
     }
     && s.reassembly.buf.len() < crate::spec::HANDSHAKE_HEADER + crate::spec::MAX_HANDSHAKE_BODY
+    && (s.mode != Mode::AwaitClientHello2Send ==> s.retained.len() == 0)
 }
 
 /// Wrap one handshake flight in a TLSPlaintext record, RFC 8446 §5.1: the
@@ -158,6 +174,7 @@ pub open spec fn start(c: super::client_spec::Config) -> Result<(State, Action),
                 mode: Mode::AwaitClientHelloSend,
                 hello: Some(hello),
                 pending_flight: wire,
+                retained: seq![],
                 compatibility: c.session_id.len() > 0,
                 reassembly: crate::spec::reasm_new(),
             }, Action::Send(wire)))
@@ -166,17 +183,21 @@ pub open spec fn start(c: super::client_spec::Config) -> Result<(State, Action),
 }
 
 /// Exact-send acknowledgement opens the receive gate for the matching flight.
-pub open spec fn acknowledge(s: State, sent: Seq<u8>) -> (State, Action) {
-    if !wf(s) { (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+/// After ClientHello2, the messages retained from the HelloRetryRequest's
+/// record are processed then, in order ([`receive_messages`]), as if they had
+/// just arrived: §5.1 lets them share its record.
+pub open spec fn acknowledge(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, sent: Seq<u8>) -> (State, Action) {
+    if !wf(s) { (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
         compatibility: s.compatibility, reassembly: s.reassembly }, Action::Fail(crate::spec::INTERNAL_ERROR)) }
     else if s.mode == Mode::AwaitClientHelloSend && sent == s.pending_flight {
         (State { mode: Mode::AwaitServerHello, hello: s.hello,
-            pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly }, Action::None)
+            pending_flight: seq![], retained: seq![], compatibility: s.compatibility, reassembly: s.reassembly }, Action::None)
     } else if s.mode == Mode::AwaitClientHello2Send && sent == s.pending_flight {
-        (State { mode: Mode::AwaitServerHello, hello: s.hello,
-            pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly }, Action::None)
+        receive_messages(hash, State { mode: Mode::AwaitServerHello, hello: s.hello,
+            pending_flight: seq![], retained: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
+            s.retained)
     } else {
-        (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+        (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
             compatibility: s.compatibility, reassembly: s.reassembly }, Action::Fail(crate::spec::INTERNAL_ERROR))
     }
 }
@@ -184,6 +205,62 @@ pub open spec fn acknowledge(s: State, sent: Seq<u8>) -> (State, Action) {
 /// Appendix D.4's one-byte dummy CCS record, placed immediately before CH2.
 pub open spec fn compatibility_ccs() -> Seq<u8> {
     seq![20u8, 3u8, 3u8, 0u8, 1u8, 1u8]
+}
+
+/// RFC 8446 §4 and §5.1: the complete handshake messages a record gave (or
+/// that were retained after a HelloRetryRequest), in order. `s` already holds
+/// the reassembly state after that record: the bytes of an unfinished message.
+/// The first message is the server's Hello; what may follow it depends on
+/// what it was.
+pub open spec fn receive_messages(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, messages: Seq<Seq<u8>>)
+    -> (State, Action)
+{
+    if messages.len() == 0 {
+        (s, Action::None)
+    } else {
+        let message = messages[0];
+        let reassembly = s.reassembly;
+        if message.len() < crate::spec::HANDSHAKE_HEADER || message[0] != crate::spec::HS_SERVER_HELLO {
+            // §4.1.3, Appendix A.1: in WAIT_SH only a ServerHello (or a
+            // HelloRetryRequest, which has its type) may arrive.
+            (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
+                compatibility: s.compatibility, reassembly }, Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
+        } else {
+            let body = message.skip(crate::spec::HANDSHAKE_HEADER as int);
+            match s.hello {
+                None => (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
+                    compatibility: s.compatibility, reassembly }, Action::Fail(crate::spec::INTERNAL_ERROR)),
+                Some(hello) => match super::client_spec::receive(hash, hello, body) {
+                    Err(alert) => (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
+                        compatibility: s.compatibility, reassembly }, Action::Fail(alert)),
+                    Ok(super::client_spec::Outcome::Established(config, transcript, peer_key)) =>
+                        if messages.len() != 1 || reassembly.buf.len() != 0 {
+                            // §5.1: "Handshake messages MUST NOT span key changes.
+                            // Implementations MUST verify that all messages
+                            // immediately preceding a key change align with a
+                            // record boundary; if not, then they MUST terminate the
+                            // connection with an "unexpected_message" alert." The
+                            // handshake keys follow the ServerHello.
+                            (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
+                                compatibility: s.compatibility, reassembly }, Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
+                        } else {
+                            (State { mode: Mode::Established, hello: None, pending_flight: seq![], retained: seq![],
+                                compatibility: s.compatibility, reassembly }, Action::Established(config, transcript, peer_key))
+                        },
+                    // §5.1: a HelloRetryRequest precedes no key change, so the
+                    // messages after it in its record are kept for after
+                    // ClientHello2 ([`acknowledge`]).
+                    Ok(super::client_spec::Outcome::Retry(next, flight)) => {
+                        let hrr = if s.compatibility {
+                            compatibility_ccs() + handshake_record(flight)
+                        } else { handshake_record(flight) };
+                        (State { mode: Mode::AwaitClientHello2Send, hello: Some(next), pending_flight: hrr,
+                            retained: messages.skip(1), compatibility: s.compatibility, reassembly }, Action::Send(hrr))
+                    },
+                },
+            }
+        }
+    }
 }
 
 /// Process one complete peer event after the prior client flight was acked.
@@ -202,24 +279,24 @@ pub open spec fn receive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, event: Pee
         PeerEvent::Ccs => if crate::spec::at_message_boundary(s.reassembly) {
             (s, Action::None)
         } else {
-            (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+            (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
                 compatibility: s.compatibility, reassembly: s.reassembly },
                 Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
         },
         PeerEvent::Error(alert) => (State { mode: Mode::Failed, hello: None,
-            pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly }, Action::Fail(alert)),
+            pending_flight: seq![], retained: seq![], compatibility: s.compatibility, reassembly: s.reassembly }, Action::Fail(alert)),
         PeerEvent::Eof => (State { mode: Mode::Failed, hello: None,
-            pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
+            pending_flight: seq![], retained: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
             Action::Fail(crate::spec::INTERNAL_ERROR)),
         PeerEvent::Alert(level, description) => {
             match crate::spec::feed_record(s.reassembly,
                 crate::spec::Record { ctype: crate::spec::CT_ALERT, fragment: seq![level, description] }) {
                 crate::spec::Res::Err(error) => (State { mode: Mode::Failed, hello: None,
-                    pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
+                    pending_flight: seq![], retained: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
                     Action::Fail(crate::spec::alert_of(error))),
                 crate::spec::Res::Ok((_, reassembly)) => {
                     if description == crate::spec::CLOSE_NOTIFY {
-                        (State { mode: Mode::Closed, hello: None, pending_flight: seq![],
+                        (State { mode: Mode::Closed, hello: None, pending_flight: seq![], retained: seq![],
                             compatibility: s.compatibility, reassembly }, Action::Close)
                     } else if description == crate::spec::USER_CANCELED {
                         // RFC 8446 §6.1: user_canceled "notifies the recipient that the
@@ -228,7 +305,7 @@ pub open spec fn receive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, event: Pee
                         // reading goes on until the close_notify.
                         (State { reassembly, ..s }, Action::None)
                     } else {
-                        (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                        (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
                             compatibility: s.compatibility, reassembly }, Action::Alert(description))
                     }
                 },
@@ -238,48 +315,12 @@ pub open spec fn receive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, event: Pee
             match crate::spec::feed_record(s.reassembly,
                 crate::spec::Record { ctype: crate::spec::CT_HANDSHAKE, fragment }) {
                 crate::spec::Res::Err(error) => (State { mode: Mode::Failed, hello: None,
-                    pending_flight: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
+                    pending_flight: seq![], retained: seq![], compatibility: s.compatibility, reassembly: s.reassembly },
                     Action::Fail(crate::spec::alert_of(error))),
-                crate::spec::Res::Ok((crate::spec::Event::Messages(messages), reassembly)) => {
-                    if messages.len() == 0 {
-                        (State { mode: s.mode, hello: s.hello, pending_flight: s.pending_flight,
-                            compatibility: s.compatibility, reassembly }, Action::None)
-                    } else if messages.len() != 1 || reassembly.buf.len() != 0 {
-                        (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
-                            compatibility: s.compatibility, reassembly }, Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
-                    } else {
-                        let message = messages[0];
-                        if message.len() < crate::spec::HANDSHAKE_HEADER
-                            || message[0] != crate::spec::HS_SERVER_HELLO {
-                            (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
-                                compatibility: s.compatibility, reassembly }, Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
-                        } else {
-                            let body = message.skip(crate::spec::HANDSHAKE_HEADER as int);
-                            match s.hello {
-                    None => (State { mode: Mode::Failed, hello: None,
-                        pending_flight: seq![], compatibility: s.compatibility, reassembly },
-                        Action::Fail(crate::spec::INTERNAL_ERROR)),
-                    Some(hello) => match super::client_spec::receive(hash, hello, body) {
-                        Err(alert) => (State { mode: Mode::Failed, hello: None,
-                            pending_flight: seq![], compatibility: s.compatibility, reassembly }, Action::Fail(alert)),
-                        Ok(super::client_spec::Outcome::Established(config, transcript, peer_key)) =>
-                            (State { mode: Mode::Established, hello: None,
-                                pending_flight: seq![], compatibility: s.compatibility, reassembly },
-                                Action::Established(config, transcript, peer_key)),
-                        Ok(super::client_spec::Outcome::Retry(next, flight)) => {
-                            let hrr = if s.compatibility {
-                                compatibility_ccs() + handshake_record(flight)
-                            } else { handshake_record(flight) };
-                            (State { mode: Mode::AwaitClientHello2Send, hello: Some(next),
-                                pending_flight: hrr, compatibility: s.compatibility, reassembly }, Action::Send(hrr))
-                        },
-                    },
-                            }
-                        }
-                    }
-                },
+                crate::spec::Res::Ok((crate::spec::Event::Messages(messages), reassembly)) =>
+                    receive_messages(hash, State { reassembly, ..s }, messages),
                 crate::spec::Res::Ok((_, reassembly)) => (State { mode: Mode::Failed,
-                    hello: None, pending_flight: seq![], compatibility: s.compatibility, reassembly },
+                    hello: None, pending_flight: seq![], retained: seq![], compatibility: s.compatibility, reassembly },
                     Action::Fail(crate::spec::UNEXPECTED_MESSAGE)),
             }
         },
@@ -302,7 +343,7 @@ pub open spec fn feed(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State,
             },
             crate::connection::framing_spec::Status::Fail(alert) => Feed {
                 consumed: framed.consumed,
-                state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                state: State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
                     compatibility: s.compatibility, reassembly: s.reassembly },
                 framing: framed.buffer, action: Action::Fail(alert),
             },
@@ -311,7 +352,7 @@ pub open spec fn feed(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State,
                     crate::spec::Read::Done(frame, rest) => {
                         if rest.len() != 0 {
                             Feed { consumed: framed.consumed,
-                                state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                                state: State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
                                     compatibility: s.compatibility, reassembly: s.reassembly },
                                 framing: seq![], action: Action::Fail(crate::spec::UNEXPECTED_MESSAGE) }
                         } else {
@@ -333,13 +374,13 @@ pub open spec fn feed(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State,
                     },
                     crate::spec::Read::Fail(error) => Feed {
                         consumed: framed.consumed,
-                        state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                        state: State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
                             compatibility: s.compatibility, reassembly: s.reassembly },
                         framing: seq![], action: Action::Fail(crate::spec::alert_of(error)),
                     },
                     crate::spec::Read::NeedMore => Feed {
                         consumed: framed.consumed,
-                        state: State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+                        state: State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
                             compatibility: s.compatibility, reassembly: s.reassembly },
                         framing: seq![], action: Action::Fail(crate::spec::DECODE_ERROR),
                     },
@@ -354,7 +395,7 @@ pub open spec fn eof(s: State) -> (State, Action) {
     if s.mode == Mode::Failed || s.mode == Mode::Closed || s.mode == Mode::Established {
         (s, Action::None)
     } else {
-        (State { mode: Mode::Failed, hello: None, pending_flight: seq![],
+        (State { mode: Mode::Failed, hello: None, pending_flight: seq![], retained: seq![],
             compatibility: s.compatibility, reassembly: s.reassembly },
             Action::Fail(crate::spec::INTERNAL_ERROR))
     }
