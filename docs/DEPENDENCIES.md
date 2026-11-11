@@ -236,6 +236,7 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | font-types | 0.12.7 | test | fontations' scalar types (`Tag`, `GlyphId`, `F2Dot14`, …), required by `read-fonts`. Its only dependency, `bytemuck`, is enabled by `read-fonts`. |
 | bytemuck | 1.25.2 | test | Plain-old-data casts, required by `read-fonts` and `font-types` (it contains `unsafe`, behind its derive's checks). |
 | bytemuck_derive | 1.12.1 | test | The derive macros of `bytemuck` (proc-macro), enabled by `font-types`; it uses `syn` 3, `quote` and `proc-macro2`, already listed. |
+| ab_glyph_rasterizer | 0.1.10 | test | Alex Butler's coverage rasterizer (used by `ab_glyph`, `glyph_brush` and `wgpu_glyph`), a descendant of `font-rs`: the reference engine in `clazel-glyph-mask`'s differential test (`tests/conformance_masks.rs`, phase-5.md item 5.17), the same signed-area accumulation in `f32` written by another author. Used without default features but with `std`, which is its only default; `cargo tree` shows no dependencies (`libm` is optional and off). It has `unsafe` only to call its line function through a pointer chosen by CPU feature detection (all variants are the same scalar code). Pinned to 0.1.10, its latest release. |
 <!-- END ALLOWLIST -->
 
 The only `shipped` package is `libc`, and only `clazel-sys` depends on it

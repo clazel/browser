@@ -11,6 +11,12 @@ description = "Glyph masks (Phase 5 item 5.17): closed contours of lines and qua
 # own crate, so no third-party code is shipped (CLAUDE.md rule 8).
 clazel-font = { path = "../clazel-font" }
 
+# The reference engine of the differential test (tests/conformance_masks.rs),
+# never compiled into the browser: the same signed-area method in f32, by
+# another author (docs/DEPENDENCIES.md, class `test`).
+[dev-dependencies]
+ab_glyph_rasterizer = { version = "=0.1.10", default-features = false, features = ["std"] }
+
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is the plan's (phase-5.md, "Crates"):
 # page-controlled coordinates in arithmetic, so Tier 1 (Kani harnesses in
