@@ -10,6 +10,11 @@ description = "Layout (Phase 5): so far only font matching (item 5.10), CSS Font
 # Faces, their names, OS/2 classes and cmap (Phase 5 item 5.9).
 clazel-font = { path = "../clazel-font" }
 
+# The reference shaper of the shaping differential (tests/conformance_shaping.rs,
+# phase-5.md item 5.11), never compiled into the browser.
+[dev-dependencies]
+rustybuzz = { version = "=0.20.1", default-features = false, features = ["std"] }
+
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The policy's
 # tier for layout is 0 (phase-5.md, "Crates").
 [package.metadata.clazel]
