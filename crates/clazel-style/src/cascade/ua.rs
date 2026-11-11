@@ -41,6 +41,8 @@
 //!   margins. They exist to override the sheet's margins, so they are given a specificity
 //!   above any selector's ([`QUIRK_SPECIFICITY`]).
 
+use std::sync::OnceLock;
+
 use clazel_dom::exec::{Arena, ExecKind};
 
 use super::computed::TextAlign;
@@ -120,6 +122,27 @@ pub fn sheet(which: Sheet) -> StyleSheet {
         }
     }
     sheet
+}
+
+/// The three sheets, parsed.
+#[derive(Debug)]
+pub struct Sheets {
+    /// `data/ua.css`.
+    pub ua: StyleSheet,
+    /// `data/ua-quirks.css`.
+    pub ua_quirks: StyleSheet,
+    /// `data/hints.css`.
+    pub hints: StyleSheet,
+}
+
+/// The three sheets, parsed once per process (they are constants of the program).
+pub fn sheets() -> &'static Sheets {
+    static SHEETS: OnceLock<Sheets> = OnceLock::new();
+    SHEETS.get_or_init(|| Sheets {
+        ua: sheet(Sheet::Ua),
+        ua_quirks: sheet(Sheet::UaQuirks),
+        hints: sheet(Sheet::Hints),
+    })
 }
 
 /// True for the `table[border]` rules of the hints sheet that §15.3.8 marks "only if border

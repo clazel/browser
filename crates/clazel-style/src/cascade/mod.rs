@@ -164,9 +164,11 @@ fn body_link_color(arena: &Arena) -> Option<computed::Rgba> {
 /// Every style rule that applies on `device`, prepared, in order of appearance, and the
 /// order of appearance after the last of them.
 fn prepare(sources: &Sources, device: Device) -> (Vec<Prepared>, u32) {
-    let ua = ua::sheet(ua::Sheet::Ua);
-    let ua_quirks = ua::sheet(ua::Sheet::UaQuirks);
-    let hint_sheet = ua::sheet(ua::Sheet::Hints);
+    let ua::Sheets {
+        ua,
+        ua_quirks,
+        hints: hint_sheet,
+    } = ua::sheets();
     let mut rules = Vec::new();
     let mut order: u32 = 0;
     let mut add = |origin: Origin, r: &crate::sources::StyleRule, quirks: bool| {
