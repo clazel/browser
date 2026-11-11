@@ -40,12 +40,12 @@
 //! reference's were 1.0 px² and 2.2 px² short. The margin changes no
 //! coverage the reference computes correctly.
 //!
-//! Under Miri, only masks of at most 64 × 64 are drawn, every 34,019th
-//! (glyph, size) pair (the plan: "Miri on 64×64 masks only"), so the test
-//! finishes in about a minute; CI fails a test that takes 300 s under Miri.
-//! A mask takes about 4 s under Miri (both engines, twice for the
-//! reference), so this is about 10 masks: at a stride of 2,003 the test
-//! took 676 s, at 21,701 97 s.
+//! Under Miri, only masks of at most 64 × 64 are drawn, every 17,011th
+//! (glyph, size) pair, stepped to directly (the plan: "Miri on 64×64 masks
+//! only"), 19 masks, so the test takes about a minute (75 s); CI fails
+//! a test that takes 300 s under Miri. Measured on Miri's clock: every
+//! 34,019th pair (10 masks) took 38 s, every 21,701st (15) 35 s, every
+//! 12,007th (28) 109 s, every 2,003rd 676 s.
 
 mod dejavu {
     include!("../../clazel-font/tests/generated/fonts_dejavu.rs");
@@ -75,7 +75,7 @@ const SIZES: std::ops::RangeInclusive<i32> = 8..=72;
 
 /// Under Miri: every this many (glyph, size) pairs, a prime so that the
 /// sample walks through sizes and glyphs.
-const MIRI_STRIDE: usize = 34_019;
+const MIRI_STRIDE: usize = 17_011;
 
 /// Under Miri: the largest mask side drawn.
 const MIRI_SIDE: u32 = 64;
