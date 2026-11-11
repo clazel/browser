@@ -182,7 +182,8 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="756" y="890" font-size="12" class="m b">layout</text>
 <text x="756" y="919" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe</text>
 <rect x="756" y="899" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
-<text x="756" y="932" font-size="10" class="mut">unverified shell</text>
+<text x="756" y="932" font-size="10" class="mut">222k cases</text>
+<text x="756" y="943" font-size="10" class="mut">8 Kani harnesses</text>
 <defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--fg)"/></marker></defs>
 <line x1="698" x2="734" y1="512" y2="512" stroke="var(--fg)" stroke-width="1.5" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
 <text x="716" y="506" font-size="10" class="mut" text-anchor="middle">IPC</text>
