@@ -37,23 +37,15 @@ pub struct Placed {
 /// whose control box has no width or no height, gives a 0 × 0 mask.
 ///
 /// Every point of the result lies in the mask: 0 ≤ x ≤ width × ONE and
-/// 0 ≤ y ≤ height × ONE (the Kani harness `place_any_3`).
+/// 0 ≤ y ≤ height × ONE ([`mask_box`] contains every screen point and
+/// [`to_local`] maps the box onto the mask; the Kani harnesses
+/// `place_screen_any`, `place_box_any` and `place_local_any`).
 pub fn place(path: &Path, offset: Offset, max_side: u32) -> Result<Placed, Error> {
-    let ox = offset.x.units();
-    let oy = offset.y.units();
-    // Screen coordinates in 26.6, y down: (x + ox, oy − y). From i32
-    // inputs these stay far inside i64.
-    let screen = |x: i32, y: i32| -> Result<(i64, i64), Error> {
-        Ok((
-            i64::from(x).checked_add(ox).ok_or(Error::Overflow)?,
-            oy.checked_sub(i64::from(y)).ok_or(Error::Overflow)?,
-        ))
-    };
     let mut bounds: Option<(i64, i64, i64, i64)> = None;
     let mut count = 0usize;
     for contour in path.contours() {
         for q in contour {
-            let (x, y) = screen(q.x, q.y)?;
+            let (x, y) = screen(q.x, q.y, offset)?;
             bounds = Some(match bounds {
                 None => (x, y, x, y),
                 Some((x0, y0, x1, y1)) => (x0.min(x), y0.min(y), x1.max(x), y1.max(y)),
@@ -74,37 +66,24 @@ pub fn place(path: &Path, offset: Offset, max_side: u32) -> Result<Placed, Error
     let Some((x0, y0, x1, y1)) = bounds else {
         return empty(0, 0);
     };
-    let px = 64i64;
-    let left = x0.div_euclid(px);
-    let top = y0.div_euclid(px);
-    let right = ceil_div64(x1)?;
-    let bottom = ceil_div64(y1)?;
-    let width = right.checked_sub(left).ok_or(Error::Overflow)?;
-    let height = bottom.checked_sub(top).ok_or(Error::Overflow)?;
+    let MaskBox {
+        left,
+        top,
+        width,
+        height,
+    } = mask_box(x0, y0, x1, y1, max_side)?;
     if width == 0 || height == 0 {
         return empty(left, top);
     }
-    let max = i64::from(max_side);
-    if width > max || height > max {
-        return Err(Error::TooLarge);
-    }
-    let ox = left.checked_mul(px).ok_or(Error::Overflow)?;
-    let oy = top.checked_mul(px).ok_or(Error::Overflow)?;
     let mut points = Vec::with_capacity(count);
     let mut contour_ends = Vec::new();
     for contour in path.contours() {
         for q in contour {
-            let (x, y) = screen(q.x, q.y)?;
-            let local = |v: i64, o: i64| -> Result<i64, Error> {
-                v.checked_sub(o)
-                    .ok_or(Error::Overflow)?
-                    .checked_mul(1i64 << SHIFT)
-                    .ok_or(Error::Overflow)
-            };
+            let (x, y) = screen(q.x, q.y, offset)?;
             points.push((
                 Point {
-                    x: local(x, ox)?,
-                    y: local(y, oy)?,
+                    x: to_local(x, left)?,
+                    y: to_local(y, top)?,
                 },
                 q.on_curve,
             ));
@@ -121,14 +100,68 @@ pub fn place(path: &Path, offset: Offset, max_side: u32) -> Result<Placed, Error
     })
 }
 
-/// `⌈v ÷ 64⌉`.
-fn ceil_div64(v: i64) -> Result<i64, Error> {
-    let floor = v.div_euclid(64);
-    if v.rem_euclid(64) == 0 {
-        Ok(floor)
-    } else {
-        floor.checked_add(1).ok_or(Error::Overflow)
+/// A point in screen coordinates, 26.6, y down: `(x + ox, oy − y)`. From
+/// `i32` inputs these stay far inside `i64`.
+pub fn screen(x: i32, y: i32, offset: Offset) -> Result<(i64, i64), Error> {
+    Ok((
+        i64::from(x)
+            .checked_add(offset.x.units())
+            .ok_or(Error::Overflow)?,
+        offset
+            .y
+            .units()
+            .checked_sub(i64::from(y))
+            .ok_or(Error::Overflow)?,
+    ))
+}
+
+/// The whole-pixel box around a control box, in pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaskBox {
+    /// Left edge, `⌊x0 ÷ 64⌋`.
+    pub left: i64,
+    /// Top edge, `⌊y0 ÷ 64⌋`.
+    pub top: i64,
+    /// `⌈x1 ÷ 64⌉ − left`.
+    pub width: i64,
+    /// `⌈y1 ÷ 64⌉ − top`.
+    pub height: i64,
+}
+
+/// The whole-pixel box around the control box (`x0..=x1`, `y0..=y1`, screen
+/// 26.6, `x0 ≤ x1`, `y0 ≤ y1`): [`Error::TooLarge`] if wider or taller than
+/// `max_side`. Floors and ceilings by 64 are arithmetic shifts by 6.
+pub fn mask_box(x0: i64, y0: i64, x1: i64, y1: i64, max_side: u32) -> Result<MaskBox, Error> {
+    let floor = |v: i64| v.checked_shr(6).ok_or(Error::Overflow);
+    let ceil = |v: i64| {
+        v.checked_add(63)
+            .ok_or(Error::Overflow)?
+            .checked_shr(6)
+            .ok_or(Error::Overflow)
+    };
+    let left = floor(x0)?;
+    let top = floor(y0)?;
+    let width = ceil(x1)?.checked_sub(left).ok_or(Error::Overflow)?;
+    let height = ceil(y1)?.checked_sub(top).ok_or(Error::Overflow)?;
+    let max = i64::from(max_side);
+    if width > max || height > max {
+        return Err(Error::TooLarge);
     }
+    Ok(MaskBox {
+        left,
+        top,
+        width,
+        height,
+    })
+}
+
+/// A screen coordinate `v` (26.6) in mask units from the mask edge at
+/// `edge` pixels: `(v − 64 edge) × 2⁸`.
+pub fn to_local(v: i64, edge: i64) -> Result<i64, Error> {
+    v.checked_sub(edge.checked_mul(64).ok_or(Error::Overflow)?)
+        .ok_or(Error::Overflow)?
+        .checked_mul(1i64 << SHIFT)
+        .ok_or(Error::Overflow)
 }
 
 #[cfg(test)]

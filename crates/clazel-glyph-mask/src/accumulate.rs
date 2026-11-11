@@ -110,8 +110,8 @@ impl Accumulator {
     /// the clamp never changes a line of a path; it makes this function
     /// total. Every arithmetic step is checked; [`Error::Overflow`] is not
     /// reachable for a mask up to [`crate::MAX_SIDE`] and up to
-    /// [`crate::MAX_LINES`] lines (the Kani harness `line_any_4x4` and the
-    /// bounds in the crate's README).
+    /// [`crate::MAX_LINES`] lines, by the bounds argued in `src/proofs.rs`
+    /// (no Kani harness covers this function whole: see there).
     pub fn line(&mut self, a: Point, b: Point) -> Result<(), Error> {
         let (xmax, ymax) = self.extent()?;
         let a = Point {
@@ -194,25 +194,46 @@ impl Accumulator {
     /// Adds a piece of signed height `dy` from x `fxa` to `fxb` (relative to
     /// the cell's left edge) in cell (`col`, `row`): `dy × 2 ONE − a` to the
     /// cell and `a = dy × (fxa + fxb)` to the next, as the module explains.
-    fn cell(&mut self, row: i64, col: i64, fxa: i64, fxb: i64, dy: i64) -> Result<(), Error> {
+    ///
+    /// The products are computed in `i32` and the index in `u32`: with
+    /// `|dy| ≤ ONE` and `fxa`, `fxb` in `0..=ONE` (as [`Self::row_piece`]
+    /// gives them) `|a|` ≤ 2²⁹ and `|own|` ≤ 2³⁰, and a row and column of a
+    /// [`crate::MAX_SIDE`] mask index fewer than 2³² cells. Narrow
+    /// multiplications keep the Kani harness `cell_any_1x1` small; a value
+    /// outside those ranges is [`Error::Overflow`].
+    pub(crate) fn cell(
+        &mut self,
+        row: i64,
+        col: i64,
+        fxa: i64,
+        fxb: i64,
+        dy: i64,
+    ) -> Result<(), Error> {
+        let narrow = |v: i64| i32::try_from(v).map_err(|_| Error::Overflow);
+        let (fxa, fxb, dy) = (narrow(fxa)?, narrow(fxb)?, narrow(dy)?);
         let a = dy
             .checked_mul(fxa.checked_add(fxb).ok_or(Error::Overflow)?)
             .ok_or(Error::Overflow)?;
         let own = dy
-            .checked_mul(ONE.checked_mul(2).ok_or(Error::Overflow)?)
+            .checked_mul(narrow(ONE)?.checked_mul(2).ok_or(Error::Overflow)?)
             .ok_or(Error::Overflow)?
             .checked_sub(a)
             .ok_or(Error::Overflow)?;
-        let row = usize::try_from(row).map_err(|_| Error::Overflow)?;
-        let col = usize::try_from(col).map_err(|_| Error::Overflow)?;
-        if row >= self.height || col > self.width {
+        let (a, own) = (i64::from(a), i64::from(own));
+        let row = u32::try_from(row).map_err(|_| Error::Overflow)?;
+        let col = u32::try_from(col).map_err(|_| Error::Overflow)?;
+        let height = u32::try_from(self.height).map_err(|_| Error::Overflow)?;
+        let width = u32::try_from(self.width).map_err(|_| Error::Overflow)?;
+        let stride = u32::try_from(self.stride).map_err(|_| Error::Overflow)?;
+        if row >= height || col > width {
             return Err(Error::Overflow);
         }
         let at = row
-            .checked_mul(self.stride)
+            .checked_mul(stride)
             .ok_or(Error::Overflow)?
             .checked_add(col)
             .ok_or(Error::Overflow)?;
+        let at = usize::try_from(at).map_err(|_| Error::Overflow)?;
         let next = at.checked_add(1).ok_or(Error::Overflow)?;
         let c = self.cells.get_mut(at).ok_or(Error::Overflow)?;
         *c = c.checked_add(own).ok_or(Error::Overflow)?;
@@ -266,7 +287,7 @@ pub fn coverage(run: i64) -> Result<u8, Error> {
 /// The x of the line from `a` to `b` (`a.y ≠ b.y`) at height `y`, rounded
 /// down: `a.x + ⌊(b.x − a.x)(y − a.y) ÷ (b.y − a.y)⌋`. Exact at `a.y` and
 /// `b.y`, and between `a.x` and `b.x` for `y` between `a.y` and `b.y`.
-fn x_at(a: Point, b: Point, y: i64) -> Result<i64, Error> {
+pub(crate) fn x_at(a: Point, b: Point, y: i64) -> Result<i64, Error> {
     let num =
         b.x.checked_sub(a.x)
             .ok_or(Error::Overflow)?
