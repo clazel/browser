@@ -284,6 +284,22 @@ impl<'a> Gpos<'a> {
         })
     }
 
+    /// Whether the ScriptList has a ScriptRecord for `script` (chapter2,
+    /// "Script List Table and Script Record": `scriptCount`, then
+    /// ScriptRecords of `scriptTag` and `scriptOffset`). A shaper needs this
+    /// to know which script table it chose, since a listed script table
+    /// whose LangSys has no `kern` feature is still the one chosen.
+    pub fn lists_script(&self, script: Tag) -> Result<bool, Error> {
+        let d = self.script_list;
+        let n = checked_count(d, 2, u16_at(d, 0)?, 6)?;
+        for i in 0..n {
+            if crate::read::tag_at(d, element(2, usize::from(i), 6)?)? == script {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// The default LangSys table of script `script`, or of `DFLT` if
     /// `script` is not listed: "An application should use a DFLT script
     /// table if there is not a script table associated with the specific
@@ -671,6 +687,26 @@ mod tests {
         assert_eq!(c.class(0xD3)?, 1);
         assert_eq!(c.class(0x32)?, 0);
         assert_eq!(c.class(0xD4)?, 0);
+        Ok(())
+    }
+
+    /// A ScriptList of `DFLT` and `latn` (each with no LangSys) in a
+    /// minimal `GPOS` 1.0 table.
+    #[test]
+    fn lists_script() -> Result<(), Error> {
+        let d = words(&[
+            1, 0, 10, 28, 30, // header
+            2, 0x4446, 0x4C54, 14, 0x6C61, 0x746E, 16, // ScriptList (at 10)
+            0, 0, // Script DFLT (at 24): no default LangSys
+            0, 0, // Script latn (at 26)
+            0, // FeatureList (at 28): no features
+            0, // LookupList (at 30): no lookups
+        ]);
+        let g = Gpos::parse(&d)?;
+        assert!(g.lists_script(DFLT)?);
+        assert!(g.lists_script(Tag(*b"latn"))?);
+        assert!(!g.lists_script(Tag(*b"grek"))?);
+        assert!(!g.lists_script(Tag(*b"dflt"))?);
         Ok(())
     }
 
