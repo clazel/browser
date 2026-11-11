@@ -26,6 +26,16 @@
 //! mark (we place marks at the pen with no offset; HarfBuzz's fallback mark
 //! positioning moves them).
 //!
+//! Both suites gate, as `clazel-font`'s system font suite does: the vendored
+//! suite's input is fixed, and the system suite runs on whatever fonts each
+//! CI runner has. A difference on a system font is never ignored: it is a
+//! shaper bug to fix, or a new kind below with its reason. On failure the
+//! output names it: up to 40 `FAIL <file>#<face> <text>: <what differed>`
+//! lines (glyph ids, or (advance, x offset, y offset) per glyph, ours then
+//! rustybuzz's), then one `FAILING FACE <file>#<face>: <n>` line per face
+//! with any; a panic in either shaper is a `FAIL` line naming the shaper.
+//! The system suite also prints how many font files each directory gave.
+//!
 //! Set `SHAPE_DEBUG` to print every expected difference with its glyphs.
 //!
 //! Expected differences. A case that differs is counted under the first
@@ -80,6 +90,7 @@ use clazel_font::layout::ClassDef;
 use clazel_font::{Face, Tag};
 use clazel_layout::shape::{KerningTable, Script, Shaper, UnitGlyph, is_combining_mark};
 use std::collections::BTreeMap;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 const DEJAVU_SERIF: &[u8] =
     include_bytes!("../../clazel-font/tests/data/fonts-dejavu/DejaVuSerif.ttf");
@@ -224,11 +235,20 @@ struct Tally {
     xfail: BTreeMap<&'static str, u64>,
     fail: u64,
     messages: Vec<String>,
+    /// Unexpected differences per face (`file#index`), all of them.
+    failing_faces: BTreeMap<String, u64>,
     /// Faces by kerning table.
     kerning: BTreeMap<&'static str, u64>,
 }
 
 impl Tally {
+    fn failure(&mut self, face: String, message: String) {
+        self.fail = self.fail.saturating_add(1);
+        self.messages.push(message);
+        let n = self.failing_faces.entry(face).or_default();
+        *n = n.saturating_add(1);
+    }
+
     fn xfail_total(&self) -> u64 {
         self.xfail.values().copied().sum()
     }
@@ -250,8 +270,13 @@ impl Tally {
         for (k, n) in &self.xfail {
             println!("  expected difference {k}: {n}");
         }
+        // On failure CI's log shows this output: the first 40 unexpected
+        // differences in full, then every face that had any, with counts.
         for m in self.messages.iter().take(40) {
             println!("  FAIL {m}");
+        }
+        for (face, n) in &self.failing_faces {
+            println!("  FAILING FACE {face}: {n} unexpected differences");
         }
     }
 }
@@ -511,23 +536,56 @@ fn compare_file(
             let Some(text) = all.get(i) else { continue };
             let text = text.as_str();
             let script = Script::of_text(text);
-            let (shaper, plan) = shapers.entry(script_name(script)).or_insert_with(|| {
-                let plan = rustybuzz::ShapePlan::new(
-                    &rb,
-                    rustybuzz::Direction::LeftToRight,
-                    Some(rb_script(script)),
-                    None,
-                    &features,
+            if !shapers.contains_key(script_name(script)) {
+                let made = catch_unwind(AssertUnwindSafe(|| {
+                    let plan = rustybuzz::ShapePlan::new(
+                        &rb,
+                        rustybuzz::Direction::LeftToRight,
+                        Some(rb_script(script)),
+                        None,
+                        &features,
+                    );
+                    (Shaper::new(face, script), plan)
+                }));
+                match made {
+                    Ok(pair) => {
+                        shapers.insert(script_name(script), pair);
+                    }
+                    Err(_) => {
+                        t.failure(
+                            format!("{name}#{index}"),
+                            format!("{name}#{index}: making the shapers for {script:?} panicked"),
+                        );
+                        continue;
+                    }
+                }
+            }
+            let Some((shaper, plan)) = shapers.get(script_name(script)) else {
+                continue;
+            };
+            // A panic in either shaper is reported with the font, face and
+            // text, not only as a panic message without them.
+            let Ok(ours) = catch_unwind(AssertUnwindSafe(|| shaper.shape(text))) else {
+                t.failure(
+                    format!("{name}#{index}"),
+                    format!("{name}#{index} {text:?}: our shaper panicked"),
                 );
-                (Shaper::new(face, script), plan)
-            });
-            let ours = shaper.shape(text);
+                continue;
+            };
             let mut buffer = rustybuzz::UnicodeBuffer::new();
             buffer.push_str(text);
             buffer.set_direction(rustybuzz::Direction::LeftToRight);
             buffer.set_script(rb_script(script));
             buffer.set_cluster_level(rustybuzz::BufferClusterLevel::Characters);
-            let out = rustybuzz::shape_with_plan(&rb, plan, buffer);
+            let Ok(out) = catch_unwind(AssertUnwindSafe(|| {
+                rustybuzz::shape_with_plan(&rb, plan, buffer)
+            })) else {
+                t.failure(
+                    format!("{name}#{index}"),
+                    format!("{name}#{index} {text:?}: rustybuzz panicked"),
+                );
+                continue;
+            };
             let theirs: Vec<Theirs> = out
                 .glyph_infos()
                 .iter()
@@ -593,11 +651,10 @@ fn compare_file(
                     let n = t.xfail.entry(k).or_default();
                     *n = n.saturating_add(1);
                 }
-                None => {
-                    t.fail = t.fail.saturating_add(1);
-                    t.messages
-                        .push(format!("{name}#{index} {text:?}: {message}"));
-                }
+                None => t.failure(
+                    format!("{name}#{index}"),
+                    format!("{name}#{index} {text:?}: {message}"),
+                ),
             }
         }
     }
@@ -657,7 +714,12 @@ fn font_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>, depth: u
 fn system_fonts() {
     let mut files = Vec::new();
     for d in SYSTEM_DIRS {
+        let before = files.len();
         font_files(std::path::Path::new(d), &mut files, 0);
+        println!(
+            "font files under {d}: {}",
+            files.len().saturating_sub(before)
+        );
     }
     let mut t = Tally::default();
     let mut offset = 0usize;
