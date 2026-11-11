@@ -28,7 +28,20 @@
 //!     pair adjustment of a lookup (one PairPos subtable is
 //!     [`pair_pos_48`]; Coverage and ClassDef are
 //!     [`coverage_class_def_128`]);
-//!   - `Face::parse` (each table it reads has its own harness).
+//!   - `Face::parse` (each table it reads has its own harness);
+//!   - item 5.10's whole-contour and whole-path conversions
+//!     (`outline::contour::push_contour` on a contour of 2 points, and
+//!     `outline::path_from_outline` on an outline of 2 points in 2
+//!     contours, each asserting `Path::is_well_formed`): both ran past 20
+//!     minutes locally; one of 4 points ran out of memory at 10 GB after
+//!     10.5 minutes. What they would check is covered by
+//!     [`outline_contour_start`] (the start is on-curve) and
+//!     [`outline_contour_step`] (each step keeps no two consecutive
+//!     off-curve points), which give well-formedness for every length by
+//!     induction over the loop, by [`outline_scale_any`] and
+//!     [`outline_midpoint_any`] for the arithmetic, and by the unit tests
+//!     and the differential test, which checks every glyph's path is well
+//!     formed.
 
 use crate::Tag;
 use crate::cmap::{Cmap, Subtable};
@@ -43,6 +56,7 @@ use crate::loca::Loca;
 use crate::maxp::Maxp;
 use crate::name;
 use crate::os2::Os2;
+use crate::outline::{PathPoint, contour};
 use crate::post::Post;
 
 /// A symbolic byte string of length at most `N`.
@@ -339,4 +353,86 @@ fn coverage_class_def_128() {
 fn pair_pos_48() {
     let data: [u8; 48] = kani::any();
     let _ = pair_pos_apply(&data, kani::any(), kani::any());
+}
+
+// Item 5.10: outlines in 26.6. Each harness checks one operation, as
+// above; the whole path (`try_glyph_path`) is these operations composed
+// over `glyf::outline`, whose flattening is not a harness (see the module
+// comment, "Not done").
+
+/// Scaling any coordinate in font units at any size and any `unitsPerEm`
+/// (0 included, which `head` refuses): never a panic or an overflow, and a
+/// result only for a size that is not negative.
+#[kani::proof]
+fn outline_scale_any() {
+    let v: i32 = kani::any();
+    let size: i32 = kani::any();
+    let upem: u16 = kani::any();
+    if crate::outline::scale::scale(v, size, upem).is_ok() {
+        assert!(size >= 0 && upem > 0);
+    }
+}
+
+/// The implied point between any two coordinates lies between them.
+#[kani::proof]
+fn outline_midpoint_any() {
+    let a: i32 = kani::any();
+    let b: i32 = kani::any();
+    let m = crate::outline::scale::midpoint(a, b);
+    assert!(m >= a.min(b) && m <= a.max(b));
+}
+
+/// One step of the contour conversion from **any** state: any previous
+/// point and any next point. The step appends the point, after an implied
+/// on-curve point exactly when both are off-curve, so no two consecutive
+/// points it leaves are off-curve. This is the loop body of
+/// `contour::push_contour` for every contour length.
+#[kani::proof]
+#[kani::unwind(4)]
+fn outline_contour_step() {
+    let any_point = || PathPoint {
+        x: kani::any(),
+        y: kani::any(),
+        on_curve: kani::any(),
+    };
+    let previous = any_point();
+    let p = any_point();
+    let mut out = vec![previous];
+    contour::push_point(&previous, &p, &mut out);
+    assert!(out.last() == Some(&p));
+    assert!(
+        out.len()
+            == if previous.on_curve || p.on_curve {
+                2
+            } else {
+                3
+            }
+    );
+    assert!(
+        out.windows(2)
+            .all(|w| matches!(w, [a, b] if a.on_curve || b.on_curve))
+    );
+}
+
+/// The start of a contour from **any** first and last point: always
+/// on-curve, and the first or last point itself whenever that is on-curve.
+/// With [`outline_contour_step`], which keeps "no two consecutive off-curve
+/// points" for every point appended after it, this gives a well-formed
+/// contour of every length, by induction over the loop.
+#[kani::proof]
+fn outline_contour_start() {
+    let any_point = || PathPoint {
+        x: kani::any(),
+        y: kani::any(),
+        on_curve: kani::any(),
+    };
+    let first = any_point();
+    let last = any_point();
+    let start = contour::contour_start(&first, &last);
+    assert!(start.on_curve);
+    if first.on_curve {
+        assert!(start == first);
+    } else if last.on_curve {
+        assert!(start == last);
+    }
 }

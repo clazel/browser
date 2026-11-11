@@ -1,5 +1,5 @@
 //! OpenType font files and the TrueType tables a face needs (phase-5.md
-//! item 5.9).
+//! item 5.9), and glyph outlines scaled to pixels (item 5.10).
 //!
 //! # Sources
 //!
@@ -50,8 +50,8 @@
 //! - **Glyphs are decoded on demand.** Nothing is expanded when a face is
 //!   opened; a glyph is decoded when asked for, and a flattened composite
 //!   is bounded by [`glyf::MAX_COMPONENT_DEPTH`], [`glyf::MAX_COMPONENTS`] and
-//!   [`glyf::MAX_POINTS`]. Beyond a bound the glyph is an error, which item
-//!   5.10 turns into an empty glyph.
+//!   [`glyf::MAX_POINTS`]. Beyond a bound the glyph is an error, which
+//!   [`outline::glyph_path`] (item 5.10) turns into an empty glyph.
 //! - **Composite transforms in fixed point.** The chapters give the
 //!   transformation in `F2DOT14` and real arithmetic; we compute each term
 //!   exactly in `i64` and round the sum to whole font units, half away from
@@ -97,6 +97,9 @@
 //!   [`name`], [`os2`], [`post`], [`kern`]: one module per table.
 //! - [`layout`]: the Common Table Formats and `GPOS` pair adjustment.
 //! - [`face`]: a face, tying the tables together.
+//! - [`outline`]: a glyph as a path in 26.6 pixels at a size, with implied
+//!   on-curve points made explicit (item 5.10; its own modelling choices are
+//!   listed there).
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
@@ -114,6 +117,7 @@ pub mod loca;
 pub mod maxp;
 pub mod name;
 pub mod os2;
+pub mod outline;
 pub mod post;
 
 mod error;
