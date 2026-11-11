@@ -67,6 +67,9 @@ pub mod rules;
 pub mod sort;
 pub mod ua;
 
+#[cfg(kani)]
+mod proofs;
+
 use std::collections::HashMap;
 
 use clazel_dom::exec::{Arena, ExecKind};

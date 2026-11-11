@@ -25,8 +25,9 @@ clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires (phase-5.md 5.0(a)):
-# Kani harnesses (src/values/proofs.rs, src/sources/proofs.rs) over the value parsers and
-# the media query evaluator. Tier 0 until CI's
+# Kani harnesses (src/values/proofs.rs, src/sources/proofs.rs, src/cascade/proofs.rs) over
+# the value parsers, the media query evaluator, and the cascade's sort, walk and
+# conversions. Tier 0 until CI's
 # full verification of them is green.
 [package.metadata.clazel]
 tier = 0

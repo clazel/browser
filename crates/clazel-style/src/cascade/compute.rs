@@ -278,7 +278,12 @@ pub fn font_size(v: &[Component], parent: i32, rem: i32) -> Option<i32> {
 /// CSS Fonts 4 §2.2†, `font-weight`: `normal` is 400, `bold` 700, and §2.2.1's table for
 /// `bolder` and `lighter` from the inherited weight `w`.
 pub fn font_weight(v: &[Component], w: Num) -> Option<Num> {
-    let at = |n: i64| Num::from_int(n);
+    // The weights of the table, all at most 1000, so `n * SCALE` is exact (what
+    // `Num::from_int` gives, without its clamp).
+    let at = |n: i64| Num {
+        millionths: n.saturating_mul(SCALE),
+        is_integer: true,
+    };
     let lt = |n: i64| w.millionths < n.saturating_mul(SCALE);
     match v {
         [Component::Keyword("normal")] => Some(at(400)),
