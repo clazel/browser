@@ -453,6 +453,8 @@ dependencies = [
  "clazel-dom",
  "clazel-encoding",
  "clazel-mime",
+ "clazel-selectors",
+ "clazel-treebuilder",
 ]
 
 [[package]]
