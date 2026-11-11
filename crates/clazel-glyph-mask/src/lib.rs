@@ -35,8 +35,8 @@
 //!   or ¾ px in x and in y ([`Offset`]), so a shaper's subpixel pen
 //!   positions need four masks per axis, not one per position.
 //! - **Béziers flattened within a quarter pixel** ([`flatten`]): uniform
-//!   subdivision with the least piece count whose error bound is at most
-//!   15/64 px, the points rounded to 2⁻¹⁴ px.
+//!   subdivision into the least power of two of pieces whose error bound is
+//!   at most 15/64 px, the points rounded to 2⁻¹⁴ px.
 //! - **Exact-area coverage per scanline, clamped to [0, 1]**
 //!   ([`accumulate`]): the magnitude of the signed area, so either contour
 //!   orientation paints. This equals non-zero winding except where contours

@@ -6,8 +6,11 @@
 //! `t = ½`, where `d = p0 − 2 p1 + p2`. Cut into `n` pieces of equal
 //! parameter length, each piece is a quadratic whose `d` is `d ÷ n²`, so
 //! every chord is within `|d| ÷ 4n²` of its piece, and every point of the
-//! curve within that of the polyline (and back). We take the least `n`
-//! with `|d|₁ ÷ 4n² ≤ TOLERANCE`, with `|d|₁ = |dx| + |dy| ≥ |d|`.
+//! curve within that of the polyline (and back). We take the least power
+//! of two `n` with `|d|₁ ÷ 4n² ≤ TOLERANCE`, with `|d|₁ = |dx| + |dy| ≥
+//! |d|`: a power of two, so that the division by `n²` below is a shift (at
+//! most twice the pieces the least `n` would need; a 64-bit division by a
+//! variable is also what made its Kani harness run past 20 minutes).
 //!
 //! The points `B(i ÷ n)` are computed exactly in integers and rounded to the
 //! nearest mask unit, which adds at most half a unit. `TOLERANCE` is 15/64
@@ -20,14 +23,14 @@ use crate::accumulate::Point;
 pub const TOLERANCE: u64 = 3_840;
 
 /// The most pieces one Bézier is cut into. A Bézier inside a mask of
-/// [`crate::MAX_SIDE`] pixels needs at most 67 (each of `d`'s components is
-/// at most 2 × 2²⁴ in magnitude, so `|d|₁` ≤ 2²⁶, and 67² × 4 × 3,840 ≥
-/// 2²⁶); the cap only bounds the count for a Bézier outside the mask, which
-/// [`crate::place`] never gives.
+/// [`crate::MAX_SIDE`] pixels needs at most 128 (each of `d`'s components is
+/// at most 2 × 2²⁴ in magnitude, so `|d|₁` ≤ 2²⁶, and 128² × 4 × 3,840 ≥
+/// 2²⁶ > 64² × 4 × 3,840); the cap only bounds the count for a Bézier
+/// outside the mask, which [`crate::place`] never gives.
 pub const MAX_PIECES: u32 = 128;
 
-/// The number of pieces for the Bézier `p0, p1, p2`: the least `n` ≥ 1 with
-/// `n² × 4 × TOLERANCE ≥ |d|₁`, capped at [`MAX_PIECES`].
+/// The number of pieces for the Bézier `p0, p1, p2`: the least power of two
+/// `n` with `n² × 4 × TOLERANCE ≥ |d|₁`, capped at [`MAX_PIECES`].
 pub fn pieces(p0: Point, p1: Point, p2: Point) -> Result<u32, Error> {
     let second = |a: i64, b: i64, c: i64| -> Result<u64, Error> {
         let twice = b.checked_mul(2).ok_or(Error::Overflow)?;
@@ -42,24 +45,30 @@ pub fn pieces(p0: Point, p1: Point, p2: Point) -> Result<u32, Error> {
         .checked_add(second(p0.y, p1.y, p2.y)?)
         .ok_or(Error::Overflow)?;
     let per = TOLERANCE.checked_mul(4).ok_or(Error::Overflow)?;
-    // The least n with n² ≥ ⌈d ÷ 4 TOLERANCE⌉.
-    let q = d.div_ceil(per);
-    let mut n = q.isqrt();
-    if n.checked_mul(n).ok_or(Error::Overflow)? < q {
-        n = n.checked_add(1).ok_or(Error::Overflow)?;
+    let mut n: u32 = 1;
+    while n < MAX_PIECES {
+        let nn = u64::from(n)
+            .checked_mul(u64::from(n))
+            .ok_or(Error::Overflow)?;
+        if nn.checked_mul(per).ok_or(Error::Overflow)? >= d {
+            break;
+        }
+        n = n.checked_mul(2).ok_or(Error::Overflow)?;
     }
-    let n = n.clamp(1, u64::from(MAX_PIECES));
-    u32::try_from(n).map_err(|_| Error::Overflow)
+    Ok(n)
 }
 
-/// `B(i ÷ n)` for the Bézier `p0, p1, p2`, rounded half up to a mask unit:
-/// `⌊((n−i)² p0 + 2i(n−i) p1 + i² p2 + ⌊n² ÷ 2⌋) ÷ n²⌋`. For `i` in
-/// `0..=n` the weights are non-negative and sum to `n²`, so the point lies
-/// in the box of the three control points; `i = n` gives `p2` exactly.
+/// `B(i ÷ n)` for the Bézier `p0, p1, p2` and a power of two `n` (as
+/// [`pieces`] gives), rounded half up to a mask unit:
+/// `⌊((n−i)² p0 + 2i(n−i) p1 + i² p2 + ⌊n² ÷ 2⌋) ÷ n²⌋`, the division an
+/// arithmetic shift. For `i` in `0..=n` the weights are non-negative and sum
+/// to `n²`, so the point lies in the box of the three control points;
+/// `i = n` gives `p2` exactly. Any other `n` or `i` is [`Error::Overflow`].
 pub fn point(p0: Point, p1: Point, p2: Point, n: u32, i: u32) -> Result<Point, Error> {
-    if n == 0 || i > n {
+    if !n.is_power_of_two() || i > n {
         return Err(Error::Overflow);
     }
+    let shift = n.trailing_zeros().checked_mul(2).ok_or(Error::Overflow)?;
     let n = i64::from(n);
     let i = i64::from(i);
     let j = n.checked_sub(i).ok_or(Error::Overflow)?;
@@ -82,7 +91,8 @@ pub fn point(p0: Point, p1: Point, p2: Point, n: u32, i: u32) -> Result<Point, E
             .ok_or(Error::Overflow)?
             .checked_add(half)
             .ok_or(Error::Overflow)?;
-        s.checked_div_euclid(nn).ok_or(Error::Overflow)
+        // An arithmetic shift right by log2(n²) is ⌊s ÷ n²⌋.
+        s.checked_shr(shift).ok_or(Error::Overflow)
     };
     Ok(Point {
         x: axis(p0.x, p1.x, p2.x)?,
@@ -106,18 +116,24 @@ mod tests {
         // |d|₁ = 2 × 7,680 = 15,360 = 4 × TOLERANCE: still one piece.
         assert_eq!(pieces(p(0, 0), p(7_680, 0), p(0, 0))?, 1);
         assert_eq!(pieces(p(0, 0), p(7_681, 0), p(0, 0))?, 2);
+        // Four times that needs n² ≥ 4: still 2; just over, 4.
+        assert_eq!(pieces(p(0, 0), p(30_720, 0), p(0, 0))?, 2);
+        assert_eq!(pieces(p(0, 0), p(30_721, 0), p(0, 0))?, 4);
         Ok(())
     }
 
     #[test]
     fn pieces_grow_as_the_square_root() -> Result<(), Error> {
-        // |d|₁ = 2 × 100 px; 200 px ÷ (4 × 15/64 px) = 213.3, so n = 15.
+        // |d|₁ = 2 × 100 px; 200 px ÷ (4 × 15/64 px) = 213.3, so n² ≥ 214:
+        // 16.
         let n = pieces(p(0, 0), p(100 * ONE, 0), p(0, 0))?;
-        assert_eq!(n, 15);
-        // The largest Bézier inside a 1024-pixel mask needs 67.
+        assert_eq!(n, 16);
+        // The largest Bézier inside a 1024-pixel mask needs 128.
         let m = 1024 * ONE;
-        assert_eq!(pieces(p(0, 0), p(m, m), p(0, 0))?, 67);
-        assert_eq!(pieces(p(m, m), p(0, 0), p(m, m))?, 67);
+        assert_eq!(pieces(p(0, 0), p(m, m), p(0, 0))?, 128);
+        assert_eq!(pieces(p(m, m), p(0, 0), p(m, m))?, 128);
+        // Half as large needs 64.
+        assert_eq!(pieces(p(0, 0), p(m / 2, m / 2), p(0, 0))?, 64);
         // Outside the mask, the count is capped.
         assert_eq!(pieces(p(0, 0), p(i64::MAX / 4, 0), p(0, 0))?, MAX_PIECES);
         Ok(())
@@ -134,6 +150,13 @@ mod tests {
         assert_eq!(point(a, b, c, 4, 1)?, p(32, 48));
         assert_eq!(point(a, b, c, 0, 0), Err(Error::Overflow));
         assert_eq!(point(a, b, c, 2, 3), Err(Error::Overflow));
+        assert_eq!(point(a, b, c, 3, 1), Err(Error::Overflow));
+        // Rounding: (0 + 2 × 1 × 3 × 1 + 0 + 8) >> 4 = 0 for a control
+        // point at 1 and n = 4, i = 1: 6/16 rounds to 0, 10/16 to 1.
+        assert_eq!(point(p(0, 0), p(1, 0), p(0, 0), 4, 1)?.x, 0);
+        assert_eq!(point(p(0, 0), p(1, 0), p(0, 0), 4, 2)?.x, 1);
+        // Negative coordinates shift arithmetically (floor).
+        assert_eq!(point(p(-3, 0), p(-3, 0), p(-3, 0), 4, 1)?.x, -3);
         Ok(())
     }
 
