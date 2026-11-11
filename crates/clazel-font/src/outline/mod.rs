@@ -1,5 +1,6 @@
 //! Glyph outlines as paths in 26.6 fixed-point pixels (phase-5.md item
-//! 5.10): the input of the glyph rasterizer (`clazel-raster`, item 5.17).
+//! 5.10): the input of the glyph rasterizer (`clazel-glyph-mask`, item
+//! 5.17).
 //!
 //! # Sources
 //!
@@ -47,12 +48,12 @@
 //!   gives [`Path::default`], which draws nothing ([`glyph_path`]). This is
 //!   listed for the hostile fonts of item 5.26. [`try_glyph_path`] keeps the
 //!   reason, for tests.
-//! - **The path type lives here**, not in `clazel-raster`, which does not
-//!   exist yet. The plan's direction is font → raster (5.17 starts "with
+//! - **The path type lives here**, not in `clazel-glyph-mask`, which does
+//!   not exist yet. The plan's direction is font → raster (5.17 starts "with
 //!   5.10's outline type"), and nothing here depends on raster, so
-//!   `clazel-raster` takes [`Path`] from this crate. [`Path`] holds no font
-//!   bytes and has no lifetime; the rasterizer may also build one itself (a
-//!   box is four on-curve points).
+//!   `clazel-glyph-mask` takes [`Path`] from this crate. [`Path`] holds no
+//!   font bytes and has no lifetime; the rasterizer may also build one itself
+//!   (a box is four on-curve points).
 
 pub mod contour;
 pub mod scale;

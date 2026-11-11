@@ -35,8 +35,8 @@ the modelling choices.
 on-curve and off-curve points in 26.6 fixed-point pixels at a given size,
 every implied on-curve point between two off-curve points made explicit and
 each contour starting on-curve, so a contour reads as lines and quadratic
-Béziers. `Path` is the input of the glyph rasterizer (`clazel-raster`, item
-5.17), which takes it from this crate. A glyph that cannot be read or
+Béziers. `Path` is the input of the glyph rasterizer (`clazel-glyph-mask`,
+item 5.17), which takes it from this crate. A glyph that cannot be read or
 flattened, or whose scaled coordinates leave `i32`, is an empty path; the
 modelling choices are listed in `src/outline/mod.rs`.
 
