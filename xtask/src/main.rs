@@ -23,7 +23,8 @@
 //! - `cargo xtask tables`: regenerate the Unicode tables generated from
 //!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs`), the
 //!   Public Suffix List, and the root certificate table from NSS's
-//!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`).
+//!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`), and the
+//!   user agent style sheet from HTML §15 (`crates/clazel-style/data/*.css`).
 //!   `check` and `verify` fail if they are stale or a data file's hash
 //!   differs from its `SOURCE.md`.
 //! - `cargo xtask report [--write] [--changed [base]]`: run the checks that produce the
@@ -48,6 +49,7 @@ mod scan;
 mod status;
 mod sys;
 mod testdata;
+mod ua_sheet;
 mod unicode;
 mod verus;
 mod workspace;
@@ -364,6 +366,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     );
     let (problems, notes) = roots::run(false);
     r.step("generated root certificate table", outcome(problems, notes));
+    let (problems, notes) = ua_sheet::run(false);
+    r.step("generated user agent style sheet", outcome(problems, notes));
     let (problems, notes) = entities::run(false);
     r.step(
         "generated named character references table",
@@ -1017,6 +1021,8 @@ fn generate_tables() -> ExitCode {
     );
     let (problems, notes) = roots::run(true);
     r.step("generate root certificate table", outcome(problems, notes));
+    let (problems, notes) = ua_sheet::run(true);
+    r.step("generate user agent style sheet", outcome(problems, notes));
     let (problems, notes) = entities::run(true);
     r.step(
         "generate named character references table",
