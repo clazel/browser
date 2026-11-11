@@ -242,16 +242,16 @@ impl Accumulator {
     }
 }
 
-/// A running sum's coverage: `round(min(|run|, FULL) × 255 ÷ FULL)`.
+/// A running sum's coverage: `round(min(|run|, FULL) × 255 ÷ FULL)`, half
+/// up. `FULL` is 2²⁹, so the division is a shift by 29 after adding 2²⁸.
 pub fn coverage(run: i64) -> Result<u8, Error> {
-    let full = FULL.unsigned_abs();
-    let v = run.unsigned_abs().min(full);
+    let v = run.unsigned_abs().min(FULL.unsigned_abs());
     let scaled = v
         .checked_mul(255)
         .ok_or(Error::Overflow)?
-        .checked_add(full.checked_div(2).ok_or(Error::Overflow)?)
+        .checked_add(1 << 28)
         .ok_or(Error::Overflow)?
-        .checked_div(full)
+        .checked_shr(29)
         .ok_or(Error::Overflow)?;
     u8::try_from(scaled).map_err(|_| Error::Overflow)
 }
@@ -301,7 +301,11 @@ mod tests {
     fn polygon(w: u32, h: u32, pts: &[(i64, i64)]) -> Result<Vec<u8>, Error> {
         let mut acc = Accumulator::new(w, h)?;
         for (i, &(x, y)) in pts.iter().enumerate() {
-            let (nx, ny) = pts.get(i.saturating_add(1)).or(pts.first()).copied().unwrap_or((x, y));
+            let (nx, ny) = pts
+                .get(i.saturating_add(1))
+                .or(pts.first())
+                .copied()
+                .unwrap_or((x, y));
             acc.line(p(x, y), p(nx, ny))?;
         }
         acc.finish()
