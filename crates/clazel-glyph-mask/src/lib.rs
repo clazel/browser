@@ -320,12 +320,16 @@ mod tests {
             contour_ends: vec![3],
         };
         assert_eq!(glyph_mask(&big, Offset::default()), Err(Error::TooLarge));
-        // 65,537 lines: a contour of that many on-curve points.
-        let many = Path {
-            points: (0..65_537).map(|i| pt(i % 64, i / 1024, true)).collect(),
-            contour_ends: vec![65_537],
-        };
-        assert_eq!(glyph_mask(&many, Offset::default()), Err(Error::TooComplex));
+        // 65,537 lines: a contour of that many on-curve points. Not under
+        // Miri, where building and walking it took 165 s of the 300 s CI
+        // allows; the limit is one comparison in `flatten_path`.
+        if !cfg!(miri) {
+            let many = Path {
+                points: (0..65_537).map(|i| pt(i % 64, i / 1024, true)).collect(),
+                contour_ends: vec![65_537],
+            };
+            assert_eq!(glyph_mask(&many, Offset::default()), Err(Error::TooComplex));
+        }
         assert_eq!(
             glyph_mask(&Path::default(), Offset::default()),
             Ok(Mask::default())

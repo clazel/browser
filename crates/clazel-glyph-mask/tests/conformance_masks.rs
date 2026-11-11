@@ -40,9 +40,12 @@
 //! reference's were 1.0 px² and 2.2 px² short. The margin changes no
 //! coverage the reference computes correctly.
 //!
-//! Under Miri, only masks of at most 64 × 64 are drawn, every 2,003rd
+//! Under Miri, only masks of at most 64 × 64 are drawn, every 34,019th
 //! (glyph, size) pair (the plan: "Miri on 64×64 masks only"), so the test
 //! finishes in about a minute; CI fails a test that takes 300 s under Miri.
+//! A mask takes about 4 s under Miri (both engines, twice for the
+//! reference), so this is about 10 masks: at a stride of 2,003 the test
+//! took 676 s, at 21,701 97 s.
 
 mod dejavu {
     include!("../../clazel-font/tests/generated/fonts_dejavu.rs");
@@ -72,7 +75,7 @@ const SIZES: std::ops::RangeInclusive<i32> = 8..=72;
 
 /// Under Miri: every this many (glyph, size) pairs, a prime so that the
 /// sample walks through sizes and glyphs.
-const MIRI_STRIDE: usize = 2_003;
+const MIRI_STRIDE: usize = 34_019;
 
 /// Under Miri: the largest mask side drawn.
 const MIRI_SIDE: u32 = 64;
@@ -270,44 +273,58 @@ fn vendored_glyphs_against_ab_glyph_rasterizer() {
                 "{file} #{index} ({} glyphs, sha256 {sha256})",
                 face.num_glyphs()
             ));
-            for glyph in 0..face.num_glyphs() {
-                for size in SIZES {
-                    pair = pair.wrapping_add(1);
-                    if cfg!(miri) && !pair.is_multiple_of(MIRI_STRIDE) {
+            // Every (glyph, size) pair natively; under Miri, every
+            // MIRI_STRIDE-th pair counted across all faces, stepped to
+            // directly (visiting every pair took most of Miri's time).
+            let sizes = SIZES.count();
+            let total = usize::from(face.num_glyphs()).saturating_mul(sizes);
+            let (first, step) = if cfg!(miri) {
+                let r = pair.checked_rem(MIRI_STRIDE).unwrap_or(0);
+                (
+                    MIRI_STRIDE
+                        .saturating_sub(r)
+                        .checked_rem(MIRI_STRIDE)
+                        .unwrap_or(0),
+                    MIRI_STRIDE,
+                )
+            } else {
+                (0, 1)
+            };
+            pair = pair.saturating_add(total);
+            for k in (first..total).step_by(step) {
+                let glyph = u16::try_from(k.checked_div(sizes).unwrap_or(0)).unwrap_or(0);
+                let size = SIZES
+                    .start()
+                    .saturating_add(i32::try_from(k.checked_rem(sizes).unwrap_or(0)).unwrap_or(0));
+                let path = glyph_path(&face, glyph, size.saturating_mul(64));
+                let n = usize::from(glyph).wrapping_add(size as usize);
+                let offset = Offset {
+                    x: quarter(n),
+                    y: quarter(n / 4),
+                };
+                let lines = match flatten_path(&path, offset, MAX_SIDE) {
+                    Ok(l) => l,
+                    Err(e) => {
+                        errors.push(format!("{file} #{index} glyph {glyph} at {size} px: {e:?}"));
                         continue;
                     }
-                    let path = glyph_path(&face, glyph, size.saturating_mul(64));
-                    let n = usize::from(glyph).wrapping_add(size as usize);
-                    let offset = Offset {
-                        x: quarter(n),
-                        y: quarter(n / 4),
-                    };
-                    let lines = match flatten_path(&path, offset, MAX_SIDE) {
-                        Ok(l) => l,
-                        Err(e) => {
-                            errors
-                                .push(format!("{file} #{index} glyph {glyph} at {size} px: {e:?}"));
-                            continue;
-                        }
-                    };
-                    if cfg!(miri) && (lines.width > MIRI_SIDE || lines.height > MIRI_SIDE) {
+                };
+                if cfg!(miri) && (lines.width > MIRI_SIDE || lines.height > MIRI_SIDE) {
+                    continue;
+                }
+                largest = (largest.0.max(lines.width), largest.1.max(lines.height));
+                let ours = match accumulate_lines(&lines) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        errors.push(format!("{file} #{index} glyph {glyph} at {size} px: {e:?}"));
                         continue;
                     }
-                    largest = (largest.0.max(lines.width), largest.1.max(lines.height));
-                    let ours = match accumulate_lines(&lines) {
-                        Ok(m) => m,
-                        Err(e) => {
-                            errors
-                                .push(format!("{file} #{index} glyph {glyph} at {size} px: {e:?}"));
-                            continue;
-                        }
-                    };
-                    let what = || format!("{file} #{index} glyph {glyph} at {size} px, {offset:?}");
-                    same.record(&ours, &same_lines(&lines), 1, what);
-                    match own_curves(&path, offset) {
-                        Ok(theirs) => own.record(&ours, &theirs, OWN_CURVES_BOUND, what),
-                        Err(e) => errors.push(format!("{}: {e:?}", what())),
-                    }
+                };
+                let what = || format!("{file} #{index} glyph {glyph} at {size} px, {offset:?}");
+                same.record(&ours, &same_lines(&lines), 1, what);
+                match own_curves(&path, offset) {
+                    Ok(theirs) => own.record(&ours, &theirs, OWN_CURVES_BOUND, what),
+                    Err(e) => errors.push(format!("{}: {e:?}", what())),
                 }
             }
         }
