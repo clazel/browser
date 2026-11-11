@@ -1,0 +1,24 @@
+[package]
+name = "clazel-glyph-mask"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Glyph masks (Phase 5 item 5.17): closed contours of lines and quadratic Béziers in 26.6 fixed point to an 8-bit coverage mask, by exact-area accumulation under the non-zero rule. No surface, no blending."
+
+[dependencies]
+# The path type of item 5.10 (`clazel_font::outline::Path`), the input; our
+# own crate, so no third-party code is shipped (CLAUDE.md rule 8).
+clazel-font = { path = "../clazel-font" }
+
+# Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
+# shipped code today; `target-tier` is the plan's (phase-5.md, "Crates"):
+# page-controlled coordinates in arithmetic, so Tier 1 (Kani harnesses in
+# src/proofs.rs). The tier stays 0 until CI's full verification has run those
+# harnesses green.
+[package.metadata.clazel]
+tier = 0
+target-tier = 1
+
+[lints]
+workspace = true

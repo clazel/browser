@@ -264,6 +264,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-glyph-mask"
+version = "0.0.0"
+dependencies = [
+ "clazel-font",
+]
+
+[[package]]
 name = "clazel-html"
 version = "0.0.0"
 dependencies = [
