@@ -108,8 +108,9 @@ const VENDORED: &[(&str, &[u8])] = &[
     ("fonts-fontations/cmap6.ttf", CMAP6),
 ];
 
-/// Under Miri, every `MIRI_STRIDE`-th case of the vendored suite runs:
-/// about 75 cases, sized to finish in about a minute on this machine.
+/// Under Miri, every `MIRI_STRIDE`-th case of the vendored suite runs: 115
+/// cases, 46 s on Miri's clock (`--report-time`, measured 2026-11-11),
+/// within the minute the plan sizes Miri runs to; CI fails a test at 300 s.
 const MIRI_STRIDE: usize = 1_000;
 
 /// In the system suite, every `SYSTEM_STRIDE`-th case of each face runs, so
@@ -150,29 +151,70 @@ const CYRILLIC_ALPHABET: &str =
     "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюяЄІЇЎЂЉЊЋЏєіїўђљњћџ .,";
 const LATIN_TRIPLES: &str = "AVTYPLWo.,'y";
 
-/// Every case: sentences, pairs per script, Latin triples.
-fn cases() -> Vec<String> {
-    let mut out: Vec<String> = LATIN_SENTENCES
-        .iter()
-        .chain(GREEK_SENTENCES)
-        .chain(CYRILLIC_SENTENCES)
-        .map(|s| (*s).to_owned())
-        .collect();
-    for alphabet in [LATIN_ALPHABET, GREEK_ALPHABET, CYRILLIC_ALPHABET] {
-        for a in alphabet.chars() {
-            for b in alphabet.chars() {
-                out.push([a, b].iter().collect());
-            }
+/// Every case: sentences, pairs per script, Latin triples. A case is made
+/// from its index when it is taken, so a strided run (under Miri) never
+/// builds the other texts.
+struct Cases {
+    sentences: Vec<&'static str>,
+    alphabets: Vec<Vec<char>>,
+    triples: Vec<char>,
+}
+
+impl Cases {
+    fn new() -> Self {
+        Self {
+            sentences: LATIN_SENTENCES
+                .iter()
+                .chain(GREEK_SENTENCES)
+                .chain(CYRILLIC_SENTENCES)
+                .copied()
+                .collect(),
+            alphabets: [LATIN_ALPHABET, GREEK_ALPHABET, CYRILLIC_ALPHABET]
+                .iter()
+                .map(|a| a.chars().collect())
+                .collect(),
+            triples: LATIN_TRIPLES.chars().collect(),
         }
     }
-    for a in LATIN_TRIPLES.chars() {
-        for b in LATIN_TRIPLES.chars() {
-            for c in LATIN_TRIPLES.chars() {
-                out.push([a, b, c].iter().collect());
-            }
-        }
+
+    fn len(&self) -> usize {
+        let pairs: usize = self
+            .alphabets
+            .iter()
+            .map(|a| a.len().saturating_mul(a.len()))
+            .sum();
+        let t = self.triples.len();
+        self.sentences
+            .len()
+            .saturating_add(pairs)
+            .saturating_add(t.saturating_mul(t).saturating_mul(t))
     }
-    out
+
+    /// Case `i`: sentences in order, then each alphabet's pairs `ab` in
+    /// order of `a` then `b`, then the triples likewise.
+    fn get(&self, i: usize) -> Option<String> {
+        if let Some(s) = self.sentences.get(i) {
+            return Some((*s).to_owned());
+        }
+        let mut i = i.checked_sub(self.sentences.len())?;
+        for a in &self.alphabets {
+            let n = a.len();
+            let square = n.saturating_mul(n);
+            if i < square {
+                let (x, y) = (i.checked_div(n)?, i.checked_rem(n)?);
+                return Some([*a.get(x)?, *a.get(y)?].iter().collect());
+            }
+            i = i.checked_sub(square)?;
+        }
+        let t = &self.triples;
+        let n = t.len();
+        let (x, rest) = (
+            i.checked_div(n.saturating_mul(n))?,
+            i.checked_rem(n.saturating_mul(n))?,
+        );
+        let (y, z) = (rest.checked_div(n)?, rest.checked_rem(n)?);
+        Some([*t.get(x)?, *t.get(y)?, *t.get(z)?].iter().collect())
+    }
 }
 
 /// Results of a suite.
@@ -421,59 +463,64 @@ fn compare(ours: &[UnitGlyph], theirs: &[Theirs]) -> Option<(Vec<&'static str>, 
 }
 
 /// Shape every `stride`-th case (from `offset`) in every face of `data`.
-fn compare_file(data: &[u8], name: &str, stride: usize, offset: &mut usize, t: &mut Tally) {
+fn compare_file(
+    data: &[u8],
+    name: &str,
+    all: &Cases,
+    stride: usize,
+    offset: &mut usize,
+    t: &mut Tally,
+) {
     let Ok(file) = FontFile::parse(data) else {
         return;
     };
     let features = features();
-    let all = cases();
     for index in 0..file.num_faces().min(32) {
         let Ok(face) = Face::parse(data, index) else {
             // CFF and unreadable faces are not shaped (5.0(c), C1; 5.9).
             continue;
         };
-        let Some(rb) = rustybuzz::Face::from_slice(data, index) else {
-            continue;
-        };
-        let mut shapers: BTreeMap<&'static str, (Shaper<'_>, rustybuzz::ShapePlan)> =
-            BTreeMap::new();
-        for script in [
-            Script::Latin,
-            Script::Greek,
-            Script::Cyrillic,
-            Script::Other,
-        ] {
-            let plan = rustybuzz::ShapePlan::new(
-                &rb,
-                rustybuzz::Direction::LeftToRight,
-                Some(rb_script(script)),
-                None,
-                &features,
-            );
-            shapers.insert(script_name(script), (Shaper::new(face, script), plan));
-        }
-        let latin = shapers.get("latn").map(|(s, _)| s.kerning_table());
-        let key = match latin {
-            Some(KerningTable::Gpos) => "GPOS",
-            Some(KerningTable::Kern) => "kern",
-            _ => "nothing",
+        // The cases of this face are numbered `first..first + all.len()`.
+        let first = *offset;
+        *offset = offset.wrapping_add(all.len());
+        let latin_shaper = Shaper::new(face, Script::Latin);
+        let key = match latin_shaper.kerning_table() {
+            KerningTable::Gpos => "GPOS",
+            KerningTable::Kern => "kern",
+            KerningTable::None => "nothing",
         };
         let n = t.kerning.entry(key).or_default();
         *n = n.saturating_add(1);
-        let Some((latin_shaper, _)) = shapers.get("latn") else {
+        // Skip parsing for rustybuzz a face none of whose cases is taken
+        // (under Miri, where the stride exceeds a face's cases).
+        let skip = first
+            .checked_rem(stride)
+            .and_then(|r| stride.saturating_sub(r).checked_rem(stride))
+            .unwrap_or(0);
+        if skip >= all.len() {
+            continue;
+        }
+        let Some(rb) = rustybuzz::Face::from_slice(data, index) else {
             continue;
         };
-        let face_traits = traits(data, index, &face, latin_shaper);
-        for text in &all {
-            let run = *offset;
-            *offset = offset.wrapping_add(1);
-            if run.checked_rem(stride) != Some(0) {
-                continue;
-            }
+        // Shapers and plans per script, made when a case first needs one.
+        let mut shapers: BTreeMap<&'static str, (Shaper<'_>, rustybuzz::ShapePlan)> =
+            BTreeMap::new();
+        let mut face_traits: Option<FaceTraits> = None;
+        for i in (skip..all.len()).step_by(stride.max(1)) {
+            let Some(text) = all.get(i) else { continue };
+            let text = text.as_str();
             let script = Script::of_text(text);
-            let Some((shaper, plan)) = shapers.get(script_name(script)) else {
-                continue;
-            };
+            let (shaper, plan) = shapers.entry(script_name(script)).or_insert_with(|| {
+                let plan = rustybuzz::ShapePlan::new(
+                    &rb,
+                    rustybuzz::Direction::LeftToRight,
+                    Some(rb_script(script)),
+                    None,
+                    &features,
+                );
+                (Shaper::new(face, script), plan)
+            });
             let ours = shaper.shape(text);
             let mut buffer = rustybuzz::UnicodeBuffer::new();
             buffer.push_str(text);
@@ -508,6 +555,8 @@ fn compare_file(data: &[u8], name: &str, stride: usize, offset: &mut usize, t: &
                     o.x_advance == t.x_advance
                         || (t.x_advance == 0 && gdef_class(&face, o.glyph) == 3)
                 });
+            let face_traits =
+                face_traits.get_or_insert_with(|| traits(data, index, &face, &latin_shaper));
             // Per-case causes first, then what the face has.
             let explained: Option<&'static str> = if has_mark && theirs.len() < ours.len() {
                 Some("canonical composition")
@@ -568,10 +617,11 @@ fn vendored_fonts() {
     let stride = if cfg!(miri) { MIRI_STRIDE } else { 1 };
     let mut t = Tally::default();
     let mut offset = 0usize;
+    let all = Cases::new();
     for (name, data) in VENDORED {
-        compare_file(data, name, stride, &mut offset, &mut t);
+        compare_file(data, name, &all, stride, &mut offset, &mut t);
     }
-    println!("cases per face: {}", cases().len());
+    println!("cases per face: {}", all.len());
     t.report("vendored fonts vs rustybuzz");
     assert!(t.fail == 0, "{} unexpected differences", t.fail);
 }
@@ -611,6 +661,7 @@ fn system_fonts() {
     }
     let mut t = Tally::default();
     let mut offset = 0usize;
+    let all = Cases::new();
     let mut read = 0usize;
     for f in &files {
         let Ok(data) = std::fs::read(f) else { continue };
@@ -621,6 +672,7 @@ fn system_fonts() {
         compare_file(
             &data,
             &f.display().to_string(),
+            &all,
             SYSTEM_STRIDE,
             &mut offset,
             &mut t,
