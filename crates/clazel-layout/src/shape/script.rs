@@ -83,9 +83,7 @@ impl Script {
     /// whose script is neither `Common` nor `Inherited`; [`Script::Other`]
     /// if none has one.
     pub fn of_text(text: &str) -> Self {
-        text.chars()
-            .find_map(Self::of_char)
-            .unwrap_or(Self::Other)
+        text.chars().find_map(Self::of_char).unwrap_or(Self::Other)
     }
 }
 

@@ -7,8 +7,8 @@
 //! Both passes pair each glyph with the next one that is not a combining
 //! mark, and every failure to read a pair is no adjustment.
 
-use clazel_font::layout::{Gpos, PairValue, ValueRecord};
 use clazel_font::kern::Kern;
+use clazel_font::layout::{Gpos, PairValue, ValueRecord};
 
 use super::UnitGlyph;
 
