@@ -1,12 +1,14 @@
 # clazel-style
 
-CSS style for Clazel's Phase 5 browser (`docs/phases/phase-5.md`, items 5.6 and 5.7). Part
+CSS style for Clazel's Phase 5 browser (`docs/phases/phase-5.md`, items 5.6 to 5.8). Part
 of [Clazel](../../README.md), a web browser whose parsers of untrusted input carry
 machine-checked proofs.
 
 Item 5.6 is the module `values/`: the property value grammars of the CSS subset Phase 5
 needs (5.0(b): what the Hacker News exit page uses), shorthands, the Quirks Mode Standard's
-value quirks, and CSSOM's serialization. Item 5.7's cascade will be the module `cascade/`.
+value quirks, and CSSOM's serialization. Item 5.8 is the module `sources/`: what style sheets
+a document has, in order, which apply, each element's `style` attribute, and media queries.
+Item 5.7's cascade will be the module `cascade/`.
 
 ## What it reads
 
@@ -70,6 +72,76 @@ away from zero) and clamped to ±(2^30 − 1), with `ex` taken as 0.5 em; colour
 8-bit sRGB when parsed, keeping a named colour's name; and the quirks apply only to the
 properties the Quirks Mode Standard lists, when set directly.
 
+## Style sources and media queries (item 5.8)
+
+`sources::collect(&arena)` reads a document's `clazel-dom` arena once, in tree order, and
+gives its `Sources`:
+
+- **`<style>` elements**: HTML §4.2.6 "update a style block": skipped if `type` is present
+  and neither empty nor `text/css`; the sheet is the element's child text content, parsed
+  by `clazel-css` ("parse a stylesheet", CSS Syntax 3 §5.4.3).
+- **`<link rel=stylesheet>` elements**: rel's tokens include `stylesheet`, `href` is present
+  and not empty, `disabled` is absent, and `type`, if present, is `text/css` (HTML §4.2.4.2,
+  §4.6.8.23). Each is `Pending` until the renderer hands its response to
+  `Sources::link_loaded` (the `Content-Type` header, whether it is same-origin, whether the
+  fetch succeeded, and the body). That runs §4.6.8.23 "process this type of linked
+  resource": a `Content-Type` other than `text/css` fails the sheet, **except in quirks
+  mode for a same-origin sheet**, which is taken as `text/css`; the body is decoded with the
+  `charset` parameter, then the link's `charset` attribute, then the document's encoding.
+- **`style` attributes** of every element: CSS Style Attributes §3, parsed as a list of
+  declarations (CSS Syntax 3 §5.4.5), kept per element for the cascade's element-attached
+  step.
+- **Titles and alternate sheets**: CSSOM §6.2 "add a CSS style sheet", in tree order, so the
+  first titled sheet sets the preferred set and other titled sets and alternates are
+  disabled.
+
+A sheet's rules (`sources::sheet::StyleSheet`) are its style rules in order, each with its
+selector text (for `clazel-selectors`), its declarations (name, value as `values/` items,
+`!important`) and the innermost `@media` rule around it; nested `@media` rules point at
+their parent. `Sources::rules_for(device)` gives the style rules that apply on a device, in
+the cascade's order of appearance: enabled sheets whose `media` matches, in tree order, and
+within each the rules whose `@media` rules all match.
+
+**Recognised and ignored**, with everything inside them: `@import`, `@supports`,
+`@font-face`, `@namespace` and `@page` (listed in `StyleSheet::ignored`). Other at-rules,
+`@charset` included, are dropped as CSS Syntax says. Not read: rules nested in a style rule
+(CSS Nesting) and declarations directly inside `@media`.
+
+**Media queries** (`sources::media`, Media Queries 4, W3C CRD of 8 October 2026): the media
+types `all`, `screen` and `print` (the deprecated types parse and match nothing), `not` and
+`only`, `and`, `or` and `not` in conditions with parentheses, comma lists, and the features
+`width` and `height` (plain, `min-`/`max-`, and the range forms `(400px <= width < 700px)`)
+and `orientation`, against the viewport, with `em`, `rem` and `ex` from the initial 16 px
+font size. Evaluation is Kleene's three-valued logic (§3.1): any other feature, value or
+syntax that reaches `<general-enclosed>` is unknown, so a query that needs it is false,
+and so is its negation. That is what HN's `-webkit-min-device-pixel-ratio` and
+`min-device-pixel-ratio` query gets. Lists serialize as CSSOM §4.2 says, extended to Level
+4's conditions.
+
+**Not here, left to later items**: the fetches (5.19) and the renderer's use of the sources
+(5.20: sending a request for each pending link, waiting for them, re-evaluating `media` on a
+new viewport, feeding `rules_for` to the cascade). `clazel-renderer` is not changed by 5.8.
+
+**Decisions taken** (from phase-5.md's plan, the maintainer being away):
+
+- The interface takes fetched sheets as input (bytes plus the response facts the quirk
+  needs) and exposes the ordered rule list, since 5.19 and 5.20 are not started.
+- Range syntax (`width >= 600px`) and `or` are implemented with the rest of Level 4's
+  condition grammar: they are part of the `width` feature and of conditions, and cost
+  little. Other features stay unknown, as item 5.8 says.
+- A media query list is split at every top-level comma after trimming whitespace (so
+  `foo,` is `foo, not all`), and an unknown query is kept rather than replaced with
+  `not all`; both follow WPT and engines where the specifications read literally say
+  otherwise, and both are in `docs/ERRATA.md`.
+- Titles, alternates, `disabled` and `type` are handled as HTML and CSSOM say, though HN
+  uses none of them; Content Security Policy is not implemented; SVG's `style` element is
+  not read.
+- Nesting of `( … )` in a media condition is bounded at 32 levels (deeper ones are
+  `<general-enclosed>`, unknown), so the parser's recursion is bounded on hostile input.
+
+The modelling choices are listed at the top of `src/sources/mod.rs` and
+`src/sources/media.rs`.
+
 ## Verification
 
 Tier 0 now, target tier 1 (phase-5.md 5.0(a)): the tier is raised only after CI's full
@@ -125,3 +197,39 @@ verification of the harnesses is green.
     the reference is written as the value the quirk gives. Properties outside the subset
     (`top`, `left`, `clip`, `letter-spacing`, `word-spacing`, `outline-*`, …) and the SVG
     half are not run.
+
+### Item 5.8 (`sources/`)
+
+- **Kani harnesses** (`src/sources/proofs.rs`), measured locally one at a time (Kani 0.68,
+  macOS arm64, wall time including the build, peak resident memory of the run's process
+  group sampled every 5 s):
+
+  | Harness | Bound | Time | Peak memory |
+  |---------|-------|-----:|------------:|
+  | `kleene_any` | §3.1's `not`, `and`, `or` on every pair of the three values, with Kleene's laws | 6 s | under 0.1 GB |
+  | `feature_any` | any `<media-feature>` (any name, prefix, test, comparisons, numbers, units, identifiers) on any device | 36 s | 3.1 GB |
+
+  **Not done** (covered only by the unit tests and the conformance test below): the
+  condition evaluator on any list of four ops, even with features reduced to unknown
+  names (over 8 GB in 69 s); a query of up to three ops (over 8 GB in 118 s); a list of up
+  to three one-op queries (over 8 GB at 686 s); the parser on any four tokens (unfinished
+  after 12 minutes); the tokens adapter, which calls `clazel-css`'s tokenizer; the
+  serializer; and the sheet walk and document collection. Each was stopped at the local
+  8 GB cap and removed rather than sent to a 16 GB CI runner untested.
+- **Conformance** (`tests/conformance_mediaqueries.rs`), over WPT `css/mediaqueries/` at
+  commit `4ad507b2` (`tests/data/wpt-mediaqueries/SOURCE.md`):
+  - `test_media_queries.html`, read call by call: **159 pass, 55 expected failures**, none
+    fail, of 214 calls read; 159 calls are not run (in loops, conditions or functions, or
+    with computed strings) and are listed by line with the reason.
+  - `match-media-parsing.html`: **21 pass**, none fail; the 13 calls inside
+    `test_resolution_parsing()` are not run.
+  - 22 reftests, one unit per `@media` rule: **47 pass, 10 expected failures**, none fail.
+  - Every expected failure is a query on a media feature outside the subset (`color`,
+    `monochrome`, `aspect-ratio`, `device-*`, `color-index`, `scan`, `grid`,
+    `overflow-*`, `update`, `hover`, `pointer` and their `any-` forms) or the `ch` unit,
+    each listed with its reason when the test runs.
+- **Miri**: under `cfg!(miri)` `test_media_queries.html` runs every fourth case (each
+  tokenizes and parses one or two short strings, which Miri runs about a thousand times
+  slower); the other two suites are small and run whole. **No Miri time has been measured
+  for these tests**: the local run was lost when the machine went down, and Miri was not
+  run again.
