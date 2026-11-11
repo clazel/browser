@@ -46,9 +46,8 @@ Taken from the plan while the maintainer was away; each is also in
   5.0(b) has them". Decision 5.0(b) A is what the exit page needs, and
   "What the exit page needs" lists neither property.
 - **Kerning source.** The plan says `GPOS` when the font has `GPOS`, and `kern`
-  otherwise. A face whose `GPOS` has no `kern` lookup for the run's script
-  (nor for the fallback tables under "Script" below) is kerned from its `kern`
-  table. That is the evident intent, and it is what HarfBuzz does. A `GPOS`
+  otherwise. A face whose `GPOS` has no `kern` lookup in the chosen script
+  table ("Script" below) is kerned from its `kern` table. That is the evident intent, and it is what HarfBuzz does. A `GPOS`
   that does not parse counts as absent. Only LookupType 2 is applied: a
   single adjustment that a font puts under `kern` is not (H1 is pair
   kerning; Euphemia UCAS on macOS has one).
@@ -66,12 +65,17 @@ Taken from the plan while the maintainer was away; each is also in
   in the same place.
 - **Script**: the first character of the run in a Latin, Greek or Cyrillic
   block picks `latn`, `grek` or `cyrl`, else `DFLT`. The `GPOS` script
-  table is that script's or `DFLT`, and if neither has a `kern` lookup,
-  `dflt` and then `latn`, as HarfBuzz tries them. With this, a run of
-  punctuation in PT Sans is kerned as HarfBuzz kerns it. HarfBuzz stops at
-  the first listed table even when it has no `kern` feature.
-  `clazel-font` does not say whether a script is listed, so we go on to the
-  next table (listed).
+  table is the first one the font lists of that script, `DFLT`, `dflt` and
+  `latn`. The first two are OpenType's rule (chapter2: use `DFLT` when the
+  text's script has no table); `dflt` and `latn` are HarfBuzz's fallbacks
+  for fonts that list neither, which make a run of punctuation in PT Sans
+  kern as HarfBuzz kerns it. The chosen table decides even when it has no
+  `kern` feature, and the `kern` table then applies. A listed table is the
+  font's statement of which features its script gets, so going on to
+  another script's `kern` would apply kerning the font did not ask for.
+  This matches HarfBuzz: Liberation Serif Italic 2.1.5 (Ubuntu 24.04) lists
+  `DFLT` with only `mark`, so digits are kerned from its `kern` table.
+  `clazel-font` gained `Gpos::lists_script` for this.
 - **Right-to-left runs stay in logical order** (no UAX #9, Phase 8). There is
   no Unicode normalization, no handling of default-ignorable characters and no
   space fallback.

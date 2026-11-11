@@ -35,8 +35,9 @@
 //!   `font-variant-ligatures: normal` asks for the `liga` feature
 //!   (§6.4); we never form ligatures. A listed deviation.
 //! - **Kerning source.** `GPOS` when the face has one whose default
-//!   language system of the run's script (or the fallbacks under
-//!   "Script" below) lists the `kern` feature with at least one lookup; otherwise the `kern` table, if it
+//!   language system of the chosen script table ("Script" below) lists
+//!   the `kern` feature with at least one lookup; otherwise the `kern`
+//!   table, if it
 //!   is the OpenType version 0 table; otherwise none. The plan says "`GPOS`
 //!   … when the font has `GPOS` … and `kern` otherwise"; a face whose
 //!   `GPOS` has no `kern` lookups (only mark positioning, say) but has a
@@ -73,15 +74,17 @@
 //!   positions for those faces.
 //! - **Script**: [`Script::of_text`] takes the first character with a
 //!   script of H1 (block tables, approximating Unicode's `Scripts.txt`);
-//!   the `GPOS` script table is that script's, or else `DFLT` (chapter2),
-//!   and when neither gives a `kern` lookup, `dflt` and then `latn`, the
-//!   order in which HarfBuzz tries them (a run of punctuation, script
-//!   `DFLT`, is then kerned like Latin in a face that lists only `latn`).
-//!   HarfBuzz stops at the first of these tables that is listed, even if it
-//!   has no `kern` feature; we go on to the next, since `clazel-font` does
-//!   not say whether a script is listed (listed: the two differ for a face
-//!   that lists the run's script or `DFLT` without a `kern` feature and
-//!   `dflt` or `latn` with one).
+//!   the `GPOS` script table is the first one listed of that script's,
+//!   `DFLT` ("An application should use a DFLT script table if there is
+//!   not a script table associated with the specific script of the text
+//!   being formatted", chapter2), and then `dflt` and `latn`, which
+//!   HarfBuzz tries for fonts that list neither (a run of punctuation,
+//!   script `DFLT`, is then kerned like Latin in a face that lists only
+//!   `latn`, as PT Sans does). The chosen table decides even when its
+//!   default LangSys has no `kern` feature: the font then asks for no
+//!   `GPOS` kerning for that text, and the `kern` table applies, as in
+//!   HarfBuzz. Liberation Serif Italic 2.1.5 lists `DFLT` with only `mark`
+//!   and `latn` with `kern`, so digits are kerned from its `kern` table.
 //! - **Right-to-left runs are shaped in logical order**: there is no
 //!   UAX #9 bidirectional reordering (Phase 8). Listed.
 //! - **No `letter-spacing` or `word-spacing`**: decision 5.0(b) A's subset
@@ -183,15 +186,22 @@ impl<'a> Shaper<'a> {
     /// chosen as [`self`]'s modelling choices say.
     pub fn new(face: Face<'a>, script: Script) -> Self {
         let gpos = face.gpos().ok().flatten().and_then(|g| {
-            // The script's table or `DFLT` (inside `kern_lookups`),
-            // then `dflt` and `latn`, as HarfBuzz tries them.
-            [script.tag(), Tag(*b"dflt"), Script::Latin.tag()]
-                .into_iter()
-                .find_map(|tag| match g.kern_lookups(tag) {
-                    Ok(lookups) if !lookups.is_empty() => Some(lookups),
-                    _ => None,
-                })
-                .map(|lookups| PairSource::Gpos(g, lookups))
+            // The first script table listed of: the run's script, `DFLT`
+            // (chapter2), then `dflt` and `latn` (HarfBuzz's fallbacks for
+            // a font that lists neither). The chosen table decides, even
+            // when its LangSys has no `kern` feature.
+            let chosen = [
+                script.tag(),
+                clazel_font::layout::DFLT,
+                Tag(*b"dflt"),
+                Script::Latin.tag(),
+            ]
+            .into_iter()
+            .find(|&tag| g.lists_script(tag).unwrap_or(false))?;
+            match g.kern_lookups(chosen) {
+                Ok(lookups) if !lookups.is_empty() => Some(PairSource::Gpos(g, lookups)),
+                _ => None,
+            }
         });
         let pairs = gpos.unwrap_or_else(|| match face.kern() {
             Ok(Some(k)) => PairSource::Kern(k),

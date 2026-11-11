@@ -78,11 +78,11 @@
 //! - `unordered GPOS`: a `kern` lookup's Coverage, ClassDef or PairSet is
 //!   not in the order the chapters require, so each engine's bisection may
 //!   find a different element.
-//! - `GPOS without kern for the script`: the face has `GPOS`, but no
-//!   `kern` lookup under the run's script, `DFLT`, `dflt` or `latn`, so we
-//!   kern it from its `kern` table or not at all, where HarfBuzz may have
-//!   chosen a script table differently (`shape`'s modelling choices,
-//!   "Script") or applied the other `GPOS` features it always applies.
+//! - `GPOS without kern for the script`: the face has `GPOS`, but the
+//!   script table chosen for Latin (the first listed of `latn`, `DFLT`,
+//!   `dflt`) has no `kern` lookup, so we kern it from its `kern` table or
+//!   not at all, where HarfBuzz may also apply the `GPOS` features it
+//!   always applies (a LangSys's required feature).
 
 use clazel_font::file::FontFile;
 use clazel_font::kern::coverage;
