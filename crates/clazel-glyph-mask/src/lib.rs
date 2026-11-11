@@ -42,7 +42,8 @@
 //!   orientation paints. This equals non-zero winding except where contours
 //!   overlap with opposite orientation (the plan says so too).
 //! - **Fixed point throughout**: no floating point, so the Kani harnesses
-//!   cover the arithmetic exactly. Mask units are 2⁻¹⁴ px.
+//!   model the arithmetic exactly where they reach it. Mask units are
+//!   2⁻¹⁴ px.
 //! - **Mask size**: at most [`MAX_SIDE`] × [`MAX_SIDE`] pixels (1024 × 1024,
 //!   enough for a glyph at about 700 px); a larger glyph is
 //!   [`Error::TooLarge`] and draws nothing (listed for the hostile pages of
