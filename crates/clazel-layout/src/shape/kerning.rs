@@ -29,7 +29,7 @@ pub enum PairSource<'a> {
 /// This is how every pair is formed: as if each `kern` lookup had the
 /// `lookupFlag` `IGNORE_MARKS` ("If set, skips over combining marks",
 /// chapter2, "Lookup Table"), which is what HarfBuzz uses for the `kern`
-/// table and what the `kern` lookups of the fonts we measured set.
+/// table. `lookupFlag` itself is not read (`clazel-font` does not expose it).
 pub fn next_base(glyphs: &[UnitGlyph], i: usize) -> Option<usize> {
     let start = i.checked_add(1)?;
     let rest = glyphs.get(start..)?;

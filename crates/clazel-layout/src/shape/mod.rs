@@ -35,8 +35,8 @@
 //!   `font-variant-ligatures: normal` asks for the `liga` feature
 //!   (§6.4); we never form ligatures. A listed deviation.
 //! - **Kerning source.** `GPOS` when the face has one whose default
-//!   language system of the run's script (or `DFLT`) lists the `kern`
-//!   feature with at least one lookup; otherwise the `kern` table, if it
+//!   language system of the run's script (or the fallbacks under
+//!   "Script" below) lists the `kern` feature with at least one lookup; otherwise the `kern` table, if it
 //!   is the OpenType version 0 table; otherwise none. The plan says "`GPOS`
 //!   … when the font has `GPOS` … and `kern` otherwise"; a face whose
 //!   `GPOS` has no `kern` lookups (only mark positioning, say) but has a
@@ -44,7 +44,9 @@
 //!   and what HarfBuzz does. A `GPOS` that does not parse counts as absent.
 //! - **`GPOS` lookups are applied one after another**, each along the whole
 //!   run, in LookupList order (chapter2). Within a lookup, `clazel-font`
-//!   applies the first subtable that covers the pair.
+//!   applies the first subtable that covers the pair. Lookups of other
+//!   types that a font puts under `kern` (single adjustment, say) are not
+//!   applied: H1 is pair kerning. Listed.
 //! - **Where a pair pass resumes** after a pair: at the second glyph, or
 //!   after it when `valueRecord2` is non-zero (the second glyph "has been
 //!   positioned"). The `gpos` chapter does not say; HarfBuzz resumes after
@@ -71,8 +73,15 @@
 //!   positions for those faces.
 //! - **Script**: [`Script::of_text`] takes the first character with a
 //!   script of H1 (block tables, approximating Unicode's `Scripts.txt`);
-//!   the `GPOS` script table is that script's or else `DFLT`. HarfBuzz
-//!   also tries `dflt` and then `latn`; we do not.
+//!   the `GPOS` script table is that script's, or else `DFLT` (chapter2),
+//!   and when neither gives a `kern` lookup, `dflt` and then `latn`, the
+//!   order in which HarfBuzz tries them (a run of punctuation, script
+//!   `DFLT`, is then kerned like Latin in a face that lists only `latn`).
+//!   HarfBuzz stops at the first of these tables that is listed, even if it
+//!   has no `kern` feature; we go on to the next, since `clazel-font` does
+//!   not say whether a script is listed (listed: the two differ for a face
+//!   that lists the run's script or `DFLT` without a `kern` feature and
+//!   `dflt` or `latn` with one).
 //! - **Right-to-left runs are shaped in logical order**: there is no
 //!   UAX #9 bidirectional reordering (Phase 8). Listed.
 //! - **No `letter-spacing` or `word-spacing`**: decision 5.0(b) A's subset
@@ -102,7 +111,7 @@ pub mod script;
 #[cfg(kani)]
 mod proofs;
 
-use clazel_font::Face;
+use clazel_font::{Face, Tag};
 
 pub use fixed::place;
 pub use kerning::PairSource;
@@ -173,14 +182,17 @@ impl<'a> Shaper<'a> {
     /// A shaper for runs of `script` in `face`, with its kerning source
     /// chosen as [`self`]'s modelling choices say.
     pub fn new(face: Face<'a>, script: Script) -> Self {
-        let gpos = face
-            .gpos()
-            .ok()
-            .flatten()
-            .and_then(|g| match g.kern_lookups(script.tag()) {
-                Ok(lookups) if !lookups.is_empty() => Some(PairSource::Gpos(g, lookups)),
-                _ => None,
-            });
+        let gpos = face.gpos().ok().flatten().and_then(|g| {
+            // The script's table or `DFLT` (inside `kern_lookups`),
+            // then `dflt` and `latn`, as HarfBuzz tries them.
+            [script.tag(), Tag(*b"dflt"), Script::Latin.tag()]
+                .into_iter()
+                .find_map(|tag| match g.kern_lookups(tag) {
+                    Ok(lookups) if !lookups.is_empty() => Some(lookups),
+                    _ => None,
+                })
+                .map(|lookups| PairSource::Gpos(g, lookups))
+        });
         let pairs = gpos.unwrap_or_else(|| match face.kern() {
             Ok(Some(k)) => PairSource::Kern(k),
             _ => PairSource::None,
