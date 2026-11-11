@@ -206,7 +206,7 @@ fn declarations_of(parsed: &ExecParsed, lo: u32, hi: u32) -> Vec<Declaration> {
 
 impl StyleSheet {
     /// "Parse a stylesheet" (CSS Syntax 3 §5.4.3, whose rules are "parse a stylesheet's contents" of the
-    /// input, §5.4.2) of `input`, already decoded, and read its
+    /// input, §5.4.4) of `input`, already decoded, and read its
     /// rules. Input longer than `clazel-css` accepts (2^29 code points, beyond any body the
     /// renderer is sent) is an empty sheet.
     pub fn parse(input: &[u32]) -> StyleSheet {

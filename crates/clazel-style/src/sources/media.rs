@@ -34,7 +34,7 @@
 //!   evaluate to false for that reason, so replacing changes no result; it would change
 //!   the serialization, and WPT's `test_media_queries.html` expects such a query to stay
 //!   parseable (`expression_should_be_parseable`), as engines keep it. So the query is
-//!   kept and evaluates to false.
+//!   kept and evaluates to false (`docs/ERRATA.md`).
 //! - **The list is split at top-level commas** after trimming whitespace, not by CSS
 //!   Syntax 3 §5.4.10 read literally (see [`parse_media_query_list`] and `docs/ERRATA.md`).
 //! - **Serialization of `<general-enclosed>`** writes its tokens back with one space for
