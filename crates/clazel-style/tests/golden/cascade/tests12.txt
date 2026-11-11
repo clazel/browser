@@ -1,0 +1,45 @@
+#case 0
+#data "<!DOCTYPE html><body><p>foo<math><mtext><i>baz</i></mtext><annotation-xml><svg><desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td><img></td></table></foreignObject></g><g>quux</g></svg></annotation-xml></math>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <math>
+        <mtext>
+          <i> font-style=Italic
+        <annotation-xml>
+          <svg>
+            <desc>
+              <b> font-weight=700
+            <g>
+              <foreignObject>
+                <p> margin-top=16px margin-bottom=16px display=Block
+                <table> display=Table border-spacing=2px 2px
+                  <tbody> display=TableRowGroup vertical-align=Middle
+                    <tr> display=TableRow vertical-align=Middle
+                      <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+                        <img>
+            <g>
+
+#case 1
+#data "<!DOCTYPE html><body>foo<math><mtext><i>baz</i></mtext><annotation-xml><svg><desc><b>eggs</b></desc><g><foreignObject><P>spam<TABLE><tr><td><img></td></table></foreignObject></g><g>quux</g></svg></annotation-xml></math>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mtext>
+        <i> font-style=Italic
+      <annotation-xml>
+        <svg>
+          <desc>
+            <b> font-weight=700
+          <g>
+            <foreignObject>
+              <p> margin-top=16px margin-bottom=16px display=Block
+              <table> display=Table border-spacing=2px 2px
+                <tbody> display=TableRowGroup vertical-align=Middle
+                  <tr> display=TableRow vertical-align=Middle
+                    <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+                      <img>
+          <g>
+
