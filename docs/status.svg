@@ -11,14 +11,14 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 .m{font-family:ui-monospace,SFMono-Regular,'SF Mono',Consolas,'Liberation Mono',monospace}.mut{fill:var(--mut)}.b{font-weight:600}
 </style>
 <rect width="880" height="186" rx="8" fill="var(--bg)" stroke="var(--line)"/>
-<text x="24" y="50" font-size="24" class="b">21<tspan font-size="14" class="mut">/37</tspan></text>
+<text x="24" y="50" font-size="24" class="b">21<tspan font-size="14" class="mut">/38</tspan></text>
 <text x="24" y="68" font-size="10.5" class="mut">crates proven correct</text>
 <text x="182" y="50" font-size="24" class="b">11k<tspan font-size="14" class="mut"></tspan></text>
 <text x="182" y="68" font-size="10.5" class="mut">Verus proof obligations</text>
 <text x="340" y="50" font-size="24" class="b">2237<tspan font-size="14" class="mut">/2250</tspan></text>
 <text x="340" y="68" font-size="10.5" class="mut">broken specs caught</text>
-<text x="24" y="114" font-size="24" class="b">2.83M<tspan font-size="14" class="mut"></tspan></text>
-<text x="24" y="132" font-size="10.5" class="mut">conformance cases, 129 suites</text>
+<text x="24" y="114" font-size="24" class="b">2.84M<tspan font-size="14" class="mut"></tspan></text>
+<text x="24" y="132" font-size="10.5" class="mut">conformance cases, 131 suites</text>
 <text x="182" y="114" font-size="24" class="b">62<tspan font-size="14" class="mut"></tspan></text>
 <text x="182" y="132" font-size="10.5" class="mut">unsafe blocks, all in clazel-sys</text>
 <text x="340" y="114" font-size="24" class="b">21<tspan font-size="14" class="mut"></tspan></text>
@@ -49,10 +49,11 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <rect x="660" y="72" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="664" y="76" width="8" height="8" rx="2" fill="var(--t0)"/>
 <rect x="680" y="72" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="684" y="76" width="8" height="8" rx="2" fill="var(--t0)"/>
 <rect x="700" y="72" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="704" y="76" width="8" height="8" rx="2" fill="var(--t0)"/>
-<rect x="720" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
+<rect x="720" y="72" width="16" height="16" rx="4" fill="none" stroke="var(--gap)" stroke-width="1.5" stroke-dasharray="3 2"/><rect x="724" y="76" width="8" height="8" rx="2" fill="var(--t0)"/>
 <rect x="740" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
 <rect x="760" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
-<text x="786" y="84" font-size="10.5" class="mut">3/9 correct</text>
+<rect x="780" y="72" width="16" height="16" rx="4" fill="var(--t0)"/>
+<text x="786" y="84" font-size="10.5" class="mut">3/10 correct</text>
 <text x="516" y="109" font-size="11" class="mut">Primitives</text>
 <rect x="600" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>
 <rect x="620" y="97" width="16" height="16" rx="4" fill="var(--t2)"/>

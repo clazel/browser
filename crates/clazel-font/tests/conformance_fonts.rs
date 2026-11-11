@@ -78,6 +78,13 @@ const EXPECTED: &[(&str, &str)] = &[
          so it misreads the rest of such a component record",
     ),
     (
+        "ttf-parser-gvar-empty",
+        "ttf-parser draws nothing for a glyph of a face with `gvar` when its `variable-fonts` \
+         feature is on, which `rustybuzz` (clazel-layout's shaping differential, item 5.11) turns \
+         on in a workspace build; we and read-fonts draw the default instance, which is what \
+         `glyf` holds (macOS's SF NS and ADT Numeric)",
+    ),
+    (
         "ttf-parser-single-point",
         "ttf-parser draws a simple glyph with exactly one point as empty, also as a component",
     ),
@@ -960,8 +967,12 @@ fn compare_glyphs(
         let mut theirs = Segs::default();
         let drawn = ttf.outline_glyph(gid, &mut theirs).is_some();
         let theirs = if drawn { theirs.0 } else { Vec::new() };
+        let gvar_empty =
+            theirs.is_empty() && matches!(face.directory().find(Tag(*b"gvar")), Ok(Some(_)));
         // Why the engines may disagree on this glyph, if they may.
-        let shape_kind = if shape.point_matching {
+        let shape_kind = if gvar_empty {
+            Some("ttf-parser-gvar-empty")
+        } else if shape.point_matching {
             Some("ttf-parser-point-matching")
         } else if shape.scaled_offset {
             Some("ttf-parser-scaled-offset")
