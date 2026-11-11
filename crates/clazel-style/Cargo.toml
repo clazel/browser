@@ -4,15 +4,23 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "CSS style for Clazel's Phase 5 browser (phase-5.md items 5.6 and 5.7): property value grammars of the subset, shorthands and their CSSOM serialization; the cascade later."
+description = "CSS style for Clazel's Phase 5 browser (phase-5.md items 5.6 to 5.8): property value grammars of the subset, shorthands and their CSSOM serialization; style sources and media queries; the cascade later."
 
 [dependencies]
 # The component values a declaration's value is read from (Phase 5 items 5.3 and 5.4).
 clazel-css = { path = "../clazel-css" }
+# The document a style source is read from (item 5.8): `<style>` and `<link>` elements and
+# `style` attributes, through the arena's readers.
+clazel-dom = { path = "../clazel-dom" }
+# A fetched sheet's encodings (CSS Syntax 3 §3.2, the CSS environment encoding).
+clazel-encoding = { path = "../clazel-encoding" }
+# A link's `type` attribute and its response's `Content-Type` (HTML §4.2.4.2, §4.6.8.23).
+clazel-mime = { path = "../clazel-mime" }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about the
 # shipped code today; `target-tier` is what the policy requires (phase-5.md 5.0(a)):
-# Kani harnesses (src/values/proofs.rs) over every value parser. Tier 0 until CI's
+# Kani harnesses (src/values/proofs.rs, src/sources/proofs.rs) over the value parsers and
+# the media query evaluator. Tier 0 until CI's
 # full verification of them is green.
 [package.metadata.clazel]
 tier = 0
