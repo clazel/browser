@@ -59,4 +59,6 @@
 //!   visits each node at most once ([`preorder`]).
 
 pub mod computed;
+pub mod legacy;
+pub mod logical;
 pub mod sort;
