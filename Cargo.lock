@@ -446,6 +446,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "clazel-style"
+version = "0.0.0"
+dependencies = [
+ "clazel-css",
+]
+
+[[package]]
 name = "clazel-sys"
 version = "0.0.0"
 dependencies = [

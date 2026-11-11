@@ -28,11 +28,13 @@ mod wpt_base64;
 mod wpt_cookies;
 mod wpt_css_selectors;
 mod wpt_css_syntax;
+mod wpt_css_values;
 mod wpt_encoding;
 mod wpt_encoding_legacy;
 mod wpt_idna;
 mod wpt_mime_types;
 mod wpt_mimesniff;
+mod wpt_quirks;
 mod wpt_url_hosts;
 mod wpt_url_percent;
 mod wpt_url_setters;
@@ -57,6 +59,12 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wpt_css_selectors::convert,
         wpt_css_selectors::FILES,
     ),
+    (
+        "wpt-css-values",
+        wpt_css_values::convert,
+        wpt_css_values::FILES,
+    ),
+    ("wpt-quirks", wpt_quirks::convert, wpt_quirks::FILES),
     (
         "wpt-css-syntax",
         wpt_css_syntax::convert,
