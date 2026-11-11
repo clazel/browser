@@ -246,3 +246,6 @@ impl<'a> Shaper<'a> {
         place(&self.shape(text), size, self.face.units_per_em())
     }
 }
+
+#[cfg(test)]
+mod tests;
