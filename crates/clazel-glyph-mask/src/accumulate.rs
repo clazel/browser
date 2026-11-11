@@ -221,25 +221,32 @@ impl Accumulator {
         Ok(())
     }
 
-    /// The 8-bit mask: per row, the running sum of the cells, its magnitude
-    /// clamped to [`FULL`] and scaled to 0..=255, rounded half up. Row after
-    /// row, top to bottom, `width` bytes each.
-    ///
-    /// [`Error::Overflow`] if a running sum leaves `i64`, which needs cells
-    /// far beyond what [`crate::MAX_LINES`] lines can add (the harness
-    /// `finish_any_4x4` checks every state with cells up to ±2⁵⁰).
+    /// The 8-bit mask: [`finish_row`] on each row, top to bottom, `width`
+    /// bytes each.
     pub fn finish(&self) -> Result<Vec<u8>, Error> {
         let len = self.width.checked_mul(self.height).ok_or(Error::Overflow)?;
         let mut out = Vec::with_capacity(len);
         for row in self.cells.chunks_exact(self.stride) {
-            let mut run: i64 = 0;
-            for &c in row.iter().take(self.width) {
-                run = run.checked_add(c).ok_or(Error::Overflow)?;
-                out.push(coverage(run)?);
-            }
+            finish_row(row, self.width, &mut out)?;
         }
         Ok(out)
     }
+}
+
+/// One row of the mask: the running sum of the row's cells, its magnitude
+/// clamped to [`FULL`] and scaled to 0..=255, rounded half up, pushed to
+/// `out` for each of the first `width` cells (fewer if the row is shorter).
+///
+/// [`Error::Overflow`] if a running sum leaves `i64`, which needs cells far
+/// beyond what [`crate::MAX_LINES`] lines can add (the harness
+/// `finish_row_any_6` checks every row with cells up to ±2⁵⁰).
+pub fn finish_row(row: &[i64], width: usize, out: &mut Vec<u8>) -> Result<(), Error> {
+    let mut run: i64 = 0;
+    for &c in row.iter().take(width) {
+        run = run.checked_add(c).ok_or(Error::Overflow)?;
+        out.push(coverage(run)?);
+    }
+    Ok(())
 }
 
 /// A running sum's coverage: `round(min(|run|, FULL) × 255 ÷ FULL)`, half
