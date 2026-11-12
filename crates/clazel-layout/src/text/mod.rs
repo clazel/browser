@@ -6,9 +6,9 @@
 //!   14 August 2026, <https://www.w3.org/TR/2026/CRD-css-text-3-20260814/>:
 //!   §3 `white-space` (its six values; `break-spaces` too, since
 //!   `clazel-style` parses it), §4 and §4.1 white space processing
-//!   ([`collapse`]: §4.1.1 Phase I, §4.1.3 segment breaks; `lines`:
-//!   §4.1.2 Phase II, §4.2 tab stops), §5 line breaking (`wrap`: §5.1
-//!   `word-break`, §5.4 `overflow-wrap`, §5.5 details; `lines`: choosing
+//!   ([`collapse`]: §4.1.1 Phase I, §4.1.3 segment breaks; [`lines`]:
+//!   §4.1.2 Phase II, §4.2 tab stops), §5 line breaking ([`wrap`]: §5.1
+//!   `word-break`, §5.4 `overflow-wrap`, §5.5 details; [`lines`]: choosing
 //!   where to wrap, min-content and max-content). phase-5.md's section
 //!   numbers were written from memory (its † marks); the pinned text has
 //!   Phase II at §4.1.2, `word-break` at §5.1 and `overflow-wrap` at §5.4,
@@ -25,13 +25,13 @@
 //! inline's [`TextStyle`], and atomic inlines), goes through:
 //!
 //! 1. [`collapse::collapse`], Phase I: the [`Unit`]s that remain;
-//! 2. `wrap::opportunities`: the `Wrap` after each unit (none, soft,
+//! 2. [`wrap::opportunities`]: the [`Wrap`] after each unit (none, soft,
 //!    forced, or an `overflow-wrap` emergency one);
-//! 3. `lines::break_lines` with the units' advances (item 5.11's shaper)
-//!    and the available width: the `lines::Line`s; and `lines::trim`
+//! 3. [`lines::break_lines`] with the units' advances (item 5.11's shaper)
+//!    and the available width: the [`lines::Line`]s; and [`lines::trim`]
 //!    per line, Phase II.
 //!
-//! `lines::min_content` and `lines::max_content` give the intrinsic
+//! [`lines::min_content`] and [`lines::max_content`] give the intrinsic
 //! sizes table layout (item 5.15) needs.
 //!
 //! # Modelling choices
@@ -47,7 +47,7 @@
 //!   Khmer, Myanmar), control characters as AL (§4), and `word-break:
 //!   break-all` (§5.1). The pair rules themselves are UAX #14's, unchanged,
 //!   which `tests/conformance_linebreak.rs` checks against every line of
-//!   `LineBreakTest.txt`; `wrap` then applies `white-space`, `keep-all`,
+//!   `LineBreakTest.txt`; [`wrap`] then applies `white-space`, `keep-all`,
 //!   `overflow-wrap` and §5.5's atomic inlines on top.
 //! - **No bidi reordering** (UAX #9 is Phase 8): lines are in logical
 //!   order, so "at the end of a line (after bidi reordering)" is the
@@ -57,12 +57,20 @@
 pub mod classes;
 pub mod collapse;
 pub mod data;
+pub mod lines;
 pub mod uax14;
+pub mod wrap;
 
+#[cfg(kani)]
+mod proofs;
+#[cfg(test)]
+mod tests;
 
 pub use classes::{Lb, Props};
 pub use collapse::{Item, Kind, Unit};
+pub use lines::{Line, Trim};
 pub use uax14::{Break, Rule, breaks, breaks_with_rules};
+pub use wrap::Wrap;
 
 use clazel_style::cascade::computed::{OverflowWrap, WhiteSpace, WordBreak};
 
