@@ -83,6 +83,8 @@ pub mod state;
 pub mod table;
 pub mod tree;
 
+#[cfg(kani)]
+mod proofs;
 #[cfg(test)]
 mod tests;
 

@@ -120,64 +120,95 @@ fn decimal(v: i64) -> String {
     v.to_string()
 }
 
-/// An additive Roman numeral for 1 to 3999 (Counter Styles 3 §6.1†,
-/// `upper-roman`: "range: 1 3999"), or `None` outside the range.
-fn roman(v: i64, upper: bool) -> Option<String> {
+/// The weights and symbols of `lower-roman` (Counter Styles 3 §6.1†:
+/// "additive-symbols: 1000 m, 900 cm, 500 d, 400 cd, 100 c, 90 xc, 50 l, 40
+/// xl, 10 x, 9 ix, 5 v, 4 iv, 1 i").
+const ROMAN: [(i64, &str); 13] = [
+    (1000, "m"),
+    (900, "cm"),
+    (500, "d"),
+    (400, "cd"),
+    (100, "c"),
+    (90, "xc"),
+    (50, "l"),
+    (40, "xl"),
+    (10, "x"),
+    (9, "ix"),
+    (5, "v"),
+    (4, "iv"),
+    (1, "i"),
+];
+
+/// How many times each of `ROMAN`'s symbols is used for `v`, by Counter
+/// Styles 3's additive algorithm (§2†, "additive": the largest weight that
+/// fits, as many times as it fits, then the next), or `None` outside the
+/// styles' range, 1 to 3999.
+pub fn roman_counts(v: i64) -> Option<[u8; 13]> {
     if !(1..=3999).contains(&v) {
         return None;
     }
-    const TABLE: [(i64, &str); 13] = [
-        (1000, "m"),
-        (900, "cm"),
-        (500, "d"),
-        (400, "cd"),
-        (100, "c"),
-        (90, "xc"),
-        (50, "l"),
-        (40, "xl"),
-        (10, "x"),
-        (9, "ix"),
-        (5, "v"),
-        (4, "iv"),
-        (1, "i"),
-    ];
+    let mut counts = [0u8; 13];
     let mut rest = v;
-    let mut out = String::new();
-    for (weight, symbol) in TABLE {
+    for (count, (weight, _)) in counts.iter_mut().zip(ROMAN) {
         // At most 3 of each weight for a value up to 3999.
         for _ in 0..4 {
             if rest < weight {
                 break;
             }
             rest = rest.saturating_sub(weight);
+            *count = count.saturating_add(1);
+        }
+    }
+    Some(counts)
+}
+
+/// An additive Roman numeral (`lower-roman`, or `upper-roman` when `upper`)
+/// for 1 to 3999, or `None` outside the range.
+fn roman(v: i64, upper: bool) -> Option<String> {
+    let counts = roman_counts(v)?;
+    let mut out = String::new();
+    for (count, (_, symbol)) in counts.iter().zip(ROMAN) {
+        for _ in 0..*count {
             out.push_str(symbol);
         }
     }
     Some(if upper { out.to_uppercase() } else { out })
 }
 
-/// An alphabetic counter (Counter Styles 3 §2†, "alphabetic": "a, b, …, z,
-/// aa, ab, …"), for values of 1 and more; `None` below 1.
-fn alphabetic(v: i64, symbols: &[char]) -> Option<String> {
-    let base = i64::try_from(symbols.len()).ok().filter(|&b| b > 0)?;
-    if v < 1 {
+/// The digits of `v` in an alphabetic system of `base` symbols (Counter
+/// Styles 3 §2†, "alphabetic": "a, b, …, z, aa, ab, …", which is bijective
+/// base `base`), least significant first, with their count; `None` for a
+/// value below 1 or a base outside 2 to 255. Each step divides by at least
+/// 2, so an `i64` has at most 63 digits.
+pub fn alphabetic_digits(v: i64, base: i64) -> Option<([u8; 64], usize)> {
+    if v < 1 || !(2..=255).contains(&base) {
         return None;
     }
+    let mut digits = [0u8; 64];
+    let mut len = 0usize;
     let mut value = v;
-    let mut out: Vec<char> = Vec::new();
-    // Each step divides by at least 2 (`base` ≥ 2 for every style used), so
-    // 64 steps cover every `i64`.
-    for _ in 0..64 {
-        if value < 1 {
-            break;
-        }
+    while value >= 1 && len < digits.len() {
         value = value.saturating_sub(1);
-        let digit = usize::try_from(value.rem_euclid(base)).unwrap_or(0);
-        out.push(symbols.get(digit).copied().unwrap_or('?'));
+        let digit = u8::try_from(value.rem_euclid(base)).unwrap_or(0);
+        if let Some(slot) = digits.get_mut(len) {
+            *slot = digit;
+        }
+        len = len.saturating_add(1);
         value = value.checked_div(base).unwrap_or(0);
     }
-    out.reverse();
-    Some(out.into_iter().collect())
+    Some((digits, len))
+}
+
+/// An alphabetic counter over `symbols`, for values of 1 and more; `None`
+/// below 1.
+fn alphabetic(v: i64, symbols: &[char]) -> Option<String> {
+    let base = i64::try_from(symbols.len()).ok()?;
+    let (digits, len) = alphabetic_digits(v, base)?;
+    let mut out = String::new();
+    for &d in digits.get(..len).unwrap_or(&[]).iter().rev() {
+        out.push(symbols.get(usize::from(d)).copied().unwrap_or('?'));
+    }
+    Some(out)
 }
 
 /// The marker text of a list item with `list-style-type` `style` and

@@ -21,7 +21,7 @@
 //!   §9.2.1.1's anonymous boxes around the root instead.
 //! - **`display: contents`** is not a value `clazel-style` computes (the
 //!   subset's `display` is phase-5.md item 5.6's list); [`StyleFns`] has a
-//!   hook for it, which [`ComputedTable`] answers `false`, so hand-written
+//!   hook for it, which `ComputedTable` answers `false`, so hand-written
 //!   tables can test it. Such an element generates no box and its children
 //!   are walked as if they were its parent's (CSS Display 3 §2.5†). On a
 //!   replaced element, `contents` acts as `none` (§2.5†, "Unusual elements").

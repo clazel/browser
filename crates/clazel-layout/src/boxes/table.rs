@@ -104,8 +104,8 @@ fn white(c: Class) -> bool {
     c == Class::Text { white: true }
 }
 
-/// Stage 1 rules 1.1 and 1.2: whether child `c` of `parent` is "treated as
-/// if [it] had 'display: none'" whatever its siblings.
+/// Stage 1 rules 1.1 and 1.2: whether child `c` of `parent` "is treated as
+/// if it had 'display: none'", whatever its siblings.
 pub fn irrelevant_1(parent: Class, c: Class) -> bool {
     // 1.1 "All child boxes of a 'table-column' parent are treated as if they
     // had 'display: none'."
