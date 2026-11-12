@@ -43,7 +43,22 @@
 //! ([`hello_agrees`], [`wait_sh_fields`]); the dispatcher theorem's
 //! `dispatcher_agrees` ([`flight_agrees`]); the post-handshake theorem's
 //! `post_agrees` with the read side open and the write side closed on both
-//! sides together ([`app_agrees`]); the status that of the stage.
+//! sides together ([`app_agrees`]), or, after the crate has answered an
+//! `update_requested` the transcription only owes, the lag [`app_owed`]:
+//! the crate's state agrees with the transcription's once it has sent the
+//! KeyUpdate it owes (`post_handshake::settle`); the status that of the
+//! stage.
+//!
+//! **An owed KeyUpdate.** In CONNECTED the transcription's reading does not
+//! depend on its write side or on the owed KeyUpdate ([`lemma_record_frame`],
+//! [`lemma_phb_frame`], [`lemma_split_frame`]: the frame lemma), so while it
+//! owes one it reads every record as the settled connection does. Reads of
+//! application data, a NewSessionTicket, a KeyUpdate without
+//! `update_requested`, a user_canceled, a dropped change_cipher_spec or a
+//! partial record keep the lag exactly ([`goes_on`] into [`app_owed`]); the
+//! caller's next send ends it: the transcription sends the owed KeyUpdate,
+//! the very records the crate sent, then the same record ([`catches_up`]),
+//! and the states agree again.
 //!
 //! **Hypotheses** ([`hypotheses`]), each one of the stage theorems': the
 //! two sides' primitives are the same functions with the lengths both model;
@@ -83,7 +98,11 @@
 //! ends), [`retry_then_fails`] (ClientHello2 sent before a later message of
 //! its record fails), [`goes_on_coalesced`] (the client's flight in one
 //! record; the comparison goes on), [`settles`] (the answer to
-//! `update_requested` sent at once; the comparison ends there),
+//! `update_requested` sent at once; the comparison goes on in the lag),
+//! [`answers_twice`] (a second `update_requested` while one is owed),
+//! [`fails_owing`] (a failure while one is owed: the alerts under keys a
+//! generation apart), [`peer_closed_owing`] and [`closes_owing`] (a
+//! close_notify while one is owed, likewise; after our close both go on),
 //! [`exhausted_epoch`], [`oversized`] (application data above 2^14 octets)
 //! and [`closes_in_handshake`] (a close before the handshake completes ends
 //! the crate's connection).
@@ -93,8 +112,7 @@
 //! stage; `connection.rs` leaves transport closure out of scope, so there
 //! is nothing to compare); a KeyUpdate of the caller's own (the driver has
 //! no such operation; `post_handshake::update_agrees` covers the
-//! transducer's `update_keys`); the comparison past [`settles`] and past
-//! [`beyond_room`].
+//! transducer's `update_keys`); the comparison past [`beyond_room`].
 
 #[cfg(verus_only)]
 use crate::connection::driver_contract::Models;
@@ -698,7 +716,7 @@ pub open spec fn driver_agrees(m: Models, p: Primitives, scalar: Seq<u8>, cs: CS
         Stage::Hello(s, framing) => cs.status == Status::Handshaking
             && hello_agrees(p, scalar, s, framing, cs.held, ts),
         Stage::Flight(s) => cs.status == Status::Handshaking && flight_agrees(p, m.verification, s, cs.held, ts),
-        Stage::App(s) => app_agrees(s, cs.status, cs.held, ts),
+        Stage::App(s) => app_agrees(s, cs.status, cs.held, ts) || app_owed(p, s, cs.status, cs.held, ts),
         Stage::Ended => false,
     }
 }
@@ -876,8 +894,11 @@ pub open spec fn beyond_room(cs: CState, ts: TState, chunk: Seq<u8>) -> bool {
 /// step that reads the request, the transcription marks it owed
 /// (`key_update_owed`). Both go on, delivering the same data; the crate's
 /// bytes are the KeyUpdate the transcription owes, and its state is the
-/// transcription's once it has sent it.
-pub open spec fn settles(p: Primitives, cs2: CState, cout: Step, tout: TOut) -> bool {
+/// transcription's once it has sent it: the lag [`app_owed`], from which
+/// the comparison goes on (until the transcription catches up at the
+/// caller's next send, [`catches_up`], or one of the owed-KeyUpdate
+/// differences ends it).
+pub open spec fn settles(m: Models, p: Primitives, scalar: Seq<u8>, cs2: CState, cout: Step, tout: TOut) -> bool {
     let conn = tout.after.client.connection;
     &&& cs2.stage matches Stage::App(s2)
     &&& tout.end is Running
@@ -886,6 +907,7 @@ pub open spec fn settles(p: Primitives, cs2: CState, cout: Step, tout: TOut) -> 
     &&& conn.key_update_owed
     &&& cout.send == flat(super::post_handshake::settle(p, s2, conn).0)
     &&& super::post_handshake::post_agrees(s2, super::post_handshake::settle(p, s2, conn).1)
+    &&& driver_agrees(m, p, scalar, cs2, tout.after)
 }
 
 /// **Stated difference, an exhausted receive epoch**
@@ -915,8 +937,11 @@ pub open spec fn feed_verdict(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     ||| retry_then_fails(m, p, cs, ts, chunk, cout, tout)
     ||| goes_on_coalesced(m, p, scalar, ts, cout, cs2, tout)
     ||| beyond_room(cs, ts, chunk)
-    ||| settles(p, cs2, cout, tout)
+    ||| settles(m, p, scalar, cs2, cout, tout)
     ||| exhausted_epoch(cs, cout, tout)
+    ||| answers_twice(p, cs, ts, chunk, cout, tout)
+    ||| fails_owing(m, p, cs, ts, chunk, cout)
+    ||| peer_closed_owing(p, cs, ts, cout, tout)
 }
 
 /// **Stated difference, application data above 2^14 octets**
@@ -955,8 +980,10 @@ pub open spec fn op_agrees(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState
     let tout = top(p, ts, op);
     match op {
         Op::Feed(chunk) => feed_verdict(m, p, scalar, cs, ts, chunk, cout, cs2, tout),
-        Op::Send(data) => goes_on(m, p, scalar, cout, cs2, tout) || oversized(cs, data, cout, tout),
-        Op::Close => goes_on(m, p, scalar, cout, cs2, tout) || closes_in_handshake(cout, tout),
+        Op::Send(data) => goes_on(m, p, scalar, cout, cs2, tout) || oversized(cs, data, cout, tout)
+            || catches_up(p, m, scalar, cs, ts, cout, cs2, tout),
+        Op::Close => goes_on(m, p, scalar, cout, cs2, tout) || closes_in_handshake(cout, tout)
+            || closes_owing(p, m, scalar, cs, ts, cout, cs2, tout),
     }
 }
 
@@ -1529,6 +1556,7 @@ pub proof fn lemma_handoff(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::
 /// A record on which the bootstrap establishes or retries is handshake
 /// bytes the crate reads as messages: the record-level theorem's
 /// `buffer_agrees` holds of them.
+#[verifier::rlimit(30)]
 pub proof fn lemma_hs_path(p: Primitives, s: crate::hello::bootstrap_spec::State, cl: ClientConnection, b: Seq<u8>)
     requires
         super::bootstrap::record_agrees(p, s, cl, b),
@@ -1542,6 +1570,10 @@ pub proof fn lemma_hs_path(p: Primitives, s: crate::hello::bootstrap_spec::State
         &&& super::bootstrap::buffer_agrees(p, s, cl, bf)
     }),
 {
+    hide(super::bootstrap::buffer_agrees);
+    hide(super::bootstrap::buffer_step);
+    hide(crate::transcription::connection::process_handshake_bytes);
+    hide(crate::transcription::middlebox::client_receive_stream);
 }
 
 /// The ServerHello in its own record: the handoff ([`lemma_handoff`]).
@@ -2418,6 +2450,7 @@ pub proof fn lemma_app_case(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
         cs.stage is App,
+        app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
         whole(ts.buffer + chunk),
     ensures app_case(m, p, cs.stage->App_0, ts, chunk),
 {
@@ -2454,6 +2487,7 @@ pub proof fn lemma_app_continue(m: Models, p: Primitives, scalar: Seq<u8>, cs: C
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
         cs.stage is App,
+        app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
         whole(ts.buffer + chunk),
         app_case(m, p, cs.stage->App_0, ts, chunk),
         crate::connection::post_handshake_spec::step(m.crypto, m.cipher, cs.stage->App_0,
@@ -2493,7 +2527,8 @@ pub proof fn lemma_app_continue(m: Models, p: Primitives, scalar: Seq<u8>, cs: C
     assert(ts.write_closed == (s.phase == crate::connection::post_handshake_spec::Phase::WriteClosed));
     if s.phase == crate::connection::post_handshake_spec::Phase::Open && conn2.key_update_owed {
         assert(Seq::<u8>::empty() + flat(r.0.wires) =~= flat(r.0.wires));
-        assert(settles(p, cs2, cout, tout));
+        assert(app_owed(p, r.1, Status::Open, (cs.held + chunk).skip(r.2 as int), tout.after));
+        assert(settles(m, p, scalar, cs2, cout, tout));
     } else {
         assert(super::post_handshake::settle(p, r.1, conn2) == (Seq::<Seq<u8>>::empty(), conn2));
         assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
@@ -2511,6 +2546,7 @@ pub proof fn lemma_app_fail(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
         cs.stage is App,
+        app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
         whole(ts.buffer + chunk),
         app_case(m, p, cs.stage->App_0, ts, chunk),
         ({
@@ -2579,6 +2615,7 @@ pub proof fn lemma_app_closed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
         cs.stage is App,
+        app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
         whole(ts.buffer + chunk),
         app_case(m, p, cs.stage->App_0, ts, chunk),
         ({
@@ -2645,6 +2682,7 @@ pub proof fn lemma_app_whole(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSta
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
         cs.stage is App,
+        app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
         whole(ts.buffer + chunk),
     ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
 {
@@ -2671,6 +2709,7 @@ pub proof fn lemma_app_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
         cs.stage is App,
+        app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
     ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
 {
     hide(super::post_handshake::post_agrees);
@@ -2741,6 +2780,7 @@ pub proof fn lemma_send_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState
     requires
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App ==> app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
     ensures op_agrees(m, p, scalar, cs, ts, Op::Send(data)),
 {
     hide(super::post_handshake::post_agrees);
@@ -2804,6 +2844,7 @@ pub proof fn lemma_close_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
     requires
         hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App ==> app_agrees(cs.stage->App_0, cs.status, cs.held, ts),
     ensures op_agrees(m, p, scalar, cs, ts, Op::Close),
 {
     hide(super::post_handshake::post_agrees);
@@ -2873,11 +2914,21 @@ pub proof fn lemma_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts:
         Op::Feed(chunk) => match cs.stage {
             Stage::Hello(_, _) => lemma_hello_feed(m, p, scalar, cs, ts, chunk),
             Stage::Flight(_) => lemma_flight_feed(m, p, scalar, cs, ts, chunk),
-            Stage::App(_) => lemma_app_feed(m, p, scalar, cs, ts, chunk),
+            Stage::App(s) => if app_agrees(s, cs.status, cs.held, ts) {
+                lemma_app_feed(m, p, scalar, cs, ts, chunk)
+            } else {
+                lemma_owed_feed(m, p, scalar, cs, ts, chunk)
+            },
             Stage::Ended => {},
         },
-        Op::Send(data) => lemma_send_op(m, p, scalar, cs, ts, data),
-        Op::Close => lemma_close_op(m, p, scalar, cs, ts),
+        Op::Send(data) => {
+            let owed = cs.stage is App && !app_agrees(cs.stage->App_0, cs.status, cs.held, ts);
+            if owed { lemma_owed_send(m, p, scalar, cs, ts, data) } else { lemma_send_op(m, p, scalar, cs, ts, data) }
+        },
+        Op::Close => {
+            let owed = cs.stage is App && !app_agrees(cs.stage->App_0, cs.status, cs.held, ts);
+            if owed { lemma_owed_close(m, p, scalar, cs, ts) } else { lemma_close_op(m, p, scalar, cs, ts) }
+        },
     }
 }
 
@@ -3013,6 +3064,679 @@ pub proof fn theorem_driver_equivalence(m: Models, p: Primitives)
     assert forall|scalar: Seq<u8>, cs: CState, ts: TState, ops: Seq<Op>|
         #[trigger] driver_agrees(m, p, scalar, cs, ts) implies #[trigger] run_agrees(m, p, scalar, cs, ts, ops) by {
         lemma_run(m, p, scalar, cs, ts, ops);
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// An owed KeyUpdate: the frame lemma.
+// ---------------------------------------------------------------------------
+
+/// `c1` is `c2` but for its write side: its `send`, and an owed KeyUpdate
+/// at least when `c2` owes one.
+pub open spec fn but_send(c1: Connection, c2: Connection) -> bool {
+    c1 == (Connection { send: c1.send, key_update_owed: c1.key_update_owed || c2.key_update_owed, ..c2 })
+}
+
+/// A result of reading, as it is for a connection whose write side is
+/// `send` and which owed a KeyUpdate when `owed`: the same, with that write
+/// side, and the KeyUpdate owed if it was or the reading made it so.
+pub open spec fn lift(t: Receive, send: Protection, owed: bool) -> Receive {
+    match t {
+        Receive::Continue(pr) => Receive::Continue(crate::transcription::connection::Progress {
+            connection: Connection { send, key_update_owed: owed || pr.connection.key_update_owed, ..pr.connection },
+            ..pr
+        }),
+        other => other,
+    }
+}
+
+/// In CONNECTED, A.1's step on a message goes on only in CONNECTED, with no
+/// action, or with a KeyUpdate's (`post_handshake::ku_actions`).
+pub proof fn lemma_connected_step(p: Primitives, hs: crate::transcription::state_machine::ClientHandshake, raw: Seq<u8>)
+    requires hs.state == crate::transcription::state_machine::ClientState::Connected,
+    ensures ({
+        let step = crate::transcription::state_machine::receive_handshake_message(p, hs, raw);
+        step is Proceed ==> {
+            &&& step->handshake == hs
+            &&& (step->actions == Seq::<crate::transcription::state_machine::Action>::empty()
+                || step->actions == super::post_handshake::ku_actions(true)
+                || step->actions == super::post_handshake::ku_actions(false))
+        }
+    }),
+{
+}
+
+/// **The frame lemma, for handshake bytes.** In CONNECTED, the
+/// transcription's processing of handshake bytes does not read the write
+/// side or the owed KeyUpdate: from `c1` (`c2` but for those) it is
+/// [`lift`] of the processing from `c2`.
+pub proof fn lemma_phb_frame(p: Primitives, c1: Connection, c2: Connection, buf: Seq<u8>)
+    requires
+        but_send(c1, c2),
+        c2.handshake.state == crate::transcription::state_machine::ClientState::Connected,
+    ensures
+        crate::transcription::connection::process_handshake_bytes(p, c1, buf)
+            == lift(crate::transcription::connection::process_handshake_bytes(p, c2, buf), c1.send, c1.key_update_owed),
+    decreases buf.len(),
+{
+    match crate::transcription::key_exchange::read_handshake_header(buf) {
+        None => {},
+        Some(header) => {
+            if buf.len() >= 4 + header.length {
+                let raw = buf.subrange(0, (4 + header.length) as int);
+                let rest = buf.subrange((4 + header.length) as int, buf.len() as int);
+                lemma_connected_step(p, c2.handshake, raw);
+                let step = crate::transcription::state_machine::receive_handshake_message(p, c2.handshake, raw);
+                if let crate::transcription::state_machine::HandshakeStep::Proceed { handshake, actions, receive_key_changes } = step {
+                    if !(receive_key_changes && rest.len() != 0) {
+                        let d1 = Connection { handshake, ..c1 };
+                        let d2 = Connection { handshake, ..c2 };
+                        let (a1, s1) = crate::transcription::connection::apply_actions(p, d1, actions);
+                        let (a2, s2) = crate::transcription::connection::apply_actions(p, d2, actions);
+                        if actions == Seq::<crate::transcription::state_machine::Action>::empty() {
+                            assert(a1 == d1 && a2 == d2);
+                        } else if actions == super::post_handshake::ku_actions(true) {
+                            super::post_handshake::lemma_ku_actions(p, d1, true);
+                            super::post_handshake::lemma_ku_actions(p, d2, true);
+                        } else {
+                            super::post_handshake::lemma_ku_actions(p, d1, false);
+                            super::post_handshake::lemma_ku_actions(p, d2, false);
+                        }
+                        assert(but_send(a1, a2));
+                        assert(s1 == s2);
+                        lemma_phb_frame(p, a1, a2, rest);
+                        match crate::transcription::connection::process_handshake_bytes(p, a2, rest) {
+                            Receive::Continue(pr) => {
+                                assert(s1 =~= Seq::<Seq<u8>>::empty());
+                            },
+                            _ => {},
+                        }
+                    }
+                }
+            }
+        },
+    }
+}
+
+/// **The frame lemma, for one whole record.** In CONNECTED, the
+/// transcription's reading of a record from `c1` (`c2` but for its write
+/// side and owed KeyUpdate) is [`lift`] of its reading from `c2`.
+#[verifier::rlimit(100)]
+pub proof fn lemma_record_frame(p: Primitives, c1: Connection, c2: Connection, b: Seq<u8>)
+    requires
+        but_send(c1, c2),
+        c2.handshake.state == crate::transcription::state_machine::ClientState::Connected,
+        super::bootstrap::whole_record(b),
+    ensures
+        super::bootstrap::one_record(p, c1, b) == lift(super::bootstrap::one_record(p, c2, b), c1.send, c1.key_update_owed),
+{
+    hide(crate::transcription::connection::process_handshake_bytes);
+    let header = crate::transcription::record::read_record_header(b)->Some_0;
+    let fr = super::bootstrap::fragment(b);
+    if crate::transcription::connection::record_length_failure(c2, header) is None {
+        if !c2.read_closed && header.content_type != crate::transcription::record::ct_change_cipher_spec() {
+            if c2.receive is Unprotected && header.content_type == crate::transcription::record::ct_handshake()
+                && fr.len() != 0 {
+                lemma_phb_frame(p, c1, c2, c2.handshake_fragments + fr);
+            }
+            if let Protection::Protected(traffic) = c2.receive {
+                if header.content_type == crate::transcription::record::ct_application_data()
+                    && traffic.sequence_number <= crate::transcription::record::max_sequence_number() {
+                    let additional = crate::transcription::record::additional_data(
+                        crate::transcription::record::ct_application_data(), header.legacy_record_version, fr.len());
+                    let nonce = crate::transcription::record::per_record_nonce(traffic.iv, traffic.sequence_number);
+                    if let Some(cleartext) = (p.aead_decrypt)(traffic.key, nonce, additional, fr) {
+                        if let Some((content, content_type)) = crate::transcription::record::read_inner_plaintext(cleartext) {
+                            let r2 = Protection::Protected(crate::transcription::record::TrafficState {
+                                sequence_number: traffic.sequence_number + 1, ..traffic });
+                            let e1 = Connection { receive: r2, ..c1 };
+                            let e2 = Connection { receive: r2, ..c2 };
+                            if content_type == crate::transcription::record::ct_handshake() && content.len() != 0 {
+                                lemma_phb_frame(p, e1, e2, e2.handshake_fragments + content);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The transcription's division of a stream reads only the read side.
+pub proof fn lemma_split_frame(c1: Connection, c2: Connection, w: Seq<u8>)
+    requires c1.receive == c2.receive,
+    ensures super::framing::split(c1, w) == super::framing::split(c2, w),
+    decreases w.len(),
+{
+    if let Some(header) = crate::transcription::record::read_record_header(w) {
+        if crate::transcription::connection::record_length_failure(c1, header) is None && w.len() >= 5 + header.length {
+            lemma_split_frame(c1, c2, w.subrange((5 + header.length) as int, w.len() as int));
+        }
+    }
+}
+
+/// The transcription's KeyUpdate send (and so `post_handshake::settle`)
+/// reads only the write side: two connections with the same `send` send
+/// the same records and end with the same `send`.
+pub proof fn lemma_send_key_update_frame(p: Primitives, c1: Connection, c2: Connection, request: nat)
+    requires c1.send == c2.send,
+    ensures
+        crate::transcription::connection::send_key_update(p, c1, request).0
+            == crate::transcription::connection::send_key_update(p, c2, request).0,
+        crate::transcription::connection::send_key_update(p, c1, request).1
+            == (Connection { send: crate::transcription::connection::send_key_update(p, c2, request).1.send, ..c1 }),
+{
+}
+
+// ---------------------------------------------------------------------------
+// An owed KeyUpdate: the lag, and the operations from it.
+// ---------------------------------------------------------------------------
+
+/// The transcription's connection once it has sent the KeyUpdate it owes
+/// (`post_handshake::settle`): the crate's counterpart while it lags.
+pub open spec fn settled(p: Primitives, s: crate::connection::post_handshake_spec::State, c: Connection) -> Connection {
+    super::post_handshake::settle(p, s, c).1
+}
+
+/// What [`settled`] is: the owed KeyUpdate's records written from `c`'s
+/// write side, and `c` with the write side after them and nothing owed.
+pub proof fn lemma_settled(p: Primitives, s: crate::connection::post_handshake_spec::State, c: Connection)
+    requires
+        s.phase == crate::connection::post_handshake_spec::Phase::Open,
+        c.key_update_owed,
+    ensures
+        settled(p, s, c) == (Connection { send: settled(p, s, c).send, key_update_owed: false, ..c }),
+        but_send(c, settled(p, s, c)),
+{
+    lemma_send_key_update_frame(p, Connection { key_update_owed: false, ..c }, Connection { key_update_owed: false, ..c },
+        crate::transcription::post_handshake::update_not_requested());
+}
+
+/// The settled connection depends on the owing one only through its write
+/// side (`settle` sends from the write side and changes nothing else).
+pub proof fn lemma_settled_frame(p: Primitives, s1: crate::connection::post_handshake_spec::State,
+    s2: crate::connection::post_handshake_spec::State, c1: Connection, c2: Connection)
+    requires
+        s1.phase == crate::connection::post_handshake_spec::Phase::Open,
+        s2.phase == crate::connection::post_handshake_spec::Phase::Open,
+        c1.key_update_owed,
+        c2.key_update_owed,
+        c1.send == c2.send,
+    ensures
+        super::post_handshake::settle(p, s1, c1).0 == super::post_handshake::settle(p, s2, c2).0,
+        settled(p, s1, c1) == (Connection { send: settled(p, s2, c2).send, key_update_owed: false, ..c1 }),
+{
+    lemma_send_key_update_frame(p, Connection { key_update_owed: false, ..c1 }, Connection { key_update_owed: false, ..c2 },
+        crate::transcription::post_handshake::update_not_requested());
+}
+
+/// **The lag** (what [`settles`] leaves): the application stage, open, and
+/// the transcription's client owing the KeyUpdate the crate has already
+/// sent. The crate's state agrees with the transcription's once it has sent
+/// it ([`settled`]); the bytes held and the status are as in
+/// [`app_agrees`].
+pub open spec fn app_owed(p: Primitives, s: crate::connection::post_handshake_spec::State, status: Status,
+    held: Seq<u8>, ts: TState) -> bool
+{
+    let conn = ts.client.connection;
+    &&& s.phase == crate::connection::post_handshake_spec::Phase::Open
+    &&& conn.key_update_owed
+    &&& super::post_handshake::post_agrees(s, settled(p, s, conn))
+    &&& ts.buffer == held
+    &&& !ts.write_closed
+    &&& status == Status::Open
+}
+
+/// **Catching up** (the end of [`settles`]' lag): application data sent
+/// while the transcription owes its KeyUpdate. The transcription sends the
+/// owed KeyUpdate first (`send_application_data`: "prior to sending its
+/// next Application Data record", §4.6.3), the very records the crate sent
+/// when it read the request, then the same record as the crate; both go
+/// on, and the states agree again.
+pub open spec fn catches_up(p: Primitives, m: Models, scalar: Seq<u8>, cs: CState, ts: TState, cout: Step, cs2: CState,
+    tout: TOut) -> bool
+{
+    &&& cs.stage matches Stage::App(s)
+    &&& tout.send == flat(super::post_handshake::settle(p, s, ts.client.connection).0) + cout.send
+    &&& cout.deliver == tout.deliver
+    &&& tout.end is Running
+    &&& driver_agrees(m, p, scalar, cs2, tout.after)
+}
+
+/// **Stated difference, a second `update_requested`** while the
+/// transcription owes its KeyUpdate (§4.6.3; `post_handshake::settle`'s
+/// consequence): the crate answers this one too, at once; the
+/// transcription, which owes one already, still owes one. From here the
+/// two write sides are a generation apart.
+pub open spec fn answers_twice(p: Primitives, cs: CState, ts: TState, chunk: Seq<u8>, cout: Step, tout: TOut) -> bool {
+    let conn = ts.client.connection;
+    &&& cs.stage matches Stage::App(s)
+    &&& conn.key_update_owed
+    &&& ({
+        let t = crate::transcription::connection::receive_stream(p, settled(p, s, conn), front(ts.buffer + chunk)).0;
+        &&& t is Continue
+        &&& t->Continue_0.connection.key_update_owed
+        &&& cout.stage matches Stage::App(s2)
+        &&& cout.send == flat(super::post_handshake::settle(p, cout.stage->App_0, t->Continue_0.connection).0)
+    })
+    &&& cout.deliver == tout.deliver
+    &&& tout.end is Running
+    &&& tout.send.len() == 0
+    &&& tout.after.client.connection.key_update_owed
+}
+
+/// **Stated difference, a failure while a KeyUpdate is owed**: the crate
+/// fails on the record as the post-handshake theorem says of the settled
+/// connection (`post_handshake::record_agrees` from [`settled`]), and the
+/// transcription reads it as from the settled connection
+/// ([`lemma_record_frame`]); but the crate's alert goes out under the key
+/// after the KeyUpdate it sent, the transcription's under the key before
+/// the one it owes.
+pub open spec fn fails_owing(m: Models, p: Primitives, cs: CState, ts: TState, chunk: Seq<u8>, cout: Step) -> bool {
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    let conn = ts.client.connection;
+    &&& crate_fails(cout)
+    &&& whole(w)
+    &&& cs.stage matches Stage::App(s)
+    &&& conn.key_update_owed
+    &&& ({
+        let cset = settled(p, s, conn);
+        let r = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
+            crate::connection::post_handshake_spec::Input::Bytes(b));
+        let t = crate::transcription::connection::receive_stream(p, cset, b).0;
+        &&& r.0.end is Fail
+        &&& super::post_handshake::record_agrees(p, m.cipher, s, cset, b, r, t)
+        &&& crate::transcription::connection::receive_stream(p, conn, b).0 == lift(t, conn.send, true)
+    })
+}
+
+/// **Stated difference, the server's close_notify while a KeyUpdate is
+/// owed**: the crate answers with the transcription's `close_write` record
+/// of the settled connection (under the key after the KeyUpdate it sent)
+/// and ends; the transcription stops reading.
+pub open spec fn peer_closed_owing(p: Primitives, cs: CState, ts: TState, cout: Step, tout: TOut) -> bool {
+    &&& cs.stage matches Stage::App(s)
+    &&& ts.client.connection.key_update_owed
+    &&& cout.stage is Ended
+    &&& cout.status == Status::Closed
+    &&& cout.send == crate::transcription::connection::close_write(p, settled(p, s, ts.client.connection))
+    &&& cout.deliver == tout.deliver
+    &&& tout.end is Running
+    &&& tout.send.len() == 0
+    &&& tout.after.client.connection.read_closed
+}
+
+/// **Stated difference, our close while a KeyUpdate is owed** (§4.6.3 asks
+/// for it only before Application Data): both close the write side, the
+/// crate's close_notify under the key after the KeyUpdate it sent, the
+/// transcription's under the key before the one it owes, which it never
+/// sends. Both go on reading, in agreeing states.
+pub open spec fn closes_owing(p: Primitives, m: Models, scalar: Seq<u8>, cs: CState, ts: TState, cout: Step, cs2: CState,
+    tout: TOut) -> bool
+{
+    &&& cs.stage matches Stage::App(s)
+    &&& ts.client.connection.key_update_owed
+    &&& cout.send == crate::transcription::connection::close_write(p, settled(p, s, ts.client.connection))
+    &&& tout.send == crate::transcription::connection::close_write(p, ts.client.connection)
+    &&& cout.deliver == tout.deliver
+    &&& tout.end is Running
+    &&& driver_agrees(m, p, scalar, cs2, tout.after)
+}
+
+/// The transcription reads a whole record while it owes a KeyUpdate as
+/// from the settled connection, lifted to its own write side.
+pub proof fn lemma_owed_read(p: Primitives, s: crate::connection::post_handshake_spec::State, ts: TState, chunk: Seq<u8>)
+    requires
+        s.phase == crate::connection::post_handshake_spec::Phase::Open,
+        ts.client.connection.key_update_owed,
+        super::post_handshake::post_agrees(s, settled(p, s, ts.client.connection)),
+        !ts.write_closed,
+        whole(ts.buffer + chunk),
+    ensures ({
+        let conn = ts.client.connection;
+        let cset = settled(p, s, conn);
+        let w = ts.buffer + chunk;
+        let b = front(w);
+        let t = crate::transcription::connection::receive_stream(p, cset, b).0;
+        &&& super::bootstrap::whole_record(b)
+        &&& crate::transcription::connection::receive_stream(p, conn, b).0 == lift(t, conn.send, true)
+        &&& t == lift(t, cset.send, false)
+        &&& tfeed(p, ts, chunk) == match super::dispatcher::lifted(ts.client, lift(t, conn.send, true)) {
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+            ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+            ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+                send: flat(records_to_send), deliver: application_data,
+                after: TState { client, buffer: w.skip((5 + super::bootstrap::length(w)) as int), ..ts },
+                end: TEnd::Running },
+        }
+    }),
+{
+    let conn = ts.client.connection;
+    let cset = settled(p, s, conn);
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    lemma_settled(p, s, conn);
+    super::post_handshake::lemma_receive_open_facts(s, cset);
+    lemma_tfeed_whole(p, ts, chunk);
+    super::framing::lemma_client_lifted(p, ts.client, b);
+    super::bootstrap::lemma_stream_one(p, conn, b);
+    super::bootstrap::lemma_stream_one(p, cset, b);
+    lemma_record_frame(p, conn, cset, b);
+    lemma_record_frame(p, cset, cset, b);
+}
+
+/// The facts of a whole record read while a KeyUpdate is owed: the crate's
+/// step on the stream is its step on the record, the post-handshake
+/// theorem holds of it against the settled connection, and the
+/// transcription reads it as from the settled connection.
+pub open spec fn owed_case(m: Models, p: Primitives, s: crate::connection::post_handshake_spec::State, ts: TState,
+    chunk: Seq<u8>) -> bool
+{
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    let conn = ts.client.connection;
+    let cset = settled(p, s, conn);
+    let r = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
+        crate::connection::post_handshake_spec::Input::Bytes(w));
+    let rb = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
+        crate::connection::post_handshake_spec::Input::Bytes(b));
+    let t = crate::transcription::connection::receive_stream(p, cset, b).0;
+    &&& r.0 == rb.0
+    &&& r.1 == rb.1
+    &&& super::post_handshake::record_agrees(p, m.cipher, s, cset, b, rb, t)
+    &&& super::post_handshake::outcome_agrees(p, s, cset, rb.0, rb.1, t, match rb.0.end {
+        crate::connection::post_handshake_spec::End::Fail(a) => super::post_handshake::fail_agrees(m.cipher, s, b, t, a),
+        _ => true })
+    &&& (r.0.end is Continue ==> r.2 == 5 + super::bootstrap::length(w) && r.1.phase == s.phase)
+    &&& (r.0.end is PeerClosed ==> r.1.phase == crate::connection::post_handshake_spec::Phase::ReadClosed)
+    &&& !(r.0.end is Close)
+    &&& crate::transcription::connection::receive_stream(p, conn, b).0 == lift(t, conn.send, true)
+    &&& t == lift(t, cset.send, false)
+    &&& cset == (Connection { send: cset.send, key_update_owed: false, ..conn })
+    &&& tfeed(p, ts, chunk) == match super::dispatcher::lifted(ts.client, lift(t, conn.send, true)) {
+        ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+        ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+        ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+            send: flat(records_to_send), deliver: application_data,
+            after: TState { client, buffer: w.skip((5 + super::bootstrap::length(w)) as int), ..ts },
+            end: TEnd::Running },
+    }
+}
+
+/// [`owed_case`].
+pub proof fn lemma_owed_case(m: Models, p: Primitives, s: crate::connection::post_handshake_spec::State, status: Status,
+    held: Seq<u8>, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        app_owed(p, s, status, held, ts),
+        whole(ts.buffer + chunk),
+    ensures owed_case(m, p, s, ts, chunk),
+{
+    hide(super::post_handshake::record_agrees);
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    let c = m.crypto;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let cset = settled(p, s, conn);
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    lemma_settled(p, s, conn);
+    super::post_handshake::lemma_receive_open_facts(s, cset);
+    super::framing::lemma_post_whole(c, f, p, s, cset, w);
+    lemma_owed_read(p, s, ts, chunk);
+    lemma_continue_phase(c, f, s, w);
+    lemma_closed_phase(c, f, s, w);
+    let rb = crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(b));
+    let t = crate::transcription::connection::receive_stream(p, cset, b).0;
+    assert(super::post_handshake::outcome_agrees(p, s, cset, rb.0, rb.1, t, match rb.0.end {
+        crate::connection::post_handshake_spec::End::Fail(a) => super::post_handshake::fail_agrees(f, s, b, t, a),
+        _ => true })) by {
+        reveal(super::post_handshake::record_agrees);
+    }
+}
+
+/// A whole record read while a KeyUpdate is owed.
+#[verifier::rlimit(100)]
+pub proof fn lemma_owed_whole(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        cs.stage is App,
+        app_owed(p, cs.stage->App_0, cs.status, cs.held, ts),
+        whole(ts.buffer + chunk),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(super::post_handshake::record_agrees);
+    hide(super::post_handshake::fail_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(exhausted_epoch);
+    hide(peer_closed);
+    hide(settles);
+    hide(owed_case);
+    let s = cs.stage->App_0;
+    let c = m.crypto;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let cset = settled(p, s, conn);
+    let w = ts.buffer + chunk;
+    assert(w =~= cs.held + chunk);
+    let n = 5 + super::bootstrap::length(w);
+    let b = front(w);
+    lemma_owed_case(m, p, s, cs.status, cs.held, ts, chunk);
+    reveal(owed_case);
+    let r = crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(w));
+    let t = crate::transcription::connection::receive_stream(p, cset, b).0;
+    let cout = crate::connection::driver_spec::carry_out(f, r.0, r.1);
+    let cs2 = CState { stage: cout.stage, status: cout.status, held: (cs.held + chunk).skip(r.2 as int) };
+    assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+    let tout = tfeed(p, ts, chunk);
+    assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
+    lemma_concat_flat(r.0.wires);
+    match r.0.end {
+        crate::connection::post_handshake_spec::End::Continue => {
+            let pr = t->Continue_0;
+            let c2 = pr.connection;
+            assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+            if c2.key_update_owed {
+                assert(Seq::<u8>::empty() + flat(r.0.wires) =~= flat(r.0.wires));
+                assert(answers_twice(p, cs, ts, chunk, cout, tout));
+            } else {
+                // The lag is kept exactly: the transcription still owes the same KeyUpdate.
+                assert(super::post_handshake::settle(p, r.1, c2) == (Seq::<Seq<u8>>::empty(), c2));
+                assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
+                assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+                let conn2 = Connection { send: conn.send, key_update_owed: true, ..c2 };
+                assert(c2.send == cset.send);
+                lemma_settled_frame(p, r.1, s, conn2, conn);
+                assert(settled(p, r.1, conn2) == c2);
+                assert(app_owed(p, r.1, Status::Open, w.skip(n as int), TState { client: ClientConnection {
+                    connection: conn2, ..ts.client }, buffer: w.skip(n as int), ..ts }));
+                assert(goes_on(m, p, scalar, cout, cs2, tout));
+            }
+        },
+        crate::connection::post_handshake_spec::End::Fail(a) => {
+            assert(fails_owing(m, p, cs, ts, chunk, cout));
+        },
+        crate::connection::post_handshake_spec::End::PeerAlert(d) => {
+            assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
+            assert(r.0.delivered =~= Seq::<u8>::empty());
+            assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+            assert(ends_alike(cout, tout));
+        },
+        crate::connection::post_handshake_spec::End::PeerClosed => {
+            let pr = t->Continue_0;
+            let c2 = pr.connection;
+            assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+            reveal(super::post_handshake::post_agrees);
+            assert(super::post_handshake::settle(p, r.1, c2) == (Seq::<Seq<u8>>::empty(), c2));
+            super::post_handshake::lemma_close(f, p, r.1, c2);
+            let rc = crate::connection::post_handshake_spec::close(f, r.1);
+            lemma_concat_flat(rc.0.wires);
+            super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, c2),
+                crate::transcription::connection::close_write(p, c2));
+            assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
+            assert(Seq::<u8>::empty() + crate::transcription::connection::close_write(p, c2)
+                =~= crate::transcription::connection::close_write(p, c2));
+            assert(crate::transcription::connection::close_write(p, c2)
+                == crate::transcription::connection::close_write(p, cset));
+            assert(peer_closed_owing(p, cs, ts, cout, tout));
+        },
+        crate::connection::post_handshake_spec::End::Close => {},
+    }
+}
+
+/// No whole record yet while a KeyUpdate is owed: both wait (the lag kept),
+/// or the crate rejects early or its epoch is exhausted.
+#[verifier::rlimit(60)]
+pub proof fn lemma_owed_partial(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        cs.stage is App,
+        app_owed(p, cs.stage->App_0, cs.status, cs.held, ts),
+        !whole(ts.buffer + chunk),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(rejects_record);
+    hide(retry_then_fails);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(settles);
+    hide(fails_owing);
+    hide(peer_closed_owing);
+    hide(answers_twice);
+    let s = cs.stage->App_0;
+    let c = m.crypto;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let cset = settled(p, s, conn);
+    let w = ts.buffer + chunk;
+    assert(w =~= cs.held + chunk);
+    lemma_settled(p, s, conn);
+    super::post_handshake::lemma_receive_open_facts(s, cset);
+    super::framing::lemma_post_partial(c, f, p, s, cset, w);
+    lemma_tfeed_partial(p, ts, chunk);
+    lemma_split_frame(conn, cset, w);
+    super::framing::lemma_stream_partial(p, cset, w);
+    let r = crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(w));
+    let cout = crate::connection::driver_spec::carry_out(f, r.0, r.1);
+    let cs2 = CState { stage: cout.stage, status: cout.status, held: (cs.held + chunk).skip(r.2 as int) };
+    assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+    let tout = tfeed(p, ts, chunk);
+    if super::framing::post_waits(r) {
+        assert(cs2.held =~= w);
+        assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+        lemma_concat_flat(Seq::<Seq<u8>>::empty());
+        assert(goes_on(m, p, scalar, cout, cs2, tout));
+    } else {
+        lemma_concat_flat(r.0.wires);
+        let a = r.0.end->Fail_0;
+        if super::post_handshake::exhausted(s) && a == crate::spec::INTERNAL_ERROR {
+            assert(exhausted_epoch(cs, cout, tout) || rejects_early(cs, ts, chunk, cout, tout));
+        } else {
+            assert(rejects_early(cs, ts, chunk, cout, tout));
+        }
+    }
+}
+
+/// Application data while a KeyUpdate is owed: the transcription catches
+/// up ([`catches_up`]), or the data is above 2^14 octets ([`oversized`]).
+#[verifier::rlimit(80)]
+pub proof fn lemma_owed_send(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, data: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        cs.stage is App,
+        app_owed(p, cs.stage->App_0, cs.status, cs.held, ts),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Send(data)),
+{
+    hide(super::post_handshake::post_agrees);
+    let s = cs.stage->App_0;
+    let c = m.crypto;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let cset = settled(p, s, conn);
+    lemma_settled(p, s, conn);
+    super::post_handshake::lemma_receive_open_facts(s, cset);
+    let (cout, cs2) = cop(m, scalar, cs, Op::Send(data));
+    let tout = top(p, ts, Op::Send(data));
+    if data.len() <= crate::spec::MAX_PLAINTEXT {
+        super::post_handshake::lemma_send_application(c, f, p, s, cset, data);
+        lemma_send_phase(c, f, s, data);
+        let r = crate::connection::post_handshake_spec::send_application(c, f, s, data);
+        lemma_concat_flat(r.0.wires);
+        assert(Seq::<u8>::empty() + flat(r.0.wires) =~= flat(r.0.wires));
+        assert(r.0.delivered =~= Seq::<u8>::empty());
+        // The transcription sends the owed KeyUpdate, then the record it
+        // would send from the settled connection.
+        assert(crate::transcription::record::fragment_blocks(data) == seq![data]);
+        let ku = super::post_handshake::settle(p, s, conn);
+        let (records, send2) = crate::transcription::connection::send_blocks(p, cset.send,
+            crate::transcription::record::ct_application_data(), crate::transcription::state_machine::other_record_version(),
+            crate::transcription::record::fragment_blocks(data));
+        assert(crate::transcription::connection::send_application_data(p, cset, data)
+            == crate::transcription::connection::SendResult::Sent(records, Connection { send: send2, ..cset }));
+        assert(crate::transcription::connection::send_application_data(p, conn, data)
+            == crate::transcription::connection::SendResult::Sent(ku.0 + records, Connection { send: send2, ..cset }));
+        lemma_flat_append(ku.0, records);
+        assert(catches_up(p, m, scalar, cs, ts, cout, cs2, tout));
+    } else {
+        super::post_handshake::lemma_oversized(c, f, p, s, cset, data);
+        assert(oversized(cs, data, cout, tout));
+    }
+}
+
+/// Our close while a KeyUpdate is owed ([`closes_owing`]).
+#[verifier::rlimit(60)]
+pub proof fn lemma_owed_close(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState)
+    requires
+        hypotheses(m, p),
+        cs.stage is App,
+        app_owed(p, cs.stage->App_0, cs.status, cs.held, ts),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Close),
+{
+    let s = cs.stage->App_0;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let cset = settled(p, s, conn);
+    lemma_settled(p, s, conn);
+    super::post_handshake::lemma_receive_open_facts(s, cset);
+    let (cout, cs2) = cop(m, scalar, cs, Op::Close);
+    let tout = top(p, ts, Op::Close);
+    super::post_handshake::lemma_close(f, p, s, cset);
+    let r = crate::connection::post_handshake_spec::close(f, s);
+    lemma_concat_flat(r.0.wires);
+    super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, cset),
+        crate::transcription::connection::close_write(p, cset));
+    assert(Seq::<u8>::empty() + crate::transcription::connection::close_write(p, cset)
+        =~= crate::transcription::connection::close_write(p, cset));
+    assert(r.0.delivered =~= Seq::<u8>::empty());
+    assert(r.1.phase == crate::connection::post_handshake_spec::Phase::WriteClosed);
+    assert(super::post_handshake::post_agrees(r.1, conn));
+    assert(closes_owing(p, m, scalar, cs, ts, cout, cs2, tout));
+}
+
+/// Feeding a chunk while a KeyUpdate is owed.
+pub proof fn lemma_owed_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        cs.stage is App,
+        app_owed(p, cs.stage->App_0, cs.status, cs.held, ts),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    if whole(ts.buffer + chunk) {
+        lemma_owed_whole(m, p, scalar, cs, ts, chunk);
+    } else {
+        lemma_owed_partial(m, p, scalar, cs, ts, chunk);
     }
 }
 
