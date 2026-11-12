@@ -71,6 +71,7 @@
 
 use super::classes::{Lb, Props};
 use super::collapse::{Kind, Unit};
+use super::state::Side;
 use super::uax14::{Break, Rule, absorbed, breaks_with_rules, effective};
 use clazel_style::cascade::computed::{OverflowWrap, WhiteSpace, WordBreak};
 
@@ -195,130 +196,116 @@ pub fn wraps_from_breaks(units: &[Unit], props: &[Props], rules: &[(Break, Rule)
         .collect();
     let absorbed = absorbed(&props);
     let effective = effective(&props, &absorbed);
-    let analysis = Analysis {
-        units,
-        props: &props,
-        absorbed: &absorbed,
-        effective: &effective,
-    };
-    (0..units.len())
-        .map(|i| {
+    let sides: Vec<Side> = units
+        .iter()
+        .zip(&props)
+        .zip(absorbed.iter().zip(&effective))
+        .map(|((u, p), (a, e))| Side {
+            unit: *u,
+            class: p.class,
+            absorbed: *a,
+            effective: e.class,
+        })
+        .collect();
+    sides
+        .iter()
+        .enumerate()
+        .map(|(i, here)| {
             let (b, rule) = rules
                 .get(i)
                 .copied()
                 .unwrap_or((Break::Mandatory, Rule::Lb3));
-            analysis.decide(i, b, rule)
+            wrap_at(here, sides.get(i.saturating_add(1)), b, rule)
         })
         .collect()
 }
 
-/// What [`Analysis::decide`] reads: the units, and UAX #14's view of them.
-struct Analysis<'a> {
-    units: &'a [Unit],
-    /// Per unit, after LB1.
-    props: &'a [Props],
-    /// Per unit, LB9.
-    absorbed: &'a [bool],
-    /// Per unit, after LB9 and LB10.
-    effective: &'a [Props],
-}
-
-impl Analysis<'_> {
-    /// The line break possible after unit `i`, given UAX #14's decision `b` by
-    /// `rule` there.
-    fn decide(&self, i: usize, b: Break, rule: Rule) -> Wrap {
-        let props = self.props;
-        let absorbed = self.absorbed;
-        let effective = self.effective;
-        let Some(u) = self.units.get(i) else {
-            return Wrap::Forced;
-        };
-        let next = self.units.get(i.saturating_add(1));
-        // §5.5: "Preserved segment breaks, and—regardless of the white-space
-        // value—any Unicode character with the BK and NL line breaking class,
-        // must be treated as forced line breaks." UAX #14's mandatory breaks
-        // are exactly these (LB4, LB5 after LF and NL; a CR is a space, §4) and
-        // the end of the text (LB3), the end of the block.
-        if b == Break::Mandatory {
-            return Wrap::Forced;
-        }
-        let Some(next) = next else {
-            // Unreachable: the last position is LB3's.
-            return Wrap::Forced;
-        };
-        let j = i.saturating_add(1);
-        // §3 and §5.5: which `white-space` decides (modelling choices).
-        let ws = u.style.white_space;
-        let wrapping = if is_space(u.kind) {
-            wraps(ws)
-        } else {
-            wraps(ws) && wraps(next.style.white_space)
-        };
-        if !wrapping {
-            return Wrap::None;
-        }
-        let class = |k: usize| props.get(k).map(|p| p.class);
-
-        // §5.5, atomic inlines.
-        if u.kind == Kind::Atomic || next.kind == Kind::Atomic {
-            let by_uax14 = matches!(
-                class(j),
-                Some(Lb::SP | Lb::ZW | Lb::BK | Lb::CR | Lb::LF | Lb::NL)
-            ) || absorbed.get(j).copied().unwrap_or(false);
-            if by_uax14 {
-                return from_break(b);
-            }
-            let other = if u.kind == Kind::Atomic {
-                (next.kind != Kind::Atomic).then_some((next, j))
-            } else {
-                Some((u, i))
-            };
-            return match other {
-                Some((c, k))
-                    if c.ch != '\u{00A0}'
-                        && matches!(class(k), Some(Lb::GL | Lb::WJ | Lb::ZWJ)) =>
-                {
-                    Wrap::None
-                }
-                _ => Wrap::Soft,
-            };
-        }
-
-        // §4.1.1: "for pre-wrap, a soft wrap opportunity exists at the end of a
-        // sequence of spaces and/or tabs", and so not inside one.
-        let preserved = |k: Kind| matches!(k, Kind::PreservedSpace | Kind::PreservedTab);
-        if ws == WhiteSpace::PreWrap && preserved(u.kind) && preserved(next.kind) {
-            return Wrap::None;
-        }
-        // §3 `break-spaces`: "A soft wrap opportunity exists after every
-        // preserved white space character and after every other space separator
-        // (including between adjacent spaces)."
-        if ws == WhiteSpace::BreakSpaces && (preserved(u.kind) || u.kind == Kind::OtherSpace) {
-            return Wrap::Soft;
-        }
-
-        let mut wrap = from_break(b);
-        // §5.1 `keep-all`: "breaks are prohibited between pairs of such
-        // characters".
-        if wrap == Wrap::Soft
-            && u.style.word_break == WordBreak::KeepAll
-            && effective.get(i).is_some_and(|p| letter(p.class))
-            && effective.get(j).is_some_and(|p| letter(p.class))
-        {
-            wrap = Wrap::None;
-        }
-        // §5.4: "An otherwise unbreakable sequence of characters may be broken
-        // at an arbitrary point if there are no otherwise-acceptable break
-        // points in the line."
-        if wrap == Wrap::None && !keeps_unit(rule) {
-            match overflow_wrap(u.style.word_break, u.style.overflow_wrap) {
-                OverflowWrap::Normal => {}
-                OverflowWrap::Anywhere => wrap = Wrap::Emergency { min_content: true },
-                OverflowWrap::BreakWord => wrap = Wrap::Emergency { min_content: false },
-            }
-        }
-        wrap
+/// The line break possible after a unit (`here`), before the next one
+/// (`next`, `None` at the end), given UAX #14's decision `b` by `rule`
+/// there. It reads nothing else, so it holds for a position anywhere in a
+/// text of any length.
+pub fn wrap_at(here: &Side, next: Option<&Side>, b: Break, rule: Rule) -> Wrap {
+    let u = &here.unit;
+    // §5.5: "Preserved segment breaks, and—regardless of the white-space
+    // value—any Unicode character with the BK and NL line breaking class,
+    // must be treated as forced line breaks." UAX #14's mandatory breaks
+    // are exactly these (LB4, LB5 after LF and NL; a CR is a space, §4) and
+    // the end of the text (LB3), the end of the block.
+    if b == Break::Mandatory {
+        return Wrap::Forced;
     }
+    let Some(there) = next else {
+        // Unreachable from `wraps_from_breaks`: the last position is LB3's.
+        return Wrap::Forced;
+    };
+    let next = &there.unit;
+    // §3 and §5.5: which `white-space` decides (modelling choices).
+    let ws = u.style.white_space;
+    let wrapping = if is_space(u.kind) {
+        wraps(ws)
+    } else {
+        wraps(ws) && wraps(next.style.white_space)
+    };
+    if !wrapping {
+        return Wrap::None;
+    }
+
+    // §5.5, atomic inlines.
+    if u.kind == Kind::Atomic || next.kind == Kind::Atomic {
+        let by_uax14 = matches!(
+            there.class,
+            Lb::SP | Lb::ZW | Lb::BK | Lb::CR | Lb::LF | Lb::NL
+        ) || there.absorbed;
+        if by_uax14 {
+            return from_break(b);
+        }
+        let other = if u.kind == Kind::Atomic {
+            (next.kind != Kind::Atomic).then_some(there)
+        } else {
+            Some(here)
+        };
+        return match other {
+            Some(c) if c.unit.ch != '\u{00A0}' && matches!(c.class, Lb::GL | Lb::WJ | Lb::ZWJ) => {
+                Wrap::None
+            }
+            _ => Wrap::Soft,
+        };
+    }
+
+    // §4.1.1: "for pre-wrap, a soft wrap opportunity exists at the end of a
+    // sequence of spaces and/or tabs", and so not inside one.
+    let preserved = |k: Kind| matches!(k, Kind::PreservedSpace | Kind::PreservedTab);
+    if ws == WhiteSpace::PreWrap && preserved(u.kind) && preserved(next.kind) {
+        return Wrap::None;
+    }
+    // §3 `break-spaces`: "A soft wrap opportunity exists after every
+    // preserved white space character and after every other space separator
+    // (including between adjacent spaces)."
+    if ws == WhiteSpace::BreakSpaces && (preserved(u.kind) || u.kind == Kind::OtherSpace) {
+        return Wrap::Soft;
+    }
+
+    let mut wrap = from_break(b);
+    // §5.1 `keep-all`: "breaks are prohibited between pairs of such
+    // characters".
+    if wrap == Wrap::Soft
+        && u.style.word_break == WordBreak::KeepAll
+        && letter(here.effective)
+        && letter(there.effective)
+    {
+        wrap = Wrap::None;
+    }
+    // §5.4: "An otherwise unbreakable sequence of characters may be broken
+    // at an arbitrary point if there are no otherwise-acceptable break
+    // points in the line."
+    if wrap == Wrap::None && !keeps_unit(rule) {
+        match overflow_wrap(u.style.word_break, u.style.overflow_wrap) {
+            OverflowWrap::Normal => {}
+            OverflowWrap::Anywhere => wrap = Wrap::Emergency { min_content: true },
+            OverflowWrap::BreakWord => wrap = Wrap::Emergency { min_content: false },
+        }
+    }
+    wrap
 }
 
 /// A UAX #14 decision as a CSS opportunity.

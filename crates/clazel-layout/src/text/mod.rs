@@ -68,6 +68,7 @@ pub mod classes;
 pub mod collapse;
 pub mod data;
 pub mod lines;
+pub mod reference;
 pub mod state;
 pub mod uax14;
 pub mod wrap;

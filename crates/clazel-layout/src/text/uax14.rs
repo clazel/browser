@@ -12,26 +12,35 @@
 //! - **Output**: one [`Break`] per character, for the position *after* it;
 //!   the last one is the position before eot. The position before the first
 //!   character (after sot) is never a break (LB2) and has no entry.
-//! - **"The rules are applied in order"**: `Context::decide` tries each rule at a
+//! - **"The rules are applied in order"**: [`step`] tries each rule at a
 //!   position and returns at the first that matches, so the implicit
 //!   "otherwise" before each rule is the order of the `if`s.
-//! - **LB9 and LB10** are a rewrite of the sequence, which we do once:
-//!   [`absorbed`] marks every CM or ZWJ that LB9 attaches to the character
-//!   before it ("Treat X (CM | ZWJ)* as if it were X"), and [`effective`]
-//!   gives each character the properties the later rules see: an absorbed
-//!   character those of its base X, a CM or ZWJ that LB9 left those of
-//!   U+0041 (LB10), and any other its own. Rules LB11 to LB31 then work on
-//!   the *items*, the characters LB9 did not absorb ("any CM or ZWJ
-//!   characters affected by this rule are ignored"). Rules LB4 to LB8a,
-//!   which come before LB9, see the characters themselves.
+//! - **One pass, one step per character.** [`step`] decides the position
+//!   before a character from a [`BreakState`], a summary of everything the
+//!   rules read to the left (`state.rs` lists it field by field), and the
+//!   at most two items to the right that LB15b, LB15c, LB19a, LB25 and LB28a
+//!   read; it returns the state after the character. No rule needs more:
+//!   every unbounded left context in the rules (`SP*` in LB8, LB14 to LB17;
+//!   `( SY | IS )*` in LB25; `(RI RI)*` in LB30a) is a regular expression,
+//!   which the state's flags follow. [`breaks_with_rules`] runs the step
+//!   along the text. `reference.rs` keeps the first reading of the rules,
+//!   which looks through the whole text from each position, as the oracle.
+//! - **LB9 and LB10** are a rewrite of the sequence: [`absorbed`] marks every
+//!   CM or ZWJ that LB9 attaches to the character before it ("Treat X (CM |
+//!   ZWJ)* as if it were X"), and [`effective`] gives each character the
+//!   properties the later rules see: an absorbed character those of its
+//!   base X, a CM or ZWJ that LB9 left those of U+0041 (LB10), and any other
+//!   its own. Rules LB11 to LB31 then work on the *items*, the characters
+//!   LB9 did not absorb ("any CM or ZWJ characters affected by this rule are
+//!   ignored"). Rules LB4 to LB8a, which come before LB9, see the
+//!   characters themselves. The step does the same rewrite as it goes (an
+//!   absorbed character leaves the item state as it was); the driver uses
+//!   [`absorbed`] and [`effective`] only to find the items to the right.
 //! - **A position inside an absorbed sequence** (before an absorbed CM or
 //!   ZWJ) is decided by LB9 as "×", unless LB4 to LB8a decided it first.
-//! - **Context to the left and right** (`SP*`, `(SY | IS)*`, the
-//!   characters after the position in LB15b, LB15c, LB19a, LB25 and
-//!   LB28a) is read over the items, so an absorbed mark between them is
-//!   skipped, as LB9 says.
 
 use super::classes::{Lb, Props};
+use super::state::{BreakState, LB15A_START};
 
 /// Whether `c` is a class and in `set`.
 fn is(c: Option<Lb>, set: u64) -> bool {
@@ -56,6 +65,8 @@ pub enum Break {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(kani, derive(kani::Arbitrary))]
 pub enum Rule {
+    /// Rule LB2 (the position before the first character).
+    Lb2,
     /// Rule LB3.
     Lb3,
     /// Rule LB4.
@@ -177,61 +188,39 @@ pub fn effective(text: &[Props], absorbed: &[bool]) -> Vec<Props> {
     out
 }
 
-/// What LB9 and LB10 make of `text`, computed once for every position.
-struct Prepared {
-    /// LB9, per character.
-    absorbed: Vec<bool>,
-    /// The items (LB9 and LB10), in order.
-    items: Vec<Props>,
-    /// For each character, its item's index.
-    item_of: Vec<usize>,
-}
-
-impl Prepared {
-    fn new(text: &[Props]) -> Prepared {
-        let absorbed = absorbed(text);
-        let effective = effective(text, &absorbed);
-        // The items: the effective properties of the characters LB9 did
-        // not absorb, and for each character the index of the item it is in.
-        let mut items: Vec<Props> = Vec::with_capacity(text.len());
-        let mut item_of: Vec<usize> = Vec::with_capacity(text.len());
-        for (&e, &a) in effective.iter().zip(&absorbed) {
-            if !a {
-                items.push(e);
-            }
-            item_of.push(items.len().saturating_sub(1));
-        }
-        Prepared {
-            absorbed,
-            items,
-            item_of,
-        }
-    }
-
-    fn context<'a>(&'a self, text: &'a [Props]) -> Context<'a> {
-        Context {
-            text,
-            absorbed: &self.absorbed,
-            items: &self.items,
-            item_of: &self.item_of,
-        }
-    }
-}
-
 /// The break after each character of `text` (UAX #14 §6), with the rule
-/// that decided it.
+/// that decided it: [`step`] along the text, then LB3 at eot.
 pub fn breaks_with_rules(text: &[Props]) -> Vec<(Break, Rule)> {
-    let prepared = Prepared::new(text);
-    let ctx = prepared.context(text);
-    (1..=text.len()).map(|i| ctx.decide(i)).collect()
-}
-
-/// The break at position `i` of `text`, between characters `i - 1` and
-/// `i` (`i == text.len()` is eot), with the rule that decided it; `i` from
-/// 1 (LB2: "sot ×" is never asked). The same decision as
-/// [`breaks_with_rules`]'s entry `i - 1`.
-pub fn break_at(text: &[Props], i: usize) -> (Break, Rule) {
-    Prepared::new(text).context(text).decide(i)
+    let absorbed = absorbed(text);
+    let effective = effective(text, &absorbed);
+    // The items to the right of each character: for character `i`, the
+    // index in `items` of the first item after its own.
+    let items: Vec<Props> = effective
+        .iter()
+        .zip(&absorbed)
+        .filter(|(_, a)| !**a)
+        .map(|(e, _)| *e)
+        .collect();
+    let mut out = Vec::with_capacity(text.len());
+    let mut state = BreakState::START;
+    let mut item: usize = 0;
+    for (i, (c, &a)) in text.iter().zip(&absorbed).enumerate() {
+        if !a && i > 0 {
+            item = item.saturating_add(1);
+        }
+        let next = items.get(item.saturating_add(1)).copied();
+        let after_next = items.get(item.saturating_add(2)).copied();
+        let (b, rule, after) = step(&state, *c, next, after_next);
+        if i > 0 {
+            out.push((b, rule));
+        }
+        state = after;
+    }
+    if !text.is_empty() {
+        // LB3: "! eot".
+        out.push((Break::Mandatory, Rule::Lb3));
+    }
+    out
 }
 
 /// The break after each character of `text` (UAX #14 §6).
@@ -242,385 +231,308 @@ pub fn breaks(text: &[Props]) -> Vec<Break> {
         .collect()
 }
 
-/// What the rules read.
-struct Context<'a> {
-    /// The characters, after LB1.
-    text: &'a [Props],
-    /// LB9, per character.
-    absorbed: &'a [bool],
-    /// The items (LB9 and LB10), in order.
-    items: &'a [Props],
-    /// For each character, its item's index.
-    item_of: &'a [usize],
+/// The state after character `c`, which LB9 absorbed or not, with `e` its
+/// properties after LB9 and LB10.
+fn advance(state: &BreakState, c: Props, absorbed: bool, e: Props) -> BreakState {
+    let raw_prev = Some(c.class);
+    // LB8: "ZW SP*".
+    let zw_spaces = c.class == Lb::ZW || (c.class == Lb::SP && state.zw_spaces);
+    if absorbed {
+        // "In subsequent rules, any CM or ZWJ characters affected by this
+        // rule are ignored": the items are unchanged.
+        return BreakState {
+            raw_prev,
+            zw_spaces,
+            ..*state
+        };
+    }
+    let class = e.class;
+    let (before_spaces, lb15a_start) = if class == Lb::SP {
+        (state.before_spaces, state.lb15a_start)
+    } else {
+        // The item before `e` is `a`; LB15a's start is "sot" or its set.
+        (
+            Some(e),
+            state.a.is_none_or(|a| is(Some(a.class), LB15A_START)),
+        )
+    };
+    BreakState {
+        raw_prev,
+        zw_spaces,
+        a: Some(e),
+        a_prev: state.a,
+        before_spaces,
+        lb15a_start,
+        // LB25: "NU ( SY | IS )*" and "NU ( SY | IS )* ( CL | CP )".
+        numeric: class == Lb::NU || (is(Some(class), lb_set![SY, IS]) && state.numeric),
+        numeric_close: is(Some(class), lb_set![CL, CP]) && state.numeric,
+        // LB30a: the parity of the RIs ending here.
+        ri_odd: class == Lb::RI && !state.ri_odd,
+    }
 }
 
-impl Context<'_> {
-    /// The class of character `i`, after LB1.
-    fn raw(&self, i: usize) -> Option<Lb> {
-        self.text.get(i).map(|p| p.class)
+/// One step of UAX #14 (§6): the break at the position before character `c`
+/// (after LB1), given what the rules remember of the text before it
+/// (`state`, which must satisfy [`BreakState::invariant`]) and the two items
+/// after `c`'s item (`None` past eot); and the state after `c`. For the
+/// first character (`state` at sot) the position is LB2's "sot ×".
+pub fn step(
+    state: &BreakState,
+    c: Props,
+    next: Option<Props>,
+    after_next: Option<Props>,
+) -> (Break, Rule, BreakState) {
+    use Break::{Allowed as Yes, Mandatory as Must, Prohibited as No};
+    // LB9: is `c` a CM or ZWJ after an X? LB10: else a CM or ZWJ is U+0041.
+    let absorbed = matches!(c.class, Lb::CM | Lb::ZWJ) && state.raw_prev.is_some_and(is_base);
+    let e = match state.a {
+        Some(base) if absorbed => base,
+        _ if matches!(c.class, Lb::CM | Lb::ZWJ) => Props::LETTER_A,
+        _ => c,
+    };
+    let after = advance(state, c, absorbed, e);
+    let decide = |b: Break, r: Rule| (b, r, after);
+
+    let before = state.raw_prev;
+    let Some(pa) = state.a else {
+        // LB2: "sot ×".
+        return decide(No, Rule::Lb2);
+    };
+    // LB4: "BK !".
+    if before == Some(Lb::BK) {
+        return decide(Must, Rule::Lb4);
+    }
+    // LB5: "CR × LF", "CR !", "LF !", "NL !".
+    if before == Some(Lb::CR) && c.class == Lb::LF {
+        return decide(No, Rule::Lb5);
+    }
+    if is(before, lb_set![CR, LF, NL]) {
+        return decide(Must, Rule::Lb5);
+    }
+    // LB6: "× ( BK | CR | LF | NL )".
+    if is(Some(c.class), lb_set![BK, CR, LF, NL]) {
+        return decide(No, Rule::Lb6);
+    }
+    // LB7: "× SP", "× ZW".
+    if is(Some(c.class), lb_set![SP, ZW]) {
+        return decide(No, Rule::Lb7);
+    }
+    // LB8: "ZW SP* ÷", over the characters (LB9 comes later).
+    if state.zw_spaces {
+        return decide(Yes, Rule::Lb8);
+    }
+    // LB8a: "ZWJ ×".
+    if before == Some(Lb::ZWJ) {
+        return decide(No, Rule::Lb8a);
+    }
+    // LB9: "Treat X (CM | ZWJ)* as if it were X": no break inside.
+    if absorbed {
+        return decide(No, Rule::Lb9);
     }
 
-    /// Item `j`.
-    fn item(&self, j: usize) -> Option<&Props> {
-        self.items.get(j)
+    // From here on, items (LB9, LB10): `pa` is the item before the
+    // position, `pb` the one after.
+    let pb = e;
+    let ca = Some(pa.class);
+    let cb = Some(pb.class);
+    let cnext = next.map(|p| p.class);
+    let s = state.before_spaces;
+    let ak_dc_as = |p: &Props| matches!(p.class, Lb::AK | Lb::AS) || p.dotted_circle;
+    let ak_dc = |p: &Props| p.class == Lb::AK || p.dotted_circle;
+
+    // LB11: "× WJ", "WJ ×".
+    if cb == Some(Lb::WJ) || ca == Some(Lb::WJ) {
+        return decide(No, Rule::Lb11);
     }
-
-    /// The class of item `j`.
-    fn class(&self, j: usize) -> Option<Lb> {
-        self.item(j).map(|p| p.class)
+    // LB12: "GL ×".
+    if ca == Some(Lb::GL) {
+        return decide(No, Rule::Lb12);
     }
-
-    /// Whether item `j` exists and its class is in `set`.
-    fn is(&self, j: usize, set: u64) -> bool {
-        is(self.class(j), set)
+    // LB12a: "[^SP HY HH] × GL".
+    if cb == Some(Lb::GL) && !is(ca, lb_set![SP, HY, HH]) {
+        return decide(No, Rule::Lb12a);
     }
-
-    /// Item `j - 1`, the one before `j` (`None` at sot).
-    fn before(j: usize) -> Option<usize> {
-        j.checked_sub(1)
+    // LB13: "× CL", "× CP", "× EX", "× SY".
+    if is(cb, lb_set![CL, CP, EX, SY]) {
+        return decide(No, Rule::Lb13);
     }
-
-    /// The last item before item `j` that is not SP, skipping `SP*`
-    /// (`None` if only spaces, or nothing, are before `j`).
-    fn before_spaces(&self, j: usize) -> Option<usize> {
-        let mut k = Context::before(j)?;
-        while self.class(k) == Some(Lb::SP) {
-            k = Context::before(k)?;
-        }
-        Some(k)
+    // LB14: "OP SP* ×".
+    if s.is_some_and(|s| s.class == Lb::OP) {
+        return decide(No, Rule::Lb14);
     }
-
-    /// The last item at or before item `k` that is not SY or IS, skipping
-    /// `(SY | IS)*` backwards (LB25).
-    fn before_sy_is(&self, k: usize) -> Option<usize> {
-        let mut k = k;
-        while self.is(k, lb_set![SY, IS]) {
-            k = Context::before(k)?;
-        }
-        Some(k)
+    // LB15a: "(sot | BK | CR | LF | NL | OP | QU | GL | SP | ZW)
+    // [\p{Pi}&QU] SP* ×".
+    if s.is_some_and(|s| s.class == Lb::QU && s.pi) && state.lb15a_start {
+        return decide(No, Rule::Lb15a);
     }
-
-    /// LB28a's `(AK | [◌] | AS)`.
-    fn ak_dc_as(&self, j: usize) -> bool {
-        self.item(j)
-            .is_some_and(|p| matches!(p.class, Lb::AK | Lb::AS) || p.dotted_circle)
+    // LB15b: "× [\p{Pf}&QU] ( SP | GL | WJ | CL | QU | CP | EX | IS | SY
+    // | BK | CR | LF | NL | ZW | eot)".
+    if pb.class == Lb::QU
+        && pb.pf
+        && (next.is_none()
+            || is(
+                cnext,
+                lb_set![SP, GL, WJ, CL, QU, CP, EX, IS, SY, BK, CR, LF, NL, ZW],
+            ))
+    {
+        return decide(No, Rule::Lb15b);
     }
-
-    /// LB28a's `(AK | [◌])`.
-    fn ak_dc(&self, j: usize) -> bool {
-        self.item(j)
-            .is_some_and(|p| p.class == Lb::AK || p.dotted_circle)
+    // LB15c: "SP ÷ IS NU".
+    if ca == Some(Lb::SP) && cb == Some(Lb::IS) && cnext == Some(Lb::NU) {
+        return decide(Yes, Rule::Lb15c);
     }
-
-    /// The break at position `i`, between characters `i - 1` and `i`
-    /// (`i == text.len()` is eot). `i` is at least 1: "sot ×" (LB2) is never
-    /// asked.
-    fn decide(&self, i: usize) -> (Break, Rule) {
-        use Break::{Allowed as Yes, Mandatory as Must, Prohibited as No};
-        let n = self.text.len();
-        let before = self.raw(i.saturating_sub(1));
-        let after = self.raw(i);
-
-        // LB3: "! eot".
-        if i >= n {
-            return (Must, Rule::Lb3);
-        }
-        // LB4: "BK !".
-        if before == Some(Lb::BK) {
-            return (Must, Rule::Lb4);
-        }
-        // LB5: "CR × LF", "CR !", "LF !", "NL !".
-        if before == Some(Lb::CR) && after == Some(Lb::LF) {
-            return (No, Rule::Lb5);
-        }
-        if matches!(before, Some(Lb::CR | Lb::LF | Lb::NL)) {
-            return (Must, Rule::Lb5);
-        }
-        // LB6: "× ( BK | CR | LF | NL )".
-        if matches!(after, Some(Lb::BK | Lb::CR | Lb::LF | Lb::NL)) {
-            return (No, Rule::Lb6);
-        }
-        // LB7: "× SP", "× ZW".
-        if matches!(after, Some(Lb::SP | Lb::ZW)) {
-            return (No, Rule::Lb7);
-        }
-        // LB8: "ZW SP* ÷", over the characters (LB9 comes later).
-        let mut k = i.saturating_sub(1);
-        while self.raw(k) == Some(Lb::SP) && k > 0 {
-            k = k.saturating_sub(1);
-        }
-        if self.raw(k) == Some(Lb::ZW) {
-            return (Yes, Rule::Lb8);
-        }
-        // LB8a: "ZWJ ×".
-        if before == Some(Lb::ZWJ) {
-            return (No, Rule::Lb8a);
-        }
-        // LB9: "Treat X (CM | ZWJ)* as if it were X": no break inside.
-        if self.absorbed.get(i).copied().unwrap_or(false) {
-            return (No, Rule::Lb9);
-        }
-
-        // From here on, items (LB9, LB10): `a` is the item before the
-        // position, `b` the one after.
-        let b = self.item_of.get(i).copied().unwrap_or(0);
-        let Some(a) = Context::before(b) else {
-            // Unreachable: character 0 is in item 0 and i >= 1 is not
-            // absorbed, so b >= 1. LB31 decides, as for any other pair.
-            return (Yes, Rule::Lb31);
-        };
-        let ca = self.class(a);
-        let cb = self.class(b);
-        let pa = self.item(a).copied().unwrap_or(Props::LETTER_A);
-        let pb = self.item(b).copied().unwrap_or(Props::LETTER_A);
-        let next = b.checked_add(1).filter(|&k| k < self.items.len());
-        let cnext = next.and_then(|k| self.class(k));
-
-        // LB11: "× WJ", "WJ ×".
-        if cb == Some(Lb::WJ) || ca == Some(Lb::WJ) {
-            return (No, Rule::Lb11);
-        }
-        // LB12: "GL ×".
-        if ca == Some(Lb::GL) {
-            return (No, Rule::Lb12);
-        }
-        // LB12a: "[^SP HY HH] × GL".
-        if cb == Some(Lb::GL) && !is(ca, lb_set![SP, HY, HH]) {
-            return (No, Rule::Lb12a);
-        }
-        // LB13: "× CL", "× CP", "× EX", "× SY".
-        if is(cb, lb_set![CL, CP, EX, SY]) {
-            return (No, Rule::Lb13);
-        }
-        // LB14: "OP SP* ×".
-        let s = self.before_spaces(b);
-        if s.is_some_and(|s| self.class(s) == Some(Lb::OP)) {
-            return (No, Rule::Lb14);
-        }
-        // LB15a: "(sot | BK | CR | LF | NL | OP | QU | GL | SP | ZW)
-        // [\p{Pi}&QU] SP* ×".
-        if let Some(q) = s
-            && self.item(q).is_some_and(|p| p.class == Lb::QU && p.pi)
-        {
-            let start = match Context::before(q) {
-                None => true,
-                Some(k) => self.is(k, lb_set![BK, CR, LF, NL, OP, QU, GL, SP, ZW]),
-            };
-            if start {
-                return (No, Rule::Lb15a);
-            }
-        }
-        // LB15b: "× [\p{Pf}&QU] ( SP | GL | WJ | CL | QU | CP | EX | IS | SY
-        // | BK | CR | LF | NL | ZW | eot)".
-        if pb.class == Lb::QU
-            && pb.pf
-            && (next.is_none()
-                || is(
-                    cnext,
-                    lb_set![SP, GL, WJ, CL, QU, CP, EX, IS, SY, BK, CR, LF, NL, ZW],
-                ))
-        {
-            return (No, Rule::Lb15b);
-        }
-        // LB15c: "SP ÷ IS NU".
-        if ca == Some(Lb::SP) && cb == Some(Lb::IS) && cnext == Some(Lb::NU) {
-            return (Yes, Rule::Lb15c);
-        }
-        // LB15d: "× IS".
-        if cb == Some(Lb::IS) {
-            return (No, Rule::Lb15d);
-        }
-        // LB16: "(CL | CP) SP* × NS".
-        if cb == Some(Lb::NS) && s.is_some_and(|s| self.is(s, lb_set![CL, CP])) {
-            return (No, Rule::Lb16);
-        }
-        // LB17: "B2 SP* × B2".
-        if cb == Some(Lb::B2) && s.is_some_and(|s| self.class(s) == Some(Lb::B2)) {
-            return (No, Rule::Lb17);
-        }
-        // LB18: "SP ÷".
-        if ca == Some(Lb::SP) {
-            return (Yes, Rule::Lb18);
-        }
-        // LB19: "× [ QU - \p{Pi} ]", "[ QU - \p{Pf} ] ×".
-        if (pb.class == Lb::QU && !pb.pi) || (pa.class == Lb::QU && !pa.pf) {
-            return (No, Rule::Lb19);
-        }
-        // LB19a: "[^$EastAsian] × QU", "× QU ( [^$EastAsian] | eot )",
-        // "QU × [^$EastAsian]", "( sot | [^$EastAsian] ) QU ×".
-        if pb.class == Lb::QU
-            && (!pa.east_asian
-                || next
-                    .and_then(|k| self.item(k))
-                    .is_none_or(|p| !p.east_asian))
-        {
-            return (No, Rule::Lb19a);
-        }
-        if pa.class == Lb::QU
-            && (!pb.east_asian
-                || Context::before(a)
-                    .and_then(|k| self.item(k))
-                    .is_none_or(|p| !p.east_asian))
-        {
-            return (No, Rule::Lb19a);
-        }
-        // LB20: "÷ CB", "CB ÷".
-        if cb == Some(Lb::CB) || ca == Some(Lb::CB) {
-            return (Yes, Rule::Lb20);
-        }
-        // LB20a: "( sot | BK | CR | LF | NL | SP | ZW | CB | GL ) ( HY | HH )
-        // × ( AL | HL )".
-        if is(ca, lb_set![HY, HH]) && is(cb, lb_set![AL, HL]) {
-            let start = match Context::before(a) {
-                None => true,
-                Some(k) => self.is(k, lb_set![BK, CR, LF, NL, SP, ZW, CB, GL]),
-            };
-            if start {
-                return (No, Rule::Lb20a);
-            }
-        }
-        // LB21: "× BA", "× HH", "× HY", "× NS", "BB ×".
-        if is(cb, lb_set![BA, HH, HY, NS]) || ca == Some(Lb::BB) {
-            return (No, Rule::Lb21);
-        }
-        // LB21a: "HL (HY | HH) × [^HL]".
-        if is(ca, lb_set![HY, HH])
-            && cb != Some(Lb::HL)
-            && Context::before(a).is_some_and(|k| self.class(k) == Some(Lb::HL))
-        {
-            return (No, Rule::Lb21a);
-        }
-        // LB21b: "SY × HL".
-        if ca == Some(Lb::SY) && cb == Some(Lb::HL) {
-            return (No, Rule::Lb21b);
-        }
-        // LB22: "× IN".
-        if cb == Some(Lb::IN) {
-            return (No, Rule::Lb22);
-        }
-        // LB23: "(AL | HL) × NU", "NU × (AL | HL)".
-        if (is(ca, lb_set![AL, HL]) && cb == Some(Lb::NU))
-            || (ca == Some(Lb::NU) && is(cb, lb_set![AL, HL]))
-        {
-            return (No, Rule::Lb23);
-        }
-        // LB23a: "PR × (ID | EB | EM)", "(ID | EB | EM) × PO".
-        if (ca == Some(Lb::PR) && is(cb, lb_set![ID, EB, EM]))
-            || (is(ca, lb_set![ID, EB, EM]) && cb == Some(Lb::PO))
-        {
-            return (No, Rule::Lb23a);
-        }
-        // LB24: "(PR | PO) × (AL | HL)", "(AL | HL) × (PR | PO)".
-        if (is(ca, lb_set![PR, PO]) && is(cb, lb_set![AL, HL]))
-            || (is(ca, lb_set![AL, HL]) && is(cb, lb_set![PR, PO]))
-        {
-            return (No, Rule::Lb24);
-        }
-        // LB25, in the annex's order:
-        if is(cb, lb_set![PO, PR]) {
-            // "NU ( SY | IS )* CL × PO", "NU ( SY | IS )* CP × PO",
-            // "NU ( SY | IS )* CL × PR", "NU ( SY | IS )* CP × PR".
-            if is(ca, lb_set![CL, CP])
-                && Context::before(a)
-                    .and_then(|k| self.before_sy_is(k))
-                    .is_some_and(|k| self.class(k) == Some(Lb::NU))
-            {
-                return (No, Rule::Lb25);
-            }
-            // "NU ( SY | IS )* × PO", "NU ( SY | IS )* × PR".
-            if self
-                .before_sy_is(a)
-                .is_some_and(|k| self.class(k) == Some(Lb::NU))
-            {
-                return (No, Rule::Lb25);
-            }
-        }
-        // "PO × OP NU", "PO × OP IS NU", "PO × NU", "PR × OP NU",
-        // "PR × OP IS NU", "PR × NU".
-        if is(ca, lb_set![PO, PR]) {
-            let after_next = next
-                .and_then(|k| k.checked_add(1))
-                .and_then(|k| self.class(k));
-            if cb == Some(Lb::NU)
-                || (cb == Some(Lb::OP) && cnext == Some(Lb::NU))
-                || (cb == Some(Lb::OP) && cnext == Some(Lb::IS) && after_next == Some(Lb::NU))
-            {
-                return (No, Rule::Lb25);
-            }
-        }
-        // "HY × NU", "IS × NU".
-        if is(ca, lb_set![HY, IS]) && cb == Some(Lb::NU) {
-            return (No, Rule::Lb25);
-        }
-        // "NU ( SY | IS )* × NU".
-        if cb == Some(Lb::NU)
-            && self
-                .before_sy_is(a)
-                .is_some_and(|k| self.class(k) == Some(Lb::NU))
-        {
-            return (No, Rule::Lb25);
-        }
-        // LB26: "JL × (JL | JV | H2 | H3)", "(JV | H2) × (JV | JT)",
-        // "(JT | H3) × JT".
-        if (ca == Some(Lb::JL) && is(cb, lb_set![JL, JV, H2, H3]))
-            || (is(ca, lb_set![JV, H2]) && is(cb, lb_set![JV, JT]))
-            || (is(ca, lb_set![JT, H3]) && cb == Some(Lb::JT))
-        {
-            return (No, Rule::Lb26);
-        }
-        // LB27: "(JL | JV | JT | H2 | H3) × PO", "PR × (JL | JV | JT | H2 |
-        // H3)".
-        let korean = lb_set![JL, JV, JT, H2, H3];
-        if (is(ca, korean) && cb == Some(Lb::PO)) || (ca == Some(Lb::PR) && is(cb, korean)) {
-            return (No, Rule::Lb27);
-        }
-        // LB28: "(AL | HL) × (AL | HL)".
-        if is(ca, lb_set![AL, HL]) && is(cb, lb_set![AL, HL]) {
-            return (No, Rule::Lb28);
-        }
-        // LB28a: "AP × (AK | [◌] | AS)", "(AK | [◌] | AS) × (VF | VI)",
-        // "(AK | [◌] | AS) VI × (AK | [◌])", "(AK | [◌] | AS) × (AK | [◌] |
-        // AS) VF".
-        if (ca == Some(Lb::AP) && self.ak_dc_as(b))
-            || (self.ak_dc_as(a) && is(cb, lb_set![VF, VI]))
-            || (ca == Some(Lb::VI)
-                && Context::before(a).is_some_and(|k| self.ak_dc_as(k))
-                && self.ak_dc(b))
-            || (self.ak_dc_as(a) && self.ak_dc_as(b) && cnext == Some(Lb::VF))
-        {
-            return (No, Rule::Lb28a);
-        }
-        // LB29: "IS × (AL | HL)".
-        if ca == Some(Lb::IS) && is(cb, lb_set![AL, HL]) {
-            return (No, Rule::Lb29);
-        }
-        // LB30: "(AL | HL | NU) × [OP-$EastAsian]", "[CP-$EastAsian] × (AL |
-        // HL | NU)".
-        if (is(ca, lb_set![AL, HL, NU]) && pb.class == Lb::OP && !pb.east_asian)
-            || (pa.class == Lb::CP && !pa.east_asian && is(cb, lb_set![AL, HL, NU]))
-        {
-            return (No, Rule::Lb30);
-        }
-        // LB30a: "sot (RI RI)* RI × RI", "[^RI] (RI RI)* RI × RI": the
-        // number of RIs ending at `a` is odd.
-        if ca == Some(Lb::RI) && cb == Some(Lb::RI) {
-            let mut count: usize = 0;
-            let mut k = Some(a);
-            while let Some(j) = k
-                && self.class(j) == Some(Lb::RI)
-            {
-                count = count.saturating_add(1);
-                k = Context::before(j);
-            }
-            if !count.is_multiple_of(2) {
-                return (No, Rule::Lb30a);
-            }
-        }
-        // LB30b: "EB × EM", "[\p{Extended_Pictographic}&\p{Cn}] × EM".
-        if cb == Some(Lb::EM) && (ca == Some(Lb::EB) || pa.pictographic_unassigned) {
-            return (No, Rule::Lb30b);
-        }
-        // LB31: "ALL ÷", "÷ ALL".
-        (Yes, Rule::Lb31)
+    // LB15d: "× IS".
+    if cb == Some(Lb::IS) {
+        return decide(No, Rule::Lb15d);
     }
+    // LB16: "(CL | CP) SP* × NS".
+    if cb == Some(Lb::NS) && s.is_some_and(|s| is(Some(s.class), lb_set![CL, CP])) {
+        return decide(No, Rule::Lb16);
+    }
+    // LB17: "B2 SP* × B2".
+    if cb == Some(Lb::B2) && s.is_some_and(|s| s.class == Lb::B2) {
+        return decide(No, Rule::Lb17);
+    }
+    // LB18: "SP ÷".
+    if ca == Some(Lb::SP) {
+        return decide(Yes, Rule::Lb18);
+    }
+    // LB19: "× [ QU - \p{Pi} ]", "[ QU - \p{Pf} ] ×".
+    if (pb.class == Lb::QU && !pb.pi) || (pa.class == Lb::QU && !pa.pf) {
+        return decide(No, Rule::Lb19);
+    }
+    // LB19a: "[^$EastAsian] × QU", "× QU ( [^$EastAsian] | eot )",
+    // "QU × [^$EastAsian]", "( sot | [^$EastAsian] ) QU ×".
+    if pb.class == Lb::QU && (!pa.east_asian || next.is_none_or(|p| !p.east_asian)) {
+        return decide(No, Rule::Lb19a);
+    }
+    if pa.class == Lb::QU && (!pb.east_asian || state.a_prev.is_none_or(|p| !p.east_asian)) {
+        return decide(No, Rule::Lb19a);
+    }
+    // LB20: "÷ CB", "CB ÷".
+    if cb == Some(Lb::CB) || ca == Some(Lb::CB) {
+        return decide(Yes, Rule::Lb20);
+    }
+    // LB20a: "( sot | BK | CR | LF | NL | SP | ZW | CB | GL ) ( HY | HH )
+    // × ( AL | HL )".
+    if is(ca, lb_set![HY, HH])
+        && is(cb, lb_set![AL, HL])
+        && state
+            .a_prev
+            .is_none_or(|p| is(Some(p.class), lb_set![BK, CR, LF, NL, SP, ZW, CB, GL]))
+    {
+        return decide(No, Rule::Lb20a);
+    }
+    // LB21: "× BA", "× HH", "× HY", "× NS", "BB ×".
+    if is(cb, lb_set![BA, HH, HY, NS]) || ca == Some(Lb::BB) {
+        return decide(No, Rule::Lb21);
+    }
+    // LB21a: "HL (HY | HH) × [^HL]".
+    if is(ca, lb_set![HY, HH])
+        && cb != Some(Lb::HL)
+        && state.a_prev.is_some_and(|p| p.class == Lb::HL)
+    {
+        return decide(No, Rule::Lb21a);
+    }
+    // LB21b: "SY × HL".
+    if ca == Some(Lb::SY) && cb == Some(Lb::HL) {
+        return decide(No, Rule::Lb21b);
+    }
+    // LB22: "× IN".
+    if cb == Some(Lb::IN) {
+        return decide(No, Rule::Lb22);
+    }
+    // LB23: "(AL | HL) × NU", "NU × (AL | HL)".
+    if (is(ca, lb_set![AL, HL]) && cb == Some(Lb::NU))
+        || (ca == Some(Lb::NU) && is(cb, lb_set![AL, HL]))
+    {
+        return decide(No, Rule::Lb23);
+    }
+    // LB23a: "PR × (ID | EB | EM)", "(ID | EB | EM) × PO".
+    if (ca == Some(Lb::PR) && is(cb, lb_set![ID, EB, EM]))
+        || (is(ca, lb_set![ID, EB, EM]) && cb == Some(Lb::PO))
+    {
+        return decide(No, Rule::Lb23a);
+    }
+    // LB24: "(PR | PO) × (AL | HL)", "(AL | HL) × (PR | PO)".
+    if (is(ca, lb_set![PR, PO]) && is(cb, lb_set![AL, HL]))
+        || (is(ca, lb_set![AL, HL]) && is(cb, lb_set![PR, PO]))
+    {
+        return decide(No, Rule::Lb24);
+    }
+    // LB25, in the annex's order: "NU ( SY | IS )* CL × PO", "NU ( SY | IS
+    // )* CP × PO", "NU ( SY | IS )* CL × PR", "NU ( SY | IS )* CP × PR";
+    // "NU ( SY | IS )* × PO", "NU ( SY | IS )* × PR".
+    if is(cb, lb_set![PO, PR]) && (state.numeric_close || state.numeric) {
+        return decide(No, Rule::Lb25);
+    }
+    // "PO × OP NU", "PO × OP IS NU", "PO × NU", "PR × OP NU", "PR × OP IS
+    // NU", "PR × NU".
+    if is(ca, lb_set![PO, PR])
+        && (cb == Some(Lb::NU)
+            || (cb == Some(Lb::OP) && cnext == Some(Lb::NU))
+            || (cb == Some(Lb::OP)
+                && cnext == Some(Lb::IS)
+                && after_next.map(|p| p.class) == Some(Lb::NU)))
+    {
+        return decide(No, Rule::Lb25);
+    }
+    // "HY × NU", "IS × NU".
+    if is(ca, lb_set![HY, IS]) && cb == Some(Lb::NU) {
+        return decide(No, Rule::Lb25);
+    }
+    // "NU ( SY | IS )* × NU".
+    if cb == Some(Lb::NU) && state.numeric {
+        return decide(No, Rule::Lb25);
+    }
+    // LB26: "JL × (JL | JV | H2 | H3)", "(JV | H2) × (JV | JT)",
+    // "(JT | H3) × JT".
+    if (ca == Some(Lb::JL) && is(cb, lb_set![JL, JV, H2, H3]))
+        || (is(ca, lb_set![JV, H2]) && is(cb, lb_set![JV, JT]))
+        || (is(ca, lb_set![JT, H3]) && cb == Some(Lb::JT))
+    {
+        return decide(No, Rule::Lb26);
+    }
+    // LB27: "(JL | JV | JT | H2 | H3) × PO", "PR × (JL | JV | JT | H2 |
+    // H3)".
+    let korean = lb_set![JL, JV, JT, H2, H3];
+    if (is(ca, korean) && cb == Some(Lb::PO)) || (ca == Some(Lb::PR) && is(cb, korean)) {
+        return decide(No, Rule::Lb27);
+    }
+    // LB28: "(AL | HL) × (AL | HL)".
+    if is(ca, lb_set![AL, HL]) && is(cb, lb_set![AL, HL]) {
+        return decide(No, Rule::Lb28);
+    }
+    // LB28a: "AP × (AK | [◌] | AS)", "(AK | [◌] | AS) × (VF | VI)",
+    // "(AK | [◌] | AS) VI × (AK | [◌])", "(AK | [◌] | AS) × (AK | [◌] |
+    // AS) VF".
+    if (ca == Some(Lb::AP) && ak_dc_as(&pb))
+        || (ak_dc_as(&pa) && is(cb, lb_set![VF, VI]))
+        || (ca == Some(Lb::VI) && state.a_prev.is_some_and(|p| ak_dc_as(&p)) && ak_dc(&pb))
+        || (ak_dc_as(&pa) && ak_dc_as(&pb) && cnext == Some(Lb::VF))
+    {
+        return decide(No, Rule::Lb28a);
+    }
+    // LB29: "IS × (AL | HL)".
+    if ca == Some(Lb::IS) && is(cb, lb_set![AL, HL]) {
+        return decide(No, Rule::Lb29);
+    }
+    // LB30: "(AL | HL | NU) × [OP-$EastAsian]", "[CP-$EastAsian] × (AL |
+    // HL | NU)".
+    if (is(ca, lb_set![AL, HL, NU]) && pb.class == Lb::OP && !pb.east_asian)
+        || (pa.class == Lb::CP && !pa.east_asian && is(cb, lb_set![AL, HL, NU]))
+    {
+        return decide(No, Rule::Lb30);
+    }
+    // LB30a: "sot (RI RI)* RI × RI", "[^RI] (RI RI)* RI × RI": the
+    // number of RIs ending at `a` is odd.
+    if ca == Some(Lb::RI) && cb == Some(Lb::RI) && state.ri_odd {
+        return decide(No, Rule::Lb30a);
+    }
+    // LB30b: "EB × EM", "[\p{Extended_Pictographic}&\p{Cn}] × EM".
+    if cb == Some(Lb::EM) && (ca == Some(Lb::EB) || pa.pictographic_unassigned) {
+        return decide(No, Rule::Lb30b);
+    }
+    // LB31: "ALL ÷", "÷ ALL".
+    decide(Yes, Rule::Lb31)
 }

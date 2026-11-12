@@ -40,11 +40,17 @@
 //!   conditionally hang are not considered when measuring the line's
 //!   contents for fit"). Opportunities are not prioritized (§5.5 leaves
 //!   that to the UA).
+//! - **Steps.** [`break_lines`] runs [`fit_step`] along the units over a
+//!   [`FitState`] (`state.rs`), and [`Measure::add`] is the measuring both
+//!   it and the intrinsic sizes use, so their Kani harnesses cover lines and
+//!   texts of every length. [`trim`] walks back from a line's end and is
+//!   checked on bounded inputs only.
 //! - **`tab-size` is not in the subset**: its initial value is 8, "a
 //!   multiple of the advance width of the space character (U+0020)"; the
 //!   caller gives the space's advance ([`initial_tab_size`]).
 
 use super::collapse::{Kind, Unit, collapsible};
+use super::state::{Fit, FitState, Measure};
 use super::wrap::Wrap;
 use clazel_style::cascade::computed::WhiteSpace;
 
@@ -176,33 +182,21 @@ pub struct Line {
     pub width: i32,
 }
 
-/// Measures a line as it grows from `start`: the pen, and the width for
-/// fit (the pen after the last unit that is not [`trailing`]).
-struct Measure {
-    pen: i32,
-    fit: i32,
-    leading: bool,
-}
-
 impl Measure {
-    fn new() -> Measure {
+    /// The line with unit `u` added, whose advance is `advance` (26.6, the
+    /// caller's `width` at this pen; not read when [`Measure::takes_width`]
+    /// is false): leading collapsible spaces (Phase II step 1) and forced
+    /// breaks take no width, and the width for fit stops before what Phase
+    /// II removes or hangs at the end ([`trailing`]).
+    pub fn add(self, u: &Unit, advance: i32) -> Measure {
+        if !self.takes_width(u) {
+            return self;
+        }
+        let pen = self.pen.saturating_add(advance);
         Measure {
-            pen: 0,
-            fit: 0,
-            leading: true,
-        }
-    }
-
-    /// Adds unit `i`. Leading collapsible spaces (step 1) and forced breaks
-    /// take no width.
-    fn add(&mut self, i: usize, u: &Unit, width: &mut impl FnMut(usize, i32) -> i32) {
-        if (self.leading && u.kind == Kind::CollapsibleSpace) || u.kind == Kind::ForcedBreak {
-            return;
-        }
-        self.leading = false;
-        self.pen = self.pen.saturating_add(width(i, self.pen));
-        if !trailing(u) {
-            self.fit = self.pen;
+            pen,
+            fit: if trailing(u) { self.fit } else { pen },
+            leading: false,
         }
     }
 }
@@ -211,7 +205,7 @@ impl Measure {
 /// (`wraps`, from `super::wrap::opportunities`; a missing one counts as
 /// forced), the available width and each unit's advance (26.6). See the
 /// modelling choices for the rule. Every line holds at least one unit, and
-/// the lines cover `units` in order.
+/// the lines cover `units` in order. [`fit_step`] along the units.
 pub fn break_lines(
     units: &[Unit],
     wraps: &[Wrap],
@@ -220,47 +214,87 @@ pub fn break_lines(
 ) -> Vec<Line> {
     let n = units.len();
     let mut lines = Vec::new();
-    let mut start = 0;
-    while start < n {
-        let mut m = Measure::new();
-        // The last soft and emergency opportunities whose line fits.
-        let mut soft: Option<(usize, i32)> = None;
-        let mut emergency: Option<(usize, i32)> = None;
-        let mut overflowed = false;
-        let mut i = start;
-        let (end, forced, w) = loop {
-            let Some(u) = units.get(i) else {
-                break (n, true, m.fit);
-            };
-            m.add(i, u, &mut width);
-            let after = i.saturating_add(1);
-            if m.fit > available && !overflowed {
-                // The content so far does not fit: wrap at the last soft
-                // opportunity, else the last emergency one.
-                if let Some((e, w)) = soft.or(emergency) {
-                    break (e, false, w);
-                }
-                overflowed = true;
-            }
-            match wraps.get(i).copied().unwrap_or(Wrap::Forced) {
-                Wrap::Forced => break (after, true, m.fit),
-                Wrap::Soft if overflowed => break (after, false, m.fit),
-                Wrap::Soft => soft = Some((after, m.fit)),
-                Wrap::Emergency { .. } if overflowed => break (after, false, m.fit),
-                Wrap::Emergency { .. } => emergency = Some((after, m.fit)),
-                Wrap::None => {}
-            }
-            i = after;
+    let mut state = FitState::new(0);
+    let mut i = 0;
+    while state.start < n {
+        let Some(u) = units.get(i) else {
+            // Only when `wraps` does not end in a forced break.
+            lines.push(Line {
+                start: state.start,
+                end: n,
+                forced: true,
+                width: state.m.fit,
+            });
+            break;
         };
-        lines.push(Line {
-            start,
-            end,
-            forced,
-            width: w,
-        });
-        start = end;
+        let advance = if state.m.takes_width(u) {
+            width(i, state.m.pen)
+        } else {
+            0
+        };
+        let wrap = wraps.get(i).copied().unwrap_or(Wrap::Forced);
+        match fit_step(&state, i, u, advance, wrap, available) {
+            Fit::Continue(next) => {
+                state = next;
+                i = i.saturating_add(1);
+            }
+            Fit::End { end, forced, width } => {
+                lines.push(Line {
+                    start: state.start,
+                    end,
+                    forced,
+                    width,
+                });
+                state = FitState::new(end);
+                i = end;
+            }
+        }
     }
     lines
+}
+
+/// One step of choosing lines (§5, modelling choices): unit `i` (`u`, of
+/// advance `advance`, followed by `wrap`) added to the line being filled
+/// (`state`, which must satisfy [`FitState::invariant`] at `i`). The line
+/// ends at the last soft opportunity that fits, else the last emergency one,
+/// once its content no longer fits `available`; with neither, it overflows
+/// to the next opportunity of either kind; a forced break always ends it.
+pub fn fit_step(
+    state: &FitState,
+    i: usize,
+    u: &Unit,
+    advance: i32,
+    wrap: Wrap,
+    available: i32,
+) -> Fit {
+    let m = state.m.add(u, advance);
+    let after = i.saturating_add(1);
+    let mut next = FitState { m, ..*state };
+    if m.fit > available && !next.overflowed {
+        // The content so far does not fit: wrap at the last soft
+        // opportunity, else the last emergency one.
+        if let Some((end, width)) = next.soft.or(next.emergency) {
+            return Fit::End {
+                end,
+                forced: false,
+                width,
+            };
+        }
+        next.overflowed = true;
+    }
+    let end = |forced: bool| Fit::End {
+        end: after,
+        forced,
+        width: m.fit,
+    };
+    match wrap {
+        Wrap::Forced => return end(true),
+        Wrap::Soft | Wrap::Emergency { .. } if next.overflowed => return end(false),
+        Wrap::Soft => next.soft = Some((after, m.fit)),
+        Wrap::Emergency { .. } => next.emergency = Some((after, m.fit)),
+        Wrap::None => {}
+    }
+    Fit::Continue(next)
 }
 
 /// The widest of the pieces `units` is cut into after every unit where
@@ -272,12 +306,13 @@ fn widest(
     mut width: impl FnMut(usize, i32) -> i32,
 ) -> i32 {
     let mut widest = 0;
-    let mut m = Measure::new();
+    let mut m = Measure::START;
     for (i, u) in units.iter().enumerate() {
-        m.add(i, u, &mut width);
+        let advance = if m.takes_width(u) { width(i, m.pen) } else { 0 };
+        m = m.add(u, advance);
         if cut(wraps.get(i).copied().unwrap_or(Wrap::Forced)) {
             widest = widest.max(m.fit);
-            m = Measure::new();
+            m = Measure::START;
         }
     }
     widest.max(m.fit)
