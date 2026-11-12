@@ -1,0 +1,1242 @@
+#case 0
+#data "<!doctype html><script>"
+root
+  block <html>
+    block <body>
+
+#case 1
+#data "<!doctype html><script>a"
+root
+  block <html>
+    block <body>
+
+#case 2
+#data "<!doctype html><script><"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<!doctype html><script></"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<!doctype html><script></S"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<!doctype html><script></SC"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "<!doctype html><script></SCR"
+root
+  block <html>
+    block <body>
+
+#case 7
+#data "<!doctype html><script></SCRI"
+root
+  block <html>
+    block <body>
+
+#case 8
+#data "<!doctype html><script></SCRIP"
+root
+  block <html>
+    block <body>
+
+#case 9
+#data "<!doctype html><script></SCRIPT"
+root
+  block <html>
+    block <body>
+
+#case 10
+#data "<!doctype html><script></SCRIPT "
+root
+  block <html>
+    block <body>
+
+#case 11
+#data "<!doctype html><script></s"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<!doctype html><script></sc"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<!doctype html><script></scr"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "<!doctype html><script></scri"
+root
+  block <html>
+    block <body>
+
+#case 15
+#data "<!doctype html><script></scrip"
+root
+  block <html>
+    block <body>
+
+#case 16
+#data "<!doctype html><script></script"
+root
+  block <html>
+    block <body>
+
+#case 17
+#data "<!doctype html><script></script "
+root
+  block <html>
+    block <body>
+
+#case 18
+#data "<!doctype html><script><!"
+root
+  block <html>
+    block <body>
+
+#case 19
+#data "<!doctype html><script><!a"
+root
+  block <html>
+    block <body>
+
+#case 20
+#data "<!doctype html><script><!-"
+root
+  block <html>
+    block <body>
+
+#case 21
+#data "<!doctype html><script><!-a"
+root
+  block <html>
+    block <body>
+
+#case 22
+#data "<!doctype html><script><!--"
+root
+  block <html>
+    block <body>
+
+#case 23
+#data "<!doctype html><script><!--a"
+root
+  block <html>
+    block <body>
+
+#case 24
+#data "<!doctype html><script><!--<"
+root
+  block <html>
+    block <body>
+
+#case 25
+#data "<!doctype html><script><!--<a"
+root
+  block <html>
+    block <body>
+
+#case 26
+#data "<!doctype html><script><!--</"
+root
+  block <html>
+    block <body>
+
+#case 27
+#data "<!doctype html><script><!--</script"
+root
+  block <html>
+    block <body>
+
+#case 28
+#data "<!doctype html><script><!--</script "
+root
+  block <html>
+    block <body>
+
+#case 29
+#data "<!doctype html><script><!--<s"
+root
+  block <html>
+    block <body>
+
+#case 30
+#data "<!doctype html><script><!--<script"
+root
+  block <html>
+    block <body>
+
+#case 31
+#data "<!doctype html><script><!--<script "
+root
+  block <html>
+    block <body>
+
+#case 32
+#data "<!doctype html><script><!--<script <"
+root
+  block <html>
+    block <body>
+
+#case 33
+#data "<!doctype html><script><!--<script <a"
+root
+  block <html>
+    block <body>
+
+#case 34
+#data "<!doctype html><script><!--<script </"
+root
+  block <html>
+    block <body>
+
+#case 35
+#data "<!doctype html><script><!--<script </s"
+root
+  block <html>
+    block <body>
+
+#case 36
+#data "<!doctype html><script><!--<script </script"
+root
+  block <html>
+    block <body>
+
+#case 37
+#data "<!doctype html><script><!--<script </scripta"
+root
+  block <html>
+    block <body>
+
+#case 38
+#data "<!doctype html><script><!--<script </script "
+root
+  block <html>
+    block <body>
+
+#case 39
+#data "<!doctype html><script><!--<script </script>"
+root
+  block <html>
+    block <body>
+
+#case 40
+#data "<!doctype html><script><!--<script </script/"
+root
+  block <html>
+    block <body>
+
+#case 41
+#data "<!doctype html><script><!--<script </script <"
+root
+  block <html>
+    block <body>
+
+#case 42
+#data "<!doctype html><script><!--<script </script <a"
+root
+  block <html>
+    block <body>
+
+#case 43
+#data "<!doctype html><script><!--<script </script </"
+root
+  block <html>
+    block <body>
+
+#case 44
+#data "<!doctype html><script><!--<script </script </script"
+root
+  block <html>
+    block <body>
+
+#case 45
+#data "<!doctype html><script><!--<script </script </script "
+root
+  block <html>
+    block <body>
+
+#case 46
+#data "<!doctype html><script><!--<script </script </script/"
+root
+  block <html>
+    block <body>
+
+#case 47
+#data "<!doctype html><script><!--<script </script </script>"
+root
+  block <html>
+    block <body>
+
+#case 48
+#data "<!doctype html><script><!--<script -"
+root
+  block <html>
+    block <body>
+
+#case 49
+#data "<!doctype html><script><!--<script -a"
+root
+  block <html>
+    block <body>
+
+#case 50
+#data "<!doctype html><script><!--<script -<"
+root
+  block <html>
+    block <body>
+
+#case 51
+#data "<!doctype html><script><!--<script --"
+root
+  block <html>
+    block <body>
+
+#case 52
+#data "<!doctype html><script><!--<script --a"
+root
+  block <html>
+    block <body>
+
+#case 53
+#data "<!doctype html><script><!--<script --<"
+root
+  block <html>
+    block <body>
+
+#case 54
+#data "<!doctype html><script><!--<script -->"
+root
+  block <html>
+    block <body>
+
+#case 55
+#data "<!doctype html><script><!--<script --><"
+root
+  block <html>
+    block <body>
+
+#case 56
+#data "<!doctype html><script><!--<script --></"
+root
+  block <html>
+    block <body>
+
+#case 57
+#data "<!doctype html><script><!--<script --></script"
+root
+  block <html>
+    block <body>
+
+#case 58
+#data "<!doctype html><script><!--<script --></script "
+root
+  block <html>
+    block <body>
+
+#case 59
+#data "<!doctype html><script><!--<script --></script/"
+root
+  block <html>
+    block <body>
+
+#case 60
+#data "<!doctype html><script><!--<script --></script>"
+root
+  block <html>
+    block <body>
+
+#case 61
+#data "<!doctype html><script><!--<script><\\/script>--></script>"
+root
+  block <html>
+    block <body>
+
+#case 62
+#data "<!doctype html><script><!--<script></scr'+'ipt>--></script>"
+root
+  block <html>
+    block <body>
+
+#case 63
+#data "<!doctype html><script><!--<script></script><script></script></script>"
+root
+  block <html>
+    block <body>
+
+#case 64
+#data "<!doctype html><script><!--<script></script><script></script>--><!--</script>"
+root
+  block <html>
+    block <body>
+
+#case 65
+#data "<!doctype html><script><!--<script></script><script></script>-- ></script>"
+root
+  block <html>
+    block <body>
+
+#case 66
+#data "<!doctype html><script><!--<script></script><script></script>- -></script>"
+root
+  block <html>
+    block <body>
+
+#case 67
+#data "<!doctype html><script><!--<script></script><script></script>- - ></script>"
+root
+  block <html>
+    block <body>
+
+#case 68
+#data "<!doctype html><script><!--<script></script><script></script>-></script>"
+root
+  block <html>
+    block <body>
+
+#case 69
+#data "<!doctype html><script><!--<script>--!></script>X"
+root
+  block <html>
+    block <body>
+
+#case 70
+#data "<!doctype html><script><!--<scr'+'ipt></script>--></script>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 71
+#data "<!doctype html><script><!--<script></scr'+'ipt></script>X"
+root
+  block <html>
+    block <body>
+
+#case 72
+#data "<!doctype html><style><!--<style></style>--></style>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 73
+#data "<!doctype html><style><!--</style>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 74
+#data "<!doctype html><style><!--...</style>...--></style>"
+root
+  block <html>
+    block <body>
+      text "...-->"
+
+#case 75
+#data "<!doctype html><style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 76
+#data "<!doctype html><style><!--...<style><!--...--!></style>--></style>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 77
+#data "<!doctype html><style><!--...</style><!-- --><style>@import ...</style>"
+root
+  block <html>
+    block <body>
+
+#case 78
+#data "<!doctype html><style>...<style><!--...</style><!-- --></style>"
+root
+  block <html>
+    block <body>
+
+#case 79
+#data "<!doctype html><style>...<!--[if IE]><style>...</style>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 80
+#data "<!doctype html><title><!--<title></title>--></title>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 81
+#data "<!doctype html><title>&lt;/title></title>"
+root
+  block <html>
+    block <body>
+
+#case 82
+#data "<!doctype html><title>foo/title><link></head><body>X"
+root
+  block <html>
+    block <body>
+
+#case 83
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 84
+#data "<!doctype html><noscript><!--<noscript></noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 85
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 86
+#data "<!doctype html><noscript><!--</noscript>X<noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 87
+#data "<!doctype html><noscript><iframe></noscript>X"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+
+#case 88
+#data "<!doctype html><noscript><iframe></noscript>X"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+
+#case 89
+#data "<!doctype html><noframes><!--<noframes></noframes>--></noframes>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 90
+#data "<!doctype html><noframes><body><script><!--...</script></body></noframes></html>"
+root
+  block <html>
+    block <body>
+
+#case 91
+#data "<!doctype html><textarea><!--<textarea></textarea>--></textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+      text "-->"
+
+#case 92
+#data "<!doctype html><textarea>&lt;/textarea></textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 93
+#data "<!doctype html><textarea>&lt;</textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 94
+#data "<!doctype html><textarea>a&lt;b</textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 95
+#data "<!doctype html><iframe><!--<iframe></iframe>--></iframe>"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+      text "-->"
+
+#case 96
+#data "<!doctype html><iframe>...<!--X->...<!--/X->...</iframe>"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+
+#case 97
+#data "<!doctype html><xmp><!--<xmp></xmp>--></xmp>"
+root
+  block <html>
+    block <body>
+      block <xmp>
+        text "<!--<xmp>" white-space=Pre
+      block (anonymous)
+        text "-->"
+
+#case 98
+#data "<!doctype html><noembed><!--<noembed></noembed>--></noembed>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 99
+#data "<script>"
+root
+  block <html>
+    block <body>
+
+#case 100
+#data "<script>a"
+root
+  block <html>
+    block <body>
+
+#case 101
+#data "<script><"
+root
+  block <html>
+    block <body>
+
+#case 102
+#data "<script></"
+root
+  block <html>
+    block <body>
+
+#case 103
+#data "<script></S"
+root
+  block <html>
+    block <body>
+
+#case 104
+#data "<script></SC"
+root
+  block <html>
+    block <body>
+
+#case 105
+#data "<script></SCR"
+root
+  block <html>
+    block <body>
+
+#case 106
+#data "<script></SCRI"
+root
+  block <html>
+    block <body>
+
+#case 107
+#data "<script></SCRIP"
+root
+  block <html>
+    block <body>
+
+#case 108
+#data "<script></SCRIPT"
+root
+  block <html>
+    block <body>
+
+#case 109
+#data "<script></SCRIPT "
+root
+  block <html>
+    block <body>
+
+#case 110
+#data "<script></s"
+root
+  block <html>
+    block <body>
+
+#case 111
+#data "<script></sc"
+root
+  block <html>
+    block <body>
+
+#case 112
+#data "<script></scr"
+root
+  block <html>
+    block <body>
+
+#case 113
+#data "<script></scri"
+root
+  block <html>
+    block <body>
+
+#case 114
+#data "<script></scrip"
+root
+  block <html>
+    block <body>
+
+#case 115
+#data "<script></script"
+root
+  block <html>
+    block <body>
+
+#case 116
+#data "<script></script "
+root
+  block <html>
+    block <body>
+
+#case 117
+#data "<script><!"
+root
+  block <html>
+    block <body>
+
+#case 118
+#data "<script><!a"
+root
+  block <html>
+    block <body>
+
+#case 119
+#data "<script><!-"
+root
+  block <html>
+    block <body>
+
+#case 120
+#data "<script><!-a"
+root
+  block <html>
+    block <body>
+
+#case 121
+#data "<script><!--"
+root
+  block <html>
+    block <body>
+
+#case 122
+#data "<script><!--a"
+root
+  block <html>
+    block <body>
+
+#case 123
+#data "<script><!--<"
+root
+  block <html>
+    block <body>
+
+#case 124
+#data "<script><!--<a"
+root
+  block <html>
+    block <body>
+
+#case 125
+#data "<script><!--</"
+root
+  block <html>
+    block <body>
+
+#case 126
+#data "<script><!--</script"
+root
+  block <html>
+    block <body>
+
+#case 127
+#data "<script><!--</script "
+root
+  block <html>
+    block <body>
+
+#case 128
+#data "<script><!--<s"
+root
+  block <html>
+    block <body>
+
+#case 129
+#data "<script><!--<script"
+root
+  block <html>
+    block <body>
+
+#case 130
+#data "<script><!--<script "
+root
+  block <html>
+    block <body>
+
+#case 131
+#data "<script><!--<script <"
+root
+  block <html>
+    block <body>
+
+#case 132
+#data "<script><!--<script <a"
+root
+  block <html>
+    block <body>
+
+#case 133
+#data "<script><!--<script </"
+root
+  block <html>
+    block <body>
+
+#case 134
+#data "<script><!--<script </s"
+root
+  block <html>
+    block <body>
+
+#case 135
+#data "<script><!--<script </script"
+root
+  block <html>
+    block <body>
+
+#case 136
+#data "<script><!--<script </scripta"
+root
+  block <html>
+    block <body>
+
+#case 137
+#data "<script><!--<script </script "
+root
+  block <html>
+    block <body>
+
+#case 138
+#data "<script><!--<script </script>"
+root
+  block <html>
+    block <body>
+
+#case 139
+#data "<script><!--<script </script/"
+root
+  block <html>
+    block <body>
+
+#case 140
+#data "<script><!--<script </script <"
+root
+  block <html>
+    block <body>
+
+#case 141
+#data "<script><!--<script </script <a"
+root
+  block <html>
+    block <body>
+
+#case 142
+#data "<script><!--<script </script </"
+root
+  block <html>
+    block <body>
+
+#case 143
+#data "<script><!--<script </script </script"
+root
+  block <html>
+    block <body>
+
+#case 144
+#data "<script><!--<script </script </script "
+root
+  block <html>
+    block <body>
+
+#case 145
+#data "<script><!--<script </script </script/"
+root
+  block <html>
+    block <body>
+
+#case 146
+#data "<script><!--<script </script </script>"
+root
+  block <html>
+    block <body>
+
+#case 147
+#data "<script><!--<script -"
+root
+  block <html>
+    block <body>
+
+#case 148
+#data "<script><!--<script -a"
+root
+  block <html>
+    block <body>
+
+#case 149
+#data "<script><!--<script --"
+root
+  block <html>
+    block <body>
+
+#case 150
+#data "<script><!--<script --a"
+root
+  block <html>
+    block <body>
+
+#case 151
+#data "<script><!--<script -->"
+root
+  block <html>
+    block <body>
+
+#case 152
+#data "<script><!--<script --><"
+root
+  block <html>
+    block <body>
+
+#case 153
+#data "<script><!--<script --></"
+root
+  block <html>
+    block <body>
+
+#case 154
+#data "<script><!--<script --></script"
+root
+  block <html>
+    block <body>
+
+#case 155
+#data "<script><!--<script --></script "
+root
+  block <html>
+    block <body>
+
+#case 156
+#data "<script><!--<script --></script/"
+root
+  block <html>
+    block <body>
+
+#case 157
+#data "<script><!--<script --></script>"
+root
+  block <html>
+    block <body>
+
+#case 158
+#data "<script><!--<script><\\/script>--></script>"
+root
+  block <html>
+    block <body>
+
+#case 159
+#data "<script><!--<script></scr'+'ipt>--></script>"
+root
+  block <html>
+    block <body>
+
+#case 160
+#data "<script><!--<script></script><script></script></script>"
+root
+  block <html>
+    block <body>
+
+#case 161
+#data "<script><!--<script></script><script></script>--><!--</script>"
+root
+  block <html>
+    block <body>
+
+#case 162
+#data "<script><!--<script></script><script></script>-- ></script>"
+root
+  block <html>
+    block <body>
+
+#case 163
+#data "<script><!--<script></script><script></script>- -></script>"
+root
+  block <html>
+    block <body>
+
+#case 164
+#data "<script><!--<script></script><script></script>- - ></script>"
+root
+  block <html>
+    block <body>
+
+#case 165
+#data "<script><!--<script></script><script></script>-></script>"
+root
+  block <html>
+    block <body>
+
+#case 166
+#data "<script><!--<script>--!></script>X"
+root
+  block <html>
+    block <body>
+
+#case 167
+#data "<script><!--<scr'+'ipt></script>--></script>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 168
+#data "<script><!--<script></scr'+'ipt></script>X"
+root
+  block <html>
+    block <body>
+
+#case 169
+#data "<style><!--<style></style>--></style>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 170
+#data "<style><!--</style>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 171
+#data "<style><!--...</style>...--></style>"
+root
+  block <html>
+    block <body>
+      text "...-->"
+
+#case 172
+#data "<style><!--<br><html xmlns:v=\"urn:schemas-microsoft-com:vml\"><!--[if !mso]><style></style>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 173
+#data "<style><!--...<style><!--...--!></style>--></style>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 174
+#data "<style><!--...</style><!-- --><style>@import ...</style>"
+root
+  block <html>
+    block <body>
+
+#case 175
+#data "<style>...<style><!--...</style><!-- --></style>"
+root
+  block <html>
+    block <body>
+
+#case 176
+#data "<style>...<!--[if IE]><style>...</style>X"
+root
+  block <html>
+    block <body>
+      text "X"
+
+#case 177
+#data "<title><!--<title></title>--></title>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 178
+#data "<title>&lt;/title></title>"
+root
+  block <html>
+    block <body>
+
+#case 179
+#data "<title>foo/title><link></head><body>X"
+root
+  block <html>
+    block <body>
+
+#case 180
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 181
+#data "<noscript><!--<noscript></noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 182
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 183
+#data "<noscript><!--</noscript>X<noscript>--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 184
+#data "<noscript><iframe></noscript>X"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+
+#case 185
+#data "<noscript><iframe></noscript>X"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+
+#case 186
+#data "<noframes><!--<noframes></noframes>--></noframes>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 187
+#data "<noframes><body><script><!--...</script></body></noframes></html>"
+root
+  block <html>
+    block <body>
+
+#case 188
+#data "<textarea><!--<textarea></textarea>--></textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+      text "-->"
+
+#case 189
+#data "<textarea>&lt;/textarea></textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 190
+#data "<iframe><!--<iframe></iframe>--></iframe>"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+      text "-->"
+
+#case 191
+#data "<iframe>...<!--X->...<!--/X->...</iframe>"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+
+#case 192
+#data "<xmp><!--<xmp></xmp>--></xmp>"
+root
+  block <html>
+    block <body>
+      block <xmp>
+        text "<!--<xmp>" white-space=Pre
+      block (anonymous)
+        text "-->"
+
+#case 193
+#data "<noembed><!--<noembed></noembed>--></noembed>"
+root
+  block <html>
+    block <body>
+      text "-->"
+
+#case 194
+#data "<!doctype html><table>\n"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 195
+#data "<!doctype html><table><td><span><font></span><span>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <span>
+                  inline <font>
+                inline <font>
+                  inline <span>
+
+#case 196
+#data "<!doctype html><form><table></form><form></table></form>"
+root
+  block <html>
+    block <body>
+      block <form>
+        table-wrapper <table>
+          table <table>
+

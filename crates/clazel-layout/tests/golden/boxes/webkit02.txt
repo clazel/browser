@@ -1,0 +1,542 @@
+#case 0
+#data "<foo bar=qux/>"
+root
+  block <html>
+    block <body>
+      inline <foo>
+
+#case 1
+#data "<p id=\"status\"><noscript><strong>A</strong></noscript><span>B</span></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <noscript>
+          inline <strong>
+            text "A"
+        inline <span>
+          text "B"
+
+#case 2
+#data "<p id=\"status\"><noscript><strong>A</strong></noscript><span>B</span></p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <noscript>
+          inline <strong>
+            text "A"
+        inline <span>
+          text "B"
+
+#case 3
+#data "<div><sarcasm><div></div></sarcasm></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          inline <sarcasm> first
+        block <div>
+        block (anonymous)
+          inline <sarcasm> last
+
+#case 4
+#data "<html><body><img src=\"\" border=\"0\" alt=\"><div>A</div></body></html>"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<table><td></tbody>A"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "A"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 6
+#data "<table><td></thead>A"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "A"
+
+#case 7
+#data "<table><td></tfoot>A"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                text "A"
+
+#case 8
+#data "<table><thead><td></tbody>A"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-header-group <thead>
+            table-row <tr>
+              table-cell <td>
+                text "A"
+
+#case 9
+#data "<legend>test</legend>"
+root
+  block <html>
+    block <body>
+      block <legend>
+        text "test"
+
+#case 10
+#data "<table><input>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        replaced <input> inline Input(Text { chars: 20 })
+      table-wrapper <table>
+        table <table>
+
+#case 12
+#data "<b><em><foo><foo><aside></b>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          inline <em>
+            inline <foo>
+              inline <foo>
+        inline <em> first
+      block <aside>
+        inline <b>
+      block (anonymous)
+        inline <em> last
+
+#case 13
+#data "<b><em><foo><foo><aside></b></em>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          inline <em>
+            inline <foo>
+              inline <foo>
+        inline <em>
+      block <aside>
+        inline <em>
+          inline <b>
+
+#case 14
+#data "<b><em><foo><foo><foo><aside></b>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          inline <em>
+            inline <foo>
+              inline <foo>
+                inline <foo>
+      block <aside>
+        inline <b>
+
+#case 15
+#data "<b><em><foo><foo><foo><aside></b></em>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          inline <em>
+            inline <foo>
+              inline <foo>
+                inline <foo>
+      block <aside>
+        inline <b>
+
+#case 19
+#data "<svg><foreignObject><div>foo</div><plaintext></foreignObject></svg><div>bar</div>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg> first
+          inline <foreignObject> first
+      block <div>
+        text "foo"
+      block <plaintext>
+        text "</foreignObject></svg><div>bar</div>" white-space=Pre
+      block (anonymous)
+        inline <svg> last
+          inline <foreignObject> last
+
+#case 20
+#data "<svg><foreignObject></foreignObject><title></svg>foo"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <foreignObject>
+      text "foo"
+
+#case 21
+#data "</foreignObject><plaintext><div>foo</div>"
+root
+  block <html>
+    block <body>
+      block <plaintext>
+        text "<div>foo</div>" white-space=Pre
+
+#case 22
+#data "<svg xml:base xml:lang xml:space xml:baaah definitionurl>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 23
+#data "<math definitionurl xlink:title xlink:show>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 24
+#data "<math DEFINITIONURL>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 25
+#data "<select><hr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+      block <hr>
+      block (anonymous)
+        inline <select> last
+
+#case 26
+#data "<select><option><hr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+          inline <option>
+      block <hr>
+      block (anonymous)
+        inline <select> last
+
+#case 27
+#data "<select><optgroup><option><hr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+          inline <optgroup>
+            inline <option>
+      block <hr>
+      block (anonymous)
+        inline <select> last
+
+#case 28
+#data "<select><optgroup><hr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+          inline <optgroup>
+      block <hr>
+      block (anonymous)
+        inline <select> last
+
+#case 29
+#data "<select><option><optgroup><hr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+          inline <option>
+          inline <optgroup>
+      block <hr>
+      block (anonymous)
+        inline <select> last
+
+#case 30
+#data "<table><tr><td><select><hr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <select> first
+                block <hr>
+                block (anonymous)
+                  inline <select> last
+
+#case 31
+#data "<table><tr><td><select><option><hr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <select> first
+                    inline <option>
+                block <hr>
+                block (anonymous)
+                  inline <select> last
+
+#case 32
+#data "<table><tr><td><select><optgroup><option><hr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <select> first
+                    inline <optgroup>
+                      inline <option>
+                block <hr>
+                block (anonymous)
+                  inline <select> last
+
+#case 33
+#data "<table><tr><td><select><optgroup><hr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <select> first
+                    inline <optgroup>
+                block <hr>
+                block (anonymous)
+                  inline <select> last
+
+#case 34
+#data "<table><tr><td><select><option><optgroup><hr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <select> first
+                    inline <option>
+                    inline <optgroup>
+                block <hr>
+                block (anonymous)
+                  inline <select> last
+
+#case 35
+#data "<select><div><i></div><option>option"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+      block <div>
+        inline <i>
+      block (anonymous)
+        inline <select> last
+          inline <i>
+            inline <option>
+              text "option"
+
+#case 36
+#data "<div><i></div><option>option"
+root
+  block <html>
+    block <body>
+      block <div>
+        inline <i>
+      block (anonymous)
+        inline <i>
+          inline <option>
+            text "option"
+
+#case 37
+#data "<select><div>div 1</div><button>button</button><div>div 2</div><datalist><option>option</option></datalist><div>div 3</div></select>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+      block <div>
+        text "div 1"
+      block (anonymous)
+        inline <select> middle
+          inline-block <button>
+            text "button"
+      block <div>
+        text "div 2"
+      block <div>
+        text "div 3"
+      block (anonymous)
+        inline <select> last
+
+#case 38
+#data "<select><button>button</select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline-block <button>
+          text "button"
+
+#case 39
+#data "<select><datalist>datalist</select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 40
+#data "<select><button><select></select></button></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline-block <button>
+
+#case 41
+#data "<select><button><div><select></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline-block <button>
+          block <div>
+
+#case 42
+#data "<select><div><option><img>option</option></div></select>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+      block <div>
+        inline <option>
+          replaced <img> inline Image
+          text "option"
+      block (anonymous)
+        inline <select> last
+
+#case 43
+#data "<select><input>"
+root
+  block <html>
+    block <body>
+      inline <select>
+      replaced <input> inline Input(Text { chars: 20 })
+
+#case 44
+#data "<select><button><selectedcontent></button><option>X"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline-block <button>
+          inline <selectedcontent>
+        inline <option>
+          text "X"
+
+#case 45
+#data "<select><button><selectedcontent></button><option>x<i>i<b>ib</i>b"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline-block <button>
+          inline <selectedcontent>
+        inline <option>
+          text "x"
+          inline <i>
+            text "i"
+            inline <b>
+              text "ib"
+          inline <b>
+            text "b"
+
+#case 46
+#data "<select><button><selectedcontent></button><option>X<option>Y"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline-block <button>
+          inline <selectedcontent>
+        inline <option>
+          text "X"
+        inline <option>
+          text "Y"
+
+#case 47
+#data "<select><button><selectedcontent></button><option>X<option selected>Y"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline-block <button>
+          inline <selectedcontent>
+        inline <option>
+          text "X"
+        inline <option>
+          text "Y"
+
+#case 48
+#data "<font><select><option>a</option></font></select>"
+root
+  block <html>
+    block <body>
+      inline <font>
+        inline <select>
+          inline <option>
+            text "a"
+
