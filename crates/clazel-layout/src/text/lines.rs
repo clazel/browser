@@ -117,14 +117,15 @@ pub fn trim(units: &[Unit], start: usize, end: usize, forced: bool) -> Trim {
     // by a forced line break, in which case it must conditionally hang the
     // sequence instead."
     let mut h = e;
-    while h > s && units.get(h.saturating_sub(1)).is_some_and(hangs) {
+    let mut all_pre_wrap = true;
+    while h > s
+        && let Some(u) = units.get(h.saturating_sub(1))
+        && hangs(u)
+    {
+        all_pre_wrap &= u.style.white_space == WhiteSpace::PreWrap;
         h = h.saturating_sub(1);
     }
-    let conditional = forced
-        && h < e
-        && units
-            .get(h..e)
-            .is_some_and(|r| r.iter().all(|u| u.style.white_space == WhiteSpace::PreWrap));
+    let conditional = forced && h < e && all_pre_wrap;
     Trim {
         start: s,
         hang: h,
@@ -151,11 +152,9 @@ pub fn tab_advance(pen: i32, tab_size: i32, half_ch: i32) -> i32 {
     if tab_size <= 0 {
         return 0;
     }
-    let stops = pen.div_euclid(tab_size);
-    let next = i64::from(stops)
-        .saturating_add(1)
-        .saturating_mul(i64::from(tab_size));
-    let mut distance = next.saturating_sub(i64::from(pen));
+    // The next stop is `tab_size - (pen mod tab_size)` away, in
+    // `1..=tab_size` (the remainder is in `0..tab_size` for any pen).
+    let mut distance = i64::from(tab_size).saturating_sub(i64::from(pen.rem_euclid(tab_size)));
     if distance < i64::from(half_ch) {
         distance = distance.saturating_add(i64::from(tab_size));
     }

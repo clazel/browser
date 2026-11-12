@@ -49,6 +49,7 @@ pub enum Break {
 /// emergency wrapping (`super::wrap`), which must not split what some
 /// rules keep together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(kani, derive(kani::Arbitrary))]
 pub enum Rule {
     /// Rule LB3.
     Lb3,
@@ -171,28 +172,61 @@ pub fn effective(text: &[Props], absorbed: &[bool]) -> Vec<Props> {
     out
 }
 
+/// What LB9 and LB10 make of `text`, computed once for every position.
+struct Prepared {
+    /// LB9, per character.
+    absorbed: Vec<bool>,
+    /// The items (LB9 and LB10), in order.
+    items: Vec<Props>,
+    /// For each character, its item's index.
+    item_of: Vec<usize>,
+}
+
+impl Prepared {
+    fn new(text: &[Props]) -> Prepared {
+        let absorbed = absorbed(text);
+        let effective = effective(text, &absorbed);
+        // The items: the effective properties of the characters LB9 did
+        // not absorb, and for each character the index of the item it is in.
+        let mut items: Vec<Props> = Vec::with_capacity(text.len());
+        let mut item_of: Vec<usize> = Vec::with_capacity(text.len());
+        for (&e, &a) in effective.iter().zip(&absorbed) {
+            if !a {
+                items.push(e);
+            }
+            item_of.push(items.len().saturating_sub(1));
+        }
+        Prepared {
+            absorbed,
+            items,
+            item_of,
+        }
+    }
+
+    fn context<'a>(&'a self, text: &'a [Props]) -> Context<'a> {
+        Context {
+            text,
+            absorbed: &self.absorbed,
+            items: &self.items,
+            item_of: &self.item_of,
+        }
+    }
+}
+
 /// The break after each character of `text` (UAX #14 §6), with the rule
 /// that decided it.
 pub fn breaks_with_rules(text: &[Props]) -> Vec<(Break, Rule)> {
-    let absorbed = absorbed(text);
-    let effective = effective(text, &absorbed);
-    // The items: the effective properties of the characters LB9 did not
-    // absorb, and for each character the index of the item it is in.
-    let mut items: Vec<Props> = Vec::with_capacity(text.len());
-    let mut item_of: Vec<usize> = Vec::with_capacity(text.len());
-    for (&e, &a) in effective.iter().zip(&absorbed) {
-        if !a {
-            items.push(e);
-        }
-        item_of.push(items.len().saturating_sub(1));
-    }
-    let ctx = Context {
-        text,
-        absorbed: &absorbed,
-        items: &items,
-        item_of: &item_of,
-    };
+    let prepared = Prepared::new(text);
+    let ctx = prepared.context(text);
     (1..=text.len()).map(|i| ctx.decide(i)).collect()
+}
+
+/// The break at position `i` of `text`, between characters `i - 1` and
+/// `i` (`i == text.len()` is eot), with the rule that decided it; `i` from
+/// 1 (LB2: "sot ×" is never asked). The same decision as
+/// [`breaks_with_rules`]'s entry `i - 1`.
+pub fn break_at(text: &[Props], i: usize) -> (Break, Rule) {
+    Prepared::new(text).context(text).decide(i)
 }
 
 /// The break after each character of `text` (UAX #14 §6).

@@ -182,19 +182,33 @@ pub fn wraps_from(units: &[Unit], props: &[Props]) -> Vec<Wrap> {
     let props: Vec<Props> = (0..units.len())
         .map(|i| props.get(i).copied().unwrap_or(Props::LETTER_A))
         .collect();
+    let rules = breaks_with_rules(&props);
+    wraps_from_breaks(units, &props, &rules)
+}
+
+/// [`wraps_from`] with UAX #14's decision after each unit given (`rules`,
+/// as `breaks_with_rules` gives them for `props`; a missing one counts as
+/// eot's). The CSS layer alone, for the Kani harnesses.
+pub fn wraps_from_breaks(units: &[Unit], props: &[Props], rules: &[(Break, Rule)]) -> Vec<Wrap> {
+    let props: Vec<Props> = (0..units.len())
+        .map(|i| props.get(i).copied().unwrap_or(Props::LETTER_A))
+        .collect();
     let absorbed = absorbed(&props);
     let effective = effective(&props, &absorbed);
-    let rules = breaks_with_rules(&props);
     let analysis = Analysis {
         units,
         props: &props,
         absorbed: &absorbed,
         effective: &effective,
     };
-    rules
-        .iter()
-        .enumerate()
-        .map(|(i, &(b, rule))| analysis.decide(i, b, rule))
+    (0..units.len())
+        .map(|i| {
+            let (b, rule) = rules
+                .get(i)
+                .copied()
+                .unwrap_or((Break::Mandatory, Rule::Lb3));
+            analysis.decide(i, b, rule)
+        })
         .collect()
 }
 
