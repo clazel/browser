@@ -26,6 +26,7 @@ mod llhttp;
 mod nist_cavp_sigver;
 mod wpt_base64;
 mod wpt_cookies;
+mod wpt_css_cascade;
 mod wpt_css_selectors;
 mod wpt_css_syntax;
 mod wpt_css_values;
@@ -70,6 +71,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         "wpt-mediaqueries",
         wpt_mediaqueries::convert,
         wpt_mediaqueries::FILES,
+    ),
+    (
+        "wpt-css-cascade",
+        wpt_css_cascade::convert,
+        wpt_css_cascade::FILES,
     ),
     (
         "wpt-css-syntax",

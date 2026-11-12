@@ -3,9 +3,11 @@
 //! [`values`] reads a declaration's component values, as `clazel-css` parsed them, into
 //! the typed values of the properties of the subset, expands shorthands, and serializes
 //! them as CSSOM does. [`sources`] finds a document's style sheets and `style` attributes,
-//! in order, and evaluates media queries. Item 5.7's cascade will be the module `cascade`.
+//! in order, and evaluates media queries. [`cascade`] gives every element its computed
+//! values (item 5.7).
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and `docs/VERIFICATION.md`.
 
+pub mod cascade;
 pub mod sources;
 pub mod values;

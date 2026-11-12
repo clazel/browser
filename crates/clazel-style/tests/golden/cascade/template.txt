@@ -1,0 +1,929 @@
+#case 0
+#data "<body><template>Hello</template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 1
+#data "<template>Hello</template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 2
+#data "<template></template><div></div>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 3
+#data "<html><template>Hello</template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<head><template><div></div></template></head>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<div><template><div><span></template><b>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <template> display=None
+      <b> font-weight=700
+
+#case 6
+#data "<div><template></div>Hello"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <template> display=None
+
+#case 7
+#data "<div></template></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 8
+#data "<table><template></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 9
+#data "<table><template></template></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 10
+#data "<table><div><template></template></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <template> display=None
+    <table> display=Table border-spacing=2px 2px
+
+#case 11
+#data "<table><template></template><div></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 12
+#data "<table>   <template></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 13
+#data "<table><tbody><template></template></tbody>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <template> display=None
+
+#case 14
+#data "<table><tbody><template></tbody></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <template> display=None
+
+#case 15
+#data "<table><tbody><template></template></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <template> display=None
+
+#case 16
+#data "<table><thead><template></template></thead>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <thead> display=TableHeaderGroup vertical-align=Middle
+        <template> display=None
+
+#case 17
+#data "<table><tfoot><template></template></tfoot>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tfoot> display=TableFooterGroup vertical-align=Middle
+        <template> display=None
+
+#case 18
+#data "<select><template></template></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <template> display=None
+
+#case 19
+#data "<select><template><option></option></template></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <template> display=None
+
+#case 20
+#data "<template><option></option></select><option></option></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 21
+#data "<select><template></template><option></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <template> display=None
+      <option>
+
+#case 22
+#data "<select><option><template></template></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <option>
+        <template> display=None
+
+#case 23
+#data "<select><template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <template> display=None
+
+#case 24
+#data "<select><option></option><template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <option>
+      <template> display=None
+
+#case 25
+#data "<select><option></option><template><option>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <option>
+      <template> display=None
+
+#case 26
+#data "<table><thead><template><td></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <thead> display=TableHeaderGroup vertical-align=Middle
+        <template> display=None
+
+#case 27
+#data "<table><template><thead></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 28
+#data "<body><table><template><td></tr><div></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 29
+#data "<table><template><thead></template></thead></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 30
+#data "<table><thead><template><tr></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <thead> display=TableHeaderGroup vertical-align=Middle
+        <template> display=None
+
+#case 31
+#data "<table><template><tr></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 32
+#data "<table><tr><template><td>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <template> display=None
+
+#case 33
+#data "<table><template><tr><template><td></template></tr></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 34
+#data "<table><template><tr><template><td></td></template></tr></template></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 35
+#data "<table><template><td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 36
+#data "<body><template><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 37
+#data "<body><template><template><tr></tr></template><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 38
+#data "<table><colgroup><template><col>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+        <template> display=None
+
+#case 39
+#data "<frameset><template><frame></frame></template></frameset>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+    <frame>
+
+#case 40
+#data "<template><frame></frame></frameset><frame></frame></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 41
+#data "<template><div><frameset><span></span></div><span></span></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 42
+#data "<body><template><div><frameset><span></span></div><span></span></template></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 43
+#data "<head><template></template></head><p><frameset>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <frameset>
+
+#case 44
+#data "<template>x</template><p><frameset>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <frameset>
+
+#case 45
+#data "<head></head><template></template><p><frameset>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <frameset>
+
+#case 46
+#data "<p><template></template><frameset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <template> display=None
+
+#case 47
+#data "<p><template><frameset></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <template> display=None
+
+#case 48
+#data "<template></template>x<frameset>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 49
+#data "<body><template><script>var i = 1;</script><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 50
+#data "<body><template><tr><div></div></tr></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 51
+#data "<table><template><tr><div></div></tr></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <template> display=None
+
+#case 52
+#data "<body><template><tr></tr><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 53
+#data "<body><template><td></td></tr><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 54
+#data "<body><template><td></td><tbody><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 55
+#data "<body><template><td></td><caption></caption><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 56
+#data "<body><template><td></td><colgroup></caption><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 57
+#data "<body><template><td></td></table><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 58
+#data "<body><template><tr></tr><tbody><tr></tr></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 59
+#data "<body><template><tr></tr><caption><tr></tr></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 60
+#data "<body><template><tr></tr></table><tr></tr></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 61
+#data "<body><template><thead></thead><caption></caption><tbody></tbody></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 62
+#data "<body><template><thead></thead></table><tbody></tbody></template></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 63
+#data "<body><template><div><tr></tr></div></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 64
+#data "<body><template><em>Hello</em></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 65
+#data "<body><template><!--comment--></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 66
+#data "<body><template><style></style><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 67
+#data "<body><template><meta><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 68
+#data "<body><template><link><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 69
+#data "<body><table><colgroup><template><col></col></template></colgroup></table></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+        <template> display=None
+
+#case 70
+#data "<body a=b><template><div></div><body c=d><div></div></body></template></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 71
+#data "<html a=b><template><div><html b=c><span></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 72
+#data "<html a=b><template><col></col><html b=c><col></col></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 73
+#data "<html a=b><template><frame></frame><html b=c><frame></frame></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 74
+#data "<body><template><tr></tr><template></template><td></td></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 75
+#data "<body><template><thead></thead><template><tr></tr></template><tr></tr><tfoot></tfoot></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 76
+#data "<body><template><template><b><template></template></template>text</template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 77
+#data "<body><template><col><colgroup>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 78
+#data "<body><template><col></colgroup>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 79
+#data "<body><template><col><colgroup></template></body>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 80
+#data "<body><template><col><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 81
+#data "<body><template><col></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 82
+#data "<body><template><col>Hello"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 83
+#data "<body><template><i><menu>Foo</i>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 84
+#data "<body><template></div><div>Foo</div><template></template><tr></tr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 85
+#data "<body><div><template></div><tr><td>Foo</td></tr></template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <template> display=None
+
+#case 86
+#data "<template></figcaption><sub><table></table>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 87
+#data "<template><template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 88
+#data "<template><div>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 89
+#data "<template><template><div>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 90
+#data "<template><template><table>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 91
+#data "<template><template><tbody>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 92
+#data "<template><template><tr>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 93
+#data "<template><template><td>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 94
+#data "<template><template><caption>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 95
+#data "<template><template><colgroup>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 96
+#data "<template><template><col>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 97
+#data "<template><template><tbody><select>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 98
+#data "<template><template><table>Foo"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 99
+#data "<template><template><frame>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 100
+#data "<template><template><script>var i"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 101
+#data "<template><template><style>var i"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 102
+#data "<template><table></template><body><span>Foo"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <span>
+
+#case 103
+#data "<template><td></template><body><span>Foo"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <span>
+
+#case 104
+#data "<template><object></template><body><span>Foo"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <span>
+
+#case 105
+#data "<template><svg><template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 106
+#data "<template><svg><foo><template><foreignObject><div></template><div>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 107
+#data "<dummy><template><span></dummy>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <dummy>
+      <template> display=None
+
+#case 108
+#data "<body><table><tr><td><select><template>Foo</template><caption>A</table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <template> display=None
+      <caption> display=TableCaption text-align=Center
+
+#case 109
+#data "<body></body><template>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <template> display=None
+
+#case 110
+#data "<head></head><template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 111
+#data "<head></head><template>Foo</template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 112
+#data "<html><head></head><template></template><head>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 113
+#data "<!DOCTYPE HTML><dummy><table><template><table><template><table><script>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <dummy>
+      <table> display=Table border-spacing=2px 2px
+        <template> display=None
+
+#case 114
+#data "<template><a><table><a>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 116
+#data "<template><table><form></table></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 118
+#data "<template><form><form><input></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 120
+#data "<template><form><template></template><form></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 121
+#data "<template><template><form></template><form></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 122
+#data "<form><template><form></template><form>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <form> margin-bottom=16px display=Block
+      <template> display=None
+
+#case 124
+#data "<!DOCTYPE HTML><template><tr><td>cell</td></tr></template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 125
+#data "<!DOCTYPE HTML><template> <tr> <td>cell</td> </tr> </template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 126
+#data "<!DOCTYPE HTML><template><tr><td>cell</td></tr>a</template>"
+<html> display=Block
+  <head> display=None
+    <template> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+

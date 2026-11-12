@@ -1,0 +1,122 @@
+#case 0
+#data "<!DOCTYPE html><p><b><i><u></p> <p>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+          <u> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <b> font-weight=700
+      <i> font-style=Italic
+        <u> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 1
+#data "<p><b><i><u></p>\n<p>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <b> font-weight=700
+        <i> font-style=Italic
+          <u> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+    <b> font-weight=700
+      <i> font-style=Italic
+        <u> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+          <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 2
+#data "<!doctype html></html> <head>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 3
+#data "<!doctype html></body><meta>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <meta> display=None
+
+#case 4
+#data "<html></html><!-- foo -->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<!doctype html></body><title>X</title>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <title> display=None
+
+#case 6
+#data "<!doctype html><table> X<meta></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <meta> display=None
+    <table> display=Table border-spacing=2px 2px
+
+#case 7
+#data "<!doctype html><table> x</table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+
+#case 8
+#data "<!doctype html><table> x </table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+
+#case 9
+#data "<!doctype html><table><tr> x</table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 10
+#data "<!doctype html><table>X<style> <tr>x </style> </table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <style> display=None
+
+#case 11
+#data "<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <a>
+      <table> display=Table border-spacing=2px 2px
+        <tbody> display=TableRowGroup vertical-align=Middle
+          <tr> display=TableRow vertical-align=Middle
+            <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+
+#case 12
+#data "<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes></frameset><noframes>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+    <frame>
+    <frameset>
+      <frame>
+    <noframes> display=None
+
+#case 13
+#data "<!DOCTYPE html><object></html>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <object>
+
