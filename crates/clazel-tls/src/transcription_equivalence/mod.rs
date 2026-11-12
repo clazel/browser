@@ -69,6 +69,7 @@ pub mod host;
 pub mod keys;
 pub mod messages;
 pub mod negotiation;
+pub mod post_handshake;
 pub mod record;
 pub mod schedule;
 pub mod transcript;
