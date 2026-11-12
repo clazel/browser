@@ -48,10 +48,11 @@ OS through them):
    mutation a certified `killed`, conformance tests, an independent
    transcription each); `clazel-displaylist` at **tier 2**, the GPU process's
    parser of a renderer's bytes; `clazel-style`, `clazel-font` and
-   `clazel-raster` at **tier 1** (Kani harnesses over all inputs up to stated
-   bounds); `clazel-layout`, `clazel-gpu`, `clazel-window`, `clazel-renderer` and
-   `clazel` at tier 0 with their items' evidence; `clazel-ipc` and
-   `clazel-kernel` still at tier 2 with 5.18's and 5.19's schema and theorems.
+   `clazel-glyph-mask` at **tier 1** (Kani harnesses over all inputs up to
+   stated bounds); `clazel-layout`, `clazel-gpu`, `clazel-window`,
+   `clazel-renderer` and `clazel` at tier 0 with their items' evidence;
+   `clazel-ipc` and `clazel-kernel` still at tier 2 with 5.18's and 5.19's
+   schema and theorems.
 2. **Suites**, vendored at pinned commits, run through the shipped code, each
    printing its `clazel-conformance:` line (`xtask/src/conformance.rs`) with
    every expected failure listed by name and reason: CSS syntax, Servo's
@@ -112,9 +113,9 @@ OS through them):
 2. **Proven free of panics and overflow (Kani, tier 1):** the property value
    parsers, the cascade and computed values (`clazel-style`); the OpenType
    table parsers and outline decoding (`clazel-font`); the glyph mask rasterizer
-   (`clazel-raster`). Each harness covers every input up to a bound written in
-   the harness and the crate's README; correctness evidence is the conformance
-   and differential tests.
+   (`clazel-glyph-mask`). Each harness covers every input up to a bound written
+   in the harness and the crate's README; correctness evidence is the
+   conformance and differential tests.
 3. **Small and tested (Tier 0, listed in VERIFICATION.md's TCB):** the layout
    (`clazel-layout`), the renderer's pipeline glue, the GPU process's drawing
    code (`clazel-gpu`), and the host's window code (`clazel-window`) and event
@@ -167,7 +168,7 @@ content, which is Tier 0 code with a test, not a theorem.
 | `clazel-style` | 0 (1) | CSS Cascade 4 §4, §6, §7; CSS 2.1 §6; CSS Values 4; CSS Color 4; CSS Fonts 3 §3; Media Queries 4 (subset); CSS Style Attributes; HTML §15.2 to §15.5; Quirks Mode | property value grammars of the subset, shorthands, the user agent style sheet, presentational hints, the cascade, inheritance, computed values as a side table keyed by node id |
 | `clazel-font` | 0 (1) | OpenType 1.9† (font file, collections, `cmap`, `head`, `hhea`, `hmtx`, `maxp`, `loca`, `glyf`, `name`, `OS/2`, `post`, `kern`, `GPOS` type 2; `CFF` per 5.0(c)); Apple TrueType Reference Manual (second text) | the table directory, each table's parser, glyph outlines as quadratic contours, advances, kerning lookups |
 | `clazel-layout` | 0 (0) | CSS 2.1 §8 to §11, §16, §17, Appendix E; CSS Text 3; CSS Tables 3 (auto layout)†; UAX #14; HTML §15.3, §15.4; Quirks Mode §3 | the box tree, block, inline and table formatting, white space, line breaking, font matching and the shaping glue, hit testing, the display list. **Replaces `clazel-text`** (5.0(g)) |
-| `clazel-raster` | 0 (1) | none (ours); the OpenType `glyf` chapter fixes the outline semantics | glyph outlines to coverage masks in the renderer: flattening and anti-aliased coverage only, no surface, no blending |
+| `clazel-glyph-mask` | 0 (1) | none (ours); the OpenType `glyf` chapter fixes the outline semantics | glyph outlines to coverage masks in the renderer: flattening and anti-aliased coverage only, no surface, no blending |
 | `clazel-displaylist` | 0 (2) | ours | the display list's types, its encoder and decoder, and the validator every list passes before any GPU call |
 | `clazel-gpu` | 0 (0) | Vulkan 1.x specification†; Apple's Metal documentation; Microsoft Learn's Direct3D 12 and DXGI pages | the GPU process: fixed pipelines and shaders, batching a validated list, a glyph atlas, drawing into shared buffers; Metal, Vulkan and Direct3D 12 backends |
 | `clazel-window` | 0 (0) | X Window System Protocol (X11R7)† on Linux; Apple's AppKit and Core Graphics documentation on macOS; Microsoft Learn's Win32 and DirectComposition pages on Windows | the host's window: open, present a surface, read events; per 5.0(e) |
@@ -895,7 +896,8 @@ explicit, composite glyphs flattened with their transforms to a stated nesting
 depth (a component cycle or depth beyond the bound is an empty glyph, listed,
 for the hostile font of 5.26), scaled from font units to pixels in fixed point
 (26.6, as FreeType's convention, a listed choice) at the used font size. The
-outline type is `clazel-raster`'s path input, so 5.17 can start with it alone.
+outline type is `clazel-glyph-mask`'s path input, so 5.17 can start with it
+alone.
 
 Font matching, in `clazel-layout`: CSS Fonts 3 §5.2† "matching font styles"
 over the font table 5.0(c) gives (family name to faces with weight, width and
@@ -1052,7 +1054,7 @@ Tests: unit tests per item kind; the WPT `CSS2/colors`, `backgrounds`† and
 
 ### 5.17 Glyph masks (M)
 
-`crates/clazel-raster`, target tier 1, run in the renderer. The GPU draws
+`crates/clazel-glyph-mask`, target tier 1, run in the renderer. The GPU draws
 rectangles and textured quads; glyph shapes are turned into coverage masks here,
 as browsers' GPU rasterizers generally also do, so font bytes never reach the
 GPU process, only masks. Input: closed contours of lines and quadratic Béziers
@@ -1503,9 +1505,9 @@ area below it, a child window or layer showing the buffer the latest `Paint` for
 tab names, which the OS clips to it (its size is already at most the viewport,
 5.18). The host draws
 its own text (the address bar) with `clazel-font`, `clazel-layout`'s shaping
-and `clazel-raster`'s masks, blended into the strip by a few lines of its own
-(the host has no GPU), on a bundled or system font, outside the sandbox; it never
-draws a byte the page chose in the strip. The page's title (from
+and `clazel-glyph-mask`'s masks, blended into the strip by a few lines of its
+own (the host has no GPU), on a bundled or system font, outside the sandbox; it
+never draws a byte the page chose in the strip. The page's title (from
 `Paint.title`) goes to the window's title bar, after the URL, so that a title
 cannot look like the address. The loop applies every queued event before it draws
 one frame: drawing once per event fell behind in 5.22a's first slice, with input

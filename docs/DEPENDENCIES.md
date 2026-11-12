@@ -243,6 +243,7 @@ Changing a row is a reviewable act. Adding one means saying why below.
 | unicode-ccc | 0.4.0 | test | The Unicode Canonical_Combining_Class property, required by `rustybuzz`. No dependencies. `#![forbid(unsafe_code)]`. |
 | unicode-properties | 0.1.5 | test | Unicode General_Category (the only feature `rustybuzz` enables), required by `rustybuzz`. No dependencies. |
 | unicode-script | 0.5.9 | test | The Unicode Script property, required by `rustybuzz`. No dependencies. |
+| ab_glyph_rasterizer | 0.1.10 | test | Alex Butler's coverage rasterizer (used by `ab_glyph`, `glyph_brush` and `wgpu_glyph`), a descendant of `font-rs`: the reference engine in `clazel-glyph-mask`'s differential test (`tests/conformance_masks.rs`, phase-5.md item 5.17), the same signed-area accumulation in `f32` written by another author. Used without default features but with `std`, which is its only default; `cargo tree` shows no dependencies (`libm` is optional and off). It has `unsafe` only to call its line function through a pointer chosen by CPU feature detection (all variants are the same scalar code). Pinned to 0.1.10, its latest release. |
 <!-- END ALLOWLIST -->
 
 The only `shipped` package is `libc`, and only `clazel-sys` depends on it
