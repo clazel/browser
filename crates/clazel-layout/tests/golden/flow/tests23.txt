@@ -1,0 +1,79 @@
+#case 0
+#data "<p><font size=4><font color=red><font size=4><font size=4><font size=4><font size=4><font size=4><font color=red><p>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x616
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+      block <p> 8,16 784x20.953125 m=16,0,16,0
+        line 8,16 784x20.953125 base=32.703125
+          inline <font> 8,17.84375 12.8125x18.640625 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          text "X" x=8 base=32.703125 w=12.8125
+
+#case 1
+#data "<p><font size=4><font size=4><font size=4><font size=4><p>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x616
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+      block <p> 8,16 784x20.953125 m=16,0,16,0
+        line 8,16 784x20.953125 base=32.703125
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          text "X" x=8 base=32.703125 w=12.8125
+
+#case 2
+#data "<p><font size=4><font size=4><font size=4><font size=\"5\"><font size=4><p>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x616
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+      block <p> 8,16 784x27.9375 m=16,0,16,0
+        line 8,16 784x27.9375 base=38.28125
+          inline <font> 8,21.578125 12.8125x20.953125 start end
+          inline <font> 8,21.578125 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x27.9375 start end
+          inline <font> 8,21.578125 12.8125x20.953125 start end
+          text "X" x=8 base=38.28125 w=12.8125
+
+#case 3
+#data "<p><font size=4 id=a><font size=4 id=b><font size=4><font size=4><p>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x616
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+      block <p> 8,16 784x20.953125 m=16,0,16,0
+        line 8,16 784x20.953125 base=32.703125
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          inline <font> 8,16 12.8125x20.953125 start end
+          text "X" x=8 base=32.703125 w=12.8125
+
+#case 4
+#data "<p><b id=a><b id=a><b id=a><b><object><b id=a><b id=a>X</object><p>Y"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <p> 8,8 784x18.640625 m=0,0,16,0
+        line 8,8 784x18.640625 base=22.859375
+          inline <b> 8,8 11.390625x18.640625 start end
+          inline <b> 8,8 11.390625x18.640625 start end
+          inline <b> 8,8 11.390625x18.640625 start end
+          inline <b> 8,8 11.390625x18.640625 start end
+          inline <object> 8,8 11.390625x18.640625 start end
+          inline <b> 8,8 11.390625x18.640625 start end
+          inline <b> 8,8 11.390625x18.640625 start end
+          text "X" x=8 base=22.859375 w=11.390625
+      block <p> 8,42.640625 784x18.640625 m=16,0,16,0
+        line 8,42.640625 784x18.640625 base=57.5
+          inline <b> 8,42.640625 10.5625x18.640625 start end
+          inline <b> 8,42.640625 10.5625x18.640625 start end
+          inline <b> 8,42.640625 10.5625x18.640625 start end
+          inline <b> 8,42.640625 10.5625x18.640625 start end
+          text "Y" x=8 base=57.5 w=10.5625
+

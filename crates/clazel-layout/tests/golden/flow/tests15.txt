@@ -1,0 +1,134 @@
+#case 0
+#data "<!DOCTYPE html><p><b><i><u></p> <p>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x0 m=16,0,16,0
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "X" x=8 base=30.859375 w=11.390625
+      block (anonymous) 8,50.640625 784x0
+
+#case 1
+#data "<p><b><i><u></p>\n<p>X"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x616
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "X" x=8 base=30.859375 w=11.390625
+      block (anonymous) 8,50.640625 784x0
+
+#case 2
+#data "<!doctype html></html> <head>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 3
+#data "<!doctype html></body><meta>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 4
+#data "<html></html><!-- foo -->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 5
+#data "<!doctype html></body><title>X</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 6
+#data "<!doctype html><table> X<meta></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "X" x=8 base=22.859375 w=11.390625
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 7
+#data "<!doctype html><table> x</table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "x" x=8 base=22.859375 w=9.015625
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 8
+#data "<!doctype html><table> x </table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "x" x=8 base=22.859375 w=9.015625
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 9
+#data "<!doctype html><table><tr> x</table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "x" x=8 base=22.859375 w=9.015625
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+          row-group <tbody> 8,26.640625 0x0
+            row <tr> 8,26.640625 0x0
+
+#case 10
+#data "<!doctype html><table>X<style> <tr>x </style> </table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "X" x=8 base=22.859375 w=11.390625
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 11
+#data "<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x55.28125
+    block <body> 8,8 784x39.28125 m=8,8,8,8
+      block <div> 8,8 784x39.28125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            inline <a> 8,8 25.1875x18.640625 start end
+            text "foo" x=8 base=22.859375 w=25.1875
+        table-wrapper <table> 8,26.640625 29.4375x20.640625 m=0,754.5625,0,0
+          table <table> 8,26.640625 29.4375x20.640625
+            row-group <tbody> 8,26.640625 29.4375x20.640625
+              row <tr> 8,26.640625 29.4375x20.640625
+                cell <td> 8,26.640625 29.4375x20.640625 p=1,1,1,1
+                  line 9,27.640625 27.4375x18.640625 base=42.5
+                    text "bar" x=9 base=42.5 w=27.4375
+
+#case 12
+#data "<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes></frameset><noframes>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 13
+#data "<!DOCTYPE html><object></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+

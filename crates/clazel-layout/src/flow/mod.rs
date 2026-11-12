@@ -105,7 +105,8 @@ pub mod state;
 pub mod style;
 pub mod widths;
 
-
+#[cfg(test)]
+mod tests;
 pub use block::Mode;
 pub use fonts::{BoxFont, FaceFonts, FontMetrics, ShapedGlyph, TextFns};
 pub use fragment::{

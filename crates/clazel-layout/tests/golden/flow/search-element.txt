@@ -1,0 +1,115 @@
+#case 0
+#data "<!doctype html><p>foo<search>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <search> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 1
+#data "<!doctype html><search><p>foo</search>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <search> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><search><b>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "xxx" x=8 base=22.859375 w=27.078125
+      block <search> 8,26.640625 784x0
+      block (anonymous) 8,26.640625 784x0
+
+#case 3
+#data "<!doctype html><a><search>x</a>y"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <search> 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <a> 8,8 9.03125x18.640625 start end
+          text "x" x=8 base=22.859375 w=9.03125
+          text "y" x=17.03125 base=22.859375 w=9.046875
+
+#case 4
+#data "<!doctype html><a><search>x<p>y<a>z"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,8 784x53.28125 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <search> 8,8 784x53.28125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            inline <a> 8,8 9.03125x18.640625 start end
+            text "x" x=8 base=22.859375 w=9.03125
+        block <p> 8,42.640625 784x18.640625 m=16,0,16,0
+          line 8,42.640625 784x18.640625 base=57.5
+            inline <a> 8,42.640625 9.046875x18.640625 start end
+            inline <a> 17.046875,42.640625 8.4375x18.640625 start end
+            text "y" x=8 base=57.5 w=9.046875
+            text "z" x=17.046875 base=57.5 w=8.4375
+
+#case 5
+#data "<!doctype html><li>a<search><li>b"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x53.28125
+    block <body> 8,8 784x37.28125 m=8,8,8,8
+      block <li> 8,8 784x37.28125
+        marker <li> -6.53125,8 14.53125x18.640625
+          line -6.53125,8 14.53125x18.640625 base=22.859375
+            text "• " x=-6.53125 base=22.859375 w=14.53125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            text "a" x=8 base=22.859375 w=9.546875
+        block <search> 8,26.640625 784x18.640625
+          block <li> 8,26.640625 784x18.640625
+            line 8,26.640625 784x18.640625 base=41.5
+              text "b" x=8 base=41.5 w=10.25
+            marker <li> -6.53125,26.640625 14.53125x18.640625
+              line -6.53125,26.640625 14.53125x18.640625 base=41.5
+                text "• " x=-6.53125 base=41.5 w=14.53125
+
+#case 6
+#data "<!doctype html><dd>a<search><dt>b"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x53.28125
+    block <body> 8,8 784x37.28125 m=8,8,8,8
+      block <dd> 48,8 744x37.28125 m=0,0,0,40
+        block (anonymous) 48,8 744x18.640625
+          line 48,8 744x18.640625 base=22.859375
+            text "a" x=48 base=22.859375 w=9.546875
+        block <search> 48,26.640625 744x18.640625
+          block <dt> 48,26.640625 744x18.640625
+            line 48,26.640625 744x18.640625 base=41.5
+              text "b" x=48 base=41.5 w=10.25
+
+#case 7
+#data "<!doctype html><x><search></x>y"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <search> 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "y" x=8 base=22.859375 w=9.046875
+      block (anonymous) 8,26.640625 784x0
+

@@ -1,0 +1,29 @@
+#case 0
+#data "<isindex>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 1
+#data "<isindex name=\"A\" action=\"B\" prompt=\"C\" foo=\"D\">"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 2
+#data "<form><isindex>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <form> 8,16 784x0 m=0,0,16,0
+
+#case 3
+#data "<!doctype html><isindex>x</isindex>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <isindex> 8,8 9.03125x18.640625 start end
+        text "x" x=8 base=22.859375 w=9.03125
+        text "x" x=17.03125 base=22.859375 w=9.03125
+
