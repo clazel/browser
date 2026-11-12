@@ -248,44 +248,89 @@ value), opportunities per property value (`white-space`, `word-break`,
 `overflow-wrap`, forced breaks, atomic inlines, Thai), Phase II trimming and
 hanging, CSS Text 3 §4.1.2's three `pre-wrap` examples (line contents and
 conditional hanging as the text renders them), line choice with and without
-`overflow-wrap`, min-content and max-content, and tab stops.
+`overflow-wrap`, min-content and max-content, and tab stops. Two more compare
+the step formulations with `src/text/reference.rs`, the first readings (UAX
+#14 looking through the whole text from each position; Phase I as five
+passes): `uax14_step_matches_reference` on every string of 1 to 3 over an
+alphabet of every class and the flag combinations the rules read, and on
+200,000 random strings of 4 to 16 weighted towards long space, mark, RI and
+number runs; `collapse_step_matches_reference` on every sequence of 1 to 4
+over 30 (character kind, `white-space`) symbols and on 100,000 random ones of
+5 to 24. Flipping the step's RI parity makes the first fail.
 
-Kani harnesses (`src/text/proofs.rs`): no panic, overflow or out-of-bounds
-index, every loop's unwinding checked, and the stated properties, on every
-input within the bounds. Measured locally, one harness at a time with
-`cargo kani -p clazel-layout --harness … --exact`, each in its own process
-group capped at 20 minutes and 8 GB (resident set of the whole group, polled
-every 5 s), on an Apple-silicon Mac. Times are wall clock including cargo's
-start; memory is the larger of the 5 s samples and the largest child's
-`getrusage` peak.
+**Steps.** Each pass is a loop whose body is a step over a small state
+(`src/text/state.rs`, which states each state's invariant as a function):
 
-| Harness | Inputs | Time | Peak memory |
-|---------|--------|------|-------------|
-| `uax14_any_2` | UAX #14 at both positions (between, and eot) of any 2 characters' properties (any class and flags): LB3, LB4, LB7, LB9, and mandatory breaks only after BK, CR, LF, NL | 29.2 s | 0.76 GB |
-| `uax14_at_1_of_3` | the same at the first position of any 3 (one character of context after) | 27.9 s | 0.75 GB |
-| `uax14_at_2_of_3` | the same at the second position of any 3 (one character of context before) | 31.1 s | 0.75 GB |
-| `wraps_any_2` | CSS's opportunities over any 2 units, properties, styles and UAX #14 decisions: forced exactly where mandatory, nothing soft where `white-space` forbids wrapping | 54.1 s | 7.25 GB |
-| `trim_any_3` | Phase II on any 3 units and any bounds: the reported ranges are ordered and inside the units | 2.7 s | 0.26 GB |
-| `break_lines_any_3` | line choice on any 3 units, opportunities, advances and available width: lines are non-empty and cover the units in order | 19.5 s | 1.61 GB |
-| `intrinsic_any_3` | min-content and max-content on any 3 units, opportunities and advances | 4.0 s | 0.30 GB |
-| `tab_advance_any` | tab stops on any pen, tab size and half `ch`: never negative, at most two tab sizes, 0 for a size ≤ 0 | 1.5 s | 0.18 GB |
+- UAX #14 (`uax14::step`) keeps the previous character's class, LB8's `ZW
+  SP*`, the last two items, the last item before spaces with LB15a's start
+  context, LB25's `NU ( SY | IS )*` and `… ( CL | CP )`, and LB30a's RI
+  parity; the right context is the at most two items that LB15b, LB15c,
+  LB19a, LB25 and LB28a read, passed as arguments. No rule needs more: every
+  unbounded context in the rules is a regular expression the state follows.
+- Phase I (`collapse::step`) keeps what the last unit kept was, a pending
+  collapsible space that a later segment break retracts (step 1's
+  "preceding"), and whether only spaces have come since the last segment
+  break (step 1's "following").
+- The CSS opportunity (`wrap::wrap_at`) reads only the two units around a
+  position. Choosing lines (`lines::fit_step`) and measuring
+  (`Measure::add`) step over the line being filled.
 
-Capped and changed on the way (none retried as it was): every harness first
-built its input as a `Vec`, which put `trim_any_4`, `break_lines_any_4` and
-`intrinsic_any_4` over 8 GB within 40 s; they now slice a fixed array and
-were shrunk to 3 units. `uax14_any_3` (all positions of 3 characters) passed
-8 GB after 11 minutes and was split by position; the rules' class sets became
-bitmasks so membership has no loop. `wraps_any_3` passed 8 GB and was shrunk
-to 2 units; at 7.25 GB it is the closest to the cap. An earlier `tab_advance`
-with a division and a 64-bit product ran 10 minutes and was rewritten with one
-`rem_euclid` (no behaviour change).
+The restructuring changed no result: `LineBreakTest.txt` gave 19,346 /
+19,346 (default) and 19,209 with 137 expected differences (CSS) before and
+after, and every unit test passed unchanged.
 
-**Not covered by Kani**: Phase I (`collapse::collapse_raw`), whose harness
-exceeded 8 GB at 4, 3 and 2 characters and was removed (unit tests cover it);
-the character tables (bisection over thousands of ranges; the harnesses take
-the properties as arbitrary values, and the conformance test covers the
-tables); reading a `&str` into units; and inputs longer than the bounds. CI
-has not run these harnesses yet.
+Kani harnesses (`src/text/proofs.rs`). A **step harness** takes any state
+satisfying the invariant and any next input, and checks no panic, overflow
+or out-of-bounds index, the stated properties, and that the invariant is
+kept; the start state satisfies it, so by induction the properties hold for
+texts **of every length**. A **driver harness** runs a whole pass on bounded
+inputs, as a cross-check that the driver calls its step correctly. Measured
+locally, one harness at a time with `cargo kani -p clazel-layout --harness …
+--exact`, each in its own process group capped at 20 minutes and 8 GB
+(resident set of the whole group, polled every 5 s), on an Apple-silicon Mac.
+Times are wall clock including cargo's start; memory is the larger of the
+5 s samples and the largest child's `getrusage` peak.
+
+| Harness | Kind | What it checks | Time | Peak memory |
+|---------|------|----------------|------|-------------|
+| `uax14_step_any` | step, every length | UAX #14 from any state, any character, any right context: LB2 at sot, LB4, LB7, LB9, mandatory breaks only after BK, CR, LF, NL; invariant kept | 8.5 s | 0.39 GB |
+| `collapse_step_any` | step, every length | Phase I: at most one unit per character, only a pending space retracted, never a collapsible space right after another (bidi aside); invariant kept | 1.6 s | 0.19 GB |
+| `wrap_at_any` | step, every length | CSS's opportunity: forced exactly where UAX #14 is mandatory or at the end; nothing soft or emergency where neither unit's `white-space` wraps | 1.9 s | 0.20 GB |
+| `measure_add_any` | step, every length | measuring a line: saturating, leading spaces and forced breaks take no width | 1.4 s | 0.19 GB |
+| `fit_step_any` | step, every length | choosing lines: a line ends after at least one unit and at most at the unit added; a line that goes on keeps the invariant | 2.0 s | 0.20 GB |
+| `tab_advance_any` | any values | tab stops: never negative, at most two tab sizes, 0 for a size ≤ 0 | 1.5 s | 0.20 GB |
+| `uax14_driver_matches_reference_2` | driver, bounded | `breaks_with_rules` equals `reference.rs`'s reading on any 2 characters' properties | 40.1 s | 1.10 GB |
+| `intrinsic_any_3` | driver, bounded | min-content and max-content on any 3 units, opportunities and advances | 4.1 s | 0.35 GB |
+| `trim_any_3` | bounded | Phase II on any 3 units and bounds: the reported ranges are ordered and inside the units | 2.8 s | 0.26 GB |
+
+**Proved for every length**: `uax14::step` (and so `breaks_with_rules`'s
+decisions, which are its outputs in order), `collapse::step`, `wrap::wrap_at`,
+`Measure::add`, `lines::fit_step`, `lines::tab_advance`. **Only for bounded
+inputs**: the drivers as whole loops (`uax14::breaks_with_rules` against the
+reference on 2 characters; the intrinsic sizes on 3 units) and
+`lines::trim`, which walks back from a line's end rather than stepping.
+
+Capped, shrunk or removed on the way (none retried as it was). Before the
+restructuring, bounded whole-string harnesses (2 to 4 characters) were the
+only coverage: building inputs as a `Vec` put `trim_any_4`,
+`break_lines_any_4` and `intrinsic_any_4` over 8 GB; `uax14_any_3` passed 8 GB
+after 11 minutes and was split by position; `wraps_any_3` passed 8 GB; a
+Phase I harness passed 8 GB at 4, 3 and 2 characters; and a `tab_advance`
+with a division and a 64-bit product ran 10 minutes (rewritten with one
+`rem_euclid`). After it, driver harnesses for Phase I (`collapse_driver_any_3`,
+then `_any_2`) and for `break_lines` (`break_lines_any_3`, then `_any_2`)
+passed 8 GB and were removed; their steps are proved for every length.
+`collapse_step_any` first failed because the stated invariant was weaker than
+what the driver keeps (it allowed a segment break as the last unit without
+`after_break`); the invariant now states the equivalence.
+
+**Not covered by Kani**: the character tables (bisection over thousands of
+ranges; the harnesses take the properties as arbitrary values, and the
+conformance test covers the tables); that each step computes exactly the
+rules beyond the asserted properties (the equivalence tests and the bounded
+driver harness compare it with the reference reading); the Phase I and
+`break_lines` drivers as whole loops (above); and reading a `&str` into
+units. CI has not run these harnesses yet.
 
 Miri: every test this item adds, measured one test per process with
 `cargo +nightly-2026-08-21 miri test -p clazel-layout … --exact -Z
@@ -297,12 +342,14 @@ before any rule ran; the file's line count is checked natively only.
 
 | Test | Miri time |
 |------|-----------|
-| `conformance_linebreak::line_break_test` (99 sampled lines, both suites) | 35.0 s |
+| `text::tests::collapse_step_matches_reference` (every 997th exhaustive sequence, 60 random) | 82.5 s |
+| `text::tests::uax14_step_matches_reference` (every 997th exhaustive string, 60 random) | 46.8 s |
+| `conformance_linebreak::line_break_test` (99 sampled lines, both suites) | 35.9 s |
 | `text::tests::overflow_wrap_is_used_only_without_soft_opportunities` | 0.95 s |
-| `text::tests::intrinsic_sizes` | 0.90 s |
-| `text::tests::word_break` | 0.87 s |
+| `text::tests::intrinsic_sizes` | 0.91 s |
+| `text::tests::word_break` | 0.85 s |
+| `text::tests::pre_wrap_example_three_ch` | 0.83 s |
 | `text::tests::normal_wraps_after_spaces` | 0.83 s |
-| `text::tests::pre_wrap_example_three_ch` | 0.82 s |
 | the other 17 unit tests in `text::tests` | under 0.6 s each |
 
 **WPT**: the `css/css-text/white-space/` and `css/css-text/line-breaking/`

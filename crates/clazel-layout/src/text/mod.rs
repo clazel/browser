@@ -53,6 +53,12 @@
 //!   order, so "at the end of a line (after bidi reordering)" is the
 //!   logical end.
 //! - **Lengths** are 26.6 fixed point in `i32`, as in [`crate::shape`].
+//! - **Every pass is a step over a small state** ([`state`]): UAX #14,
+//!   Phase I, the opportunity at a position, measuring and choosing lines.
+//!   The drivers only feed units to the steps, so the Kani harnesses over
+//!   any state satisfying the invariant cover texts of every length.
+//!   [`mod@reference`] keeps the first, whole-text readings of UAX #14 and Phase
+//!   I as the oracles the steps are tested against.
 
 /// A set of line breaking classes, one bit per `Lb` variant:
 /// `lb_set![SP, HY]` is UAX #14's `[SP HY]`. A mask rather than a slice, so

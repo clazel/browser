@@ -187,7 +187,7 @@ impl Measure {
     /// caller's `width` at this pen; not read when [`Measure::takes_width`]
     /// is false): leading collapsible spaces (Phase II step 1) and forced
     /// breaks take no width, and the width for fit stops before what Phase
-    /// II removes or hangs at the end ([`trailing`]).
+    /// II removes or hangs at the end.
     pub fn add(self, u: &Unit, advance: i32) -> Measure {
         if !self.takes_width(u) {
             return self;
