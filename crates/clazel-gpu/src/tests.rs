@@ -38,12 +38,49 @@ fn run(scene: &Scene) -> Result<(), String> {
     Ok(())
 }
 
+fn scene(name: &str) -> Result<(), String> {
+    let scene = scenes::all()
+        .into_iter()
+        .find(|s| s.name == name)
+        .ok_or_else(|| format!("no scene {name}"))?;
+    run(&scene)
+}
+
 #[test]
-fn every_scene_matches_the_reference() -> Result<(), String> {
-    for scene in scenes::all() {
-        run(&scene)?;
-    }
-    Ok(())
+fn every_scene_is_tested() {
+    let names: Vec<&str> = scenes::all().iter().map(|s| s.name).collect();
+    assert_eq!(names, ["fill", "clips", "masks", "frames", "atlas"]);
+}
+
+#[test]
+fn scene_fill() -> Result<(), String> {
+    scene("fill")
+}
+
+#[test]
+fn scene_clips() -> Result<(), String> {
+    scene("clips")
+}
+
+#[test]
+fn scene_masks() -> Result<(), String> {
+    scene("masks")
+}
+
+#[test]
+fn scene_frames() -> Result<(), String> {
+    scene("frames")
+}
+
+/// Ignored under Miri: its 2.3 MB of coverage go through the byte-by-byte encoder
+/// and decoder, and the whole scene list took 523 s on Miri's clock, past CI's 300 s
+/// per test. Under Miri, a compaction in the middle of a list is covered by
+/// `batch::tests::a_compaction_closes_the_open_batch` and
+/// `atlas::tests::a_full_store_is_compacted_in_id_order`.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn scene_atlas() -> Result<(), String> {
+    scene("atlas")
 }
 
 #[test]

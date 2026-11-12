@@ -104,46 +104,60 @@ One harness per process, each with a 20-minute and 8 GB cap.
 | Test | Time under Miri |
 |------|-----------------|
 
+## The Metal backend
+
+`src/metal.rs`, macOS on Apple silicon only, through `clazel_sys::macos::metal`
+(every foreign call is there, under CLAUDE.md rule 1). The shaders are compiled at
+start from `quad.metal` as embedded at build time (the machine has no offline Metal
+toolchain); one command buffer per frame holds uploads as blit copies from a staging
+buffer and render passes between them, under scissors, into a texture on an IOSurface
+the backend makes (`Target`, which item 5.18 can supply instead); the frame is
+committed and waited for. Any nil, failed compile or command buffer error is a
+`BackendError`.
+
+`tests/metal.rs` draws every scene and compares each list's pixels with the software
+reference (within one level per channel) and with the stored pixels in
+`tests/pixels/` (exactly). On the development machine (Apple M1 Pro, macOS 26) every
+channel of every scene equals the reference: the largest difference is 0. A mutant
+shader with full coverage for every mask fails both comparisons. Without a Metal
+device (CI's macOS runner may have none) the tests print why and pass; they have run
+only on that machine.
+
 ## What is left of item 5.17b
 
-- **The Metal backend.** Blocked on a question for the maintainer (below). Its design:
-  `MTLCreateSystemDefaultDevice`, one command queue, the library compiled at start
-  from `quad.metal` (embedded at build time; the machine has no offline Metal
-  toolchain), one render pipeline blending one / one minus source alpha into
-  `RGBA8Unorm`, the target a texture on an IOSurface the backend creates
-  (`IOSurfaceCreate`), the quads and each upload copied by `newBufferWithBytes`
-  (each is one audited call that copies), uploads as blit copies ordered with the
-  draws, scissors by `setScissorRect:`, and the pixels read by `getBytes:` for the
-  tests. Every list item is to be tested against stored pixels and the reference,
-  skipping with a printed reason where there is no device.
 - **The Vulkan backend** (Linux, lavapipe in CI). It needs: `clazel-sys` linking only
   `libvulkan`; hand-written `#[repr(C)]` structures checked against the
-  specification; the checker taught to accept a call through a function pointer
-  looked up with `vkGetDeviceProcAddr` (for `VK_KHR_external_memory_fd` and
-  `VK_EXT_external_memory_dma_buf`); no WSI extension; the SPIR-V committed here; and
-  the rows copied into a mapped buffer by one audited call.
+  specification; extension functions (`VK_KHR_external_memory_fd`,
+  `VK_EXT_external_memory_dma_buf`) looked up with `vkGetDeviceProcAddr`, which needs
+  the checker's dispatcher casts (below) extended to a second kind of dispatcher, a
+  looked-up pointer rather than a symbol, decided when that backend is built; no WSI
+  extension; the SPIR-V committed here; and the atlas uploads as buffer copies like
+  Metal's, or rows copied into a mapped buffer by one audited call.
 - **The Direct3D 12 backend** (Windows, WARP as fallback). It needs: the checker
   taught to accept a COM call through a vtable, with hand-written vtable declarations
   audited against the headers; the shaders stored compiled for Direct3D (DXBC, unless
   the prototype finds DXIL's signing workable) with a check like the SPIR-V one;
   presenting with `CreateSwapChainForCompositionSurfaceHandle`, with no window.
 - **Neither can run on the development machine** (an Apple-silicon Mac).
+- **Intel Macs** are not supported by the Metal backend (shared-storage textures and
+  `BOOL` as `bool` are Apple silicon's).
+- **The shared buffers and the process boundary** are items 5.18 and 5.21a.
 
-## The question for the maintainer
+## How Metal is reached: dispatcher casts
 
-The plan reaches Metal through several `#[link_name = "objc_msgSend"]` declarations,
+The plan reached Metal through several `#[link_name = "objc_msgSend"]` declarations,
 one per message signature (items 5.17b and 5.21). That does not build: rustc's
 `clashing_extern_declarations` lint, a warning by default, fires on the second
 declaration of the same symbol with another signature (measured on 1.98.1), and CI
-denies warnings. Every way round it changes the audit rule:
+denies warnings. The maintainer delegated the choice, and the form taken is:
+`objc_msgSend` is declared once, with no parameters, and each signature is one
+`const` holding one `std::mem::transmute` of it to an `unsafe extern "C" fn(..)`
+type, which is the cast Apple's documentation prescribes. `xtask/src/sys.rs`
+accepts exactly that form and rejects every other `transmute`, use of the
+dispatcher, or call through a pointer. It changes the wording CLAUDE.md rule 1
+needs, which is proposed for the maintainer, not made here.
 
-1. **Typed function pointers** (recommended): declare `objc_msgSend` once and give
-   each signature a `const` function pointer made by `transmute` of it, which is the
-   cast Apple's documentation prescribes for calling `objc_msgSend`. The checker would
-   accept exactly that form (a listed name, the one source, a function-pointer type)
-   and calls through the listed names. Vulkan needs the same form for
-   `vkGetDeviceProcAddr`, which the plan already asks for. It changes the wording of
-   CLAUDE.md rule 1 ("one call to a foreign function"), so it is not decided here.
-2. Allow `clashing_extern_declarations` in `clazel-sys`'s manifest, which weakens a
-   lint (CLAUDE.md rule 2).
-3. Assembly trampolines under distinct symbols, a new kind of code to audit.
+The casts are declared `extern "C"`: an Objective-C exception thrown through one
+would unwind into Rust where that ABI forbids it. Metal raises exceptions for API
+misuse, which the wrappers' checks are there to rule out; whether the casts should be
+`extern "C-unwind"` instead is left to review.

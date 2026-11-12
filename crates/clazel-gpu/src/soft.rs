@@ -167,8 +167,8 @@ mod tests {
     /// more than half a level off, and opaque full coverage gives the colour.
     /// 2^32 cases are too many for a test, so `c` and `a` take every value, `k` a
     /// spread of 16 and `d` every 15th. Under `cfg(miri)`, which is far slower, `c`
-    /// and `a` still take every value but `k` and `d` only 2 each, so the test
-    /// stays well under CI's 300 s per test.
+    /// and `a` take every 5th value and `k` and `d` 2 each: with every value of `c`
+    /// and `a` it measured 290 s on Miri's clock, too near CI's 300 s per test.
     #[test]
     fn blending_is_the_exact_value_rounded() {
         let ks: &[u8] = if cfg!(miri) {
@@ -184,8 +184,9 @@ mod tests {
             (0..=255).step_by(15).collect()
         };
         for &k in ks {
-            for a in 0..=255u8 {
-                for c in 0..=255u8 {
+            let step = if cfg!(miri) { 5 } else { 1 };
+            for a in (0..=255u8).step_by(step) {
+                for c in (0..=255u8).step_by(step) {
                     for &d in &ds {
                         let exact = (f64::from(c) * f64::from(k) / 255.0
                             + f64::from(d) * (1.0 - f64::from(a) * f64::from(k) / 65_025.0))

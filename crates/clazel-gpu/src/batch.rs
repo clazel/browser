@@ -171,10 +171,10 @@ impl Builder {
     /// Add a quad under the current clip, cut to the viewport.
     pub fn draw(&mut self, mut quad: Quad) -> Result<(), Error> {
         let scissor = self.clip()?;
-        quad.rect = quad.rect.intersect(self.screen);
-        if scissor.is_empty() || quad.rect.intersect(scissor).is_empty() {
+        let Some(rect) = visible(quad.rect, self.screen, scissor) else {
             return Ok(());
-        }
+        };
+        quad.rect = rect;
         let next = u32::try_from(self.frame.quads.len()).map_err(|_| Error::Range)?;
         match self.open {
             Some((open, _)) if open == scissor => {}
@@ -211,6 +211,13 @@ impl Builder {
         }
         Ok(self.frame)
     }
+}
+
+/// A quad's rectangle cut to the viewport, if any of it shows under `scissor`:
+/// then it is inside the viewport and not empty, and `scissor` is not empty.
+pub fn visible(rect: Rect, screen: Rect, scissor: Rect) -> Option<Rect> {
+    let cut = rect.intersect(screen);
+    (!scissor.is_empty() && !cut.intersect(scissor).is_empty()).then_some(cut)
 }
 
 /// Build the frame for a list that passed the validator, updating the atlas.
@@ -334,6 +341,64 @@ mod tests {
             build(&[ExecItem::PopClip], view()?, &mut Atlas::new()).map(|_| ()),
             Err(Error::Range)
         );
+        Ok(())
+    }
+
+    /// A compaction in the middle of a list: the draw before it is a batch of its
+    /// own, closed before the store is replaced, and the moved mask is uploaded
+    /// again before the draw after it. Small enough for Miri.
+    #[test]
+    fn a_compaction_closes_the_open_batch() -> Result<(), Error> {
+        let mask = |id: u32| ExecItem::UploadMask {
+            id,
+            columns: 512,
+            rows: 512,
+            coverage: vec![1; 262_144],
+        };
+        let draw = |id: u32| ExecItem::DrawMask {
+            id,
+            x: 0,
+            y: 0,
+            colour: 0xffff_ffff,
+        };
+        let items = [
+            mask(0),
+            mask(1),
+            mask(2),
+            draw(1),
+            ExecItem::FreeMask { id: 0 },
+            mask(3),
+            mask(4),
+            draw(1),
+        ];
+        let frame = build(&items, view()?, &mut Atlas::new())?;
+        let kinds: Vec<(&str, u32)> = frame
+            .ops
+            .iter()
+            .map(|op| match op {
+                Op::Atlas { capacity } => ("atlas", *capacity),
+                Op::Upload { offset, .. } => ("upload", *offset),
+                Op::Draw { first, .. } => ("draw", *first),
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                ("atlas", 1 << 20),
+                ("upload", 0),
+                ("upload", 262_144),
+                ("upload", 524_288),
+                ("upload", 786_432),
+                ("draw", 0),
+                ("atlas", 2 << 20),
+                ("upload", 0),
+                ("upload", 262_144),
+                ("upload", 524_288),
+                ("upload", 786_432),
+                ("draw", 1),
+            ]
+        );
+        assert_eq!(frame.quads.get(1).map(|q| q.offset), Some(0));
         Ok(())
     }
 

@@ -212,34 +212,6 @@ impl Atlas {
     }
 }
 
-#[cfg(kani)]
-impl Atlas {
-    /// An atlas in any state, for a harness to constrain.
-    pub(crate) fn for_proof(
-        capacity: u32,
-        top: u32,
-        live: u32,
-        table: Vec<Option<Entry>>,
-    ) -> Atlas {
-        Atlas {
-            capacity,
-            top,
-            live,
-            table,
-        }
-    }
-
-    /// The table, for a harness.
-    pub(crate) fn table_for_proof(&self) -> &[Option<Entry>] {
-        &self.table
-    }
-
-    /// The live bytes, for a harness.
-    pub(crate) fn live_for_proof(&self) -> u32 {
-        self.live
-    }
-}
-
 /// Where a mask of `size` bytes goes in a store of `capacity` bytes whose first
 /// free byte is `top`, if it fits: `top` itself.
 pub fn place(capacity: u32, top: u32, size: u32) -> Option<u32> {
