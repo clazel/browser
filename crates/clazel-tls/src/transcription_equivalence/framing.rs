@@ -107,7 +107,6 @@
 use crate::connection::framing_spec::{Feed, Status};
 #[cfg(verus_only)]
 use crate::spec::Read;
-#[cfg(verus_only)]
 use crate::transcription::alerts::ClientError;
 #[cfg(verus_only)]
 use crate::transcription::connection::{Connection, Progress, Protection, Receive};
