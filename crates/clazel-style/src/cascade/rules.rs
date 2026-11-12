@@ -21,14 +21,24 @@
 //! must pass its proven check ([`clazel_selectors::exec_check::check`]); each such
 //! one-selector list is checked once, when the rule is prepared, and a rule where one fails
 //! falls back to the whole list and its greatest specificity.
+//!
+//! Before matching, [`Selectors::match_element`] skips an element no complex selector of
+//! the list can match by its subject's type selector: §21.3† matches the rightmost
+//! compound selector against the element first, and a type selector in it matches only an
+//! element whose local name is its name (ASCII-lowercased, for an HTML element; §5.1†,
+//! `clazel_selectors::spec::type_name_matches`); an `:is()` or `:where()` there matches
+//! only what one of its argument's selectors does ([`subject_names`]). Skipping returns
+//! what matching would, and saves matching the user agent sheet's rules for other elements
+//! against every element. The same test skips, within a list matched one complex selector
+//! at a time, the complex selectors that cannot match.
 
 use clazel_css::parser::contract::MAX_PARSER_INPUT;
-use clazel_dom::exec::Arena;
+use clazel_dom::exec::{Arena, ExecKind};
 use clazel_selectors::exec_check::check;
 use clazel_selectors::exec_match::matches;
 use clazel_selectors::exec_parse::parse_selector;
 use clazel_selectors::exec_specificity::{ExecSpecificity, complex_specificity_of};
-use clazel_selectors::exec_types::{ExecRange, ExecSelectors};
+use clazel_selectors::exec_types::{ExecRange, ExecSelectors, ExecSimple};
 
 use super::logical;
 use super::sort::Specificity;
@@ -78,6 +88,63 @@ pub struct Selectors {
     /// True if every complex selector of the list can be matched alone (see the module's
     /// documentation).
     one_by_one: bool,
+    /// For each complex selector of the list, the local names an element must have one of
+    /// to match it, or `None` ([`subject_names`]).
+    subjects: Vec<Option<Vec<Vec<u32>>>>,
+}
+
+/// The deepest `:is()` and `:where()` nesting [`subject_names`] looks into.
+const SUBJECT_DEPTH: u32 = 4;
+
+/// The local names an element must have one of to match complex selector `ci`, by its
+/// subject (its last compound selector), or `None` if it may have any. A type selector
+/// there gives its name; else an `:is()` or `:where()` there, which matches an element when
+/// one of its argument's complex selectors does, gives the names of those complex
+/// selectors' subjects together, unless one of them may have any (§21.3†, §4.2†, §4.4†).
+/// The arguments' lists are earlier in `parsed` than the list holding them, and the search
+/// stops at [`SUBJECT_DEPTH`] levels.
+fn subject_names(parsed: &ExecSelectors, ci: usize, depth: u32) -> Option<Vec<Vec<u32>>> {
+    let complex = parsed.complexes.get(ci)?;
+    let last = complex.compounds.hi.checked_sub(1)?;
+    if last < complex.compounds.lo {
+        return None;
+    }
+    let compound = parsed.compounds.get(last)?;
+    let simples = parsed.simples.get(compound.lo..compound.hi)?;
+    if let Some(name) = simples.iter().find_map(|s| match s {
+        ExecSimple::Type { name, .. } => Some(name.clone()),
+        _ => None,
+    }) {
+        return Some(vec![name]);
+    }
+    let inner = depth.checked_sub(1)?;
+    simples.iter().find_map(|s| {
+        let (ExecSimple::Is { list } | ExecSimple::Where { list }) = s else {
+            return None;
+        };
+        let range = parsed.lists.get(*list)?;
+        let mut names = Vec::new();
+        for k in range.lo..range.hi {
+            names.extend(subject_names(parsed, k, inner)?);
+        }
+        Some(names)
+    })
+}
+
+/// Whether type selector `name` may match an element whose local name is `local`: §5.1†
+/// compares the name ASCII-lowercased for an HTML element, as written otherwise; either
+/// equality is necessary for a match.
+fn type_may_match(name: &[u32], local: &[u32]) -> bool {
+    name == local
+        || (name.len() == local.len()
+            && name.iter().zip(local).all(|(&n, &l)| {
+                let lower = if (0x41..=0x5A).contains(&n) {
+                    n.saturating_add(0x20)
+                } else {
+                    n
+                };
+                lower == l
+            }))
 }
 
 fn specificity(s: ExecSpecificity) -> Specificity {
@@ -104,6 +171,9 @@ impl Selectors {
         }
         let mut specificities = Vec::new();
         let mut one_by_one = true;
+        let subjects = (list.lo..list.hi)
+            .map(|ci| subject_names(&parsed, ci, SUBJECT_DEPTH))
+            .collect();
         for ci in list.lo..list.hi {
             specificities.push(specificity(complex_specificity_of(&parsed, list_index, ci)));
             parsed.lists.push(ExecRange {
@@ -119,24 +189,46 @@ impl Selectors {
             list_index,
             specificities,
             one_by_one,
+            subjects,
         })
+    }
+
+    /// False only if no complex selector of the list can match element `x`, by its
+    /// subject's type selector (see the module's documentation).
+    pub fn may_match(&self, arena: &Arena, x: usize) -> bool {
+        (0..self.subjects.len()).any(|k| self.complex_may_match(arena, x, k))
+    }
+
+    /// False only if the `k`th complex selector of the list cannot match element `x`.
+    fn complex_may_match(&self, arena: &Arena, x: usize, k: usize) -> bool {
+        let ExecKind::Element { local_name, .. } = arena.kind(x) else {
+            return true;
+        };
+        match self.subjects.get(k) {
+            Some(Some(names)) => names.iter().any(|n| type_may_match(n, local_name)),
+            _ => true,
+        }
     }
 
     /// The specificity in effect when the list is matched against element `x`, or `None`
     /// if it does not match. `x` must be a node of `arena`, which must be one the tree
     /// builder made (`clazel-selectors`' precondition: a well-formed document).
     pub fn match_element(&mut self, arena: &Arena, x: usize) -> Option<Specificity> {
-        if x >= arena.len() || !matches(arena, &self.parsed, x) {
+        if x >= arena.len() || !self.may_match(arena, x) {
             return None;
         }
-        let greatest = self.specificities.iter().copied().max();
         if self.specificities.len() <= 1 || !self.one_by_one {
-            return greatest;
+            return matches(arena, &self.parsed, x)
+                .then(|| self.specificities.iter().copied().max())
+                .flatten();
         }
+        // A list matches an element when one of its complex selectors does (§21.3†, as
+        // `clazel_selectors::spec::match_list` models it), so matching each alone gives both
+        // whether the list matches and the most specific selector that does.
         let mut best: Option<Specificity> = None;
         for (k, ci) in (self.list.lo..self.list.hi).enumerate() {
             let s = self.specificities.get(k).copied().unwrap_or_default();
-            if best.is_some_and(|b| b >= s) {
+            if best.is_some_and(|b| b >= s) || !self.complex_may_match(arena, x, k) {
                 continue;
             }
             self.parsed.lists.push(ExecRange {
@@ -149,8 +241,7 @@ impl Selectors {
                 best = Some(s);
             }
         }
-        // The list matched, so one of its selectors did.
-        best.or(greatest)
+        best
     }
 
     /// The index of the rule's list in the parse (for tests).
@@ -206,6 +297,42 @@ mod tests {
         let mut t = Selectors::parse(&u(":is(p, #x) q, q")).unwrap_or_else(|| unreachable!());
         assert_eq!(t.match_element(&arena, q), sp(0, 0, 1));
         assert!(Selectors::parse(&u("p:unknown")).is_none());
+    }
+
+    #[test]
+    fn subject_type_skips_only_non_matches() {
+        let mut arena = Arena::new(u("about:blank"));
+        let html = element(&mut arena, 0, "html", &[]);
+        let div = element(&mut arena, html, "div", &[("class", "c")]);
+        let p = element(&mut arena, div, "p", &[("class", "c")]);
+        let q = element(&mut arena, div, "q", &[]);
+        let cases: &[(&str, &[bool])] = &[
+            ("div p", &[false, false, true, false]),
+            ("P", &[false, false, true, false]),
+            ("p.c, q", &[false, false, true, true]),
+            (":is(p) q", &[false, false, false, true]),
+            (":is(p, q)", &[false, false, true, true]),
+            (":where(:is(div), p)", &[false, true, true, false]),
+            (":is(p, .c)", &[true, true, true, true]),
+            (":not(p)", &[true, true, true, true]),
+            (".c", &[true, true, true, true]),
+            ("p > *", &[true, true, true, true]),
+            ("*|div", &[false, true, false, false]),
+        ];
+        for &(text, may) in cases {
+            let mut s = Selectors::parse(&u(text)).unwrap_or_else(|| unreachable!());
+            for (k, x) in [html, div, p, q].into_iter().enumerate() {
+                assert_eq!(
+                    s.may_match(&arena, x),
+                    may.get(k) == Some(&true),
+                    "{text} {k}"
+                );
+                // Skipping never changes the result.
+                let full = matches(&arena, &s.parsed, x);
+                assert!(s.may_match(&arena, x) || !full, "{text} {k}");
+                assert_eq!(s.match_element(&arena, x).is_some(), full, "{text} {k}");
+            }
+        }
     }
 
     #[test]
