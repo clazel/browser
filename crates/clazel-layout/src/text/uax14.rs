@@ -12,7 +12,7 @@
 //! - **Output**: one [`Break`] per character, for the position *after* it;
 //!   the last one is the position before eot. The position before the first
 //!   character (after sot) is never a break (LB2) and has no entry.
-//! - **"The rules are applied in order"**: [`decide`] tries each rule at a
+//! - **"The rules are applied in order"**: `Context::decide` tries each rule at a
 //!   position and returns at the first that matches, so the implicit
 //!   "otherwise" before each rule is the order of the `if`s.
 //! - **LB9 and LB10** are a rewrite of the sequence, which we do once:

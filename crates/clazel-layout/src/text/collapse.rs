@@ -24,7 +24,7 @@
 //!   all respects". Its [`Unit`] keeps its offset in the item.
 //! - **Bidi formatting characters are skipped when looking for neighbours**
 //!   ("ignoring bidi formatting characters (characters with the
-//!   Bidi_Control property [UAX9]) as if they were not there"); they stay in
+//!   Bidi_Control property \[UAX9\]) as if they were not there"); they stay in
 //!   the output. Bidi_Control is U+061C, U+200E, U+200F, U+202A to U+202E
 //!   and U+2066 to U+2069 (PropList.txt; the set is stable).
 //! - **"Collapsed to have zero advance width"**: such a space is removed. Its
