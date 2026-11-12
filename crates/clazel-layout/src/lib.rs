@@ -13,6 +13,7 @@
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
 
+pub mod boxes;
 pub mod fonts;
 pub mod shape;
 pub mod text;

@@ -336,8 +336,10 @@ dependencies = [
 name = "clazel-layout"
 version = "0.0.0"
 dependencies = [
+ "clazel-dom",
  "clazel-font",
  "clazel-style",
+ "clazel-treebuilder",
  "rustybuzz",
 ]
 
