@@ -228,8 +228,10 @@ verification of the harnesses is green.
     `monochrome`, `aspect-ratio`, `device-*`, `color-index`, `scan`, `grid`,
     `overflow-*`, `update`, `hover`, `pointer` and their `any-` forms) or the `ch` unit,
     each listed with its reason when the test runs.
-- **Miri**: under `cfg!(miri)` `test_media_queries.html` runs every fourth case (each
-  tokenizes and parses one or two short strings, which Miri runs about a thousand times
-  slower); the other two suites are small and run whole. **No Miri time has been measured
-  for these tests**: the local run was lost when the machine went down, and Miri was not
-  run again.
+- **Miri** (`--report-time`, Miri's clock, nightly-2026-08-21, locally): the whole crate
+  passes, 37 tests in about 181 s of Miri time, none over 42 s. Under `cfg!(miri)`
+  `test_media_queries.html` runs every fourth case (each tokenizes and parses one or two
+  short strings): 18 s; the reftests run whole in 35 s and `match-media-parsing.html` in
+  2.5 s. `deep_nesting_is_bounded` nests 1,000 levels under Miri instead of 100,000: 15 s,
+  where 100,000 passed 10 minutes without finishing (and ran out CI's 6-hour Miri job on
+  the first push of this branch).
