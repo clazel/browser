@@ -637,4 +637,549 @@ pub proof fn theorem_framing_equivalence(p: Primitives)
     }
 }
 
+// ---------------------------------------------------------------------------
+// The transcription's stream, record by record.
+// ---------------------------------------------------------------------------
+
+/// §5: on a stream with no whole record, `receive_stream` waits (the bytes
+/// are its incomplete last record) or refuses the header's length, as
+/// [`split`] says.
+pub proof fn lemma_stream_partial(p: Primitives, c: Connection, w: Seq<u8>)
+    requires !c.read_closed, split(c, w).records.len() == 0,
+    ensures
+        crate::transcription::connection::receive_stream(p, c, w).0 == match split(c, w).end {
+            SplitEnd::Partial(_) => Receive::Continue(Progress { connection: c, application_data: seq![],
+                records_to_send: seq![] }),
+            SplitEnd::TooLong(e) => Receive::Abort(e),
+        },
+{
+}
+
+/// §5: the transcription's client reads a stream that starts with a whole
+/// record `b` as `b`, then the rest from where `b` left it
+/// (`post_handshake::joined`), with D.4's dummy record
+/// (`dispatcher::lifted`).
+pub proof fn lemma_client_prefix(p: Primitives, cl: crate::transcription::middlebox::ClientConnection,
+    b: Seq<u8>, rest: Seq<u8>)
+    requires super::bootstrap::whole_record(b), !cl.connection.read_closed,
+    ensures
+        crate::transcription::middlebox::client_receive_stream(p, cl, b + rest).0
+            == super::dispatcher::lifted(cl, super::post_handshake::joined(
+                super::bootstrap::one_record(p, cl.connection, b),
+                |c2: Connection| crate::transcription::connection::receive_stream(p, c2, rest).0)),
+{
+    super::post_handshake::lemma_stream_prefix(p, cl.connection, b, rest);
+    super::bootstrap::lemma_stream_one(p, cl.connection, b);
+}
+
+/// A record that changes nothing but the connection, and writes and
+/// delivers nothing, leaves the rest of the stream to the connection after
+/// it.
+pub proof fn lemma_client_continue(p: Primitives, cl: crate::transcription::middlebox::ClientConnection,
+    c2: Connection, rest: Seq<u8>)
+    ensures
+        super::dispatcher::lifted(cl, super::post_handshake::joined(
+            Receive::Continue(Progress { connection: c2, application_data: seq![], records_to_send: seq![] }),
+            |c3: Connection| crate::transcription::connection::receive_stream(p, c3, rest).0))
+        == crate::transcription::middlebox::client_receive_stream(p,
+            crate::transcription::middlebox::ClientConnection { connection: c2, ..cl }, rest).0,
+{
+    match crate::transcription::connection::receive_stream(p, c2, rest).0 {
+        Receive::Continue(two) => {
+            assert(Seq::<u8>::empty() + two.application_data =~= two.application_data);
+            assert(Seq::<Seq<u8>>::empty() + two.records_to_send =~= two.records_to_send);
+        },
+        _ => {},
+    }
+}
+
+/// `lifted` of a result that writes nothing keeps the client as it is but
+/// for the connection.
+pub proof fn lemma_lifted_quiet(cl: crate::transcription::middlebox::ClientConnection, c2: Connection)
+    ensures
+        super::dispatcher::lifted(cl, Receive::Continue(Progress { connection: c2, application_data: seq![],
+            records_to_send: seq![] }))
+        == (crate::transcription::middlebox::ClientReceive::Continue {
+            client: crate::transcription::middlebox::ClientConnection { connection: c2, ..cl },
+            application_data: seq![], records_to_send: seq![] }),
+{
+}
+
+// ---------------------------------------------------------------------------
+// The bootstrap (`hello/bootstrap_spec.rs`) on a stream.
+// ---------------------------------------------------------------------------
+
+/// What a run of the bootstrap's `feed` leaves: its last action, the state,
+/// the framer's bytes and the input consumed.
+pub struct BootRun {
+    /// The last action (`None`: it waits for more bytes).
+    pub action: crate::hello::bootstrap_spec::Action,
+    /// The bootstrap after the run.
+    pub state: crate::hello::bootstrap_spec::State,
+    /// The bytes the framer holds.
+    pub framing: Seq<u8>,
+    /// Input bytes consumed.
+    pub consumed: nat,
+}
+
+/// Whether the bootstrap's caller feeds it more: the last call had no
+/// effect, and it still waits for the server's Hello.
+pub open spec fn boot_goes_on(s: crate::hello::bootstrap_spec::State,
+    a: crate::hello::bootstrap_spec::Action) -> bool
+{
+    a is None && s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello
+}
+
+/// The bootstrap's caller, on the chunks `chunk` then `chunks`: `feed` the
+/// chunk, and again on what it did not consume, while [`boot_goes_on`];
+/// when the chunk is used up, the next. Any other action is the caller's to
+/// handle (send and acknowledge, hand over, or end), with the unconsumed
+/// bytes kept (`bootstrap_spec::feed`: "Caller-owned suffix bytes remain
+/// unconsumed").
+pub open spec fn boot_drive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    framing: Seq<u8>, chunk: Seq<u8>, chunks: Seq<Seq<u8>>) -> BootRun
+    decreases chunks.len(), chunk.len(),
+{
+    let f = crate::hello::bootstrap_spec::feed(hash, s, framing, chunk);
+    let stop = BootRun { action: f.action, state: f.state, framing: f.framing, consumed: f.consumed };
+    if boot_goes_on(f.state, f.action) {
+        if 0 < f.consumed < chunk.len() {
+            let r = boot_drive(hash, f.state, f.framing, chunk.skip(f.consumed as int), chunks);
+            BootRun { consumed: f.consumed + r.consumed, ..r }
+        } else if f.consumed == chunk.len() && chunks.len() > 0 {
+            let r = boot_drive(hash, f.state, f.framing, chunks[0], chunks.skip(1));
+            BootRun { consumed: f.consumed + r.consumed, ..r }
+        } else {
+            stop
+        }
+    } else {
+        stop
+    }
+}
+
+/// The bootstrap on the stream `w` from an empty framer: the whole-record
+/// step (`bootstrap_lemmas::record_step`) on each record [`frames`]
+/// completes, in order, while [`boot_goes_on`]; the framer's failure; or
+/// it waits, holding the partial record.
+pub open spec fn boot_steps(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    w: Seq<u8>) -> BootRun
+    decreases w.len(),
+{
+    let (st, k) = first(w, false);
+    match st {
+        Status::Pending => BootRun { action: crate::hello::bootstrap_spec::Action::None, state: s,
+            framing: w, consumed: w.len() },
+        Status::Fail(a) => BootRun { action: crate::hello::bootstrap_spec::Action::Fail(a),
+            state: crate::hello::bootstrap_lemmas::terminal(s, crate::hello::bootstrap_spec::Mode::Failed,
+                s.reassembly),
+            framing: w.take(k as int), consumed: k },
+        Status::Complete => {
+            let (s2, a) = crate::hello::bootstrap_lemmas::record_step(hash, s, w.take(k as int));
+            if boot_goes_on(s2, a) && 0 < k <= w.len() {
+                let r = boot_steps(hash, s2, w.skip(k as int));
+                BootRun { consumed: k + r.consumed, ..r }
+            } else {
+                BootRun { action: a, state: s2, framing: seq![], consumed: k }
+            }
+        },
+    }
+}
+
+/// [`boot_steps`] with `before` bytes already held by the framer.
+pub open spec fn boot_held(r: BootRun, before: nat) -> BootRun {
+    BootRun { consumed: (r.consumed - before) as nat, ..r }
+}
+
+/// The bootstrap's `feed` from a framer holding `buf`, as [`first`]
+/// decides on the bytes it holds and the chunk.
+pub proof fn lemma_boot_feed(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    buf: Seq<u8>, chunk: Seq<u8>)
+    requires
+        s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello,
+        crate::connection::framing_spec::wf_mode(buf, false),
+        crate::spec::read_record(buf, false) is NeedMore,
+    ensures ({
+        let x = buf + chunk;
+        let (st, k) = first(x, false);
+        &&& buf.len() <= k <= x.len()
+        &&& (st is Pending ==> k == x.len())
+        &&& (!(st is Pending) ==> buf.len() < k)
+        &&& crate::hello::bootstrap_spec::feed(hash, s, buf, chunk) == match st {
+            Status::Pending => crate::hello::bootstrap_spec::Feed { consumed: chunk.len(), state: s, framing: x,
+                action: crate::hello::bootstrap_spec::Action::None },
+            Status::Fail(a) => crate::hello::bootstrap_spec::Feed { consumed: (k - buf.len()) as nat,
+                state: crate::hello::bootstrap_lemmas::terminal(s, crate::hello::bootstrap_spec::Mode::Failed,
+                    s.reassembly),
+                framing: x.take(k as int), action: crate::hello::bootstrap_spec::Action::Fail(a) },
+            Status::Complete => crate::hello::bootstrap_spec::Feed { consumed: (k - buf.len()) as nat,
+                state: crate::hello::bootstrap_lemmas::record_step(hash, s, x.take(k as int)).0, framing: seq![],
+                action: crate::hello::bootstrap_lemmas::record_step(hash, s, x.take(k as int)).1 },
+        }
+    }),
+{
+    hide(crate::hello::bootstrap_lemmas::record_step);
+    hide(crate::hello::bootstrap_spec::receive);
+    let x = buf + chunk;
+    lemma_feed_from(buf, chunk, false);
+    lemma_first(x, x.len(), false);
+    let (st, k) = first(x, false);
+    match st {
+        Status::Pending => {
+            assert(x.take(k as int) =~= x);
+        },
+        Status::Complete => {
+            crate::hello::bootstrap_lemmas::lemma_feed_complete(hash, s, buf, chunk);
+        },
+        _ => {},
+    }
+}
+
+/// **Chunking does not matter for the bootstrap.** Its caller over `chunk`
+/// then `chunks`, from a framer holding `buf`, is [`boot_steps`] of all the
+/// bytes.
+pub proof fn lemma_boot_drive(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    buf: Seq<u8>, chunk: Seq<u8>, chunks: Seq<Seq<u8>>)
+    requires
+        s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello,
+        crate::connection::framing_spec::wf_mode(buf, false),
+        crate::spec::read_record(buf, false) is NeedMore,
+    ensures
+        boot_steps(hash, s, buf + chunk + super::ccs::flatten(chunks)).consumed >= buf.len(),
+        boot_drive(hash, s, buf, chunk, chunks)
+            == boot_held(boot_steps(hash, s, buf + chunk + super::ccs::flatten(chunks)), buf.len()),
+    decreases chunks.len(), chunk.len(),
+{
+    hide(crate::hello::bootstrap_spec::feed);
+    hide(first);
+    hide(crate::hello::bootstrap_lemmas::record_step);
+    let x = buf + chunk;
+    let rest = super::ccs::flatten(chunks);
+    let w = x + rest;
+    lemma_boot_feed(hash, s, buf, chunk);
+    lemma_first(x, x.len(), false);
+    let (st, k) = first(x, false);
+    match st {
+        Status::Pending => {
+            assert(x.take(k as int) =~= x);
+            if chunks.len() == 0 {
+                assert(rest =~= Seq::<u8>::empty());
+                assert(w =~= x);
+            } else {
+                assert(x.take(x.len() as int) =~= x);
+                lemma_need_more_wf(x, false);
+                lemma_boot_drive(hash, s, x, chunks[0], chunks.skip(1));
+                assert(x + chunks[0] + super::ccs::flatten(chunks.skip(1)) =~= w);
+            }
+        },
+        Status::Fail(_) => {
+            lemma_first_extend(x, rest, false);
+            assert(w.take(k as int) =~= x.take(k as int));
+        },
+        Status::Complete => {
+            lemma_first_extend(x, rest, false);
+            assert(w.take(k as int) =~= x.take(k as int));
+            let (s2, a) = crate::hello::bootstrap_lemmas::record_step(hash, s, x.take(k as int));
+            let c = (k - buf.len()) as nat;
+            if boot_goes_on(s2, a) {
+                lemma_empty(false);
+                if c < chunk.len() {
+                    lemma_boot_drive(hash, s2, seq![], chunk.skip(c as int), chunks);
+                    assert(Seq::<u8>::empty() + chunk.skip(c as int) + rest =~= w.skip(k as int));
+                } else if chunks.len() > 0 {
+                    lemma_boot_drive(hash, s2, seq![], chunks[0], chunks.skip(1));
+                    assert(Seq::<u8>::empty() + chunks[0] + super::ccs::flatten(chunks.skip(1)) =~= w.skip(k as int));
+                } else {
+                    assert(w.skip(k as int) =~= Seq::<u8>::empty());
+                    reveal(first);
+                    assert(first(w.skip(k as int), false).0 is Pending);
+                }
+            }
+        },
+    }
+}
+
+/// The transcription's client after records that changed only the bytes of
+/// an unfinished handshake message: `cl` with those bytes.
+pub open spec fn with_fragments(cl: crate::transcription::middlebox::ClientConnection, buf: Seq<u8>)
+    -> crate::transcription::middlebox::ClientConnection
+{
+    crate::transcription::middlebox::ClientConnection {
+        connection: Connection { handshake_fragments: buf, ..cl.connection },
+        ..cl
+    }
+}
+
+/// The bootstrap and the transcription's client (`client_receive_stream`)
+/// agree on the stream `w`, record by record, along [`boot_steps`]:
+/// - the crate waits on a partial record: the transcription writes,
+///   delivers and changes nothing;
+/// - the crate's framer fails on a whole record: the whole-record theorem
+///   (`bootstrap::record_agrees`) holds of it, the crate's step on it is
+///   that failure, and the transcription reads the stream as that record,
+///   then the rest;
+/// - the crate's framer fails on a partial record ([`early_reject`]): the
+///   transcription waits (and every completion is rejected by both,
+///   [`lemma_early_reject`]), or refuses the header's length
+///   ([`too_long_agrees`]);
+/// - the crate completes a record: `bootstrap::record_agrees` holds of it,
+///   and the transcription reads the stream as that record then the rest;
+///   if the crate goes on, the two states agree again
+///   (`bootstrap::bootstrap_agrees`) and the transcription's result is its
+///   result on the rest, from there.
+pub open spec fn boot_stream_agrees(p: Primitives, s: crate::hello::bootstrap_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>) -> bool
+    decreases w.len(),
+{
+    let (st, k) = first(w, false);
+    let c = cl.connection;
+    let u = crate::transcription::middlebox::client_receive_stream(p, cl, w).0;
+    let n = 5 + super::bootstrap::length(w);
+    let quiet = crate::transcription::middlebox::ClientReceive::Continue { client: cl,
+        application_data: seq![], records_to_send: seq![] };
+    match st {
+        Status::Pending => u == quiet,
+        Status::Fail(a) => if w.len() >= n {
+            let b = w.take(n as int);
+            &&& super::bootstrap::whole_record(b)
+            &&& super::bootstrap::record_agrees(p, s, cl, b)
+            &&& crate::hello::bootstrap_lemmas::record_step(p.hash, s, b)
+                == (crate::hello::bootstrap_lemmas::terminal(s, crate::hello::bootstrap_spec::Mode::Failed,
+                    s.reassembly), crate::hello::bootstrap_spec::Action::Fail(a))
+            &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(
+                super::bootstrap::one_record(p, c, b),
+                |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(n as int)).0))
+        } else {
+            &&& early_reject(w, false, a)
+            &&& (u == quiet || (u matches crate::transcription::middlebox::ClientReceive::Abort(e)
+                && too_long_agrees(SplitEnd::TooLong(e), w, false, a)))
+        },
+        Status::Complete => {
+            let b = w.take(k as int);
+            let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b);
+            let cl2 = with_fragments(cl, s2.reassembly.buf);
+            &&& super::bootstrap::whole_record(b)
+            &&& super::bootstrap::record_agrees(p, s, cl, b)
+            &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(
+                super::bootstrap::one_record(p, c, b),
+                |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(k as int)).0))
+            &&& boot_goes_on(s2, a) ==> {
+                &&& super::bootstrap::bootstrap_agrees(p, s2, cl2)
+                &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
+                &&& boot_stream_agrees(p, s2, cl2, w.skip(k as int))
+            }
+        },
+    }
+}
+
+/// [`bootstrap::record_agrees`] for every whole record, from agreeing
+/// states (the bootstrap theorem's second part).
+pub proof fn lemma_boot_record(p: Primitives, s: crate::hello::bootstrap_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, b: Seq<u8>)
+    requires
+        super::transcript::hash_is_32(p.hash),
+        super::bootstrap::bootstrap_agrees(p, s, cl),
+        super::bootstrap::whole_record(b),
+    ensures super::bootstrap::record_agrees(p, s, cl, b),
+{
+    if super::bootstrap::handshake_record(b) {
+        super::bootstrap::lemma_handshake_record(p, s, cl, b);
+    } else {
+        super::bootstrap::lemma_other_record(p, s, cl, b);
+    }
+}
+
+/// When the crate goes on after a whole record, the transcription's result
+/// on it is "go on, with these fragments" (from `record_agrees`).
+pub proof fn lemma_boot_quiet(p: Primitives, s: crate::hello::bootstrap_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, b: Seq<u8>)
+    requires
+        super::bootstrap::record_agrees(p, s, cl, b),
+        boot_goes_on(crate::hello::bootstrap_lemmas::record_step(p.hash, s, b).0,
+            crate::hello::bootstrap_lemmas::record_step(p.hash, s, b).1),
+    ensures ({
+        let s2 = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b).0;
+        let c2 = Connection { handshake_fragments: s2.reassembly.buf, ..cl.connection };
+        &&& super::bootstrap::one_record(p, cl.connection, b)
+            == Receive::Continue(Progress { connection: c2, application_data: seq![], records_to_send: seq![] })
+        &&& super::bootstrap::bootstrap_agrees(p, s2, with_fragments(cl, s2.reassembly.buf))
+    }),
+{
+    let c = cl.connection;
+    let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b);
+    let c2 = Connection { handshake_fragments: s2.reassembly.buf, ..c };
+    let t = super::bootstrap::one_record(p, c, b);
+    if super::bootstrap::handshake_record(b) && crate::spec::extract_messages(super::bootstrap::buffer(s, b)) is Ok {
+        let bf = super::bootstrap::buffer(s, b);
+        assert(super::bootstrap::buffer_agrees(p, s, cl, bf));
+    } else {
+        match t {
+            Receive::Continue(progress) => {
+                let (records, sent) = crate::transcription::middlebox::before_second_flight(cl.compatibility_mode,
+                    cl.change_cipher_spec_sent, progress.records_to_send);
+                if progress.records_to_send.len() > 0 {
+                    assert(records.len() > 0);
+                }
+                assert(progress.records_to_send =~= Seq::<Seq<u8>>::empty());
+            },
+            _ => {},
+        }
+    }
+}
+
+/// `client_receive_stream` is `lifted` of `receive_stream`.
+pub proof fn lemma_client_lifted(p: Primitives, cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>)
+    ensures
+        crate::transcription::middlebox::client_receive_stream(p, cl, w).0
+            == super::dispatcher::lifted(cl, crate::transcription::connection::receive_stream(p, cl.connection, w).0),
+{
+}
+
+/// What [`lemma_boot_stream`] uses of `bootstrap::bootstrap_agrees`.
+pub proof fn lemma_boot_agrees_facts(p: Primitives, s: crate::hello::bootstrap_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection)
+    requires super::bootstrap::bootstrap_agrees(p, s, cl),
+    ensures mode_agrees(cl.connection, false), !cl.connection.read_closed,
+        s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello,
+{
+}
+
+/// The bootstrap's step on a whole record its framer refuses.
+pub proof fn lemma_record_step_fail(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    b: Seq<u8>, e: crate::spec::ErrKind)
+    requires crate::spec::read_record(b, false) == Read::<crate::spec::Frame>::Fail(e),
+    ensures crate::hello::bootstrap_lemmas::record_step(hash, s, b)
+        == (crate::hello::bootstrap_lemmas::terminal(s, crate::hello::bootstrap_spec::Mode::Failed, s.reassembly),
+            crate::hello::bootstrap_spec::Action::Fail(crate::spec::alert_of(e))),
+{
+}
+
+/// The bootstrap's stream on a record its framer completes.
+pub proof fn lemma_boot_stream_complete(p: Primitives, s: crate::hello::bootstrap_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>, k: nat)
+    requires
+        super::transcript::hash_is_32(p.hash),
+        super::bootstrap::bootstrap_agrees(p, s, cl),
+        5 <= k <= w.len(),
+        super::bootstrap::whole_record(w.take(k as int)),
+    ensures ({
+        let b = w.take(k as int);
+        let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b);
+        let cl2 = with_fragments(cl, s2.reassembly.buf);
+        let u = crate::transcription::middlebox::client_receive_stream(p, cl, w).0;
+        &&& super::bootstrap::record_agrees(p, s, cl, b)
+        &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(
+            super::bootstrap::one_record(p, cl.connection, b),
+            |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(k as int)).0))
+        &&& boot_goes_on(s2, a) ==> {
+            &&& super::bootstrap::bootstrap_agrees(p, s2, cl2)
+            &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
+        }
+    }),
+{
+    hide(super::bootstrap::record_agrees);
+    hide(super::bootstrap::bootstrap_agrees);
+    hide(crate::hello::bootstrap_lemmas::record_step);
+    hide(super::bootstrap::one_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(crate::transcription::connection::receive_stream);
+    hide(super::dispatcher::lifted);
+    let c = cl.connection;
+    let b = w.take(k as int);
+    lemma_boot_agrees_facts(p, s, cl);
+    lemma_boot_record(p, s, cl, b);
+    assert(b + w.skip(k as int) =~= w);
+    lemma_client_prefix(p, cl, b, w.skip(k as int));
+    let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b);
+    if boot_goes_on(s2, a) {
+        lemma_boot_quiet(p, s, cl, b);
+        let c2 = Connection { handshake_fragments: s2.reassembly.buf, ..c };
+        lemma_client_continue(p, cl, c2, w.skip(k as int));
+    }
+}
+
+/// **The bootstrap on a stream** ([`boot_stream_agrees`]), from agreeing
+/// states, for every stream.
+pub proof fn lemma_boot_stream(p: Primitives, s: crate::hello::bootstrap_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>)
+    requires
+        super::transcript::hash_is_32(p.hash),
+        super::bootstrap::bootstrap_agrees(p, s, cl),
+    ensures boot_stream_agrees(p, s, cl, w),
+    decreases w.len(),
+{
+    hide(super::bootstrap::record_agrees);
+    hide(super::bootstrap::bootstrap_agrees);
+    hide(crate::hello::bootstrap_lemmas::record_step);
+    hide(super::bootstrap::one_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(crate::transcription::connection::receive_stream);
+    hide(split);
+    let c = cl.connection;
+    let (st, k) = first(w, false);
+    let n = 5 + super::bootstrap::length(w);
+    lemma_boot_agrees_facts(p, s, cl);
+    lemma_first(w, w.len(), false);
+    lemma_framing_agrees(c, w, false);
+    lemma_client_lifted(p, cl, w);
+    match st {
+        Status::Pending => {
+            lemma_stream_partial(p, c, w);
+            lemma_lifted_quiet(cl, c);
+            assert(crate::transcription::middlebox::ClientConnection { connection: c, ..cl } == cl);
+        },
+        Status::Fail(a) => {
+            if w.len() >= n {
+                let b = w.take(n as int);
+                assert(b.subrange(3, 5) =~= w.subrange(3, 5));
+                let e = crate::spec::read_record(b, false)->Fail_0;
+                lemma_record_step_fail(p.hash, s, b, e);
+                lemma_boot_stream_complete(p, s, cl, w, n);
+            } else {
+                lemma_stream_partial(p, c, w);
+                lemma_lifted_quiet(cl, c);
+                assert(crate::transcription::middlebox::ClientConnection { connection: c, ..cl } == cl);
+            }
+        },
+        Status::Complete => {
+            lemma_boot_stream_complete(p, s, cl, w, k);
+            let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, w.take(k as int));
+            if boot_goes_on(s2, a) {
+                lemma_boot_stream(p, s2, with_fragments(cl, s2.reassembly.buf), w.skip(k as int));
+            }
+        },
+    }
+}
+
+/// **The bootstrap theorem, for streams.** From agreeing states
+/// (`bootstrap::bootstrap_agrees`) and an empty framer, for every stream
+/// cut into any chunks, the bootstrap's caller ([`boot_drive`]) is
+/// [`boot_steps`] of the concatenated bytes: the whole-record step on each
+/// record its framer completes, in order; and along those records, the
+/// crate and the transcription's `client_receive_stream` of the same bytes
+/// agree ([`boot_stream_agrees`]).
+pub proof fn theorem_boot_stream(p: Primitives)
+    requires super::transcript::hash_is_32(p.hash),
+    ensures
+        forall|s: crate::hello::bootstrap_spec::State, cl: crate::transcription::middlebox::ClientConnection,
+            chunk: Seq<u8>, chunks: Seq<Seq<u8>>|
+            #[trigger] super::bootstrap::bootstrap_agrees(p, s, cl) ==> {
+                &&& #[trigger] boot_drive(p.hash, s, seq![], chunk, chunks)
+                    == boot_steps(p.hash, s, chunk + super::ccs::flatten(chunks))
+                &&& boot_stream_agrees(p, s, cl, chunk + super::ccs::flatten(chunks))
+            },
+{
+    assert forall|s: crate::hello::bootstrap_spec::State, cl: crate::transcription::middlebox::ClientConnection,
+        chunk: Seq<u8>, chunks: Seq<Seq<u8>>|
+        #[trigger] super::bootstrap::bootstrap_agrees(p, s, cl) implies {
+            &&& #[trigger] boot_drive(p.hash, s, seq![], chunk, chunks)
+                == boot_steps(p.hash, s, chunk + super::ccs::flatten(chunks))
+            &&& boot_stream_agrees(p, s, cl, chunk + super::ccs::flatten(chunks))
+        } by {
+        lemma_empty(false);
+        lemma_boot_drive(p.hash, s, seq![], chunk, chunks);
+        assert(Seq::<u8>::empty() + chunk + super::ccs::flatten(chunks) =~= chunk + super::ccs::flatten(chunks));
+        lemma_boot_stream(p, s, cl, chunk + super::ccs::flatten(chunks));
+    }
+}
+
 } // verus!
