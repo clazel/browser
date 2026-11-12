@@ -65,6 +65,7 @@ pub mod ccs;
 pub mod client;
 pub mod dispatcher;
 pub mod extensions;
+pub mod framing;
 pub mod hello;
 pub mod host;
 pub mod keys;
