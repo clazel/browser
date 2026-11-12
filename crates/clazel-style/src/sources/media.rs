@@ -1504,6 +1504,10 @@ mod tests {
         assert!(applies(&deep(MAX_DEPTH), 1, 1));
         // Deeper than the bound: general-enclosed, so unknown.
         assert!(!applies(&deep(MAX_DEPTH.saturating_add(5)), 1, 1));
-        assert!(!applies(&deep(100_000), 1, 1));
+        // Far deeper, to show the parser's recursion stays bounded. Under Miri, which runs
+        // the tokenizer about a thousand times slower, 1,000 levels (still far past the
+        // bound) instead of 100,000, so the test finishes in seconds.
+        let far = if cfg!(miri) { 1_000 } else { 100_000 };
+        assert!(!applies(&deep(far), 1, 1));
     }
 }
