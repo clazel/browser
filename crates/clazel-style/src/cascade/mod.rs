@@ -166,12 +166,12 @@ fn body_link_color(arena: &Arena) -> Option<computed::Rgba> {
 
 /// Every style rule that applies on `device`, prepared, in order of appearance, and the
 /// order of appearance after the last of them.
-fn prepare(sources: &Sources, device: Device) -> (Vec<Prepared>, u32) {
+fn prepare(sheets: &ua::Sheets, sources: &Sources, device: Device) -> (Vec<Prepared>, u32) {
     let ua::Sheets {
         ua,
         ua_quirks,
         hints: hint_sheet,
-    } = ua::sheets();
+    } = sheets;
     let mut rules = Vec::new();
     let mut order: u32 = 0;
     let mut add = |origin: Origin, r: &crate::sources::StyleRule, quirks: bool| {
@@ -304,8 +304,20 @@ fn cascaded_values<'a>(entries: &mut [Entry<'a>]) -> Vec<Option<&'a Specified>> 
 /// `device`. `arena` must be a document the tree builder made (selector matching needs a
 /// well-formed tree).
 pub fn cascade(arena: &Arena, sources: &Sources, device: Device) -> ComputedTable {
+    cascade_with(ua::sheets(), arena, sources, device)
+}
+
+/// [`cascade`] with `sheets` as the user agent sheets in place of [`ua::sheets`]. Tests use
+/// it with [`ua::Sheets::for_document`]'s smaller sheets, which give the same table, where
+/// the whole sheets would take too long (under Miri).
+pub fn cascade_with(
+    sheets: &ua::Sheets,
+    arena: &Arena,
+    sources: &Sources,
+    device: Device,
+) -> ComputedTable {
     let quirks = sources.quirks;
-    let (mut rules, after_rules) = prepare(sources, device);
+    let (mut rules, after_rules) = prepare(sheets, sources, device);
     let attributes: HashMap<usize, Vec<Longhands>> = sources
         .attributes
         .iter()

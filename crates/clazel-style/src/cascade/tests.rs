@@ -39,15 +39,77 @@ pub fn by_id(arena: &Arena, id: &str) -> Option<usize> {
     })
 }
 
-/// The document cascaded in an 800 by 600 viewport, and the style of the element `id`.
-fn style(html: &str, id: &str) -> ComputedStyle {
-    let arena = parse(html);
-    let sources = collect(&arena);
-    let table = cascade(&arena, &sources, Device::screen(800, 600));
-    by_id(&arena, id)
-        .and_then(|n| table.get(n).cloned())
-        .unwrap_or_else(ComputedStyle::initial)
+/// The table of `arena`'s document in an 800 by 600 viewport. Under Miri, the user agent
+/// sheets are cut to the rules that can match the document ([`ua::Sheets::for_document`]):
+/// preparing and matching the whole sheets takes minutes per document there.
+/// `filtered_sheets_give_the_same_tables` checks natively that both give the same table.
+fn table_of(arena: &Arena) -> ComputedTable {
+    let sources = collect(arena);
+    let device = Device::screen(800, 600);
+    if cfg!(miri) {
+        cascade_with(&ua::sheets().for_document(arena), arena, &sources, device)
+    } else {
+        cascade(arena, &sources, device)
+    }
 }
+
+/// A document, parsed and cascaded once.
+struct Doc {
+    arena: Arena,
+    table: ComputedTable,
+}
+
+impl Doc {
+    fn new(html: &str) -> Doc {
+        let arena = parse(html);
+        let table = table_of(&arena);
+        Doc { arena, table }
+    }
+
+    /// The style of the element `id`.
+    fn style(&self, id: &str) -> ComputedStyle {
+        by_id(&self.arena, id)
+            .and_then(|n| self.table.get(n).cloned())
+            .unwrap_or_else(ComputedStyle::initial)
+    }
+}
+
+const UA_DOC: &str = "<!DOCTYPE html><body id=b><h1 id=h>x</h1><p id=p>y</p><ul id=u><li id=l>z</ul>\
+               <div id=d hidden></div><b id=bold>b</b><a id=a href=x>a</a>\
+               <table id=t><tr><th id=th>h</th></tr></table><pre id=pre>p</pre>";
+
+const AUTHOR_DOC: &str = "<!DOCTYPE html><style>#x { color: red } .c { color: green !important } \
+               p { color: blue; width: 10px } img { width: 30px }</style>\
+               <p id=x class=c style='color: black'>a</p>\
+               <p id=y style='color: rgb(1, 2, 3); width: 5px'>b</p>\
+               <img id=i width=200 height=20><img id=j width=200 style='width: 7px'>\
+               <table id=t width=50% bgcolor=red style='background-color: green'></table>";
+
+const INHERIT_DOC: &str = "<!DOCTYPE html><style>\
+               #o { color: green; background: red; font-size: 20px; line-height: 1.5 }\
+               #i { color: red; background-color: red; font-size: 2em; }\
+               #i { color: unset; background-color: unset; border: 2px solid; }\
+               #k { color: initial; font-size: inherit; display: revert; }\
+               #r { display: inline; display: revert; margin: revert; }\
+               </style><div id=o><div id=i><span id=k>x</span></div><p id=r>y</p></div>";
+
+const QUIRKS_DOC: &str = "<style>body { font-size: 20px; color: f00 } td { width: 10 }</style>\
+               <body><table id=t><tr><td id=d><p id=p>x</p></td></tr></table>\
+               <p id=q>y</p></body>";
+
+const HN_DOC: &str = "<html lang=en op=news><head><style>\
+               body { font-family: Verdana, Geneva, sans-serif; font-size: 10pt; color: #828282 }\
+               td { font-family: Verdana, Geneva, sans-serif; font-size: 10pt; color: #828282 }\
+               .pagetop { font-size: 10pt; color: #222222 }\
+               a:link { color: #000000; text-decoration: none }\
+               @media only screen and (min-width: 300px) and (max-width: 750px) { .c { width: 1px } }\
+               </style></head><body><center>\
+               <table id=hnmain border=0 cellpadding=0 cellspacing=0 width=85% bgcolor=#f6f6ef>\
+               <tr><td id=top bgcolor=#ff6600><span class=pagetop id=pt><a id=link href=news>Hacker News</a></span></td></tr>\
+               <tr style='height:10px' id=spacer></tr>\
+               <tr><td id=ind><img id=s src=s.gif height=1 width=40></td>\
+               <td valign=top class=votelinks id=v><center>x</center></td></tr>\
+               </table></center></body></html>";
 
 fn px(v: i32) -> i32 {
     v.saturating_mul(64)
@@ -59,10 +121,8 @@ fn lp_px(v: i32) -> Size {
 
 #[test]
 fn user_agent_sheet() {
-    let doc = "<!DOCTYPE html><body id=b><h1 id=h>x</h1><p id=p>y</p><ul id=u><li id=l>z</ul>\
-               <div id=d hidden></div><b id=bold>b</b><a id=a href=x>a</a>\
-               <table id=t><tr><th id=th>h</th></tr></table><pre id=pre>p</pre>";
-    let s = |id| style(doc, id);
+    let doc = Doc::new(UA_DOC);
+    let s = |id| doc.style(id);
     let b = s("b");
     assert_eq!(b.display, Display::Block);
     assert_eq!(b.margin, [lp_px(8); 4], "body's 8px margins");
@@ -111,27 +171,22 @@ fn user_agent_sheet() {
 
 #[test]
 fn author_rules_hints_and_style_attributes() {
-    let doc = "<!DOCTYPE html><style>#x { color: red } .c { color: green !important } \
-               p { color: blue; width: 10px } img { width: 30px }</style>\
-               <p id=x class=c style='color: black'>a</p>\
-               <p id=y style='color: rgb(1, 2, 3); width: 5px'>b</p>\
-               <img id=i width=200 height=20><img id=j width=200 style='width: 7px'>\
-               <table id=t width=50% bgcolor=red style='background-color: green'></table>";
+    let doc = Doc::new(AUTHOR_DOC);
     assert_eq!(
-        style(doc, "x").color,
+        doc.style("x").color,
         [0, 128, 0, 255],
         "important beats the attribute"
     );
-    let y = style(doc, "y");
+    let y = doc.style("y");
     assert_eq!((y.color, y.width), ([1, 2, 3, 255], lp_px(5)));
-    let i = style(doc, "i");
+    let i = doc.style("i");
     assert_eq!(
         (i.width, i.height),
         (lp_px(30), lp_px(20)),
         "an author rule beats a hint"
     );
-    assert_eq!(style(doc, "j").width, lp_px(7));
-    let t = style(doc, "t");
+    assert_eq!(doc.style("j").width, lp_px(7));
+    let t = doc.style("t");
     assert_eq!(
         t.width,
         Size::Lp(Lp::Percent(Num {
@@ -144,14 +199,8 @@ fn author_rules_hints_and_style_attributes() {
 
 #[test]
 fn inheritance_and_keywords() {
-    let doc = "<!DOCTYPE html><style>\
-               #o { color: green; background: red; font-size: 20px; line-height: 1.5 }\
-               #i { color: red; background-color: red; font-size: 2em; }\
-               #i { color: unset; background-color: unset; border: 2px solid; }\
-               #k { color: initial; font-size: inherit; display: revert; }\
-               #r { display: inline; display: revert; margin: revert; }\
-               </style><div id=o><div id=i><span id=k>x</span></div><p id=r>y</p></div>";
-    let i = style(doc, "i");
+    let doc = Doc::new(INHERIT_DOC);
+    let i = doc.style("i");
     assert_eq!(i.color, [0, 128, 0, 255], "unset inherits color");
     assert_eq!(
         i.background_color, TRANSPARENT,
@@ -166,7 +215,7 @@ fn inheritance_and_keywords() {
         })
     );
     assert_eq!(i.border_color, [[0, 128, 0, 255]; 4], "currentcolor");
-    let k = style(doc, "k");
+    let k = doc.style("k");
     assert_eq!(k.color, BLACK);
     assert_eq!(k.font_size, px(40));
     assert_eq!(
@@ -174,7 +223,7 @@ fn inheritance_and_keywords() {
         Display::Inline,
         "revert reaches the UA's (no) rule for span"
     );
-    let r = style(doc, "r");
+    let r = doc.style("r");
     assert_eq!(r.display, Display::Block, "revert reaches p's UA rule");
     assert_eq!(r.margin[0], lp_px(20), "1em of the inherited 20px");
 }
@@ -183,62 +232,47 @@ fn inheritance_and_keywords() {
 fn quirks_mode() {
     // No doctype: quirks mode. Tables reset the font size and the hashless colour and
     // unitless length quirks apply to author sheets.
-    let doc = "<style>body { font-size: 20px; color: f00 } td { width: 10 }</style>\
-               <body><table id=t><tr><td id=d><p id=p>x</p></td></tr></table>\
-               <p id=q>y</p></body>";
-    let t = style(doc, "t");
+    let doc = Doc::new(QUIRKS_DOC);
+    let t = doc.style("t");
     assert_eq!(
         t.font_size,
         px(16),
         "tables do not inherit font-size in quirks mode"
     );
     assert_eq!(t.color, [255, 0, 0, 255]);
-    assert_eq!(style(doc, "d").width, lp_px(10));
-    let p = style(doc, "p");
+    assert_eq!(doc.style("d").width, lp_px(10));
+    let p = doc.style("p");
     assert_eq!(
         (p.margin[0], p.margin[2]),
         (lp_px(0), lp_px(0)),
         "margin collapsing quirks"
     );
-    let q = style(doc, "q");
+    let q = doc.style("q");
     assert_eq!(q.margin[0], lp_px(20), "not first in body: 1em of 20px");
 }
 
 #[test]
 fn hacker_news_shape() {
-    let doc = "<html lang=en op=news><head><style>\
-               body { font-family: Verdana, Geneva, sans-serif; font-size: 10pt; color: #828282 }\
-               td { font-family: Verdana, Geneva, sans-serif; font-size: 10pt; color: #828282 }\
-               .pagetop { font-size: 10pt; color: #222222 }\
-               a:link { color: #000000; text-decoration: none }\
-               @media only screen and (min-width: 300px) and (max-width: 750px) { .c { width: 1px } }\
-               </style></head><body><center>\
-               <table id=hnmain border=0 cellpadding=0 cellspacing=0 width=85% bgcolor=#f6f6ef>\
-               <tr><td id=top bgcolor=#ff6600><span class=pagetop id=pt><a id=link href=news>Hacker News</a></span></td></tr>\
-               <tr style='height:10px' id=spacer></tr>\
-               <tr><td id=ind><img id=s src=s.gif height=1 width=40></td>\
-               <td valign=top class=votelinks id=v><center>x</center></td></tr>\
-               </table></center></body></html>";
-    let t = style(doc, "hnmain");
+    let doc = Doc::new(HN_DOC);
+    let t = doc.style("hnmain");
     assert_eq!(t.background_color, [0xf6, 0xf6, 0xef, 255]);
     assert_eq!(t.border_spacing, [0, 0]);
     assert_eq!(t.font_size, px(16), "quirks: table resets font-size");
-    let top = style(doc, "top");
+    let top = doc.style("top");
     assert_eq!(top.background_color, [0xff, 0x66, 0x00, 255]);
     assert_eq!(top.padding, [Lp::Px64(0); 4], "cellpadding");
     assert_eq!(top.font_size, 853, "10pt is 13.33px");
-    let pt = style(doc, "pt");
+    let pt = doc.style("pt");
     assert_eq!(pt.color, [0x22, 0x22, 0x22, 255]);
-    let link = style(doc, "link");
+    let link = doc.style("link");
     assert_eq!(link.color, BLACK);
     assert!(!link.text_decoration_line.underline);
-    assert_eq!(style(doc, "spacer").height, lp_px(10));
-    let s = style(doc, "s");
+    assert_eq!(doc.style("spacer").height, lp_px(10));
+    let s = doc.style("s");
     assert_eq!((s.width, s.height), (lp_px(40), lp_px(1)));
-    assert_eq!(style(doc, "v").vertical_align, VerticalAlign::Top);
-    let arena = parse(doc);
-    let table = cascade(&arena, &collect(&arena), Device::screen(800, 600));
-    let center = (0..arena.len()).find(|&n| hints::is_html(&arena, n, "center"));
+    assert_eq!(doc.style("v").vertical_align, VerticalAlign::Top);
+    let (arena, table) = (&doc.arena, &doc.table);
+    let center = (0..arena.len()).find(|&n| hints::is_html(arena, n, "center"));
     let c = center.and_then(|n| table.get(n));
     assert_eq!(
         c.map(|c| c.align_descendants),
@@ -247,7 +281,7 @@ fn hacker_news_shape() {
     let families: Vec<String> = table
         .family(
             table
-                .get(by_id(&arena, "top").unwrap_or(0))
+                .get(by_id(arena, "top").unwrap_or(0))
                 .unwrap_or(&ComputedStyle::initial()),
         )
         .iter()
@@ -273,5 +307,28 @@ fn tree_order_visits_each_node_once() {
         if let Some(p) = arena.parent(n) {
             assert!(order.iter().position(|&m| m == p).is_some_and(|j| j < i));
         }
+    }
+}
+
+/// The sheets cut to a document's rules give the same table as the whole sheets, for every
+/// document of these tests (the cut is what the tests run under Miri).
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "cascades with the whole user agent sheets, which take minutes per document under \
+              Miri; the comparison is the same natively"
+)]
+fn filtered_sheets_give_the_same_tables() {
+    for doc in [UA_DOC, AUTHOR_DOC, INHERIT_DOC, QUIRKS_DOC, HN_DOC] {
+        let arena = parse(doc);
+        let sources = collect(&arena);
+        let device = Device::screen(800, 600);
+        let small = ua::sheets().for_document(&arena);
+        assert!(small.ua.rules.len() < ua::sheets().ua.rules.len());
+        assert_eq!(
+            cascade_with(&small, &arena, &sources, device),
+            cascade(&arena, &sources, device),
+            "{doc}"
+        );
     }
 }

@@ -20,7 +20,7 @@ use clazel_style::cascade::computed::{
     ComputedStyle, Display, LineHeight, Lp, MaxSize, Overflow, Size, TextAlign, VerticalAlign,
     WhiteSpace,
 };
-use clazel_style::cascade::{ComputedTable, cascade, hints};
+use clazel_style::cascade::{ComputedTable, cascade, cascade_with, hints, ua};
 use clazel_style::sources::{Device, collect};
 use clazel_treebuilder::exec::driver::parse_real;
 use clazel_treebuilder::exec::types::EncFnsExec;
@@ -251,12 +251,25 @@ fn value(arena: &Arena, table: &ComputedTable, v: &Value) -> Result<String, Stri
 fn wpt_css_cascade() {
     let (mut pass, mut xfail, mut fail) = (0usize, 0usize, 0usize);
     let mut failures = Vec::new();
-    // Under Miri every case still runs: there are 13, each one document of a few elements,
-    // and the user agent sheet is parsed once per process.
+    // Under Miri every case still runs (there are 13, on 7 small pages), with the user agent
+    // sheets cut to the rules that can match the page (`ua::Sheets::for_document`), which
+    // give the same table (checked natively here and in the golden test): the whole sheets
+    // take minutes per page there.
     for (page, html) in PAGES {
         let arena = parse(html);
         let sources = collect(&arena);
-        let table = cascade(&arena, &sources, Device::screen(800, 600));
+        let device = Device::screen(800, 600);
+        let table = if cfg!(miri) {
+            cascade_with(&ua::sheets().for_document(&arena), &arena, &sources, device)
+        } else {
+            let table = cascade(&arena, &sources, device);
+            let small = ua::sheets().for_document(&arena);
+            assert!(
+                table == cascade_with(&small, &arena, &sources, device),
+                "{page}: the cut sheets give another table"
+            );
+            table
+        };
         for case in CASES.iter().filter(|c| c.page == *page) {
             let outside = case.assertions.iter().find_map(|a| {
                 [&a.left, &a.right].into_iter().find_map(|v| match v {

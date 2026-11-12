@@ -12,6 +12,10 @@
 //! The output of each `.dat` file is compared byte for byte with
 //! `tests/golden/cascade/<file>.txt`; any difference fails the test.
 //!
+//! Each document is cascaded with the user agent sheets cut to the rules that can match it
+//! (`clazel_style::cascade::ua::Sheets::for_document`), and, except under Miri, also with
+//! the whole sheets, and the two tables must be equal.
+//!
 //! Not cascaded: the `#document-fragment` cases (the cascade takes a document) and the
 //! `scripted_*.dat` cases, which the generated table only counts.
 //!
@@ -27,7 +31,7 @@ use clazel_dom::exec::{Arena, ExecKind};
 use clazel_style::cascade::computed::{
     ComputedStyle, Family, LineHeight, ListStyleType, Lp, MaxSize, Size, VerticalAlign,
 };
-use clazel_style::cascade::{ComputedTable, cascade, tree_order};
+use clazel_style::cascade::{ComputedTable, cascade, cascade_with, tree_order, ua};
 use clazel_style::sources::{Device, collect};
 use clazel_treebuilder::exec::driver::parse_real;
 use clazel_treebuilder::exec::types::EncFnsExec;
@@ -228,7 +232,19 @@ fn differences(s: &ComputedStyle, parent: &ComputedStyle, table: &ComputedTable)
 fn print_document(out: &mut String, case: &Case) {
     let arena = parse(case.data);
     let sources = collect(&arena);
-    let table = cascade(&arena, &sources, Device::screen(800, 600));
+    let device = Device::screen(800, 600);
+    // The user agent sheets cut to the rules that can match the document
+    // (`ua::Sheets::for_document`) give the same table as the whole sheets: checked here,
+    // natively, on every document. Under Miri only the cut sheets are used.
+    let small = ua::sheets().for_document(&arena);
+    let table = cascade_with(&small, &arena, &sources, device);
+    if !cfg!(miri) {
+        assert!(
+            table == cascade(&arena, &sources, device),
+            "case {}: the cut sheets give another table",
+            case.index
+        );
+    }
     let _ = writeln!(out, "#case {}", case.index);
     let _ = writeln!(out, "#data {:?}", case.data);
     let initial = ComputedStyle::initial();

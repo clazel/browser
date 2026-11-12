@@ -20,9 +20,13 @@
 //!
 //! Every other declaration outside the subset (`content-visibility`, `position`, `float`,
 //! `unicode-bidi`, `box-sizing`, `appearance`, `fit-content`, `calc()`, system colours, …)
-//! is invalid and dropped by the cascade's filtering, as CSS says; `@namespace` is
-//! recognised and ignored (5.8); `@media (scripting)` is false (scripting is off, and
-//! 5.8 evaluates the unknown feature as false).
+//! is invalid and dropped by the cascade's filtering, as CSS says; `@media (scripting)` is
+//! false (scripting is off, and 5.8 evaluates the unknown feature as false).
+//!
+//! `@namespace` is recognised and ignored (5.8), so the sheets' type selectors, which the
+//! standard scopes to the HTML namespace with `@namespace "http://www.w3.org/1999/xhtml"`,
+//! also match SVG and MathML elements of the same local name (`title`, `style`, `a`, …).
+//! Phase 5 renders neither SVG nor MathML, so nothing it draws changes.
 //!
 //! # Rules given in prose
 //!
@@ -133,6 +137,94 @@ pub struct Sheets {
     pub ua_quirks: StyleSheet,
     /// `data/hints.css`.
     pub hints: StyleSheet,
+}
+
+impl Sheets {
+    /// The sheets without the rules that cannot match any element of the document in
+    /// `arena`: a rule is dropped when, in each of its complex selectors, the subject
+    /// compound selector (the last one) starts with a type selector naming no element of
+    /// the document (compared ASCII case-insensitively, whatever the element's namespace).
+    /// Such a compound matches no element of the document, so the cascade of that document
+    /// is the same with these sheets as with the whole ones (the rules kept keep their
+    /// order, and [`super::cascade`] only compares orders). A selector the scan cannot read
+    /// (an escape or a namespace prefix) keeps its rule.
+    ///
+    /// This exists for tests: under Miri, preparing and matching the whole sheets for each
+    /// test document takes minutes. The crate's tests check, natively, that the tables are
+    /// the same for their documents.
+    pub fn for_document(&self, arena: &Arena) -> Sheets {
+        let mut names: Vec<String> = Vec::new();
+        for x in 0..arena.len() {
+            if let ExecKind::Element { local_name, .. } = arena.kind(x) {
+                let n: String = local_name
+                    .iter()
+                    .filter_map(|&c| char::from_u32(c))
+                    .collect::<String>()
+                    .to_ascii_lowercase();
+                if !names.contains(&n) {
+                    names.push(n);
+                }
+            }
+        }
+        let keep = |sheet: &StyleSheet| {
+            let mut out = sheet.clone();
+            out.rules.retain(|r| can_match(&r.selectors, &names));
+            out
+        };
+        Sheets {
+            ua: keep(&self.ua),
+            ua_quirks: keep(&self.ua_quirks),
+            hints: keep(&self.hints),
+        }
+    }
+}
+
+/// Whether a rule whose prelude is `selectors` may match an element whose (lowercased)
+/// local name is one of `names` (see [`Sheets::for_document`]).
+fn can_match(selectors: &[u32], names: &[String]) -> bool {
+    let text: String = selectors
+        .iter()
+        .filter_map(|&c| char::from_u32(c))
+        .collect();
+    if text.contains('\\') || text.contains('|') {
+        return true;
+    }
+    // Split at the commas outside brackets and parentheses; in each complex selector, the
+    // subject compound starts after the last combinator or whitespace outside them.
+    let mut depth: u32 = 0;
+    let mut subject = String::new();
+    let mut after_combinator = false;
+    let mut any = false;
+    let check = |subject: &str| {
+        let name: String = subject
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+            .collect::<String>()
+            .to_ascii_lowercase();
+        !subject.starts_with(|c: char| c.is_ascii_alphabetic()) || names.contains(&name)
+    };
+    for c in text.chars() {
+        match c {
+            '(' | '[' => depth = depth.saturating_add(1),
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if depth == 0 && c == ',' {
+            any |= check(&subject);
+            subject.clear();
+            after_combinator = false;
+        } else if depth == 0 && (c.is_whitespace() || matches!(c, '>' | '+' | '~')) {
+            // The next compound, if one follows, starts a new subject.
+            after_combinator = true;
+        } else {
+            if after_combinator {
+                subject.clear();
+                after_combinator = false;
+            }
+            subject.push(c);
+        }
+    }
+    any | check(&subject)
 }
 
 /// The three sheets, parsed once per process (they are constants of the program).
@@ -356,10 +448,31 @@ mod tests {
     }
 
     #[test]
+    fn subject_type_filter() {
+        let names = vec!["p".to_owned(), "td".to_owned()];
+        let can = |s: &str| can_match(&s.chars().map(u32::from).collect::<Vec<_>>(), &names);
+        assert!(can("p"));
+        assert!(!can("div "));
+        assert!(!can("li ,\ndiv "));
+        assert!(can("DIV > P"));
+        assert!(!can("div"));
+        assert!(!can("p > div, ul li"));
+        assert!(can("ul, td"));
+        assert!(can("[hidden]"));
+        assert!(can("*"));
+        assert!(can(":is(h1, h2) "));
+        assert!(!can("table[border=\"0\" i] > tr"));
+        assert!(can("table[border] > td"));
+        assert!(can("svg|a"));
+    }
+
+    #[test]
     fn sheets_parse() {
-        let ua = sheet(Sheet::Ua);
-        let quirks = sheet(Sheet::UaQuirks);
-        let hints = sheet(Sheet::Hints);
+        let Sheets {
+            ua,
+            ua_quirks: quirks,
+            hints,
+        } = sheets();
         assert!(ua.rules.len() > 60, "{}", ua.rules.len());
         assert_eq!(quirks.rules.len(), 8);
         assert!(hints.rules.len() > 30, "{}", hints.rules.len());
