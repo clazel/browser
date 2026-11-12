@@ -266,26 +266,27 @@ pub open spec fn flat(records: Seq<Seq<u8>>) -> Seq<u8> {
 /// five bytes and `length` more), with `middlebox::client_receive_stream` of
 /// that record (so D.4's dummy record included); otherwise it holds the
 /// bytes. On an abort it writes `connection::abort_record` of the error, at
-/// the connection it had when the record arrived.
+/// the connection it had when the record arrived, unless it has closed its
+/// write side (§6.1, as for application data).
 pub open spec fn tfeed(p: Primitives, ts: TState, chunk: Seq<u8>) -> TOut {
     let w = ts.buffer + chunk;
     let c = ts.client.connection;
+    let alert = |e: ClientError| if ts.write_closed { Seq::<u8>::empty() }
+        else { crate::transcription::connection::abort_record(p, c, e) };
     let wait = TOut { send: seq![], deliver: seq![], after: TState { buffer: w, ..ts }, end: TEnd::Running };
     match crate::transcription::record::read_record_header(w) {
         None => wait,
         Some(header) =>
             if !c.read_closed && crate::transcription::connection::record_length_failure(c, header) is Some {
                 let e = crate::transcription::connection::record_length_failure(c, header)->0;
-                TOut { send: crate::transcription::connection::abort_record(p, c, e), deliver: seq![], after: ts,
-                    end: TEnd::Aborted(e) }
+                TOut { send: alert(e), deliver: seq![], after: ts, end: TEnd::Aborted(e) }
             } else if w.len() < 5 + header.length {
                 wait
             } else {
                 let b = w.subrange(0, (5 + header.length) as int);
                 let rest = w.subrange((5 + header.length) as int, w.len() as int);
                 match crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 {
-                    ClientReceive::Abort(e) => TOut { send: crate::transcription::connection::abort_record(p, c, e),
-                        deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+                    ClientReceive::Abort(e) => TOut { send: alert(e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
                     ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
                     ClientReceive::Continue { client, application_data, records_to_send } => TOut {
                         send: flat(records_to_send), deliver: application_data,
@@ -293,6 +294,11 @@ pub open spec fn tfeed(p: Primitives, ts: TState, chunk: Seq<u8>) -> TOut {
                 }
             },
     }
+}
+
+/// What the transcription's caller writes on an abort.
+pub open spec fn abort_bytes(p: Primitives, ts: TState, e: ClientError) -> Seq<u8> {
+    if ts.write_closed { Seq::<u8>::empty() } else { crate::transcription::connection::abort_record(p, ts.client.connection, e) }
 }
 
 /// The transcription's caller sends application data
@@ -365,7 +371,7 @@ pub proof fn lemma_tfeed_whole(p: Primitives, ts: TState, chunk: Seq<u8>)
         let c = ts.client.connection;
         &&& super::bootstrap::whole_record(b)
         &&& tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 {
-            ClientReceive::Abort(e) => TOut { send: crate::transcription::connection::abort_record(p, c, e),
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e),
                 deliver: seq![], after: ts, end: TEnd::Aborted(e) },
             ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
             ClientReceive::Continue { client, application_data, records_to_send } => TOut {
@@ -410,8 +416,7 @@ pub proof fn lemma_tfeed_partial(p: Primitives, ts: TState, chunk: Seq<u8>)
             super::framing::SplitEnd::Partial(_) =>
                 TOut { send: seq![], deliver: seq![], after: TState { buffer: w, ..ts }, end: TEnd::Running },
             super::framing::SplitEnd::TooLong(e) => TOut {
-                send: crate::transcription::connection::abort_record(p, c, e), deliver: seq![], after: ts,
-                end: TEnd::Aborted(e) },
+                send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
         }
     }),
 {
@@ -622,14 +627,15 @@ pub open spec fn goes_on(m: Models, p: Primitives, scalar: Seq<u8>, cout: Step, 
 }
 
 /// Both end the same way, with the same bytes: a failure of the client
-/// with the same alert (the crate's last record is the transcription's
-/// `abort_record`), or the server's error alert.
+/// with the same alert (the crate's last record, if its write side is open,
+/// is the transcription's `abort_record`), or the server's error alert.
 pub open spec fn ends_alike(cout: Step, tout: TOut) -> bool {
     &&& cout.stage is Ended
     &&& cout.send == tout.send
     &&& cout.deliver == tout.deliver
     &&& match (cout.status, tout.end) {
-        (Status::Failed(a, Origin::Sent), TEnd::Aborted(e)) => crate::transcription::alerts::required_alert(e) == a as nat,
+        (Status::Failed(a, origin), TEnd::Aborted(e)) =>
+            origin != Origin::Peer && crate::transcription::alerts::required_alert(e) == a as nat,
         (Status::Failed(d, Origin::Peer), TEnd::Peer(d2)) => d as nat == d2,
         _ => false,
     }
@@ -711,7 +717,7 @@ pub open spec fn peer_closed(p: Primitives, ts: TState, cout: Step, tout: TOut) 
     &&& cout.stage is Ended
     &&& cout.status == Status::Closed
     &&& cout.send == (if ts.write_closed { Seq::<u8>::empty() }
-        else { crate::transcription::connection::close_write(p, ts.client.connection) })
+        else { crate::transcription::connection::close_write(p, tout.after.client.connection) })
     &&& cout.deliver == tout.deliver
     &&& tout.end is Running
     &&& tout.send.len() == 0
@@ -741,6 +747,71 @@ pub open spec fn retry_then_fails(m: Models, p: Primitives, cs: CState, ts: TSta
     &&& super::bootstrap::record_agrees(p, s, ts.client, b)
 }
 
+/// **Stated difference, the client's flight in one record**
+/// (`dispatcher::coalesced`; §5.1: handshake messages "MAY be coalesced
+/// into a single TLSPlaintext record"): on the server Finished both send
+/// the client's flight, D.4's dummy record first when owed; the crate seals
+/// its messages in one record, the transcription each in its own
+/// (`dispatcher::protect_each`). The same bytes when no CertificateRequest
+/// came (one message: then [`goes_on`] holds). Both go on in agreeing
+/// states.
+pub open spec fn goes_on_coalesced(m: Models, p: Primitives, scalar: Seq<u8>, ts: TState, cout: Step, cs2: CState,
+    tout: TOut) -> bool
+{
+    let hs2 = tout.after.client.connection.handshake;
+    let chts = hs2.client_handshake_traffic_secret;
+    let msgs = super::dispatcher::client_flight(hs2);
+    let mode = ts.client.compatibility_mode;
+    let sent = ts.client.change_cipher_spec_sent;
+    &&& cout.send == flat(crate::transcription::middlebox::before_second_flight(mode, sent,
+        seq![super::dispatcher::coalesced(p, chts, msgs)]).0)
+    &&& tout.send == flat(crate::transcription::middlebox::before_second_flight(mode, sent,
+        super::dispatcher::protect_each(p, crate::transcription::record::traffic_state(p, chts), msgs)).0)
+    &&& cout.deliver == tout.deliver
+    &&& tout.end is Running
+    &&& driver_agrees(m, p, scalar, cs2, tout.after)
+}
+
+/// **Domain: the crate's transcript cap** (`dispatcher::room`, as
+/// `framing::disp_room`): the whole record at the front could take the
+/// crate's 4 MiB transcript past its cap, which the dispatcher theorem does
+/// not compare. Nothing is claimed of this record or after it.
+pub open spec fn beyond_room(cs: CState, ts: TState, chunk: Seq<u8>) -> bool {
+    &&& whole(ts.buffer + chunk)
+    &&& cs.stage matches Stage::Flight(s)
+    &&& !super::framing::disp_room(crate::connection::dispatcher_spec::State { framing: seq![], ..s })
+}
+
+/// **Stated difference, the answer to `update_requested`**
+/// (`post_handshake::settle`; §4.6.3): the crate sends its KeyUpdate in the
+/// step that reads the request, the transcription marks it owed
+/// (`key_update_owed`). Both go on, delivering the same data; the crate's
+/// bytes are the KeyUpdate the transcription owes, and its state is the
+/// transcription's once it has sent it.
+pub open spec fn settles(p: Primitives, cs2: CState, cout: Step, tout: TOut) -> bool {
+    let conn = tout.after.client.connection;
+    &&& cs2.stage matches Stage::App(s2)
+    &&& tout.end is Running
+    &&& tout.send.len() == 0
+    &&& cout.deliver == tout.deliver
+    &&& conn.key_update_owed
+    &&& cout.send == flat(super::post_handshake::settle(p, s2, conn).0)
+    &&& super::post_handshake::post_agrees(s2, super::post_handshake::settle(p, s2, conn).1)
+}
+
+/// **Stated difference, an exhausted receive epoch**
+/// (`post_handshake::exhausted`): after a record under sequence number
+/// 2^64 - 1 the crate refuses the next with `internal_error` before any of
+/// its bytes; the transcription waits for its header, and refuses it then
+/// (or refuses its length). Unreachable in practice.
+pub open spec fn exhausted_epoch(cs: CState, cout: Step, tout: TOut) -> bool {
+    &&& crate_fails(cout)
+    &&& cout.status->Failed_0 == crate::spec::INTERNAL_ERROR
+    &&& cs.stage matches Stage::App(s)
+    &&& super::post_handshake::exhausted(s)
+    &&& ((tout.end is Running && tout.send.len() == 0) || tout.end is Aborted)
+}
+
 /// How the outcomes of feeding `chunk` compare: both go on in agreeing
 /// states with the same outputs, or both end alike, or a rejection or a
 /// stated difference ends the comparison (each a definition above).
@@ -753,6 +824,10 @@ pub open spec fn feed_verdict(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     ||| rejects_early(cs, ts, chunk, cout, tout)
     ||| peer_closed(p, ts, cout, tout)
     ||| retry_then_fails(m, p, cs, ts, chunk, cout, tout)
+    ||| goes_on_coalesced(m, p, scalar, ts, cout, cs2, tout)
+    ||| beyond_room(cs, ts, chunk)
+    ||| settles(p, cs2, cout, tout)
+    ||| exhausted_epoch(cs, cout, tout)
 }
 
 /// The outcomes of one operation compare.
@@ -872,7 +947,7 @@ pub proof fn lemma_hello_facts(p: Primitives, scalar: Seq<u8>, s: crate::hello::
         &&& c.handshake.state == crate::transcription::state_machine::ClientState::WaitSh
         &&& s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello
         &&& tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 {
-            ClientReceive::Abort(e) => TOut { send: crate::transcription::connection::abort_record(p, c, e),
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e),
                 deliver: seq![], after: ts, end: TEnd::Aborted(e) },
             ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
             ClientReceive::Continue { client, application_data, records_to_send } => TOut {
@@ -1558,6 +1633,488 @@ pub proof fn lemma_hello_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
             assert(input.skip(k as int) =~= Seq::<u8>::empty());
             assert(x + Seq::<u8>::empty() =~= x);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The flight stage.
+// ---------------------------------------------------------------------------
+
+/// What the flight stage's step on a whole record comes to, given the
+/// caller's state after it (`cs2`).
+pub open spec fn flight_whole(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::connection::dispatcher_spec::State,
+    held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState) -> bool
+{
+    let w = ts.buffer + chunk;
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let (a, s2) = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0, front(w));
+    let cout = crate::connection::driver_spec::flight_out(m.crypto, m.verification, ciphers(m), a, s2);
+    let cs = CState { stage: Stage::Flight(s), status: Status::Handshaking, held };
+    (cs2.stage == cout.stage && cs2.status == cout.status
+        && (!(a is Fail) ==> cs2.held == w.skip((5 + super::bootstrap::length(w)) as int)))
+        ==> feed_verdict(m, p, scalar, cs, ts, chunk, cout, cs2, tfeed(p, ts, chunk))
+}
+
+/// The record-level facts of a whole record in the flight, with room.
+pub proof fn lemma_flight_facts(m: Models, p: Primitives, s: crate::connection::dispatcher_spec::State, held: Seq<u8>,
+    ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        flight_agrees(p, m.verification, s, held, ts),
+        whole(ts.buffer + chunk),
+        super::framing::disp_room(crate::connection::dispatcher_spec::State { framing: seq![], ..s }),
+    ensures ({
+        let w = ts.buffer + chunk;
+        let b = front(w);
+        let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+        let y = ts.client.connection;
+        &&& super::bootstrap::whole_record(b)
+        &&& super::dispatcher::record_agrees(m.crypto, m.verification, ciphers(m), p, s0, ts.client, b)
+        &&& super::dispatcher::in_flight(y.handshake.state)
+        &&& !y.read_closed
+        &&& !ts.write_closed
+        &&& tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 {
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+            ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+            ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+                send: flat(records_to_send), deliver: application_data,
+                after: TState { client, buffer: w.skip((5 + super::bootstrap::length(w)) as int), ..ts },
+                end: TEnd::Running },
+        }
+    }),
+{
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    super::framing::lemma_disp_agrees_facts(p, m.verification, s0, ts.client);
+    lemma_tfeed_whole(p, ts, chunk);
+    assert(super::dispatcher::room(s0, (s0.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat));
+    super::dispatcher::lemma_receive(m.crypto, m.verification, ciphers(m), p, s0, ts.client, b);
+    assert(super::dispatcher::in_flight(ts.client.connection.handshake.state)) by {
+        reveal(super::dispatcher::dispatcher_agrees);
+    }
+}
+
+/// The outcome facts of a whole record in the flight, with room: the
+/// dispatcher theorem's `outcome_agrees`, and the transcription's result
+/// as its caller sees it.
+pub open spec fn flight_case(m: Models, p: Primitives, s: crate::connection::dispatcher_spec::State, ts: TState,
+    chunk: Seq<u8>) -> bool
+{
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let (a, s2) = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0, b);
+    let t = super::bootstrap::one_record(p, ts.client.connection, b);
+    &&& crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 == super::dispatcher::lifted(ts.client, t)
+    &&& super::dispatcher::outcome_agrees(m.crypto, m.verification, ciphers(m), p, s0, ts.client, a, s2, t, true)
+}
+
+/// [`flight_case`], from the dispatcher theorem's `record_agrees`.
+pub proof fn lemma_flight_case(m: Models, p: Primitives, s: crate::connection::dispatcher_spec::State, held: Seq<u8>,
+    ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        flight_agrees(p, m.verification, s, held, ts),
+        whole(ts.buffer + chunk),
+        super::framing::disp_room(crate::connection::dispatcher_spec::State { framing: seq![], ..s }),
+    ensures flight_case(m, p, s, ts, chunk),
+{
+    lemma_flight_facts(m, p, s, held, ts, chunk);
+}
+
+/// The flight's step on a whole record that goes on quietly (nothing to
+/// do, a dropped change_cipher_spec, a user_canceled): both go on.
+pub proof fn lemma_flight_quiet(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::connection::dispatcher_spec::State,
+    held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
+    requires
+        hypotheses(m, p),
+        flight_agrees(p, m.verification, s, held, ts),
+        whole(ts.buffer + chunk),
+        flight_case(m, p, s, ts, chunk),
+        tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, front(ts.buffer + chunk)).0 {
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+            ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+            ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+                send: flat(records_to_send), deliver: application_data,
+                after: TState { client, buffer: (ts.buffer + chunk).skip((5 + super::bootstrap::length(ts.buffer + chunk)) as int), ..ts },
+                end: TEnd::Running },
+        },
+        ({
+            let a = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m),
+                crate::connection::dispatcher_spec::State { framing: seq![], ..s }, front(ts.buffer + chunk)).0;
+            a is None || a is Ignored || a is Cancelled
+        }),
+    ensures flight_whole(m, p, scalar, s, held, ts, chunk, cs2),
+{
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(super::bootstrap::one_record);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(settles);
+    hide(exhausted_epoch);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(peer_closed);
+    hide(ends_alike);
+    let w = ts.buffer + chunk;
+    let n = 5 + super::bootstrap::length(w);
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let (a, s2) = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0, front(w));
+    let t = super::bootstrap::one_record(p, ts.client.connection, front(w));
+    let pr = t->Continue_0;
+    assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+    assert(pr.application_data =~= Seq::<u8>::empty());
+    assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
+    assert(s2.mode == crate::connection::dispatcher_spec::Mode::Handshake && s2.framing.len() == 0) by {
+        reveal(super::dispatcher::dispatcher_agrees);
+    }
+    assert(s2.framing =~= Seq::<u8>::empty());
+    assert(crate::connection::dispatcher_spec::State { framing: seq![], ..s2 } == s2);
+    super::framing::lemma_empty(true);
+    assert(Seq::<u8>::empty() + w.skip(n as int) =~= w.skip(n as int));
+}
+
+/// The flight's step on the server Finished: the client's flight goes out
+/// and is acknowledged at once (`driver_spec` choice 2), the transducer
+/// starts, and the transcription is in CONNECTED with the same bytes sent,
+/// or the same messages in one record per message ([`goes_on_coalesced`]).
+#[verifier::rlimit(40)]
+pub proof fn lemma_flight_send(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::connection::dispatcher_spec::State,
+    held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
+    requires
+        hypotheses(m, p),
+        flight_agrees(p, m.verification, s, held, ts),
+        whole(ts.buffer + chunk),
+        flight_case(m, p, s, ts, chunk),
+        tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, front(ts.buffer + chunk)).0 {
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+            ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+            ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+                send: flat(records_to_send), deliver: application_data,
+                after: TState { client, buffer: (ts.buffer + chunk).skip((5 + super::bootstrap::length(ts.buffer + chunk)) as int), ..ts },
+                end: TEnd::Running },
+        },
+        crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m),
+            crate::connection::dispatcher_spec::State { framing: seq![], ..s }, front(ts.buffer + chunk)).0 is Send,
+    ensures flight_whole(m, p, scalar, s, held, ts, chunk, cs2),
+{
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(super::bootstrap::one_record);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(settles);
+    hide(exhausted_epoch);
+    hide(beyond_room);
+    hide(peer_closed);
+    hide(ends_alike);
+    let c = m.crypto;
+    let v = m.verification;
+    let f = ciphers(m);
+    let w = ts.buffer + chunk;
+    let n = 5 + super::bootstrap::length(w);
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s0, front(w));
+    let wire = a->Send_0;
+    let t = super::bootstrap::one_record(p, ts.client.connection, front(w));
+    let pr = t->Continue_0;
+    assert(super::dispatcher::sent_agrees(c, v, f, p, ts.client, pr, wire, s2));
+    assert(super::dispatcher::ack_agrees(c, v, f, p, s2, pr.connection));
+    assert(s2.pending_flight == wire);
+    let cout = crate::connection::driver_spec::flight_out(c, v, f, a, s2);
+    let ack = crate::connection::dispatcher_spec::acknowledge(c, v, f, s2, wire);
+    let app = crate::connection::post_handshake_spec::start(c, ack.1.client_application_secret,
+        ack.1.server_application_secret)->Ok_0;
+    assert(cout == Step { send: wire, deliver: seq![], stage: Stage::App(app), status: Status::Open });
+    assert(app.phase == crate::connection::post_handshake_spec::Phase::Open);
+    assert(pr.application_data =~= Seq::<u8>::empty());
+    let cs = CState { stage: Stage::Flight(s), status: Status::Handshaking, held };
+    let tout = tfeed(p, ts, chunk);
+    if cs2.stage == cout.stage && cs2.status == cout.status && cs2.held == w.skip(n as int) {
+        assert(driver_agrees(m, p, scalar, cs2, tout.after));
+        if super::dispatcher::client_flight(pr.connection.handshake).len() == 1 {
+            assert(goes_on(m, p, scalar, cout, cs2, tout));
+        } else {
+            assert(goes_on_coalesced(m, p, scalar, ts, cout, cs2, tout));
+        }
+    }
+}
+
+/// The flight's step on a whole record that fails, or the server's error
+/// alert: both end alike, or the crate rejects as the dispatcher theorem
+/// compares rejections.
+pub proof fn lemma_flight_fail(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::connection::dispatcher_spec::State,
+    held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
+    requires
+        hypotheses(m, p),
+        flight_agrees(p, m.verification, s, held, ts),
+        whole(ts.buffer + chunk),
+        flight_case(m, p, s, ts, chunk),
+        super::dispatcher::record_agrees(m.crypto, m.verification, ciphers(m), p,
+            crate::connection::dispatcher_spec::State { framing: seq![], ..s }, ts.client, front(ts.buffer + chunk)),
+        tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, front(ts.buffer + chunk)).0 {
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+            ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+            ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+                send: flat(records_to_send), deliver: application_data,
+                after: TState { client, buffer: (ts.buffer + chunk).skip((5 + super::bootstrap::length(ts.buffer + chunk)) as int), ..ts },
+                end: TEnd::Running },
+        },
+        ({
+            let a = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m),
+                crate::connection::dispatcher_spec::State { framing: seq![], ..s }, front(ts.buffer + chunk)).0;
+            a is Fail || a is PeerAlert
+        }),
+    ensures flight_whole(m, p, scalar, s, held, ts, chunk, cs2),
+{
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(super::dispatcher::record_agrees);
+    hide(super::dispatcher::fail_agrees);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(super::bootstrap::one_record);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(settles);
+    hide(exhausted_epoch);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(peer_closed);
+    hide(goes_on);
+    let w = ts.buffer + chunk;
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let (a, s2) = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0, front(w));
+    let u = crate::transcription::middlebox::client_receive_stream(p, ts.client, front(w)).0;
+    let cout = crate::connection::driver_spec::flight_out(m.crypto, m.verification, ciphers(m), a, s2);
+    let tout = tfeed(p, ts, chunk);
+    if let ClientReceive::Abort(e) = u {
+        if let crate::connection::dispatcher_spec::Action::Fail(alert, _) = a {
+            if crate::transcription::alerts::required_alert(e) == alert as nat {
+                assert(ends_alike(cout, tout));
+            }
+        }
+    }
+}
+
+/// The flight's step on the server's close_notify: the crate answers with
+/// the transcription's `close_write` record and ends; the transcription
+/// stops reading ([`peer_closed`]).
+pub proof fn lemma_flight_close(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::connection::dispatcher_spec::State,
+    held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
+    requires
+        hypotheses(m, p),
+        flight_agrees(p, m.verification, s, held, ts),
+        whole(ts.buffer + chunk),
+        flight_case(m, p, s, ts, chunk),
+        super::dispatcher::in_flight(ts.client.connection.handshake.state),
+        tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, front(ts.buffer + chunk)).0 {
+            ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+            ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+            ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+                send: flat(records_to_send), deliver: application_data,
+                after: TState { client, buffer: (ts.buffer + chunk).skip((5 + super::bootstrap::length(ts.buffer + chunk)) as int), ..ts },
+                end: TEnd::Running },
+        },
+        crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m),
+            crate::connection::dispatcher_spec::State { framing: seq![], ..s }, front(ts.buffer + chunk)).0 is Close,
+    ensures flight_whole(m, p, scalar, s, held, ts, chunk, cs2),
+{
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(super::bootstrap::one_record);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(settles);
+    hide(exhausted_epoch);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(goes_on);
+    hide(ends_alike);
+    let w = ts.buffer + chunk;
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let (a, s2) = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0, front(w));
+    let y = ts.client.connection;
+    let t = super::bootstrap::one_record(p, y, front(w));
+    let pr = t->Continue_0;
+    assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+    assert(pr.application_data =~= Seq::<u8>::empty());
+    assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
+    super::dispatcher::lemma_alert_record_kept(p, y, pr.connection, 0);
+    let cout = crate::connection::driver_spec::flight_out(m.crypto, m.verification, ciphers(m), a, s2);
+    assert(peer_closed(p, ts, cout, tfeed(p, ts, chunk)));
+}
+
+/// The flight stage on a whole record.
+#[verifier::rlimit(40)]
+pub proof fn lemma_flight_whole(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::connection::dispatcher_spec::State,
+    held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
+    requires
+        hypotheses(m, p),
+        flight_agrees(p, m.verification, s, held, ts),
+        whole(ts.buffer + chunk),
+    ensures flight_whole(m, p, scalar, s, held, ts, chunk, cs2),
+{
+    hide(flight_case);
+    hide(feed_verdict);
+    hide(flight_whole);
+    hide(tfeed);
+    hide(super::dispatcher::record_agrees);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let cs = CState { stage: Stage::Flight(s), status: Status::Handshaking, held };
+    if !super::framing::disp_room(s0) {
+        assert(beyond_room(cs, ts, chunk));
+        reveal(feed_verdict);
+        reveal(flight_whole);
+    } else {
+        lemma_flight_facts(m, p, s, held, ts, chunk);
+        lemma_flight_case(m, p, s, held, ts, chunk);
+        let a = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0,
+            front(ts.buffer + chunk)).0;
+        match a {
+            crate::connection::dispatcher_spec::Action::None | crate::connection::dispatcher_spec::Action::Ignored
+                | crate::connection::dispatcher_spec::Action::Cancelled =>
+                lemma_flight_quiet(m, p, scalar, s, held, ts, chunk, cs2),
+            crate::connection::dispatcher_spec::Action::Send(_) =>
+                lemma_flight_send(m, p, scalar, s, held, ts, chunk, cs2),
+            crate::connection::dispatcher_spec::Action::Fail(_, _) | crate::connection::dispatcher_spec::Action::PeerAlert(_) =>
+                lemma_flight_fail(m, p, scalar, s, held, ts, chunk, cs2),
+            crate::connection::dispatcher_spec::Action::Close(_) =>
+                lemma_flight_close(m, p, scalar, s, held, ts, chunk, cs2),
+            crate::connection::dispatcher_spec::Action::Ready => {
+                reveal(flight_case);
+            },
+        }
+    }
+}
+
+/// The flight stage with no whole record at the front: it waits (both
+/// go on), or rejects the header early.
+#[verifier::rlimit(80)]
+pub proof fn lemma_flight_partial(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is Flight,
+        !whole(ts.buffer + chunk),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::connection::dispatcher_spec::feed);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(rejects_record);
+    hide(retry_then_fails);
+    hide(settles);
+    hide(exhausted_epoch);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(peer_closed);
+    hide(ends_alike);
+    let s = cs.stage->Flight_0;
+    let c = m.crypto;
+    let v = m.verification;
+    let f = ciphers(m);
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let input = cs.held + chunk;
+    let x = s.framing + input;
+    assert(x =~= ts.buffer + chunk);
+    let cl = ts.client;
+    let y = cl.connection;
+    super::framing::lemma_disp_agrees_facts(p, v, s0, cl);
+    assert(super::dispatcher::in_flight(y.handshake.state)) by {
+        reveal(super::dispatcher::dispatcher_agrees);
+    }
+    super::framing::lemma_disp_feed(c, v, f, s, input);
+    super::framing::lemma_first(x, x.len(), true);
+    super::framing::lemma_framing_agrees(y, x, true);
+    lemma_tfeed_partial(p, ts, chunk);
+    let (st, k) = super::framing::first(x, true);
+    let r = crate::connection::dispatcher_spec::feed(c, v, f, s, input);
+    let cout = crate::connection::driver_spec::flight_out(c, v, f, r.1, r.2);
+    let cs2 = CState { stage: cout.stage, status: cout.status, held: input.skip(r.0 as int) };
+    assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+    let tout = tfeed(p, ts, chunk);
+    if st is Pending {
+        assert(input.skip(r.0 as int) =~= Seq::<u8>::empty());
+        assert(x + Seq::<u8>::empty() =~= x);
+        assert(x.take(x.len() as int) =~= x);
+        super::framing::lemma_need_more_wf(x, true);
+        assert(crate::connection::dispatcher_spec::State { framing: seq![], ..r.2 } == s0);
+        assert(goes_on(m, p, scalar, cout, cs2, tout));
+    } else if st is Fail {
+        let a = st->Fail_0;
+        super::framing::lemma_early_alert(x, a);
+        super::dispatcher::lemma_fatal(f, p, s0, y, a);
+        assert(rejects_early(cs, ts, chunk, cout, tout));
+    } else {
+        assert(x.take(k as int).subrange(3, 5) =~= x.subrange(3, 5));
+    }
+}
+
+/// **The flight stage, one operation**: feeding a chunk agrees
+/// ([`op_agrees`]).
+pub proof fn lemma_flight_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is Flight,
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(flight_whole);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::connection::dispatcher_spec::feed);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(crate::connection::driver_spec::flight_out);
+    hide(feed_verdict);
+    if !whole(ts.buffer + chunk) {
+        lemma_flight_partial(m, p, scalar, cs, ts, chunk);
+    } else {
+        let s = cs.stage->Flight_0;
+        let c = m.crypto;
+        let v = m.verification;
+        let f = ciphers(m);
+        let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+        let input = cs.held + chunk;
+        let x = s.framing + input;
+        assert(x =~= ts.buffer + chunk);
+        let y = ts.client.connection;
+        super::framing::lemma_disp_agrees_facts(p, v, s0, ts.client);
+        super::framing::lemma_disp_feed(c, v, f, s, input);
+        super::framing::lemma_first(x, x.len(), true);
+        super::framing::lemma_framing_agrees(y, x, true);
+        let (st, k) = super::framing::first(x, true);
+        let r = crate::connection::dispatcher_spec::feed(c, v, f, s, input);
+        let cout = crate::connection::driver_spec::flight_out(c, v, f, r.1, r.2);
+        let cs2 = CState { stage: cout.stage, status: cout.status, held: input.skip(r.0 as int) };
+        assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+        let n = 5 + super::bootstrap::length(x);
+        let b = front(x);
+        match st {
+            crate::connection::framing_spec::Status::Complete => {
+                assert(x.take(k as int).subrange(3, 5) =~= x.subrange(3, 5));
+                assert(k == n);
+                assert(input.skip((k - s.framing.len()) as int) =~= x.skip(n as int));
+            },
+            crate::connection::framing_spec::Status::Fail(a) => {
+                assert(b.subrange(3, 5) =~= x.subrange(3, 5));
+                reveal(crate::connection::dispatcher_spec::receive_record);
+            },
+            crate::connection::framing_spec::Status::Pending => {
+                super::framing::lemma_t_header(x);
+            },
+        }
+        lemma_flight_whole(m, p, scalar, s, cs.held, ts, chunk, cs2);
+        reveal(flight_whole);
     }
 }
 
