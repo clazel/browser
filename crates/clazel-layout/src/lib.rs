@@ -13,3 +13,4 @@
 
 pub mod fonts;
 pub mod shape;
+pub mod text;
