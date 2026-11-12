@@ -6,7 +6,95 @@
 //! `close_write` and `alert_record`), from the configuration to the end of
 //! the connection: [`theorem_driver_equivalence`].
 //!
-//! The comparison is built operation by operation: [`op_agrees`].
+//! **What is compared.** Both sides are driven by the same caller
+//! operations ([`Op`]): the next chunk of the server's stream, in any size
+//! (so any chunking of the stream is some sequence of operations),
+//! application data to send, and a close, interleaved in any order. The
+//! crate's side is the driver as its contracts make it a function
+//! ([`cop`]: `step` on what the caller holds plus the chunk, one record at
+//! most, `driver_spec` choice 3; `send`; `close`), and `connect` at the start
+//! ([`cstart`]); [`lemma_cstep`] and [`lemma_cstart`] show the contracts
+//! leave no other output. The transcription's side is its caller
+//! ([`top`]): it reads at most one whole record of what it holds per
+//! chunk, as `connection::receive_stream` reads its first (so it waits
+//! exactly when that function waits, and reads the same records), through
+//! `middlebox::client_receive_stream`; on an abort it writes
+//! `connection::abort_record`; it sends with `send_application_data` and
+//! closes with `close_write`, and writes nothing after its close_notify
+//! (the transcription has no write-closed state of its own).
+//!
+//! **The theorem** ([`theorem_driver_equivalence`]): from the start
+//! ([`start_agrees`]: the crate's first record is `start_client`'s, against
+//! the crate's own ClientHello and its scalar) every run of operations
+//! compares operation by operation ([`run_agrees`], [`op_agrees`]): the
+//! bytes sent, the plaintext delivered and the status are the
+//! transcription's and both go on in agreeing states ([`driver_agrees`]),
+//! across both handoffs (the bootstrap to the dispatcher at the ServerHello,
+//! [`lemma_handoff`]; the dispatcher to the transducer at the acknowledged
+//! client flight, `dispatcher::ack_agrees`); or both end alike
+//! ([`ends_alike`]); or the crate rejects a record and the record-level
+//! theorem of its stage relates the transcription's handling of it
+//! ([`rejects_record`]: the alerts equal, or the crate's that of some
+//! failure in the transcription's list, or a stated difference of that
+//! theorem); or one of the stated differences below holds.
+//!
+//! **The state relation** ([`driver_agrees`]), by stage: the bootstrap
+//! theorem's `bootstrap_agrees` with the bytes held and A.1's WAIT_SH fields
+//! ([`hello_agrees`], [`wait_sh_fields`]); the dispatcher theorem's
+//! `dispatcher_agrees` ([`flight_agrees`]); the post-handshake theorem's
+//! `post_agrees` with the read side open and the write side closed on both
+//! sides together ([`app_agrees`]); the status that of the stage.
+//!
+//! **Hypotheses** ([`hypotheses`]), each one of the stage theorems': the
+//! two sides' primitives are the same functions with the lengths both model;
+//! X25519 agrees; and the two certificate validators agree for every host
+//! and time, the crate's 16 KiB key cap never firing ([`validators`],
+//! `dispatcher::validator_agrees`). For the start: the scalar is 32 octets
+//! and its public value is the one the configuration offers, and the
+//! transcription runs in the crate's compatibility mode.
+//!
+//! **The domain conditions the stage theorems left to the driver:**
+//! - `dispatcher::accepts_server_hello`'s start inputs are discharged:
+//!   every ClientHello the crate sends offers its nine signature schemes
+//!   ([`lemma_offered_schemes`]), and `server_public_key` and
+//!   `certificate_request_context` are unset in WAIT_SH, with the private
+//!   key the crate's scalar, through a HelloRetryRequest
+//!   ([`wait_sh_fields`], [`lemma_wait_sh_step`]).
+//! - The all-zero X25519 shared secret is discharged: both refuse the
+//!   ServerHello with `illegal_parameter`, and the crate's plaintext alert
+//!   is the transcription's `abort_record` ([`lemma_handoff`]). With bytes
+//!   after that ServerHello the two still name different faults (the
+//!   bootstrap's `buffer_fail_agrees`, under [`rejects_record`]).
+//! - Offers are the client's profile: discharged (`dispatcher::lemma_start`
+//!   proves `dispatcher_agrees`, which holds `profile_extensions`, from the
+//!   crate's own offers).
+//! - The message type: no condition at the driver level. The record-level
+//!   theorems compare every record, a message of the wrong type included
+//!   (`dispatcher::wrong_type` is a case of its `fail_agrees`).
+//! - The crate's resource policies are stated, not assumed: its caps
+//!   (2^18 handshake message, the transcript and cookie caps of the Hello,
+//!   `internal_error`) are cases of the record-level `fail_agrees` under
+//!   [`rejects_record`] and [`retry_then_fails`]; the 16 KiB key cap is in
+//!   [`validators`]; `dispatcher::room` remains a domain ([`beyond_room`]).
+//!
+//! **Stated differences** (each a definition): [`rejects_early`] (the
+//! framer's timing on a header), [`peer_closed`] (the server's close_notify:
+//! the crate answers with the transcription's `close_write` record and
+//! ends), [`retry_then_fails`] (ClientHello2 sent before a later message of
+//! its record fails), [`goes_on_coalesced`] (the client's flight in one
+//! record; the comparison goes on), [`settles`] (the answer to
+//! `update_requested` sent at once; the comparison ends there),
+//! [`exhausted_epoch`], [`oversized`] (application data above 2^14 octets)
+//! and [`closes_in_handshake`] (a close before the handshake completes ends
+//! the crate's connection).
+//!
+//! **Not covered:** transport end of file (`Driver::eof`: the crate ends
+//! with `Failed(internal_error, Truncated)` and sends nothing, whatever the
+//! stage; `connection.rs` leaves transport closure out of scope, so there
+//! is nothing to compare); a KeyUpdate of the caller's own (the driver has
+//! no such operation; `post_handshake::update_agrees` covers the
+//! transducer's `update_keys`); the comparison past [`settles`] and past
+//! [`beyond_room`].
 
 #[cfg(verus_only)]
 use crate::connection::driver_contract::Models;
@@ -830,13 +918,44 @@ pub open spec fn feed_verdict(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     ||| exhausted_epoch(cs, cout, tout)
 }
 
+/// **Stated difference, application data above 2^14 octets**
+/// (`post_handshake::lemma_oversized`; §5.1): the crate's
+/// `send_application` takes one record's worth and refuses more as a local
+/// `record_overflow` (after the KeyUpdate due on the last sequence number,
+/// if any), ending the connection; the transcription's
+/// `send_application_data` fragments it.
+pub open spec fn oversized(cs: CState, data: Seq<u8>, cout: Step, tout: TOut) -> bool {
+    &&& data.len() > crate::spec::MAX_PLAINTEXT
+    &&& cs.stage is App
+    &&& cout.stage is Ended
+    &&& cout.status matches Status::Failed(a, _) && a == crate::spec::RECORD_OVERFLOW
+    &&& tout.end is Running
+}
+
+/// **Stated difference, a close before the handshake completes** (§6.1):
+/// both write the same close_notify (in plaintext before the ServerHello,
+/// under the client handshake key in the server's flight, A.1's note), and
+/// the crate ends the connection; the transcription, which has no
+/// write-closed state, has only written the record (its caller writes
+/// nothing more).
+pub open spec fn closes_in_handshake(cout: Step, tout: TOut) -> bool {
+    &&& cout.stage is Ended
+    &&& cout.status == Status::Closed
+    &&& cout.send == tout.send
+    &&& cout.deliver.len() == 0
+    &&& tout.deliver.len() == 0
+    &&& tout.end is Running
+    &&& tout.after.write_closed
+}
+
 /// The outcomes of one operation compare.
 pub open spec fn op_agrees(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, op: Op) -> bool {
     let (cout, cs2) = cop(m, scalar, cs, op);
     let tout = top(p, ts, op);
     match op {
         Op::Feed(chunk) => feed_verdict(m, p, scalar, cs, ts, chunk, cout, cs2, tout),
-        _ => goes_on(m, p, scalar, cout, cs2, tout),
+        Op::Send(data) => goes_on(m, p, scalar, cout, cs2, tout) || oversized(cs, data, cout, tout),
+        Op::Close => goes_on(m, p, scalar, cout, cs2, tout) || closes_in_handshake(cout, tout),
     }
 }
 
@@ -1425,6 +1544,7 @@ pub proof fn lemma_hs_path(p: Primitives, s: crate::hello::bootstrap_spec::State
 }
 
 /// The ServerHello in its own record: the handoff ([`lemma_handoff`]).
+#[verifier::rlimit(60)]
 pub proof fn lemma_hello_established(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::hello::bootstrap_spec::State,
     framing: Seq<u8>, held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
     requires
@@ -1439,6 +1559,10 @@ pub proof fn lemma_hello_established(m: Models, p: Primitives, scalar: Seq<u8>, 
     hide(super::bootstrap::record_agrees);
     hide(crate::hello::bootstrap_lemmas::record_step);
     hide(super::dispatcher::dispatcher_agrees);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(settles);
+    hide(exhausted_epoch);
     hide(rejects_record);
     hide(rejects_early);
     hide(peer_closed);
@@ -2115,6 +2239,779 @@ pub proof fn lemma_flight_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CS
         }
         lemma_flight_whole(m, p, scalar, s, cs.held, ts, chunk, cs2);
         reveal(flight_whole);
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// The application stage.
+// ---------------------------------------------------------------------------
+
+/// A step of the transducer that goes on (`End::Continue`) from a state
+/// that reads keeps its phase: only the server's close_notify and failures
+/// change it, and those end the step otherwise.
+pub proof fn lemma_continue_phase(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, wire: Seq<u8>)
+    requires crate::connection::post_handshake_spec::can_read(s),
+    ensures ({
+        let r = crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(wire));
+        r.0.end is Continue ==> r.1.phase == s.phase
+    }),
+{
+    match s.receiver {
+        Some(rx) => {
+            match crate::traffic::spec::receive(crate::connection::post_handshake_spec::open_of(f, rx), rx, wire) {
+                (rx2, crate::traffic::spec::Read::Record(typ, content, used)) => {
+                    lemma_record_phase(c, f, crate::connection::post_handshake_spec::State { receiver: Some(rx2), ..s },
+                        typ, content);
+                },
+                _ => {},
+            }
+        },
+        None => {},
+    }
+}
+
+/// [`lemma_continue_phase`] for one record's content.
+pub proof fn lemma_record_phase(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, typ: u8, content: Seq<u8>)
+    ensures ({
+        let r = crate::connection::post_handshake_spec::record(c, f, s, typ, content);
+        r.0.end is Continue ==> r.1.phase == s.phase
+    }),
+{
+    match crate::spec::feed_record(s.reassembly, crate::spec::Record { ctype: typ, fragment: content }) {
+        crate::spec::Res::Ok((crate::spec::Event::Messages(ms), r)) => {
+            lemma_messages_phase(c, f, crate::connection::post_handshake_spec::State { reassembly: r, ..s }, ms);
+        },
+        _ => {},
+    }
+}
+
+/// [`lemma_continue_phase`] for a record's messages.
+pub proof fn lemma_messages_phase(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, ms: Seq<Seq<u8>>)
+    ensures ({
+        let r = crate::connection::post_handshake_spec::messages(c, f, s, ms);
+        r.0.end is Continue ==> r.1.phase == s.phase
+    }),
+    decreases ms.len(),
+{
+    if ms.len() > 0 {
+        lemma_message_phase(c, f, s, ms[0], ms.len() == 1);
+        let r = crate::connection::post_handshake_spec::message(c, f, s, ms[0], ms.len() == 1);
+        crate::connection::post_handshake_lemmas::lemma_message_end(c, f, s, ms[0], ms.len() == 1);
+        if crate::connection::post_handshake_spec::can_read(r.1) {
+            lemma_messages_phase(c, f, r.1, ms.skip(1));
+        }
+    }
+}
+
+/// [`lemma_continue_phase`] for one message.
+pub proof fn lemma_message_phase(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, m: Seq<u8>, last: bool)
+    ensures ({
+        let r = crate::connection::post_handshake_spec::message(c, f, s, m, last);
+        r.0.end is Continue ==> r.1.phase == s.phase
+    }),
+{
+}
+
+/// What the application stage's step on the stream comes to.
+pub open spec fn app_out(m: Models, s: crate::connection::post_handshake_spec::State, w: Seq<u8>) -> (nat, Step) {
+    let r = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
+        crate::connection::post_handshake_spec::Input::Bytes(w));
+    (r.2, crate::connection::driver_spec::carry_out(m.cipher, r.0, r.1))
+}
+
+/// A step of the transducer from a state that reads ends with the server's
+/// close_notify only through `peer_closed`: `PeerClosed` leaves it
+/// `ReadClosed`, `Close` (our close_notify already sent) `Closed`.
+pub proof fn lemma_closed_phase(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, wire: Seq<u8>)
+    requires crate::connection::post_handshake_spec::can_read(s),
+    ensures ({
+        let r = crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(wire));
+        &&& r.0.end is PeerClosed ==> r.1.phase == crate::connection::post_handshake_spec::Phase::ReadClosed
+            && s.phase == crate::connection::post_handshake_spec::Phase::Open
+        &&& r.0.end is Close ==> r.1.phase == crate::connection::post_handshake_spec::Phase::Closed
+            && s.phase == crate::connection::post_handshake_spec::Phase::WriteClosed
+    }),
+{
+    match s.receiver {
+        Some(rx) => {
+            match crate::traffic::spec::receive(crate::connection::post_handshake_spec::open_of(f, rx), rx, wire) {
+                (rx2, crate::traffic::spec::Read::Record(typ, content, used)) => {
+                    let s1 = crate::connection::post_handshake_spec::State { receiver: Some(rx2), ..s };
+                    match crate::spec::feed_record(s1.reassembly, crate::spec::Record { ctype: typ, fragment: content }) {
+                        crate::spec::Res::Ok((crate::spec::Event::Messages(ms), r)) => {
+                            lemma_messages_open_end(c, f, crate::connection::post_handshake_spec::State { reassembly: r, ..s1 }, ms);
+                        },
+                        _ => {},
+                    }
+                },
+                _ => {},
+            }
+        },
+        None => {},
+    }
+}
+
+/// A record's messages end the connection only by a failure.
+pub proof fn lemma_messages_open_end(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, ms: Seq<Seq<u8>>)
+    ensures ({
+        let e = crate::connection::post_handshake_spec::messages(c, f, s, ms).0.end;
+        e is Continue || e is Fail
+    }),
+    decreases ms.len(),
+{
+    if ms.len() > 0 {
+        let r = crate::connection::post_handshake_spec::message(c, f, s, ms[0], ms.len() == 1);
+        if crate::connection::post_handshake_spec::can_read(r.1) {
+            lemma_messages_open_end(c, f, r.1, ms.skip(1));
+        }
+    }
+}
+
+/// The record-level facts of a whole record in the application stage: the
+/// step on the stream is the step on the record, the post-handshake
+/// theorem's `outcome_agrees` holds of it, and the transcription's caller
+/// reads it.
+pub open spec fn app_case(m: Models, p: Primitives, s: crate::connection::post_handshake_spec::State, ts: TState,
+    chunk: Seq<u8>) -> bool
+{
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    let conn = ts.client.connection;
+    let r = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
+        crate::connection::post_handshake_spec::Input::Bytes(w));
+    let rb = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
+        crate::connection::post_handshake_spec::Input::Bytes(b));
+    let tb = crate::transcription::connection::receive_stream(p, conn, b).0;
+    &&& r.0 == rb.0
+    &&& r.1 == rb.1
+    &&& super::post_handshake::record_agrees(p, m.cipher, s, conn, b, rb, tb)
+    &&& super::post_handshake::outcome_agrees(p, s, conn, rb.0, rb.1, tb, match rb.0.end {
+        crate::connection::post_handshake_spec::End::Fail(a) => super::post_handshake::fail_agrees(m.cipher, s, b, tb, a),
+        _ => true })
+    &&& (r.0.end is Continue ==> r.2 == 5 + super::bootstrap::length(w) && r.1.phase == s.phase)
+    &&& (r.0.end is PeerClosed ==> r.1.phase == crate::connection::post_handshake_spec::Phase::ReadClosed
+        && s.phase == crate::connection::post_handshake_spec::Phase::Open)
+    &&& (r.0.end is Close ==> r.1.phase == crate::connection::post_handshake_spec::Phase::Closed
+        && s.phase == crate::connection::post_handshake_spec::Phase::WriteClosed)
+    &&& crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 == super::dispatcher::lifted(ts.client, tb)
+    &&& tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 {
+        ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
+        ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
+        ClientReceive::Continue { client, application_data, records_to_send } => TOut {
+            send: flat(records_to_send), deliver: application_data,
+            after: TState { client, buffer: w.skip((5 + super::bootstrap::length(w)) as int), ..ts },
+            end: TEnd::Running },
+    }
+}
+
+/// [`app_case`].
+pub proof fn lemma_app_case(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App,
+        whole(ts.buffer + chunk),
+    ensures app_case(m, p, cs.stage->App_0, ts, chunk),
+{
+    hide(super::post_handshake::record_agrees);
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    let s = cs.stage->App_0;
+    let c = m.crypto;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    super::post_handshake::lemma_receive_open_facts(s, conn);
+    super::framing::lemma_post_whole(c, f, p, s, conn, w);
+    lemma_tfeed_whole(p, ts, chunk);
+    super::framing::lemma_client_lifted(p, ts.client, b);
+    lemma_continue_phase(c, f, s, w);
+    lemma_closed_phase(c, f, s, w);
+    let rb = crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(b));
+    let tb = crate::transcription::connection::receive_stream(p, conn, b).0;
+    assert(super::post_handshake::outcome_agrees(p, s, conn, rb.0, rb.1, tb, match rb.0.end {
+        crate::connection::post_handshake_spec::End::Fail(a) => super::post_handshake::fail_agrees(f, s, b, tb, a),
+        _ => true })) by {
+        reveal(super::post_handshake::record_agrees);
+    }
+}
+
+/// The application stage on a whole record that goes on: both go on, or
+/// the crate answers `update_requested` at once ([`settles`]).
+#[verifier::rlimit(40)]
+pub proof fn lemma_app_continue(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App,
+        whole(ts.buffer + chunk),
+        app_case(m, p, cs.stage->App_0, ts, chunk),
+        crate::connection::post_handshake_spec::step(m.crypto, m.cipher, cs.stage->App_0,
+            crate::connection::post_handshake_spec::Input::Bytes(ts.buffer + chunk)).0.end is Continue,
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(super::post_handshake::record_agrees);
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(exhausted_epoch);
+    hide(peer_closed);
+    hide(ends_alike);
+    let s = cs.stage->App_0;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let w = ts.buffer + chunk;
+    assert(w =~= cs.held + chunk);
+    let b = front(w);
+    let r = crate::connection::post_handshake_spec::step(m.crypto, f, s, crate::connection::post_handshake_spec::Input::Bytes(w));
+    let tb = crate::transcription::connection::receive_stream(p, conn, b).0;
+    let cout = crate::connection::driver_spec::carry_out(f, r.0, r.1);
+    let cs2 = CState { stage: cout.stage, status: cout.status, held: (cs.held + chunk).skip(r.2 as int) };
+    assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+    let tout = tfeed(p, ts, chunk);
+    let pr = tb->Continue_0;
+    let conn2 = pr.connection;
+    assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+    assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
+    lemma_concat_flat(r.0.wires);
+    assert(ts.write_closed == (s.phase == crate::connection::post_handshake_spec::Phase::WriteClosed));
+    if s.phase == crate::connection::post_handshake_spec::Phase::Open && conn2.key_update_owed {
+        assert(Seq::<u8>::empty() + flat(r.0.wires) =~= flat(r.0.wires));
+        assert(settles(p, cs2, cout, tout));
+    } else {
+        assert(super::post_handshake::settle(p, r.1, conn2) == (Seq::<Seq<u8>>::empty(), conn2));
+        assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
+        assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+        assert(goes_on(m, p, scalar, cout, cs2, tout));
+    }
+}
+
+/// The application stage on a whole record that fails, or the server's
+/// error alert: both end alike, or the crate rejects as the post-handshake
+/// theorem compares rejections.
+#[verifier::rlimit(40)]
+pub proof fn lemma_app_fail(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App,
+        whole(ts.buffer + chunk),
+        app_case(m, p, cs.stage->App_0, ts, chunk),
+        ({
+            let e = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, cs.stage->App_0,
+                crate::connection::post_handshake_spec::Input::Bytes(ts.buffer + chunk)).0.end;
+            e is Fail || e is PeerAlert
+        }),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(super::post_handshake::record_agrees);
+    hide(super::post_handshake::post_agrees);
+    hide(super::post_handshake::fail_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(exhausted_epoch);
+    hide(peer_closed);
+    hide(settles);
+    hide(goes_on);
+    let s = cs.stage->App_0;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let w = ts.buffer + chunk;
+    assert(w =~= cs.held + chunk);
+    let b = front(w);
+    let r = crate::connection::post_handshake_spec::step(m.crypto, f, s, crate::connection::post_handshake_spec::Input::Bytes(w));
+    let tb = crate::transcription::connection::receive_stream(p, conn, b).0;
+    let cout = crate::connection::driver_spec::carry_out(f, r.0, r.1);
+    let cs2 = CState { stage: cout.stage, status: cout.status, held: (cs.held + chunk).skip(r.2 as int) };
+    assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+    let tout = tfeed(p, ts, chunk);
+    lemma_concat_flat(r.0.wires);
+    assert(ts.write_closed == !crate::connection::post_handshake_spec::can_write(s));
+    match r.0.end {
+        crate::connection::post_handshake_spec::End::Fail(a) => {
+            if let Receive::Abort(e) = tb {
+                if crate::transcription::alerts::required_alert(e) == a as nat {
+                    super::ccs::lemma_flatten(crate::transcription::connection::alert_record(p, conn, a as nat),
+                        crate::transcription::connection::alert_record(p, conn, a as nat));
+                    assert(Seq::<u8>::empty() + crate::transcription::connection::alert_record(p, conn, a as nat)
+                        =~= crate::transcription::connection::alert_record(p, conn, a as nat));
+                    assert(r.0.delivered =~= Seq::<u8>::empty());
+                    assert(ends_alike(cout, tout));
+                }
+            }
+        },
+        _ => {
+            assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
+            assert(r.0.delivered =~= Seq::<u8>::empty());
+            assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+            assert(ends_alike(cout, tout));
+        },
+    }
+}
+
+/// The application stage on the server's close_notify: the crate answers
+/// with the transcription's `close_write` record if its write side is open,
+/// and ends; the transcription stops reading ([`peer_closed`]).
+#[verifier::rlimit(80)]
+pub proof fn lemma_app_closed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App,
+        whole(ts.buffer + chunk),
+        app_case(m, p, cs.stage->App_0, ts, chunk),
+        ({
+            let e = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, cs.stage->App_0,
+                crate::connection::post_handshake_spec::Input::Bytes(ts.buffer + chunk)).0.end;
+            e is PeerClosed || e is Close
+        }),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(super::post_handshake::record_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(retry_then_fails);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(exhausted_epoch);
+    hide(settles);
+    hide(goes_on);
+    hide(ends_alike);
+    let s = cs.stage->App_0;
+    let f = m.cipher;
+    let conn = ts.client.connection;
+    let w = ts.buffer + chunk;
+    assert(w =~= cs.held + chunk);
+    let b = front(w);
+    let r = crate::connection::post_handshake_spec::step(m.crypto, f, s, crate::connection::post_handshake_spec::Input::Bytes(w));
+    let tb = crate::transcription::connection::receive_stream(p, conn, b).0;
+    let cout = crate::connection::driver_spec::carry_out(f, r.0, r.1);
+    let cs2 = CState { stage: cout.stage, status: cout.status, held: (cs.held + chunk).skip(r.2 as int) };
+    assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+    let tout = tfeed(p, ts, chunk);
+    let pr = tb->Continue_0;
+    let conn2 = pr.connection;
+    assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+    assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
+    lemma_concat_flat(r.0.wires);
+    if r.0.end is PeerClosed {
+        assert(r.1.phase == crate::connection::post_handshake_spec::Phase::ReadClosed);
+        assert(super::post_handshake::settle(p, r.1, conn2) == (Seq::<Seq<u8>>::empty(), conn2));
+        super::post_handshake::lemma_close(f, p, r.1, conn2);
+        let rc = crate::connection::post_handshake_spec::close(f, r.1);
+        lemma_concat_flat(rc.0.wires);
+        super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, conn2),
+            crate::transcription::connection::close_write(p, conn2));
+        assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
+        assert(Seq::<u8>::empty() + crate::transcription::connection::close_write(p, conn2)
+            =~= crate::transcription::connection::close_write(p, conn2));
+        assert(ts.write_closed == false);
+        assert(peer_closed(p, ts, cout, tout));
+    } else {
+        assert(r.1.phase == crate::connection::post_handshake_spec::Phase::Closed);
+        assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
+        assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+        assert(peer_closed(p, ts, cout, tout));
+    }
+}
+
+/// The application stage on a whole record.
+pub proof fn lemma_app_whole(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App,
+        whole(ts.buffer + chunk),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(app_case);
+    hide(op_agrees);
+    hide(driver_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    lemma_app_case(m, p, scalar, cs, ts, chunk);
+    let e = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, cs.stage->App_0,
+        crate::connection::post_handshake_spec::Input::Bytes(ts.buffer + chunk)).0.end;
+    match e {
+        crate::connection::post_handshake_spec::End::Continue => lemma_app_continue(m, p, scalar, cs, ts, chunk),
+        crate::connection::post_handshake_spec::End::Fail(_) | crate::connection::post_handshake_spec::End::PeerAlert(_) =>
+            lemma_app_fail(m, p, scalar, cs, ts, chunk),
+        _ => lemma_app_closed(m, p, scalar, cs, ts, chunk),
+    }
+}
+
+/// **The application stage, one operation**: feeding a chunk agrees
+/// ([`op_agrees`]).
+#[verifier::rlimit(40)]
+pub proof fn lemma_app_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is App,
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::post_handshake_spec::step);
+    hide(rejects_record);
+    hide(retry_then_fails);
+    hide(goes_on_coalesced);
+    hide(beyond_room);
+    hide(settles);
+    let w = ts.buffer + chunk;
+    if whole(w) {
+        lemma_app_whole(m, p, scalar, cs, ts, chunk);
+    } else {
+        let s = cs.stage->App_0;
+        let c = m.crypto;
+        let f = m.cipher;
+        let conn = ts.client.connection;
+        assert(w =~= cs.held + chunk);
+        super::post_handshake::lemma_receive_open_facts(s, conn);
+        super::framing::lemma_post_partial(c, f, p, s, conn, w);
+        lemma_tfeed_partial(p, ts, chunk);
+        super::framing::lemma_stream_partial(p, conn, w);
+        let r = crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(w));
+        let cout = crate::connection::driver_spec::carry_out(f, r.0, r.1);
+        let cs2 = CState { stage: cout.stage, status: cout.status, held: (cs.held + chunk).skip(r.2 as int) };
+        assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+        let tout = tfeed(p, ts, chunk);
+        if super::framing::post_waits(r) {
+            assert(cs2.held =~= w);
+            assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+            lemma_concat_flat(Seq::<Seq<u8>>::empty());
+            assert(goes_on(m, p, scalar, cout, cs2, tout));
+        } else {
+            lemma_concat_flat(r.0.wires);
+            let a = r.0.end->Fail_0;
+            if super::post_handshake::exhausted(s) && a == crate::spec::INTERNAL_ERROR {
+                assert(exhausted_epoch(cs, cout, tout) || rejects_early(cs, ts, chunk, cout, tout));
+            } else {
+                assert(rejects_early(cs, ts, chunk, cout, tout));
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The caller's sends and closes.
+// ---------------------------------------------------------------------------
+
+/// Sending application data that goes on keeps the transducer's phase.
+pub proof fn lemma_send_phase(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, data: Seq<u8>)
+    ensures ({
+        let r = crate::connection::post_handshake_spec::send_application(c, f, s, data);
+        r.0.end is Continue ==> r.1.phase == s.phase
+    }),
+{
+}
+
+/// **Sending application data** agrees: before the handshake ends neither
+/// sends anything (`driver_contract::send_ensures`; the transcription's
+/// `send_application_data` is `NotConnected`); after it, the crate's record
+/// is the transcription's (`post_handshake::send_agrees`, with §5.3's
+/// KeyUpdate before the last sequence number on both sides), or neither
+/// sends after its close_notify; or data above 2^14 octets is the stated
+/// difference [`oversized`].
+#[verifier::rlimit(40)]
+pub proof fn lemma_send_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, data: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Send(data)),
+{
+    hide(super::post_handshake::post_agrees);
+    hide(super::bootstrap::bootstrap_agrees);
+    hide(super::dispatcher::dispatcher_agrees);
+    let (cout, cs2) = cop(m, scalar, cs, Op::Send(data));
+    let tout = top(p, ts, Op::Send(data));
+    let conn = ts.client.connection;
+    match cs.stage {
+        Stage::Hello(s, _) => {
+            assert(conn.handshake.state == crate::transcription::state_machine::ClientState::WaitSh) by {
+                reveal(super::bootstrap::bootstrap_agrees);
+            }
+            assert(cs2 == cs);
+            assert(tout.after == ts);
+        },
+        Stage::Flight(s) => {
+            let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+            super::framing::lemma_disp_agrees_facts(p, m.verification, s0, ts.client);
+            assert(super::dispatcher::in_flight(conn.handshake.state)) by {
+                reveal(super::dispatcher::dispatcher_agrees);
+            }
+            assert(cs2 == cs);
+            assert(tout.after == ts);
+        },
+        Stage::App(s) => {
+            super::post_handshake::lemma_receive_open_facts(s, conn);
+            let c = m.crypto;
+            let f = m.cipher;
+            let r = crate::connection::post_handshake_spec::send_application(c, f, s, data);
+            if s.phase == crate::connection::post_handshake_spec::Phase::Open {
+                if data.len() <= crate::spec::MAX_PLAINTEXT {
+                    super::post_handshake::lemma_send_application(c, f, p, s, conn, data);
+                    lemma_send_phase(c, f, s, data);
+                    lemma_concat_flat(r.0.wires);
+                    assert(Seq::<u8>::empty() + flat(r.0.wires) =~= flat(r.0.wires));
+                    assert(r.0.delivered =~= Seq::<u8>::empty());
+                    assert(goes_on(m, p, scalar, cout, cs2, tout));
+                } else {
+                    super::post_handshake::lemma_oversized(c, f, p, s, conn, data);
+                    assert(oversized(cs, data, cout, tout));
+                }
+            } else {
+                assert(cout.send =~= Seq::<u8>::empty());
+                assert(cs2 == cs);
+            }
+        },
+        Stage::Ended => {},
+    }
+}
+
+/// **Closing** agrees: before the handshake ends, both write the same
+/// close_notify (the plaintext one before the ServerHello, the one under
+/// the client handshake key in the flight), and the crate ends the
+/// connection (the stated difference [`closes_in_handshake`]); after it,
+/// the crate's `close` is the transcription's `close_write`
+/// (`post_handshake::close_agrees`) and both go on reading, or neither
+/// writes after its close_notify.
+#[verifier::rlimit(80)]
+pub proof fn lemma_close_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Close),
+{
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::dispatcher_spec::close_wire);
+    hide(super::bootstrap::bootstrap_agrees);
+    hide(super::dispatcher::dispatcher_agrees);
+    let (cout, cs2) = cop(m, scalar, cs, Op::Close);
+    let tout = top(p, ts, Op::Close);
+    let conn = ts.client.connection;
+    match cs.stage {
+        Stage::Hello(s, _) => {
+            assert(conn.handshake.state == crate::transcription::state_machine::ClientState::WaitSh
+                && conn.send == Protection::Unprotected) by {
+                reveal(super::bootstrap::bootstrap_agrees);
+            }
+            lemma_alert_record_plain(p, conn, 0);
+            assert(closes_in_handshake(cout, tout));
+        },
+        Stage::Flight(s) => {
+            let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+            super::framing::lemma_disp_agrees_facts(p, m.verification, s0, ts.client);
+            assert(super::dispatcher::in_flight(conn.handshake.state)) by {
+                reveal(super::dispatcher::dispatcher_agrees);
+            }
+            super::dispatcher::lemma_closing(ciphers(m), p, s0, conn);
+            assert(crate::connection::dispatcher_spec::close_wire(ciphers(m), s)
+                == crate::connection::dispatcher_spec::close_wire(ciphers(m), s0)) by {
+                reveal(crate::connection::dispatcher_spec::close_wire);
+            }
+            assert(closes_in_handshake(cout, tout));
+        },
+        Stage::App(s) => {
+            super::post_handshake::lemma_receive_open_facts(s, conn);
+            let f = m.cipher;
+            let r = crate::connection::post_handshake_spec::close(f, s);
+            if s.phase == crate::connection::post_handshake_spec::Phase::Open {
+                super::post_handshake::lemma_close(f, p, s, conn);
+                lemma_concat_flat(r.0.wires);
+                super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, conn),
+                    crate::transcription::connection::close_write(p, conn));
+                assert(Seq::<u8>::empty() + crate::transcription::connection::close_write(p, conn)
+                    =~= crate::transcription::connection::close_write(p, conn));
+                assert(r.0.delivered =~= Seq::<u8>::empty());
+                assert(r.1.phase == crate::connection::post_handshake_spec::Phase::WriteClosed);
+                assert(goes_on(m, p, scalar, cout, cs2, tout));
+            } else {
+                assert(cout.send =~= Seq::<u8>::empty());
+                assert(cs2 == cs);
+            }
+        },
+        Stage::Ended => {},
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The theorem.
+// ---------------------------------------------------------------------------
+
+/// One operation, from agreeing states, agrees.
+pub proof fn lemma_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, op: Op)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+    ensures op_agrees(m, p, scalar, cs, ts, op),
+{
+    match op {
+        Op::Feed(chunk) => match cs.stage {
+            Stage::Hello(_, _) => lemma_hello_feed(m, p, scalar, cs, ts, chunk),
+            Stage::Flight(_) => lemma_flight_feed(m, p, scalar, cs, ts, chunk),
+            Stage::App(_) => lemma_app_feed(m, p, scalar, cs, ts, chunk),
+            Stage::Ended => {},
+        },
+        Op::Send(data) => lemma_send_op(m, p, scalar, cs, ts, data),
+        Op::Close => lemma_close_op(m, p, scalar, cs, ts),
+    }
+}
+
+/// The run of the caller's operations `ops` compares: each operation's
+/// outcomes agree ([`op_agrees`]), and the next is compared from the states
+/// after it as long as they agree ([`driver_agrees`]); a rejection, an end
+/// or a stated difference ends the comparison.
+pub open spec fn run_agrees(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, ops: Seq<Op>) -> bool
+    decreases ops.len(),
+{
+    if ops.len() == 0 {
+        true
+    } else {
+        let (_, cs2) = cop(m, scalar, cs, ops[0]);
+        let tout = top(p, ts, ops[0]);
+        &&& op_agrees(m, p, scalar, cs, ts, ops[0])
+        &&& (driver_agrees(m, p, scalar, cs2, tout.after) ==> run_agrees(m, p, scalar, cs2, tout.after, ops.skip(1)))
+    }
+}
+
+/// [`run_agrees`] from agreeing states, for every run.
+pub proof fn lemma_run(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, ops: Seq<Op>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+    ensures run_agrees(m, p, scalar, cs, ts, ops),
+    decreases ops.len(),
+{
+    hide(op_agrees);
+    hide(driver_agrees);
+    if ops.len() > 0 {
+        lemma_op(m, p, scalar, cs, ts, ops[0]);
+        let (_, cs2) = cop(m, scalar, cs, ops[0]);
+        let tout = top(p, ts, ops[0]);
+        if driver_agrees(m, p, scalar, cs2, tout.after) {
+            lemma_run(m, p, scalar, cs2, tout.after, ops.skip(1));
+        }
+    }
+}
+
+/// The start: the crate's first record (`Driver::connect`) is the
+/// transcription's `start_client` records, the driver then waits in its
+/// Hello stage, and the two agree ([`driver_agrees`]). A configuration the
+/// crate's `client_spec::config_ok` refuses ends the connection before
+/// anything is sent; the transcription has no such refusal (its
+/// `start_client` expects a ClientHello meeting `client_hello_conforms`,
+/// which `client::theorem_client_hello_equivalence` shows the crate's is
+/// for every configuration it accepts).
+pub open spec fn start_agrees(m: Models, p: Primitives, config: crate::hello::client_spec::Config,
+    tconfig: crate::transcription::middlebox::ClientConfig, scalar: Seq<u8>) -> bool
+{
+    let out = cstart(m, config);
+    let (ts, sent) = tstart(p, config, tconfig, scalar);
+    match crate::hello::client_spec::start(config) {
+        Err(alert) => out == Step { send: seq![], deliver: seq![], stage: Stage::Ended,
+            status: Status::Failed(alert, Origin::NotSent) },
+        Ok(_) => {
+            &&& out.send == sent
+            &&& out.deliver.len() == 0
+            &&& driver_agrees(m, p, scalar, CState { stage: out.stage, status: out.status, held: seq![] }, ts)
+        },
+    }
+}
+
+/// [`start_agrees`], for one configuration.
+pub proof fn lemma_start(m: Models, p: Primitives, config: crate::hello::client_spec::Config,
+    tconfig: crate::transcription::middlebox::ClientConfig, scalar: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        scalar.len() == 32,
+        (p.x25519)(scalar, crate::transcription::primitives::x25519_basepoint()) == config.public_key,
+        tconfig.compatibility_mode == super::ccs::mode(config),
+    ensures start_agrees(m, p, config, tconfig, scalar),
+{
+    super::bootstrap::lemma_start(p, config, tconfig, scalar, scalar);
+    assert(m.crypto.hash == p.hash);
+    match crate::hello::client_spec::start(config) {
+        Err(_) => {},
+        Ok(_) => {
+            let first = super::client::ch_view(crate::hello::client_spec::client_hello(config, Seq::empty()));
+            let hs = crate::transcription::state_machine::start_handshake(first, scalar, scalar);
+            let c0 = Connection { handshake: hs, receive: Protection::Unprotected, send: Protection::Unprotected,
+                handshake_fragments: seq![], read_closed: false, key_update_owed: false };
+            lemma_apply_keeps(p, c0, seq![crate::transcription::state_machine::Action::SendHandshake(
+                crate::transcription::key_exchange::write_client_hello(first),
+                crate::transcription::state_machine::initial_client_hello_record_version())]);
+            super::framing::lemma_empty(false);
+            assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+        },
+    }
+}
+
+/// **The driver theorem.** RFC 8446 §4.1, §5, §6 and §7.3, end to end,
+/// under [`hypotheses`] (the two sides' primitives are the same functions;
+/// the certificate validators agree): for every configuration the crate
+/// starts with, every X25519 scalar whose public value the configuration
+/// offers, and the transcription in the crate's compatibility mode,
+/// - **the start agrees** ([`start_agrees`]): the crate's first record is
+///   `start_client`'s, and the two then agree ([`driver_agrees`]);
+/// - **every run agrees** ([`run_agrees`]): for every sequence of the
+///   caller's operations (bytes of the server's stream in any chunks, with
+///   application data and a close interleaved anywhere), each operation's
+///   outcomes compare ([`op_agrees`]): the bytes sent, the data delivered
+///   and the status are the transcription's, both going on in agreeing
+///   states, across the two handoffs (the bootstrap to the dispatcher at the
+///   ServerHello, the dispatcher to the transducer at the acknowledged
+///   client flight); or both end alike; or the crate rejects a record as the
+///   record-level theorems compare rejections; or one of the stated
+///   differences holds, after which the comparison ends: [`rejects_early`],
+///   [`peer_closed`], [`retry_then_fails`], [`goes_on_coalesced`] (which goes
+///   on), [`settles`], [`exhausted_epoch`], [`oversized`],
+///   [`closes_in_handshake`], and the domain [`beyond_room`].
+pub proof fn theorem_driver_equivalence(m: Models, p: Primitives)
+    requires hypotheses(m, p),
+    ensures
+        forall|config: crate::hello::client_spec::Config, tconfig: crate::transcription::middlebox::ClientConfig,
+            scalar: Seq<u8>|
+            scalar.len() == 32
+                && (p.x25519)(scalar, crate::transcription::primitives::x25519_basepoint()) == config.public_key
+                && tconfig.compatibility_mode == super::ccs::mode(config)
+            ==> #[trigger] start_agrees(m, p, config, tconfig, scalar),
+        forall|scalar: Seq<u8>, cs: CState, ts: TState, ops: Seq<Op>|
+            #[trigger] driver_agrees(m, p, scalar, cs, ts) ==> #[trigger] run_agrees(m, p, scalar, cs, ts, ops),
+{
+    assert forall|config: crate::hello::client_spec::Config, tconfig: crate::transcription::middlebox::ClientConfig,
+        scalar: Seq<u8>|
+        scalar.len() == 32
+            && (p.x25519)(scalar, crate::transcription::primitives::x25519_basepoint()) == config.public_key
+            && tconfig.compatibility_mode == super::ccs::mode(config)
+        implies #[trigger] start_agrees(m, p, config, tconfig, scalar) by {
+        lemma_start(m, p, config, tconfig, scalar);
+    }
+    assert forall|scalar: Seq<u8>, cs: CState, ts: TState, ops: Seq<Op>|
+        #[trigger] driver_agrees(m, p, scalar, cs, ts) implies #[trigger] run_agrees(m, p, scalar, cs, ts, ops) by {
+        lemma_run(m, p, scalar, cs, ts, ops);
     }
 }
 
