@@ -514,6 +514,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     }
 
     /// One step through the ServerHello.
+    #[verifier::rlimit(50)]
     fn hello_step(&mut self, mut boot: Bootstrap<C>, next: Next<C, K, F, V>, input: &[u8]) -> (out: (usize, Output))
         requires boot.wf(), next.scalar.len() == 32,
             boot.crypto_functions() == old(self).models().crypto,
@@ -527,6 +528,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 contract_step(out.1, final(self))),
     {
         hide(crate::hello::bootstrap_spec::feed);
+        hide(crate::hello::bootstrap_spec::acknowledge);
         let (consumed, action) = boot.feed(input);
         let out = match action {
             BootAction::None => {
@@ -536,13 +538,51 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             },
             // A HelloRetryRequest: ClientHello2, with the dummy
             // change_cipher_spec before it when required (D.4).
+            // The acknowledgement processes what followed the
+            // HelloRetryRequest in its record (RFC 8446 §5.1).
             BootAction::Send(wire) => {
-                if matches!(boot.acknowledge_send(wire.as_slice()), BootAction::None) {
-                    self.stage = Some(Stage::Hello { boot, next });
-                    self.state = State::Handshaking;
-                    Output { send: wire, deliver: Vec::new(), state: State::Handshaking }
-                } else {
-                    self.hello_failed(crate::spec::INTERNAL_ERROR)
+                let ghost w = wire@;
+                let ghost fed = boot@;
+                let ack = boot.acknowledge_send(wire.as_slice());
+                proof {
+                    assert((boot@.0, ack@) == crate::hello::bootstrap_spec::acknowledge(
+                        old(self).models().crypto.hash, fed.0, w));
+                    assert(boot@.1 == fed.1);
+                }
+                match ack {
+                    BootAction::None => {
+                        self.stage = Some(Stage::Hello { boot, next });
+                        self.state = State::Handshaking;
+                        Output { send: wire, deliver: Vec::new(), state: State::Handshaking }
+                    },
+                    BootAction::Established(established) => {
+                        let o = self.establish(established, next);
+                        let ghost tail_view = o.send@;
+                        let mut send = wire;
+                        let mut tail = o.send;
+                        send.append(&mut tail);
+                        proof {
+                            assert(send@ == w + tail_view);
+                            assert(send@.subrange(0, w.len() as int) =~= w);
+                            if tail_view.len() == 0 {
+                                assert(send@ =~= w);
+                            }
+                        }
+                        Output { send, deliver: o.deliver, state: o.state }
+                    },
+                    BootAction::Fail(alert) => {
+                        let o = self.hello_failed(alert);
+                        let ghost tail_view = o.send@;
+                        let mut send = wire;
+                        let mut tail = o.send;
+                        send.append(&mut tail);
+                        proof {
+                            assert(send@ == w + tail_view);
+                            assert(tail_view == spec::hello_failure(alert).send);
+                        }
+                        Output { send, deliver: o.deliver, state: o.state }
+                    },
+                    _ => self.hello_failed(crate::spec::INTERNAL_ERROR),
                 }
             },
             BootAction::Established(established) => self.establish(established, next),

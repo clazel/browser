@@ -2661,6 +2661,34 @@
       }
     },
     {
+      "id": "bootstrap-retained-dropped",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "            s.retained)",
+      "replace": "            seq![])",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1 lets handshake messages share a record, and a HelloRetryRequest precedes no key change, so the messages after it are the server's next ones: the mutant forgets them when ClientHello2 is acknowledged, so lemma_retained_processed_on_acknowledge is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_retained_processed_on_acknowledge()",
+        "witness": "super::bootstrap_spec::acknowledge(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::retry_sent_with_retained(), seq![1u8]).1 == super::bootstrap_spec::Action::None"
+      }
+    },
+    {
+      "id": "bootstrap-following-bytes-refused-first",
+      "file": "src/hello/bootstrap_spec.rs",
+      "find": "if message.len() < crate::spec::HANDSHAKE_HEADER || message[0] != crate::spec::HS_SERVER_HELLO {",
+      "replace": "if message.len() < crate::spec::HANDSHAKE_HEADER || message[0] != crate::spec::HS_SERVER_HELLO || messages.len() != 1 || reassembly.buf.len() != 0 {",
+      "expect": "killed",
+      "reason": "RFC 8446 §5.1: the alignment check covers only messages before a key change, and the server's Hello is checked first; the mutant (the old behaviour) refuses any byte after the Hello with unexpected_message before looking at it, so lemma_first_message_first is false.",
+      "module": "hello::certificates",
+      "certificate": {
+        "file": "src/hello/mutation_certificates.rs",
+        "lemma": "super::certificates::lemma_first_message_first()",
+        "witness": "super::bootstrap_spec::receive_messages(|m: Seq<u8>| super::certificates::empty_hash(m), super::certificates::awaiting_with_buffer(seq![]), seq![seq![2u8, 0u8, 0u8, 0u8], seq![2u8, 0u8, 0u8, 0u8]]).1 == super::bootstrap_spec::Action::Fail(crate::spec::UNEXPECTED_MESSAGE)"
+      }
+    },
+    {
       "id": "dispatcher-ccs-dropped-mid-message",
       "file": "src/connection/dispatcher_spec.rs",
       "find": "        && crate::spec::at_message_boundary(reassembly)\n}",

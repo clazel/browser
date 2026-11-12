@@ -25,9 +25,15 @@
 //! The acknowledgement gate is the crate's interface to its transport (a send
 //! must be acknowledged with exactly its bytes before input is read); the
 //! transcription has no transport, and writes its records as a list. So
-//! [`start_agrees`] and [`acknowledge_agrees`] say: the bytes the crate asks
+//! [`start_agrees`] and [`buffer_agrees`] say: the bytes the crate asks
 //! to send are the transcription's records, and acknowledging exactly them
-//! leads to agreeing states.
+//! leads to agreeing states. After a HelloRetryRequest, the messages that
+//! follow it in its record (§5.1 lets them be coalesced) are what the crate
+//! processes on that acknowledgement, and the transcription in the same
+//! step: [`buffer_agrees`] compares the two, again from agreeing states. So
+//! when one of them fails, the crate has already asked to send ClientHello2,
+//! while the transcription's abort writes no ClientHello2; both reject, with
+//! the same alerts.
 //!
 //! Where the two differ (each a case of [`fail_agrees`]):
 //! - **Two faults in one record** ([`two_faults`]): both reject; the crate
@@ -39,17 +45,16 @@
 //! - **The crate's resource caps** ([`cap`]): a handshake message above
 //!   2^18 octets, and the transcript and cookie caps of the negotiation
 //!   theorem, refused with `internal_error`.
-//! - **Bytes after a handshake message in the same record** while waiting
-//!   for the server's Hello ([`following_bytes`]): the crate refuses
-//!   (`unexpected_message`). The transcription does too when the first
-//!   message fails or is a ServerHello (§5.1, the key change), but goes on
-//!   after a HelloRetryRequest it accepts, since §5.1 lets messages be
-//!   coalesced. Found here; see the pull request.
+//! - (Resolved: bytes after a handshake message in the same record. The
+//!   crate refused them before looking at the first message; it now handles
+//!   them as §5.1 and the transcription do, see `bootstrap_spec`.)
 //! - A ServerHello the crate accepts here, whose X25519 shared secret is all
 //!   zero: the transcription aborts in the same step (`accept_server_hello`),
 //!   the crate in `join_spec::derive`, after this layer
-//!   ([`record_agrees`]'s `Established` case states the transcription's
-//!   step exactly).
+//!   ([`buffer_agrees`]'s `Established` case states the transcription's
+//!   step exactly). With bytes after that ServerHello the two name
+//!   different faults: the crate the bytes (`unexpected_message`), the
+//!   transcription the secret ([`buffer_fail_agrees`]).
 //!
 //! Not covered: the transport's end of file (the crate's `eof`: no
 //! transcription counterpart, as `connection.rs` leaves transport closure
@@ -173,28 +178,26 @@ pub proof fn lemma_extract(buf: Seq<u8>)
 // ---------------------------------------------------------------------------
 
 /// The crate's bootstrap, waiting for the server's Hello, and the
-/// transcription's client stand for the same connection (see the module
+/// transcription's client stand for the same connection, except perhaps for
+/// the bytes of an unfinished handshake message (see the module
 /// documentation).
-pub open spec fn bootstrap_agrees(p: Primitives, s: State, cl: ClientConnection) -> bool {
+pub open spec fn agrees_but_buffer(p: Primitives, s: State, cl: ClientConnection) -> bool {
     let c = cl.connection;
     &&& s.mode == Mode::AwaitServerHello
     &&& crate::hello::bootstrap_spec::wf(s)
     &&& super::negotiation::negotiation_agrees(p, s.hello->Some_0, c.handshake)
     &&& c.receive == Protection::Unprotected
     &&& c.send == Protection::Unprotected
-    &&& c.handshake_fragments == s.reassembly.buf
     &&& !c.read_closed
     &&& !c.key_update_owed
     &&& cl.compatibility_mode == s.compatibility
     &&& cl.change_cipher_spec_sent == (s.hello->Some_0.transcript.retried && s.compatibility)
 }
 
-/// After a HelloRetryRequest: the crate waits for the acknowledgement of
-/// its ClientHello2 flight, and is otherwise as in [`bootstrap_agrees`].
-pub open spec fn retried_agrees(p: Primitives, s: State, cl: ClientConnection) -> bool {
-    bootstrap_agrees(p, State { mode: Mode::AwaitServerHello, pending_flight: seq![], ..s }, cl)
-        && s.mode == Mode::AwaitClientHello2Send
-        && crate::hello::bootstrap_spec::wf(s)
+/// [`agrees_but_buffer`], and the crate's reassembly buffer is the
+/// transcription's `handshake_fragments`.
+pub open spec fn bootstrap_agrees(p: Primitives, s: State, cl: ClientConnection) -> bool {
+    agrees_but_buffer(p, s, cl) && cl.connection.handshake_fragments == s.reassembly.buf
 }
 
 /// The bytes of the handshake message(s) a handshake record completes:
@@ -208,22 +211,6 @@ pub open spec fn handshake_record(b: Seq<u8>) -> bool {
     b[0] == crate::spec::CT_HANDSHAKE && 0 < length(b) <= crate::spec::MAX_PLAINTEXT
 }
 
-/// The record completes exactly one message, of type server_hello, and
-/// nothing else: the case the negotiation theorem covers.
-pub open spec fn single_hello(s: State, b: Seq<u8>) -> bool {
-    &&& handshake_record(b)
-    &&& match crate::spec::extract_messages(buffer(s, b)) {
-        crate::spec::Res::Ok((ms, rest)) => ms.len() == 1 && rest.len() == 0
-            && ms[0][0] == crate::spec::HS_SERVER_HELLO,
-        _ => false,
-    }
-}
-
-/// The body of that message.
-pub open spec fn hello_body(s: State, b: Seq<u8>) -> Seq<u8> {
-    buffer(s, b).skip(4)
-}
-
 /// Two faults in one record, where each side names a different one (see
 /// the module documentation).
 pub open spec fn two_faults(c: Connection, b: Seq<u8>) -> bool {
@@ -233,48 +220,75 @@ pub open spec fn two_faults(c: Connection, b: Seq<u8>) -> bool {
             && length(b) <= crate::spec::MAX_PLAINTEXT && c.handshake_fragments.len() > 0
 }
 
-/// The crate's resource caps: a handshake message above
-/// `MAX_HANDSHAKE_BODY`, or (on a ServerHello the transcription accepts
-/// with no failure) the transcript and cookie caps.
+/// The crate's resource cap on a handshake message: above
+/// `MAX_HANDSHAKE_BODY` octets (the transcript and cookie caps are in
+/// [`buffer_fail_agrees`]).
 pub open spec fn cap(p: Primitives, s: State, c: Connection, b: Seq<u8>) -> bool {
-    ||| handshake_record(b) && crate::spec::extract_messages(buffer(s, b))
-            == crate::spec::Res::<(Seq<Seq<u8>>, Seq<u8>)>::Err(crate::spec::ErrKind::HandshakeTooLarge)
-    ||| single_hello(s, b)
-            && crate::hello::spec::validate(s.hello->Some_0.config.session_id, s.hello->Some_0.transcript.retried,
-                hello_body(s, b)) is Ok
-            && super::hello::hello_failures(c.handshake.hello, c.handshake.retry, hello_body(s, b)).len() == 0
+    handshake_record(b) && crate::spec::extract_messages(buffer(s, b))
+        == crate::spec::Res::<(Seq<Seq<u8>>, Seq<u8>)>::Err(crate::spec::ErrKind::HandshakeTooLarge)
 }
 
-/// A handshake record that completes a message and has more bytes after
-/// it. The transcription aborts with the first message's failure, or for
-/// §5.1's key change after a ServerHello; after a HelloRetryRequest it
-/// accepts, it goes on (see the module documentation).
-pub open spec fn following_bytes(p: Primitives, s: State, c: Connection, b: Seq<u8>, t: Receive) -> bool {
-    &&& handshake_record(b)
-    &&& match crate::spec::extract_messages(buffer(s, b)) {
-        crate::spec::Res::Ok((ms, rest)) => {
-            &&& ms.len() >= 1
-            &&& (ms.len() > 1 || rest.len() > 0)
-            &&& match crate::transcription::state_machine::receive_handshake_message(p, c.handshake, ms[0]) {
-                HandshakeStep::Abort(e) => t == Receive::Abort(e),
-                HandshakeStep::Proceed { receive_key_changes, .. } =>
-                    receive_key_changes ==> t == Receive::Abort(ClientError::KeyChangeNotAligned),
-            }
-        },
-        _ => false,
-    }
-}
-
-/// When the crate fails with `alert`: the transcription aborts with that
-/// alert, or one of the named differences holds.
+/// When the crate fails with `alert` on a record that is not handshake
+/// messages: the transcription aborts with that alert, or one of the named
+/// differences holds.
 pub open spec fn fail_agrees(p: Primitives, s: State, c: Connection, b: Seq<u8>, t: Receive, alert: u8) -> bool {
     ||| t is Abort && crate::transcription::alerts::required_alert(t->Abort_0) == alert as nat
     ||| t is Abort && two_faults(c, b)
-    ||| single_hello(s, b) && super::auth_flight::alert_in(alert,
-            super::hello::hello_failures(c.handshake.hello, c.handshake.retry, hello_body(s, b)))
-        && t == Receive::Abort(super::hello::hello_failures(c.handshake.hello, c.handshake.retry, hello_body(s, b))[0])
     ||| alert == crate::spec::INTERNAL_ERROR && cap(p, s, c, b)
-    ||| alert == crate::spec::UNEXPECTED_MESSAGE && following_bytes(p, s, c, b, t)
+}
+
+/// The length of the first handshake message of `bf`, header included.
+pub open spec fn first_length(bf: Seq<u8>) -> nat {
+    4 + crate::spec::be_value(bf.subrange(1, 4))
+}
+
+/// The body of the first handshake message of `bf`.
+pub open spec fn first_body(bf: Seq<u8>) -> Seq<u8> {
+    bf.subrange(4, first_length(bf) as int)
+}
+
+/// The crate's handling of the bytes `bf` of handshake messages: the
+/// complete ones (`bootstrap_spec::receive_messages`), with the bytes of an
+/// unfinished one as the reassembly state.
+pub open spec fn buffer_step(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State, bf: Seq<u8>) -> (State, Action) {
+    match crate::spec::extract_messages(bf) {
+        crate::spec::Res::Ok((ms, rest)) => crate::hello::bootstrap_spec::receive_messages(hash,
+            State { reassembly: crate::spec::Reasm { buf: rest }, ..s }, ms),
+        crate::spec::Res::Err(e) => (crate::hello::bootstrap_lemmas::terminal(s, Mode::Failed, s.reassembly),
+            Action::Fail(crate::spec::alert_of(e))),
+    }
+}
+
+/// `records` written before what `t` writes, as `process_handshake_bytes`
+/// joins one message's records to the next ones'.
+pub open spec fn after_records(records: Seq<Seq<u8>>, t: Receive) -> Receive {
+    match t {
+        Receive::Continue(progress) =>
+            Receive::Continue(Progress { records_to_send: records + progress.records_to_send, ..progress }),
+        other => other,
+    }
+}
+
+/// When the crate fails with `alert` on the handshake messages `bf`, and
+/// the transcription's processing of them gives `t`: the transcription
+/// aborts with that alert; or the first message is a ServerHello whose
+/// failures (the transcription's list) include the crate's alert, and the
+/// transcription aborts with the first; or the crate's transcript or cookie
+/// cap refused a ServerHello with no failure (`internal_error`); or the
+/// server's ServerHello has an all-zero X25519 shared secret and bytes follow
+/// it: the transcription aborts on the secret, the crate on the bytes (it
+/// computes the secret after this layer, in `join_spec::derive`).
+pub open spec fn buffer_fail_agrees(p: Primitives, s: State, c: Connection, bf: Seq<u8>, t: Receive, alert: u8) -> bool {
+    let f = super::hello::hello_failures(c.handshake.hello, c.handshake.retry, first_body(bf));
+    ||| t is Abort && crate::transcription::alerts::required_alert(t->Abort_0) == alert as nat
+    ||| bf[0] == crate::spec::HS_SERVER_HELLO && super::auth_flight::alert_in(alert, f) && f.len() > 0
+            && t == Receive::Abort(f[0])
+    ||| alert == crate::spec::INTERNAL_ERROR && bf[0] == crate::spec::HS_SERVER_HELLO
+            && crate::hello::spec::validate(s.hello->Some_0.config.session_id, s.hello->Some_0.transcript.retried,
+                first_body(bf)) is Ok
+            && f.len() == 0
+    ||| alert == crate::spec::UNEXPECTED_MESSAGE && bf.len() > first_length(bf)
+            && t == Receive::Abort(ClientError::SharedSecretAllZero)
 }
 
 /// The transcription after one whole handshake message `raw` that ends the
@@ -290,8 +304,75 @@ pub open spec fn after_message(p: Primitives, c: Connection, raw: Seq<u8>) -> Re
     }
 }
 
+/// The crate's handling of the handshake messages `bf` ([`buffer_step`])
+/// and the transcription's (`process_handshake_bytes`) agree, from states
+/// that agree but for the buffer. After a HelloRetryRequest, the crate's
+/// flight is the transcription's records with D.4's CCS, and acknowledging
+/// it processes what follows the HelloRetryRequest in `bf` as the
+/// transcription does, from agreeing states again (§5.1: messages may be
+/// coalesced; a HelloRetryRequest precedes no key change).
+pub open spec fn buffer_agrees(p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>) -> bool
+    decreases bf.len(),
+{
+    let c = cl.connection;
+    let t = crate::transcription::connection::process_handshake_bytes(p, c, bf);
+    let (s2, a) = buffer_step(p.hash, s, bf);
+    let n = first_length(bf);
+    match a {
+        Action::None => {
+            let c2 = Connection { handshake_fragments: s2.reassembly.buf, ..c };
+            &&& t == Receive::Continue(Progress { connection: c2, application_data: seq![], records_to_send: seq![] })
+            &&& bootstrap_agrees(p, s2, ClientConnection { connection: c2, ..cl })
+        },
+        // A message above the crate's 2^18 cap is `record_agrees`' (`cap`).
+        Action::Fail(alert) => s2.mode == Mode::Failed && (crate::spec::extract_messages(bf) is Err
+            || buffer_fail_agrees(p, s, c, bf, t, alert)),
+        Action::Established(config, transcript, key) => {
+            &&& s2.mode == Mode::Established
+            &&& bf.len() == n
+            &&& bf[0] == crate::spec::HS_SERVER_HELLO
+            &&& t == after_message(p, c, bf)
+            &&& bf == crate::transcription::key_exchange::write_handshake(2, first_body(bf))
+            &&& crate::hello::client_spec::receive(p.hash, s.hello->Some_0, first_body(bf))
+                == Ok::<crate::hello::client_spec::Outcome, u8>(
+                    crate::hello::client_spec::Outcome::Established(config, transcript, key))
+            &&& super::negotiation::receive_agrees(p, s.hello->Some_0, c.handshake, first_body(bf))
+        },
+        Action::Send(bytes) => {
+            if 4 <= n && n <= bf.len() {
+                let step = crate::transcription::state_machine::receive_handshake_message(p, c.handshake,
+                    bf.subrange(0, n as int));
+                let (c3, sent) = crate::transcription::connection::apply_actions(p,
+                    Connection { handshake: step->handshake, ..c }, step->actions);
+                let (records, ccs_sent) = crate::transcription::middlebox::before_second_flight(
+                    cl.compatibility_mode, cl.change_cipher_spec_sent, sent);
+                let s1 = State { mode: Mode::AwaitServerHello, pending_flight: seq![], retained: seq![], ..s2 };
+                let cl2 = ClientConnection { connection: c3, change_cipher_spec_sent: ccs_sent, ..cl };
+                &&& bf[0] == crate::spec::HS_SERVER_HELLO
+                &&& step is Proceed
+                &&& !step->receive_key_changes
+                &&& bytes == super::ccs::flatten(records)
+                &&& t == after_records(sent,
+                    crate::transcription::connection::process_handshake_bytes(p, c3, bf.skip(n as int)))
+                &&& s2.mode == Mode::AwaitClientHello2Send
+                &&& s2.pending_flight == bytes
+                &&& crate::hello::bootstrap_spec::wf(s2)
+                &&& crate::hello::bootstrap_spec::acknowledge(p.hash, s2, bytes)
+                    == buffer_step(p.hash, s1, bf.skip(n as int))
+                &&& agrees_but_buffer(p, s1, cl2)
+                &&& buffer_agrees(p, s1, cl2, bf.skip(n as int))
+            } else {
+                false
+            }
+        },
+        _ => false,
+    }
+}
+
 /// The crate's step on one whole record and the transcription's
-/// `client_receive_stream` of it agree (see the module documentation).
+/// `client_receive_stream` of it agree (see the module documentation): a
+/// handshake record whose messages the crate reads is [`buffer_agrees`];
+/// every other record is compared by what the crate does.
 pub open spec fn record_agrees(p: Primitives, s: State, cl: ClientConnection, b: Seq<u8>) -> bool {
     let c = cl.connection;
     let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b);
@@ -308,40 +389,27 @@ pub open spec fn record_agrees(p: Primitives, s: State, cl: ClientConnection, b:
                 records_to_send: records }
         },
     }
-    &&& match a {
-        Action::None => {
-            let c2 = Connection { handshake_fragments: s2.reassembly.buf, ..c };
-            &&& u == ClientReceive::Continue { client: ClientConnection { connection: c2, ..cl },
-                application_data: seq![], records_to_send: seq![] }
-            &&& bootstrap_agrees(p, s2, ClientConnection { connection: c2, ..cl })
-        },
-        Action::Close => {
-            &&& s2.mode == Mode::Closed
-            &&& t == Receive::Continue(Progress { connection: Connection { read_closed: true, ..c },
-                application_data: seq![], records_to_send: seq![] })
-        },
-        Action::Alert(d) => t == Receive::PeerError(d as nat),
-        Action::Fail(alert) => s2.mode == Mode::Failed && fail_agrees(p, s, c, b, t, alert),
-        Action::Send(bytes) => match u {
-            ClientReceive::Continue { client, application_data, records_to_send } => {
-                &&& single_hello(s, b)
-                &&& application_data == Seq::<u8>::empty()
-                &&& bytes == super::ccs::flatten(records_to_send)
-                &&& retried_agrees(p, s2, client)
-                &&& s2.pending_flight == bytes
+    &&& if handshake_record(b) && crate::spec::extract_messages(buffer(s, b)) is Ok {
+        &&& (s2, a) == buffer_step(p.hash, s, buffer(s, b))
+        &&& t == crate::transcription::connection::process_handshake_bytes(p, c, buffer(s, b))
+        &&& buffer_agrees(p, s, cl, buffer(s, b))
+    } else {
+        match a {
+            Action::None => {
+                let c2 = Connection { handshake_fragments: s2.reassembly.buf, ..c };
+                &&& u == ClientReceive::Continue { client: ClientConnection { connection: c2, ..cl },
+                    application_data: seq![], records_to_send: seq![] }
+                &&& bootstrap_agrees(p, s2, ClientConnection { connection: c2, ..cl })
             },
+            Action::Close => {
+                &&& s2.mode == Mode::Closed
+                &&& t == Receive::Continue(Progress { connection: Connection { read_closed: true, ..c },
+                    application_data: seq![], records_to_send: seq![] })
+            },
+            Action::Alert(d) => t == Receive::PeerError(d as nat),
+            Action::Fail(alert) => s2.mode == Mode::Failed && fail_agrees(p, s, c, b, t, alert),
             _ => false,
-        },
-        Action::Established(config, transcript, key) => {
-            &&& s2.mode == Mode::Established
-            &&& single_hello(s, b)
-            &&& t == after_message(p, c, buffer(s, b))
-            &&& buffer(s, b) == crate::transcription::key_exchange::write_handshake(2, hello_body(s, b))
-            &&& crate::hello::client_spec::receive(p.hash, s.hello->Some_0, hello_body(s, b))
-                == Ok::<crate::hello::client_spec::Outcome, u8>(
-                    crate::hello::client_spec::Outcome::Established(config, transcript, key))
-            &&& super::negotiation::receive_agrees(p, s.hello->Some_0, c.handshake, hello_body(s, b))
-        },
+        }
     }
 }
 
@@ -356,7 +424,7 @@ pub open spec fn start_agrees(p: Primitives, c: crate::hello::client_spec::Confi
         Ok((s0, Action::Send(wire))) => {
             let (cl0, records) = crate::transcription::middlebox::start_client(p, config, first,
                 x25519_private_key, retry_private_key);
-            let (s1, a1) = crate::hello::bootstrap_spec::acknowledge(s0, wire);
+            let (s1, a1) = crate::hello::bootstrap_spec::acknowledge(p.hash, s0, wire);
             &&& wire == super::ccs::flatten(records)
             &&& s0.mode == Mode::AwaitClientHelloSend
             &&& a1 == Action::None
@@ -365,12 +433,6 @@ pub open spec fn start_agrees(p: Primitives, c: crate::hello::client_spec::Confi
         Ok(_) => false,
         Err(_) => true,
     }
-}
-
-/// Acknowledging exactly the ClientHello2 flight leads to agreeing states.
-pub open spec fn acknowledge_agrees(p: Primitives, s: State, cl: ClientConnection) -> bool {
-    let (s1, a1) = crate::hello::bootstrap_spec::acknowledge(s, s.pending_flight);
-    a1 == Action::None && bootstrap_agrees(p, s1, cl)
 }
 
 // ---------------------------------------------------------------------------
@@ -448,23 +510,6 @@ pub proof fn lemma_process_one(p: Primitives, c: Connection, bf: Seq<u8>)
     }
 }
 
-/// §5.1: a buffer with bytes after its first whole message.
-pub proof fn lemma_process_more(p: Primitives, c: Connection, bf: Seq<u8>)
-    requires
-        crate::transcription::key_exchange::read_handshake_header(bf) is Some,
-        bf.len() > 4 + crate::transcription::key_exchange::read_handshake_header(bf)->Some_0.length,
-    ensures ({
-        let n = 4 + crate::transcription::key_exchange::read_handshake_header(bf)->Some_0.length;
-        let t = crate::transcription::connection::process_handshake_bytes(p, c, bf);
-        match crate::transcription::state_machine::receive_handshake_message(p, c.handshake, bf.subrange(0, n as int)) {
-            HandshakeStep::Abort(e) => t == Receive::Abort(e),
-            HandshakeStep::Proceed { receive_key_changes, .. } =>
-                receive_key_changes ==> t == Receive::Abort(ClientError::KeyChangeNotAligned),
-        }
-    }),
-{
-}
-
 /// The ClientHello2 record, as `apply_actions` writes it unprotected.
 pub proof fn lemma_send_flight(p: Primitives, c: Connection, flight: Seq<u8>, version: nat)
     requires c.send == Protection::Unprotected, flight.len() <= 0x4000,
@@ -506,21 +551,124 @@ pub proof fn lemma_message(m: Seq<u8>)
     assert(crate::spec::write_handshake(m[0], m.skip(4)) =~= m);
 }
 
-/// [`record_agrees`] for a record that completes exactly one ServerHello
-/// (or HelloRetryRequest): the negotiation theorem's case.
-#[verifier::rlimit(100)]
-pub proof fn lemma_single_hello(p: Primitives, s: State, cl: ClientConnection, b: Seq<u8>)
+/// §4: past its first whole message, `extract_messages` goes on with the
+/// rest of the buffer.
+pub proof fn lemma_extract_tail(bf: Seq<u8>)
+    requires
+        crate::spec::extract_messages(bf) is Ok,
+        crate::spec::extract_messages(bf)->Ok_0.0.len() > 0,
+    ensures
+        4 <= first_length(bf) <= bf.len(),
+        crate::spec::extract_messages(bf.skip(first_length(bf) as int)) is Ok,
+        crate::spec::extract_messages(bf.skip(first_length(bf) as int))->Ok_0.0
+            == crate::spec::extract_messages(bf)->Ok_0.0.skip(1),
+        crate::spec::extract_messages(bf.skip(first_length(bf) as int))->Ok_0.1
+            == crate::spec::extract_messages(bf)->Ok_0.1,
+        crate::spec::extract_messages(bf)->Ok_0.0[0] == bf.subrange(0, first_length(bf) as int),
+{
+    let n = first_length(bf);
+    let tail = crate::spec::extract_messages(bf.skip(n as int));
+    let ms = crate::spec::extract_messages(bf)->Ok_0.0;
+    assert(bf.take(n as int) =~= bf.subrange(0, n as int));
+    assert(ms =~= seq![bf.take(n as int)] + tail->Ok_0.0);
+    assert(ms.skip(1) =~= tail->Ok_0.0);
+}
+
+/// What `extract_messages` leaves is the start of one message: shorter
+/// than the largest.
+pub proof fn lemma_extract_rest(bf: Seq<u8>)
+    requires crate::spec::extract_messages(bf) is Ok,
+    ensures crate::spec::extract_messages(bf)->Ok_0.1.len()
+        < crate::spec::HANDSHAKE_HEADER + crate::spec::MAX_HANDSHAKE_BODY,
+    decreases bf.len(),
+{
+    lemma_extract(bf);
+    if crate::spec::extract_messages(bf)->Ok_0.0.len() > 0 {
+        lemma_extract_tail(bf);
+        lemma_extract_rest(bf.skip(first_length(bf) as int));
+    }
+}
+
+/// [`buffer_agrees`], for every buffer, from states that agree but for the
+/// buffer.
+#[verifier::rlimit(300)]
+pub proof fn lemma_buffer(p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>)
     requires
         super::transcript::hash_is_32(p.hash),
-        bootstrap_agrees(p, s, cl),
-        whole_record(b),
-        single_hello(s, b),
-        buffer(s, b) == crate::transcription::key_exchange::write_handshake(
-            buffer(s, b)[0] as nat, hello_body(s, b)),
-        one_record(p, cl.connection, b) == after_message(p, cl.connection, buffer(s, b)),
-        crate::hello::bootstrap_lemmas::record_step(p.hash, s, b) == crate::hello::bootstrap_lemmas::hello_step(p.hash,
-            State { reassembly: crate::spec::Reasm { buf: seq![] }, ..s }, hello_body(s, b)),
-    ensures record_agrees(p, s, cl, b),
+        agrees_but_buffer(p, s, cl),
+    ensures buffer_agrees(p, s, cl, bf),
+    decreases bf.len(), 2nat,
+{
+    hide(crate::hello::client_spec::receive);
+    hide(crate::hello::spec::validate);
+    hide(super::hello::hello_failures);
+    hide(super::negotiation::negotiation_agrees);
+    let c = cl.connection;
+    lemma_extract(bf);
+    match crate::spec::extract_messages(bf) {
+        crate::spec::Res::Err(_) => {},
+        crate::spec::Res::Ok((ms, rest)) => {
+            lemma_extract_rest(bf);
+            if ms.len() == 0 {
+                assert(rest == bf);
+            } else {
+                let n = first_length(bf);
+                lemma_extract_tail(bf);
+                if bf[0] == crate::spec::HS_SERVER_HELLO {
+                    if bf.len() == n {
+                        assert(bf.subrange(0, n as int) =~= bf);
+                        lemma_process_one(p, c, bf);
+                    }
+                    lemma_buffer_hello(p, s, cl, bf);
+                } else {
+                    lemma_buffer_not_hello(p, s, cl, bf);
+                }
+            }
+        },
+    }
+}
+
+/// [`lemma_buffer`] when the first message is not a ServerHello: both sides
+/// refuse it (`unexpected_message`).
+#[verifier::rlimit(100)]
+pub proof fn lemma_buffer_not_hello(p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>)
+    requires
+        agrees_but_buffer(p, s, cl),
+        crate::spec::extract_messages(bf) is Ok,
+        crate::spec::extract_messages(bf)->Ok_0.0.len() > 0,
+        bf[0] != crate::spec::HS_SERVER_HELLO,
+    ensures buffer_agrees(p, s, cl, bf),
+{
+    hide(crate::hello::client_spec::receive);
+    hide(crate::hello::spec::validate);
+    hide(super::hello::hello_failures);
+    let c = cl.connection;
+    lemma_extract(bf);
+    lemma_extract_tail(bf);
+    let ms = crate::spec::extract_messages(bf)->Ok_0.0;
+    let n = first_length(bf);
+    let raw = bf.subrange(0, n as int);
+    assert(raw[0] == bf[0]);
+    assert(crate::transcription::state_machine::receive_handshake_message(p, c.handshake, raw)
+        == crate::transcription::state_machine::out_of_order(raw[0] as nat));
+}
+
+/// [`lemma_buffer`] when the first message is a ServerHello (or a
+/// HelloRetryRequest): the negotiation theorem's case.
+#[verifier::rlimit(300)]
+pub proof fn lemma_buffer_hello(p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>)
+    requires
+        super::transcript::hash_is_32(p.hash),
+        agrees_but_buffer(p, s, cl),
+        crate::spec::extract_messages(bf) is Ok,
+        crate::spec::extract_messages(bf)->Ok_0.0.len() > 0,
+        crate::spec::extract_messages(bf)->Ok_0.1.len()
+            < crate::spec::HANDSHAKE_HEADER + crate::spec::MAX_HANDSHAKE_BODY,
+        bf[0] == crate::spec::HS_SERVER_HELLO,
+        bf.len() == first_length(bf) ==> crate::transcription::connection::process_handshake_bytes(p,
+            cl.connection, bf) == after_message(p, cl.connection, bf),
+    ensures buffer_agrees(p, s, cl, bf),
+    decreases bf.len(), 1nat,
 {
     hide(crate::hello::client_spec::receive);
     hide(crate::hello::spec::validate);
@@ -528,72 +676,111 @@ pub proof fn lemma_single_hello(p: Primitives, s: State, cl: ClientConnection, b
     hide(super::hello::hello_failures);
     let c = cl.connection;
     let hello = s.hello->Some_0;
-    let bf = buffer(s, b);
-    let body = hello_body(s, b);
-    assert(bf == crate::transcription::key_exchange::write_handshake(2, body));
-    assert(body.len() <= crate::transcript::spec::MAX_BODY) by {
-        lemma_extract(bf);
+    lemma_extract(bf);
+    lemma_extract_tail(bf);
+    let ms = crate::spec::extract_messages(bf)->Ok_0.0;
+    let rest = crate::spec::extract_messages(bf)->Ok_0.1;
+    let n = first_length(bf);
+    let raw = ms[0];
+    assert(raw.subrange(1, 4) =~= bf.subrange(1, 4));
+    lemma_message(raw);
+    let body = first_body(bf);
+    assert(body =~= raw.skip(4));
+    assert(raw == crate::transcription::key_exchange::write_handshake(2, body));
+    if bf.len() == n {
+        assert(bf.subrange(0, n as int) =~= bf);
     }
+    let s0 = State { reassembly: crate::spec::Reasm { buf: rest }, ..s };
+    crate::hello::bootstrap_lemmas::lemma_receive_messages(p.hash, s0, ms);
     super::negotiation::lemma_receive(p, hello, c.handshake, body);
-    lemma_stream_one(p, c, b);
     match crate::hello::client_spec::receive(p.hash, hello, body) {
         Ok(crate::hello::client_spec::Outcome::Retry(next, flight)) => {
-            lemma_hello_retry(p, s, cl, b, next, flight);
+            lemma_buffer_retry(p, s, cl, bf, next, flight);
+        },
+        Ok(crate::hello::client_spec::Outcome::Established(config, transcript, key)) => {
+            if bf.len() != n {
+                let h = crate::transcription::key_exchange::read_server_hello(body)->Some_0;
+                let step = crate::transcription::state_machine::accept_server_hello(p, c.handshake, h, raw);
+                match step {
+                    crate::transcription::state_machine::HandshakeStep::Abort(e) =>
+                        assert(e == ClientError::SharedSecretAllZero),
+                    crate::transcription::state_machine::HandshakeStep::Proceed { receive_key_changes, .. } =>
+                        assert(receive_key_changes),
+                }
+            }
         },
         _ => {},
     }
 }
 
-/// [`lemma_single_hello`] when the crate retries.
+/// [`lemma_buffer`] when the crate retries: ClientHello2 and its CCS are the
+/// transcription's records, and what follows the HelloRetryRequest is
+/// [`buffer_agrees`] again, from the states after it.
 #[verifier::rlimit(100)]
-pub proof fn lemma_hello_retry(p: Primitives, s: State, cl: ClientConnection, b: Seq<u8>,
+pub proof fn lemma_buffer_retry(p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>,
     next: crate::hello::client_spec::State, flight: Seq<u8>)
     requires
-        bootstrap_agrees(p, s, cl),
-        whole_record(b),
-        single_hello(s, b),
-        one_record(p, cl.connection, b) == after_message(p, cl.connection, buffer(s, b)),
-        crate::hello::bootstrap_lemmas::record_step(p.hash, s, b) == crate::hello::bootstrap_lemmas::hello_step(p.hash,
-            State { reassembly: crate::spec::Reasm { buf: seq![] }, ..s }, hello_body(s, b)),
-        crate::hello::client_spec::receive(p.hash, s.hello->Some_0, hello_body(s, b))
+        super::transcript::hash_is_32(p.hash),
+        agrees_but_buffer(p, s, cl),
+        crate::spec::extract_messages(bf) is Ok,
+        crate::spec::extract_messages(bf)->Ok_0.0.len() > 0,
+        bf[0] == crate::spec::HS_SERVER_HELLO,
+        bf.subrange(0, first_length(bf) as int)
+            == crate::transcription::key_exchange::write_handshake(2, first_body(bf)),
+        crate::hello::client_spec::receive(p.hash, s.hello->Some_0, first_body(bf))
             == Ok::<crate::hello::client_spec::Outcome, u8>(crate::hello::client_spec::Outcome::Retry(next, flight)),
-        super::negotiation::receive_agrees(p, s.hello->Some_0, cl.connection.handshake, hello_body(s, b)),
-        buffer(s, b) == crate::transcription::key_exchange::write_handshake(2, hello_body(s, b)),
-    ensures record_agrees(p, s, cl, b),
+        super::negotiation::receive_agrees(p, s.hello->Some_0, cl.connection.handshake, first_body(bf)),
+    ensures buffer_agrees(p, s, cl, bf),
+    decreases bf.len(), 0nat,
 {
     hide(crate::hello::client_spec::receive);
     hide(crate::hello::spec::validate);
     hide(crate::transcription::state_machine::receive_handshake_message);
     hide(super::hello::hello_failures);
+    lemma_extract_rest(bf);
     let c = cl.connection;
     let hello = s.hello->Some_0;
-    let bf = buffer(s, b);
-    let body = hello_body(s, b);
+    let n = first_length(bf);
+    let body = first_body(bf);
+    lemma_extract(bf);
+    lemma_extract_tail(bf);
+    let ms = crate::spec::extract_messages(bf)->Ok_0.0;
+    let rest = crate::spec::extract_messages(bf)->Ok_0.1;
+    let raw = bf.subrange(0, n as int);
     lemma_retry_wf(p.hash, hello, body, next, flight);
-    lemma_stream_one(p, c, b);
-    let step = crate::transcription::state_machine::receive_handshake_message(p, c.handshake, bf);
+    let step = crate::transcription::state_machine::receive_handshake_message(p, c.handshake, raw);
     let hs2 = step->handshake;
-    lemma_send_flight(p, Connection { handshake: hs2, ..c }, flight, 0x0303);
+    let c2 = Connection { handshake: hs2, ..c };
+    lemma_send_flight(p, c2, flight, 0x0303);
     super::record::lemma_write_plaintext(22, 0x0303, flight);
     let r = crate::transcription::record::write_tls_plaintext(22, 0x0303, flight);
     assert(crate::hello::bootstrap_spec::handshake_record(flight) == r);
-    let c2 = Connection { handshake: hs2, handshake_fragments: seq![], ..c };
-    assert(one_record(p, c, b) == Receive::Continue(Progress { connection: c2,
-        application_data: seq![], records_to_send: seq![r] }));
+    assert(crate::spec::write_plaintext(22u8, 0x0303u16, flight).len() > 0);
     super::ccs::theorem_compatibility_ccs();
-    let (batch, sent) = crate::transcription::middlebox::before_second_flight(
+    let (batch, ccs_sent) = crate::transcription::middlebox::before_second_flight(
         super::ccs::mode(hello.config), false, seq![r]);
     assert(super::ccs::flatten(batch) == if super::ccs::mode(hello.config) {
         crate::hello::bootstrap_spec::compatibility_ccs() + r } else { r });
     assert(!hello.transcript.retried);
     assert(cl.change_cipher_spec_sent == false);
     assert(cl.compatibility_mode == super::ccs::mode(hello.config));
-    let s2 = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b).0;
+    // The crate's side: the HelloRetryRequest, then the acknowledgement.
+    let s0 = State { reassembly: crate::spec::Reasm { buf: rest }, ..s };
+    crate::hello::bootstrap_lemmas::lemma_receive_messages(p.hash, s0, ms);
+    assert(ms[0].skip(4) =~= body);
+    let (s2, a) = buffer_step(p.hash, s, bf);
     assert(s2.hello == Some(next));
-    assert(s2.mode == Mode::AwaitClientHello2Send);
+    assert(s2.retained == ms.skip(1));
+    assert(s2.reassembly.buf == rest);
     assert(crate::hello::bootstrap_spec::wf(s2));
-    let cl2 = ClientConnection { connection: c2, change_cipher_spec_sent: sent, ..cl };
-    assert(retried_agrees(p, s2, cl2));
+    let s1 = State { mode: Mode::AwaitServerHello, pending_flight: seq![], retained: seq![], ..s2 };
+    assert(crate::hello::bootstrap_spec::acknowledge(p.hash, s2, s2.pending_flight)
+        == buffer_step(p.hash, s1, bf.skip(n as int)));
+    // The transcription's side: ClientHello2, then the rest of the buffer.
+    assert(bf.subrange(n as int, bf.len() as int) =~= bf.skip(n as int));
+    let cl2 = ClientConnection { connection: c2, change_cipher_spec_sent: ccs_sent, ..cl };
+    assert(agrees_but_buffer(p, s1, cl2));
+    lemma_buffer(p, s1, cl2, bf.skip(n as int));
 }
 
 /// [`record_agrees`] for a handshake record.
@@ -607,42 +794,19 @@ pub proof fn lemma_handshake_record(p: Primitives, s: State, cl: ClientConnectio
     ensures record_agrees(p, s, cl, b),
 {
     let c = cl.connection;
-    let hello = s.hello->Some_0;
     lemma_header(b);
     lemma_stream_one(p, c, b);
     let bf = buffer(s, b);
     lemma_extract(bf);
     let t = one_record(p, c, b);
     assert(t == crate::transcription::connection::process_handshake_bytes(p, c, bf));
+    assert(crate::hello::bootstrap_lemmas::record_step(p.hash, s, b)
+        == crate::hello::bootstrap_lemmas::fragment_step(p.hash, s, fragment(b)));
     match crate::spec::extract_messages(bf) {
         crate::spec::Res::Err(_) => {},
         crate::spec::Res::Ok((ms, rest)) => {
-            if ms.len() == 0 {
-                assert(crate::transcription::middlebox::before_second_flight(cl.compatibility_mode,
-                    cl.change_cipher_spec_sent, Seq::<Seq<u8>>::empty())
-                    == (Seq::<Seq<u8>>::empty(), cl.change_cipher_spec_sent));
-            } else {
-                let n = 4 + crate::spec::be_value(bf.subrange(1, 4));
-                if bf.len() == n {
-                    assert(bf.subrange(0, n as int) =~= bf);
-                    lemma_process_one(p, c, bf);
-                    if bf[0] == crate::spec::HS_SERVER_HELLO {
-                        assert(rest =~= Seq::<u8>::empty());
-                        assert(ms[0] == bf);
-                        assert(single_hello(s, b));
-                        lemma_message(bf);
-                        assert(crate::hello::bootstrap_lemmas::record_step(p.hash, s, b)
-                            == crate::hello::bootstrap_lemmas::fragment_step(p.hash, s, fragment(b)));
-                        assert(crate::hello::bootstrap_lemmas::record_step(p.hash, s, b)
-                            == crate::hello::bootstrap_lemmas::hello_step(p.hash,
-                                State { reassembly: crate::spec::Reasm { buf: seq![] }, ..s }, hello_body(s, b)));
-                        lemma_single_hello(p, s, cl, b);
-                    }
-                } else {
-                    lemma_process_more(p, c, bf);
-                    assert(bf.subrange(0, n as int) == ms[0]);
-                }
-            }
+            assert(crate::hello::bootstrap_lemmas::record_step(p.hash, s, b) == buffer_step(p.hash, s, bf));
+            lemma_buffer(p, s, cl, bf);
         },
     }
 }
@@ -704,9 +868,10 @@ pub proof fn lemma_start(p: Primitives, c: crate::hello::client_spec::Config,
 /// crate's first record is the transcription's `start_client` records and
 /// acknowledging it leads to agreeing states ([`start_agrees`]); from every
 /// pair of agreeing states, on every whole record, the crate's step and the
-/// transcription's `client_receive_stream` agree ([`record_agrees`]); and
-/// after a retry, acknowledging exactly the ClientHello2 flight leads to
-/// agreeing states again ([`acknowledge_agrees`]). Hypothesis: the hash's
+/// transcription's `client_receive_stream` agree ([`record_agrees`]),
+/// where after a HelloRetryRequest acknowledging exactly the ClientHello2
+/// flight processes what followed it in its record as the transcription
+/// does, and leads to agreeing states again ([`buffer_agrees`]). Hypothesis: the hash's
 /// outputs are 32 bytes, and the crate hashes with the transcription's
 /// hash.
 pub proof fn theorem_bootstrap_equivalence(p: Primitives)
@@ -719,8 +884,6 @@ pub proof fn theorem_bootstrap_equivalence(p: Primitives)
             ==> #[trigger] start_agrees(p, c, config, x25519_private_key, retry_private_key),
         forall|s: State, cl: ClientConnection, b: Seq<u8>|
             #[trigger] bootstrap_agrees(p, s, cl) && whole_record(b) ==> #[trigger] record_agrees(p, s, cl, b),
-        forall|s: State, cl: ClientConnection|
-            #[trigger] retried_agrees(p, s, cl) ==> acknowledge_agrees(p, s, cl),
 {
     assert forall|c: crate::hello::client_spec::Config, config: crate::transcription::middlebox::ClientConfig,
         x25519_private_key: Seq<u8>, retry_private_key: Seq<u8>|
@@ -737,8 +900,6 @@ pub proof fn theorem_bootstrap_equivalence(p: Primitives)
             lemma_other_record(p, s, cl, b);
         }
     }
-    assert forall|s: State, cl: ClientConnection|
-        #[trigger] retried_agrees(p, s, cl) implies acknowledge_agrees(p, s, cl) by {}
 }
 
 } // verus!

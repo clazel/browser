@@ -230,6 +230,38 @@ fn retry_flight_orders_compatibility_ccs_and_requires_exact_ack() -> Result<(), 
     Ok(())
 }
 
+/// RFC 8446 §5.1: handshake messages "MAY be coalesced into a single
+/// TLSPlaintext record", and only messages before a key change must end a
+/// record. A ServerHello in the HelloRetryRequest's record is kept and read
+/// once ClientHello2 is acknowledged; bytes after a ServerHello are
+/// `unexpected_message`.
+#[test]
+fn messages_after_a_hello_retry_request_in_its_record_are_kept() -> Result<(), String> {
+    let (mut bootstrap, client_wire) = started(SESSION)?;
+    ack_initial(&mut bootstrap, &client_wire)?;
+    let mut both = handshake(2, &server_hello(SESSION, true));
+    both.extend_from_slice(&handshake(2, &server_hello(SESSION, false)));
+    let record = plaintext(22, &both);
+    let (consumed, action) = bootstrap.feed(&record);
+    assert_eq!(consumed, record.len());
+    let retry_wire = match action {
+        Action::Send(wire) => wire,
+        _ => return Err("HRR followed by a ServerHello did not produce ClientHello2".to_owned()),
+    };
+    assert!(matches!(
+        bootstrap.acknowledge_send(&retry_wire),
+        Action::Established(_)
+    ));
+
+    let (mut bootstrap, client_wire) = started(SESSION)?;
+    ack_initial(&mut bootstrap, &client_wire)?;
+    let mut trailing = handshake(2, &server_hello(SESSION, false));
+    trailing.push(8);
+    let (_, action) = bootstrap.feed(&plaintext(22, &trailing));
+    assert!(matches!(action, Action::Fail(10)));
+    Ok(())
+}
+
 #[test]
 fn no_compatibility_ccs_for_empty_session_id_and_coalesced_suffix_stays_unconsumed()
 -> Result<(), String> {

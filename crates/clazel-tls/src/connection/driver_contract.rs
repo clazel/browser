@@ -52,8 +52,29 @@ pub open spec fn hello_step_ensures(m: Models, boot: crate::hello::bootstrap_spe
             crate::hello::bootstrap_spec::Action::None =>
                 out.stage == super::driver_spec::Stage::Hello(expected.state, expected.framing)
                     && out.send.len() == 0 && out.status == super::driver_spec::Status::Handshaking,
-            crate::hello::bootstrap_spec::Action::Send(wire) =>
-                out.send == wire || out == super::driver_spec::hello_failure(crate::spec::INTERNAL_ERROR),
+            // ClientHello2 goes out and is acknowledged at once (driver_spec
+            // choice 2); the acknowledgement then processes the messages the
+            // HelloRetryRequest's record held after it (RFC 8446 §5.1).
+            crate::hello::bootstrap_spec::Action::Send(wire) => {
+                let (acked, after) = crate::hello::bootstrap_spec::acknowledge(m.crypto.hash, expected.state, wire);
+                match after {
+                    crate::hello::bootstrap_spec::Action::None =>
+                        out.send == wire && out.status == super::driver_spec::Status::Handshaking
+                            && out.stage == super::driver_spec::Stage::Hello(acked, expected.framing),
+                    crate::hello::bootstrap_spec::Action::Established(_, _, _) =>
+                        out.send.len() >= wire.len() && out.send.subrange(0, wire.len() as int) == wire
+                            && match out.stage {
+                                super::driver_spec::Stage::Flight(state) => flight_started(m, after, scalar, state)
+                                    && out.send == wire,
+                                _ => out.stage == super::driver_spec::Stage::Ended,
+                            },
+                    crate::hello::bootstrap_spec::Action::Fail(a) => out == super::driver_spec::Step {
+                        send: wire + super::driver_spec::hello_failure(a).send,
+                        ..super::driver_spec::hello_failure(a)
+                    },
+                    _ => out == super::driver_spec::hello_failure(crate::spec::INTERNAL_ERROR),
+                }
+            },
             crate::hello::bootstrap_spec::Action::Established(_, _, _) => match out.stage {
                 super::driver_spec::Stage::Flight(state) => flight_started(m, expected.action, scalar, state)
                     && out.send.len() == 0,
