@@ -26,8 +26,13 @@
 //!     §4 treats it "as any other character of the Other Symbols (So)
 //!     general category", which we resolve to AL; LB1 keeps it CM.
 //!
-//! Under Miri every [`MIRI_STRIDE`]th line runs (Miri runs this code
-//! thousands of times slower, and CI fails any test that takes 300 s).
+//! Under Miri only [`MIRI_SAMPLES`] lines run, taken at evenly spaced byte
+//! offsets of the file (the first whole line after each offset), and the
+//! file's own line count is not checked. Miri runs this code thousands of
+//! times slower, and CI fails any test that takes 300 s: even reading the
+//! 3 MB file line by line, before running any rule, took more than ten
+//! minutes, so the input is reduced by sampling rather than by a stride over
+//! parsed lines.
 
 use clazel_layout::text::classes::{Gc, Lb, general_category, line_break};
 use clazel_layout::text::{Break, Props, breaks_with_rules};
@@ -35,29 +40,62 @@ use clazel_layout::text::{Break, Props, breaks_with_rules};
 /// The test file, as vendored.
 const TEST_FILE: &str = include_str!("../data/unicode-18.0.0/LineBreakTest.txt");
 
-/// Under Miri, run one line in this many (measured: README, "Miri").
-const MIRI_STRIDE: usize = 20;
+/// Under Miri, the number of evenly spaced samples of the file (measured:
+/// README).
+const MIRI_SAMPLES: usize = 100;
 
 /// One line of the test file: the code points and, after each, whether
 /// there is a break opportunity.
 struct Case {
-    line: usize,
+    /// Where it is: "line N", or "byte N" for a sample under Miri.
+    line: String,
     text: Vec<char>,
     expected: Vec<bool>,
 }
 
-/// The test file's cases, in order, or the first line that does not have
-/// the documented form.
-fn cases() -> Result<Vec<Case>, String> {
+/// The lines to run, each with where it is: every line natively; under
+/// Miri, the first whole line after each of [`MIRI_SAMPLES`] evenly spaced
+/// byte offsets.
+fn lines_to_run() -> Vec<(String, &'static str)> {
+    if !cfg!(miri) {
+        return (1usize..)
+            .zip(TEST_FILE.lines())
+            .map(|(n, l)| (format!("line {n}"), l))
+            .collect();
+    }
+    let bytes = TEST_FILE.as_bytes();
+    let step = bytes.len() / MIRI_SAMPLES;
+    let newline_after = |from: usize| {
+        bytes
+            .get(from..)
+            .and_then(|b| b.iter().position(|&c| c == b'\n'))
+            .map(|p| from.saturating_add(p))
+    };
     let mut out = Vec::new();
-    for (line, l) in (1usize..).zip(TEST_FILE.lines()) {
+    for k in 0..MIRI_SAMPLES {
+        let Some(start) = newline_after(step.saturating_mul(k)).map(|p| p.saturating_add(1)) else {
+            continue;
+        };
+        let end = newline_after(start).unwrap_or(bytes.len());
+        if let Some(l) = TEST_FILE.get(start..end) {
+            out.push((format!("byte {start}"), l));
+        }
+    }
+    out
+}
+
+/// The cases of `lines`, in order, or the first line that does not have
+/// the documented form.
+fn cases(lines: &[(String, &str)]) -> Result<Vec<Case>, String> {
+    let mut out = Vec::new();
+    for (line, l) in lines {
         let data = l.split('#').next().unwrap_or("").trim();
         if data.is_empty() {
             continue;
         }
         let mut tokens = data.split_whitespace();
         if tokens.next() != Some("×") {
-            return Err(format!("line {line}: no × at the start"));
+            return Err(format!("{line}: no × at the start"));
         }
         let mut text = Vec::new();
         let mut expected = Vec::new();
@@ -65,16 +103,16 @@ fn cases() -> Result<Vec<Case>, String> {
             let c = u32::from_str_radix(cp, 16)
                 .ok()
                 .and_then(char::from_u32)
-                .ok_or(format!("line {line}: bad code point {cp}"))?;
+                .ok_or(format!("{line}: bad code point {cp}"))?;
             text.push(c);
             match tokens.next() {
                 Some("÷") => expected.push(true),
                 Some("×") => expected.push(false),
-                other => return Err(format!("line {line}: expected ÷ or ×, got {other:?}")),
+                other => return Err(format!("{line}: expected ÷ or ×, got {other:?}")),
             }
         }
         out.push(Case {
-            line,
+            line: line.clone(),
             text,
             expected,
         });
@@ -96,14 +134,14 @@ fn run(case: &Case, props: impl Fn(char) -> Props) -> Option<String> {
                 .map(|c| format!("{:04X}", u32::from(*c)))
                 .collect();
             return Some(format!(
-                "line {}: [{}] after character {k}: expected {}, got {b:?} by {rule:?}",
+                "{}: [{}] after character {k}: expected {}, got {b:?} by {rule:?}",
                 case.line,
                 cps.join(" "),
                 if *want { "÷" } else { "×" },
             ));
         }
     }
-    (got.len() != case.expected.len()).then(|| format!("line {}: wrong length", case.line))
+    (got.len() != case.expected.len()).then(|| format!("{}: wrong length", case.line))
 }
 
 /// The tailoring that explains a difference under [`Props::css`], if any.
@@ -124,25 +162,26 @@ fn tailoring(case: &Case) -> Option<&'static str> {
 
 #[test]
 fn line_break_test() {
-    let stride = if cfg!(miri) { MIRI_STRIDE } else { 1 };
-    let all = match cases() {
+    let all = match cases(&lines_to_run()) {
         Ok(all) => all,
         Err(e) => {
             assert!(e.is_empty(), "LineBreakTest.txt: {e}");
             Vec::new()
         }
     };
-    // The file's own count ("# Lines: 19346").
-    let stated = TEST_FILE
-        .lines()
-        .find_map(|l| l.strip_prefix("# Lines: "))
-        .and_then(|n| n.trim().parse::<usize>().ok());
-    assert_eq!(Some(all.len()), stated, "the file's line count");
+    if !cfg!(miri) {
+        // The file's own count ("# Lines: 19346").
+        let stated = TEST_FILE
+            .lines()
+            .find_map(|l| l.strip_prefix("# Lines: "))
+            .and_then(|n| n.trim().parse::<usize>().ok());
+        assert_eq!(Some(all.len()), stated, "the file's line count");
+    }
 
     let mut default = (0u64, 0u64, Vec::new());
     let mut css = (0u64, 0u64, Vec::new());
     let mut css_xfail: std::collections::BTreeMap<&str, u64> = Default::default();
-    for case in all.iter().step_by(stride) {
+    for case in &all {
         match run(case, Props::of) {
             None => default.0 = default.0.saturating_add(1),
             Some(m) => {
