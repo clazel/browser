@@ -1,0 +1,111 @@
+#case 0
+#data "<head><noscript><!doctype html><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 1
+#data "<head><noscript><html class=\"foo\"><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 2
+#data "<head><noscript></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<head><noscript>   </noscript>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<head><noscript><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<head><noscript><basefont><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "<head><noscript><bgsound><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 7
+#data "<head><noscript><link><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 8
+#data "<head><noscript><meta><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 9
+#data "<head><noscript><noframes>XXX</noscript></noframes></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 10
+#data "<head><noscript><style>XXX</style></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 11
+#data "<head><noscript></br><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+      text <br> "\n" white-space=Pre
+
+#case 12
+#data "<head><noscript><head class=\"foo\"><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<head><noscript><noscript class=\"foo\"><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "<head><noscript></p><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+
+#case 15
+#data "<head><noscript><p><!--foo--></noscript>"
+root
+  block <html>
+    block <body>
+      block <p>
+
+#case 16
+#data "<head><noscript>XXX<!--foo--></noscript></head>"
+root
+  block <html>
+    block <body>
+      text "XXX"
+
+#case 17
+#data "<head><noscript>"
+root
+  block <html>
+    block <body>
+

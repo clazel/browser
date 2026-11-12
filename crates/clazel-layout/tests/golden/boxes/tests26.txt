@@ -1,0 +1,317 @@
+#case 0
+#data "<!DOCTYPE html><body><a href='#1'><nobr>1<nobr></a><br><a href='#2'><nobr>2<nobr></a><br><a href='#3'><nobr>3<nobr></a>"
+root
+  block <html>
+    block <body>
+      inline <a>
+        inline <nobr>
+          text "1" white-space=Nowrap
+        inline <nobr>
+      inline <nobr>
+        text <br> "\n" white-space=Pre
+        inline <a>
+      inline <a>
+        inline <nobr>
+          text "2" white-space=Nowrap
+        inline <nobr>
+      inline <nobr>
+        text <br> "\n" white-space=Pre
+        inline <a>
+      inline <a>
+        inline <nobr>
+          text "3" white-space=Nowrap
+        inline <nobr>
+
+#case 1
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><i><nobr>2<nobr></i>3"
+root
+  block <html>
+    block <body>
+      inline <b>
+        inline <nobr>
+          text "1" white-space=Nowrap
+        inline <nobr>
+      inline <nobr>
+        inline <i>
+      inline <i>
+        inline <nobr>
+          text "2" white-space=Nowrap
+        inline <nobr>
+      inline <nobr>
+        text "3" white-space=Nowrap
+
+#case 2
+#data "<!DOCTYPE html><body><b><nobr>1<table><nobr></b><i><nobr>2<nobr></i>3"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+          inline <nobr> first
+            text "1" white-space=Nowrap
+            inline <nobr>
+              inline <i>
+            inline <i>
+              inline <nobr>
+                text "2" white-space=Nowrap
+              inline <nobr>
+            inline <nobr>
+              text "3" white-space=Nowrap
+      table-wrapper <table>
+        table <table>
+      block (anonymous)
+        inline <b> last
+          inline <nobr> last
+
+#case 3
+#data "<!DOCTYPE html><body><b><nobr>1<table><tr><td><nobr></b><i><nobr>2<nobr></i>3"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b> first
+          inline <nobr> first
+            text "1" white-space=Nowrap
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <nobr>
+                  inline <i>
+                inline <i>
+                  inline <nobr>
+                    text "2" white-space=Nowrap
+                  inline <nobr>
+                inline <nobr>
+                  text "3" white-space=Nowrap
+      block (anonymous)
+        inline <b> last
+          inline <nobr> last
+
+#case 4
+#data "<!DOCTYPE html><body><b><nobr>1<div><nobr></b><i><nobr>2<nobr></i>3"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          inline <nobr>
+            text "1" white-space=Nowrap
+      block <div>
+        inline <b>
+          inline <nobr>
+          inline <nobr>
+        inline <nobr>
+          inline <i>
+        inline <i>
+          inline <nobr>
+            text "2" white-space=Nowrap
+          inline <nobr>
+        inline <nobr>
+          text "3" white-space=Nowrap
+
+#case 5
+#data "<!DOCTYPE html><body><b><nobr>1<nobr></b><div><i><nobr>2<nobr></i>3"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <b>
+          inline <nobr>
+            text "1" white-space=Nowrap
+          inline <nobr>
+      block <div>
+        inline <nobr>
+          inline <i>
+        inline <i>
+          inline <nobr>
+            text "2" white-space=Nowrap
+          inline <nobr>
+        inline <nobr>
+          text "3" white-space=Nowrap
+
+#case 6
+#data "<!DOCTYPE html><body><b><nobr>1<nobr><ins></b><i><nobr>"
+root
+  block <html>
+    block <body>
+      inline <b>
+        inline <nobr>
+          text "1" white-space=Nowrap
+        inline <nobr>
+          inline <ins>
+      inline <nobr>
+        inline <i>
+      inline <i>
+        inline <nobr>
+
+#case 7
+#data "<!DOCTYPE html><body><b><nobr>1<ins><nobr></b><i>2"
+root
+  block <html>
+    block <body>
+      inline <b>
+        inline <nobr>
+          text "1" white-space=Nowrap
+          inline <ins>
+        inline <nobr>
+      inline <nobr>
+        inline <i>
+          text "2" white-space=Nowrap
+
+#case 8
+#data "<!DOCTYPE html><body><b>1<nobr></b><i><nobr>2</i>"
+root
+  block <html>
+    block <body>
+      inline <b>
+        text "1"
+        inline <nobr>
+      inline <nobr>
+        inline <i>
+      inline <i>
+        inline <nobr>
+          text "2" white-space=Nowrap
+
+#case 9
+#data "<p><code x</code></p>\n"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <code>
+      block (anonymous)
+        inline <code>
+
+#case 10
+#data "<!DOCTYPE html><svg><foreignObject><p><i></p>a"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg> first
+          inline <foreignObject> first
+      block <p>
+        inline <i>
+      block (anonymous)
+        inline <svg> last
+          inline <foreignObject> last
+            inline <i>
+              text "a"
+
+#case 11
+#data "<!DOCTYPE html><table><tr><td><svg><foreignObject><p><i></p>a"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <svg> first
+                    inline <foreignObject> first
+                block <p>
+                  inline <i>
+                block (anonymous)
+                  inline <svg> last
+                    inline <foreignObject> last
+                      inline <i>
+                        text "a"
+
+#case 12
+#data "<!DOCTYPE html><math><mtext><p><i></p>a"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <mtext> first
+      block <p>
+        inline <i>
+      block (anonymous)
+        inline <math> last
+          inline <mtext> last
+            inline <i>
+              text "a"
+
+#case 13
+#data "<!DOCTYPE html><table><tr><td><math><mtext><p><i></p>a"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <math> first
+                    inline <mtext> first
+                block <p>
+                  inline <i>
+                block (anonymous)
+                  inline <math> last
+                    inline <mtext> last
+                      inline <i>
+                        text "a"
+
+#case 14
+#data "<!DOCTYPE html><body><div><!/div>a"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "a"
+
+#case 15
+#data "<button><p><button>"
+root
+  block <html>
+    block <body>
+      inline-block <button>
+        block <p>
+      inline-block <button>
+
+#case 16
+#data "<svg></p><foo>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+      block <p>
+      block (anonymous)
+        inline <foo>
+
+#case 17
+#data "<svg></br><foo>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+      text <br> "\n" white-space=Pre
+      inline <foo>
+
+#case 18
+#data "<math></p><foo>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math>
+      block <p>
+      block (anonymous)
+        inline <foo>
+
+#case 19
+#data "<math></br><foo>"
+root
+  block <html>
+    block <body>
+      inline <math>
+      text <br> "\n" white-space=Pre
+      inline <foo>
+

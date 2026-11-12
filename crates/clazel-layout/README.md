@@ -2,15 +2,16 @@
 
 Layout for [Clazel](../../README.md), a web browser whose parsers of untrusted
 input carry machine-checked proofs (Phase 5, `docs/phases/phase-5.md`). So far:
-font matching (item 5.10, `src/fonts/`), shaping (item 5.11, `src/shape/`), and
-white space and line breaking (item 5.12, `src/text/`). The box tree, block,
-inline and table formatting and the display list (items 5.13 to 5.16) are not
-started.
+font matching (item 5.10, `src/fonts/`), shaping (item 5.11, `src/shape/`),
+white space and line breaking (item 5.12, `src/text/`), and the box tree
+(item 5.13, `src/boxes/`). Block, inline and table formatting and the display
+list (items 5.14 to 5.16) are not started.
 
-Its dependencies are `clazel-font`, which reads every byte of a font, and
-`clazel-style`, whose computed `white-space`, `word-break` and `overflow-wrap`
-the line breaker reads. `rustybuzz` is a dev-dependency, used only by the
-shaping differential.
+Its dependencies are `clazel-font`, which reads every byte of a font,
+`clazel-style`, whose computed values the line breaker and the box tree read,
+and `clazel-dom`, whose arena the box tree is built from. `rustybuzz` is a
+dev-dependency, used only by the shaping differential, and `clazel-treebuilder`
+one used by the box tree's tests to parse documents.
 
 ## Font matching (item 5.10)
 
@@ -166,6 +167,100 @@ source.
 - **WPT reftests wait for item 5.25**: `css/css-text/white-space/` and
   `css/css-text/line-breaking/` are reftests, which need the rendering
   harness. They are not vendored or run here.
+
+## The box tree (item 5.13)
+
+`src/boxes/`, against CSS 2.1 (the Recommendation of 7 June 2011) §9.2, §9.7,
+§12.5, §17.2.1 and §17.4, CSS Display 3† (`none`, `contents`), CSS Text 3's
+Phase I (item 5.12), and HTML at commit `4c54fae1` §15.3.4, §15.3.7, §15.4 and
+§15.5. `boxes::build(arena, styles)` takes the DOM arena and the computed
+style, as `boxes::StyleFns` (a function from node id to `clazel-style`'s
+`ComputedStyle`; item 5.7's `ComputedTable` implements it, and tests use
+hand-written tables), and returns a `BoxTree`: an arena of boxes, each with
+its kind, the node that generated it (`None` for an anonymous box), its parent
+and its children, numbered in tree order. It runs, in order:
+
+1. `generate`: each node's principal box and additional boxes (list items'
+   markers), with text nodes as text runs, `display: none` generating nothing
+   and `contents` hoisting its children; an iterative walk, one step per node;
+2. `table`: §17.2.1's three stages (remove irrelevant boxes; generate missing
+   child wrappers; generate missing parents), each rule by its number, then
+   §17.4's table wrapper box (captions, then the table box);
+3. `anonymous::split_blocks`: §9.2.1.1's anonymous block boxes, with an inline
+   box that holds a block-level box split into fragments around it (first,
+   middle and last, so borders can be opened as the section says);
+4. `anonymous::text_runs`: Phase I (`text::collapse`) once per inline
+   formatting context, and §9.2.2.1's removal of the white space it collapses
+   away.
+
+Every pass is a loop over a step whose state is small (`src/boxes/state.rs`
+states each state's invariant), and none recurses: a document of 100,000
+nested elements builds in under a second. Replaced elements (`img`, `input`,
+`textarea`, `iframe`) are boxes with what HTML gives for their size; the
+sizes that need a font (an `input`'s and a `textarea`'s character width and
+height) are converted by layout (item 5.14). Each file lists its modelling
+choices at its top; `src/boxes/mod.rs` lists those that cross files.
+
+### Decisions taken for 5.13
+
+Taken from the plan while the maintainer was away; each is also in the
+source.
+
+- **`StyleFns` returns `clazel-style`'s `ComputedStyle`** for a node id
+  (`Option<&ComputedStyle>`), rather than a new type: the cascade is on
+  `main`, its type already holds the subset's computed values, and a
+  hand-written table is `ComputedStyle::initial()` with fields set.
+- **§9.7 is the identity.** `position` and `float` are not in the subset
+  (5.0(b) A): `clazel-style` neither parses nor computes them, so every box
+  is in flow. The root element's blockification is the cascade's.
+- **`display: contents`** is not a value the subset computes (item 5.6's list
+  of `display` values does not have it, and the plan marks it "out"); it is
+  implemented behind `StyleFns::display_contents`, which `ComputedTable`
+  answers `false`, so hand-written tables can test it.
+- **Replaced elements** are the four the plan names: `img`, `input`,
+  `textarea` and `iframe`. An `img` is HTML §15.4.2's image that "represents
+  nothing", with natural size 0 by 0 (no image is decoded in this phase), so
+  its `width` and `height` come from its attributes through the
+  presentational hints; its `alt` text is not shown. An `iframe` keeps its
+  `src` for item 5.24. `audio`, `canvas`, `embed`, `object`, `video`, `button`
+  and `select` are ordinary elements in this phase.
+- **`br` and `wbr`** compute to `display: inline` (their `display-outside`
+  values are not in the subset), so the box tree gives a `br` a text run of
+  one line feed with `white-space: pre` (a forced break) and a `wbr` one of a
+  zero width space (a soft wrap opportunity).
+- **Lists.** Counters are not in the subset, so the `list-item` counter is
+  computed here from what the user agent sheet and HTML's `start` and `value`
+  hints would give it; `reversed` is not applied, and a list item outside its
+  list's scope (after the list, CSS's following-sibling scope) counts in its
+  own. `list-style-position` is not in the subset, so every marker is its list
+  item's first child, placed as `outside`; HTML's quirks-mode `inside` for
+  `li` is not applied. The predefined counter styles that are drawn are listed
+  in `src/boxes/marker.rs`; every other one falls back to `decimal`.
+- **§17.4's table wrapper box is built here**, so that table layout (item
+  5.15) gets the captions apart from the table box. `caption-side` is not in
+  the subset: every caption is above.
+- **White space for §17.2.1** is CSS Text 3's document white space (spaces,
+  tabs, line feeds, carriage returns), in any text run, whatever its
+  `white-space`.
+- **Order of the passes**: §17.2.1 before §9.2.1.1, Phase I last (see
+  `src/boxes/mod.rs`).
+- **What Phase I collapses away** is removed: a text run with no unit left,
+  and every run of an inline formatting context that holds only collapsible
+  spaces (Phase II removes those from the line's start). Other leading and
+  trailing collapsible spaces stay for layout's Phase II. An anonymous block
+  left with no children is removed; one holding only an empty fragment of a
+  split inline is kept (a zero-height line), so no fragment is lost.
+- **The plan's section numbers.** CSS 2.1's, marked † in the plan, were
+  checked against the Recommendation's text; HTML §15.5's subsections were
+  counted in the pinned source (§15.5.6 the text entry `input`, §15.5.17
+  `textarea`). CSS Display 3, Lists 3 and Counter Styles 3 are cited with †.
+- **Target tier stays 0**, as the plan's Crates table gives for this crate;
+  the Kani harnesses below were added as the brief asked.
+- **WPT anonymous-table tests wait for item 5.25**: they are reftests, which
+  need the rendering harness. They are not vendored or run here.
+- **The golden dumps are added beside `clazel-text`'s golden test**, which
+  decision 5.0(g) G3 keeps until item 5.26; they replace it when that crate is
+  deleted.
 
 ## Verification
 
@@ -354,3 +449,83 @@ before any rule ran; the file's line count is checked natively only.
 
 **WPT**: the `css/css-text/white-space/` and `css/css-text/line-breaking/`
 tests are reftests and wait for the rendering harness of item 5.25.
+
+### The box tree (item 5.13)
+
+Golden test (`tests/golden_boxes.rs`): the 1,761 document cases of the
+html5lib tree-construction suite vendored in `clazel-treebuilder`, parsed,
+cascaded by `clazel_style::cascade` (item 5.7) under the user agent sheets in
+an 800 by 600 viewport, built into box trees and printed (`boxes::dump`), one
+fixture per `.dat` file under `tests/golden/boxes/`, compared byte for byte
+(`CLAZEL_BLESS=1` regenerates them; review the diff). They hold 10,376 boxes:
+510 anonymous, 403 split inline fragments and 1,142 text runs. The 206
+`#document-fragment` cases and 6 scripted cases are not built. Natively the
+test takes 2.6 s.
+
+Unit tests (`src/boxes/tests.rs`, 29): box generation (`display: none` and
+`contents`, text across inlines, white space collapsed away, `br` and `wbr`,
+each replaced element, list markers with `start`, `value` and nested lists,
+marker text per counter style); §9.2.1.1 (the section's own two examples,
+empty sides of a split, nested inlines split together, consecutive blocks
+and white space between them, inline blocks); each of §17.2.1's rules (1.1
+to 1.4, 2.1 to 2.3, 3.1, 3.2 in a block, an inline and a cell), HTML tables
+with HN's empty `<tr/>` and §17.4's captions; the grouping and split steps'
+contracts; and a document of 100,000 nested elements (0.7 s natively),
+built through `clazel-dom`'s own operations since the tree builder is
+quadratic on such nesting. They use a hand-written style table, as the item
+intends; the golden test runs the real cascade.
+
+Kani harnesses (`src/boxes/proofs.rs`), measured as for item 5.12's below:
+one harness at a time with `cargo kani -p clazel-layout --harness … --exact`,
+each in its own process group capped at 20 minutes and 8 GB (resident set
+of the whole group, polled every 5 s), on an Apple-silicon Mac. Times are
+wall clock including cargo's start (the first includes building the crate
+for Kani); memory is the larger of the 5 s samples and `time -l`'s peak.
+
+| Harness | Kind | What it checks | Time | Peak memory |
+|---------|------|----------------|------|-------------|
+| `decide_any` | step, every size | what any node generates: only an element a principal box, only text a text run, `none` nothing, `contents` only for a non-replaced element, a replaced element no walked children | 16.3 s | 1.00 GB |
+| `walk_step_any` | step, every size | one step of the generation walk from any frame satisfying its invariant: every frame pushed for any child satisfies it with the boxes added | 1.9 s | 0.22 GB |
+| `group_step_any` | step, every size | the grouping step of stages 2 and 3 from any state: a wrapped child is never kept, a wrapper opened only when none is | 1.9 s | 0.21 GB |
+| `irrelevant_any` | any input | stage 1 on any parent, child and siblings: rules 1.1 and 1.2 remove what they say, rules 1.3 and 1.4 only white-space-only text | 2.6 s | 0.22 GB |
+| `stage_2_any` | any input | stage 2's decision for any parent and child meets the stage's goal (written a second time), in the parent and in the wrapper | 3.2 s | 0.22 GB |
+| `stage_3_any` | any input | rules 3.1 then 3.2 for any parent and any child stage 2 left: no proper table child misparented, every cell in a row, an inline table in an inline | 3.4 s | 0.23 GB |
+| `split_step_any` | step, every size | §9.2.1.1's split step from any state satisfying its invariant, any event: invariant kept, inline content placed with every fragment open, a block only with none open after every box has had its first fragment, an exited box's last fragment made | 2.3 s | 0.22 GB |
+| `roman_any` | any value | Roman numerals: `None` exactly outside 1 to 3999, else weights adding up to the value | 7.6 s | 0.23 GB |
+| `alphabetic_any` | any value | alphabetic numbering in base 26: `None` exactly below 1, 1 to 14 digits, each below 26 | 12.6 s | 0.77 GB |
+
+**Proved for every size**: `generate::decide`, `generate::walk_step`,
+`table::irrelevant_1`, `irrelevant_2`, `wrapper_2`, `wrapper_3_1`,
+`wrapper_3_2`, `state::group_step` and `anonymous::split_step`: each loop
+body of the passes, so a tree of any size and depth has each step's
+properties. `marker::roman_counts` and `marker::alphabetic_digits` are proved
+for every value. **Nothing is proved only for bounded inputs.**
+
+Capped and removed (not retried): `regroup_any_3`, the grouping driver on
+one parent with any 3 children, passed the 8 GB cap after 13.7 minutes of
+symbolic execution, mostly in the drop glue of the arena's boxes.
+
+**Not covered by Kani**: the drivers that walk the arena
+(`generate::generate`, `table::stage_1` to `stage_3` with `regroup`,
+`table::wrappers`, `anonymous::split`, `anonymous::text_runs`,
+`BoxTree::compact`) as whole loops over trees, whose state is a vector of
+boxes holding strings; reading the DOM and the computed style; the list
+counters (`marker::ordinals`, a pass in tree order over a map) and the marker
+strings; and Phase I, whose step item 5.12 proves. The unit and golden tests
+run all of them. CI has not run these harnesses yet.
+
+Miri: every test this item adds, one test per process with `cargo
++nightly-2026-08-21 miri test -p clazel-layout … --exact -Z unstable-options
+--report-time`, each capped at 10 minutes. Times are on Miri's clock.
+
+| Test | Miri time |
+|------|-----------|
+| `golden_boxes::golden_box_trees` (case 0 only: parsing the user agent sheets and one cascade dominate) | 107.2 s |
+| `boxes::tests::deep_documents_build_without_recursion` (300 levels under Miri, 100,000 natively) | 48.3 s |
+| `boxes::tests::list_items_get_markers` | 6.9 s |
+| `boxes::tests::stage_3_2_misparented_children_get_tables` | 5.2 s |
+| the other 26 tests in `boxes::tests` | under 5 s each |
+
+**WPT**: the anonymous table objects tests (`css/CSS2/tables/` and
+`css/css-tables/`) are reftests and wait for the rendering harness of item
+5.25.
