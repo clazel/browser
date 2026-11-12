@@ -78,6 +78,7 @@ pub mod generate;
 pub mod marker;
 pub mod replaced;
 pub mod state;
+pub mod table;
 pub mod tree;
 
 pub use replaced::{Input, Replaced};
