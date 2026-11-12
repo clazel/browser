@@ -37,12 +37,18 @@ fn clip(x: i32, y: i32, width: u32, height: u32) -> ExecItem {
     }
 }
 
-/// A mask whose coverage is a ramp: every value 0 to 255 appears for 16 × 16.
+/// A mask whose coverage is a ramp, byte `i` being `37 × i mod 256`: every value 0
+/// to 255 appears in each 256 bytes. That sequence has period 256, so one period is
+/// computed and repeated, which is a block copy: computing every byte of the
+/// 2.3 MB scene "atlas" took over 350 s of Miri's clock in every test that lists
+/// the scenes.
 fn ramp(id: u32, columns: u16, rows: u16) -> ExecItem {
     let n = usize::from(columns).saturating_mul(usize::from(rows));
-    let coverage = (0..n)
+    let period: Vec<u8> = (0..256usize)
         .map(|i| u8::try_from(i.saturating_mul(37) % 256).unwrap_or(0))
         .collect();
+    let mut coverage = period.repeat(n.div_ceil(256));
+    coverage.truncate(n);
     ExecItem::UploadMask {
         id,
         columns,

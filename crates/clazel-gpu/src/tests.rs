@@ -72,13 +72,8 @@ fn scene_frames() -> Result<(), String> {
     scene("frames")
 }
 
-/// Ignored under Miri: its 2.3 MB of coverage go through the byte-by-byte encoder
-/// and decoder, and the whole scene list took 523 s on Miri's clock, past CI's 300 s
-/// per test. Under Miri, a compaction in the middle of a list is covered by
-/// `batch::tests::a_compaction_closes_the_open_batch` and
-/// `atlas::tests::a_full_store_is_compacted_in_id_order`.
+/// A compaction in the middle of a list, between two draws. 56 s on Miri's clock.
 #[test]
-#[cfg_attr(miri, ignore)]
 fn scene_atlas() -> Result<(), String> {
     scene("atlas")
 }

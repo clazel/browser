@@ -86,23 +86,51 @@ as the plan asks. Each is also written where it is made.
 
 ## Kani
 
-One harness per process, each with a 20-minute and 8 GB cap.
+Each harness in its own process group, with a 20-minute and 8 GB cap polled every
+5 s (`src/proofs.rs`). Times are the whole `cargo kani` run with the crate already
+built; peak memory below 0.01 GB means the run ended before the first poll.
 
-| Harness | Covers | Time | Peak memory |
-|---------|--------|------|-------------|
-| `place_any` | every input | | |
-| `grown_capacity_any` | every input | | |
-| `texel_index_any` | every input | | |
-| `rect_at_any` | every input | | |
-| `intersect_any` | every input | | |
-| `blend_any` | every input | | |
-| `clip_then_draw_any` | one step from any state, any viewport | | |
-| `atlas_upload_any` | bounded: two live masks, masks up to 2 × 2 | | |
+| Harness | Covers | Result | Verification time | Wall time | Peak memory |
+|---------|--------|--------|-------------------|-----------|-------------|
+| `place_any` | every input | passed, 10 checks | 0.09 s | 12 s | 0.67 GB |
+| `grown_capacity_any` | every capacity the atlas holds, any total | passed, 63 checks | 0.28 s | 3 s | < 0.01 GB |
+| `rect_at_any` | every input | passed, 77 checks | 0.35 s | 2 s | < 0.01 GB |
+| `intersect_any` | every input | passed, 14 checks | 0.16 s | 1 s | < 0.01 GB |
+| `blend_any` | every input | passed, 20 checks | 0.99 s | 2 s | < 0.01 GB |
+| `visible_any` | every input (the draw step's cut) | passed, 15 checks | 0.33 s | 2 s | < 0.01 GB |
+| `clip_then_draw_any` | one draw from a fresh frame, any viewport, clip and quad | passed, 696 checks | 2.5 s | 5 s | < 0.01 GB |
+
+Proved for every size: `place`, `grown_capacity`, `Rect::at`, `Rect::intersect`,
+`blend`, `batch::visible`. Bounded: the builder, to one draw from a fresh frame.
+
+Not covered, each removed at a cap:
+
+| Harness | Cap | What covers it instead |
+|---------|-----|------------------------|
+| `texel_index_any` (any `u16` sides; then sides up to 2048) | 20 min twice, 0.17 GB | unit tests, every scene; all its steps are checked |
+| `atlas_upload_any` (two live masks of up to 2 × 2, any offsets) | 8 GB in 83 s | `atlas.rs` tests, `a_compaction_closes_the_open_batch`, scene "atlas" |
+| `clip_then_draw_any`, first form (a draw, then a clip and a draw) | 8 GB in 21 s | split into `visible_any` and the one-draw form above |
 
 ## Miri
 
-| Test | Time under Miri |
-|------|-----------------|
+Each test in its own process with a 10-minute cap, times on Miri's clock
+(`--report-time`). The fake backend makes no foreign call, so the whole batching
+runs under Miri; the Metal tests (`tests/metal.rs`, and `clazel-sys`'s
+`a_surface_texture_has_the_surface_size`) call the GPU and are ignored under Miri.
+
+| Test | Time |
+|------|------|
+| `tests::scene_atlas` | 55.9 s |
+| `tests::scene_masks` | 39.2 s |
+| `tests::scene_clips` | 30.7 s |
+| `tests::scene_fill` | 27.5 s |
+| `tests::scene_frames` | 18.3 s |
+| `tests::bad_lists_are_refused_before_drawing` | 14.5 s |
+| `soft::tests::blending_is_the_exact_value_rounded` | 12.6 s (290 s before its Miri inputs were thinned) |
+| `tests::every_scene_is_tested` | 0.8 s |
+| `batch::tests::a_compaction_closes_the_open_batch` | 0.1 s |
+| the other 15 unit tests | under 0.05 s each |
+| `clazel-sys` `macos::metal::tests::sizes_are_checked_before_any_call` | 0.001 s |
 
 ## The Metal backend
 
