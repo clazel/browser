@@ -187,13 +187,18 @@ one per message signature (items 5.17b and 5.21). That does not build: rustc's
 declaration of the same symbol with another signature (measured on 1.98.1), and CI
 denies warnings. The maintainer delegated the choice, and the form taken is:
 `objc_msgSend` is declared once, with no parameters, and each signature is one
-`const` holding one `std::mem::transmute` of it to an `unsafe extern "C" fn(..)`
-type, which is the cast Apple's documentation prescribes. `xtask/src/sys.rs`
+`const` holding one `std::mem::transmute` of it to an `unsafe extern "C-unwind"
+fn(..)` type, which is the cast Apple's documentation prescribes. `xtask/src/sys.rs`
 accepts exactly that form and rejects every other `transmute`, use of the
 dispatcher, or call through a pointer. It changes the wording CLAUDE.md rule 1
 needs, which is proposed for the maintainer, not made here.
 
-The casts are declared `extern "C"`: an Objective-C exception thrown through one
-would unwind into Rust where that ABI forbids it. Metal raises exceptions for API
-misuse, which the wrappers' checks are there to rule out; whether the casts should be
-`extern "C-unwind"` instead is left to review.
+The dispatcher and its casts are `"C-unwind"`, and the checker accepts no other ABI
+for them. Metal raises Objective-C exceptions for API misuse, which the wrappers'
+checks are there to rule out; should one be thrown anyway, it unwinds through the Rust
+frames above the call as a foreign exception, which the Rust reference defines
+(`items.fn.extern.unwind.behavior`: destructors run under `panic=unwind`, the process
+aborts under `panic=abort`), where through an `extern "C"` cast it would be undefined
+behaviour (`panic.unwind.ffi.undefined`). Nothing catches it: an exception is a bug
+the GPU process may die of. An open encoder is still ended on the way out, by a guard
+whose `Drop` sends `endEncoding`.

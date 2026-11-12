@@ -28,7 +28,24 @@
 //!   of `<IOSurface/IOSurfaceRef.h>`; a wrong key would make `IOSurfaceCreate` or the
 //!   texture on it fail, which the tests would show.
 //! - **Encoders are scoped**: a render or blit encoder exists only inside the
-//!   function that ends it, so none is left open when a command buffer is committed.
+//!   function that opened it, which ends it through a guard ([`EndEncoding`]) whose
+//!   [`Drop`] sends `endEncoding`, so it is ended on return, on a panic in the
+//!   closure [`CommandBuffer::render`] runs, and on an exception unwinding through,
+//!   and none is left open when a command buffer is committed.
+//! - **Objective-C exceptions unwind; they are not caught.** `objc_msgSend` and its
+//!   casts use the `"C-unwind"` ABI. On Apple silicon an Objective-C exception is a
+//!   native (C++-ABI) unwind, so one thrown by a method this file sends unwinds
+//!   through the Rust frames above the call as a foreign exception. The Rust
+//!   reference makes that defined behaviour (`items.fn.extern.unwind.behavior`:
+//!   under `panic=unwind` a native unwind reaching an unwinding-ABI boundary
+//!   unwinds, running destructors, such as [`Object`]'s `release` and
+//!   [`EndEncoding`]'s; under `panic=abort` it aborts), where through a `"C"`
+//!   pointer it would be undefined (`panic.unwind.ffi.undefined`). If it reaches
+//!   `catch_unwind`, a thread's root or `main`, the process aborts or the catch
+//!   returns an opaque `Err`, and which is unspecified
+//!   (`panic.unwind.ffi.catch-foreign`). Nothing here catches one: the methods
+//!   called are documented to report failure by nil, an `NSError` or a status, and
+//!   an exception is a bug the GPU process may die of.
 //! - **What the GPU reads is not checked here.** A draw's counts are whatever
 //!   `clazel-gpu` passes; its fixed shaders bound their own reads. What is checked
 //!   here is every CPU-side length, offset and rectangle a call takes.
@@ -43,16 +60,24 @@ type Id = *mut c_void;
 type Sel = *const c_void;
 
 #[link(name = "objc", kind = "dylib")]
-// SAFETY: docs ObjectiveC/objc_msgSend, docs ObjectiveC/objc_getClass and docs ObjectiveC/sel_registerName,
-// from <objc/message.h> and <objc/runtime.h>:
+// SAFETY: docs ObjectiveC/objc_msgSend, from <objc/message.h>: declared here with
+// no parameters, as <objc/message.h> does when OBJC_OLD_DISPATCH_PROTOTYPES is 0,
+// because it is never called as declared, only cast to a typed pointer (below).
+// The ABI is "C-unwind", not "C": the method a message reaches may throw an
+// Objective-C exception, and an unwind out of a "C" call is undefined behaviour
+// (see the module documentation). libobjc is linked by name.
+unsafe extern "C-unwind" {
+    fn objc_msgSend();
+}
+
+#[link(name = "objc", kind = "dylib")]
+// SAFETY: docs ObjectiveC/objc_getClass and docs ObjectiveC/sel_registerName,
+// from <objc/runtime.h>:
 // `objc_getClass(const char *name)` returns `id` (`Class`, a pointer) and
 // `sel_registerName(const char *str)` returns `SEL` (a pointer); `c_char` and
-// pointers match. `objc_msgSend` is declared here with no parameters, as
-// <objc/message.h> does when OBJC_OLD_DISPATCH_PROTOTYPES is 0, because it is
-// never called as declared, only cast to a typed pointer (below). libobjc is
-// linked by name.
+// pointers match. Neither sends a message, so neither runs a method that could
+// throw. libobjc is linked by name.
 unsafe extern "C" {
-    fn objc_msgSend();
     fn objc_getClass(name: *const c_char) -> Id;
     fn sel_registerName(name: *const c_char) -> Sel;
 }
@@ -137,7 +162,9 @@ struct ClearColor {
 // The dispatcher casts. Each has the receiver (`id`) and the selector (`SEL`)
 // first, then the method's parameters, and its return type, exactly as the
 // method is declared; `NSUInteger` is `usize` and `BOOL` is `bool` on Apple
-// silicon, and every object parameter is `id`.
+// silicon, and every object parameter is `id`. Each is "C-unwind", the ABI
+// `objc_msgSend` is declared with, so an exception from the method is a defined
+// unwind (see the module documentation).
 
 // SAFETY: docs ObjectiveC/objc_msgSend ("must be cast to an appropriate function
 // pointer type before being called"). Methods `(id)m` returning `id`: docs
@@ -147,28 +174,28 @@ struct ClearColor {
 // docs Metal/MTLRenderPassDescriptor/renderPassDescriptor (a class method, sent to
 // the class), docs Metal/MTLRenderPassDescriptor/colorAttachments and docs
 // Metal/MTLRenderPipelineDescriptor/colorAttachments.
-const MSG_ID: unsafe extern "C" fn(Id, Sel) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID: unsafe extern "C-unwind" fn(Id, Sel) -> Id =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(void)m`: docs ObjectiveC/NSObject/release, docs
 // Foundation/NSAutoreleasePool/drain, docs Metal/MTLCommandBuffer/commit, docs
 // Metal/MTLCommandBuffer/waitUntilCompleted and docs
 // Metal/MTLCommandEncoder/endEncoding.
-const MSG_VOID: unsafe extern "C" fn(Id, Sel) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID: unsafe extern "C-unwind" fn(Id, Sel) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
-// SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
+// SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(NSUInteger)m`: docs Metal/MTLCommandBuffer/status (`MTLCommandBufferStatus`,
-// an `NSUInteger` enumeration) and docs Metal/MTLBuffer/length.
-const MSG_USIZE: unsafe extern "C" fn(Id, Sel) -> usize =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+// an `NSUInteger` enumeration).
+const MSG_USIZE: unsafe extern "C-unwind" fn(Id, Sel) -> usize =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(id)m:(id)a`: docs Metal/MTLLibrary/newFunctionWithName (an NSString name) and
 // docs Metal/MTLCommandBuffer/renderCommandEncoderWithDescriptor.
-const MSG_ID_ID: unsafe extern "C" fn(Id, Sel, Id) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_ID: unsafe extern "C-unwind" fn(Id, Sel, Id) -> Id =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(id)m:(NSUInteger)a`: docs
@@ -176,16 +203,16 @@ const MSG_ID_ID: unsafe extern "C" fn(Id, Sel, Id) -> Id =
 // docs Metal/MTLRenderPipelineColorAttachmentDescriptorArray/objectAtIndexedSubscript
 // and docs Foundation/NSNumber/initWithUnsignedLong (`unsigned long`, 64 bits on
 // Apple silicon, as `NSUInteger`).
-const MSG_ID_USIZE: unsafe extern "C" fn(Id, Sel, usize) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_USIZE: unsafe extern "C-unwind" fn(Id, Sel, usize) -> Id =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(void)m:(id)a`: docs Metal/MTLRenderPipelineDescriptor/vertexFunction and
 // fragmentFunction (their setters), docs
 // Metal/MTLRenderCommandEncoder/setRenderPipelineState and docs
 // Metal/MTLRenderPassAttachmentDescriptor/texture (its setter).
-const MSG_VOID_ID: unsafe extern "C" fn(Id, Sel, Id) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_ID: unsafe extern "C-unwind" fn(Id, Sel, Id) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(void)m:(NSUInteger)a`, each an `NSUInteger` property's setter or an
@@ -195,96 +222,113 @@ const MSG_VOID_ID: unsafe extern "C" fn(Id, Sel, Id) =
 // sourceRGBBlendFactor, destinationRGBBlendFactor, sourceAlphaBlendFactor and
 // destinationAlphaBlendFactor; docs Metal/MTLRenderPassAttachmentDescriptor/loadAction
 // and storeAction.
-const MSG_VOID_USIZE: unsafe extern "C" fn(Id, Sel, usize) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_USIZE: unsafe extern "C-unwind" fn(Id, Sel, usize) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(void)setBlendingEnabled:(BOOL)a`: docs
 // Metal/MTLRenderPipelineColorAttachmentDescriptor/isBlendingEnabled (its
 // setter); `BOOL` is `bool` on Apple silicon.
-const MSG_VOID_BOOL: unsafe extern "C" fn(Id, Sel, bool) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_BOOL: unsafe extern "C-unwind" fn(Id, Sel, bool) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(id)newLibraryWithSource:(NSString *)s options:(MTLCompileOptions *)o
 // error:(NSError **)e`: docs Metal/MTLDevice/newLibraryWithSource:options:error.
-const MSG_ID_ID_ID_OUT: unsafe extern "C" fn(Id, Sel, Id, Id, *mut Id) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_ID_ID_OUT: unsafe extern "C-unwind" fn(Id, Sel, Id, Id, *mut Id) -> Id =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(id)newRenderPipelineStateWithDescriptor:(MTLRenderPipelineDescriptor *)d
 // error:(NSError **)e`: docs Metal/MTLDevice/newRenderPipelineStateWithDescriptor:error.
-const MSG_ID_ID_OUT: unsafe extern "C" fn(Id, Sel, Id, *mut Id) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_ID_OUT: unsafe extern "C-unwind" fn(Id, Sel, Id, *mut Id) -> Id =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(id)m:(const void *)p a:(NSUInteger)n b:(NSUInteger)k`: docs
 // Metal/MTLDevice/newBufferWithBytes:length:options (`MTLResourceOptions`, an
 // `NSUInteger` set) and docs Foundation/NSString/initWithBytes:length:encoding
 // (`NSStringEncoding`, an `NSUInteger`).
-const MSG_ID_PTR_USIZE_USIZE: unsafe extern "C" fn(Id, Sel, *const c_void, usize, usize) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_PTR_USIZE_USIZE: unsafe extern "C-unwind" fn(
+    Id,
+    Sel,
+    *const c_void,
+    usize,
+    usize,
+) -> Id = unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(id)newBufferWithLength:(NSUInteger)n options:(MTLResourceOptions)o`: docs
 // Metal/MTLDevice/newBufferWithLength:options.
-const MSG_ID_USIZE_USIZE: unsafe extern "C" fn(Id, Sel, usize, usize) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_USIZE_USIZE: unsafe extern "C-unwind" fn(Id, Sel, usize, usize) -> Id =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(id)newTextureWithDescriptor:(MTLTextureDescriptor *)d
 // iosurface:(IOSurfaceRef)s plane:(NSUInteger)p`: docs
 // Metal/MTLDevice/newTextureWithDescriptor:iosurface:plane (an `IOSurfaceRef` is a
 // pointer, passed as `id`).
-const MSG_ID_ID_ID_USIZE: unsafe extern "C" fn(Id, Sel, Id, Id, usize) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_ID_ID_USIZE: unsafe extern "C-unwind" fn(Id, Sel, Id, Id, usize) -> Id =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(id)initWithObjects:(const id [])o forKeys:(const id [])k count:(NSUInteger)n`:
 // docs Foundation/NSDictionary/initWithObjects:forKeys:count.
-const MSG_ID_IDS_IDS_USIZE: unsafe extern "C" fn(Id, Sel, *const Id, *const Id, usize) -> Id =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_ID_IDS_IDS_USIZE: unsafe extern "C-unwind" fn(
+    Id,
+    Sel,
+    *const Id,
+    *const Id,
+    usize,
+) -> Id = unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(void)copyFromBuffer:(id)s sourceOffset:(NSUInteger)a toBuffer:(id)d
 // destinationOffset:(NSUInteger)b size:(NSUInteger)n`: docs
 // Metal/MTLBlitCommandEncoder/copyFromBuffer:sourceOffset:toBuffer:destinationOffset:size.
-const MSG_VOID_ID_USIZE_ID_USIZE_USIZE: unsafe extern "C" fn(Id, Sel, Id, usize, Id, usize, usize) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_ID_USIZE_ID_USIZE_USIZE: unsafe extern "C-unwind" fn(
+    Id,
+    Sel,
+    Id,
+    usize,
+    Id,
+    usize,
+    usize,
+) = unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(void)m:(id)b offset:(NSUInteger)o atIndex:(NSUInteger)i`: docs
 // Metal/MTLRenderCommandEncoder/setVertexBuffer:offset:atIndex and docs
 // Metal/MTLRenderCommandEncoder/setFragmentBuffer:offset:atIndex.
-const MSG_VOID_ID_USIZE_USIZE: unsafe extern "C" fn(Id, Sel, Id, usize, usize) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_ID_USIZE_USIZE: unsafe extern "C-unwind" fn(Id, Sel, Id, usize, usize) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Methods
 // `(void)m:(const void *)p length:(NSUInteger)n atIndex:(NSUInteger)i`: docs
 // Metal/MTLRenderCommandEncoder/setVertexBytes:length:atIndex and docs
 // Metal/MTLRenderCommandEncoder/setFragmentBytes:length:atIndex.
-const MSG_VOID_PTR_USIZE_USIZE: unsafe extern "C" fn(Id, Sel, *const c_void, usize, usize) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_PTR_USIZE_USIZE: unsafe extern "C-unwind" fn(Id, Sel, *const c_void, usize, usize) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(void)setScissorRect:(MTLScissorRect)r`: docs
 // Metal/MTLRenderCommandEncoder/setScissorRect, the structure by value.
-const MSG_VOID_SCISSOR: unsafe extern "C" fn(Id, Sel, ScissorRect) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_SCISSOR: unsafe extern "C-unwind" fn(Id, Sel, ScissorRect) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(void)setClearColor:(MTLClearColor)c`: docs
 // Metal/MTLRenderPassColorAttachmentDescriptor/clearColor (its setter), the
 // structure by value.
-const MSG_VOID_CLEAR: unsafe extern "C" fn(Id, Sel, ClearColor) =
-    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+const MSG_VOID_CLEAR: unsafe extern "C-unwind" fn(Id, Sel, ClearColor) =
+    unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(void)drawPrimitives:(MTLPrimitiveType)t vertexStart:(NSUInteger)s
 // vertexCount:(NSUInteger)n instanceCount:(NSUInteger)i baseInstance:(NSUInteger)b`:
 // docs Metal/MTLRenderCommandEncoder/drawPrimitives:vertexStart:vertexCount:instanceCount:baseInstance
 // (`MTLPrimitiveType` is an `NSUInteger` enumeration).
-const MSG_VOID_USIZE_USIZE_USIZE_USIZE_USIZE: unsafe extern "C" fn(
+const MSG_VOID_USIZE_USIZE_USIZE_USIZE_USIZE: unsafe extern "C-unwind" fn(
     Id,
     Sel,
     usize,
@@ -292,20 +336,20 @@ const MSG_VOID_USIZE_USIZE_USIZE_USIZE_USIZE: unsafe extern "C" fn(
     usize,
     usize,
     usize,
-) = unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+) = unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 // SAFETY: docs ObjectiveC/objc_msgSend (cast to the method's type). Method
 // `(void)getBytes:(void *)p bytesPerRow:(NSUInteger)r fromRegion:(MTLRegion)g
 // mipmapLevel:(NSUInteger)l`: docs
 // Metal/MTLTexture/getBytes:bytesPerRow:fromRegion:mipmapLevel, the region by value.
-const MSG_VOID_OUT_USIZE_REGION_USIZE: unsafe extern "C" fn(
+const MSG_VOID_OUT_USIZE_REGION_USIZE: unsafe extern "C-unwind" fn(
     Id,
     Sel,
     *mut c_void,
     usize,
     Region,
     usize,
-) = unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };
+) = unsafe { std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };
 
 /// A Metal call failed: it returned nil, or a command buffer ended in error. The
 /// GPU process ends; this crate decides nothing about it.
@@ -985,6 +1029,7 @@ impl CommandBuffer {
         // id`.
         let e = unsafe { MSG_ID(this_id, s) };
         let encoder = Object::retained(e, "blitCommandEncoder")?;
+        let ending = EndEncoding(&encoder);
         let s = sel(c"copyFromBuffer:sourceOffset:toBuffer:destinationOffset:size:");
         let encoder_id: Id = encoder.ptr();
         let src_id: Id = src.obj.ptr();
@@ -1001,13 +1046,14 @@ impl CommandBuffer {
                 encoder_id, s, src_id, src_offset, dst_id, dst_offset, len,
             )
         }
-        end_encoding(&encoder);
+        drop(ending);
         Ok(())
     }
 
     /// Encode a render pass into `target`, cleared to `clear` (red, green, blue,
     /// alpha, 0 to 1) or, with `None`, keeping what it holds; `f` encodes the
-    /// pass's commands, and the pass is ended whatever `f` returns.
+    /// pass's commands, and the pass is ended whatever `f` returns, and if it
+    /// panics.
     pub fn render<R>(
         &mut self,
         target: &Texture,
@@ -1060,13 +1106,14 @@ impl CommandBuffer {
         // -> id`.
         let e = unsafe { MSG_ID_ID(this_id, s, pass_id) };
         let encoder = Object::retained(e, "renderCommandEncoderWithDescriptor:")?;
+        let ending = EndEncoding(&encoder);
         let mut scoped = RenderEncoder {
             obj: &encoder,
             width: target.width,
             height: target.height,
         };
         let out = f(&mut scoped);
-        end_encoding(&encoder);
+        drop(ending);
         out
     }
 
@@ -1098,14 +1145,22 @@ impl CommandBuffer {
     }
 }
 
-/// End an encoder.
-fn end_encoding(encoder: &Object) {
-    let s = sel(c"endEncoding");
-    let encoder_id: Id = encoder.ptr();
-    // SAFETY: docs Metal/MTLCommandEncoder/endEncoding: ends the encoder; called
-    // once per encoder, by the method that opened it. MSG_VOID is `(id, SEL) ->
-    // void`.
-    unsafe { MSG_VOID(encoder_id, s) }
+/// Ends an open encoder when dropped: made right after the encoder is opened, by
+/// the method that opened it, so the encoder is ended exactly once however that
+/// method leaves (a return, a panic in [`CommandBuffer::render`]'s closure, or an
+/// unwinding exception), before the encoder itself is released.
+struct EndEncoding<'a>(&'a Object);
+
+impl Drop for EndEncoding<'_> {
+    fn drop(&mut self) {
+        let s = sel(c"endEncoding");
+        let encoder_id: Id = self.0.ptr();
+        // SAFETY: docs Metal/MTLCommandEncoder/endEncoding: ends the encoder; sent
+        // once per encoder, by this guard, which the method that opened the
+        // encoder makes and drops before the encoder (borrowed here) is released.
+        // MSG_VOID is `(id, SEL) -> void`.
+        unsafe { MSG_VOID(encoder_id, s) }
+    }
 }
 
 /// An open render pass, inside [`CommandBuffer::render`].
