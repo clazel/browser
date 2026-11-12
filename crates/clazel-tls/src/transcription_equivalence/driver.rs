@@ -99,7 +99,8 @@
 #[cfg(verus_only)]
 use crate::connection::driver_contract::Models;
 #[cfg(verus_only)]
-use crate::connection::driver_spec::{Origin, Stage, Status, Step};
+use crate::connection::driver_spec::{Origin, Step};
+use crate::connection::driver_spec::{Stage, Status};
 use crate::transcription::alerts::ClientError;
 #[cfg(verus_only)]
 use crate::transcription::connection::{Connection, Protection, Receive};

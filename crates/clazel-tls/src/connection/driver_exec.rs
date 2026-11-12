@@ -267,9 +267,9 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                     Self::failed_at_start(crate::spec::INTERNAL_ERROR, Ghost(models))
                 }
             },
-            Ok((_, action)) => {
+            Ok((_, _action)) => {
                 proof {
-                    assert(!(action@ is Send));
+                    assert(!(_action@ is Send));
                 }
                 Self::failed_at_start(crate::spec::INTERNAL_ERROR, Ghost(models))
             },
