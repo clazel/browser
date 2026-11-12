@@ -64,6 +64,7 @@ pub mod bootstrap;
 pub mod ccs;
 pub mod client;
 pub mod dispatcher;
+pub mod driver;
 pub mod extensions;
 pub mod framing;
 pub mod hello;
