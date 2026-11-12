@@ -100,9 +100,9 @@
 //!   - `align_offset(align, available, width)`: CSS 2.1 §16.2 with CSS Text
 //!     3 §7.1's overflow rule. Contract: in `0..=available - width` when the
 //!     content fits, zero when it does not (start-aligned).
-//! - **What each box is to the walk** ([`Role`]), from its class and its
-//!   parent's (`block.rs`): `role(class, parent) -> Role`. Contract: a
-//!   block-level box in a block container is in its parent's flow, an
+//! - **What each box is to the walk** ([`Role`]), from its class
+//!   (`block.rs`): `role(class) -> Role`. Contract: a block-level box (item
+//!   5.13 leaves every one in a block container) is in its parent's flow, an
 //!   atomic inline is laid out on its own, inline boxes and text runs only
 //!   inside their inline formatting context, a marker beside its list item,
 //!   columns as empty boxes, and table-internal boxes (the placeholder of

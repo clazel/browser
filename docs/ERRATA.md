@@ -642,3 +642,32 @@ it evidently means. Each entry records what we specified instead.
 - **We specify:** the query is kept as parsed and evaluates to false
   (`crates/clazel-style/src/sources/media.rs`, its modelling choices).
 - **Reported upstream:** not yet.
+
+## CSS 2.1 §8.3.1: the definition of adjoining margins and its bullets disagree
+
+- **Spec:** Cascading Style Sheets Level 2 Revision 1, W3C Recommendation of
+  7 June 2011, <https://www.w3.org/TR/2011/REC-CSS2-20110607/box.html#collapsing-margins>
+- **Text:** the definition lists, among the pairs of adjoining margins,
+  "bottom margin of a last in-flow child and bottom margin of its parent if
+  the parent has 'auto' computed height" and "top and bottom margins of a box
+  that does not establish a new block formatting context and that has zero
+  computed 'min-height', zero or 'auto' computed 'height', and no in-flow
+  children". The bullets that follow say "The bottom margin of an in-flow
+  block box with a 'height' of 'auto' and a 'min-height' of zero collapses
+  with its last in-flow block-level child's bottom margin …" and "A box's own
+  margins collapse if … it does not contain a line box, and all of its
+  in-flow children's margins (if any) collapse."
+- **Problem:** read literally the two disagree. The first pair lets a parent
+  whose `min-height` is not zero take its last child's bottom margin, so the
+  margin would end up below a box that `min-height` made taller than its
+  content; the second pair stops a box with an empty child (`<div><div></div></div>`)
+  from collapsing through, though its child's margins collapse through the
+  child and adjoin both of its edges. The bullets, which restate the
+  definition, are the evident intent, and engines follow them.
+- **We specify:** the bullets' conditions: `min-height` zero for the parent's
+  bottom, and "all of its in-flow children's margins (if any) collapse"
+  (with "does not contain a line box", where an empty line box, CSS 2.1
+  §9.4.2, does not count). See `BlockFacts::bottom_adjoins` and
+  `BlockFacts::may_collapse_through` in
+  `crates/clazel-layout/src/flow/margins.rs`.
+- **Reported upstream:** not yet.

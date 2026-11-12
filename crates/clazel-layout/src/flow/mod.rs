@@ -91,9 +91,61 @@
 //! - **The whole document is laid out again** for a new viewport
 //!   (phase-5.md): [`layout`] is a function of its inputs.
 
+pub mod block;
+pub mod dump;
+pub mod fonts;
 pub mod fragment;
+pub mod heights;
+pub mod inline;
+pub mod intrinsic;
+pub mod length;
+pub mod margins;
+pub mod replaced;
 pub mod state;
+pub mod style;
+pub mod widths;
 
+
+pub use block::Mode;
+pub use fonts::{BoxFont, FaceFonts, FontMetrics, ShapedGlyph, TextFns};
 pub use fragment::{
     BoxFragment, FragmentTree, Glyph, GlyphRun, InlinePiece, LineBox, LineItem, Rect, Sides,
 };
+
+use clazel_dom::exec::Arena;
+
+use crate::boxes::{BoxTree, StyleFns};
+
+/// The viewport: the size of the initial containing block (CSS 2.1 §10.1),
+/// in 1/64 px.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Viewport {
+    /// Its width.
+    pub width: i32,
+    /// Its height.
+    pub height: i32,
+}
+
+impl Viewport {
+    /// A viewport of `width` by `height` CSS pixels.
+    pub fn px(width: u16, height: u16) -> Viewport {
+        Viewport {
+            width: i32::from(width).saturating_mul(64),
+            height: i32::from(height).saturating_mul(64),
+        }
+    }
+}
+
+/// The fragment tree of box tree `tree`, built from the document in
+/// `arena` (whose mode decides the quirks) with computed style `styles`,
+/// in fonts `fonts`, for a viewport of size `viewport` (the module's
+/// pipeline).
+pub fn layout(
+    tree: &BoxTree,
+    arena: &Arena,
+    styles: &impl StyleFns,
+    fonts: &impl TextFns,
+    viewport: Viewport,
+) -> FragmentTree {
+    block::run(tree, arena, styles, fonts, viewport)
+}

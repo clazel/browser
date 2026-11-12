@@ -224,8 +224,9 @@ pub struct LineBox {
     /// Its baseline: the root inline box's (the strut's), y in document
     /// coordinates.
     pub baseline: i32,
-    /// What it holds, in content order: each inline box's piece before the
-    /// content inside it.
+    /// What it holds: the pieces of its inline boxes first, in tree order
+    /// (so their backgrounds come before any text), then its glyph runs and
+    /// atomic inlines in content order.
     pub items: Vec<LineItem>,
 }
 
