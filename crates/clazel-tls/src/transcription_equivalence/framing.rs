@@ -1761,4 +1761,427 @@ pub proof fn theorem_disp_stream(c: crate::schedule::spec::Crypto, v: crate::aut
     }
 }
 
+// ---------------------------------------------------------------------------
+// The post-handshake transducer (`connection/post_handshake_spec.rs`) on a
+// stream.
+// ---------------------------------------------------------------------------
+
+/// The transducer's step waits: it consumed nothing and ended nothing
+/// (modelling choice 1: "An incomplete record consumes nothing and changes
+/// nothing").
+pub open spec fn post_waits(r: (crate::connection::post_handshake_spec::Out,
+    crate::connection::post_handshake_spec::State, nat)) -> bool
+{
+    r.2 == 0 && r.0.end is Continue
+}
+
+/// Whether the transducer's caller steps it again: the step ended nothing
+/// and the read side is open.
+pub open spec fn post_goes_on(r: (crate::connection::post_handshake_spec::Out,
+    crate::connection::post_handshake_spec::State, nat)) -> bool
+{
+    r.0.end is Continue && crate::connection::post_handshake_spec::can_read(r.1)
+}
+
+/// What a run of the transducer gives: the outputs of its steps that did
+/// not wait, in order, the state, and, if it stopped to wait for more
+/// bytes, the bytes it holds.
+pub struct PostRun {
+    /// The outputs of the steps that read a record (or failed), in order.
+    pub outs: Seq<crate::connection::post_handshake_spec::Out>,
+    /// The transducer after the run.
+    pub state: crate::connection::post_handshake_spec::State,
+    /// `Some(bytes)`: it waits, and the caller holds `bytes`; `None`: it
+    /// stopped on an output that ends the connection or its read side.
+    pub waiting: Option<Seq<u8>>,
+}
+
+/// The transducer's caller, holding `buf` and then given `chunks`: `step`
+/// on what it holds; when the step waits, append the next chunk; when it
+/// reads a record, drop the bytes it consumed and step again while
+/// [`post_goes_on`] (modelling choice 1: "The caller resubmits the rest").
+pub open spec fn post_drive(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, buf: Seq<u8>, chunks: Seq<Seq<u8>>) -> PostRun
+    decreases chunks.len(), buf.len(),
+{
+    let r = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(buf));
+    if post_waits(r) {
+        if chunks.len() == 0 {
+            PostRun { outs: seq![], state: s, waiting: Some(buf) }
+        } else {
+            post_drive(c, f, s, buf + chunks[0], chunks.skip(1))
+        }
+    } else if post_goes_on(r) && 0 < r.2 <= buf.len() {
+        let x = post_drive(c, f, r.1, buf.skip(r.2 as int), chunks);
+        PostRun { outs: seq![r.0] + x.outs, ..x }
+    } else {
+        PostRun { outs: seq![r.0], state: r.1, waiting: None }
+    }
+}
+
+/// The transducer on the stream `w`: `step` on the stream, then on what it
+/// did not consume, while [`post_goes_on`].
+pub open spec fn post_steps(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, w: Seq<u8>) -> PostRun
+    decreases w.len(),
+{
+    let r = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(w));
+    if post_waits(r) {
+        PostRun { outs: seq![], state: s, waiting: Some(w) }
+    } else if post_goes_on(r) && 0 < r.2 <= w.len() {
+        let x = post_steps(c, f, r.1, w.skip(r.2 as int));
+        PostRun { outs: seq![r.0] + x.outs, ..x }
+    } else {
+        PostRun { outs: seq![r.0], state: r.1, waiting: None }
+    }
+}
+
+/// A step that does not wait decides as it would on any longer stream: the
+/// same output and state, and, if it goes on, the same record consumed.
+pub proof fn lemma_post_step_extend(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, b: Seq<u8>, more: Seq<u8>)
+    requires
+        crate::connection::post_handshake_spec::can_read(s),
+        !post_waits(crate::connection::post_handshake_spec::step(c, f, s,
+            crate::connection::post_handshake_spec::Input::Bytes(b))),
+    ensures ({
+        let r0 = crate::connection::post_handshake_spec::step(c, f, s,
+            crate::connection::post_handshake_spec::Input::Bytes(b));
+        let r1 = crate::connection::post_handshake_spec::step(c, f, s,
+            crate::connection::post_handshake_spec::Input::Bytes(b + more));
+        &&& r1.0 == r0.0
+        &&& r1.1 == r0.1
+        &&& r0.0.end is Continue ==> r1.2 == r0.2 && 0 < r0.2 <= b.len()
+    }),
+{
+    hide(crate::connection::post_handshake_spec::record);
+    let r0 = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(b));
+    let r1 = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(b + more));
+    if s.receiver is Some {
+        let rx = s.receiver->Some_0;
+        let open = crate::connection::post_handshake_spec::open_of(f, rx);
+        if !rx.failed && rx.next is Some {
+            match crate::spec::read_record(b, true) {
+                Read::NeedMore => {
+                    assert(r0.2 == 0);
+                    assert(r0.0.end is Continue);
+                },
+                Read::Fail(_) => {
+                    lemma_read_extend(b, more, true);
+                    assert(crate::traffic::spec::receive(open, rx, b) == crate::traffic::spec::receive(open, rx, b + more));
+                },
+                Read::Done(_, rest) => {
+                    lemma_read_extend(b, more, true);
+                    lemma_done_rest(b, true);
+                    assert((b + more).len() - (rest + more).len() == b.len() - rest.len());
+                    assert(crate::traffic::spec::receive(open, rx, b).0 == crate::traffic::spec::receive(open, rx, b + more).0);
+                    assert(crate::traffic::spec::receive(open, rx, b).1 == crate::traffic::spec::receive(open, rx, b + more).1);
+                },
+            }
+        }
+    }
+}
+
+/// A record read off `b` leaves fewer bytes than `b` (its header at least).
+pub proof fn lemma_done_rest(b: Seq<u8>, protected: bool)
+    requires crate::spec::read_record(b, protected) is Done,
+    ensures crate::spec::read_record(b, protected)->Done_1.len() + 5 <= b.len(),
+{
+    reveal(crate::spec::read_record);
+}
+
+/// **Chunking does not matter for the transducer.** Its caller, holding
+/// `buf` and given `chunks`, is [`post_steps`] of all the bytes.
+pub proof fn lemma_post_drive(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: crate::connection::post_handshake_spec::State, buf: Seq<u8>, chunks: Seq<Seq<u8>>)
+    requires crate::connection::post_handshake_spec::can_read(s),
+    ensures post_drive(c, f, s, buf, chunks) == post_steps(c, f, s, buf + super::ccs::flatten(chunks)),
+    decreases chunks.len(), buf.len(),
+{
+    hide(crate::connection::post_handshake_spec::step);
+    let w = buf + super::ccs::flatten(chunks);
+    let r = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(buf));
+    if post_waits(r) {
+        if chunks.len() == 0 {
+            assert(w =~= buf);
+        } else {
+            lemma_post_drive(c, f, s, buf + chunks[0], chunks.skip(1));
+            assert(buf + chunks[0] + super::ccs::flatten(chunks.skip(1)) =~= w);
+        }
+    } else {
+        lemma_post_step_extend(c, f, s, buf, super::ccs::flatten(chunks));
+        if post_goes_on(r) {
+            lemma_post_drive(c, f, r.1, buf.skip(r.2 as int), chunks);
+            assert(buf.skip(r.2 as int) + super::ccs::flatten(chunks) =~= w.skip(r.2 as int));
+        }
+    }
+}
+
+/// The transducer and the transcription on a stream `w` with a whole record
+/// `b` at its front: the step on `w` is the step on `b` (output and state),
+/// the whole-record theorem (`post_handshake::record_agrees`) holds of `b`,
+/// and the transcription reads `w` as `b`, then the rest
+/// (`post_handshake::joined`); if the crate goes on, it consumed exactly
+/// `b` and the transcription went on too, and, unless the transcription now
+/// owes a KeyUpdate (the `settle` difference: the crate sent its answer in
+/// that step), the crate sent nothing and the states agree again
+/// (`post_agrees`).
+pub open spec fn post_whole_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>) -> bool
+{
+    let n = 5 + super::bootstrap::length(w);
+    let r = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(w));
+    let b = w.take(n as int);
+    let rb = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(b));
+    let tb = crate::transcription::connection::receive_stream(p, conn, b).0;
+    &&& super::bootstrap::whole_record(b)
+    &&& r.0 == rb.0
+    &&& r.1 == rb.1
+    &&& super::post_handshake::record_agrees(p, f, s, conn, b, rb, tb)
+    &&& crate::transcription::connection::receive_stream(p, conn, w).0 == super::post_handshake::joined(tb,
+        |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(n as int)).0)
+    &&& post_goes_on(r) ==> {
+        &&& r.2 == n
+        &&& tb is Continue
+        &&& !tb->Continue_0.connection.key_update_owed ==> {
+            &&& r.0.wires.len() == 0
+            &&& super::post_handshake::post_agrees(r.1, tb->Continue_0.connection)
+        }
+    }
+}
+
+/// The transducer and the transcription on a stream `w` with no whole
+/// record at its front: the crate waits and the transcription does
+/// nothing; or the crate fails, with the transcription's `alert_record` of
+/// its alert while it can write, because its epoch is exhausted
+/// (`post_handshake::exhausted`: it refuses before reading any byte,
+/// `internal_error`; the transcription waits or refuses the header) or
+/// because it rejected the header early ([`early_reject`]; the
+/// transcription waits or refuses the header's length,
+/// [`too_long_agrees`]).
+pub open spec fn post_partial_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>) -> bool
+{
+    let r = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(w));
+    let tr = crate::transcription::connection::receive_stream(p, conn, w).0;
+    let quiet_t = Receive::Continue(Progress { connection: conn, application_data: seq![], records_to_send: seq![] });
+    if post_waits(r) {
+        &&& r.0 == crate::connection::post_handshake_spec::quiet()
+        &&& r.1 == s
+        &&& tr == quiet_t
+    } else {
+        let a = r.0.end->Fail_0;
+        &&& r.0.end is Fail
+        &&& r.0 == (crate::connection::post_handshake_spec::Out { wires: super::post_handshake::alert_wires(p, s, conn, a),
+            delivered: seq![], end: crate::connection::post_handshake_spec::End::Fail(a) })
+        &&& r.1 == crate::connection::post_handshake_spec::failed()
+        &&& ((super::post_handshake::exhausted(s) && a == crate::spec::INTERNAL_ERROR && (tr == quiet_t || tr is Abort))
+            || (early_reject(w, true, a) && (tr == quiet_t
+                || (tr matches Receive::Abort(e) && too_long_agrees(SplitEnd::TooLong(e), w, true, a)))))
+    }
+}
+
+/// The transducer and the transcription's `receive_stream` agree on the
+/// stream `w`, along [`post_steps`]: [`post_whole_agrees`] when a whole
+/// record is at its front, and then, when the crate goes on and the
+/// transcription owes no KeyUpdate, again on the rest from the agreeing
+/// states; [`post_partial_agrees`] when none is.
+pub open spec fn post_stream_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>) -> bool
+    decreases w.len(),
+{
+    let n = 5 + super::bootstrap::length(w);
+    if w.len() >= 5 && w.len() >= n {
+        let r = crate::connection::post_handshake_spec::step(c, f, s,
+            crate::connection::post_handshake_spec::Input::Bytes(w));
+        let tb = crate::transcription::connection::receive_stream(p, conn, w.take(n as int)).0;
+        &&& post_whole_agrees(c, f, p, s, conn, w)
+        &&& (post_goes_on(r) && !tb->Continue_0.connection.key_update_owed) ==>
+            post_stream_agrees(c, f, p, r.1, tb->Continue_0.connection, w.skip(n as int))
+    } else {
+        post_partial_agrees(c, f, p, s, conn, w)
+    }
+}
+
+/// [`post_partial_agrees`].
+#[verifier::rlimit(40)]
+pub proof fn lemma_post_partial(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>)
+    requires
+        super::post_handshake::hypotheses(c, f, p),
+        super::post_handshake::post_agrees(s, conn),
+        crate::connection::post_handshake_spec::can_read(s),
+        w.len() < 5 || w.len() < 5 + super::bootstrap::length(w),
+    ensures post_partial_agrees(c, f, p, s, conn, w),
+{
+    hide(crate::connection::post_handshake_spec::record);
+    hide(crate::connection::post_handshake_spec::fatal);
+    hide(super::post_handshake::post_agrees);
+    hide(super::post_handshake::alert_wires);
+    hide(crate::transcription::connection::receive_stream);
+    hide(split);
+    hide(too_long_agrees);
+    super::post_handshake::lemma_receive_open_facts(s, conn);
+    lemma_first(w, w.len(), true);
+    assert(w.take(w.len() as int) =~= w);
+    lemma_framing_agrees(conn, w, true);
+    lemma_stream_partial(p, conn, w);
+    let rx = s.receiver->Some_0;
+    assert(super::post_handshake::cipher_agrees(f, p)) by { reveal(super::post_handshake::hypotheses); }
+    if rx.next is Some {
+        let rr = crate::spec::read_record(w, true);
+        if !(rr is NeedMore) {
+            lemma_post_partial_fail(w);
+            let e = rr->Fail_0;
+            super::post_handshake::lemma_alert_of(e);
+            super::post_handshake::lemma_fatal(f, p, s, conn, crate::spec::alert_of(e));
+        }
+    } else {
+        super::post_handshake::lemma_fatal(f, p, s, conn, crate::spec::INTERNAL_ERROR);
+    }
+}
+
+/// On a stream with no whole record at its front, the protected parser
+/// waits or fails on the header, and then the crate rejected it early.
+pub proof fn lemma_post_partial_fail(w: Seq<u8>)
+    requires
+        w.len() < 5 || w.len() < 5 + super::bootstrap::length(w),
+        !(crate::spec::read_record(w, true) is NeedMore),
+    ensures
+        crate::spec::read_record(w, true) is Fail,
+        early_reject(w, true, crate::spec::alert_of(crate::spec::read_record(w, true)->Fail_0)),
+{
+    reveal(crate::spec::read_record);
+    assert(w.take(5).subrange(3, 5) =~= w.subrange(3, 5));
+    assert(w.take(5)[0] == w[0]);
+}
+
+/// [`post_whole_agrees`].
+pub proof fn lemma_post_whole(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>)
+    requires
+        super::post_handshake::hypotheses(c, f, p),
+        super::post_handshake::post_agrees(s, conn),
+        crate::connection::post_handshake_spec::can_read(s),
+        w.len() >= 5,
+        w.len() >= 5 + super::bootstrap::length(w),
+    ensures post_whole_agrees(c, f, p, s, conn, w),
+{
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    hide(super::post_handshake::post_agrees);
+    hide(super::post_handshake::record_agrees);
+    hide(super::post_handshake::hypotheses);
+    let n = 5 + super::bootstrap::length(w);
+    let b = w.take(n as int);
+    assert(b.subrange(3, 5) =~= w.subrange(3, 5));
+    assert(b + w.skip(n as int) =~= w);
+    super::post_handshake::lemma_step_prefix(c, f, s, b, w.skip(n as int));
+    super::post_handshake::lemma_stream_prefix(p, conn, b, w.skip(n as int));
+    super::post_handshake::lemma_receive(c, f, p, s, conn, b);
+    let r = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(w));
+    let rb = crate::connection::post_handshake_spec::step(c, f, s,
+        crate::connection::post_handshake_spec::Input::Bytes(b));
+    let tb = crate::transcription::connection::receive_stream(p, conn, b).0;
+    if post_goes_on(r) {
+        assert(super::post_handshake::outcome_agrees(p, s, conn, rb.0, rb.1, tb, true) && rb.2 == b.len()) by {
+            reveal(super::post_handshake::record_agrees);
+        }
+        lemma_post_quiet(p, s, conn, rb.0, rb.1, tb);
+    }
+}
+
+/// When the transducer goes on after a record, the transcription went on
+/// too; unless it owes a KeyUpdate, the crate sent nothing and the states
+/// agree.
+pub proof fn lemma_post_quiet(p: Primitives, s: crate::connection::post_handshake_spec::State, conn: Connection,
+    o: crate::connection::post_handshake_spec::Out, s2: crate::connection::post_handshake_spec::State, t: Receive)
+    requires
+        super::post_handshake::outcome_agrees(p, s, conn, o, s2, t, true),
+        o.end is Continue,
+    ensures
+        t is Continue,
+        !t->Continue_0.connection.key_update_owed ==> {
+            &&& o.wires.len() == 0
+            &&& super::post_handshake::post_agrees(s2, t->Continue_0.connection)
+        },
+{
+    hide(super::post_handshake::post_agrees);
+}
+
+/// **The transducer on a stream** ([`post_stream_agrees`]), from agreeing
+/// states with the read side open, for every stream.
+#[verifier::rlimit(40)]
+pub proof fn lemma_post_stream(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>)
+    requires
+        super::post_handshake::hypotheses(c, f, p),
+        super::post_handshake::post_agrees(s, conn),
+        crate::connection::post_handshake_spec::can_read(s),
+    ensures post_stream_agrees(c, f, p, s, conn, w),
+    decreases w.len(),
+{
+    hide(crate::connection::post_handshake_spec::step);
+    hide(crate::transcription::connection::receive_stream);
+    hide(super::post_handshake::post_agrees);
+    hide(super::post_handshake::hypotheses);
+    hide(post_whole_agrees);
+    hide(post_partial_agrees);
+    let n = 5 + super::bootstrap::length(w);
+    if w.len() >= 5 && w.len() >= n {
+        lemma_post_whole(c, f, p, s, conn, w);
+        let r = crate::connection::post_handshake_spec::step(c, f, s,
+            crate::connection::post_handshake_spec::Input::Bytes(w));
+        let tb = crate::transcription::connection::receive_stream(p, conn, w.take(n as int)).0;
+        if post_goes_on(r) && !tb->Continue_0.connection.key_update_owed {
+            assert(super::post_handshake::post_agrees(r.1, tb->Continue_0.connection)) by {
+                reveal(post_whole_agrees);
+            }
+            lemma_post_stream(c, f, p, r.1, tb->Continue_0.connection, w.skip(n as int));
+        }
+    } else {
+        lemma_post_partial(c, f, p, s, conn, w);
+    }
+}
+
+/// **The post-handshake theorem, for streams.** From agreeing states with
+/// the read side open, for every stream cut into any chunks, the
+/// transducer's caller ([`post_drive`]) is [`post_steps`] of the
+/// concatenated bytes, and the transducer and the transcription's
+/// `receive_stream` of the same bytes agree along it
+/// ([`post_stream_agrees`]).
+pub proof fn theorem_post_stream(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives)
+    requires super::post_handshake::hypotheses(c, f, p),
+    ensures
+        forall|s: crate::connection::post_handshake_spec::State, conn: Connection, chunk: Seq<u8>,
+            chunks: Seq<Seq<u8>>|
+            #[trigger] super::post_handshake::post_agrees(s, conn) && crate::connection::post_handshake_spec::can_read(s)
+                ==> {
+                &&& #[trigger] post_drive(c, f, s, chunk, chunks)
+                    == post_steps(c, f, s, chunk + super::ccs::flatten(chunks))
+                &&& post_stream_agrees(c, f, p, s, conn, chunk + super::ccs::flatten(chunks))
+            },
+{
+    assert forall|s: crate::connection::post_handshake_spec::State, conn: Connection, chunk: Seq<u8>,
+        chunks: Seq<Seq<u8>>|
+        #[trigger] super::post_handshake::post_agrees(s, conn) && crate::connection::post_handshake_spec::can_read(s)
+            implies {
+            &&& #[trigger] post_drive(c, f, s, chunk, chunks)
+                == post_steps(c, f, s, chunk + super::ccs::flatten(chunks))
+            &&& post_stream_agrees(c, f, p, s, conn, chunk + super::ccs::flatten(chunks))
+        } by {
+        lemma_post_drive(c, f, s, chunk, chunks);
+        lemma_post_stream(c, f, p, s, conn, chunk + super::ccs::flatten(chunks));
+    }
+}
+
 } // verus!
