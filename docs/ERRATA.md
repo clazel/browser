@@ -597,3 +597,48 @@ it evidently means. Each entry records what we specified instead.
 - **We specify:** the data (`chapter2_example_7_class_def_format_1` in
   `crates/clazel-font/src/layout.rs`).
 - **Reported upstream:** not yet.
+
+## CSS Syntax 3 §5.4.10 drops a media query list's last empty query
+
+- **Spec:** CSS Syntax Module Level 3, Editor's Draft, `css-syntax-3/Overview.bs`
+  of `w3c/csswg-drafts` at commit `c410ee5e4d2afe6d8b2e8ce53723b8d1eb3b5b67`,
+  <https://drafts.csswg.org/css-syntax-3/#parse-comma-separated-list-of-component-values>,
+  as Media Queries Level 4 §3 (W3C CRD of 8 October 2026) uses it: "To parse a
+  `<media-query-list>` production, parse a comma-separated list of component
+  values, then parse each entry in the returned list as a `<media-query>`."
+- **Text:** "3. While input is not empty: Consume a list of component values
+  from input, with `<comma-token>` as the stop token, and append the result to
+  groups. Discard a token from input. 4. Return groups."
+- **Problem:** after the last comma's token is discarded the input is empty, so
+  `foo,` gives one group (`foo`), `,` one empty group, and `,,` two; and ` `
+  (whitespace only) gives one group of whitespace, which is not a
+  `<media-query>` and so becomes `not all`. WPT's `match-media-parsing.html`,
+  which cites this algorithm, expects `foo, not all`, `not all, not all`,
+  `not all, not all, not all` and the empty list, as engines give; HTML
+  §2.3.10 likewise treats an all-whitespace `media` value as matching. The
+  evident intent is that each comma ends a query.
+- **We specify:** a list whose tokens are all whitespace is the empty list;
+  otherwise every top-level comma ends a group, so there is one more group than
+  there are commas (`parse_media_query_list` in
+  `crates/clazel-style/src/sources/media.rs`). `clazel-css`'s transcription of
+  §5.4.10 is unchanged; the media query parser splits the list itself.
+- **Reported upstream:** not yet.
+
+## Media Queries 4 §3.2 replaces an unknown query with `not all`, which WPT and engines do not
+
+- **Spec:** Media Queries Level 4, W3C Candidate Recommendation Draft of
+  8 October 2026, <https://www.w3.org/TR/2026/CRD-mediaqueries-4-20261008/#error-handling>
+- **Text:** "An unknown `<mf-name>` or `<mf-value>`, or a feature value which
+  does not match the value syntax for that media feature, results in the value
+  'unknown'. A `<media-query>` whose value is 'unknown' must be replaced with
+  not all."
+- **Problem:** a query's value depends on the device, not only on its text, so
+  "replaced ... during parsing" cannot be done by a parser in general, and WPT's
+  `test_media_queries.html` requires the opposite for every unknown expression
+  (`expression_should_be_unknown` asserts that `(e)` is parseable, that is, that
+  `@media screen, (e)` does not serialize as `screen, not all`), as engines
+  keep such queries. Replacing it would change no result: an unknown query is
+  false (§3.1) and so is `not all`.
+- **We specify:** the query is kept as parsed and evaluates to false
+  (`crates/clazel-style/src/sources/media.rs`, its modelling choices).
+- **Reported upstream:** not yet.

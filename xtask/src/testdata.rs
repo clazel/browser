@@ -32,6 +32,7 @@ mod wpt_css_values;
 mod wpt_encoding;
 mod wpt_encoding_legacy;
 mod wpt_idna;
+mod wpt_mediaqueries;
 mod wpt_mime_types;
 mod wpt_mimesniff;
 mod wpt_quirks;
@@ -65,6 +66,11 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wpt_css_values::FILES,
     ),
     ("wpt-quirks", wpt_quirks::convert, wpt_quirks::FILES),
+    (
+        "wpt-mediaqueries",
+        wpt_mediaqueries::convert,
+        wpt_mediaqueries::FILES,
+    ),
     (
         "wpt-css-syntax",
         wpt_css_syntax::convert,

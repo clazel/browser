@@ -465,6 +465,9 @@ name = "clazel-style"
 version = "0.0.0"
 dependencies = [
  "clazel-css",
+ "clazel-dom",
+ "clazel-encoding",
+ "clazel-mime",
 ]
 
 [[package]]

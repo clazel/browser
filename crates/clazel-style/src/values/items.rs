@@ -272,8 +272,8 @@ impl<'a> Cursor<'a> {
     }
 }
 
-/// The text of an [`ExecNumber`]'s number part, pushed onto `text`.
-fn push_str(text: &mut Vec<u32>, s: &[u32]) -> Span {
+/// `s`, pushed onto `text`: its span there.
+pub(crate) fn push_str(text: &mut Vec<u32>, s: &[u32]) -> Span {
     let start = u32::try_from(text.len()).unwrap_or(u32::MAX);
     text.extend_from_slice(s);
     Span {
@@ -282,7 +282,8 @@ fn push_str(text: &mut Vec<u32>, s: &[u32]) -> Span {
     }
 }
 
-fn number(n: &ExecNumber) -> Num {
+/// The value of a number token.
+pub(crate) fn number(n: &ExecNumber) -> Num {
     Num::from_parts(&n.number_part, &n.exponent_part, n.is_integer)
 }
 
@@ -293,7 +294,7 @@ fn signed(n: &ExecNumber) -> bool {
 /// The rows of `rows` that make the list `lo .. hi`, last to first (so that popping gives
 /// the first): the last value of the list is row `hi - 1`, and the one before it ends where
 /// that one's subtree starts.
-fn top_level(rows: &[ExecRow], lo: usize, hi: usize) -> Vec<usize> {
+pub(crate) fn top_level(rows: &[ExecRow], lo: usize, hi: usize) -> Vec<usize> {
     let mut out = Vec::new();
     let mut k = hi;
     // Each step lowers `k` by at least one, and `k <= hi <= rows.len()` when it matters.
@@ -329,12 +330,18 @@ impl Values {
     /// where its subtree starts. Rows that are not so (a start after the row, a position
     /// past the text) read as an empty subtree and the end-of-file token, which is dropped.
     pub fn from_rows(text: &[u32], rows: &[ExecRow]) -> Values {
+        Values::from_row_range(text, rows, 0, rows.len())
+    }
+
+    /// The items of the list of rows `lo` up to `hi` of `rows`, read as [`Values::from_rows`]
+    /// reads all of them: a declaration's value, whose rows are a range of a style sheet's.
+    pub fn from_row_range(text: &[u32], rows: &[ExecRow], lo: usize, hi: usize) -> Values {
         let mut out = Values::default();
         // Each frame: the rows of a list still to read, last first, and the item whose end
         // it sets. A row is in at most one frame (the subtrees of a list's values do not
         // overlap), so there are at most two steps per row and one for the last frame.
         let mut stack: Vec<(Vec<usize>, Option<usize>)> =
-            vec![(top_level(rows, 0, rows.len()), None)];
+            vec![(top_level(rows, lo, hi.min(rows.len())), None)];
         for _ in 0..rows.len().saturating_mul(2).saturating_add(1) {
             let Some(frame) = stack.last_mut() else {
                 break;
