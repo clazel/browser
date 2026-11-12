@@ -282,10 +282,12 @@ fn golden_computed_values() {
     let mut files: BTreeMap<&str, String> = BTreeMap::new();
     let mut cascaded = 0usize;
     let mut fragments = 0usize;
-    // Under Miri every 200th case (10 of them): each one prepares the user agent sheet's
-    // selectors and matches them against every element, which Miri runs about a thousand
-    // times slower; Miri checks for undefined behaviour, not coverage.
-    let stride = if cfg!(miri) { 200 } else { 1 };
+    // Under Miri every 900th case: cases 0 and 900 are documents (an adoption agency case,
+    // and a table of links), 1800 a fragment. Each document costs Miri about a minute
+    // (preparing the cut user agent sheets' selectors and matching them), on top of the 73 s
+    // the process spends parsing the sheets, and a test must stay under 300 s; Miri checks
+    // for undefined behaviour, not coverage, which the native run gives.
+    let stride = if cfg!(miri) { 900 } else { 1 };
     for case in CASES.iter().step_by(stride) {
         let out = files.entry(case.file).or_default();
         if case.fragment.is_some() {
