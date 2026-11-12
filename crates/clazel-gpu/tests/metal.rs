@@ -11,8 +11,17 @@
 //!   run with `CLAZEL_GPU_BLESS=1`.
 //!
 //! These make foreign calls, which Miri cannot run, so they are ignored under Miri.
-//! CI's macOS runner may have no GPU: then each test prints why and passes without
-//! drawing.
+//!
+//! **A missing device is a skip only on a developer's machine.** When the `CI`
+//! environment variable is set (GitHub Actions sets `CI=true`), no usable Metal
+//! device is a test failure, saying so. CI's macOS job runs on `macos-15` (Apple
+//! silicon, virtualised), which is expected to offer a paravirtual Metal device.
+//!
+//! Each test prints what it ran on, in a line starting `clazel-gpu: Metal device`.
+//! The name comes from the OS (`system_profiler SPDisplaysDataType`'s chipset model,
+//! and `sysctl`'s `hw.model` and `kern.hv_vmm_present`, which is 1 in a virtual
+//! machine), run as subprocesses: the `clazel-sys` wrappers cannot read the Metal
+//! device's own name without new foreign calls, which this test does not add.
 
 #![cfg(all(target_os = "macos", target_arch = "aarch64"))]
 
@@ -23,6 +32,60 @@ use clazel_gpu::metal::MetalBackend;
 use clazel_gpu::reference::{self, Masks};
 use clazel_gpu::{Backend, Gpu, Viewport, scenes};
 
+/// What the OS says the GPU is, for the log. Never fails: a missing tool prints
+/// "unknown".
+fn describe_device() -> String {
+    let run = |cmd: &str, args: &[&str]| {
+        std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default()
+    };
+    let displays = run("system_profiler", &["SPDisplaysDataType"]);
+    let pick = |key: &str| {
+        displays
+            .lines()
+            .find_map(|l| l.trim().strip_prefix(key).map(|v| v.trim().to_owned()))
+            .unwrap_or_else(|| "unknown".to_owned())
+    };
+    let sysctl = |name: &str| {
+        let v = run("sysctl", &["-n", name]);
+        let v = v.trim();
+        if v.is_empty() {
+            "unknown".to_owned()
+        } else {
+            v.to_owned()
+        }
+    };
+    format!(
+        "clazel-gpu: Metal device \"{}\" (Metal support: {}; hw.model {}; kern.hv_vmm_present {}; \
+         names from the OS, not from the MTLDevice)",
+        pick("Chipset Model:"),
+        pick("Metal Support:"),
+        sysctl("hw.model"),
+        sysctl("kern.hv_vmm_present"),
+    )
+}
+
+/// The backend, or why there is none: an error under CI (`CI` set), else `None` and
+/// a printed skip.
+fn backend_or_skip() -> Result<Option<MetalBackend>, String> {
+    println!("{}", describe_device());
+    match MetalBackend::new() {
+        Ok(b) => Ok(Some(b)),
+        Err(e) if std::env::var_os("CI").is_some() => Err(format!(
+            "no usable Metal device under CI ({e:?}); a missing device is a skip only on a \
+             developer's machine"
+        )),
+        Err(e) => {
+            eprintln!("skipped: no usable Metal device ({e:?}), and CI is not set");
+            Ok(None)
+        }
+    }
+}
+
 fn stored(name: &str, n: usize) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/pixels")
@@ -32,12 +95,8 @@ fn stored(name: &str, n: usize) -> PathBuf {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn every_scene_on_metal() -> Result<(), String> {
-    let backend = match MetalBackend::new() {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("skipped: no usable Metal device ({e:?})");
-            return Ok(());
-        }
+    let Some(backend) = backend_or_skip()? else {
+        return Ok(());
     };
     let bless = std::env::var_os("CLAZEL_GPU_BLESS").is_some();
     let mut gpu = Gpu::new(backend);
@@ -99,8 +158,7 @@ fn every_scene_on_metal() -> Result<(), String> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn a_refused_list_reaches_no_gpu_call() -> Result<(), String> {
-    let Ok(backend) = MetalBackend::new() else {
-        eprintln!("skipped: no usable Metal device");
+    let Some(backend) = backend_or_skip()? else {
         return Ok(());
     };
     let mut gpu = Gpu::new(backend);

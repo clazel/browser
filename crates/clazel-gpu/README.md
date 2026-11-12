@@ -147,9 +147,17 @@ committed and waited for. Any nil, failed compile or command buffer error is a
 reference (within one level per channel) and with the stored pixels in
 `tests/pixels/` (exactly). On the development machine (Apple M1 Pro, macOS 26) every
 channel of every scene equals the reference: the largest difference is 0. A mutant
-shader with full coverage for every mask fails both comparisons. Without a Metal
-device (CI's macOS runner may have none) the tests print why and pass; they have run
-only on that machine.
+shader with full coverage for every mask fails both comparisons. Each test prints
+what it ran on (`clazel-gpu: Metal device "<name>"`, the name from the OS, since the
+`clazel-sys` wrappers cannot read the device's own name without new foreign calls).
+
+Without a usable Metal device the tests skip with a printed reason on a developer's
+machine, but fail when the `CI` environment variable is set: CI's `macos-15` runner
+(Apple silicon, virtualised) is expected to offer a paravirtual Metal device, and the
+first CI run settles whether it does. So far the tests have run only on the
+development machine. A paravirtual device may behave differently (IOSurface-backed
+textures, the blit path, rounding), so a failure there is possible and would be real
+information, not noise.
 
 ## What is left of item 5.17b
 
