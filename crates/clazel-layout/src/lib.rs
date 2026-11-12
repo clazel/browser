@@ -16,6 +16,7 @@
 //! `docs/VERIFICATION.md`.
 
 pub mod boxes;
+pub mod flow;
 pub mod fonts;
 pub mod shape;
 pub mod text;
