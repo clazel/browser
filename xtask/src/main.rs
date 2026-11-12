@@ -204,6 +204,7 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     let mut decl_notes = Vec::new();
     let mut axioms = 0usize;
     let (mut unsafe_blocks, mut unsafe_lines) = (0usize, 0usize);
+    let mut dispatcher_casts = 0usize;
     let workspace_manifest = std::fs::read_to_string("Cargo.toml").unwrap_or_default();
     let (review_status, review_problems) = match reviews::status(crates) {
         Ok(s) => s,
@@ -231,6 +232,7 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
                 }
                 unsafe_blocks = unsafe_blocks.saturating_add(s.unsafe_blocks);
                 unsafe_lines = unsafe_lines.saturating_add(s.unsafe_lines);
+                dispatcher_casts = dispatcher_casts.saturating_add(s.dispatcher_casts);
                 violations.extend(s.violations);
                 axioms = axioms.saturating_add(s.axioms);
                 let evidence = mutate::gaps(c).and_then(|mutations| {
@@ -290,7 +292,10 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
             violations,
             vec![
                 format!("documented axioms: {axioms}"),
-                format!("`unsafe` blocks: {unsafe_blocks} ({unsafe_lines} lines)"),
+                format!(
+                    "`unsafe` blocks: {unsafe_blocks} ({unsafe_lines} lines), of which \
+                     {dispatcher_casts} dispatcher casts"
+                ),
             ],
         ),
     );
