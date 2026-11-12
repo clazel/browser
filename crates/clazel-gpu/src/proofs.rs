@@ -7,9 +7,10 @@
 //! any state** that satisfies a stated invariant, so it holds for lists of every
 //! length:
 //!
-//! - For every input: [`place_any`], [`grown_capacity_any`], [`texel_index_any`]
-//!   (every pixel of a mask that fits the atlas has an index inside the mask),
-//!   [`rect_at_any`], [`intersect_any`], [`blend_any`].
+//! - For every input: [`place_any`], [`grown_capacity_any`] (from any capacity
+//!   the atlas can hold), [`rect_at_any`], [`intersect_any`], [`blend_any`].
+//! - For every mask the validator allows (sides up to 2048): [`texel_index_any`]
+//!   (every pixel of a mask that fits the atlas has an index inside the mask).
 //! - One batching step from any state, for any item numbers and any viewport:
 //!   [`clip_then_draw_any`] (a push and a draw after an earlier draw: every quad
 //!   is inside the viewport and not empty, every scissor inside the viewport and
@@ -56,9 +57,14 @@ fn grown_capacity_any() {
     }
 }
 
+/// Restructured after a first form, with any `u16` sides and any `u32` pixel,
+/// reached the 20-minute cap (the 32-bit multiplications): sides are now at most
+/// 2048, the validator's `MAX_MASK_SIDE`, and the pixel is within the mask.
 #[kani::proof]
 fn texel_index_any() {
-    let (offset, columns, rows, column, row): (u32, u16, u16, u32, u32) = kani::any();
+    let (offset, columns, rows, column, row): (u32, u16, u16, u16, u16) = kani::any();
+    kani::assume(columns <= 2048 && rows <= 2048);
+    let (column, row) = (u32::from(column), u32::from(row));
     let size = mask_size(columns, rows);
     kani::assume(u64::from(offset) + u64::from(size) <= u64::from(MAX_CAPACITY));
     kani::assume(column < u32::from(columns) && row < u32::from(rows));

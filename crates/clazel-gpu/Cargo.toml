@@ -10,6 +10,10 @@ description = "The GPU process's drawing (Phase 5 item 5.17b): a validated displ
 # The decoder and validator every list passes first (item 5.17a); our own crate.
 clazel-displaylist = { path = "../clazel-displaylist" }
 
+# Every foreign call of the Metal backend is in `clazel-sys` (CLAUDE.md rule 1).
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+clazel-sys = { path = "../clazel-sys" }
+
 # Verification tier (docs/VERIFICATION.md). The plan places this crate at tier 0
 # (item 5.17b): a GPU driver is in its trusted base whatever is proven here. The
 # Kani harnesses in src/proofs.rs are evidence for the batching and atlas
