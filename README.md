@@ -3,7 +3,7 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 62 `unsafe` blocks (237 lines) that enter the OS sandbox, machine-checked and audited. Shipped dependencies are `libc` and libcrux.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 137 `unsafe` blocks (336 lines) that enter the OS sandbox, machine-checked and audited. Of those, 21 are casts of `objc_msgSend` to a typed function pointer, one per Objective-C message signature that Metal drawing uses. Shipped dependencies are `libc` and libcrux.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Honest about it:** each crate declares its verification tier, and the

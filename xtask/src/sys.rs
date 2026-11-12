@@ -160,7 +160,29 @@ pub const DISPATCHERS: &[&str] = &["objc_msgSend"];
 
 /// The typed casts of `crates/clazel-sys/src/macos/metal.rs`'s dispatcher, one
 /// per message signature, named for it.
-const METAL_CASTS: &[&str] = &[];
+const METAL_CASTS: &[&str] = &[
+    "MSG_ID",
+    "MSG_VOID",
+    "MSG_USIZE",
+    "MSG_ID_ID",
+    "MSG_ID_USIZE",
+    "MSG_VOID_ID",
+    "MSG_VOID_USIZE",
+    "MSG_VOID_BOOL",
+    "MSG_ID_ID_ID_OUT",
+    "MSG_ID_ID_OUT",
+    "MSG_ID_PTR_USIZE_USIZE",
+    "MSG_ID_USIZE_USIZE",
+    "MSG_ID_ID_ID_USIZE",
+    "MSG_ID_IDS_IDS_USIZE",
+    "MSG_VOID_ID_USIZE_ID_USIZE_USIZE",
+    "MSG_VOID_ID_USIZE_USIZE",
+    "MSG_VOID_PTR_USIZE_USIZE",
+    "MSG_VOID_SCISSOR",
+    "MSG_VOID_CLEAR",
+    "MSG_VOID_USIZE_USIZE_USIZE_USIZE_USIZE",
+    "MSG_VOID_OUT_USIZE_REGION_USIZE",
+];
 
 /// Consts that may each hold one cast of a dispatcher, by file (repo-relative).
 pub const DISPATCH_CASTS: &[(&str, &[&str])] =
