@@ -8,11 +8,17 @@
 #[cfg(verus_only)]
 use crate::connection::post_handshake_spec::{End, Phase, State};
 #[cfg(verus_only)]
+use crate::spec::MsgKind;
+#[cfg(verus_only)]
+use crate::transcription::alerts::ClientError;
+#[cfg(verus_only)]
 use crate::transcription::connection::{Connection, Protection, SendResult};
+#[cfg(verus_only)]
+use crate::transcription::extensions::TableMessage;
 #[cfg(verus_only)]
 use crate::transcription::primitives::Primitives;
 #[cfg(verus_only)]
-use crate::transcription::state_machine::ClientState;
+use crate::transcription::state_machine::{ClientState, HandshakeStep};
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -372,6 +378,191 @@ pub proof fn lemma_start(c: crate::schedule::spec::Crypto, p: Primitives, client
     super::record::lemma_epoch_start(c, p, client_secret);
     super::record::lemma_epoch_start(c, p, server_secret);
     assert(conn.handshake_fragments =~= crate::spec::reasm_new().buf);
+}
+
+// ---------------------------------------------------------------------------
+// Proofs: one post-handshake message (§4.6).
+// ---------------------------------------------------------------------------
+
+/// One extension of a NewSessionTicket that §4.2's table allows there: its
+/// body fails on the transcription's side (`decode_error`) exactly when the
+/// crate's `ext_body_ok` does (§4.2.10: early_data's `uint32
+/// max_early_data_size`; no other body is read).
+pub proof fn lemma_nst_body(e: crate::spec::Ext)
+    requires crate::spec::extension_allowed(e.etype, MsgKind::Nst),
+    ensures
+        crate::transcription::extension_bodies::one_body_failures(seq![], super::messages::ext_view(e), TableMessage::Nst)
+            == if crate::spec::ext_body_ok(e, MsgKind::Nst) { Seq::<ClientError>::empty() }
+            else { seq![ClientError::Malformed] },
+{
+    super::extensions::lemma_table(e.etype, MsgKind::Nst);
+}
+
+/// A NewSessionTicket's block, its extensions all allowed there: every body
+/// failure is `Malformed`, and there is none exactly when the crate's body
+/// checks pass.
+pub proof fn lemma_nst_bodies(es: Seq<crate::spec::Ext>)
+    requires crate::spec::all_allowed(es, MsgKind::Nst),
+    ensures ({
+        let f = crate::transcription::extension_bodies::extension_body_failures(seq![], super::messages::exts_view(es),
+            TableMessage::Nst);
+        &&& (f.len() == 0) == crate::spec::all_bodies_ok(es, MsgKind::Nst)
+        &&& forall|i: int| 0 <= i < f.len() ==> #[trigger] f[i] == ClientError::Malformed
+    }),
+    decreases es.len(),
+{
+    let v = super::messages::exts_view(es);
+    let f = crate::transcription::extension_bodies::extension_body_failures(seq![], v, TableMessage::Nst);
+    if es.len() > 0 {
+        let rest = es.skip(1);
+        assert(v.subrange(1, v.len() as int) =~= super::messages::exts_view(rest));
+        assert(v[0] == super::messages::ext_view(es[0]));
+        lemma_nst_bodies(rest);
+        lemma_nst_body(es[0]);
+        let mine = crate::transcription::extension_bodies::one_body_failures(seq![], v[0], TableMessage::Nst);
+        let tail = crate::transcription::extension_bodies::extension_body_failures(seq![],
+            super::messages::exts_view(rest), TableMessage::Nst);
+        assert(f == mine + tail);
+        assert forall|i: int| 0 <= i < f.len() implies #[trigger] f[i] == ClientError::Malformed by {
+            if i >= mine.len() {
+                assert(f[i] == tail[i - mine.len()]);
+            }
+        }
+    }
+}
+
+/// §4.6.1 syntax: a NewSessionTicket reads the same on both sides.
+pub proof fn lemma_read_nst(body: Seq<u8>)
+    ensures
+        match crate::spec::read_new_session_ticket(body) {
+            None => crate::transcription::post_handshake::read_new_session_ticket(body) is None,
+            Some(n) => {
+                &&& crate::transcription::post_handshake::read_new_session_ticket(body) is Some
+                &&& crate::transcription::post_handshake::read_new_session_ticket(body)->Some_0.extensions
+                    == super::messages::exts_view(n.extensions)
+                &&& crate::transcription::post_handshake::read_new_session_ticket(body)->Some_0.ticket_lifetime
+                    == n.ticket_lifetime as nat
+            },
+        },
+{
+    if body.len() >= 8 {
+        let r2 = body.skip(4).skip(4);
+        assert(r2 =~= body.subrange(8, body.len() as int));
+        super::messages::lemma_read_vec(r2, 0, 255);
+        match crate::spec::read_vec(r2, 0, 255) {
+            None => {},
+            Some((nonce, r3)) => {
+                super::messages::lemma_read_vec(r3, 1, 65535);
+                match crate::spec::read_vec(r3, 1, 65535) {
+                    None => {},
+                    Some((ticket, r4)) => {
+                        super::messages::lemma_read_exts(r4, 0, 65534);
+                        super::record::lemma_read_uint(body, 4);
+                        crate::lemmas_pl::lemma_be_value_bound(body.take(4));
+                        assert(crate::spec::pow256(4) == 0x1_0000_0000) by (compute_only);
+                    },
+                }
+            },
+        }
+    }
+}
+
+/// §4.6.1: a NewSessionTicket in CONNECTED. The crate's parser refuses it
+/// exactly when the transcription aborts, with the alert of the
+/// transcription's first failure (both check the lifetime, then §4.2's
+/// block rules, then the bodies); otherwise both go on with nothing to do.
+pub proof fn lemma_nst(hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>)
+    ensures
+        match crate::spec::parse_handshake_body(4, body, 32) {
+            crate::spec::Res::Err(k) => {
+                let t = crate::transcription::state_machine::receive_post_handshake(hs, 4, body);
+                &&& t is Abort
+                &&& crate::transcription::alerts::required_alert(t->Abort_0) == crate::spec::alert_of(k) as nat
+            },
+            crate::spec::Res::Ok(m) => {
+                &&& m is NewSessionTicket
+                &&& crate::transcription::state_machine::receive_post_handshake(hs, 4, body)
+                    == crate::transcription::state_machine::proceed(hs, seq![])
+            },
+        },
+{
+    lemma_read_nst(body);
+    match crate::spec::read_new_session_ticket(body) {
+        None => {},
+        Some(n) => {
+            let m = crate::transcription::post_handshake::read_new_session_ticket(body)->Some_0;
+            let es = n.extensions;
+            let ev = super::messages::exts_view(es);
+            assert(m.extensions == ev);
+            let life = crate::transcription::alerts::fails_if(m.ticket_lifetime > 604800, ClientError::TicketLifetimeTooLong);
+            let dup = crate::transcription::alerts::fails_if(crate::transcription::extensions::has_duplicate_extension(ev),
+                ClientError::DuplicateExtension);
+            let nsp = crate::transcription::alerts::fails_if(
+                crate::transcription::extensions::any_not_specified(ev, TableMessage::Nst),
+                ClientError::ExtensionNotSpecifiedForMessage);
+            let bf = crate::transcription::extension_bodies::extension_body_failures(seq![], ev, TableMessage::Nst);
+            let failures = crate::transcription::post_handshake::new_session_ticket_failures(m);
+            assert(crate::transcription::extensions::block_rules_failures(ev, TableMessage::Nst) == dup + nsp);
+            assert(failures == life + (dup + nsp) + bf);
+            super::extensions::lemma_unique(es);
+            super::extensions::lemma_all_allowed(es, MsgKind::Nst);
+            if n.ticket_lifetime > 604800 {
+                assert(failures[0] == ClientError::TicketLifetimeTooLong);
+            } else if !crate::spec::exts_unique(es) {
+                assert(failures[0] == ClientError::DuplicateExtension);
+            } else if !crate::spec::all_allowed(es, MsgKind::Nst) {
+                assert(failures[0] == ClientError::ExtensionNotSpecifiedForMessage);
+            } else {
+                lemma_nst_bodies(es);
+                assert(failures =~= bf);
+                if bf.len() > 0 {
+                    assert(bf[0] == ClientError::Malformed);
+                }
+            }
+        },
+    }
+}
+
+/// §4.6.3: a KeyUpdate in CONNECTED. The crate's parser refuses it exactly
+/// when the transcription aborts, with the same alert; otherwise the request
+/// is one of the two defined values and the transcription updates its read
+/// side, owing a KeyUpdate of its own on `update_requested`, with a key
+/// change after the message.
+pub proof fn lemma_ku(hs: crate::transcription::state_machine::ClientHandshake, body: Seq<u8>)
+    ensures
+        match crate::spec::parse_handshake_body(24, body, 32) {
+            crate::spec::Res::Err(k) => {
+                let t = crate::transcription::state_machine::receive_post_handshake(hs, 24, body);
+                &&& t is Abort
+                &&& crate::transcription::alerts::required_alert(t->Abort_0) == crate::spec::alert_of(k) as nat
+            },
+            crate::spec::Res::Ok(m) => {
+                &&& m is KeyUpdate
+                &&& (m->KeyUpdate_0 == crate::spec::UPDATE_NOT_REQUESTED || m->KeyUpdate_0 == crate::spec::UPDATE_REQUESTED)
+                &&& crate::transcription::state_machine::receive_post_handshake(hs, 24, body) == HandshakeStep::Proceed {
+                    handshake: hs,
+                    actions: if m->KeyUpdate_0 == crate::spec::UPDATE_REQUESTED {
+                        seq![crate::transcription::state_machine::Action::UpdateReceiveSecret,
+                            crate::transcription::state_machine::Action::RespondToKeyUpdate]
+                    } else {
+                        seq![crate::transcription::state_machine::Action::UpdateReceiveSecret]
+                    },
+                    receive_key_changes: true,
+                }
+            },
+        },
+{
+}
+
+/// §4.6: a message of any other type in CONNECTED is `unexpected_message`
+/// on both sides (the transcription names three cases, all with that alert).
+pub proof fn lemma_other_type(hs: crate::transcription::state_machine::ClientHandshake, t: u8, body: Seq<u8>)
+    requires t != 4 && t != 24,
+    ensures
+        crate::transcription::state_machine::receive_post_handshake(hs, t as nat, body) is Abort,
+        crate::transcription::alerts::required_alert(
+            crate::transcription::state_machine::receive_post_handshake(hs, t as nat, body)->Abort_0) == 10,
+{
 }
 
 } // verus!
