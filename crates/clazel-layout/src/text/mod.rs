@@ -54,10 +54,21 @@
 //!   logical end.
 //! - **Lengths** are 26.6 fixed point in `i32`, as in [`crate::shape`].
 
+/// A set of line breaking classes, one bit per `Lb` variant:
+/// `lb_set![SP, HY]` is UAX #14's `[SP HY]`. A mask rather than a slice, so
+/// testing membership has no loop (which keeps the Kani harnesses' formulas
+/// small).
+macro_rules! lb_set {
+    ($($c:ident),+ $(,)?) => {
+        0u64 $(| $crate::text::classes::Lb::$c.bit())+
+    };
+}
+
 pub mod classes;
 pub mod collapse;
 pub mod data;
 pub mod lines;
+pub mod state;
 pub mod uax14;
 pub mod wrap;
 

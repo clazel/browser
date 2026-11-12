@@ -33,25 +33,6 @@
 
 use super::classes::{Lb, Props};
 
-/// A set of classes, one bit per [`Lb`] variant: `lb_set![SP, HY]` is
-/// `[SP HY]`. A mask rather than a slice, so testing membership has no
-/// loop (which keeps the Kani harnesses' formulas small).
-macro_rules! lb_set {
-    ($($c:ident),+ $(,)?) => {
-        0u64 $(| Lb::$c.bit())+
-    };
-}
-
-impl Lb {
-    /// This class's bit in an [`lb_set!`].
-    const fn bit(self) -> u64 {
-        match 1u64.checked_shl(self as u32) {
-            Some(b) => b,
-            None => 0,
-        }
-    }
-}
-
 /// Whether `c` is a class and in `set`.
 fn is(c: Option<Lb>, set: u64) -> bool {
     c.is_some_and(|c| set & c.bit() != 0)

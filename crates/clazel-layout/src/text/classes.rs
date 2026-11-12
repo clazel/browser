@@ -123,6 +123,16 @@ pub enum Lb {
     ZWJ,
 }
 
+impl Lb {
+    /// This class's bit in a set of classes (`lb_set!`).
+    pub const fn bit(self) -> u64 {
+        match 1u64.checked_shl(self as u32) {
+            Some(b) => b,
+            None => 0,
+        }
+    }
+}
+
 /// The General_Category values that line breaking reads; every other value
 /// is `None` where a category is returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
