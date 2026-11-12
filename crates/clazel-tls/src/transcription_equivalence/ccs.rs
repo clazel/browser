@@ -18,8 +18,10 @@
 //!
 //! Tied to the streams: before ClientHello2, by
 //! [`super::bootstrap::theorem_bootstrap_equivalence`] (the crate's flight
-//! is the flattened `middlebox::client_receive_stream` records). Not yet:
-//! the encrypted flight's, which needs the dispatcher equivalence.
+//! is the flattened `middlebox::client_receive_stream` records); before the
+//! encrypted flight, by [`super::dispatcher::theorem_dispatcher_equivalence`]
+//! (`dispatcher::sent_agrees`: the crate's bytes are the transcription's
+//! `before_second_flight` batch, its flight coalesced into one record).
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
