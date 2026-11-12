@@ -105,6 +105,8 @@ pub mod state;
 pub mod style;
 pub mod widths;
 
+#[cfg(kani)]
+mod proofs;
 #[cfg(test)]
 mod tests;
 pub use block::Mode;
