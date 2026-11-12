@@ -1217,4 +1217,251 @@ pub proof fn lemma_in_place(ms: Seq<Seq<u8>>, boundary: bool)
 {
 }
 
+/// The server Finished, the last message of its record at a message
+/// boundary, accepted: the crate's flight and the transcription's records
+/// agree ([`sent_agrees`]).
+#[verifier::rlimit(80)]
+pub proof fn lemma_send_case(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, f: Ciphers,
+    p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>)
+    requires
+        hypotheses(c, v, f, p),
+        agrees_but_buffer(p, v, s, cl),
+        s.reassembly.buf.len() == 0,
+        bf.len() >= 4,
+        crate::transcription::key_exchange::read_handshake_header(bf) is Some,
+        4 + crate::transcription::key_exchange::read_handshake_header(bf)->Some_0.length == bf.len(),
+        crate::auth::spec::step(c, v, s.auth->Some_0, crate::auth::spec::Input::Handshake(bf[0], bf.skip(4))).1 is Send,
+        message_agrees(p, s.auth->Some_0, cl.connection.handshake, bf,
+            crate::auth::spec::step(c, v, s.auth->Some_0, crate::auth::spec::Input::Handshake(bf[0], bf.skip(4))),
+            crate::transcription::state_machine::receive_handshake_message(p, cl.connection.handshake, bf)),
+    ensures
+        messages_agree(c, v, f, p, s, cl, bf, crate::connection::dispatcher_spec::run_messages(c, v, f, s, seq![bf]),
+            crate::transcription::connection::process_handshake_bytes(p, cl.connection, bf)),
+{
+    hide(crate::auth::spec::step);
+    hide(crate::transcription::state_machine::receive_handshake_message);
+    hide(crate::transcription::connection::apply_actions);
+    hide(crate::transcription::connection::process_handshake_bytes);
+    hide(crate::transcription::key_schedule::client_application_traffic_secret_0);
+    hide(crate::transcription::key_schedule::server_application_traffic_secret_0);
+    hide(crate::transcription::key_schedule::master_secret);
+    hide(crate::transcription::presentation::concatenate);
+    hide(crate::transcription::record::protect_record);
+    let y = cl.connection;
+    let hs = y.handshake;
+    let a = s.auth->Some_0;
+    let rs = crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(bf[0], bf.skip(4)));
+    let flight = rs.1->Send_0;
+    let ts = crate::transcription::state_machine::receive_handshake_message(p, hs, bf);
+    let h2 = ts->handshake;
+    let msgs = client_flight(h2);
+    let retried = hs.retry is Some;
+    let master = crate::transcription::key_schedule::master_secret(p, hs.handshake_secret);
+    let through = hs.transcript.push(bf);
+    let cas = crate::transcription::key_schedule::client_application_traffic_secret_0(p, master, through, retried);
+    let sas = crate::transcription::key_schedule::server_application_traffic_secret_0(p, master, through, retried);
+    let chts = hs.client_handshake_traffic_secret;
+    // The transcription: A.1's actions, then nothing left in the record.
+    lemma_t_first(p, y, bf, bf.len());
+    assert(bf.subrange(0, bf.len() as int) =~= bf);
+    let rest = bf.subrange(bf.len() as int, bf.len() as int);
+    assert(rest =~= Seq::<u8>::empty());
+    assert(ts->actions == flight_actions(chts, msgs, cas, sas));
+    let y2 = Connection { handshake: h2, ..y };
+    lemma_apply_flight(p, y2, chts, msgs, cas, sas);
+    let after = Connection {
+        send: Protection::Protected(crate::transcription::record::traffic_state(p, cas)),
+        receive: Protection::Protected(crate::transcription::record::traffic_state(p, sas)),
+        ..y2
+    };
+    reveal(crate::transcription::connection::process_handshake_bytes);
+    super::post_handshake::lemma_t_incomplete(p, after, rest);
+    let conn = Connection { handshake_fragments: rest, ..after };
+    let t0 = crate::transcription::record::traffic_state(p, chts);
+    let sent = protect_each(p, t0, msgs);
+    assert(sent + Seq::<Seq<u8>>::empty() =~= sent);
+    let pr = Progress { connection: conn, application_data: seq![], records_to_send: sent };
+    assert(crate::transcription::connection::process_handshake_bytes(p, y, bf) == Receive::Continue(pr));
+    // The crate: its flight, sealed under the unused client handshake epoch.
+    lemma_run_first(c, v, f, s, seq![bf]);
+    assert(seq![bf][0] == bf);
+    let stepped = State { auth: Some(rs.0), ..s };
+    assert(crate::connection::dispatcher_spec::process_one(c, v, f, s, bf)
+        == crate::connection::dispatcher_spec::send_flight(f, stepped, flight));
+    let tx = s.handshake_sender->Some_0;
+    lemma_seal(f, p, tx);
+    assert(tx.next == Some(0u64));
+    super::record::lemma_protect(p, crate::connection::dispatcher_spec::seal_with(f, tx), tx, t0, 22, flight);
+    let rec = crate::transcription::record::protect_record(p, t0, 22, flight);
+    assert(rec == coalesced(p, chts, msgs));
+    super::ccs::lemma_ccs_bytes();
+    let dummy = crate::transcription::middlebox::dummy_change_cipher_spec_record();
+    super::ccs::lemma_flatten(dummy, rec);
+    assert(seq![dummy] + seq![rec] =~= seq![dummy, rec]);
+    if msgs.len() == 1 {
+        lemma_one_message(p, chts, msgs);
+    }
+    let (act, s2) = crate::connection::dispatcher_spec::send_flight(f, stepped, flight);
+    assert(s2.auth == Some(rs.0));
+    assert(s2.master == s.master);
+    lemma_ack(c, v, f, p, s2, conn, through, retried);
+    let wire = act->Send_0;
+    assert(conn.handshake == h2);
+    assert(h2.state == ClientState::Connected);
+    assert(pr.records_to_send == protect_each(p, crate::transcription::record::traffic_state(p, h2.client_handshake_traffic_secret), msgs));
+    assert(wire == (if s.ccs_pending { crate::connection::dispatcher_spec::compatibility_ccs_record() + rec } else { rec }));
+    super::ccs::lemma_flatten(rec, rec);
+    if cl.compatibility_mode && !cl.change_cipher_spec_sent {
+        assert(crate::transcription::middlebox::before_second_flight(cl.compatibility_mode,
+            cl.change_cipher_spec_sent, seq![rec]).0 == seq![dummy] + seq![rec]);
+    } else {
+        assert(crate::transcription::middlebox::before_second_flight(cl.compatibility_mode,
+            cl.change_cipher_spec_sent, seq![rec]).0 == seq![rec]);
+    }
+    assert(wire == super::ccs::flatten(crate::transcription::middlebox::before_second_flight(cl.compatibility_mode,
+        cl.change_cipher_spec_sent, seq![coalesced(p, chts, msgs)]).0));
+    assert(msgs.len() == 1 ==> wire == super::ccs::flatten(crate::transcription::middlebox::before_second_flight(
+        cl.compatibility_mode, cl.change_cipher_spec_sent, pr.records_to_send).0));
+    assert(s2.mode == Mode::AwaitClientFlight);
+    assert(s2.pending_flight == wire);
+    assert(!s2.ccs_pending);
+    assert(sent_agrees(c, v, f, p, cl, pr, act->Send_0, s2));
+}
+
+/// The step of [`lemma_messages`] past a message both sides accept with no
+/// action: what holds for the rest of the buffer holds for the buffer.
+#[verifier::rlimit(40)]
+pub proof fn lemma_messages_more(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, f: Ciphers,
+    p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>, n: nat, s2: State, h2: ClientHandshake,
+    r: (Action, State), t: Receive)
+    requires
+        4 <= n <= bf.len(),
+        crate::transcription::key_exchange::read_handshake_header(bf) is Some,
+        4 + crate::transcription::key_exchange::read_handshake_header(bf)->Some_0.length == n,
+        crate::transcription::state_machine::receive_handshake_message(p, cl.connection.handshake, bf.subrange(0, n as int))
+            is Proceed,
+        crate::transcription::state_machine::receive_handshake_message(p, cl.connection.handshake, bf.subrange(0, n as int))->handshake
+            == h2,
+        !crate::transcription::state_machine::receive_handshake_message(p, cl.connection.handshake, bf.subrange(0, n as int))
+            ->receive_key_changes,
+        in_flight(cl.connection.handshake.state),
+        in_flight(h2.state),
+        h2.client_handshake_traffic_secret == cl.connection.handshake.client_handshake_traffic_secret,
+        messages_agree(c, v, f, p, s2, ClientConnection { connection: Connection { handshake: h2, ..cl.connection }, ..cl },
+            bf.subrange(n as int, bf.len() as int), r, t),
+    ensures
+        messages_agree(c, v, f, p, s, cl, bf, r, super::bootstrap::after_records(Seq::<Seq<u8>>::empty(), t)),
+{
+    let y = cl.connection;
+    let y2 = Connection { handshake: h2, ..y };
+    let cl2 = ClientConnection { connection: y2, ..cl };
+    let rest = bf.subrange(n as int, bf.len() as int);
+    lemma_fails_first(p, y.handshake, bf, n, match r.0 { Action::Fail(a, _) => a, _ => 0u8 });
+    match t {
+        Receive::Continue(pr) => {
+            assert(Seq::<Seq<u8>>::empty() + pr.records_to_send =~= pr.records_to_send);
+            assert(super::bootstrap::after_records(Seq::<Seq<u8>>::empty(), t) == t);
+            assert forall|cn: Connection| ClientConnection { connection: cn, ..cl2 } == ClientConnection { connection: cn, ..cl } by {}
+        },
+        _ => {},
+    }
+    match r.0 {
+        Action::Fail(alert, w) => {
+            lemma_alert_record_kept(p, y, y2, alert as nat);
+        },
+        _ => {},
+    }
+}
+
+/// §4, §5.1, A.1: the crate's `run_messages` on the complete messages of a
+/// buffer and the transcription's `process_handshake_bytes` of it agree
+/// ([`messages_agree`]), the crate's reassembly state being the bytes after
+/// them, no Finished out of place, and room in the crate's transcript.
+#[verifier::rlimit(80)]
+pub proof fn lemma_messages(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, f: Ciphers,
+    p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>)
+    requires
+        hypotheses(c, v, f, p),
+        agrees_but_buffer(p, v, s, cl),
+        crate::spec::extract_messages(bf) is Ok,
+        s.reassembly.buf == crate::spec::extract_messages(bf)->Ok_0.1,
+        !crate::connection::dispatcher_spec::finished_out_of_place(crate::spec::extract_messages(bf)->Ok_0.0,
+            s.reassembly.buf.len() == 0),
+        room(s, bf.len()),
+    ensures
+        messages_agree(c, v, f, p, s, cl, bf,
+            crate::connection::dispatcher_spec::run_messages(c, v, f, s, crate::spec::extract_messages(bf)->Ok_0.0),
+            crate::transcription::connection::process_handshake_bytes(p, cl.connection, bf)),
+    decreases bf.len(),
+{
+    hide(crate::connection::dispatcher_spec::run_messages);
+    hide(crate::transcription::connection::process_handshake_bytes);
+    hide(messages_agree);
+    hide(crate::auth::spec::step);
+    hide(crate::transcription::state_machine::receive_handshake_message);
+    hide(crate::spec::extract_messages);
+    hide(fails_as);
+    hide(crate::connection::dispatcher_spec::finished_out_of_place);
+    let y = cl.connection;
+    let (ms, r) = crate::spec::extract_messages(bf)->Ok_0;
+    super::bootstrap::lemma_extract(bf);
+    if ms.len() == 0 {
+        assert(ms =~= Seq::<Seq<u8>>::empty());
+        reveal(crate::connection::dispatcher_spec::run_messages);
+        reveal(crate::transcription::connection::process_handshake_bytes);
+        super::post_handshake::lemma_t_incomplete(p, y, bf);
+        reveal(messages_agree);
+        let y2 = Connection { handshake_fragments: bf, ..y };
+        assert(agrees_but_buffer(p, v, s, ClientConnection { connection: y2, ..cl }));
+    } else {
+        super::post_handshake::lemma_extract_more(bf);
+        let n = super::bootstrap::first_length(bf);
+        let m = ms[0];
+        let rest = bf.subrange(n as int, bf.len() as int);
+        assert(rest =~= bf.skip(n as int));
+        let a = s.auth->Some_0;
+        let hs = y.handshake;
+        assert(m.subrange(1, 4) =~= bf.subrange(1, 4));
+        assert(m.skip(4).len() == n - 4);
+        lemma_message(c, v, p, a, hs, m);
+        lemma_t_first(p, y, bf, n);
+        lemma_run_first(c, v, f, s, ms);
+        lemma_in_place(ms, r.len() == 0);
+        let rs = crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(m[0], m.skip(4)));
+        let ts = crate::transcription::state_machine::receive_handshake_message(p, hs, m);
+        let stepped = State { auth: Some(rs.0), ..s };
+        assert(super::auth::phase_is(a.phase, hs.state));
+        match rs.1 {
+            crate::auth::spec::Action::Fail(alert) => {
+                lemma_message_fails_alert(hs, m, ts->Abort_0, alert);
+                lemma_fatal(f, p, stepped, y, alert);
+                lemma_fails_first(p, hs, bf, n, alert);
+                reveal(messages_agree);
+            },
+            crate::auth::spec::Action::None => {
+                let h2 = ts->handshake;
+                let y2 = Connection { handshake: h2, ..y };
+                let cl2 = ClientConnection { connection: y2, ..cl };
+                super::post_handshake::lemma_apply_none(p, y2);
+                assert(Connection { handshake: h2, ..y } == y2);
+                assert(super::auth::phase_is(rs.0.phase, h2.state));
+                assert(agrees_but_buffer(p, v, stepped, cl2));
+                assert(crate::spec::extract_messages(rest) == crate::spec::Res::Ok((ms.skip(1), r)));
+                lemma_messages(c, v, f, p, stepped, cl2, rest);
+                let rr = crate::connection::dispatcher_spec::run_messages(c, v, f, stepped, ms.skip(1));
+                let tt = crate::transcription::connection::process_handshake_bytes(p, y2, rest);
+                lemma_messages_more(c, v, f, p, s, cl, bf, n, stepped, h2, rr, tt);
+            },
+            crate::auth::spec::Action::Send(flight) => {
+                assert(ms.len() == 1 && r.len() == 0);
+                assert(bf.len() == n);
+                assert(m =~= bf);
+                assert(ms =~= seq![bf]);
+                lemma_send_case(c, v, f, p, s, cl, bf);
+            },
+            _ => {},
+        }
+    }
+}
+
 } // verus!
