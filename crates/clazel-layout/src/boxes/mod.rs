@@ -83,6 +83,8 @@ pub mod state;
 pub mod table;
 pub mod tree;
 
+#[cfg(test)]
+mod tests;
 
 pub use replaced::{Input, Replaced};
 pub use tree::{BoxId, BoxKind, BoxTree, Class, Fragment, LayoutBox, Marker, RowGroup, TextRun};
