@@ -420,3 +420,224 @@ fn tab_stops() {
     // Saturates instead of overflowing.
     assert!(tab_advance(i32::MAX, i32::MAX, i32::MAX) >= 0);
 }
+
+// The step formulations against the first readings (`reference.rs`).
+
+/// Under Miri, check one case in this many (Miri runs this code thousands
+/// of times slower; the cases are generated, so a stride keeps their
+/// spread).
+const MIRI_STRIDE: usize = if cfg!(miri) { 997 } else { 1 };
+
+/// Every line breaking class, each as properties with no flags, then the
+/// flag combinations the rules read: Pi and Pf quotation marks, East Asian
+/// OP, CP and QU, U+25CC, an unassigned pictographic, East Asian ID.
+fn alphabet() -> Vec<Props> {
+    let mut classes: Vec<Lb> = Vec::new();
+    for &(_, _, c) in super::data::LINE_BREAK.iter() {
+        if !classes.contains(&c) {
+            classes.push(c);
+        }
+    }
+    let plain = |class| Props {
+        class,
+        ..Props::LETTER_A
+    };
+    let mut out: Vec<Props> = classes.into_iter().map(plain).collect();
+    out.extend([
+        Props {
+            pi: true,
+            ..plain(Lb::QU)
+        },
+        Props {
+            pf: true,
+            ..plain(Lb::QU)
+        },
+        Props {
+            east_asian: true,
+            ..plain(Lb::QU)
+        },
+        Props {
+            east_asian: true,
+            ..plain(Lb::OP)
+        },
+        Props {
+            east_asian: true,
+            ..plain(Lb::CP)
+        },
+        Props {
+            east_asian: true,
+            ..plain(Lb::ID)
+        },
+        Props {
+            dotted_circle: true,
+            ..plain(Lb::AL)
+        },
+        Props {
+            pictographic_unassigned: true,
+            ..plain(Lb::ID)
+        },
+    ]);
+    out
+}
+
+/// A small deterministic generator (a 64-bit linear congruential one).
+struct Lcg(u64);
+
+impl Lcg {
+    fn below(&mut self, n: usize) -> usize {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        let n = u64::try_from(n).unwrap_or(1).max(1);
+        usize::try_from((self.0 >> 33).checked_rem(n).unwrap_or(0)).unwrap_or(0)
+    }
+}
+
+#[test]
+fn uax14_step_matches_reference() {
+    let alphabet = alphabet();
+    let k = alphabet.len();
+    let mut checked: usize = 0;
+    // Every string of length 1 to 3 over the alphabet.
+    let total3 = k.saturating_mul(k).saturating_mul(k);
+    for n in (0..total3).step_by(MIRI_STRIDE) {
+        for len in 1..=3usize {
+            let text: Vec<Props> = (0..len)
+                .filter_map(|d| {
+                    alphabet
+                        .get(n / k.pow(u32::try_from(d).unwrap_or(0)) % k)
+                        .copied()
+                })
+                .collect();
+            assert_eq!(
+                super::breaks_with_rules(&text),
+                super::reference::breaks_with_rules(&text),
+                "{text:?}"
+            );
+            checked = checked.saturating_add(1);
+        }
+    }
+    // Random strings of length 4 to 16, with long runs of spaces, marks,
+    // RIs and number punctuation more likely than the alphabet makes them.
+    let runs: Vec<Props> = [
+        Lb::SP,
+        Lb::CM,
+        Lb::ZWJ,
+        Lb::RI,
+        Lb::IS,
+        Lb::SY,
+        Lb::NU,
+        Lb::QU,
+    ]
+    .iter()
+    .map(|&class| Props {
+        class,
+        ..Props::LETTER_A
+    })
+    .collect();
+    let mut rng = Lcg(5_812);
+    let cases: usize = if cfg!(miri) { 60 } else { 200_000 };
+    for _ in 0..cases {
+        let len = 4usize.saturating_add(rng.below(13));
+        let text: Vec<Props> = (0..len)
+            .filter_map(|_| {
+                if rng.below(2) == 0 {
+                    runs.get(rng.below(runs.len())).copied()
+                } else {
+                    alphabet.get(rng.below(k)).copied()
+                }
+            })
+            .collect();
+        assert_eq!(
+            super::breaks_with_rules(&text),
+            super::reference::breaks_with_rules(&text),
+            "{text:?}"
+        );
+        checked = checked.saturating_add(1);
+    }
+    assert!(checked > 0);
+}
+
+#[test]
+fn collapse_step_matches_reference() {
+    use super::collapse::{Raw, Unit, collapse_raw};
+    let raws = [
+        Raw::Space,
+        Raw::Tab,
+        Raw::SegmentBreak,
+        Raw::Bidi,
+        Raw::Other(Kind::Char),
+    ];
+    let styles = [
+        WhiteSpace::Normal,
+        WhiteSpace::Nowrap,
+        WhiteSpace::Pre,
+        WhiteSpace::PreWrap,
+        WhiteSpace::BreakSpaces,
+        WhiteSpace::PreLine,
+    ];
+    let symbols: Vec<(Raw, WhiteSpace)> = raws
+        .iter()
+        .flat_map(|&r| styles.iter().map(move |&w| (r, w)))
+        .collect();
+    let k = symbols.len();
+    let make = |seq: &[(Raw, WhiteSpace)]| -> Vec<(Raw, Unit)> {
+        seq.iter()
+            .enumerate()
+            .map(|(i, &(r, w))| {
+                let ch = match r {
+                    Raw::Space => ' ',
+                    Raw::Tab => '\t',
+                    Raw::SegmentBreak => '\n',
+                    Raw::Bidi => '\u{200E}',
+                    Raw::Other(_) => 'a',
+                };
+                (
+                    r,
+                    Unit {
+                        ch,
+                        kind: Kind::Char,
+                        item: i,
+                        offset: 0,
+                        style: ws(w),
+                    },
+                )
+            })
+            .collect()
+    };
+    // Every sequence of length 1 to 4 over 30 symbols.
+    let total4 = k.pow(4);
+    for n in (0..total4).step_by(MIRI_STRIDE) {
+        for len in 1..=4usize {
+            let seq: Vec<(Raw, WhiteSpace)> = (0..len)
+                .filter_map(|d| {
+                    symbols
+                        .get(n / k.pow(u32::try_from(d).unwrap_or(0)) % k)
+                        .copied()
+                })
+                .collect();
+            let raw = make(&seq);
+            assert_eq!(
+                collapse_raw(&raw),
+                super::reference::collapse_raw(&raw),
+                "{seq:?}"
+            );
+        }
+    }
+    // Random sequences of length 5 to 24.
+    let mut rng = Lcg(77);
+    let cases: usize = if cfg!(miri) { 60 } else { 100_000 };
+    for _ in 0..cases {
+        let len = 5usize.saturating_add(rng.below(20));
+        let seq: Vec<(Raw, WhiteSpace)> = (0..len)
+            .filter_map(|_| symbols.get(rng.below(k)).copied())
+            .collect();
+        let raw = make(&seq);
+        assert_eq!(
+            collapse_raw(&raw),
+            super::reference::collapse_raw(&raw),
+            "{seq:?}"
+        );
+    }
+}
