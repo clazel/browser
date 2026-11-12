@@ -802,6 +802,8 @@ pub proof fn lemma_hello_crate(m: Models, s: crate::hello::bootstrap_spec::State
 {
     hide(crate::hello::bootstrap_lemmas::record_step);
     hide(crate::hello::bootstrap_spec::feed);
+    hide(crate::connection::driver_contract::established_step);
+    hide(crate::hello::bootstrap_spec::acknowledge);
     let x = framing + input;
     super::framing::lemma_boot_feed(m.crypto.hash, s, framing, input);
     super::framing::lemma_first(x, x.len(), false);
@@ -979,6 +981,352 @@ pub proof fn lemma_hello_none(m: Models, p: Primitives, scalar: Seq<u8>, s: crat
     assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
     assert(Seq::<u8>::empty() + w.skip((5 + super::bootstrap::length(w)) as int)
         =~= w.skip((5 + super::bootstrap::length(w)) as int));
+}
+
+
+// ---------------------------------------------------------------------------
+// The handoff at the ServerHello.
+// ---------------------------------------------------------------------------
+
+/// Every ClientHello the crate sends, the first or the retry's (any
+/// cookie), offers the crate's nine signature schemes: the transcription's
+/// `offered_signature_schemes` of it is `auth::offered_schemes`. One of the
+/// two start inputs `dispatcher::accepts_server_hello` left to the driver.
+pub proof fn lemma_offered_schemes(c: crate::hello::client_spec::Config, cookie: Seq<u8>)
+    ensures
+        crate::transcription::key_exchange::offered_signature_schemes(
+            super::client::ch_view(crate::hello::client_spec::client_hello(c, cookie))) == super::auth::offered_schemes(),
+{
+    let ch = crate::hello::client_spec::client_hello(c, cookie);
+    let v = super::client::ch_view(ch).extensions;
+    super::client::lemma_fixed_bodies();
+    super::client::lemma_extensions_view(c, cookie);
+    let vs = super::messages::exts_view(super::client::sni_extensions(c));
+    let ksd = crate::spec::write_key_share_ch(seq![crate::spec::KeyShare { group: 29, key_exchange: c.public_key }]);
+    let fixed = seq![
+        crate::transcription::extensions::Extension { extension_type: 43, extension_data: seq![2u8, 3u8, 4u8] },
+        crate::transcription::extensions::Extension { extension_type: 13,
+            extension_data: crate::spec::write_signature_schemes(crate::hello::client_spec::signatures()) },
+        crate::transcription::extensions::Extension { extension_type: 10, extension_data: seq![0u8, 2u8, 0u8, 29u8] },
+        crate::transcription::extensions::Extension { extension_type: 51, extension_data: ksd },
+    ];
+    let tail = if cookie.len() == 0 { Seq::<crate::transcription::extensions::Extension>::empty() }
+        else { seq![crate::transcription::extensions::Extension { extension_type: 44, extension_data: cookie }] };
+    assert(v =~= vs + (fixed + tail));
+    super::client::lemma_fixed_find(fixed, tail, ksd);
+    super::client::lemma_sni_find(c, 13);
+    super::client::lemma_find_append(vs, fixed + tail, 13);
+    assert(super::extensions::nats(crate::hello::client_spec::signatures())
+        =~= seq![0x0403nat, 0x0503nat, 0x0804nat, 0x0805nat, 0x0806nat, 0x0807nat, 0x0401nat, 0x0501nat, 0x0601nat]);
+    assert(crate::transcription::extensions::read_signature_scheme_list(
+        crate::transcription::extensions::write_signature_scheme_list(
+            seq![0x0403nat, 0x0503nat, 0x0804nat, 0x0805nat, 0x0806nat, 0x0807nat, 0x0401nat, 0x0501nat, 0x0601nat]))
+        == Some(seq![0x0403nat, 0x0503nat, 0x0804nat, 0x0805nat, 0x0806nat, 0x0807nat, 0x0401nat, 0x0501nat, 0x0601nat]))
+        by (compute_only);
+}
+
+/// A.1's actions never change the handshake state, the read side or the
+/// bytes of an unfinished message.
+pub proof fn lemma_apply_keeps(p: Primitives, c: Connection, actions: Seq<crate::transcription::state_machine::Action>)
+    ensures ({
+        let after = crate::transcription::connection::apply_actions(p, c, actions).0;
+        &&& after.handshake == c.handshake
+        &&& after.read_closed == c.read_closed
+        &&& after.handshake_fragments == c.handshake_fragments
+    }),
+    decreases actions.len(),
+{
+    if actions.len() > 0 {
+        let tail = actions.subrange(1, actions.len() as int);
+        match actions[0] {
+            crate::transcription::state_machine::Action::SendHandshake(message, version) => {
+                let (records, send) = crate::transcription::connection::send_blocks(p, c.send,
+                    crate::transcription::record::ct_handshake(), version,
+                    crate::transcription::record::fragment_blocks(message));
+                lemma_apply_keeps(p, Connection { send, ..c }, tail);
+            },
+            crate::transcription::state_machine::Action::SetReceiveSecret(secret) =>
+                lemma_apply_keeps(p, Connection { receive: Protection::Protected(
+                    crate::transcription::record::traffic_state(p, secret)), ..c }, tail),
+            crate::transcription::state_machine::Action::SetSendSecret(secret) =>
+                lemma_apply_keeps(p, Connection { send: Protection::Protected(
+                    crate::transcription::record::traffic_state(p, secret)), ..c }, tail),
+            crate::transcription::state_machine::Action::UpdateReceiveSecret =>
+                lemma_apply_keeps(p, Connection { receive: crate::transcription::connection::updated_traffic(p, c.receive),
+                    ..c }, tail),
+            crate::transcription::state_machine::Action::RespondToKeyUpdate =>
+                lemma_apply_keeps(p, Connection { key_update_owed: true, ..c }, tail),
+        }
+    }
+}
+
+/// A step in WAIT_SH that goes on (a HelloRetryRequest accepted) keeps
+/// [`wait_sh_fields`]: `accept_hello_retry_request` keeps every field but
+/// the hello, the retry record, the transcript and the private key, which
+/// is one of the two the state holds.
+pub proof fn lemma_wait_sh_step(p: Primitives, hs: crate::transcription::state_machine::ClientHandshake, raw: Seq<u8>,
+    scalar: Seq<u8>)
+    requires
+        hs.state == crate::transcription::state_machine::ClientState::WaitSh,
+        wait_sh_fields(hs, scalar),
+        crate::transcription::state_machine::receive_handshake_message(p, hs, raw) is Proceed,
+        !crate::transcription::state_machine::receive_handshake_message(p, hs, raw)->receive_key_changes,
+    ensures
+        wait_sh_fields(crate::transcription::state_machine::receive_handshake_message(p, hs, raw)->handshake, scalar),
+        crate::transcription::state_machine::receive_handshake_message(p, hs, raw)->handshake.state
+            == crate::transcription::state_machine::ClientState::WaitSh,
+{
+}
+
+/// After a HelloRetryRequest (the controller's transcript is in its
+/// second-ServerHello phase, so `retried`), the crate never retries again:
+/// `validate` refuses a second HelloRetryRequest (§4.1.4).
+pub proof fn lemma_no_second_retry(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: crate::hello::bootstrap_spec::State, bf: Seq<u8>)
+    requires
+        s.hello is Some,
+        s.hello->Some_0.transcript.retried,
+    ensures !(super::bootstrap::buffer_step(hash, s, bf).1 is Send),
+{
+    match crate::spec::extract_messages(bf) {
+        crate::spec::Res::Ok((ms, rest)) => {
+            let s1 = crate::hello::bootstrap_spec::State { reassembly: crate::spec::Reasm { buf: rest }, ..s };
+            if ms.len() > 0 && ms[0].len() >= crate::spec::HANDSHAKE_HEADER && ms[0][0] == crate::spec::HS_SERVER_HELLO {
+                crate::hello::bootstrap_lemmas::lemma_receive_messages(hash, s1, ms);
+                let body = ms[0].skip(crate::spec::HANDSHAKE_HEADER as int);
+                let hello = s.hello->Some_0;
+                assert(!(crate::hello::spec::retry(crate::spec::read_server_hello(body)->Some_0, true) is Ok));
+                if let Ok(crate::hello::client_spec::Outcome::Retry(_, _))
+                    = crate::hello::client_spec::receive(hash, hello, body) {
+                    assert(crate::hello::spec::validate(hello.config.session_id, true, body) is Ok);
+                    assert(false);
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+/// What `bootstrap::buffer_agrees` says of handshake bytes the crate
+/// establishes on (its `Established` case), with the crate's `receive`
+/// unfolded: `validate` chose the share, and the transcript took the
+/// ServerHello.
+pub proof fn lemma_est_facts(p: Primitives, s: crate::hello::bootstrap_spec::State, cl: ClientConnection, bf: Seq<u8>)
+    requires
+        super::bootstrap::agrees_but_buffer(p, s, cl),
+        super::bootstrap::buffer_step(p.hash, s, bf).1 is Established,
+        super::bootstrap::buffer_agrees(p, s, cl, bf),
+    ensures ({
+        let hello = s.hello->Some_0;
+        let a = super::bootstrap::buffer_step(p.hash, s, bf).1;
+        let body = super::bootstrap::first_body(bf);
+        let c = cl.connection;
+        &&& bf == crate::transcription::key_exchange::write_handshake(2, body)
+        &&& crate::transcription::connection::process_handshake_bytes(p, c, bf) == super::bootstrap::after_message(p, c, bf)
+        &&& a->Established_0 == hello.config
+        &&& crate::hello::spec::validate(hello.config.session_id, hello.transcript.retried, body)
+            == Ok::<crate::hello::spec::Selection, u8>(crate::hello::spec::Selection::Share(a->Established_2))
+        &&& crate::transcript::spec::step(p.hash, hello.transcript, crate::transcript::spec::Kind::ServerHello, body)
+            == Ok::<crate::transcript::spec::State, crate::transcript::spec::Error>(a->Established_1)
+        &&& super::negotiation::receive_agrees(p, hello, c.handshake, body)
+        &&& crate::hello::client_spec::wf(hello)
+        &&& super::negotiation::negotiation_agrees(p, hello, c.handshake)
+    }),
+{
+}
+
+/// The transcription's step on the ServerHello the crate establishes on,
+/// and what the dispatcher's start needs of it (the share, the transcript,
+/// the ClientHello's offers: item 1's signature schemes).
+pub proof fn lemma_est_step(p: Primitives, s: crate::hello::bootstrap_spec::State, cl: ClientConnection, bf: Seq<u8>)
+    requires
+        super::bootstrap::agrees_but_buffer(p, s, cl),
+        super::bootstrap::buffer_step(p.hash, s, bf).1 is Established,
+        super::bootstrap::buffer_agrees(p, s, cl, bf),
+    ensures ({
+        let hello = s.hello->Some_0;
+        let retried = hello.transcript.retried;
+        let a = super::bootstrap::buffer_step(p.hash, s, bf).1;
+        let (config, transcript, key) = (a->Established_0, a->Established_1, a->Established_2);
+        let body = super::bootstrap::first_body(bf);
+        let hs = cl.connection.handshake;
+        let h = crate::transcription::key_exchange::read_server_hello(body)->Some_0;
+        &&& crate::transcription::key_exchange::read_server_hello(body) is Some
+        &&& crate::transcription::extensions::find_extension(h.extensions, 51) is Some
+        &&& crate::transcription::extensions::read_key_share_server_hello(
+            crate::transcription::extensions::find_extension(h.extensions, 51)->0)
+            == Some(crate::transcription::extensions::KeyShareEntry { group: 0x001D, key_exchange: key })
+        &&& crate::transcription::state_machine::receive_handshake_message(p, hs, bf)
+            == crate::transcription::state_machine::accept_server_hello(p, hs, h, bf)
+        &&& super::transcript::represents(p, transcript, hs.transcript.push(bf), retried)
+        &&& (hs.retry is Some) == retried
+        &&& transcript.retried == retried
+        &&& config == hello.config
+        &&& crate::hello::client_spec::config_ok(config)
+        &&& (p.x25519)(hs.x25519_private_key, crate::transcription::primitives::x25519_basepoint()) == config.public_key
+        &&& crate::transcription::key_exchange::offered_signature_schemes(hs.hello) == super::auth::offered_schemes()
+        &&& super::extensions::nats(crate::hello::join_spec::extension_types(config, transcript.retried))
+            == crate::transcription::extensions::extension_types(hs.hello.extensions)
+        &&& crate::transcript::spec::wf(transcript)
+        &&& transcript.phase == crate::transcript::spec::Phase::Handshake
+        &&& hs.state == crate::transcription::state_machine::ClientState::WaitSh
+    }),
+{
+    hide(super::bootstrap::buffer_agrees);
+    hide(super::bootstrap::buffer_step);
+    lemma_est_facts(p, s, cl, bf);
+    let c = cl.connection;
+    let hs = c.handshake;
+    let hello = s.hello->Some_0;
+    let config0 = hello.config;
+    let retried = hello.transcript.retried;
+    let a = super::bootstrap::buffer_step(p.hash, s, bf).1;
+    let (config, transcript, key) = (a->Established_0, a->Established_1, a->Established_2);
+    let body = super::bootstrap::first_body(bf);
+    assert(body.len() <= crate::transcript::spec::MAX_BODY);
+    let cookie0: Seq<u8> = if retried {
+        choose|cookie: Seq<u8>| cookie.len() > 0
+            && hs.hello == super::client::ch_view(#[trigger] crate::hello::client_spec::client_hello(config0, cookie))
+    } else {
+        Seq::empty()
+    };
+    assert(hs.hello == super::client::ch_view(crate::hello::client_spec::client_hello(config0, cookie0)));
+    let offers = crate::hello::join_spec::extension_types(config0, cookie0.len() != 0);
+    super::client::lemma_sent_is_profile(config0, cookie0);
+    super::hello::lemma_validate(hs.hello, hs.retry, offers, config0.session_id, retried, body);
+    lemma_offered_schemes(config0, cookie0);
+    crate::transcript::lemmas::lemma_step_wf(p.hash, hello.transcript, crate::transcript::spec::Kind::ServerHello, body);
+}
+
+/// **The handoff at the ServerHello** (and item 2 of the driver's remaining
+/// conditions): from a bootstrap state that agrees with the
+/// transcription's client (but for the buffer), on handshake bytes whose
+/// one message the crate establishes on, the crate's handoff
+/// (`driver_contract::established_step`) and the transcription's step on
+/// the same message (`bootstrap::after_message`) agree:
+/// - the X25519 shared secret is all zero (§7.4.2): the transcription
+///   aborts in `accept_server_hello`, the crate in `join_spec::derive`, both
+///   with `illegal_parameter`, and the crate's plaintext alert is the
+///   transcription's `abort_record`;
+/// - otherwise both go on, writing and delivering nothing, and the
+///   dispatcher's start agrees with the transcription's client after the
+///   ServerHello (`dispatcher::lemma_start`, whose start inputs, the
+///   ClientHello's signature schemes and the unset WAIT_EE fields, hold
+///   here: [`lemma_est_step`], [`wait_sh_fields`]).
+#[verifier::rlimit(100)]
+pub proof fn lemma_handoff(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    cl: ClientConnection, bf: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        super::bootstrap::agrees_but_buffer(p, s, cl),
+        wait_sh_fields(cl.connection.handshake, scalar),
+        super::bootstrap::buffer_step(m.crypto.hash, s, bf).1 is Established,
+        super::bootstrap::buffer_agrees(p, s, cl, bf),
+    ensures ({
+        let a = super::bootstrap::buffer_step(m.crypto.hash, s, bf).1;
+        let out = crate::connection::driver_contract::established_step(m, a, scalar);
+        let c = cl.connection;
+        &&& crate::transcription::connection::process_handshake_bytes(p, c, bf)
+            == super::bootstrap::after_message(p, c, bf)
+        &&& match super::bootstrap::after_message(p, c, bf) {
+            Receive::Abort(e) => {
+                &&& e == ClientError::SharedSecretAllZero
+                &&& crate::transcription::alerts::required_alert(e) == 47
+                &&& out == crate::connection::driver_spec::hello_failure(47)
+                &&& crate::transcription::connection::abort_record(p, c, e)
+                    == crate::connection::driver_spec::hello_failure(47).send
+            },
+            Receive::Continue(pr) => {
+                &&& pr.application_data.len() == 0
+                &&& pr.records_to_send.len() == 0
+                &&& out.send.len() == 0
+                &&& out.deliver.len() == 0
+                &&& out.status == Status::Handshaking
+                &&& out.stage matches Stage::Flight(ds)
+                &&& ds.framing == Seq::<u8>::empty()
+                &&& ds.mode == crate::connection::dispatcher_spec::Mode::Handshake
+                &&& super::dispatcher::dispatcher_agrees(p, m.verification, ds,
+                    ClientConnection { connection: pr.connection, ..cl })
+            },
+            Receive::PeerError(_) => false,
+        }
+    }),
+{
+    hide(super::bootstrap::buffer_agrees);
+    hide(super::bootstrap::buffer_step);
+    hide(super::negotiation::receive_agrees);
+    hide(super::negotiation::negotiation_agrees);
+    hide(crate::transcription::state_machine::receive_handshake_message);
+    hide(crate::transcription::connection::process_handshake_bytes);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(super::transcript::represents);
+    hide(crate::transcription::key_exchange::read_server_hello);
+    let c = cl.connection;
+    let hs = c.handshake;
+    assert(m.crypto.hash == p.hash);
+    lemma_est_facts(p, s, cl, bf);
+    lemma_est_step(p, s, cl, bf);
+    let a = super::bootstrap::buffer_step(p.hash, s, bf).1;
+    let (config, transcript, key) = (a->Established_0, a->Established_1, a->Established_2);
+    assert(a == crate::hello::bootstrap_spec::Action::Established(config, transcript, key));
+    let body = super::bootstrap::first_body(bf);
+    let raw = bf;
+    let retried = s.hello->Some_0.transcript.retried;
+    let h = crate::transcription::key_exchange::read_server_hello(body)->Some_0;
+    let msgs = hs.transcript.push(raw);
+    assert((m.exchange.public_key)(scalar) == config.public_key);
+    super::keys::theorem_handshake_keys_equivalence(m.crypto, m.exchange, p);
+    let shared = (p.x25519)(scalar, key);
+    let derived = crate::hello::join_spec::derive(m.crypto, m.exchange, config, transcript, key, scalar);
+    assert(super::transcript::represents(p, transcript, msgs, retried));
+    let step = crate::transcription::state_machine::accept_server_hello(p, hs, h, raw);
+    assert(super::bootstrap::after_message(p, c, bf) == match step {
+        crate::transcription::state_machine::HandshakeStep::Abort(e) => Receive::Abort(e),
+        crate::transcription::state_machine::HandshakeStep::Proceed { handshake, actions, .. } => {
+            let (after, sent) = crate::transcription::connection::apply_actions(p, Connection { handshake, ..c }, actions);
+            Receive::Continue(crate::transcription::connection::Progress {
+                connection: Connection { handshake_fragments: seq![], ..after },
+                application_data: seq![], records_to_send: sent })
+        },
+    });
+    match derived {
+        Err(alert) => {
+            // Item 2: both refuse the all-zero shared secret, with illegal_parameter.
+            assert(crate::transcription::presentation::all_zero(shared));
+            assert(step == crate::transcription::state_machine::HandshakeStep::Abort(ClientError::SharedSecretAllZero));
+            assert(alert == 47);
+            lemma_alert_record_plain(p, c, 47);
+        },
+        Ok((auth_config, master)) => {
+            assert(!crate::transcription::presentation::all_zero(shared));
+            assert(step is Proceed);
+            // `handshake_spec::start` goes through: 32-octet secrets and a well-formed transcript.
+            assert(auth_config.client_secret.len() == 32);
+            assert(auth_config.server_secret.len() == 32);
+            super::client::lemma_offers(config, transcript.retried);
+            assert(crate::hello::client_spec::signatures().len() == 9);
+            assert(crate::auth::spec::config_ok(auth_config));
+            assert(crate::traffic::handshake_spec::start(m.crypto, m.exchange, config, transcript, key, scalar) is Ok);
+            // The transcription's step, and its actions.
+            let hs1 = step->handshake;
+            let a1 = step->actions;
+            let shts = hs1.server_handshake_traffic_secret;
+            assert(a1 == seq![crate::transcription::state_machine::Action::SetReceiveSecret(shts)]);
+            let y1 = Connection { handshake: hs1, ..c };
+            let y2 = Connection { receive: Protection::Protected(crate::transcription::record::traffic_state(p, shts)), ..y1 };
+            assert(a1.subrange(1, 1) =~= Seq::<crate::transcription::state_machine::Action>::empty());
+            assert(crate::transcription::connection::apply_actions(p, y2, Seq::empty()) == (y2, Seq::<Seq<u8>>::empty()));
+            assert(crate::transcription::connection::apply_actions(p, y1, a1) == (y2, Seq::<Seq<u8>>::empty()));
+            let pr = super::bootstrap::after_message(p, c, bf)->Continue_0;
+            let cl1 = ClientConnection { connection: pr.connection, ..cl };
+            // D.4: the dummy record is owed exactly when the transcription has not written it.
+            assert(crate::traffic::handshake_spec::needs_ccs(config, transcript)
+                == (cl1.compatibility_mode && !cl1.change_cipher_spec_sent));
+            assert(validators(m.verification, p, config.host, config.now));
+            assert(super::dispatcher::accepts_server_hello(p, c, h, raw, config, transcript, key, scalar));
+            super::dispatcher::lemma_start(m.crypto, m.exchange, m.verification, ciphers(m), p, cl1, c, h, raw, config,
+                transcript, key, scalar);
+        },
+    }
 }
 
 } // verus!
