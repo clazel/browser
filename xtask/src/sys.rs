@@ -18,13 +18,20 @@
 //! 6. no raw pointer arithmetic, and no public foreign function: the crate's
 //!    public API is safe;
 //! 7. a **dispatcher** ([`DISPATCHERS`]: `objc_msgSend`, which must be called
-//!    through a function pointer of each method's exact type) is declared once
-//!    with no parameters and never called or named elsewhere; the only use is a
-//!    `const` on its file's [`DISPATCH_CASTS`] list, written exactly
-//!    `const NAME: unsafe extern "C" fn(..) -> .. = unsafe {
-//!    std::mem::transmute(objc_msgSend as unsafe extern "C" fn()) };` with a
-//!    `// SAFETY:` comment directly above it, and such a const is named nowhere
-//!    but in calls inside `unsafe` blocks. Every other `transmute` is rejected;
+//!    through a function pointer of each method's exact type) is declared once,
+//!    in an `unsafe extern "C-unwind"` block, with no parameters, and never called
+//!    or named elsewhere; the only use is a `const` on its file's
+//!    [`DISPATCH_CASTS`] list, written exactly
+//!    `const NAME: unsafe extern "C-unwind" fn(..) -> .. = unsafe {
+//!    std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };` with
+//!    a `// SAFETY:` comment directly above it, and such a const is named nowhere
+//!    but in calls inside `unsafe` blocks. Every other `transmute` is rejected.
+//!    The ABI is `"C-unwind"` throughout, and only that: an Objective-C exception
+//!    unwinding out of a call through a `"C"` pointer is undefined behaviour
+//!    (Rust reference, `panic.unwind.ffi.undefined`), and through a `"C-unwind"`
+//!    one it is a defined unwind or abort (`items.fn.extern.unwind.behavior`).
+//!    The three places must agree: `D as T` coerces the function item only to a
+//!    pointer of its declared ABI, and the cast's type is the one called;
 //! 8. the latest row of `docs/SYS-AUDITS.md` carries the SHA-256 of the
 //!    crate's source ([`source_hash`]), so every change is audited.
 //!
@@ -389,7 +396,7 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                         && ident_is(tokens.get(k.saturating_add(3)), "fn")
                         && !matches!(tokens.get(k.saturating_add(4)), Some(TokenTree::Ident(_)))
                     {
-                        // `unsafe extern "C" fn(..)`: a function pointer type. Only a
+                        // `unsafe extern "C-unwind" fn(..)`: a function pointer type. Only a
                         // listed dispatcher cast can give one a value that is
                         // called (rule 7), so the type itself is not checked here.
                         k = k.saturating_add(4);
@@ -406,12 +413,16 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                     } else if ident_is(next, "extern") {
                         require_safety_comment(lines, line, file);
                         // `unsafe extern "C" { ... }`: skip the ABI string.
+                        let abi = match tokens.get(k.saturating_add(2)) {
+                            Some(TokenTree::Literal(l)) => l.to_string(),
+                            _ => String::new(),
+                        };
                         let rest = tokens.get(k.saturating_add(2)..).unwrap_or(&[]);
                         let at = rest.iter().position(|t| {
                             matches!(t, TokenTree::Group(g) if g.delimiter() == Delimiter::Brace)
                         });
                         match at.and_then(|i| rest.get(i)) {
-                            Some(TokenTree::Group(g)) => check_extern(g, file),
+                            Some(TokenTree::Group(g)) => check_extern(g, &abi, file),
                             _ => flag(file, line, "`unsafe extern` without a block"),
                         }
                         k = k.saturating_add(3).saturating_add(at.unwrap_or(0));
@@ -488,8 +499,8 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
     }
 }
 
-/// `const NAME: unsafe extern "C" fn(..) -> .. = unsafe {
-/// std::mem::transmute(D as unsafe extern "C" fn()) };` at `k` (the `const`),
+/// `const NAME: unsafe extern "C-unwind" fn(..) -> .. = unsafe {
+/// std::mem::transmute(D as unsafe extern "C-unwind" fn()) };` at `k` (the `const`),
 /// with D a dispatcher this file may declare and a `// SAFETY:` comment directly
 /// above. Returns the index after the item's `;`.
 fn dispatcher_cast(tokens: &[TokenTree], k: usize, lines: &[&str], file: &mut File) -> usize {
@@ -505,7 +516,7 @@ fn dispatcher_cast(tokens: &[TokenTree], k: usize, lines: &[&str], file: &mut Fi
     let item: Vec<TokenTree> = tokens.get(k..end).unwrap_or(&[]).to_vec();
     let eq = item.iter().position(|t| is_punct(Some(t), '='));
     let ty = eq.and_then(|e| item.get(3..e)).unwrap_or(&[]);
-    let typed = is_punct(at(2), ':') && is_c_fn_pointer(ty);
+    let typed = is_punct(at(2), ':') && is_c_unwind_fn_pointer(ty);
     let value = eq
         .and_then(|e| item.get(e.saturating_add(1)..))
         .unwrap_or(&[]);
@@ -523,8 +534,8 @@ fn dispatcher_cast(tokens: &[TokenTree], k: usize, lines: &[&str], file: &mut Fi
         flag(
             file,
             line,
-            "a dispatcher cast must be exactly `const NAME: unsafe extern \"C\" fn(..) = \
-             unsafe { std::mem::transmute(D as unsafe extern \"C\" fn()) };`",
+            "a dispatcher cast must be exactly `const NAME: unsafe extern \"C-unwind\" fn(..) = \
+             unsafe { std::mem::transmute(D as unsafe extern \"C-unwind\" fn()) };`",
         );
     } else {
         file.dispatcher_casts = file.dispatcher_casts.saturating_add(1);
@@ -532,16 +543,19 @@ fn dispatcher_cast(tokens: &[TokenTree], k: usize, lines: &[&str], file: &mut Fi
     end
 }
 
-/// `unsafe extern "C" fn (..)`, optionally `-> T`, and nothing else.
-fn is_c_fn_pointer(ty: &[TokenTree]) -> bool {
+/// The one ABI a dispatcher is declared, cast and called with (rule 7).
+const DISPATCH_ABI: &str = "\"C-unwind\"";
+
+/// `unsafe extern "C-unwind" fn (..)`, optionally `-> T`, and nothing else.
+fn is_c_unwind_fn_pointer(ty: &[TokenTree]) -> bool {
     matches!(ty,
         [TokenTree::Ident(u), TokenTree::Ident(e), TokenTree::Literal(abi), TokenTree::Ident(f), TokenTree::Group(params), rest @ ..]
-            if *u == "unsafe" && *e == "extern" && abi.to_string() == "\"C\"" && *f == "fn"
+            if *u == "unsafe" && *e == "extern" && abi.to_string() == DISPATCH_ABI && *f == "fn"
                 && params.delimiter() == Delimiter::Parenthesis
                 && (rest.is_empty() || (is_punct(rest.first(), '-') && is_punct(rest.get(1), '>') && rest.len() > 2)))
 }
 
-/// `std::mem::transmute(D as unsafe extern "C" fn())` with D a dispatcher of this
+/// `std::mem::transmute(D as unsafe extern "C-unwind" fn())` with D a dispatcher of this
 /// file, and nothing else.
 fn transmute_of_dispatcher(body: &[TokenTree], file: &File) -> bool {
     let path = ["std", ":", ":", "mem", ":", ":", "transmute"];
@@ -561,7 +575,7 @@ fn transmute_of_dispatcher(body: &[TokenTree], file: &File) -> bool {
                 if DISPATCHERS.contains(&d.to_string().as_str())
                     && file.permitted.contains(&d.to_string().as_str())
                     && *r#as == "as"
-                    && is_c_fn_pointer(ty)
+                    && is_c_unwind_fn_pointer(ty)
                     && ty.len() == 5
                     && matches!(ty.get(4), Some(TokenTree::Group(g)) if g.stream().is_empty()))
 }
@@ -617,8 +631,10 @@ fn check_call(name: &str, args: &Group, line: usize, block: &mut Block, file: &m
     block.calls.push(name.to_owned());
 }
 
-/// `unsafe extern { ... }`: only private function declarations from the list.
-fn check_extern(g: &Group, file: &mut File) {
+/// `unsafe extern ABI { ... }`: only private function declarations from the
+/// list, and a dispatcher only where `abi` (the ABI string, quoted, or empty) is
+/// `"C-unwind"`.
+fn check_extern(g: &Group, abi: &str, file: &mut File) {
     let body: Vec<TokenTree> = g.stream().into_iter().collect();
     for (k, tt) in body.iter().enumerate() {
         let TokenTree::Ident(id) = tt else { continue };
@@ -664,6 +680,15 @@ fn check_extern(g: &Group, file: &mut File) {
                             file,
                             line,
                             format!("dispatcher `{name}` must be declared `fn {name}();`"),
+                        );
+                    }
+                    if abi != DISPATCH_ABI {
+                        flag(
+                            file,
+                            line,
+                            format!(
+                                "dispatcher `{name}` must be declared in an `unsafe extern \"C-unwind\"` block"
+                            ),
                         );
                     }
                 }
@@ -1432,11 +1457,10 @@ mod tests {
         ))
     }
 
-    const DECL: &str =
-        "// SAFETY: docs ObjectiveC/objc_msgSend.\nunsafe extern \"C\" { fn objc_msgSend(); }\n";
+    const DECL: &str = "// SAFETY: docs ObjectiveC/objc_msgSend.\nunsafe extern \"C-unwind\" { fn objc_msgSend(); }\n";
     const CAST: &str = "// SAFETY: docs ObjectiveC/objc_msgSend; the cast Apple prescribes.\n\
-        const MSG_ID: unsafe extern \"C\" fn(*mut u8, *mut u8) -> *mut u8 =\n\
-        unsafe { std::mem::transmute(objc_msgSend as unsafe extern \"C\" fn()) };\n";
+        const MSG_ID: unsafe extern \"C-unwind\" fn(*mut u8, *mut u8) -> *mut u8 =\n\
+        unsafe { std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) };\n";
     const CALL: &str = "fn f(r: *mut u8, s: *mut u8) -> *mut u8 {\n\
         // SAFETY: docs ObjectiveC/NSObject/new.\n    unsafe { MSG_ID(r, s) }\n}\n";
 
@@ -1459,14 +1483,14 @@ mod tests {
         // Of data, in a listed const.
         rejected(
             &format!(
-                "{DECL}// SAFETY: docs X.\nconst MSG_ID: unsafe extern \"C\" fn() = unsafe {{ std::mem::transmute(7usize) }};"
+                "{DECL}// SAFETY: docs X.\nconst MSG_ID: unsafe extern \"C-unwind\" fn() = unsafe {{ std::mem::transmute(7usize) }};"
             ),
             "must be exactly",
         )?;
         // Of a dispatcher, in a const not on the list.
         rejected(
             &format!(
-                "{DECL}// SAFETY: docs X.\nconst OTHER: unsafe extern \"C\" fn() = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C\" fn()) }};"
+                "{DECL}// SAFETY: docs X.\nconst OTHER: unsafe extern \"C-unwind\" fn() = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) }};"
             ),
             "`transmute` is only allowed",
         )?;
@@ -1483,15 +1507,15 @@ mod tests {
         )?;
         // A turbofish, another path, or more than the one call.
         for value in [
-            "std::mem::transmute::<unsafe extern \"C\" fn(), unsafe extern \"C\" fn()>(objc_msgSend as unsafe extern \"C\" fn())",
-            "core::mem::transmute(objc_msgSend as unsafe extern \"C\" fn())",
-            "std::mem::transmute(objc_getClass as unsafe extern \"C\" fn())",
-            "std::mem::transmute(objc_msgSend as unsafe extern \"C\" fn(u8))",
-            "std::mem::transmute(objc_msgSend as unsafe extern \"C\" fn()); objc_getClass(p)",
+            "std::mem::transmute::<unsafe extern \"C-unwind\" fn(), unsafe extern \"C-unwind\" fn()>(objc_msgSend as unsafe extern \"C-unwind\" fn())",
+            "core::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn())",
+            "std::mem::transmute(objc_getClass as unsafe extern \"C-unwind\" fn())",
+            "std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn(u8))",
+            "std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()); objc_getClass(p)",
         ] {
             rejected(
                 &format!(
-                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: unsafe extern \"C\" fn() = unsafe {{ {value} }};"
+                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: unsafe extern \"C-unwind\" fn() = unsafe {{ {value} }};"
                 ),
                 "must be exactly",
             )?;
@@ -1503,23 +1527,59 @@ mod tests {
     fn planted_wrong_target_type_or_no_safety_comment() -> Result<(), String> {
         for ty in [
             "usize",
-            "unsafe extern \"C-unwind\" fn()",
-            "extern \"C\" fn()",
-            "Option<unsafe extern \"C\" fn()>",
+            "unsafe extern \"C\" fn()",
+            "unsafe extern \"system\" fn()",
+            "extern \"C-unwind\" fn()",
+            "Option<unsafe extern \"C-unwind\" fn()>",
         ] {
             rejected(
                 &format!(
-                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: {ty} = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C\" fn()) }};"
+                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: {ty} = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) }};"
                 ),
                 "must be exactly",
             )?;
         }
         rejected(
             &format!(
-                "{DECL}const MSG_ID: unsafe extern \"C\" fn() = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C\" fn()) }};"
+                "{DECL}const MSG_ID: unsafe extern \"C-unwind\" fn() = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) }};"
             ),
             "without a `// SAFETY:`",
         )
+    }
+
+    /// `"C"` anywhere a dispatcher is declared or cast is rejected, so no cast
+    /// can mix the two ABIs.
+    #[test]
+    fn planted_c_abi_instead_of_c_unwind() -> Result<(), String> {
+        let c_decl = "// SAFETY: docs X.\nunsafe extern \"C\" { fn objc_msgSend(); }\n";
+        rejected(
+            &format!("{c_decl}{CAST}{CALL}"),
+            "must be declared in an `unsafe extern \"C-unwind\"` block",
+        )?;
+        rejected(
+            "// SAFETY: docs X.\nunsafe extern { fn objc_msgSend(); }\n",
+            "must be declared in an `unsafe extern \"C-unwind\"` block",
+        )?;
+        // The cast's type, its source, or both, in `"C"`.
+        for (ty, source) in [
+            (
+                "unsafe extern \"C\" fn(*mut u8, *mut u8) -> *mut u8",
+                "C-unwind",
+            ),
+            (
+                "unsafe extern \"C-unwind\" fn(*mut u8, *mut u8) -> *mut u8",
+                "C",
+            ),
+            ("unsafe extern \"C\" fn(*mut u8, *mut u8) -> *mut u8", "C"),
+        ] {
+            rejected(
+                &format!(
+                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: {ty} = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"{source}\" fn()) }};"
+                ),
+                "must be exactly",
+            )?;
+        }
+        Ok(())
     }
 
     #[test]
@@ -1531,16 +1591,16 @@ mod tests {
         )?;
         // Made into a function pointer another way.
         rejected(
-            &format!("{DECL}fn f() {{ let p = objc_msgSend as unsafe extern \"C\" fn(); }}"),
+            &format!("{DECL}fn f() {{ let p = objc_msgSend as unsafe extern \"C-unwind\" fn(); }}"),
             "dispatcher `objc_msgSend` may only",
         )?;
         // Declared with parameters.
         rejected(
-            "// SAFETY: docs X.\nunsafe extern \"C\" { fn objc_msgSend(a: u8); }",
+            "// SAFETY: docs X.\nunsafe extern \"C-unwind\" { fn objc_msgSend(a: u8); }",
             "must be declared `fn objc_msgSend();`",
         )?;
         rejected(
-            "// SAFETY: docs X.\nunsafe extern \"C\" { fn objc_msgSend() -> u8; }",
+            "// SAFETY: docs X.\nunsafe extern \"C-unwind\" { fn objc_msgSend() -> u8; }",
             "must be declared `fn objc_msgSend();`",
         )
     }
