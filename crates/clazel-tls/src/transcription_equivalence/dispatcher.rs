@@ -74,8 +74,10 @@
 //!   crate closes at once, sending exactly the transcription's
 //!   `close_write` record; the transcription only stops reading.
 //!
-//! Not covered: the framer's timing on a partial record (`framing_spec`);
-//! transport end of file (the crate's `die`; `connection.rs` leaves
+//! The framer's timing on a partial record, and `feed` over a stream in any
+//! chunks, are [`super::framing`]'s ([`super::framing::theorem_disp_stream`]).
+//!
+//! Not covered: transport end of file (the crate's `die`; `connection.rs` leaves
 //! transport closure out of scope); `acknowledge` of bytes other than the
 //! flight (a local `internal_error`; the transcription has no transport);
 //! `feed` outside the `Handshake` mode (it does nothing).

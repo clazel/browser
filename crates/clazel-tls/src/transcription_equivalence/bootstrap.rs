@@ -19,8 +19,9 @@
 //! (which `bootstrap_lemmas::lemma_feed_complete` proves is `feed` on every
 //! record its framer completes) against the transcription's
 //! `client_receive_stream` of the same bytes ([`record_agrees`]). The framer
-//! itself (when each side decides on a partial record) is `framing_spec`'s
-//! part of #139.
+//! itself (when each side decides on a partial record), and `feed` over a
+//! stream in any chunks, are [`super::framing`]'s
+//! ([`super::framing::theorem_boot_stream`]).
 //!
 //! The acknowledgement gate is the crate's interface to its transport (a send
 //! must be acknowledged with exactly its bytes before input is read); the

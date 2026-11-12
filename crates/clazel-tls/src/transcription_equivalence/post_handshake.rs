@@ -92,10 +92,12 @@
 //!   [`post_agrees`] says nothing of its `send` then.
 //! - Transport end of file (the crate's `Input::Closed`): `connection.rs`
 //!   leaves transport closure out of scope.
-//! - The framer's timing on a partial record: the crate decides on a
-//!   record's type and length as soon as its header has arrived, the
+//! - In this file (covered in [`super::framing`] instead): the timing on a
+//!   partial record (the crate decides on a record's type and length as soon
+//!   as its header has arrived, the
 //!   transcription on its length only, and on its type once the body has
-//!   arrived. As in [`super::bootstrap`], whole records are compared.
+//!   arrived) and a stream in any chunks
+//!   ([`super::framing::theorem_post_stream`]).
 //! - Joining the starting state to the dispatcher (the driver theorem).
 
 #[cfg(verus_only)]

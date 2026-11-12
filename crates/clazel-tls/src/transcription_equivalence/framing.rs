@@ -38,15 +38,64 @@
 //!    and [`header_two_faults`] holds (the existing "record header order"
 //!    difference). No header that the crate rejects early is accepted by the
 //!    transcription once its record is complete.
-//! 4. **Each layer, for streams** (below): `feed`, driven over any chunking,
-//!    is the layer's whole-record step on each record [`frames`] completes,
-//!    in order, and the end is one of the cases of item 2.
+//! 4. **Each layer, for streams.** For each of the three machines, its
+//!    caller over any chunking is a function of the concatenated bytes (the
+//!    machine's whole-record step on each record the framer completes, in
+//!    order), and along that stream the machine and the transcription agree
+//!    record by record through the existing whole-record theorem, from the
+//!    states it says agree again, with the end of the stream as in item 2:
+//!    - **bootstrap** ([`theorem_boot_stream`]): [`boot_drive`] is
+//!      [`boot_steps`] (`bootstrap_lemmas::record_step` on each record), and
+//!      [`boot_stream_agrees`] carries `bootstrap::record_agrees` against
+//!      `middlebox::client_receive_stream` of the whole stream;
+//!    - **dispatcher** ([`theorem_disp_stream`]): [`disp_drive`] is
+//!      [`disp_steps`] (`dispatcher_spec::receive_record` on each record),
+//!      and [`disp_stream_agrees`] carries `dispatcher::record_agrees`
+//!      against `client_receive_stream`, at each record within the
+//!      dispatcher theorem's domain ([`disp_room`]: the crate's transcript
+//!      cap does not fire);
+//!    - **post-handshake** ([`theorem_post_stream`]): [`post_drive`] is
+//!      [`post_steps`] (`step` on what is held, the caller resubmitting the
+//!      rest), and [`post_stream_agrees`] carries
+//!      `post_handshake::record_agrees` against `connection::receive_stream`,
+//!      up to the first record after which the transcription owes a
+//!      KeyUpdate (the existing `settle` difference: the crate has sent its
+//!      answer and the transcription has not, so the two connections differ
+//!      by that KeyUpdate from then on).
+//!
+//!    When a machine stops on a record (an action for its caller: a flight to
+//!    send and acknowledge, the handover to the next machine, a failure, a
+//!    closure), the transcription's result on the whole stream is its result
+//!    on that record joined with its result on the rest
+//!    (`post_handshake::joined`), and the unconsumed bytes stay with the
+//!    caller: what comes next is the caller's (the driver theorem's).
+//!
+//! Where the two sides decide differently on a partial record (each stated
+//! as a definition, none excluded from a domain):
+//! - [`early_reject`]: the crate rejects a header with a type its mode does
+//!   not allow before the body arrives; the transcription waits for the
+//!   body, then rejects it with the same alert ([`lemma_early_reject`]), or
+//!   never decides if the stream ends first. When the length is refused too,
+//!   both reject at the header, the crate naming the type
+//!   ([`header_two_faults`], the earlier theorems' `two_faults` for a
+//!   header).
+//! - `post_handshake::exhausted`: after sequence number 2^64 - 1, the
+//!   transducer refuses the next step with `internal_error` before any byte
+//!   of a next record has arrived; the transcription waits (and refuses the
+//!   record once its header passes, or its length).
+//!
+//! No disagreement was found: no header the crate rejects early is accepted
+//! by the transcription once its record is complete, and the crate never
+//! completes a record the transcription does not split off whole.
 //!
 //! Modelling choices of this file:
 //! - [`drive`] is the caller that the framer's modelling choices describe
 //!   ("The caller retains/resubmits only the unconsumed suffix. A completed
 //!   record is cleared by take."). It stops at a failure, which is final
-//!   in every layer.
+//!   in every layer. [`boot_drive`], [`disp_drive`] and [`post_drive`] are
+//!   that caller for each machine: they feed again while the machine still
+//!   reads and asked nothing of the caller, and otherwise stop with the
+//!   machine's action.
 //! - [`split`] fixes the transcription's protection (`Connection::receive`),
 //!   since a stream's protection changes only at the record boundaries where
 //!   the crate hands over from one layer to the next (§5.1: "all messages
