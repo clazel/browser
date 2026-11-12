@@ -74,6 +74,8 @@
 //!   (§9.2.1.1, §9.2.2.1, §17.2.1's "anonymous objects"), which layout
 //!   applies.
 
+pub mod anonymous;
+pub mod dump;
 pub mod generate;
 pub mod marker;
 pub mod replaced;
@@ -81,9 +83,11 @@ pub mod state;
 pub mod table;
 pub mod tree;
 
+
 pub use replaced::{Input, Replaced};
 pub use tree::{BoxId, BoxKind, BoxTree, Class, Fragment, LayoutBox, Marker, RowGroup, TextRun};
 
+use clazel_dom::exec::Arena;
 use clazel_style::cascade::computed::{ComputedStyle, ComputedTable};
 
 /// Computed style as box generation reads it: for each node id, the
@@ -106,4 +110,15 @@ impl StyleFns for ComputedTable {
     fn style(&self, node: usize) -> Option<&ComputedStyle> {
         self.get(node)
     }
+}
+
+/// The box tree of the document in `arena` with the computed style
+/// `styles` (the module's pipeline).
+pub fn build(arena: &Arena, styles: &impl StyleFns) -> BoxTree {
+    let mut tree = generate::generate(arena, styles);
+    table::anonymous_table_objects(&mut tree);
+    anonymous::split_blocks(&mut tree);
+    anonymous::text_runs(&mut tree, arena, styles);
+    tree.compact();
+    tree
 }
