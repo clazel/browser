@@ -71,6 +71,9 @@ const PLACES: &[(&str, Place)] = &[
     ("clazel-font", Place::Renderer),
     ("clazel-layout", Place::Renderer),
     ("clazel-glyph-mask", Place::Renderer),
+    // The GPU process (item 5.17b): sandboxed and one per tab like the renderer.
+    // The detail image has no panel for it yet; item 5.27 adds one.
+    ("clazel-gpu", Place::Renderer),
     ("clazel-displaylist", Place::Primitive),
     ("clazel-encoding", Place::Primitive),
     ("clazel-url", Place::Primitive),

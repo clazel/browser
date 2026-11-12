@@ -1,0 +1,22 @@
+[package]
+name = "clazel-gpu"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "The GPU process's drawing (Phase 5 item 5.17b): a validated display list and a viewport to pixels, through fixed pipelines, with backends below a small trait."
+
+[dependencies]
+# The decoder and validator every list passes first (item 5.17a); our own crate.
+clazel-displaylist = { path = "../clazel-displaylist" }
+
+# Verification tier (docs/VERIFICATION.md). The plan places this crate at tier 0
+# (item 5.17b): a GPU driver is in its trusted base whatever is proven here. The
+# Kani harnesses in src/proofs.rs are evidence for the batching and atlas
+# arithmetic, not a tier claim.
+[package.metadata.clazel]
+tier = 0
+target-tier = 0
+
+[lints]
+workspace = true
