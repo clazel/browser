@@ -207,15 +207,14 @@ impl CollapseState {
 
     /// The invariant: a collapsible space is pending exactly when it is the
     /// last unit kept, and what it replaced was not a collapsible space or
-    /// segment break (step 4 and step 1 would have removed it); just after
-    /// a segment break nothing is pending and the last unit kept is that
-    /// break.
+    /// segment break (step 4 and step 1 would have removed it); the last
+    /// unit kept is a segment break exactly when only collapsible spaces,
+    /// tabs and bidi formatting characters have come since it
+    /// (`after_break`), and then nothing is pending.
     pub fn invariant(&self) -> bool {
         (self.last == Last::Space) == self.pending.is_some()
             && matches!(self.pending, None | Some(Last::Start | Last::Other))
-            && (!self.after_break
-                || (self.pending.is_none()
-                    && matches!(self.last, Last::ConvertedBreak | Last::PreservedBreak)))
+            && self.after_break == matches!(self.last, Last::ConvertedBreak | Last::PreservedBreak)
     }
 }
 
