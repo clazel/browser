@@ -32,6 +32,55 @@ pub open spec fn flight_started(m: Models, established: crate::hello::bootstrap_
     }
 }
 
+/// §7.1, §7.3: what the bootstrap's `Established` comes to. The handshake
+/// keys are derived from the accepted ServerHello and our scalar, and the
+/// dispatcher starts from them in the handoff's exact state
+/// ([`flight_started`]), sending nothing. If they cannot be derived (§7.4.2's
+/// all-zero shared secret, a scalar that is not the one offered), it is a
+/// local failure before the handshake keys (`driver_spec` choice 4).
+pub open spec fn established_step(m: Models, established: crate::hello::bootstrap_spec::Action,
+    scalar: Seq<u8>) -> super::driver_spec::Step
+{
+    match established {
+        crate::hello::bootstrap_spec::Action::Established(config, transcript, peer_key) =>
+            match crate::traffic::handshake_spec::start(m.crypto, m.exchange, config, transcript, peer_key, scalar) {
+                Ok(h) => super::driver_spec::Step { send: seq![], deliver: seq![],
+                    stage: super::driver_spec::Stage::Flight(super::dispatcher_spec::start(h,
+                        crate::traffic::handshake_spec::needs_ccs(config, transcript))),
+                    status: super::driver_spec::Status::Handshaking },
+                Err(alert) => super::driver_spec::hello_failure(alert),
+            },
+        _ => super::driver_spec::hello_failure(crate::spec::INTERNAL_ERROR),
+    }
+}
+
+/// RFC 8446 §4.1.2 and §5.1: the start. The bootstrap's first record (the
+/// initial ClientHello) goes out and is acknowledged at once (`driver_spec`
+/// choice 2), and the Hello stage waits with an empty framer. A
+/// configuration the bootstrap refuses ends the connection with its alert,
+/// nothing sent.
+pub open spec fn connect_ensures(m: Models, config: crate::hello::client_spec::Config,
+    out: super::driver_spec::Step) -> bool
+{
+    let failed = |alert: u8| super::driver_spec::Step { send: seq![], deliver: seq![],
+        stage: super::driver_spec::Stage::Ended,
+        status: super::driver_spec::Status::Failed(alert, super::driver_spec::Origin::NotSent) };
+    match crate::hello::bootstrap_spec::start(config) {
+        Ok((s0, crate::hello::bootstrap_spec::Action::Send(wire))) => {
+            let (s1, a1) = crate::hello::bootstrap_spec::acknowledge(m.crypto.hash, s0, wire);
+            if a1 is None {
+                out == super::driver_spec::Step { send: wire, deliver: seq![],
+                    stage: super::driver_spec::Stage::Hello(s1, seq![]),
+                    status: super::driver_spec::Status::Handshaking }
+            } else {
+                out == failed(crate::spec::INTERNAL_ERROR)
+            }
+        },
+        Ok(_) => out == failed(crate::spec::INTERNAL_ERROR),
+        Err(alert) => out == failed(alert),
+    }
+}
+
 /// §7.3: the transducer starts from the application traffic secrets of a
 /// dispatcher that reached `Ready`, so past the server Finished.
 pub open spec fn app_started(m: Models, state: super::post_handshake_spec::State) -> bool {
@@ -61,13 +110,10 @@ pub open spec fn hello_step_ensures(m: Models, boot: crate::hello::bootstrap_spe
                     crate::hello::bootstrap_spec::Action::None =>
                         out.send == wire && out.status == super::driver_spec::Status::Handshaking
                             && out.stage == super::driver_spec::Stage::Hello(acked, expected.framing),
-                    crate::hello::bootstrap_spec::Action::Established(_, _, _) =>
-                        out.send.len() >= wire.len() && out.send.subrange(0, wire.len() as int) == wire
-                            && match out.stage {
-                                super::driver_spec::Stage::Flight(state) => flight_started(m, after, scalar, state)
-                                    && out.send == wire,
-                                _ => out.stage == super::driver_spec::Stage::Ended,
-                            },
+                    crate::hello::bootstrap_spec::Action::Established(_, _, _) => out == super::driver_spec::Step {
+                        send: wire + established_step(m, after, scalar).send,
+                        ..established_step(m, after, scalar)
+                    },
                     crate::hello::bootstrap_spec::Action::Fail(a) => out == super::driver_spec::Step {
                         send: wire + super::driver_spec::hello_failure(a).send,
                         ..super::driver_spec::hello_failure(a)
@@ -75,11 +121,8 @@ pub open spec fn hello_step_ensures(m: Models, boot: crate::hello::bootstrap_spe
                     _ => out == super::driver_spec::hello_failure(crate::spec::INTERNAL_ERROR),
                 }
             },
-            crate::hello::bootstrap_spec::Action::Established(_, _, _) => match out.stage {
-                super::driver_spec::Stage::Flight(state) => flight_started(m, expected.action, scalar, state)
-                    && out.send.len() == 0,
-                _ => out.stage == super::driver_spec::Stage::Ended,
-            },
+            crate::hello::bootstrap_spec::Action::Established(_, _, _) =>
+                out == established_step(m, expected.action, scalar),
             crate::hello::bootstrap_spec::Action::Alert(a) => out == super::driver_spec::peer_failed(a),
             crate::hello::bootstrap_spec::Action::Fail(a) => out == super::driver_spec::hello_failure(a),
             crate::hello::bootstrap_spec::Action::Close => out == super::driver_spec::hello_closed(),
@@ -128,9 +171,10 @@ pub open spec fn app_step_ensures(m: Models, before: super::post_handshake_spec:
     consumed == r.2 && out == super::driver_spec::carry_out(m.cipher, r.0, r.1)
 }
 
-/// One step of the joined client, whichever machine is running.
-pub open spec fn step_ensures(m: Models, before: super::driver_spec::Stage, scalar: Seq<u8>, input: Seq<u8>,
-    consumed: nat, out: super::driver_spec::Step) -> bool
+/// One step of the joined client, whichever machine is running. `status`
+/// is where the connection was before it; once ended, nothing changes.
+pub open spec fn step_ensures(m: Models, before: super::driver_spec::Stage, status: super::driver_spec::Status,
+    scalar: Seq<u8>, input: Seq<u8>, consumed: nat, out: super::driver_spec::Step) -> bool
 {
     match before {
         super::driver_spec::Stage::Hello(boot, framing) =>
@@ -138,28 +182,37 @@ pub open spec fn step_ensures(m: Models, before: super::driver_spec::Stage, scal
         super::driver_spec::Stage::Flight(state) =>
             flight_step_ensures(m, state, input, consumed, out) && out.deliver.len() == 0,
         super::driver_spec::Stage::App(state) => app_step_ensures(m, state, input, consumed, out),
-        super::driver_spec::Stage::Ended => consumed == 0 && out.send.len() == 0 && out.deliver.len() == 0
-            && out.stage == super::driver_spec::Stage::Ended,
+        super::driver_spec::Stage::Ended => consumed == 0 && out == unchanged(before, status),
     }
 }
 
+/// Nothing sent or delivered, and the connection where it was.
+pub open spec fn unchanged(stage: super::driver_spec::Stage, status: super::driver_spec::Status)
+    -> super::driver_spec::Step
+{
+    super::driver_spec::Step { send: seq![], deliver: seq![], stage, status }
+}
+
 /// Sending application data is the transducer's `send_application`, and
-/// nothing before the handshake ends.
-pub open spec fn send_ensures(m: Models, before: super::driver_spec::Stage, data: Seq<u8>,
-    out: super::driver_spec::Step) -> bool
+/// nothing, with the connection unchanged, before the handshake ends or
+/// after it ended.
+pub open spec fn send_ensures(m: Models, before: super::driver_spec::Stage, status: super::driver_spec::Status,
+    data: Seq<u8>, out: super::driver_spec::Step) -> bool
 {
     match before {
         super::driver_spec::Stage::App(state) => {
             let r = super::post_handshake_spec::send_application(m.crypto, m.cipher, state, data);
             out == super::driver_spec::carry_out(m.cipher, r.0, r.1)
         },
-        _ => out.send.len() == 0,
+        _ => out == unchanged(before, status),
     }
 }
 
 /// Closing is the transducer's `close` once it runs. Before the ServerHello
 /// it is a plaintext close_notify.
-pub open spec fn close_ensures(m: Models, before: super::driver_spec::Stage, out: super::driver_spec::Step) -> bool {
+pub open spec fn close_ensures(m: Models, before: super::driver_spec::Stage, status: super::driver_spec::Status,
+    out: super::driver_spec::Step) -> bool
+{
     match before {
         super::driver_spec::Stage::App(state) => {
             let r = super::post_handshake_spec::close(m.cipher, state);
@@ -168,7 +221,7 @@ pub open spec fn close_ensures(m: Models, before: super::driver_spec::Stage, out
         super::driver_spec::Stage::Hello(_, _) => out == super::driver_spec::hello_closed(),
         super::driver_spec::Stage::Flight(state) => out == super::driver_spec::flight_closed(
             super::dispatcher_spec::close_wire(super::dispatcher_spec::Ciphers { seal: m.cipher.seal, open: m.cipher.open }, state)),
-        super::driver_spec::Stage::Ended => out.send.len() == 0,
+        super::driver_spec::Stage::Ended => out == unchanged(before, status),
     }
 }
 } // verus!

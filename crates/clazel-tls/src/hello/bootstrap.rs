@@ -548,7 +548,8 @@ impl<C: Crypto> Bootstrap<C> {
     pub fn start(config: Config, crypto: C) -> (out: Result<(Self, Action), u8>)
         ensures super::bootstrap_contract::start_ensures(config@, start_view(out)),
             match out {
-                Ok((b, _)) => b.wf() && b.crypto_functions() == crypto.functions(),
+                Ok((b, _)) => b.wf() && b.crypto_functions() == crypto.functions()
+                    && b@.1 == crate::connection::framing_spec::new(),
                 Err(_) => true,
             },
     {
