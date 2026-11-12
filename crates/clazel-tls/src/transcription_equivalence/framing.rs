@@ -1182,4 +1182,583 @@ pub proof fn theorem_boot_stream(p: Primitives)
     }
 }
 
+// ---------------------------------------------------------------------------
+// The dispatcher (`connection/dispatcher_spec.rs`) on a stream.
+// ---------------------------------------------------------------------------
+
+/// A record's messages leave the framer as they found it, empty.
+pub proof fn lemma_run_messages_framing(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, s: crate::connection::dispatcher_spec::State,
+    messages: Seq<Seq<u8>>)
+    requires s.framing.len() == 0,
+    ensures crate::connection::dispatcher_spec::run_messages(c, v, f, s, messages).1.framing.len() == 0,
+    decreases messages.len(),
+{
+    hide(crate::auth::spec::step);
+    if messages.len() > 0 {
+        let (action, after) = crate::connection::dispatcher_spec::process_one(c, v, f, s, messages[0]);
+        if action is None {
+            lemma_run_messages_framing(c, v, f, after, messages.skip(1));
+        }
+    }
+}
+
+/// A record's content leaves the framer as it found it, empty.
+pub proof fn lemma_receive_plaintext_framing(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, s: crate::connection::dispatcher_spec::State, typ: u8,
+    bytes: Seq<u8>)
+    requires s.framing.len() == 0,
+    ensures crate::connection::dispatcher_spec::receive_plaintext(c, v, f, s, typ, bytes).1.framing.len() == 0,
+{
+    hide(crate::connection::dispatcher_spec::run_messages);
+    if bytes.len() <= crate::spec::MAX_PLAINTEXT {
+        match crate::spec::feed_record(s.reassembly, crate::spec::Record { ctype: typ, fragment: bytes }) {
+            crate::spec::Res::Ok((crate::spec::Event::Messages(messages), reassembly)) => {
+                lemma_run_messages_framing(c, v, f, crate::connection::dispatcher_spec::State { reassembly, ..s },
+                    messages);
+            },
+            _ => {},
+        }
+    }
+}
+
+/// `receive_record` from an empty framer leaves it empty.
+pub proof fn lemma_receive_record_framing(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, s: crate::connection::dispatcher_spec::State, b: Seq<u8>)
+    requires s.framing.len() == 0,
+    ensures crate::connection::dispatcher_spec::receive_record(c, v, f, s, b).1.framing.len() == 0,
+{
+    hide(crate::connection::dispatcher_spec::receive_plaintext);
+    match crate::spec::read_record(b, true) {
+        crate::spec::Read::Done(crate::spec::Frame::Protected(_, _), _) => {
+            if s.handshake_receiver is Some {
+                let rx = s.handshake_receiver->Some_0;
+                let (epoch, read) = crate::traffic::spec::receive(
+                    crate::connection::dispatcher_spec::open_with(f, rx), rx, b);
+                let opened = crate::connection::dispatcher_spec::State { handshake_receiver: Some(epoch), ..s };
+                if read is Record {
+                    lemma_receive_plaintext_framing(c, v, f, opened, read->Record_0, read->Record_1);
+                }
+            }
+        },
+        _ => {},
+    }
+}
+
+/// A fatal alert does not depend on the framer's bytes.
+pub proof fn lemma_fatal_framing(f: crate::connection::dispatcher_spec::Ciphers,
+    s: crate::connection::dispatcher_spec::State, x: Seq<u8>, alert: u8)
+    ensures crate::connection::dispatcher_spec::fatal(f, crate::connection::dispatcher_spec::State { framing: x, ..s }, alert)
+        == crate::connection::dispatcher_spec::fatal(f, s, alert),
+{
+}
+
+/// The dispatcher's `feed` from a framer holding `s.framing`, as [`first`]
+/// decides on the bytes it holds and the chunk; `s0` is `s` with the
+/// framer emptied.
+pub proof fn lemma_disp_feed(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, s: crate::connection::dispatcher_spec::State, chunk: Seq<u8>)
+    requires
+        s.mode == crate::connection::dispatcher_spec::Mode::Handshake,
+        crate::connection::framing_spec::wf_mode(s.framing, true),
+        crate::spec::read_record(s.framing, true) is NeedMore,
+    ensures ({
+        let x = s.framing + chunk;
+        let (st, k) = first(x, true);
+        let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+        &&& s.framing.len() <= k <= x.len()
+        &&& (st is Pending ==> k == x.len())
+        &&& (!(st is Pending) ==> s.framing.len() < k)
+        &&& crate::connection::dispatcher_spec::feed(c, v, f, s, chunk) == match st {
+            Status::Pending => (chunk.len(), crate::connection::dispatcher_spec::Action::None,
+                crate::connection::dispatcher_spec::State { framing: x, ..s }),
+            Status::Fail(a) => ((k - s.framing.len()) as nat, crate::connection::dispatcher_spec::fatal(f, s0, a).0,
+                crate::connection::dispatcher_spec::fatal(f, s0, a).1),
+            Status::Complete => ((k - s.framing.len()) as nat,
+                crate::connection::dispatcher_spec::receive_record(c, v, f, s0, x.take(k as int)).0,
+                crate::connection::dispatcher_spec::receive_record(c, v, f, s0, x.take(k as int)).1),
+        }
+    }),
+{
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::connection::dispatcher_spec::fatal);
+    let x = s.framing + chunk;
+    lemma_feed_from(s.framing, chunk, true);
+    lemma_first(x, x.len(), true);
+    let (st, k) = first(x, true);
+    if st is Pending {
+        assert(x.take(k as int) =~= x);
+    }
+    if st is Fail {
+        lemma_fatal_framing(f, crate::connection::dispatcher_spec::State { framing: seq![], ..s }, s.framing,
+            st->Fail_0);
+        assert(crate::connection::dispatcher_spec::State { framing: s.framing,
+            ..crate::connection::dispatcher_spec::State { framing: seq![], ..s } } == s);
+    }
+}
+
+/// What a run of the dispatcher's `feed` gives: its actions other than
+/// `None`, in order, the state, and the input consumed.
+pub struct DispRun {
+    /// Actions other than `None`, in order.
+    pub actions: Seq<crate::connection::dispatcher_spec::Action>,
+    /// The dispatcher after the run (its framer holds a partial record).
+    pub state: crate::connection::dispatcher_spec::State,
+    /// Input bytes consumed.
+    pub consumed: nat,
+}
+
+/// Whether the dispatcher's caller feeds it more: it is still reading the
+/// server's flight and the last call asked nothing of the caller (no
+/// effect, a dropped change_cipher_spec, a user_canceled).
+pub open spec fn disp_goes_on(s: crate::connection::dispatcher_spec::State,
+    a: crate::connection::dispatcher_spec::Action) -> bool
+{
+    &&& s.mode == crate::connection::dispatcher_spec::Mode::Handshake
+    &&& (a is None || a is Ignored || a is Cancelled)
+}
+
+/// `a` as a list of actions the caller sees: none for `None`.
+pub open spec fn shown(a: crate::connection::dispatcher_spec::Action) -> Seq<crate::connection::dispatcher_spec::Action> {
+    if a is None { seq![] } else { seq![a] }
+}
+
+/// The dispatcher's caller, on the chunks `chunk` then `chunks`: `feed` the
+/// chunk, and again on what it did not consume, while [`disp_goes_on`];
+/// when the chunk is used up, the next. Any other action is the caller's to
+/// handle (`dispatcher_spec`: "unconsumed suffix bytes remain caller
+/// owned").
+pub open spec fn disp_drive(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, s: crate::connection::dispatcher_spec::State, chunk: Seq<u8>,
+    chunks: Seq<Seq<u8>>) -> DispRun
+    decreases chunks.len(), chunk.len(),
+{
+    let (n, a, s2) = crate::connection::dispatcher_spec::feed(c, v, f, s, chunk);
+    let stop = DispRun { actions: shown(a), state: s2, consumed: n };
+    if disp_goes_on(s2, a) {
+        if 0 < n < chunk.len() {
+            let r = disp_drive(c, v, f, s2, chunk.skip(n as int), chunks);
+            DispRun { actions: shown(a) + r.actions, state: r.state, consumed: n + r.consumed }
+        } else if n == chunk.len() && chunks.len() > 0 {
+            let r = disp_drive(c, v, f, s2, chunks[0], chunks.skip(1));
+            DispRun { actions: shown(a) + r.actions, state: r.state, consumed: n + r.consumed }
+        } else {
+            stop
+        }
+    } else {
+        stop
+    }
+}
+
+/// The dispatcher on the stream `w` from an empty framer: its whole-record
+/// step (`dispatcher_spec::receive_record`) on each record [`frames`]
+/// completes, in order, while [`disp_goes_on`]; the framer's failure
+/// (`fatal`); or it waits, its framer holding the partial record.
+pub open spec fn disp_steps(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, s: crate::connection::dispatcher_spec::State, w: Seq<u8>) -> DispRun
+    decreases w.len(),
+{
+    let (st, k) = first(w, true);
+    match st {
+        Status::Pending => DispRun { actions: seq![],
+            state: crate::connection::dispatcher_spec::State { framing: w, ..s }, consumed: w.len() },
+        Status::Fail(a) => DispRun { actions: seq![crate::connection::dispatcher_spec::fatal(f, s, a).0],
+            state: crate::connection::dispatcher_spec::fatal(f, s, a).1, consumed: k },
+        Status::Complete => {
+            let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, w.take(k as int));
+            if disp_goes_on(s2, a) && 0 < k <= w.len() {
+                let r = disp_steps(c, v, f, s2, w.skip(k as int));
+                DispRun { actions: shown(a) + r.actions, state: r.state, consumed: k + r.consumed }
+            } else {
+                DispRun { actions: shown(a), state: s2, consumed: k }
+            }
+        },
+    }
+}
+
+/// [`disp_steps`] with `before` bytes already held by the framer.
+pub open spec fn disp_held(r: DispRun, before: nat) -> DispRun {
+    DispRun { consumed: (r.consumed - before) as nat, ..r }
+}
+
+/// **Chunking does not matter for the dispatcher.** Its caller over `chunk`
+/// then `chunks`, from a framer holding `s.framing`, is [`disp_steps`] of
+/// all the bytes from an empty framer.
+pub proof fn lemma_disp_drive(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, s: crate::connection::dispatcher_spec::State, chunk: Seq<u8>,
+    chunks: Seq<Seq<u8>>)
+    requires
+        s.mode == crate::connection::dispatcher_spec::Mode::Handshake,
+        crate::connection::framing_spec::wf_mode(s.framing, true),
+        crate::spec::read_record(s.framing, true) is NeedMore,
+    ensures ({
+        let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+        let w = s.framing + chunk + super::ccs::flatten(chunks);
+        &&& disp_steps(c, v, f, s0, w).consumed >= s.framing.len()
+        &&& disp_drive(c, v, f, s, chunk, chunks) == disp_held(disp_steps(c, v, f, s0, w), s.framing.len())
+    }),
+    decreases chunks.len(), chunk.len(),
+{
+    hide(crate::connection::dispatcher_spec::feed);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(crate::connection::dispatcher_spec::fatal);
+    hide(first);
+    let buf = s.framing;
+    let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+    let x = buf + chunk;
+    let rest = super::ccs::flatten(chunks);
+    let w = x + rest;
+    lemma_disp_feed(c, v, f, s, chunk);
+    lemma_first(x, x.len(), true);
+    let (st, k) = first(x, true);
+    match st {
+        Status::Pending => {
+            assert(x.take(k as int) =~= x);
+            let s1 = crate::connection::dispatcher_spec::State { framing: x, ..s };
+            assert(crate::connection::dispatcher_spec::State { framing: seq![], ..s1 } == s0);
+            assert(crate::connection::dispatcher_spec::State { framing: w, ..s0 }
+                == crate::connection::dispatcher_spec::State { framing: w, ..s });
+            if chunks.len() == 0 {
+                assert(rest =~= Seq::<u8>::empty());
+                assert(w =~= x);
+            } else {
+                assert(x.take(x.len() as int) =~= x);
+                lemma_need_more_wf(x, true);
+                lemma_disp_drive(c, v, f, s1, chunks[0], chunks.skip(1));
+                assert(x + chunks[0] + super::ccs::flatten(chunks.skip(1)) =~= w);
+            }
+        },
+        Status::Fail(_) => {
+            lemma_first_extend(x, rest, true);
+            reveal(crate::connection::dispatcher_spec::fatal);
+        },
+        Status::Complete => {
+            lemma_first_extend(x, rest, true);
+            assert(w.take(k as int) =~= x.take(k as int));
+            let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s0, x.take(k as int));
+            let n = (k - buf.len()) as nat;
+            if disp_goes_on(s2, a) {
+                lemma_receive_record_framing(c, v, f, s0, x.take(k as int));
+                assert(s2.framing =~= Seq::<u8>::empty());
+                assert(crate::connection::dispatcher_spec::State { framing: seq![], ..s2 } == s2);
+                lemma_empty(true);
+                if n < chunk.len() {
+                    lemma_disp_drive(c, v, f, s2, chunk.skip(n as int), chunks);
+                    assert(Seq::<u8>::empty() + chunk.skip(n as int) + rest =~= w.skip(k as int));
+                    assert(s2.framing + chunk.skip(n as int) + rest =~= w.skip(k as int));
+                } else if chunks.len() > 0 {
+                    lemma_disp_drive(c, v, f, s2, chunks[0], chunks.skip(1));
+                    assert(s2.framing + chunks[0] + super::ccs::flatten(chunks.skip(1)) =~= w.skip(k as int));
+                } else {
+                    assert(w.skip(k as int) =~= Seq::<u8>::empty());
+                    reveal(first);
+                    assert(first(w.skip(k as int), false).0 is Pending);
+                    assert(first(w.skip(k as int), true).0 is Pending);
+                    assert(crate::connection::dispatcher_spec::State { framing: w.skip(k as int), ..s2 } == s2);
+                    assert(shown(a) + Seq::<crate::connection::dispatcher_spec::Action>::empty() =~= shown(a));
+                }
+            }
+        },
+    }
+}
+
+/// The dispatcher's domain condition `dispatcher::room` for the next record:
+/// the crate's 4 MiB transcript cap cannot fire on it.
+pub open spec fn disp_room(s: crate::connection::dispatcher_spec::State) -> bool {
+    super::dispatcher::room(s, (s.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat)
+}
+
+/// The dispatcher and the transcription's client (`client_receive_stream`)
+/// agree on the stream `w`, record by record, along [`disp_steps`] (as
+/// [`boot_stream_agrees`] for the bootstrap): the crate waits on a partial
+/// record and the transcription does nothing; the crate's framer fails on a
+/// whole record, which is `receive_record`'s `fatal` and, within the
+/// dispatcher theorem's domain ([`disp_room`]), `dispatcher::record_agrees`;
+/// it fails on a partial record ([`early_reject`]) with the transcription's
+/// `alert_record` of its alert, while the transcription waits or refuses
+/// the header's length; it completes a record, and within the domain
+/// `dispatcher::record_agrees` holds of it and, if the crate goes on, the
+/// states agree again (`dispatcher::dispatcher_agrees`) and the
+/// transcription's result is its result on the rest from there. In every
+/// whole-record case the transcription reads the stream as that record,
+/// then the rest.
+pub open spec fn disp_stream_agrees(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, p: Primitives, s: crate::connection::dispatcher_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>) -> bool
+    decreases w.len(),
+{
+    let (st, k) = first(w, true);
+    let y = cl.connection;
+    let u = crate::transcription::middlebox::client_receive_stream(p, cl, w).0;
+    let n = 5 + super::bootstrap::length(w);
+    let quiet = crate::transcription::middlebox::ClientReceive::Continue { client: cl,
+        application_data: seq![], records_to_send: seq![] };
+    match st {
+        Status::Pending => u == quiet,
+        Status::Fail(a) => if w.len() >= n {
+            let b = w.take(n as int);
+            &&& super::bootstrap::whole_record(b)
+            &&& crate::connection::dispatcher_spec::receive_record(c, v, f, s, b)
+                == crate::connection::dispatcher_spec::fatal(f, s, a)
+            &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(
+                super::bootstrap::one_record(p, y, b),
+                |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(n as int)).0))
+            &&& disp_room(s) ==> super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
+        } else {
+            &&& early_reject(w, true, a)
+            &&& crate::connection::dispatcher_spec::fatal(f, s, a)
+                == (crate::connection::dispatcher_spec::Action::Fail(a,
+                    Some(crate::transcription::connection::alert_record(p, y, a as nat))),
+                    crate::connection::dispatcher_spec::failed())
+            &&& (u == quiet || (u matches crate::transcription::middlebox::ClientReceive::Abort(e)
+                && too_long_agrees(SplitEnd::TooLong(e), w, true, a)))
+        },
+        Status::Complete => {
+            let b = w.take(k as int);
+            let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, b);
+            let t = super::bootstrap::one_record(p, y, b);
+            let cl2 = crate::transcription::middlebox::ClientConnection { connection: t->Continue_0.connection, ..cl };
+            &&& super::bootstrap::whole_record(b)
+            &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(t,
+                |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(k as int)).0))
+            &&& disp_room(s) ==> {
+                &&& super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
+                &&& disp_goes_on(s2, a) ==> {
+                    &&& super::dispatcher::dispatcher_agrees(p, v, s2, cl2)
+                    &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
+                    &&& disp_stream_agrees(c, v, f, p, s2, cl2, w.skip(k as int))
+                }
+            }
+        },
+    }
+}
+
+/// A record whose result writes and delivers nothing leaves the rest of the
+/// stream to the connection after it.
+pub proof fn lemma_client_continue_progress(p: Primitives, cl: crate::transcription::middlebox::ClientConnection,
+    pr: Progress, rest: Seq<u8>)
+    requires pr.application_data.len() == 0, pr.records_to_send.len() == 0,
+    ensures
+        super::dispatcher::lifted(cl, super::post_handshake::joined(Receive::Continue(pr),
+            |c3: Connection| crate::transcription::connection::receive_stream(p, c3, rest).0))
+        == crate::transcription::middlebox::client_receive_stream(p,
+            crate::transcription::middlebox::ClientConnection { connection: pr.connection, ..cl }, rest).0,
+{
+    assert(pr.application_data =~= Seq::<u8>::empty());
+    assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+    assert(pr == Progress { connection: pr.connection, application_data: seq![], records_to_send: seq![] });
+    lemma_client_continue(p, cl, pr.connection, rest);
+}
+
+/// An early rejection's alert is `unexpected_message` or `record_overflow`.
+pub proof fn lemma_early_alert(w: Seq<u8>, alert: u8)
+    requires early_reject(w, true, alert) || early_reject(w, false, alert),
+    ensures alert != 0, alert != 90,
+{
+    reveal(crate::spec::read_record);
+}
+
+/// The transcription's client on a stream with no whole record: it waits,
+/// changing nothing, or refuses the header's length.
+pub proof fn lemma_client_partial(p: Primitives, cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>)
+    requires !cl.connection.read_closed, split(cl.connection, w).records.len() == 0,
+    ensures
+        crate::transcription::middlebox::client_receive_stream(p, cl, w).0 == match split(cl.connection, w).end {
+            SplitEnd::Partial(_) => crate::transcription::middlebox::ClientReceive::Continue { client: cl,
+                application_data: seq![], records_to_send: seq![] },
+            SplitEnd::TooLong(e) => crate::transcription::middlebox::ClientReceive::Abort(e),
+        },
+{
+    lemma_stream_partial(p, cl.connection, w);
+    lemma_client_lifted(p, cl, w);
+    assert(crate::transcription::middlebox::ClientConnection { connection: cl.connection, ..cl } == cl);
+}
+
+/// What [`lemma_disp_stream`] uses of `dispatcher::dispatcher_agrees`.
+pub proof fn lemma_disp_agrees_facts(p: Primitives, v: crate::auth::spec::Verification,
+    s: crate::connection::dispatcher_spec::State, cl: crate::transcription::middlebox::ClientConnection)
+    requires super::dispatcher::dispatcher_agrees(p, v, s, cl),
+    ensures
+        mode_agrees(cl.connection, true),
+        !cl.connection.read_closed,
+        s.mode == crate::connection::dispatcher_spec::Mode::Handshake,
+        s.framing.len() == 0,
+        super::dispatcher::sender_fresh(p, s, cl.connection),
+        super::auth::phase_is(s.auth->Some_0.phase, cl.connection.handshake.state),
+{
+}
+
+/// When the dispatcher goes on after a record, the transcription's result
+/// writes and delivers nothing, and the states agree again (from
+/// `dispatcher::outcome_agrees`).
+pub proof fn lemma_disp_quiet(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, p: Primitives, s: crate::connection::dispatcher_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, a: crate::connection::dispatcher_spec::Action,
+    s2: crate::connection::dispatcher_spec::State, t: Receive)
+    requires
+        super::dispatcher::outcome_agrees(c, v, f, p, s, cl, a, s2, t, true),
+        disp_goes_on(s2, a),
+    ensures
+        t is Continue,
+        t->Continue_0.application_data.len() == 0,
+        t->Continue_0.records_to_send.len() == 0,
+        super::dispatcher::dispatcher_agrees(p, v, s2,
+            crate::transcription::middlebox::ClientConnection { connection: t->Continue_0.connection, ..cl }),
+{
+    hide(super::dispatcher::dispatcher_agrees);
+}
+
+/// The dispatcher's stream on a whole record at the front of `w`.
+pub proof fn lemma_disp_stream_whole(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, p: Primitives, s: crate::connection::dispatcher_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>, k: nat)
+    requires
+        super::dispatcher::hypotheses(c, v, f, p),
+        super::dispatcher::dispatcher_agrees(p, v, s, cl),
+        5 <= k <= w.len(),
+        super::bootstrap::whole_record(w.take(k as int)),
+    ensures ({
+        let b = w.take(k as int);
+        let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, b);
+        let t = super::bootstrap::one_record(p, cl.connection, b);
+        let cl2 = crate::transcription::middlebox::ClientConnection { connection: t->Continue_0.connection, ..cl };
+        let u = crate::transcription::middlebox::client_receive_stream(p, cl, w).0;
+        &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(t,
+            |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(k as int)).0))
+        &&& disp_room(s) ==> {
+            &&& super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
+            &&& disp_goes_on(s2, a) ==> {
+                &&& super::dispatcher::dispatcher_agrees(p, v, s2, cl2)
+                &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
+            }
+        }
+    }),
+{
+    hide(super::dispatcher::record_agrees);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(super::bootstrap::one_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(crate::transcription::connection::receive_stream);
+    hide(super::dispatcher::lifted);
+    hide(super::dispatcher::hypotheses);
+    hide(super::dispatcher::room);
+    hide(super::dispatcher::outcome_agrees);
+    hide(super::post_handshake::joined);
+    let b = w.take(k as int);
+    lemma_disp_agrees_facts(p, v, s, cl);
+    assert(b + w.skip(k as int) =~= w);
+    lemma_client_prefix(p, cl, b, w.skip(k as int));
+    if disp_room(s) {
+        super::dispatcher::lemma_receive(c, v, f, p, s, cl, b);
+        let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, b);
+        if disp_goes_on(s2, a) {
+            let t = super::bootstrap::one_record(p, cl.connection, b);
+            assert(super::dispatcher::outcome_agrees(c, v, f, p, s, cl, a, s2, t, true)) by {
+                reveal(super::dispatcher::record_agrees);
+            }
+            lemma_disp_quiet(c, v, f, p, s, cl, a, s2, t);
+            lemma_client_continue_progress(p, cl, t->Continue_0, w.skip(k as int));
+        }
+    }
+}
+
+/// **The dispatcher on a stream** ([`disp_stream_agrees`]), from agreeing
+/// states, for every stream.
+pub proof fn lemma_disp_stream(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, p: Primitives, s: crate::connection::dispatcher_spec::State,
+    cl: crate::transcription::middlebox::ClientConnection, w: Seq<u8>)
+    requires
+        super::dispatcher::hypotheses(c, v, f, p),
+        super::dispatcher::dispatcher_agrees(p, v, s, cl),
+    ensures disp_stream_agrees(c, v, f, p, s, cl, w),
+    decreases w.len(),
+{
+    hide(super::dispatcher::record_agrees);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(crate::connection::dispatcher_spec::receive_record);
+    hide(super::bootstrap::one_record);
+    hide(crate::transcription::middlebox::client_receive_stream);
+    hide(crate::transcription::connection::receive_stream);
+    hide(split);
+    hide(super::dispatcher::lifted);
+    hide(super::dispatcher::hypotheses);
+    hide(super::dispatcher::room);
+    hide(super::post_handshake::joined);
+    hide(crate::connection::dispatcher_spec::fatal);
+    hide(disp_room);
+    hide(too_long_agrees);
+    let y = cl.connection;
+    let (st, k) = first(w, true);
+    let n = 5 + super::bootstrap::length(w);
+    lemma_disp_agrees_facts(p, v, s, cl);
+    lemma_first(w, w.len(), true);
+    lemma_framing_agrees(y, w, true);
+    match st {
+        Status::Pending => {
+            lemma_client_partial(p, cl, w);
+        },
+        Status::Fail(a) => {
+            if w.len() >= n {
+                let b = w.take(n as int);
+                assert(b.subrange(3, 5) =~= w.subrange(3, 5));
+                reveal(crate::connection::dispatcher_spec::receive_record);
+                lemma_disp_stream_whole(c, v, f, p, s, cl, w, n);
+            } else {
+                lemma_client_partial(p, cl, w);
+                lemma_early_alert(w, a);
+                assert(super::dispatcher::ciphers_agree(f, p)) by { reveal(super::dispatcher::hypotheses); }
+                super::dispatcher::lemma_fatal(f, p, s, y, a);
+            }
+        },
+        Status::Complete => {
+            lemma_disp_stream_whole(c, v, f, p, s, cl, w, k);
+            let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, w.take(k as int));
+            let t = super::bootstrap::one_record(p, y, w.take(k as int));
+            if disp_room(s) && disp_goes_on(s2, a) {
+                lemma_disp_stream(c, v, f, p, s2,
+                    crate::transcription::middlebox::ClientConnection { connection: t->Continue_0.connection, ..cl },
+                    w.skip(k as int));
+            }
+        },
+    }
+}
+
+/// **The dispatcher theorem, for streams.** From agreeing states
+/// (`dispatcher::dispatcher_agrees`, whose framer is empty), for every
+/// stream cut into any chunks, the dispatcher's caller ([`disp_drive`]) is
+/// [`disp_steps`] of the concatenated bytes: `receive_record` on each record
+/// its framer completes, in order; and along those records the crate and
+/// the transcription's `client_receive_stream` of the same bytes agree
+/// ([`disp_stream_agrees`], within the dispatcher theorem's domain,
+/// [`disp_room`], at each record).
+pub proof fn theorem_disp_stream(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
+    f: crate::connection::dispatcher_spec::Ciphers, p: Primitives)
+    requires super::dispatcher::hypotheses(c, v, f, p),
+    ensures
+        forall|s: crate::connection::dispatcher_spec::State, cl: crate::transcription::middlebox::ClientConnection,
+            chunk: Seq<u8>, chunks: Seq<Seq<u8>>|
+            #[trigger] super::dispatcher::dispatcher_agrees(p, v, s, cl) ==> {
+                &&& #[trigger] disp_drive(c, v, f, s, chunk, chunks)
+                    == disp_steps(c, v, f, s, chunk + super::ccs::flatten(chunks))
+                &&& disp_stream_agrees(c, v, f, p, s, cl, chunk + super::ccs::flatten(chunks))
+            },
+{
+    assert forall|s: crate::connection::dispatcher_spec::State, cl: crate::transcription::middlebox::ClientConnection,
+        chunk: Seq<u8>, chunks: Seq<Seq<u8>>|
+        #[trigger] super::dispatcher::dispatcher_agrees(p, v, s, cl) implies {
+            &&& #[trigger] disp_drive(c, v, f, s, chunk, chunks)
+                == disp_steps(c, v, f, s, chunk + super::ccs::flatten(chunks))
+            &&& disp_stream_agrees(c, v, f, p, s, cl, chunk + super::ccs::flatten(chunks))
+        } by {
+        lemma_disp_agrees_facts(p, v, s, cl);
+        assert(s.framing =~= Seq::<u8>::empty());
+        assert(crate::connection::dispatcher_spec::State { framing: seq![], ..s } == s);
+        lemma_empty(true);
+        lemma_disp_drive(c, v, f, s, chunk, chunks);
+        assert(s.framing + chunk + super::ccs::flatten(chunks) =~= chunk + super::ccs::flatten(chunks));
+        lemma_disp_stream(c, v, f, p, s, cl, chunk + super::ccs::flatten(chunks));
+    }
+}
+
 } // verus!
