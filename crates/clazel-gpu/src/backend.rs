@@ -87,7 +87,8 @@ pub enum Op {
         /// Bytes, a power of two.
         capacity: u32,
     },
-    /// Copy `Frame::bytes[start .. start + len]` into the atlas at `offset`.
+    /// Copy `Frame::bytes[start .. start + len]` into the atlas at `offset`. All
+    /// three are multiples of 4 (`atlas.rs`).
     Upload {
         /// The first atlas byte written.
         offset: u32,

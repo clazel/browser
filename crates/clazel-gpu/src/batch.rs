@@ -149,13 +149,18 @@ impl Builder {
                     });
                 }
                 Change::Upload { id } => {
+                    // The slot is the coverage padded with zeros to whole words,
+                    // and every upload's bytes start on a word too.
                     let entry = atlas.get(*id).ok_or(Error::Range)?;
                     let start = self.frame.bytes.len();
+                    let len = usize::try_from(entry.size()).map_err(|_| Error::Range)?;
+                    let end = start.checked_add(len).ok_or(Error::Range)?;
                     self.frame.bytes.extend_from_slice(&entry.coverage);
+                    self.frame.bytes.resize(end, 0);
                     self.frame.ops.push(Op::Upload {
                         offset: entry.offset,
                         start,
-                        len: entry.coverage.len(),
+                        len,
                     });
                 }
             }
@@ -349,7 +354,7 @@ mod tests {
             },
         ];
         let frame = build(&items, view()?, &mut Atlas::new())?;
-        assert_eq!(frame.bytes, vec![10, 20]);
+        assert_eq!(frame.bytes, vec![10, 20, 0, 0]);
         assert!(matches!(
             frame.ops.as_slice(),
             [
@@ -357,7 +362,7 @@ mod tests {
                 Op::Upload {
                     offset: 0,
                     start: 0,
-                    len: 2
+                    len: 4
                 },
                 Op::Draw { count: 1, .. }
             ]

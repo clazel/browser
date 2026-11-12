@@ -43,6 +43,9 @@ pub mod reference;
 pub mod scenes;
 pub mod soft;
 
+#[cfg(kani)]
+mod proofs;
+
 use std::fmt;
 
 use clazel_displaylist::exec::{Validator, decode};

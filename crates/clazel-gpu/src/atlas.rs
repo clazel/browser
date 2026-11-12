@@ -14,12 +14,18 @@
 //!   buffer (the old one stays alive for draws already recorded). So no byte is
 //!   written twice between compactions, and an upload never overwrites coverage an
 //!   earlier draw of the same frame reads.
+//! - **Slots are whole 4-byte words**: a mask's slot is its size rounded up to a
+//!   multiple of 4 ([`slot_size`]), and uploads are padded with zeros to fill it,
+//!   because Metal's buffer-to-buffer copies on macOS need offsets and sizes that
+//!   are multiples of 4 (`copyFromBuffer:sourceOffset:toBuffer:destinationOffset:size:`),
+//!   and Vulkan's `vkCmdCopyBuffer` is simplest so too.
 //! - **Capacity**: a power of two from [`MIN_CAPACITY`] (1 MiB) to
-//!   [`MAX_CAPACITY`] (64 MiB, the validator's limit on live coverage,
-//!   `MAX_MASK_BYTES`). A compaction grows the store until at least half of it is
-//!   free, so a run of uploads after one costs no other. At most `MAX_CAPACITY`
-//!   bytes are live, so a compaction into `MAX_CAPACITY` always fits; if it would
-//!   not (only if the validator's guarantee were broken), the upload is
+//!   [`MAX_CAPACITY`] (128 MiB). The validator keeps at most 64 MiB of coverage
+//!   live (`MAX_MASK_BYTES`) in at most 65,536 masks, so slots hold at most
+//!   64 MiB + 3 × 65,536 bytes, which a compaction into `MAX_CAPACITY` always fits.
+//!   A compaction grows the store until at least half of it is free, so a run of
+//!   uploads after one costs no other. If it did not fit (only if the validator's
+//!   guarantee were broken), the upload is
 //!   [`Error::AtlasFull`](crate::Error::AtlasFull) and the process ends.
 //! - **A copy of each live mask's coverage stays on the CPU**, at most 64 MiB, so
 //!   that a compaction can upload it again. The GPU buffer is never read back.
@@ -32,8 +38,9 @@ use crate::Error;
 /// The smallest atlas, in bytes.
 pub const MIN_CAPACITY: u32 = 1 << 20;
 
-/// The largest atlas, in bytes: `clazel_displaylist::spec::MAX_MASK_BYTES`.
-pub const MAX_CAPACITY: u32 = 1 << 26;
+/// The largest atlas, in bytes: twice `clazel_displaylist::spec::MAX_MASK_BYTES`,
+/// which leaves room for the slots' padding.
+pub const MAX_CAPACITY: u32 = 1 << 27;
 
 /// How many ids there are: `clazel_displaylist::spec::MAX_MASKS`.
 pub const MAX_MASKS: usize = 65_536;
@@ -52,15 +59,21 @@ pub struct Entry {
 }
 
 impl Entry {
-    /// Its size in bytes.
+    /// Its slot's size in bytes: its size rounded up to a multiple of 4.
     pub fn size(&self) -> u32 {
-        mask_size(self.columns, self.rows)
+        slot_size(self.columns, self.rows)
     }
 }
 
 /// `columns × rows`: at most 65,535² < 2^32, so it never overflows.
 pub fn mask_size(columns: u16, rows: u16) -> u32 {
     u32::from(columns).saturating_mul(u32::from(rows))
+}
+
+/// A mask's slot: `columns × rows` rounded up to a multiple of 4, at most
+/// 65,535² + 3 < 2^32.
+pub fn slot_size(columns: u16, rows: u16) -> u32 {
+    mask_size(columns, rows).saturating_add(3) & !3
 }
 
 /// What the backend must do to the atlas, in order with the draws.
@@ -138,10 +151,11 @@ impl Atlas {
         if index >= MAX_MASKS || self.get(id).is_some() {
             return Err(Error::Range);
         }
-        let size = mask_size(columns, rows);
-        if usize::try_from(size).ok() != Some(coverage.len()) || size == 0 {
+        let raw = mask_size(columns, rows);
+        if usize::try_from(raw).ok() != Some(coverage.len()) || raw == 0 {
             return Err(Error::Range);
         }
+        let size = slot_size(columns, rows);
         if self.table.len() <= index {
             self.table.resize(index.saturating_add(1), None);
         }
@@ -198,6 +212,34 @@ impl Atlas {
     }
 }
 
+#[cfg(kani)]
+impl Atlas {
+    /// An atlas in any state, for a harness to constrain.
+    pub(crate) fn for_proof(
+        capacity: u32,
+        top: u32,
+        live: u32,
+        table: Vec<Option<Entry>>,
+    ) -> Atlas {
+        Atlas {
+            capacity,
+            top,
+            live,
+            table,
+        }
+    }
+
+    /// The table, for a harness.
+    pub(crate) fn table_for_proof(&self) -> &[Option<Entry>] {
+        &self.table
+    }
+
+    /// The live bytes, for a harness.
+    pub(crate) fn live_for_proof(&self) -> u32 {
+        self.live
+    }
+}
+
 /// Where a mask of `size` bytes goes in a store of `capacity` bytes whose first
 /// free byte is `top`, if it fits: `top` itself.
 pub fn place(capacity: u32, top: u32, size: u32) -> Option<u32> {
@@ -249,6 +291,9 @@ mod tests {
         );
         assert_eq!(atlas.get(3).map(|e| e.offset), Some(0));
         assert_eq!(atlas.top(), 4);
+        atlas.upload(4, 3, 1, vec![1, 2, 3], &mut changes)?;
+        assert_eq!(atlas.get(4).map(|e| (e.offset, e.size())), Some((4, 4)));
+        assert_eq!(atlas.top(), 8);
         Ok(())
     }
 
@@ -315,6 +360,8 @@ mod tests {
         assert_eq!(grown_capacity(0, MAX_CAPACITY), Some(MAX_CAPACITY));
         assert_eq!(grown_capacity(0, MAX_CAPACITY + 1), None);
         assert_eq!(grown_capacity(u32::MAX, 5), Some(MAX_CAPACITY));
+        assert_eq!(super::slot_size(3, 3), 12);
+        assert_eq!(super::slot_size(u16::MAX, u16::MAX), 4_294_836_228);
     }
 
     #[test]
