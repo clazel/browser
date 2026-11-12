@@ -74,9 +74,35 @@
 //!   (§9.2.1.1, §9.2.2.1, §17.2.1's "anonymous objects"), which layout
 //!   applies.
 
+pub mod generate;
+pub mod marker;
 pub mod replaced;
 pub mod state;
 pub mod tree;
 
 pub use replaced::{Input, Replaced};
 pub use tree::{BoxId, BoxKind, BoxTree, Class, Fragment, LayoutBox, Marker, RowGroup, TextRun};
+
+use clazel_style::cascade::computed::{ComputedStyle, ComputedTable};
+
+/// Computed style as box generation reads it: for each node id, the
+/// element's computed values for the subset, or `None` for a node that is
+/// not an element or has no style (an element in a `template`'s contents).
+pub trait StyleFns {
+    /// The computed style of element `node`.
+    fn style(&self, node: usize) -> Option<&ComputedStyle>;
+
+    /// Whether element `node` has `display: contents` (CSS Display 3
+    /// §2.5†), which the subset does not compute; `false` unless a
+    /// hand-written table says otherwise.
+    fn display_contents(&self, node: usize) -> bool {
+        let _ = node;
+        false
+    }
+}
+
+impl StyleFns for ComputedTable {
+    fn style(&self, node: usize) -> Option<&ComputedStyle> {
+        self.get(node)
+    }
+}
