@@ -1102,4 +1102,389 @@ pub proof fn lemma_messages(c: crate::schedule::spec::Crypto, f: crate::traffic:
     }
 }
 
+// ---------------------------------------------------------------------------
+// One record.
+// ---------------------------------------------------------------------------
+
+/// Two faults in one record's header, where each side names a different
+/// one: a type that is neither application_data nor change_cipher_spec and
+/// a length above 2^14. The crate checks the type first (`read_record` step
+/// 1, `unexpected_message`), the transcription the length first
+/// (`record_overflow`); §5 and §5.1 rank neither.
+pub open spec fn two_faults(b: Seq<u8>) -> bool {
+    b[0] != crate::spec::CT_CHANGE_CIPHER_SPEC && b[0] != crate::spec::CT_APPLICATION_DATA
+        && super::bootstrap::length(b) > crate::spec::MAX_PLAINTEXT
+}
+
+/// The crate's receive epoch is exhausted: it has read a record under
+/// sequence number 2^64 - 1. The crate then refuses the next record with
+/// `internal_error` before looking at it (`traffic::spec::receive`); the
+/// transcription checks the record's header first, and refuses one that
+/// passes with `SequenceNumberWrap` (`internal_error` too). Unreachable in
+/// practice (2^64 records).
+pub open spec fn exhausted(s: State) -> bool {
+    s.receiver->Some_0.next is None
+}
+
+/// The crate's resource cap: the record's handshake content completes a
+/// message header announcing more than 2^18 octets (`MAX_HANDSHAKE_BODY`),
+/// refused with `internal_error`. §4's `uint24 length` allows it, and the
+/// transcription has no cap: it waits for the bytes, or processes the
+/// messages before it.
+pub open spec fn cap(f: crate::traffic::spec::Cipher, s: State, b: Seq<u8>) -> bool {
+    let rx = s.receiver->Some_0;
+    match crate::traffic::spec::receive(crate::connection::post_handshake_spec::open_of(f, rx), rx, b).1 {
+        crate::traffic::spec::Read::Record(typ, content, _) =>
+            typ == crate::spec::CT_HANDSHAKE && crate::spec::extract_messages(s.reassembly.buf + content) is Err,
+        _ => false,
+    }
+}
+
+/// When the crate fails with `a` on a record: the transcription aborts with
+/// that alert, or one of the stated differences holds.
+pub open spec fn fail_agrees(f: crate::traffic::spec::Cipher, s: State, b: Seq<u8>,
+    t: crate::transcription::connection::Receive, a: u8) -> bool
+{
+    ||| t is Abort && crate::transcription::alerts::required_alert(t->Abort_0) == a as nat
+    ||| t is Abort && two_faults(b)
+    ||| t is Abort && a == crate::spec::INTERNAL_ERROR && exhausted(s)
+    ||| a == crate::spec::INTERNAL_ERROR && cap(f, s, b)
+}
+
+/// What the crate does with a record or its content (`o`, `s2`) and what
+/// the transcription does (`t`) agree: a failure is the transcription's
+/// abort (`failed`: the alert matches, or a stated difference holds), with
+/// the transcription's alert record for the crate's alert; the peer's error
+/// alert is `PeerError` on both sides; otherwise both go on, deliver the
+/// same application data and, but for [`settle`], send nothing, in agreeing
+/// states.
+pub open spec fn outcome_agrees(p: Primitives, s: State, c: Connection, o: crate::connection::post_handshake_spec::Out,
+    s2: State, t: crate::transcription::connection::Receive, failed: bool) -> bool
+{
+    match o.end {
+        End::Fail(a) => {
+            &&& s2 == crate::connection::post_handshake_spec::failed()
+            &&& o.delivered.len() == 0
+            &&& o.wires == alert_wires(p, s, c, a)
+            &&& failed
+        },
+        End::PeerAlert(d) => {
+            &&& s2 == crate::connection::post_handshake_spec::failed()
+            &&& o.wires.len() == 0
+            &&& o.delivered.len() == 0
+            &&& t == crate::transcription::connection::Receive::PeerError(d as nat)
+        },
+        _ => match t {
+            crate::transcription::connection::Receive::Continue(progress) => {
+                &&& o.delivered == progress.application_data
+                &&& progress.records_to_send.len() == 0
+                &&& o.wires == settle(p, s2, progress.connection).0
+                &&& post_agrees(s2, settle(p, s2, progress.connection).1)
+            },
+            _ => false,
+        },
+    }
+}
+
+/// The crate's step on one whole record `b` and the transcription's
+/// `receive_stream` of it agree: the crate consumes the record, and
+/// [`outcome_agrees`] with [`fail_agrees`] for a failure.
+pub open spec fn record_agrees(p: Primitives, f: crate::traffic::spec::Cipher, s: State, c: Connection, b: Seq<u8>,
+    r: (crate::connection::post_handshake_spec::Out, State, nat), t: crate::transcription::connection::Receive) -> bool
+{
+    &&& r.2 == b.len()
+    &&& outcome_agrees(p, s, c, r.0, r.1, t, match r.0.end {
+        End::Fail(a) => fail_agrees(f, s, b, t, a),
+        _ => true,
+    })
+}
+
+/// §5.3: reading a record moves both read sequence numbers on.
+pub proof fn lemma_advance(rx: crate::traffic::spec::State, tr: crate::transcription::record::TrafficState)
+    requires super::record::epoch_agrees(rx, tr), rx.next is Some,
+    ensures
+        super::record::epoch_agrees(crate::traffic::spec::advance(rx),
+            crate::transcription::record::TrafficState { sequence_number: tr.sequence_number + 1, ..tr }),
+        crate::traffic::spec::advance(rx).failed == rx.failed,
+{
+}
+
+/// §5, §5.1, §5.2: the header of one whole record, read by the crate's
+/// protected framer and by the transcription's `receive_record` in
+/// CONNECTED. A TLSCiphertext goes on to `receive_ciphertext`; every other
+/// record is refused on both sides, with the same alert or as
+/// [`two_faults`].
+pub proof fn lemma_frame(p: Primitives, c: Connection, b: Seq<u8>)
+    requires
+        super::bootstrap::whole_record(b),
+        c.receive is Protected,
+        c.handshake.state == ClientState::Connected,
+        !c.read_closed,
+    ensures ({
+        let t = super::bootstrap::one_record(p, c, b);
+        match crate::spec::read_record(b, true) {
+            crate::spec::Read::Fail(k) => t is Abort
+                && (crate::transcription::alerts::required_alert(t->Abort_0) == crate::spec::alert_of(k) as nat
+                    || two_faults(b)),
+            crate::spec::Read::Done(crate::spec::Frame::Protected(h, e), rest) => {
+                &&& b[0] == crate::spec::CT_APPLICATION_DATA
+                &&& rest.len() == 0
+                &&& super::record::is_protected_record(b)
+                &&& t == crate::transcription::connection::receive_ciphertext(p, c, c.receive->Protected_0,
+                    crate::transcription::record::read_record_header(b)->Some_0.legacy_record_version,
+                    b.subrange(5, b.len() as int).take(
+                        crate::transcription::record::read_record_header(b)->Some_0.length as int))
+            },
+            crate::spec::Read::Done(_, _) => t is Abort
+                && crate::transcription::alerts::required_alert(t->Abort_0) == 10,
+            crate::spec::Read::NeedMore => false,
+        }
+    }),
+{
+    super::bootstrap::lemma_header(b);
+    let len = super::bootstrap::length(b);
+    assert(b.subrange(5, b.len() as int).take(len as int) =~= super::bootstrap::fragment(b));
+    assert(b.subrange(5, (5 + len) as int) =~= super::bootstrap::fragment(b));
+}
+
+/// §5.4: what the crate's inner plaintext check lets through.
+pub proof fn lemma_inner_ok(x: Seq<u8>)
+    requires crate::spec::open_inner_plaintext(x) is Ok,
+    ensures ({
+        let r = crate::spec::open_inner_plaintext(x)->Ok_0;
+        &&& r.ctype == 21 || r.ctype == 22 || r.ctype == 23
+        &&& r.fragment.len() <= crate::spec::MAX_PLAINTEXT
+        &&& r.ctype != 23 ==> r.fragment.len() > 0
+    }),
+{
+}
+
+/// §5.1, §6, §6.1: an alert record's content in CONNECTED.
+pub proof fn lemma_alert_content(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: State, y: Connection, content: Seq<u8>)
+    requires
+        hypotheses(c, f, p),
+        post_agrees(s, y),
+        crate::connection::post_handshake_spec::can_read(s),
+        content.len() > 0,
+    ensures ({
+        let (o, s2) = crate::connection::post_handshake_spec::record(c, f, s, 21, content);
+        let t = crate::transcription::connection::receive_protected_content(p, y, 21, content);
+        outcome_agrees(p, s, y, o, s2, t,
+            t is Abort && crate::transcription::alerts::required_alert(t->Abort_0) == o.end->Fail_0 as nat)
+    }),
+{
+    assert(Connection { handshake_fragments: s.reassembly.buf, ..y } == y);
+    if s.reassembly.buf.len() > 0 {
+        lemma_fatal(f, p, s, y, 10);
+    } else if content.len() != 2 {
+        lemma_fatal(f, p, s, y, 50);
+    } else {
+        let d = content[1];
+        assert(State { reassembly: s.reassembly, ..s } == s);
+        if d == 0 {
+            let y2 = Connection { read_closed: true, ..y };
+            let (o, s2) = crate::connection::post_handshake_spec::peer_closed(s);
+            assert(post_agrees(s2, y2));
+            assert(o.delivered =~= Seq::<u8>::empty());
+        } else if d == 90 {
+            assert(Seq::<u8>::empty() =~= Seq::<u8>::empty());
+        }
+    }
+}
+
+/// §5.1, §5.4, §4.6: the content of an authenticated record in CONNECTED:
+/// the crate's `record` against the transcription's
+/// `receive_protected_content`, for every type and content the crate's
+/// inner-plaintext check lets through.
+pub proof fn lemma_content(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: State, y: Connection, typ: u8, content: Seq<u8>)
+    requires
+        hypotheses(c, f, p),
+        post_agrees(s, y),
+        crate::connection::post_handshake_spec::can_read(s),
+        typ == 21 || typ == 22 || typ == 23,
+        content.len() <= crate::spec::MAX_PLAINTEXT,
+        typ != 23 ==> content.len() > 0,
+    ensures ({
+        let (o, s2) = crate::connection::post_handshake_spec::record(c, f, s, typ, content);
+        let t = crate::transcription::connection::receive_protected_content(p, y, typ as nat, content);
+        outcome_agrees(p, s, y, o, s2, t, {
+            ||| t is Abort && crate::transcription::alerts::required_alert(t->Abort_0) == o.end->Fail_0 as nat
+            ||| o.end == End::Fail(crate::spec::INTERNAL_ERROR) && typ == crate::spec::CT_HANDSHAKE
+                && crate::spec::extract_messages(s.reassembly.buf + content) is Err
+        })
+    }),
+{
+    assert(Connection { handshake_fragments: s.reassembly.buf, ..y } == y);
+    assert(State { reassembly: s.reassembly, ..s } == s);
+    if typ == 23 {
+        if s.reassembly.buf.len() > 0 {
+            lemma_fatal(f, p, s, y, 10);
+        }
+    } else if typ == 21 {
+        lemma_alert_content(c, f, p, s, y, content);
+    } else {
+        let bf = s.reassembly.buf + content;
+        super::bootstrap::lemma_extract(bf);
+        match crate::spec::extract_messages(bf) {
+            crate::spec::Res::Err(e) => {
+                lemma_fatal(f, p, s, y, 80);
+            },
+            crate::spec::Res::Ok((ms, r)) => {
+                let s3 = State { reassembly: crate::spec::Reasm { buf: r }, ..s };
+                assert(Connection { handshake_fragments: s3.reassembly.buf, ..y }
+                    == Connection { handshake_fragments: r, ..y });
+                assert(agrees_but_buffer(s3, y));
+                lemma_messages(c, f, p, s3, y, bf);
+                let (o, s2) = crate::connection::post_handshake_spec::messages(c, f, s3, ms);
+                match crate::transcription::connection::process_handshake_bytes(p, y, bf) {
+                    crate::transcription::connection::Receive::Continue(progress) => {
+                        assert(o.delivered =~= progress.application_data);
+                    },
+                    _ => {},
+                }
+            },
+        }
+    }
+}
+
+/// [`post_agrees`] with the read side open: the facts [`lemma_receive`]
+/// uses.
+pub proof fn lemma_receive_open_facts(s: State, conn: Connection)
+    requires post_agrees(s, conn), crate::connection::post_handshake_spec::can_read(s),
+    ensures
+        agrees_but_buffer(s, conn),
+        s.receiver is Some,
+        conn.receive is Protected,
+        super::record::epoch_agrees(s.receiver->Some_0, conn.receive->Protected_0),
+        !s.receiver->Some_0.failed,
+        conn.handshake.state == ClientState::Connected,
+        !conn.read_closed,
+{
+    assert(Connection { handshake_fragments: s.reassembly.buf, ..conn } == conn);
+}
+
+/// After a record is read, the states with both read sequence numbers moved
+/// on still agree.
+pub proof fn lemma_post_agrees_read(s: State, conn: Connection, s1: State, after: Connection)
+    requires
+        post_agrees(s, conn),
+        crate::connection::post_handshake_spec::can_read(s),
+        s1 == (State { receiver: s1.receiver, ..s }),
+        after == (Connection { receive: after.receive, ..conn }),
+        s1.receiver is Some,
+        after.receive is Protected,
+        super::record::epoch_agrees(s1.receiver->Some_0, after.receive->Protected_0),
+        !s1.receiver->Some_0.failed,
+        after.receive->Protected_0.secret == conn.receive->Protected_0.secret,
+    ensures
+        post_agrees(s1, after),
+{
+}
+
+/// §5, §5.1 to §5.4, §6, §4.6: one whole record received with the read side
+/// open: the crate's `step` against the transcription's `receive_stream`.
+#[verifier::rlimit(30)]
+pub proof fn lemma_receive(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: State, conn: Connection, b: Seq<u8>)
+    requires
+        hypotheses(c, f, p),
+        post_agrees(s, conn),
+        crate::connection::post_handshake_spec::can_read(s),
+        super::bootstrap::whole_record(b),
+    ensures
+        record_agrees(p, f, s, conn, b,
+            crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(b)),
+            crate::transcription::connection::receive_stream(p, conn, b).0),
+{
+    hide(crate::connection::post_handshake_spec::record);
+    hide(crate::connection::post_handshake_spec::fatal);
+    hide(crate::transcription::connection::receive_protected_content);
+    hide(crate::transcription::connection::receive_stream);
+    hide(post_agrees);
+    hide(settle);
+    lemma_receive_open_facts(s, conn);
+    super::bootstrap::lemma_stream_one(p, conn, b);
+    let rx = s.receiver->Some_0;
+    let tr = conn.receive->Protected_0;
+    lemma_seal(f, p, rx, tr);
+    lemma_frame(p, conn, b);
+    let t = super::bootstrap::one_record(p, conn, b);
+    let open = crate::connection::post_handshake_spec::open_of(f, rx);
+    let read = crate::traffic::spec::receive(open, rx, b);
+    if rx.next is None {
+        lemma_fatal(f, p, s, conn, 80);
+        match crate::spec::read_record(b, true) {
+            crate::spec::Read::Done(crate::spec::Frame::Protected(h, e), rest) => {
+                assert(t == crate::transcription::connection::Receive::Abort(ClientError::SequenceNumberWrap));
+            },
+            _ => {},
+        }
+    } else {
+        match crate::spec::read_record(b, true) {
+            crate::spec::Read::Fail(k) => {
+                lemma_alert_of(k);
+                lemma_fatal(f, p, s, conn, crate::spec::alert_of(k));
+            },
+            crate::spec::Read::Done(crate::spec::Frame::Protected(h, e), rest) => {
+                super::record::lemma_deprotect(p, open, rx, conn, tr, b);
+                match read.1 {
+                    crate::traffic::spec::Read::Fail(a) => {
+                        let n = rx.next->Some_0;
+                        match crate::spec::decrypt_record(open, rx.iv, n, h, e) {
+                            crate::spec::Res::Err(k) => { lemma_alert_of(k); },
+                            _ => {},
+                        }
+                        lemma_fatal(f, p, s, conn, a);
+                    },
+                    crate::traffic::spec::Read::Record(typ, content, used) => {
+                        let n = rx.next->Some_0;
+                        let x = open(crate::spec::per_record_nonce(rx.iv, n), h, e)->Some_0;
+                        lemma_inner_ok(x);
+                        lemma_advance(rx, tr);
+                        let s1 = State { receiver: Some(read.0), ..s };
+                        let after = Connection {
+                            receive: Protection::Protected(crate::transcription::record::TrafficState {
+                                sequence_number: tr.sequence_number + 1, ..tr }),
+                            ..conn
+                        };
+                        lemma_post_agrees_read(s, conn, s1, after);
+                        lemma_content(c, f, p, s1, after, typ, content);
+                        assert forall|a: u8| #[trigger] alert_wires(p, s1, after, a) == alert_wires(p, s, conn, a) by {}
+                    },
+                    crate::traffic::spec::Read::NeedMore => {},
+                }
+            },
+            crate::spec::Read::Done(_, _) => {
+                lemma_fatal(f, p, s, conn, 10);
+            },
+            crate::spec::Read::NeedMore => {},
+        }
+    }
+}
+
+/// The read side has ended (§6.1: "Any data received after a closure alert
+/// has been received MUST be ignored"): both sides ignore a whole record.
+pub proof fn lemma_receive_closed(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: State, conn: Connection, b: Seq<u8>)
+    requires
+        post_agrees(s, conn),
+        !crate::connection::post_handshake_spec::can_read(s),
+        super::bootstrap::whole_record(b),
+    ensures
+        record_agrees(p, f, s, conn, b,
+            crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Bytes(b)),
+            crate::transcription::connection::receive_stream(p, conn, b).0),
+{
+    super::bootstrap::lemma_header(b);
+    let rest = b.subrange((5 + super::bootstrap::length(b)) as int, b.len() as int);
+    assert(rest =~= Seq::<u8>::empty());
+    let e = crate::transcription::connection::Progress { connection: conn, application_data: seq![], records_to_send: seq![] };
+    assert(crate::transcription::connection::receive_stream(p, conn, rest)
+        == (crate::transcription::connection::Receive::Continue(e), rest));
+    assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+    assert(Seq::<Seq<u8>>::empty() + Seq::<Seq<u8>>::empty() =~= Seq::<Seq<u8>>::empty());
+}
+
 } // verus!
