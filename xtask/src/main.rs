@@ -46,6 +46,7 @@ mod report;
 mod reviews;
 mod roots;
 mod scan;
+mod shaders;
 mod status;
 mod sys;
 mod testdata;
@@ -368,6 +369,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     r.step("generated root certificate table", outcome(problems, notes));
     let (problems, notes) = ua_sheet::run(false);
     r.step("generated user agent style sheet", outcome(problems, notes));
+    let (problems, notes) = shaders::run(false);
+    r.step("compiled GPU shaders (SPIR-V)", outcome(problems, notes));
     let (problems, notes) = entities::run(false);
     r.step(
         "generated named character references table",
@@ -1023,6 +1026,8 @@ fn generate_tables() -> ExitCode {
     r.step("generate root certificate table", outcome(problems, notes));
     let (problems, notes) = ua_sheet::run(true);
     r.step("generate user agent style sheet", outcome(problems, notes));
+    let (problems, notes) = shaders::run(true);
+    r.step("compile GPU shaders (SPIR-V)", outcome(problems, notes));
     let (problems, notes) = entities::run(true);
     r.step(
         "generate named character references table",
