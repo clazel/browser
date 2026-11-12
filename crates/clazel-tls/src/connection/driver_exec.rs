@@ -158,6 +158,7 @@ fn concat(wires: &[Vec<u8>]) -> (out: Vec<u8>)
 
 fn quiet(state: State) -> (out: Output)
     ensures out.send@.len() == 0, out.deliver@.len() == 0, out.state == state,
+        out.send@ == Seq::<u8>::empty(), out.deliver@ == Seq::<u8>::empty(),
 {
     Output { send: Vec::new(), deliver: Vec::new(), state }
 }
@@ -227,6 +228,9 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             out.0.models().exchange == exchange.functions(),
             out.0.models().cipher == factory.functions(),
             out.0.models().verification == verifier.functions(),
+            contract::connect_ensures(out.0.models(), config@, contract_step(out.1, &out.0)),
+            out.0.stage() is Hello ==> out.0.scalar() == scalar@,
+            out.0.status() == out.1.state,
     {
         let ghost models = contract::Models {
             crypto: crypto.functions(),
@@ -234,36 +238,63 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             cipher: factory.functions(),
             verification: verifier.functions(),
         };
-        match Bootstrap::start(config, hello_crypto) {
+        let ghost config_view = config@;
+        let started = Bootstrap::start(config, hello_crypto);
+        proof {
+            assert(super::framing_spec::new() =~= Seq::<u8>::empty());
+        }
+        match started {
             Ok((mut boot, BootAction::Send(wire))) => {
-                if matches!(boot.acknowledge_send(wire.as_slice()), BootAction::None) {
+                let ghost s0 = boot@.0;
+                let ack = boot.acknowledge_send(wire.as_slice());
+                proof {
+                    assert(crate::hello::bootstrap_spec::start(config_view)
+                        == Ok::<(crate::hello::bootstrap_spec::State, crate::hello::bootstrap_spec::Action), u8>(
+                            (s0, crate::hello::bootstrap_spec::Action::Send(wire@))));
+                    assert((boot@.0, ack@) == crate::hello::bootstrap_spec::acknowledge(models.crypto.hash, s0, wire@));
+                }
+                if matches!(ack, BootAction::None) {
                     let state = State::Handshaking;
+                    let deliver = Vec::new();
+                    proof { assert(deliver@ =~= seq![]); }
                     let driver = Driver {
                         stage: Some(Stage::Hello { boot, next: Next { crypto, exchange, factory, verifier, scalar } }),
                         state,
                         models: Ghost(models),
                     };
-                    (driver, Output { send: wire, deliver: Vec::new(), state })
+                    (driver, Output { send: wire, deliver, state })
                 } else {
                     Self::failed_at_start(crate::spec::INTERNAL_ERROR, Ghost(models))
                 }
             },
-            Ok(_) => Self::failed_at_start(crate::spec::INTERNAL_ERROR, Ghost(models)),
+            Ok((_, action)) => {
+                proof {
+                    assert(!(action@ is Send));
+                }
+                Self::failed_at_start(crate::spec::INTERNAL_ERROR, Ghost(models))
+            },
             Err(alert) => Self::failed_at_start(alert, Ghost(models)),
         }
     }
 
     fn failed_at_start(alert: u8, models: Ghost<contract::Models>) -> (out: (Self, Output))
-        ensures out.0.wf(), out.0.models() == models@,
+        ensures out.0.wf(), out.0.models() == models@, out.0.status() == out.1.state,
+            contract_step(out.1, &out.0) == (spec::Step { send: seq![], deliver: seq![], stage: spec::Stage::Ended,
+                status: spec::Status::Failed(alert, spec::Origin::NotSent) }),
     {
         let state = State::Failed(Failure { alert, origin: Origin::NotSent });
-        (Driver { stage: None, state, models }, quiet(state))
+        let out = quiet(state);
+        proof {
+            assert(out.send@ =~= seq![]);
+            assert(out.deliver@ =~= seq![]);
+        }
+        (Driver { stage: None, state, models }, out)
     }
 
     /// End the connection with this state and these octets.
     fn ended(&mut self, send: Vec<u8>, deliver: Vec<u8>, state: State) -> (out: Output)
         requires spec::is_final(state@),
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             final(self).stage() == spec::Stage::Ended,
             out.send == send, out.deliver == deliver, out.state == state, final(self).state == state,
     {
@@ -276,7 +307,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     fn settle(&mut self, prefix: Vec<u8>, deliver: Vec<u8>, o: Out, app: PostHandshake<C, F>) -> (out: Output)
         requires app.wf(), app.crypto_functions() == old(self).models().crypto,
             app.cipher_functions() == old(self).models().cipher,
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             contract_step(out, final(self)) == spec::settle(prefix@, deliver@, o@, app@),
     {
         let wires = concat(o.wires.as_slice());
@@ -316,7 +347,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     fn carry_out(&mut self, o: Out, mut app: PostHandshake<C, F>) -> (out: Output)
         requires app.wf(), app.crypto_functions() == old(self).models().crypto,
             app.cipher_functions() == old(self).models().cipher,
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             contract_step(out, final(self)) == spec::carry_out(old(self).models().cipher, o@, app@),
     {
         if matches!(o.end, End::PeerClosed) {
@@ -330,7 +361,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
 
     /// A failure the dispatcher reported, after `prefix` ([`spec::flight_failure_after`]).
     fn flight_failed(&mut self, prefix: Vec<u8>, alert: u8, wire: Option<Vec<u8>>) -> (out: Output)
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             final(self).stage() == spec::Stage::Ended, spec::is_final(out.state@),
             out.deliver@.len() == 0,
             contract_step(out, final(self)) == spec::flight_failure_after(prefix@, alert, super::exec::wire_view(wire)),
@@ -352,7 +383,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
 
     /// A close during the flight ([`spec::flight_closed`]).
     fn flight_close(&mut self, wire: Option<Vec<u8>>) -> (out: Output)
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             contract_step(out, final(self)) == spec::flight_closed(super::exec::wire_view(wire)),
     {
         let deliver = Vec::new();
@@ -370,7 +401,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             conn.crypto_functions() == old(self).models().crypto,
             conn.cipher_functions() == old(self).models().cipher,
             conn.verifier_functions() == old(self).models().verification,
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             out.deliver@.len() == 0,
             match final(self).stage() {
                 spec::Stage::App(state) => contract::app_started(final(self).models(), state)
@@ -416,7 +447,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             conn.crypto_functions() == old(self).models().crypto,
             conn.cipher_functions() == old(self).models().cipher,
             conn.verifier_functions() == old(self).models().verification,
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.1.state,
             out.0 <= input.len(), out.1.deliver@.len() == 0,
             contract::flight_step_ensures(old(self).models(), conn@, input@, out.0 as nat,
                 contract_step(out.1, final(self))),
@@ -456,7 +487,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
 
     /// A local failure before the handshake keys ([`spec::hello_failure`]).
     fn hello_failed(&mut self, alert: u8) -> (out: Output)
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             contract_step(out, final(self)) == spec::hello_failure(alert),
     {
         let send = plaintext_alert(crate::spec::LEVEL_FATAL, alert);
@@ -472,15 +503,11 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             next.exchange.functions() == old(self).models().exchange,
             next.factory.functions() == old(self).models().cipher,
             next.verifier.functions() == old(self).models().verification,
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             out.deliver@.len() == 0,
-            match final(self).stage() {
-                spec::Stage::Flight(state) => contract::flight_started(old(self).models(),
-                    crate::hello::bootstrap_spec::Action::Established(established@.0, established@.1, established@.2),
-                    next.scalar@, state) && out.send@.len() == 0 && out.state == State::Handshaking,
-                spec::Stage::Ended => true,
-                _ => false,
-            },
+            contract_step(out, final(self)) == contract::established_step(old(self).models(),
+                crate::hello::bootstrap_spec::Action::Established(established@.0, established@.1, established@.2),
+                next.scalar@),
     {
         let ghost e = established@;
         let ghost m = self.models();
@@ -507,7 +534,12 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                 let conn = Connection::new(keys, crypto, factory, verifier);
                 self.stage = Some(Stage::Flight { conn: Box::new(conn) });
                 self.state = State::Handshaking;
-                quiet(State::Handshaking)
+                let out = quiet(State::Handshaking);
+                proof {
+                    assert(crate::traffic::handshake_spec::start(m.crypto, m.exchange, e.0, e.1, e.2, scalar@)
+                        == Ok::<crate::traffic::handshake_spec::Handoff, u8>(keys@));
+                }
+                out
             },
             Err(alert) => self.hello_failed(alert),
         }
@@ -522,7 +554,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
             next.exchange.functions() == old(self).models().exchange,
             next.factory.functions() == old(self).models().cipher,
             next.verifier.functions() == old(self).models().verification,
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.1.state,
             out.0 <= input.len(), out.1.deliver@.len() == 0,
             contract::hello_step_ensures(old(self).models(), boot@.0, boot@.1, next.scalar@, input@, out.0 as nat,
                 contract_step(out.1, final(self))),
@@ -553,7 +585,9 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                     BootAction::None => {
                         self.stage = Some(Stage::Hello { boot, next });
                         self.state = State::Handshaking;
-                        Output { send: wire, deliver: Vec::new(), state: State::Handshaking }
+                        let deliver = Vec::new();
+                        proof { assert(deliver@ =~= seq![]); }
+                        Output { send: wire, deliver, state: State::Handshaking }
                     },
                     BootAction::Established(established) => {
                         let o = self.establish(established, next);
@@ -563,10 +597,6 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
                         send.append(&mut tail);
                         proof {
                             assert(send@ == w + tail_view);
-                            assert(send@.subrange(0, w.len() as int) =~= w);
-                            if tail_view.len() == 0 {
-                                assert(send@ =~= w);
-                            }
                         }
                         Output { send, deliver: o.deliver, state: o.state }
                     },
@@ -600,12 +630,16 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     /// octets consumed; the caller resubmits the rest.
     pub fn step(&mut self, input: &[u8]) -> (out: (usize, Output))
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).models() == old(self).models(), out.0 <= input.len(),
-            contract::step_ensures(old(self).models(), old(self).stage(), old(self).scalar(), input@,
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.1.state, out.0 <= input.len(),
+            contract::step_ensures(old(self).models(), old(self).stage(), old(self).status()@, old(self).scalar(), input@,
                 out.0 as nat, contract_step(out.1, final(self))),
     {
         match self.stage.take() {
-            None => (0, quiet(self.state)),
+            None => {
+                let out = quiet(self.state);
+                proof { assert(self.stage() == spec::Stage::Ended); }
+                (0, out)
+            },
             Some(Stage::App { mut app }) => {
                 let (consumed, o) = app.step_out(Input::Bytes(input));
                 (consumed, self.carry_out(o, app))
@@ -618,8 +652,9 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     /// Protect up to one record of application data.
     pub fn send(&mut self, data: &[u8]) -> (out: Output)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).models() == old(self).models(),
-            contract::send_ensures(old(self).models(), old(self).stage(), data@, contract_step(out, final(self))),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
+            contract::send_ensures(old(self).models(), old(self).stage(), old(self).status()@, data@,
+                contract_step(out, final(self))),
     {
         match self.stage.take() {
             Some(Stage::App { mut app }) => {
@@ -636,11 +671,16 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     /// §6.1: close from our side.
     pub fn close(&mut self) -> (out: Output)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).models() == old(self).models(),
-            contract::close_ensures(old(self).models(), old(self).stage(), contract_step(out, final(self))),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
+            contract::close_ensures(old(self).models(), old(self).stage(), old(self).status()@,
+                contract_step(out, final(self))),
     {
         match self.stage.take() {
-            None => quiet(self.state),
+            None => {
+                let out = quiet(self.state);
+                proof { assert(self.stage() == spec::Stage::Ended); }
+                out
+            },
             Some(Stage::App { mut app }) => {
                 let o = app.close_out();
                 self.carry_out(o, app)
@@ -660,7 +700,7 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
     /// §6.1: the transport ended. Before a close_notify that is a truncation.
     pub fn eof(&mut self) -> (out: Output)
         requires old(self).wf(),
-        ensures final(self).wf(), final(self).models() == old(self).models(),
+        ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
             final(self).stage() == spec::Stage::Ended, spec::is_final(out.state@),
             out.send@.len() == 0, out.deliver@.len() == 0,
     {
