@@ -33,6 +33,30 @@
 
 use super::classes::{Lb, Props};
 
+/// A set of classes, one bit per [`Lb`] variant: `lb_set![SP, HY]` is
+/// `[SP HY]`. A mask rather than a slice, so testing membership has no
+/// loop (which keeps the Kani harnesses' formulas small).
+macro_rules! lb_set {
+    ($($c:ident),+ $(,)?) => {
+        0u64 $(| Lb::$c.bit())+
+    };
+}
+
+impl Lb {
+    /// This class's bit in an [`lb_set!`].
+    const fn bit(self) -> u64 {
+        match 1u64.checked_shl(self as u32) {
+            Some(b) => b,
+            None => 0,
+        }
+    }
+}
+
+/// Whether `c` is a class and in `set`.
+fn is(c: Option<Lb>, set: u64) -> bool {
+    c.is_some_and(|c| set & c.bit() != 0)
+}
+
 /// What a position between two characters is (UAX #14 §6: "!", "×", "÷").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(kani, derive(kani::Arbitrary))]
@@ -266,8 +290,8 @@ impl Context<'_> {
     }
 
     /// Whether item `j` exists and its class is in `set`.
-    fn is(&self, j: usize, set: &[Lb]) -> bool {
-        self.class(j).is_some_and(|c| set.contains(&c))
+    fn is(&self, j: usize, set: u64) -> bool {
+        is(self.class(j), set)
     }
 
     /// Item `j - 1`, the one before `j` (`None` at sot).
@@ -289,7 +313,7 @@ impl Context<'_> {
     /// `(SY | IS)*` backwards (LB25).
     fn before_sy_is(&self, k: usize) -> Option<usize> {
         let mut k = k;
-        while self.is(k, &[Lb::SY, Lb::IS]) {
+        while self.is(k, lb_set![SY, IS]) {
             k = Context::before(k)?;
         }
         Some(k)
@@ -370,7 +394,6 @@ impl Context<'_> {
         let pb = self.item(b).copied().unwrap_or(Props::LETTER_A);
         let next = b.checked_add(1).filter(|&k| k < self.items.len());
         let cnext = next.and_then(|k| self.class(k));
-        let is = |c: Option<Lb>, set: &[Lb]| c.is_some_and(|c| set.contains(&c));
 
         // LB11: "× WJ", "WJ ×".
         if cb == Some(Lb::WJ) || ca == Some(Lb::WJ) {
@@ -381,11 +404,11 @@ impl Context<'_> {
             return (No, Rule::Lb12);
         }
         // LB12a: "[^SP HY HH] × GL".
-        if cb == Some(Lb::GL) && !is(ca, &[Lb::SP, Lb::HY, Lb::HH]) {
+        if cb == Some(Lb::GL) && !is(ca, lb_set![SP, HY, HH]) {
             return (No, Rule::Lb12a);
         }
         // LB13: "× CL", "× CP", "× EX", "× SY".
-        if is(cb, &[Lb::CL, Lb::CP, Lb::EX, Lb::SY]) {
+        if is(cb, lb_set![CL, CP, EX, SY]) {
             return (No, Rule::Lb13);
         }
         // LB14: "OP SP* ×".
@@ -400,20 +423,7 @@ impl Context<'_> {
         {
             let start = match Context::before(q) {
                 None => true,
-                Some(k) => self.is(
-                    k,
-                    &[
-                        Lb::BK,
-                        Lb::CR,
-                        Lb::LF,
-                        Lb::NL,
-                        Lb::OP,
-                        Lb::QU,
-                        Lb::GL,
-                        Lb::SP,
-                        Lb::ZW,
-                    ],
-                ),
+                Some(k) => self.is(k, lb_set![BK, CR, LF, NL, OP, QU, GL, SP, ZW]),
             };
             if start {
                 return (No, Rule::Lb15a);
@@ -426,22 +436,7 @@ impl Context<'_> {
             && (next.is_none()
                 || is(
                     cnext,
-                    &[
-                        Lb::SP,
-                        Lb::GL,
-                        Lb::WJ,
-                        Lb::CL,
-                        Lb::QU,
-                        Lb::CP,
-                        Lb::EX,
-                        Lb::IS,
-                        Lb::SY,
-                        Lb::BK,
-                        Lb::CR,
-                        Lb::LF,
-                        Lb::NL,
-                        Lb::ZW,
-                    ],
+                    lb_set![SP, GL, WJ, CL, QU, CP, EX, IS, SY, BK, CR, LF, NL, ZW],
                 ))
         {
             return (No, Rule::Lb15b);
@@ -455,7 +450,7 @@ impl Context<'_> {
             return (No, Rule::Lb15d);
         }
         // LB16: "(CL | CP) SP* × NS".
-        if cb == Some(Lb::NS) && s.is_some_and(|s| self.is(s, &[Lb::CL, Lb::CP])) {
+        if cb == Some(Lb::NS) && s.is_some_and(|s| self.is(s, lb_set![CL, CP])) {
             return (No, Rule::Lb16);
         }
         // LB17: "B2 SP* × B2".
@@ -494,33 +489,21 @@ impl Context<'_> {
         }
         // LB20a: "( sot | BK | CR | LF | NL | SP | ZW | CB | GL ) ( HY | HH )
         // × ( AL | HL )".
-        if is(ca, &[Lb::HY, Lb::HH]) && is(cb, &[Lb::AL, Lb::HL]) {
+        if is(ca, lb_set![HY, HH]) && is(cb, lb_set![AL, HL]) {
             let start = match Context::before(a) {
                 None => true,
-                Some(k) => self.is(
-                    k,
-                    &[
-                        Lb::BK,
-                        Lb::CR,
-                        Lb::LF,
-                        Lb::NL,
-                        Lb::SP,
-                        Lb::ZW,
-                        Lb::CB,
-                        Lb::GL,
-                    ],
-                ),
+                Some(k) => self.is(k, lb_set![BK, CR, LF, NL, SP, ZW, CB, GL]),
             };
             if start {
                 return (No, Rule::Lb20a);
             }
         }
         // LB21: "× BA", "× HH", "× HY", "× NS", "BB ×".
-        if is(cb, &[Lb::BA, Lb::HH, Lb::HY, Lb::NS]) || ca == Some(Lb::BB) {
+        if is(cb, lb_set![BA, HH, HY, NS]) || ca == Some(Lb::BB) {
             return (No, Rule::Lb21);
         }
         // LB21a: "HL (HY | HH) × [^HL]".
-        if is(ca, &[Lb::HY, Lb::HH])
+        if is(ca, lb_set![HY, HH])
             && cb != Some(Lb::HL)
             && Context::before(a).is_some_and(|k| self.class(k) == Some(Lb::HL))
         {
@@ -535,28 +518,28 @@ impl Context<'_> {
             return (No, Rule::Lb22);
         }
         // LB23: "(AL | HL) × NU", "NU × (AL | HL)".
-        if (is(ca, &[Lb::AL, Lb::HL]) && cb == Some(Lb::NU))
-            || (ca == Some(Lb::NU) && is(cb, &[Lb::AL, Lb::HL]))
+        if (is(ca, lb_set![AL, HL]) && cb == Some(Lb::NU))
+            || (ca == Some(Lb::NU) && is(cb, lb_set![AL, HL]))
         {
             return (No, Rule::Lb23);
         }
         // LB23a: "PR × (ID | EB | EM)", "(ID | EB | EM) × PO".
-        if (ca == Some(Lb::PR) && is(cb, &[Lb::ID, Lb::EB, Lb::EM]))
-            || (is(ca, &[Lb::ID, Lb::EB, Lb::EM]) && cb == Some(Lb::PO))
+        if (ca == Some(Lb::PR) && is(cb, lb_set![ID, EB, EM]))
+            || (is(ca, lb_set![ID, EB, EM]) && cb == Some(Lb::PO))
         {
             return (No, Rule::Lb23a);
         }
         // LB24: "(PR | PO) × (AL | HL)", "(AL | HL) × (PR | PO)".
-        if (is(ca, &[Lb::PR, Lb::PO]) && is(cb, &[Lb::AL, Lb::HL]))
-            || (is(ca, &[Lb::AL, Lb::HL]) && is(cb, &[Lb::PR, Lb::PO]))
+        if (is(ca, lb_set![PR, PO]) && is(cb, lb_set![AL, HL]))
+            || (is(ca, lb_set![AL, HL]) && is(cb, lb_set![PR, PO]))
         {
             return (No, Rule::Lb24);
         }
         // LB25, in the annex's order:
-        if is(cb, &[Lb::PO, Lb::PR]) {
+        if is(cb, lb_set![PO, PR]) {
             // "NU ( SY | IS )* CL × PO", "NU ( SY | IS )* CP × PO",
             // "NU ( SY | IS )* CL × PR", "NU ( SY | IS )* CP × PR".
-            if is(ca, &[Lb::CL, Lb::CP])
+            if is(ca, lb_set![CL, CP])
                 && Context::before(a)
                     .and_then(|k| self.before_sy_is(k))
                     .is_some_and(|k| self.class(k) == Some(Lb::NU))
@@ -573,7 +556,7 @@ impl Context<'_> {
         }
         // "PO × OP NU", "PO × OP IS NU", "PO × NU", "PR × OP NU",
         // "PR × OP IS NU", "PR × NU".
-        if is(ca, &[Lb::PO, Lb::PR]) {
+        if is(ca, lb_set![PO, PR]) {
             let after_next = next
                 .and_then(|k| k.checked_add(1))
                 .and_then(|k| self.class(k));
@@ -585,7 +568,7 @@ impl Context<'_> {
             }
         }
         // "HY × NU", "IS × NU".
-        if is(ca, &[Lb::HY, Lb::IS]) && cb == Some(Lb::NU) {
+        if is(ca, lb_set![HY, IS]) && cb == Some(Lb::NU) {
             return (No, Rule::Lb25);
         }
         // "NU ( SY | IS )* × NU".
@@ -598,27 +581,27 @@ impl Context<'_> {
         }
         // LB26: "JL × (JL | JV | H2 | H3)", "(JV | H2) × (JV | JT)",
         // "(JT | H3) × JT".
-        if (ca == Some(Lb::JL) && is(cb, &[Lb::JL, Lb::JV, Lb::H2, Lb::H3]))
-            || (is(ca, &[Lb::JV, Lb::H2]) && is(cb, &[Lb::JV, Lb::JT]))
-            || (is(ca, &[Lb::JT, Lb::H3]) && cb == Some(Lb::JT))
+        if (ca == Some(Lb::JL) && is(cb, lb_set![JL, JV, H2, H3]))
+            || (is(ca, lb_set![JV, H2]) && is(cb, lb_set![JV, JT]))
+            || (is(ca, lb_set![JT, H3]) && cb == Some(Lb::JT))
         {
             return (No, Rule::Lb26);
         }
         // LB27: "(JL | JV | JT | H2 | H3) × PO", "PR × (JL | JV | JT | H2 |
         // H3)".
-        let korean = [Lb::JL, Lb::JV, Lb::JT, Lb::H2, Lb::H3];
-        if (is(ca, &korean) && cb == Some(Lb::PO)) || (ca == Some(Lb::PR) && is(cb, &korean)) {
+        let korean = lb_set![JL, JV, JT, H2, H3];
+        if (is(ca, korean) && cb == Some(Lb::PO)) || (ca == Some(Lb::PR) && is(cb, korean)) {
             return (No, Rule::Lb27);
         }
         // LB28: "(AL | HL) × (AL | HL)".
-        if is(ca, &[Lb::AL, Lb::HL]) && is(cb, &[Lb::AL, Lb::HL]) {
+        if is(ca, lb_set![AL, HL]) && is(cb, lb_set![AL, HL]) {
             return (No, Rule::Lb28);
         }
         // LB28a: "AP × (AK | [◌] | AS)", "(AK | [◌] | AS) × (VF | VI)",
         // "(AK | [◌] | AS) VI × (AK | [◌])", "(AK | [◌] | AS) × (AK | [◌] |
         // AS) VF".
         if (ca == Some(Lb::AP) && self.ak_dc_as(b))
-            || (self.ak_dc_as(a) && is(cb, &[Lb::VF, Lb::VI]))
+            || (self.ak_dc_as(a) && is(cb, lb_set![VF, VI]))
             || (ca == Some(Lb::VI)
                 && Context::before(a).is_some_and(|k| self.ak_dc_as(k))
                 && self.ak_dc(b))
@@ -627,13 +610,13 @@ impl Context<'_> {
             return (No, Rule::Lb28a);
         }
         // LB29: "IS × (AL | HL)".
-        if ca == Some(Lb::IS) && is(cb, &[Lb::AL, Lb::HL]) {
+        if ca == Some(Lb::IS) && is(cb, lb_set![AL, HL]) {
             return (No, Rule::Lb29);
         }
         // LB30: "(AL | HL | NU) × [OP-$EastAsian]", "[CP-$EastAsian] × (AL |
         // HL | NU)".
-        if (is(ca, &[Lb::AL, Lb::HL, Lb::NU]) && pb.class == Lb::OP && !pb.east_asian)
-            || (pa.class == Lb::CP && !pa.east_asian && is(cb, &[Lb::AL, Lb::HL, Lb::NU]))
+        if (is(ca, lb_set![AL, HL, NU]) && pb.class == Lb::OP && !pb.east_asian)
+            || (pa.class == Lb::CP && !pa.east_asian && is(cb, lb_set![AL, HL, NU]))
         {
             return (No, Rule::Lb30);
         }
