@@ -724,8 +724,9 @@ pub open spec fn peer_closed(p: Primitives, ts: TState, cout: Step, tout: TOut) 
 /// ServerHello with an all-zero shared secret). The crate has sent
 /// ClientHello2 (acknowledged at once, `driver_spec` choice 2) before the
 /// later messages are read, then its alert; the transcription's abort
-/// writes no ClientHello2, only its alert. `bootstrap::record_agrees` holds
-/// of the record, and relates the two alerts.
+/// writes no ClientHello2, only its alert (or, where the crate's caps fired,
+/// it goes on). `bootstrap::record_agrees` holds of the record, and relates
+/// the two.
 pub open spec fn retry_then_fails(m: Models, p: Primitives, cs: CState, ts: TState, chunk: Seq<u8>, cout: Step,
     tout: TOut) -> bool
 {
@@ -737,8 +738,6 @@ pub open spec fn retry_then_fails(m: Models, p: Primitives, cs: CState, ts: TSta
     &&& crate::hello::bootstrap_lemmas::record_step(m.crypto.hash, s, b).1
         matches crate::hello::bootstrap_spec::Action::Send(wire)
     &&& cout.send == wire + crate::connection::driver_spec::hello_failure(cout.status->Failed_0).send
-    &&& tout.end is Aborted
-    &&& tout.send == crate::transcription::connection::abort_record(p, ts.client.connection, tout.end->Aborted_0)
     &&& super::bootstrap::record_agrees(p, s, ts.client, b)
 }
 
@@ -793,9 +792,11 @@ pub proof fn lemma_hello_crate(m: Models, s: crate::hello::bootstrap_spec::State
             &&& (!(a is Fail) ==> input.skip(k as int) == x.skip((5 + super::bootstrap::length(x)) as int))
         } else {
             ||| (k == input.len() && out == hello_act(m, scalar, s, x, crate::hello::bootstrap_spec::Action::None)
+                && super::framing::first(x, false).0 is Pending
                 && crate::connection::framing_spec::wf_mode(x, false)
                 && crate::spec::read_record(x, false) is NeedMore)
             ||| (out.status matches Status::Failed(a, _) && super::framing::early_reject(x, false, a)
+                && super::framing::first(x, false).0 == crate::connection::framing_spec::Status::Fail(a)
                 && out == crate::connection::driver_spec::hello_failure(a))
         }
     }),
@@ -1326,6 +1327,237 @@ pub proof fn lemma_handoff(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::
             super::dispatcher::lemma_start(m.crypto, m.exchange, m.verification, ciphers(m), p, cl1, c, h, raw, config,
                 transcript, key, scalar);
         },
+    }
+}
+
+
+/// A record on which the bootstrap establishes or retries is handshake
+/// bytes the crate reads as messages: the record-level theorem's
+/// `buffer_agrees` holds of them.
+pub proof fn lemma_hs_path(p: Primitives, s: crate::hello::bootstrap_spec::State, cl: ClientConnection, b: Seq<u8>)
+    requires
+        super::bootstrap::record_agrees(p, s, cl, b),
+        crate::hello::bootstrap_lemmas::record_step(p.hash, s, b).1 is Established
+            || crate::hello::bootstrap_lemmas::record_step(p.hash, s, b).1 is Send,
+    ensures ({
+        let bf = super::bootstrap::buffer(s, b);
+        &&& crate::hello::bootstrap_lemmas::record_step(p.hash, s, b) == super::bootstrap::buffer_step(p.hash, s, bf)
+        &&& super::bootstrap::one_record(p, cl.connection, b)
+            == crate::transcription::connection::process_handshake_bytes(p, cl.connection, bf)
+        &&& super::bootstrap::buffer_agrees(p, s, cl, bf)
+    }),
+{
+}
+
+/// The ServerHello in its own record: the handoff ([`lemma_handoff`]).
+pub proof fn lemma_hello_established(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    framing: Seq<u8>, held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
+    requires
+        hypotheses(m, p),
+        hello_agrees(p, scalar, s, framing, held, ts),
+        whole(ts.buffer + chunk),
+        crate::hello::bootstrap_lemmas::record_step(m.crypto.hash, s, front(ts.buffer + chunk)).1 is Established,
+    ensures hello_whole(m, p, scalar, s, framing, held, ts, chunk, cs2),
+{
+    hide(super::bootstrap::buffer_agrees);
+    hide(super::bootstrap::buffer_step);
+    hide(super::bootstrap::record_agrees);
+    hide(crate::hello::bootstrap_lemmas::record_step);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(peer_closed);
+    hide(retry_then_fails);
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    let c = ts.client.connection;
+    let n = 5 + super::bootstrap::length(w);
+    lemma_hello_facts(p, scalar, s, framing, held, ts, chunk);
+    assert(m.crypto.hash == p.hash);
+    lemma_hs_path(p, s, ts.client, b);
+    let bf = super::bootstrap::buffer(s, b);
+    lemma_handoff(m, p, scalar, s, ts.client, bf);
+    let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b);
+    let cout = hello_act(m, scalar, s2, seq![], a);
+    assert(cout == crate::connection::driver_contract::established_step(m, a, scalar));
+    let t = super::bootstrap::after_message(p, c, bf);
+    match t {
+        Receive::Continue(pr) => {
+            assert(cout.send =~= Seq::<u8>::empty());
+            assert(cout.deliver =~= Seq::<u8>::empty());
+            assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+            assert(pr.application_data =~= Seq::<u8>::empty());
+            assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
+            let ds = cout.stage->Flight_0;
+            assert(crate::connection::dispatcher_spec::State { framing: seq![], ..ds } == ds);
+            super::framing::lemma_empty(true);
+            assert(Seq::<u8>::empty() + w.skip(n as int) =~= w.skip(n as int));
+        },
+        _ => {},
+    }
+}
+
+/// A HelloRetryRequest: ClientHello2 goes out (with D.4's dummy record)
+/// and is acknowledged at once; what followed the HelloRetryRequest in its
+/// record is then read, as the transcription reads it in the same step.
+#[verifier::rlimit(60)]
+pub proof fn lemma_hello_send(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::hello::bootstrap_spec::State,
+    framing: Seq<u8>, held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
+    requires
+        hypotheses(m, p),
+        hello_agrees(p, scalar, s, framing, held, ts),
+        whole(ts.buffer + chunk),
+        crate::hello::bootstrap_lemmas::record_step(m.crypto.hash, s, front(ts.buffer + chunk)).1 is Send,
+    ensures hello_whole(m, p, scalar, s, framing, held, ts, chunk, cs2),
+{
+    hide(super::bootstrap::buffer_step);
+    hide(super::bootstrap::record_agrees);
+    hide(crate::hello::bootstrap_lemmas::record_step);
+    hide(super::dispatcher::dispatcher_agrees);
+    hide(super::bootstrap::bootstrap_agrees);
+    hide(rejects_record);
+    hide(rejects_early);
+    hide(peer_closed);
+    hide(ends_alike);
+    hide(crate::transcription::state_machine::receive_handshake_message);
+    let w = ts.buffer + chunk;
+    let b = front(w);
+    let cl = ts.client;
+    let c = cl.connection;
+    let n0 = 5 + super::bootstrap::length(w);
+    lemma_hello_facts(p, scalar, s, framing, held, ts, chunk);
+    assert(m.crypto.hash == p.hash);
+    lemma_hs_path(p, s, cl, b);
+    let bf = super::bootstrap::buffer(s, b);
+    let (s2, a) = crate::hello::bootstrap_lemmas::record_step(p.hash, s, b);
+    let wire = a->Send_0;
+    // `buffer_agrees`' Send case.
+    let n = super::bootstrap::first_length(bf);
+    let raw = bf.subrange(0, n as int);
+    let rest = bf.skip(n as int);
+    let step = crate::transcription::state_machine::receive_handshake_message(p, c.handshake, raw);
+    let (c3, sent) = crate::transcription::connection::apply_actions(p, Connection { handshake: step->handshake, ..c },
+        step->actions);
+    let (records, ccs_sent) = crate::transcription::middlebox::before_second_flight(cl.compatibility_mode,
+        cl.change_cipher_spec_sent, sent);
+    let s1 = crate::hello::bootstrap_spec::State { mode: crate::hello::bootstrap_spec::Mode::AwaitServerHello,
+        pending_flight: seq![], retained: seq![], ..s2 };
+    let cl2 = ClientConnection { connection: c3, change_cipher_spec_sent: ccs_sent, ..cl };
+    let t2 = crate::transcription::connection::process_handshake_bytes(p, c3, rest);
+    assert({
+        &&& 4 <= n && n <= bf.len()
+        &&& step is Proceed
+        &&& !step->receive_key_changes
+        &&& wire == super::ccs::flatten(records)
+        &&& crate::transcription::connection::process_handshake_bytes(p, c, bf)
+            == super::bootstrap::after_records(sent, t2)
+        &&& s2.mode == crate::hello::bootstrap_spec::Mode::AwaitClientHello2Send
+        &&& crate::hello::bootstrap_spec::wf(s2)
+        &&& crate::hello::bootstrap_spec::acknowledge(p.hash, s2, wire) == super::bootstrap::buffer_step(p.hash, s1, rest)
+        &&& super::bootstrap::agrees_but_buffer(p, s1, cl2)
+        &&& super::bootstrap::buffer_agrees(p, s1, cl2, rest)
+    });
+    // ClientHello2's step keeps WAIT_SH's fields, and leaves the controller retried.
+    lemma_apply_keeps(p, Connection { handshake: step->handshake, ..c }, step->actions);
+    lemma_wait_sh_step(p, c.handshake, raw, scalar);
+    assert(wait_sh_fields(c3.handshake, scalar));
+    assert(s1.hello->Some_0.transcript.retried);
+    lemma_no_second_retry(p.hash, s1, rest);
+    let (acked, after) = super::bootstrap::buffer_step(p.hash, s1, rest);
+    let cout = hello_act(m, scalar, s2, seq![], a);
+    let u = crate::transcription::middlebox::client_receive_stream(p, cl, b).0;
+    assert(u == super::dispatcher::lifted(cl, super::bootstrap::after_records(sent, t2)));
+    assert(sent + Seq::<Seq<u8>>::empty() =~= sent);
+    match after {
+        crate::hello::bootstrap_spec::Action::None => {
+            let c2 = Connection { handshake_fragments: acked.reassembly.buf, ..c3 };
+            assert(t2 == Receive::Continue(crate::transcription::connection::Progress { connection: c2,
+                application_data: seq![], records_to_send: seq![] }));
+            assert(super::bootstrap::bootstrap_agrees(p, acked, ClientConnection { connection: c2, ..cl2 }));
+            assert(cout.deliver =~= Seq::<u8>::empty());
+            super::framing::lemma_empty(false);
+            assert(Seq::<u8>::empty() + w.skip(n0 as int) =~= w.skip(n0 as int));
+        },
+        crate::hello::bootstrap_spec::Action::Fail(alert) => {
+            assert(retry_then_fails(m, p, CState { stage: Stage::Hello(s, framing), status: Status::Handshaking, held },
+                ts, chunk, cout, tfeed(p, ts, chunk)));
+        },
+        crate::hello::bootstrap_spec::Action::Established(_, _, _) => {
+            lemma_handoff(m, p, scalar, s1, cl2, rest);
+            let est = crate::connection::driver_contract::established_step(m, after, scalar);
+            match super::bootstrap::after_message(p, c3, rest) {
+                Receive::Continue(pr) => {
+                    assert(cout.send =~= wire);
+                    assert(cout.deliver =~= Seq::<u8>::empty());
+                    assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
+                    assert(pr.application_data =~= Seq::<u8>::empty());
+                    let ds = cout.stage->Flight_0;
+                    assert(crate::connection::dispatcher_spec::State { framing: seq![], ..ds } == ds);
+                    super::framing::lemma_empty(true);
+                    assert(Seq::<u8>::empty() + w.skip(n0 as int) =~= w.skip(n0 as int));
+                },
+                _ => {
+                    assert(retry_then_fails(m, p, CState { stage: Stage::Hello(s, framing), status: Status::Handshaking,
+                        held }, ts, chunk, cout, tfeed(p, ts, chunk)));
+                },
+            }
+        },
+        _ => {},
+    }
+}
+
+/// **The Hello stage, one operation**: feeding a chunk agrees
+/// ([`op_agrees`]).
+pub proof fn lemma_hello_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
+    requires
+        hypotheses(m, p),
+        driver_agrees(m, p, scalar, cs, ts),
+        cs.stage is Hello,
+    ensures op_agrees(m, p, scalar, cs, ts, Op::Feed(chunk)),
+{
+    hide(hello_whole);
+    hide(hello_act);
+    hide(crate::hello::bootstrap_lemmas::record_step);
+    hide(super::bootstrap::bootstrap_agrees);
+    let (s, framing) = match cs.stage { Stage::Hello(s, f) => (s, f), _ => arbitrary() };
+    let input = cs.held + chunk;
+    let x = framing + input;
+    assert(x =~= ts.buffer + chunk);
+    let c = ts.client.connection;
+    assert(c.receive == Protection::Unprotected && s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello) by {
+        reveal(super::bootstrap::bootstrap_agrees);
+    }
+    lemma_hello_crate(m, s, framing, scalar, input, c);
+    let (k, cout) = hello_out(m, s, framing, scalar, input);
+    let cs2 = CState { stage: cout.stage, status: cout.status, held: input.skip(k as int) };
+    assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
+    if whole(x) {
+        let (s2, a) = crate::hello::bootstrap_lemmas::record_step(m.crypto.hash, s, front(x));
+        match a {
+            crate::hello::bootstrap_spec::Action::None =>
+                lemma_hello_none(m, p, scalar, s, framing, cs.held, ts, chunk, cs2),
+            crate::hello::bootstrap_spec::Action::Send(_) =>
+                lemma_hello_send(m, p, scalar, s, framing, cs.held, ts, chunk, cs2),
+            crate::hello::bootstrap_spec::Action::Established(_, _, _) =>
+                lemma_hello_established(m, p, scalar, s, framing, cs.held, ts, chunk, cs2),
+            crate::hello::bootstrap_spec::Action::Alert(_) =>
+                lemma_hello_alert(m, p, scalar, s, framing, cs.held, ts, chunk, cs2),
+            crate::hello::bootstrap_spec::Action::Fail(_) =>
+                lemma_hello_fail(m, p, scalar, s, framing, cs.held, ts, chunk, cs2),
+            crate::hello::bootstrap_spec::Action::Close =>
+                lemma_hello_close(m, p, scalar, s, framing, cs.held, ts, chunk, cs2),
+        }
+        reveal(hello_whole);
+    } else {
+        reveal(super::bootstrap::bootstrap_agrees);
+        lemma_tfeed_partial(p, ts, chunk);
+        super::framing::lemma_framing_agrees(c, x, false);
+        let (st, _) = super::framing::first(x, false);
+        if st is Pending {
+            reveal(hello_act);
+            assert(input.skip(k as int) =~= Seq::<u8>::empty());
+            assert(x + Seq::<u8>::empty() =~= x);
+        }
     }
 }
 
