@@ -237,3 +237,107 @@ pub fn numbers(arch: Arch) -> Vec<u32> {
 pub fn is_allowed(arch: Arch, nr: u32) -> bool {
     ALLOWLIST.iter().any(|s| s.number(arch) == nr)
 }
+
+/// Item 5.21a: the GPU process's additions to [`ALLOWLIST`] on Linux.
+///
+/// **Not measured.** Every entry here is reasoned from what a Vulkan driver is
+/// documented or known to do, on a Mac where no Linux GPU process can run; none has
+/// been checked against lavapipe or a hardware driver. Each `reason` starts "not
+/// measured", and `tests/vendored.rs` checks that it does, until a Linux machine
+/// measures the list (draw every scene with lavapipe and with each real driver,
+/// read the pixels back, and narrow until removing any entry breaks it).
+///
+/// Modelling choices:
+/// - **Warm up, then enter.** The GPU process loads the Vulkan loader and driver,
+///   opens its device node (none for lavapipe), makes its device and compiles its
+///   fixed pipelines (our shaders, never a page's) *before* installing the filter,
+///   as the plan says ("the device paths opened before entering it") and as the
+///   macOS GPU process does. So there is still no `open`, `openat`, `socket` or
+///   `connect`: no new file, no X server, no network.
+/// - **The renderer's list, plus what a driver needs at run time**: `sendmsg` and
+///   `recvmsg` for passing buffer descriptors with the host (which the renderer's
+///   list deliberately lacks), threads (`clone`, `clone3`, and what a new thread
+///   does first), and `ioctl` for a hardware driver's commands.
+/// - **No argument filtering**, as for the renderer: the generator selects by
+///   number only. So `ioctl` reaches every ioctl of every descriptor the process
+///   holds (the plan: "`ioctl` argument filtering is stated per driver or stated
+///   as absent": it is absent); `clone` and `clone3` can make a process as well as
+///   a thread, which then runs under the same filter; and `mmap` and `mprotect` can
+///   make executable memory, which lavapipe needs for its compiled shaders (ours).
+/// - **Weaker than the renderer's**, by exactly these additions; the crate README
+///   says so.
+pub const GPU_EXTRA: &[Syscall] = &[
+    Syscall {
+        name: "ioctl",
+        x86_64: 16,
+        aarch64: 29,
+        reason: "not measured: a hardware driver's commands on its device node (DRM); \
+                 no argument filtering",
+    },
+    Syscall {
+        name: "getpid",
+        x86_64: 39,
+        aarch64: 172,
+        reason: "not measured: drivers and the Vulkan loader read their own process id",
+    },
+    Syscall {
+        name: "sendmsg",
+        x86_64: 46,
+        aarch64: 211,
+        reason: "not measured: send buffer descriptors to the host (SCM_RIGHTS)",
+    },
+    Syscall {
+        name: "recvmsg",
+        x86_64: 47,
+        aarch64: 212,
+        reason: "not measured: receive buffer descriptors from the host (SCM_RIGHTS)",
+    },
+    Syscall {
+        name: "clone",
+        x86_64: 56,
+        aarch64: 220,
+        reason: "not measured: lavapipe's and drivers' worker threads (older libc); \
+                 no argument filtering",
+    },
+    Syscall {
+        name: "sched_getaffinity",
+        x86_64: 204,
+        aarch64: 123,
+        reason: "not measured: lavapipe sizes its thread pool from the usable CPUs",
+    },
+    Syscall {
+        name: "set_robust_list",
+        x86_64: 273,
+        aarch64: 99,
+        reason: "not measured: the C library registers each new thread's robust futexes",
+    },
+    Syscall {
+        name: "rseq",
+        x86_64: 334,
+        aarch64: 293,
+        reason: "not measured: the C library registers each new thread's restartable \
+                 sequences",
+    },
+    Syscall {
+        name: "clone3",
+        x86_64: 435,
+        aarch64: 435,
+        reason: "not measured: worker threads (newer libc tries clone3 first); no \
+                 argument filtering",
+    },
+];
+
+/// The GPU process's allowlisted numbers for `arch`: [`ALLOWLIST`] then
+/// [`GPU_EXTRA`], in table order.
+pub fn gpu_numbers(arch: Arch) -> Vec<u32> {
+    ALLOWLIST
+        .iter()
+        .chain(GPU_EXTRA)
+        .map(|s| s.number(arch))
+        .collect()
+}
+
+/// Whether syscall number `nr` is on the GPU process's allowlist for `arch`.
+pub fn is_gpu_allowed(arch: Arch, nr: u32) -> bool {
+    is_allowed(arch, nr) || GPU_EXTRA.iter().any(|s| s.number(arch) == nr)
+}
