@@ -288,10 +288,12 @@ which the table cannot reach, so they are stated here:
 - **Windows**: `kernel32`, `advapi32`, `userenv`, `bcrypt`, `iphlpapi`, `user32`
   and `gdi32`, and for the GPU process `dxgi` and `d3d12` (phase-5.md item
   5.17b), all part of the OS; `DeriveCapabilitySidsFromName` is imported from
-  `kernelbase.dll` by name, with no import library. As on Linux, every binary
-  links `clazel-sys`, so `clazel` and `clazel-renderer` load `dxgi.dll` and
-  `d3d12.dll` at start too, though only the GPU process calls them (**expected
-  from how Windows resolves imports; not observed, since none of this has
-  run**). Direct3D loads the adapter's driver, or WARP, which is part of
-  Windows. The Direct3D shaders are compiled by `vkd3d-compiler` 1.19, a tool
+  `kernelbase.dll` by name, with no import library. Unlike Linux's
+  `DT_NEEDED`, a Windows binary imports a DLL only if it references one of its
+  functions, so `dxgi.dll` and `d3d12.dll` should be imported by `clazel-gpu`
+  alone and not by the host or the renderer, which link `clazel-sys` and call
+  none of them. **That is expected, not observed** (none of this has run), and
+  it matters: the renderer runs without `win32k`, where a DLL that needs it may
+  fail to load. `dumpbin /imports` on the three binaries settles it. Direct3D
+  loads the adapter's driver, or WARP, which is part of Windows. The Direct3D shaders are compiled by `vkd3d-compiler` 1.19, a tool
   that is neither a Cargo package nor shipped (`xtask/src/shaders.rs`).
