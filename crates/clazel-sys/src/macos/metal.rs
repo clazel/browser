@@ -697,6 +697,12 @@ impl Surface {
     pub fn height(&self) -> usize {
         self.height
     }
+
+    /// The `IOSurfaceRef`, for `window.rs` to show it in a layer. Still owned by
+    /// this `Surface`; the caller only passes it to a call that retains it.
+    pub(crate) fn as_raw(&self) -> *mut c_void {
+        self.ptr.as_ptr()
+    }
 }
 
 /// An RGBA8 texture on a [`Surface`] (`id<MTLTexture>`), usable as a render target.
