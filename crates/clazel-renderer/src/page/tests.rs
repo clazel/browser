@@ -174,7 +174,7 @@ fn the_gpu_process_reads_what_the_renderer_writes() -> Result<(), RunError> {
         scale: 1,
     })
     .unwrap_or_default();
-    assert_eq!(server.kernel(&size), Ok(()));
+    assert_eq!(server.kernel(&size), Ok(Vec::new()));
     let mut rest = &list[..];
     let mut frames_drawn = Vec::new();
     while let Ok(Some(l)) = clazel_gpu::channel::read_list(&mut rest) {

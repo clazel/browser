@@ -11,7 +11,7 @@
 //!   (`window.rs`), on macOS on Apple silicon in a window server session;
 //!   elsewhere, or with `--text`, the text-mode browser of phase-4.md item 4.15
 //!   (`browse.rs`). The host's log of frames goes to standard error.
-//! - `clazel browse --headless OUT URL [--size WxH]`: render one page to `OUT`, a
+//! - `clazel browse --headless OUT URL [--size WxH] [--wait S]`: render one page to `OUT`, a
 //!   PNG or (`.ppm`) a PPM, without a window (item 5.23).
 //! - `--gpu=hardware` with `browse` ignores the driver blocklist (item 5.17c), with
 //!   a warning.
@@ -124,7 +124,7 @@ fn main() -> ExitCode {
 fn usage() -> ExitCode {
     eprintln!(
         "usage: clazel URL SCRIPT | clazel demo | clazel fetch URL | \
-         clazel browse [--text | --headless OUT [--size WxH]] [--gpu=hardware] URL"
+         clazel browse [--text | --headless OUT [--size WxH] [--wait S]] [--gpu=hardware] URL"
     );
     ExitCode::from(2)
 }
@@ -199,7 +199,12 @@ fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode 
         let Some(dims) = value("--size").map_or(Some((1024, 768)), |s| size(&s)) else {
             return usage();
         };
-        return match window::headless(&mut host, std::path::Path::new(&out), url, dims) {
+        let wait = match value("--wait").map(|w| w.parse::<u64>()) {
+            None => window::HEADLESS_WAIT,
+            Some(Ok(s)) => Duration::from_secs(s),
+            Some(Err(_)) => return usage(),
+        };
+        return match window::headless(&mut host, std::path::Path::new(&out), url, dims, wait) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("clazel: browse --headless: {e}");

@@ -36,7 +36,8 @@
 //!   tab has committed (this loop's list, as in item 4.15), Command-R reloads.
 //! - **Headless**: one tab sized `--size W×H` (default 1024 by 768) at scale 1;
 //!   the first `Paint` with its pixels is written, PPM if `OUT` ends in `.ppm`,
-//!   else PNG (`picture.rs`); 30 seconds without one is a failure.
+//!   else PNG (`picture.rs`); 30 seconds (or `--wait S`) without one is a
+//!   failure.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -70,7 +71,7 @@ pub fn renderer_fonts() -> Vec<std::path::PathBuf> {
         .collect()
 }
 
-/// How long `--headless` waits for a frame.
+/// How long `--headless` waits for a frame unless `--wait` says otherwise.
 pub const HEADLESS_WAIT: Duration = Duration::from_secs(30);
 
 /// A `Paint` for one tab, as the host shows it.
@@ -327,12 +328,13 @@ pub fn window_pixels(rgba: &[u8]) -> Vec<u32> {
 }
 
 /// `browse --headless OUT URL`: open a tab at `url` sized `width` by `height`,
-/// and write its first frame to `out`.
+/// and write its first frame to `out`, waiting up to `wait` for it.
 pub fn headless(
     host: &mut Host,
     out: &Path,
     url: &str,
     (width, height): (u32, u32),
+    wait: Duration,
 ) -> Result<(), String> {
     let tab = host.open(url);
     if renderer_of(host, tab).is_none() {
@@ -345,7 +347,7 @@ pub fn headless(
         scale: 1,
     });
     let end = Instant::now()
-        .checked_add(HEADLESS_WAIT)
+        .checked_add(wait)
         .unwrap_or_else(Instant::now);
     let mut pending = None;
     while Instant::now() < end {
@@ -378,7 +380,7 @@ pub fn headless(
     if renderer_of(host, tab).is_none() {
         return Err(format!("the tab for {url} is gone"));
     }
-    Err(format!("no frame for {url} within {HEADLESS_WAIT:?}"))
+    Err(format!("no frame for {url} within {wait:?}"))
 }
 
 /// The user's input on `tab`'s content area (`EventRecord::Input`): `kind` 0 a

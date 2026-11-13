@@ -2,8 +2,8 @@
 //! 5.23): a stand-in renderer that writes a hand-built display list to the list
 //! socket it inherits, the real GPU process, and the reference pixels of the list.
 //!
-//! The stand-in renderer is a shell script: it waits a second (so the kernel has
-//! committed the tab and sized it before the list arrives), writes the list to
+//! The stand-in renderer is a Perl script: it waits for the kernel's `BodyEnd`
+//! (the tab is committed, so a `FrameReady` is allowed), writes the list to
 //! `--list-fd N`, then reads its kernel channel until the host closes it.
 
 use std::path::{Path, PathBuf};
@@ -17,16 +17,40 @@ use clazel_gpu::geom::Viewport;
 use clazel_gpu::reference::{Masks, draw};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord};
 
-/// The stand-in renderer.
-const RENDERER: &str = r#"#!/bin/sh
-fd=""
-while [ $# -gt 0 ]; do
-  if [ "$1" = "--list-fd" ]; then fd="$2"; fi
-  shift
-done
-sleep 1
-if [ -n "$fd" ]; then eval "cat \"\$CLAZEL_TEST_LIST\" >&$fd"; fi
-exec cat > /dev/null
+/// The stand-in renderer, in Perl (the shell cannot read frames): it reads the
+/// kernel's frames (a 4-byte big-endian length, then the message) until
+/// `BodyEnd` (CBOR `[107]`, `81 18 6b`), when the kernel has committed it, then
+/// writes the list to `--list-fd N` once, and reads on until the host closes its
+/// channel.
+const RENDERER: &str = r#"#!/usr/bin/perl
+use strict;
+use IO::Handle;
+my ($fd, $list);
+for my $i (0 .. $#ARGV - 1) { $fd = $ARGV[$i + 1] if $ARGV[$i] eq '--list-fd'; }
+sub exactly {
+    my ($n) = @_;
+    my $got = '';
+    while (length($got) < $n) {
+        my $r = sysread(STDIN, $got, $n - length($got), length($got));
+        return undef if !$r;
+    }
+    return $got;
+}
+while (defined(my $head = exactly(4))) {
+    my $body = exactly(unpack('N', $head));
+    last if !defined $body;
+    next unless $body eq "\x81\x18\x6b" && defined $fd && !defined $list;
+    # The handle lives as long as the script: a lexical one would close the
+    # socket at the end of this iteration, and the GPU process ends when its list
+    # socket closes (measured: that lost the frame in 4 runs of 20).
+    open($list, '>&=', $fd) or die "list socket: $!";
+    binmode $list;
+    open(my $f, '<', $ENV{CLAZEL_TEST_LIST}) or die "list file: $!";
+    binmode $f;
+    local $/;
+    print {$list} <$f>;
+    $list->flush;
+}
 "#;
 
 /// The hand-built list: a white canvas, an opaque and a translucent fill under a
@@ -141,7 +165,7 @@ pub fn fixture(tag: &str) -> Result<Fixture, String> {
     let name = format!("clazel-{tag}-{}", std::process::id());
     let dir = std::env::temp_dir().join(name);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let script = dir.join("renderer.sh");
+    let script = dir.join("renderer.pl");
     std::fs::write(&script, RENDERER).map_err(|e| e.to_string())?;
     // `clazel browse` runs `$CLAZEL_RENDERER` itself, so the script must be executable.
     use std::os::unix::fs::PermissionsExt;
@@ -173,7 +197,7 @@ pub fn metal() -> Result<(), String> {
 pub fn host(f: &Fixture) -> Host {
     let (script, list, gpu) = (f.script.clone(), f.list.clone(), f.gpu.clone());
     Host::new(move |_| {
-        let mut c = Command::new("/bin/sh");
+        let mut c = Command::new("/usr/bin/perl");
         c.arg(&script).env("CLAZEL_TEST_LIST", &list);
         c
     })
