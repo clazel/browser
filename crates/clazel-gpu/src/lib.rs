@@ -38,12 +38,15 @@
 pub mod atlas;
 pub mod backend;
 pub mod batch;
+pub mod blocklist;
 pub mod geom;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 pub mod metal;
+pub mod policy;
 pub mod reference;
 pub mod scenes;
 pub mod soft;
+pub mod start;
 
 #[cfg(kani)]
 mod proofs;
