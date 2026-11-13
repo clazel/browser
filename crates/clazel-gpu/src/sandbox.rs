@@ -28,9 +28,12 @@
 //!    the warm-up wrong is refused here;
 //! 4. Landlock with no rule (no filesystem access; it binds the calling thread
 //!    and the threads it creates, not the driver's existing workers);
-//! 5. the seccomp list (`seccomp::gpu_program`) on **every thread at once**
+//! 5. the seccomp list on **every thread at once**
 //!    (`SECCOMP_FILTER_FLAG_TSYNC`), so the workers of step 3 are filtered too:
-//!    no `open`, `openat`, `socket` or `connect` for any of them;
+//!    no `open`, `openat`, `socket` or `connect` for any of them. On a software
+//!    device it is `seccomp::gpu_program`, measured on lavapipe; on a hardware
+//!    device `seccomp::gpu_hardware_program`, which also allows `ioctl` and has
+//!    never been measured, so a hardware driver may be killed here or later;
 //! 6. only then may the caller check the blocklist and read a message.
 //!
 //! No byte from a page or a renderer is read before the last step, so a page
@@ -192,7 +195,8 @@ pub fn start_vulkan(software: bool) -> Result<crate::vulkan::VulkanBackend, Fail
     let mut backend = crate::vulkan::VulkanBackend::new(software).map_err(Failure::Device)?;
     warm_up(&mut backend)?;
     layer("landlock", landlock())?;
-    seccomp().map_err(|e| Failure::Layer("seccomp", e))?;
+    let software = crate::backend::Backend::adapter(&backend).software;
+    seccomp(software).map_err(|e| Failure::Layer("seccomp", e))?;
     Ok(backend)
 }
 
@@ -225,11 +229,18 @@ const ARCH: Option<clazel_sandbox::syscalls::Arch> = Some(clazel_sandbox::syscal
 ))]
 const ARCH: Option<clazel_sandbox::syscalls::Arch> = None;
 
-/// The GPU process's seccomp list, on every thread.
+/// The GPU process's seccomp list, on every thread: the software driver's
+/// (measured on lavapipe), or with a hardware device the one that also allows
+/// `ioctl` (not measured).
 #[cfg(target_os = "linux")]
-fn seccomp() -> Result<(), String> {
+fn seccomp(software: bool) -> Result<(), String> {
     let arch = ARCH.ok_or("no seccomp program for this architecture")?;
-    let program = clazel_sandbox::seccomp::gpu_program(arch).map_err(|e| format!("{e:?}"))?;
+    let program = if software {
+        clazel_sandbox::seccomp::gpu_program(arch)
+    } else {
+        clazel_sandbox::seccomp::gpu_hardware_program(arch)
+    }
+    .map_err(|e| format!("{e:?}"))?;
     let program: Vec<clazel_sys::linux::SockFilter> = program
         .iter()
         .map(|i| clazel_sys::linux::SockFilter {

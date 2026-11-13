@@ -128,9 +128,17 @@ pub fn renderer_program(arch: Arch) -> Result<Vec<SockFilter>, GenError> {
     generate(arch.audit_arch(), &syscalls::numbers(arch))
 }
 
-/// The GPU process's seccomp program for `arch` (item 5.21a), from
-/// [`syscalls::gpu_numbers`]: the same layout, over the renderer's list and
-/// [`syscalls::GPU_EXTRA`]. **Not measured** (see `GPU_EXTRA`).
+/// The GPU process's seccomp program for `arch` on a software driver (item
+/// 5.21a), from [`syscalls::gpu_numbers`]: the same layout, over the renderer's
+/// list and [`syscalls::GPU_EXTRA`], measured on one configuration (see
+/// `GPU_EXTRA`).
 pub fn gpu_program(arch: Arch) -> Result<Vec<SockFilter>, GenError> {
     generate(arch.audit_arch(), &syscalls::gpu_numbers(arch))
+}
+
+/// The GPU process's seccomp program for `arch` on a hardware driver, from
+/// [`syscalls::gpu_hardware_numbers`]: [`gpu_program`]'s list and
+/// [`syscalls::GPU_HARDWARE_EXTRA`]. **Not measured** (see `GPU_HARDWARE_EXTRA`).
+pub fn gpu_hardware_program(arch: Arch) -> Result<Vec<SockFilter>, GenError> {
+    generate(arch.audit_arch(), &syscalls::gpu_hardware_numbers(arch))
 }

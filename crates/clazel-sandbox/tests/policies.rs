@@ -286,37 +286,48 @@ fn seatbelt_profile_shape() {
 
 #[test]
 fn gpu_programs_allow_exactly_the_gpu_list_below_1024() -> Result<(), String> {
-    use clazel_sandbox::seccomp::gpu_program;
+    use clazel_sandbox::seccomp::{gpu_hardware_program, gpu_program};
+    type Allowed = fn(Arch, u32) -> bool;
     for arch in Arch::ALL {
-        let prog = gpu_program(arch).map_err(|e| format!("{e:?}"))?;
-        validate(&prog).map_err(|e| format!("{e:?}"))?;
-        assert_eq!(
-            prog.len(),
-            syscalls::ALLOWLIST.len() + syscalls::GPU_EXTRA.len() + 6
+        let software = (
+            gpu_program(arch),
+            syscalls::GPU_EXTRA.len(),
+            syscalls::is_gpu_allowed as Allowed,
         );
-        for nr in (0..1024u32).step_by(miri_step()) {
-            let got = run(&prog, &SeccompData::new(nr, arch.audit_arch()));
-            let want = if syscalls::is_gpu_allowed(arch, nr) {
-                SECCOMP_RET_ALLOW
-            } else {
-                SECCOMP_RET_KILL_PROCESS
-            };
-            assert_eq!(got, Ok(want), "{arch:?} syscall {nr}");
-            let other = match arch {
-                Arch::X86_64 => AUDIT_ARCH_AARCH64,
-                Arch::Aarch64 => AUDIT_ARCH_X86_64,
-            };
-            assert_eq!(
-                run(&prog, &SeccompData::new(nr, other)),
-                Ok(SECCOMP_RET_KILL_PROCESS)
-            );
+        let hardware = (
+            gpu_hardware_program(arch),
+            syscalls::GPU_EXTRA.len() + syscalls::GPU_HARDWARE_EXTRA.len(),
+            syscalls::is_gpu_hardware_allowed as Allowed,
+        );
+        for (prog, extra, allowed) in [software, hardware] {
+            let prog = prog.map_err(|e| format!("{e:?}"))?;
+            validate(&prog).map_err(|e| format!("{e:?}"))?;
+            assert_eq!(prog.len(), syscalls::ALLOWLIST.len() + extra + 6);
+            for nr in (0..1024u32).step_by(miri_step()) {
+                let got = run(&prog, &SeccompData::new(nr, arch.audit_arch()));
+                let want = if allowed(arch, nr) {
+                    SECCOMP_RET_ALLOW
+                } else {
+                    SECCOMP_RET_KILL_PROCESS
+                };
+                assert_eq!(got, Ok(want), "{arch:?} syscall {nr}");
+                let other = match arch {
+                    Arch::X86_64 => AUDIT_ARCH_AARCH64,
+                    Arch::Aarch64 => AUDIT_ARCH_X86_64,
+                };
+                assert_eq!(
+                    run(&prog, &SeccompData::new(nr, other)),
+                    Ok(SECCOMP_RET_KILL_PROCESS)
+                );
+            }
         }
     }
     Ok(())
 }
 
-/// The GPU list is the renderer's plus its additions: everything the renderer may
-/// call, the GPU process may too, and the additions are exactly the plan's.
+/// The GPU lists are the renderer's plus their additions: everything the renderer
+/// may call, the GPU process may too; the software additions are exactly the
+/// measured ones, and a hardware driver gets `ioctl` besides.
 #[test]
 fn gpu_list_is_the_renderers_plus_the_additions() {
     for arch in Arch::ALL {
@@ -327,21 +338,41 @@ fn gpu_list_is_the_renderers_plus_the_additions() {
             assert!(!syscalls::is_allowed(arch, s.number(arch)), "{}", s.name);
             assert!(syscalls::is_gpu_allowed(arch, s.number(arch)), "{}", s.name);
         }
+        for s in syscalls::GPU_HARDWARE_EXTRA {
+            assert!(
+                !syscalls::is_gpu_allowed(arch, s.number(arch)),
+                "{}",
+                s.name
+            );
+            assert!(
+                syscalls::is_gpu_hardware_allowed(arch, s.number(arch)),
+                "{}",
+                s.name
+            );
+        }
     }
     let names: Vec<&str> = syscalls::GPU_EXTRA.iter().map(|s| s.name).collect();
     assert_eq!(
         names,
         [
-            "ioctl",
-            "getpid",
-            "sendmsg",
-            "recvmsg",
-            "clone",
+            "ftruncate",
             "sched_getaffinity",
             "set_robust_list",
             "rseq",
             "clone3"
         ]
+    );
+    let names: Vec<&str> = syscalls::GPU_HARDWARE_EXTRA
+        .iter()
+        .map(|s| s.name)
+        .collect();
+    assert_eq!(names, ["ioctl"]);
+    // The GPU process's namespaces are the renderer's without the PID namespace.
+    use clazel_sandbox::namespaces::{self, Namespace};
+    assert!(!namespaces::GPU.contains(&Namespace::Pid));
+    assert_eq!(
+        namespaces::gpu_unshare_flags(),
+        namespaces::renderer_unshare_flags() & !namespaces::CLONE_NEWPID
     );
 }
 
@@ -392,7 +423,7 @@ fn gpu_numbers_are_the_two_lists_in_order() {
             .map(|s| s.number(arch))
             .collect();
         assert_eq!(syscalls::gpu_numbers(arch), want);
-        assert_eq!(want.len(), 31);
+        assert_eq!(want.len(), 27);
         for nr in (0..1024u32).step_by(miri_step()) {
             assert_eq!(syscalls::is_gpu_allowed(arch, nr), want.contains(&nr));
         }

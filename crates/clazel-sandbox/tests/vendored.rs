@@ -324,7 +324,11 @@ fn is_alias(defs: &HashMap<String, String>, name: &str) -> bool {
 fn allowlist_numbers_match_kernel_tables() -> Result<(), String> {
     let tbl = vendored("syscall_64.tbl")?;
     let generic = defines(&["unistd.h"])?;
-    for s in syscalls::ALLOWLIST.iter().chain(syscalls::GPU_EXTRA) {
+    let all = syscalls::ALLOWLIST
+        .iter()
+        .chain(syscalls::GPU_EXTRA)
+        .chain(syscalls::GPU_HARDWARE_EXTRA);
+    for s in all {
         let x86 = x86_64_number(&tbl, s.name)
             .ok_or_else(|| format!("{}: not in syscall_64.tbl", s.name))?;
         assert_eq!(s.x86_64, x86, "{} on x86-64", s.name);
@@ -405,13 +409,13 @@ fn allowlist_has_no_duplicates_and_no_forbidden_names() {
     }
 }
 
-/// Item 5.21a: the GPU list has no duplicate, still nothing that opens, connects,
-/// executes or changes the sandbox, and says of every addition that it is not
-/// measured.
+/// Item 5.21a: the GPU lists have no duplicate, still nothing that opens,
+/// connects, executes or changes the sandbox, and say of every addition whether
+/// it was measured.
 #[test]
 fn gpu_list_has_no_duplicates_and_no_forbidden_names() {
     for arch in Arch::ALL {
-        let mut nums = syscalls::gpu_numbers(arch);
+        let mut nums = syscalls::gpu_hardware_numbers(arch);
         nums.sort_unstable();
         let n = nums.len();
         nums.dedup();
@@ -455,7 +459,11 @@ fn gpu_list_has_no_duplicates_and_no_forbidden_names() {
         "landlock_create_ruleset",
         "landlock_restrict_self",
     ];
-    for s in syscalls::ALLOWLIST.iter().chain(syscalls::GPU_EXTRA) {
+    let all = syscalls::ALLOWLIST
+        .iter()
+        .chain(syscalls::GPU_EXTRA)
+        .chain(syscalls::GPU_HARDWARE_EXTRA);
+    for s in all {
         assert!(
             !forbidden.contains(&s.name),
             "{} must not be allowed",
@@ -463,6 +471,9 @@ fn gpu_list_has_no_duplicates_and_no_forbidden_names() {
         );
     }
     for s in syscalls::GPU_EXTRA {
+        assert!(s.reason.starts_with("measured: "), "{}", s.name);
+    }
+    for s in syscalls::GPU_HARDWARE_EXTRA {
         assert!(s.reason.starts_with("not measured: "), "{}", s.name);
     }
 }
