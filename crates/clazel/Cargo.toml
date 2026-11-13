@@ -36,6 +36,11 @@ clazel-cookie = { path = "../clazel-cookie", version = "=0.0.0" }
 # The hostile pages of phase-4.md item 4.16 count the nodes and attributes
 # of a parsed page to check the renderer's memory bound against them.
 clazel-dom = { path = "../clazel-dom", version = "=0.0.0" }
+# The reftest runner's pure parts (phase-5.md item 5.25, tests/reftest/): our
+# HTML parser finds a test's references and fuzziness, and the style crate's
+# sheet parser and property table say which tests are outside the subset.
+clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
+clazel-style = { path = "../clazel-style", version = "=0.0.0" }
 clazel-origin = { path = "../clazel-origin", version = "=0.0.0" }
 clazel-url = { path = "../clazel-url", version = "=0.0.0" }
 # The TLS 1.3 server of tests/host.rs's `https:` navigation, configured as
