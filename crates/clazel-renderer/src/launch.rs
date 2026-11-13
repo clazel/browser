@@ -6,7 +6,11 @@
 //! starts the renderer already inside the AppContainer and Job Object of
 //! `clazel_sandbox::appcontainer` (through `clazel-sys`), with three anonymous
 //! pipes as its standard handles; `enter` there only checks that it is
-//! confined. The host sees the same [`Link`] either way.
+//! confined. The host sees the same [`Link`] either way. A GPU process is
+//! started the same way on Windows, under the `GPU_*` policy of that module
+//! (phase-5.md item 5.21a), and its list and surface channels are two more
+//! anonymous pipes whose ends the child inherits as handles. The Windows half
+//! of this file has been compiled, without its tests, and never run.
 
 use std::collections::HashMap;
 use std::io::{self, Read};
@@ -63,7 +67,7 @@ pub fn alone() -> std::sync::MutexGuard<'static, ()> {
 /// The renderer's end of a GPU process's list socket, for [`spawn_with_list`].
 pub struct ListEnd(
     #[cfg(target_os = "macos")] std::os::unix::net::UnixStream,
-    #[cfg(target_os = "linux")] std::io::PipeWriter,
+    #[cfg(any(target_os = "linux", windows))] std::io::PipeWriter,
 );
 
 /// What the host holds of a started GPU process (items 5.18 and 5.23): its
@@ -83,7 +87,10 @@ pub struct GpuStart {
 /// Start the GPU process `command` describes, as [`spawn`] starts a renderer,
 /// with two more sockets inherited by number: the list socket's GPU end
 /// (`--list-fd N`) and the surface socket's (`--surface-fd M`). On macOS and
-/// Linux (clearing close-on-exec is `clazel_sys`'s `clear_close_on_exec`);
+/// Linux (clearing close-on-exec is `clazel_sys`'s `clear_close_on_exec`) and
+/// on Windows, where the two are pipes, `N` and `M` are the values of the
+/// handles the child inherits (`clazel_sys::windows::spawn`'s handle list), and
+/// the process is started inside the GPU process's AppContainer;
 /// elsewhere it fails with `Unsupported`. On Linux the two channels are pipes,
 /// not socket pairs: each carries bytes one way only, and the child opens its end
 /// again through `/dev/fd/N`, which Linux refuses for a socket (`ENXIO`) and
@@ -111,7 +118,7 @@ pub fn spawn_paired(
 
 /// Start a renderer as [`spawn`] does, with `list`, the list socket's renderer
 /// end from [`spawn_gpu`], inherited by number as `--list-fd N`; the host's copy
-/// is closed on return. On macOS and Linux.
+/// is closed on return. On macOS, Linux and Windows.
 pub fn spawn_with_list(
     command: Command,
     list: ListEnd,
@@ -212,7 +219,59 @@ mod pairing {
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(windows)]
+mod pairing {
+    use std::io::{self, Read};
+    use std::os::windows::io::{AsRawHandle, OwnedHandle};
+    use std::process::Command;
+
+    use super::imp::{self, Confined};
+    use super::{GpuStart, Link, ListEnd, alone};
+
+    pub fn spawn_gpu(mut command: Command) -> io::Result<GpuStart> {
+        let _alone = alone();
+        // The list goes renderer to GPU process, pixels GPU process to host.
+        let (list_gpu, list) = io::pipe()?;
+        let (surface, surface_gpu) = io::pipe()?;
+        let (list_gpu, surface_gpu) = (OwnedHandle::from(list_gpu), OwnedHandle::from(surface_gpu));
+        command.args([
+            "--list-fd",
+            &number(&list_gpu),
+            "--surface-fd",
+            &number(&surface_gpu),
+        ]);
+        let started = imp::spawn_confined(command, Confined::Gpu, &[&list_gpu, &surface_gpu]);
+        drop((list_gpu, surface_gpu));
+        let (link, frames) = started?;
+        Ok(GpuStart {
+            link: Link(link),
+            frames,
+            surface: Box::new(surface),
+            list: ListEnd(list),
+        })
+    }
+
+    pub fn spawn_with_list(
+        mut command: Command,
+        list: ListEnd,
+    ) -> io::Result<(Link, Box<dyn Read + Send>)> {
+        let _alone = alone();
+        let list = OwnedHandle::from(list.0);
+        command.args(["--list-fd", &number(&list)]);
+        let started = imp::spawn_confined(command, Confined::Renderer, &[&list]);
+        drop(list);
+        let (link, reader) = started?;
+        Ok((Link(link), reader))
+    }
+
+    /// A handle's value, which is the same number in a child that inherits it,
+    /// for the child's arguments.
+    fn number(handle: &OwnedHandle) -> String {
+        (handle.as_raw_handle() as usize).to_string()
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 mod pairing {
     use std::io::{self, Read};
     use std::process::Command;
@@ -327,8 +386,55 @@ mod imp {
         stderr: PipeReader,
     }
 
-    /// Binaries the AppContainer has been granted read and execute on.
-    static GRANTED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+    /// Which process is started, and so under which policy
+    /// (`clazel_sandbox::appcontainer`).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Confined {
+        /// A renderer: the policy with no capability and no `win32k`.
+        Renderer,
+        /// A GPU process (item 5.21a): its own container, the `registryRead`
+        /// capability, and `win32k`, which Direct3D needs.
+        Gpu,
+    }
+
+    impl Confined {
+        fn container_name(self) -> &'static str {
+            match self {
+                Confined::Renderer => policy::CONTAINER_NAME,
+                Confined::Gpu => policy::GPU_CONTAINER_NAME,
+            }
+        }
+
+        fn policy(self) -> Policy<'static> {
+            let (capabilities, mitigations, job) = match self {
+                Confined::Renderer => (
+                    policy::CAPABILITIES,
+                    policy::mitigation_mask(),
+                    policy::RENDERER_JOB,
+                ),
+                Confined::Gpu => (
+                    policy::GPU_CAPABILITIES,
+                    policy::gpu_mitigation_mask(),
+                    policy::GPU_JOB,
+                ),
+            };
+            Policy {
+                container_name: self.container_name(),
+                capabilities,
+                mitigations,
+                child_process_restricted: policy::CHILD_PROCESS_RESTRICTED,
+                opt_out_all_application_packages: policy::OPT_OUT_ALL_APPLICATION_PACKAGES,
+                active_process_limit: job.active_process_limit,
+                kill_on_close: job.kill_on_close,
+                ui_restrictions: job.ui_restrictions,
+                process_memory_limit: job.process_memory_limit,
+            }
+        }
+    }
+
+    /// Binaries an AppContainer has been granted read and execute on, with the
+    /// container's name.
+    static GRANTED: Mutex<Vec<(PathBuf, &'static str)>> = Mutex::new(Vec::new());
 
     /// One spawn at a time: Windows creates the AppContainer's per-user folders
     /// on first use and two `CreateProcessW` calls for the same container race
@@ -342,11 +448,11 @@ mod imp {
 
     /// The AppContainer SID is on no file's ACL, so it cannot even start the
     /// renderer binary until it is granted read and execute on that one file
-    /// (`icacls`, once per binary; the grant stays on the file).
-    fn grant(program: &Path) -> io::Result<()> {
-        let sid = windows::container_sid(policy::CONTAINER_NAME).map_err(other)?;
+    /// (`icacls`, once per binary and container; the grant stays on the file).
+    fn grant(program: &Path, container: &'static str) -> io::Result<()> {
+        let sid = windows::container_sid(container).map_err(other)?;
         let mut granted = GRANTED.lock().map_err(other)?;
-        if granted.iter().any(|p| p == program) {
+        if granted.iter().any(|(p, c)| p == program && *c == container) {
             return Ok(());
         }
         let out = Command::new("icacls")
@@ -361,7 +467,7 @@ mod imp {
                 String::from_utf8_lossy(&out.stdout).trim()
             )));
         }
-        granted.push(program.to_path_buf());
+        granted.push((program.to_path_buf(), container));
         Ok(())
     }
 
@@ -376,8 +482,18 @@ mod imp {
     }
 
     pub fn spawn(command: Command) -> io::Result<(Link, Box<dyn Read + Send>)> {
+        spawn_confined(command, Confined::Renderer, &[])
+    }
+
+    /// Start `command` under `which`'s policy, with `inherit` inherited besides
+    /// its three standard pipes.
+    pub fn spawn_confined(
+        command: Command,
+        which: Confined,
+        inherit: &[&OwnedHandle],
+    ) -> io::Result<(Link, Box<dyn Read + Send>)> {
         let program = std::path::absolute(command.get_program())?;
-        grant(&program)?;
+        grant(&program, which.container_name())?;
         let mut line = windows::quote_arg(&program.to_string_lossy());
         for arg in command.get_args() {
             line.push(' ');
@@ -391,22 +507,11 @@ mod imp {
             OwnedHandle::from(stdout_w),
             OwnedHandle::from(stderr_w),
         );
-        let job = policy::RENDERER_JOB;
         let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_owned());
         let owned = env_pairs(&system_root);
         let env: Vec<(&str, &str)> = owned.iter().map(|(k, v)| (*k, v.as_str())).collect();
         let _one_at_a_time = SPAWN.lock().map_err(other)?;
-        let confinement = Policy {
-            container_name: policy::CONTAINER_NAME,
-            capabilities: policy::CAPABILITIES,
-            mitigations: policy::mitigation_mask(),
-            child_process_restricted: policy::CHILD_PROCESS_RESTRICTED,
-            opt_out_all_application_packages: policy::OPT_OUT_ALL_APPLICATION_PACKAGES,
-            active_process_limit: job.active_process_limit,
-            kill_on_close: job.kill_on_close,
-            ui_restrictions: job.ui_restrictions,
-            process_memory_limit: job.process_memory_limit,
-        };
+        let confinement = which.policy();
         // Windows sometimes answers a start with ERROR_FILE_NOT_FOUND although
         // the binary is there (seen on the CI runner for about 6 in 100
         // starts of short-lived renderers, and never on a retry), apparently
@@ -423,7 +528,7 @@ mod imp {
                 stdin: &h_in,
                 stdout: &h_out,
                 stderr: &h_err,
-                inherit: &[],
+                inherit,
             };
             match windows::spawn(&program, &line, &confinement, &env, &handles) {
                 Ok(p) => break p,
