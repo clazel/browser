@@ -1,9 +1,10 @@
 //! The host's window (phase-5.md items 5.21 to 5.22a): open one, read its events
 //! and show pixels in it.
 //!
-//! On Windows (5.22a, first slice), on macOS on Apple silicon (5.21) and on Linux
-//! (5.22). The backends give the same [`Window`]: `open`, `size`, `next_event`,
-//! `draw`, `set_title` and `dpi`, reporting the same [`Event`]s. What a
+//! On Windows (5.22a, drawn with GDI), on macOS on Apple silicon (5.21) and on
+//! Linux (5.22). The backends give the same [`Window`]: `open`, `size`,
+//! `next_event`, `draw`, `show_page_pixels`, `hide_page`, `set_title`, `dpi`,
+//! `activate` and `close`, reporting the same [`Event`]s. What a
 //! platform's message or event means is decided here, in [`messages`] (Win32),
 //! [`nsevent`] (AppKit) and [`x11proto`] (X11), as pure functions that every
 //! target can test; the foreign calls of Windows and macOS are all in
