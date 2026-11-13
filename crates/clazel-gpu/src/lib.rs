@@ -19,6 +19,9 @@
 //! - [`atlas`]: the glyph atlas, one linear store with a bump allocator.
 //! - [`batch`]: the shared batching, clips as scissor rectangles.
 //! - [`backend`]: the frame a backend draws, the quad format, the trait.
+//! - [`blocklist`]: the driver blocklist and its parser (item 5.17c).
+//! - [`start`]: the start's answer, before any list (item 5.17c).
+//! - [`policy`]: the crash policy, for the kernel (item 5.17c).
 //! - [`soft`]: source-over in 8-bit sRGB, premultiplied, no gamma correction; the
 //!   fake backend.
 //! - [`reference`]: the expected pixels of a list, computed independently.
@@ -38,12 +41,15 @@
 pub mod atlas;
 pub mod backend;
 pub mod batch;
+pub mod blocklist;
 pub mod geom;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 pub mod metal;
+pub mod policy;
 pub mod reference;
 pub mod scenes;
 pub mod soft;
+pub mod start;
 
 #[cfg(kani)]
 mod proofs;
@@ -95,13 +101,31 @@ pub struct Gpu<B: Backend> {
 }
 
 impl<B: Backend> Gpu<B> {
-    /// Start with no masks.
-    pub fn new(backend: B) -> Gpu<B> {
-        Gpu {
+    /// Item 5.17c: check the backend's adapter against the shipped blocklist
+    /// (unless `launch` ignores it) **before any list is read**, and start with no
+    /// masks; or refuse. This is the only way to make a `Gpu`, so nothing is drawn on
+    /// a device that was not checked. The answer is `GpuReady { software }` or, for a
+    /// refusal that [`start::Refusal::is_gpu_refused`], `GpuRefused` (item 5.18).
+    pub fn start(
+        backend: B,
+        launch: start::Launch,
+    ) -> Result<(Gpu<B>, start::Ready), start::Refusal> {
+        Gpu::start_with(backend, launch, blocklist::SHIPPED.as_bytes())
+    }
+
+    /// [`Gpu::start`] with another blocklist table, for tests.
+    pub fn start_with(
+        backend: B,
+        launch: start::Launch,
+        table: &[u8],
+    ) -> Result<(Gpu<B>, start::Ready), start::Refusal> {
+        let ready = start::answer(&backend.adapter(), launch, table)?;
+        let gpu = Gpu {
             validator: Validator::empty(),
             atlas: atlas::Atlas::new(),
             backend,
-        }
+        };
+        Ok((gpu, ready))
     }
 
     /// Decode, validate and draw one list into a target of `viewport`'s size. On
@@ -121,7 +145,8 @@ impl<B: Backend> Gpu<B> {
         &mut self.backend
     }
 
-    /// Give the backend back, forgetting the masks.
+    /// Give the backend back, forgetting the masks. Starting again checks the
+    /// blocklist again.
     pub fn into_backend(self) -> B {
         self.backend
     }
