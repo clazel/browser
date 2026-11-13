@@ -61,7 +61,10 @@ pub fn alone() -> std::sync::MutexGuard<'static, ()> {
 }
 
 /// The renderer's end of a GPU process's list socket, for [`spawn_with_list`].
-pub struct ListEnd(#[cfg(target_os = "macos")] std::os::unix::net::UnixStream);
+pub struct ListEnd(
+    #[cfg(target_os = "macos")] std::os::unix::net::UnixStream,
+    #[cfg(target_os = "linux")] std::io::PipeWriter,
+);
 
 /// What the host holds of a started GPU process (items 5.18 and 5.23): its
 /// channel to the kernel, as a renderer's; a reader of the surface socket; and
@@ -79,9 +82,12 @@ pub struct GpuStart {
 
 /// Start the GPU process `command` describes, as [`spawn`] starts a renderer,
 /// with two more sockets inherited by number: the list socket's GPU end
-/// (`--list-fd N`) and the surface socket's (`--surface-fd M`). Only on macOS so
-/// far (clearing close-on-exec is `clazel_sys::macos::clear_close_on_exec`);
-/// elsewhere it fails with `Unsupported`.
+/// (`--list-fd N`) and the surface socket's (`--surface-fd M`). On macOS and
+/// Linux (clearing close-on-exec is `clazel_sys`'s `clear_close_on_exec`);
+/// elsewhere it fails with `Unsupported`. On Linux the two channels are pipes,
+/// not socket pairs: each carries bytes one way only, and the child opens its end
+/// again through `/dev/fd/N`, which Linux refuses for a socket (`ENXIO`) and
+/// allows for a pipe.
 ///
 /// Every program started while those flags are clear inherits the two
 /// descriptors. So nothing else is started between this call's clearing and
@@ -105,7 +111,7 @@ pub fn spawn_paired(
 
 /// Start a renderer as [`spawn`] does, with `list`, the list socket's renderer
 /// end from [`spawn_gpu`], inherited by number as `--list-fd N`; the host's copy
-/// is closed on return. Only on macOS so far.
+/// is closed on return. On macOS and Linux.
 pub fn spawn_with_list(
     command: Command,
     list: ListEnd,
@@ -159,7 +165,54 @@ mod pairing {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
+mod pairing {
+    use std::io::{self, Read};
+    use std::os::fd::{AsFd, AsRawFd};
+    use std::process::Command;
+
+    use super::{GpuStart, Link, ListEnd, alone, spawn_held};
+
+    pub fn spawn_gpu(mut command: Command) -> io::Result<GpuStart> {
+        let _alone = alone();
+        // The list goes renderer to GPU process, pixels GPU process to host.
+        let (list_gpu, list) = io::pipe()?;
+        let (surface, surface_gpu) = io::pipe()?;
+        let list_fd = pass(&list_gpu)?;
+        let surface_fd = pass(&surface_gpu)?;
+        command.args(["--list-fd", &list_fd, "--surface-fd", &surface_fd]);
+        let started = spawn_held(command);
+        drop((list_gpu, surface_gpu));
+        let (link, frames) = started?;
+        Ok(GpuStart {
+            link,
+            frames,
+            surface: Box::new(surface),
+            list: ListEnd(list),
+        })
+    }
+
+    pub fn spawn_with_list(
+        mut command: Command,
+        list: ListEnd,
+    ) -> io::Result<(Link, Box<dyn Read + Send>)> {
+        let _alone = alone();
+        command.args(["--list-fd", &pass(&list.0)?]);
+        let started = spawn_held(command);
+        drop(list);
+        started
+    }
+
+    /// Clear `end`'s close-on-exec flag; its number, for the child's arguments.
+    fn pass(end: &impl AsFd) -> io::Result<String> {
+        let fd = end.as_fd();
+        clazel_sys::linux::clear_close_on_exec(fd)
+            .map_err(|e| io::Error::from_raw_os_error(e.0))?;
+        Ok(fd.as_raw_fd().to_string())
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 mod pairing {
     use std::io::{self, Read};
     use std::process::Command;

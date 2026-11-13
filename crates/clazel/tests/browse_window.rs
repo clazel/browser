@@ -52,13 +52,13 @@ mod mac {
 
     use clazel_window::{Event, Window, has_window_server};
 
-    use crate::gpu::{close, fixture, host, metal, open, painted, reference};
+    use crate::gpu::{close, device, fixture, host, open, painted, reference};
     use crate::strip::{self, Contents, STRIP_POINTS};
 
     const WATCHDOG: Duration = Duration::from_secs(120);
 
     pub fn run() -> ExitCode {
-        if let Err(why) = metal() {
+        if let Err(why) = device() {
             eprintln!("clazel browse_window: skipped: no Metal device ({why})");
             return if std::env::var_os("CI").is_some() {
                 ExitCode::FAILURE
