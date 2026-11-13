@@ -41,6 +41,8 @@ pub open spec fn ml_state_one() -> State {
         now: 0,
         viewports: Seq::empty(),
         titles: Seq::empty(),
+        subfetches: Seq::empty(),
+        subcounts: Seq::empty(),
     }
 }
 
@@ -531,6 +533,8 @@ pub open spec fn ml_gpu_state(committed: bool, sized: bool) -> State {
             Seq::empty()
         },
         titles: Seq::empty(),
+        subfetches: Seq::empty(),
+        subcounts: Seq::empty(),
     }
 }
 

@@ -518,7 +518,7 @@ proof fn lemma_step_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch
                 lemma_all_remove(s.renderers, o + out, i);
             }
         },
-        Event::Resize { .. } | Event::Input { .. } => {
+        Event::Resize { .. } | Event::Input { .. } | Event::SubNet { .. } => {
             lemma_all_prefix(s.renderers, o, out);
         },
     }

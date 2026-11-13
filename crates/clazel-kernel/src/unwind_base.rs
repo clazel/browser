@@ -655,6 +655,9 @@ pub proof fn lemma_jar_no_public_suffix_step(rules: Seq<clazel_psl::spec::Rule>,
         Event::NavigateTab { tab, url } => {
             lemma_navigation_frame(rules, urls, fetch, s, tab, url, script_document(seq![]));
         },
+        Event::SubNet { renderer, serial, hop, input } => {
+            crate::subfetch_rel::lemma_sub_net_wf(rules, urls, fetch, s, renderer, serial, hop, input);
+        },
         Event::Net { conn, input } => {
             lemma_net_frame(rules, urls, fetch, s, conn, input);
             assert(crate::invariant::jar_wf(rules, s.jar));

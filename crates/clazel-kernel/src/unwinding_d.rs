@@ -53,6 +53,8 @@ pub proof fn lemma_rel_same_table(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         crate::invariant::jar_no_public_suffix(rules, s2b.jar),
         s1b.viewports == s2b.viewports,
         crate::domain::titles_of_domain(rules, s1b.titles, d) == crate::domain::titles_of_domain(rules, s2b.titles, d),
+        crate::domain::subfetches_of_domain(rules, s1b.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2b.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, s1b.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2b.subcounts, d),
     ensures
         crate::noninterference::rel(rules, urls, d, s1b, s2b),
 {

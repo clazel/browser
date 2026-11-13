@@ -157,6 +157,11 @@ impl Host {
                 // process (the window is items 5.20 to 5.23), so there is
                 // none to start or write to, and no frame arrives to paint.
                 OutputRecord::SpawnGpu { .. } | OutputRecord::ToGpu { .. } => {}
+                // Item 5.19: no renderer sends `FetchStyle` before item 5.20,
+                // so no sub-fetch connection is asked for yet.
+                OutputRecord::SubConnect { .. }
+                | OutputRecord::SubSend { .. }
+                | OutputRecord::SubClose { .. } => {}
                 paint @ OutputRecord::Paint { .. } => self.shown.push(paint),
             }
         }

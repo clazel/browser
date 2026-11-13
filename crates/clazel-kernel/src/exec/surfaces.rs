@@ -419,12 +419,14 @@ pub fn decode_gpu_frame_exec(bytes: &[u8]) -> (r: Option<Msg>)
 pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> (out: (StateRecord, Vec<OutputRecord>))
     requires
         renderers_ok::<F>(s.renderers@),
+        super::subfetch::subfetches_ok::<F>(s.subfetches@),
     ensures
         result_view(out) == from_gpu(s@, id as nat, bytes@),
         keeps_storage_jar_now(s, out.0),
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
         renderers_ok::<F>(out.0.renderers@),
+        super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
     match find_by_id_exec(s.renderers.as_slice(), id) {
         None => (s, no_outputs()),

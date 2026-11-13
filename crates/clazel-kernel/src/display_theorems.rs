@@ -95,6 +95,9 @@ proof fn lemma_handle_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, 
                 lemma_storage_call_no_show(s, r, m);
             }
         },
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        },
         _ => {},
     }
 }
@@ -161,6 +164,13 @@ proof fn lemma_other_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
         // Item 5.18.
         Event::FromGpu { .. } | Event::Resize { .. } | Event::Input { .. } => {
             lemma_surface_events_no_show(s, e);
+        },
+        // Item 5.19.
+        Event::Tick { time } => {
+            crate::subfetch_rel::lemma_tick_all_shape(s, time);
+        },
+        Event::SubNet { renderer, serial, hop, input } => {
+            crate::subfetch_rel::lemma_sub_net_shape(rules, fetch, s, renderer, serial, hop, input);
         },
         _ => {},
     }

@@ -67,6 +67,9 @@ pub proof fn lemma_navigate_tab_consistency(
             crate::net_rel::lemma_rel_conn_tabs(s1, s2, s1b, s2b);
             // Item 5.18: a replaced renderer's title is forgotten in both runs.
             crate::surface_rel::lemma_titles_forget_same(rules, s1.titles, s2.titles, old.id, old.lock, d);
+            // Item 5.19: a kept renderer's sub-fetches end in both runs.
+            crate::subfetch_rel::lemma_end_domain(rules, s1.subfetches, s2.subfetches, old.id, old.lock, d);
+            crate::subfetch_rel::lemma_new_document_domain(rules, s1.subcounts, s2.subcounts, old.id, old.lock, d);
             assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
                 crate::unwind_base::lemma_update_contains(urls, s1.renderers, s1.next_id, i1, r, x);
                 crate::unwind_base::lemma_update_contains(urls, s2.renderers, s2.next_id, i2, r, x);
@@ -215,6 +218,8 @@ pub proof fn lemma_rel_from_sets(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
         forall|o: clazel_origin::spec::Origin| o is Tuple && crate::domain::domain_of_lock(rules, o) == d ==> storage_of(s1, o) == storage_of(s2, o),
         s1.viewports == s2.viewports,
         crate::domain::titles_of_domain(rules, s1.titles, d) == crate::domain::titles_of_domain(rules, s2.titles, d),
+        crate::domain::subfetches_of_domain(rules, s1.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, s1.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2.subcounts, d),
     ensures
         crate::noninterference::rel(rules, urls, d, s1, s2),
 {

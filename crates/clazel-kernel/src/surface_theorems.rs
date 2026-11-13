@@ -108,9 +108,26 @@ proof fn lemma_from_renderer_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls
                         lemma_storage_call_no_surface(s, r, m);
                     }
                 },
+                clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
+                    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+                },
                 _ => {},
             },
         }
+    }
+}
+
+/// Item 5.19's events (a `Tick`'s sweep, a `SubNet`) have none.
+proof fn lemma_subfetch_events_no_surface(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        e is Tick || e is SubNet,
+    ensures
+        no_surface(step(rules, urls, fetch, s, e).1),
+{
+    match e {
+        Event::Tick { time } => crate::subfetch_rel::lemma_tick_all_shape(s, time),
+        Event::SubNet { renderer, serial, hop, input } => crate::subfetch_rel::lemma_sub_net_shape(rules, fetch, s, renderer, serial, hop, input),
+        _ => {},
     }
 }
 
@@ -168,6 +185,9 @@ proof fn lemma_no_paint_but_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
                     assert(k == 0 || k == 1);
                 }
             }
+        },
+        Event::Tick { .. } | Event::SubNet { .. } => {
+            lemma_subfetch_events_no_surface(rules, urls, fetch, s, e);
         },
         _ => {},
     }
@@ -534,7 +554,9 @@ pub proof fn theorem_channel_only_own_tab(rules: Seq<clazel_psl::spec::Rule>, ur
                 lemma_closes_no_surface(s.conns, s.renderers[i].tab);
             }
         },
-        Event::Tick { .. } => {},
+        Event::Tick { .. } | Event::SubNet { .. } => {
+            lemma_subfetch_events_no_surface(rules, urls, fetch, s, e);
+        },
         _ => {
             lemma_channel_surface(rules, urls, fetch, s, e);
         },

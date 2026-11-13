@@ -56,6 +56,9 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                 }
             }
         }
+        if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
         let closes = closes_of_tab(s.conns, r.tab);
@@ -104,6 +107,8 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 {
     if e is FromGpu {
         crate::surface_rel::lemma_local_respect_gpu(rules, urls, fetch, d, s1, s2, e);
+    } else if e is SubNet {
+        crate::subfetch_rel::lemma_local_respect_subnet(rules, urls, fetch, d, s1, s2, e);
     } else {
         lemma_local_respect_renderer(rules, urls, fetch, d, s1, s2, e);
     }
