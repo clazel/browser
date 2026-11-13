@@ -20,6 +20,49 @@
 //!   operations are the least the Rust runtime and allocator are known to
 //!   query; if a renderer needs another, 2.16 will show a denial and the rule
 //!   is added here with its reason.
+//!
+//! # The GPU process's profile (phase-5.md item 5.21a)
+//!
+//! [`GPU`] is the GPU process's profile on macOS (Metal on Apple silicon). It was
+//! **measured** on one machine (an Apple M1 Pro, macOS 26.7.2, 2026-11-13) by a process
+//! that drew every scene of `clazel-gpu` through the Metal backend, read the pixels
+//! back and compared them with the software reference, with Seatbelt's denials read
+//! from the system log (`log show --predicate 'sender == "Sandbox"'`).
+//!
+//! Modelling choices:
+//! - **Warm up, then enter.** The GPU process makes its Metal device, its command
+//!   queue and its one fixed pipeline (compiling our own shader source, never a
+//!   page's) *before* it enters the sandbox and before it reads any message, as the
+//!   Linux GPU process opens its device paths before seccomp. Metal then holds the
+//!   IOKit connections it needs (`AGXDeviceUserClient`, `IOSurfaceRootUserClient`)
+//!   and Seatbelt, which checks `iokit-open-user-client` and `mach-lookup` when a
+//!   connection is made, never sees them again. Measured: after that warm-up, a
+//!   profile of `(deny default)` alone drew every scene correctly, creating new
+//!   IOSurfaces of each scene's size inside it, and the system log showed no denial.
+//! - **So the profile has no rule.** Every rule is "the least a measured run
+//!   needed"; none was. The renderer's two rules (a signal to itself, three
+//!   `sysctl` names) are not copied: the GPU process was not measured to need them.
+//! - **What entering first would cost**, measured the same day and not used: a
+//!   process that enters before making the device needs `iokit-open-user-client`
+//!   for `AGXDeviceUserClient` and `IOSurfaceRootUserClient`, `mach-lookup` of
+//!   `com.apple.MTLCompilerService`, `file-read*` under
+//!   `/System/Library/Extensions` (the driver bundle), `sysctl-read` of four names,
+//!   and `file-read-metadata` of its own executable's directory; without any one of
+//!   these it fails or crashes. That profile would also need the executable's path
+//!   as a parameter. Warming up first needs none of it.
+//! - **No WindowServer.** Making a Metal device looks up
+//!   `com.apple.windowserver.active`; denied (in the measurement of entering first)
+//!   it changed nothing, and after the warm-up the profile denies it like
+//!   everything else.
+//! - **Weaker than the renderer's, though its text is shorter.** The process holds
+//!   open connections to the GPU's kernel driver and to IOSurface, through which it
+//!   can make every call those user clients accept: that kernel surface is what the
+//!   renderer's sandbox has and this one does not, and Seatbelt cannot filter it.
+//!   The Metal driver's own code also runs in the process.
+//! - **An unmeasured driver.** Another GPU or another macOS version may open
+//!   something after the warm-up. Then a Metal call fails inside the sandbox, the
+//!   GPU process exits, and the crash policy (item 5.17c) acts; the profile is never
+//!   widened at run time.
 
 /// One `(allow ...)` rule.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,6 +89,10 @@ pub const RENDERER: &[Rule] = &[
     },
 ];
 
+/// The GPU process's rules after `(deny default)`, entered after the warm-up
+/// (module documentation): none.
+pub const GPU: &[Rule] = &[];
+
 /// Render `rules` as an SBPL profile.
 pub fn render(rules: &[Rule]) -> String {
     let mut out = String::from("(version 1)\n(deny default)\n");
@@ -64,4 +111,10 @@ pub fn render(rules: &[Rule]) -> String {
 /// The renderer's profile.
 pub fn renderer_profile() -> String {
     render(RENDERER)
+}
+
+/// The GPU process's profile, to enter after making the Metal device, queue and
+/// pipeline (module documentation).
+pub fn gpu_profile() -> String {
+    render(GPU)
 }

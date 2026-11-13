@@ -123,7 +123,11 @@ fn scan_stream(stream: TokenStream, out: &mut Scan) {
                     "assume_specification" => push(out, Kind::EscapeHatch, tt, name),
                     "unsafe" => {
                         push(out, Kind::Unsafe, tt, name);
-                        out.unsafe_spans.push(unsafe_span(&tokens, k));
+                        // `unsafe extern "C" fn(..)` is a function pointer type, not
+                        // a block: it is still a finding, but not counted as one.
+                        if !fn_pointer_type(&tokens, k) {
+                            out.unsafe_spans.push(unsafe_span(&tokens, k));
+                        }
                     }
                     _ => {}
                 }
@@ -133,6 +137,14 @@ fn scan_stream(stream: TokenStream, out: &mut Scan) {
         }
         k = next;
     }
+}
+
+/// The `unsafe` at `k` starts a function pointer type: `unsafe extern "ABI" fn`.
+fn fn_pointer_type(tokens: &[TokenTree], k: usize) -> bool {
+    let at = |i: usize| tokens.get(k.saturating_add(i));
+    matches!(at(1), Some(TokenTree::Ident(e)) if *e == "extern")
+        && matches!(at(2), Some(TokenTree::Literal(_)))
+        && matches!(at(3), Some(TokenTree::Ident(f)) if *f == "fn")
 }
 
 /// Lines covered by the `unsafe` at `k`: up to the closing brace of the
@@ -333,6 +345,10 @@ mod tests {
         let s = scan("#[kani::proof] fn a() {} #[kani::proof] fn b() {\n unsafe {\n } }")?;
         assert_eq!(s.kani_proofs, 2);
         assert_eq!(s.unsafe_spans, vec![(2, 3)]);
+        // A function pointer type is a finding but not a block.
+        let t = scan("const F: unsafe extern \"C\" fn() = unsafe {\n x\n };")?;
+        assert_eq!(t.unsafe_spans, vec![(1, 3)]);
+        assert_eq!(t.findings.len(), 2);
         assert_eq!(
             s.findings.iter().map(|f| f.kind).collect::<Vec<_>>(),
             vec![Kind::Unsafe]

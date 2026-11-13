@@ -9,7 +9,10 @@ to trust the agents. Read `docs/VERIFICATION.md` and `docs/ROADMAP.md` first.
    sandbox. No other crate may override that lint, and `clazel-sys` overrides
    only that lint, in its `Cargo.toml` (never an inline `#[allow]`). Its only
    dependency is `libc`. Inside it, every `unsafe` is one block holding one
-   call to a foreign function from the fixed list in `xtask/src/sys.rs`, with
+   call to a foreign function from the fixed list in `xtask/src/sys.rs`, or
+   one cast of a listed dispatcher (`objc_msgSend`) to a typed
+   `extern "C-unwind"` function pointer, in a `const` (a call through such a
+   const counts as a foreign call), with
    a `// SAFETY:` comment directly above it citing the man page and the
    `libc` declaration (on Windows, the Microsoft Learn page, written
    `docs <Function>`, and the hand-written declaration); there is no raw pointer arithmetic and every `pub fn`

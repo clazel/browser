@@ -10,12 +10,29 @@
 //!    `unsafe fn`, `impl` or `trait`;
 //! 4. each `unsafe { }` block holds exactly one call, to a foreign function
 //!    on its file's fixed list ([`FOREIGN_FUNCTIONS`]; `syscall` only with a
-//!    number from [`SYSCALLS`]), and no pointer dereference;
+//!    number from [`SYSCALLS`]) or through one of its file's dispatcher casts
+//!    ([`DISPATCH_CASTS`]), and no pointer dereference; the one other block is
+//!    a dispatcher cast itself (below);
 //! 5. each `unsafe` has a `// SAFETY:` comment directly above it that cites
 //!    a man page (`man 2 prctl`);
 //! 6. no raw pointer arithmetic, and no public foreign function: the crate's
 //!    public API is safe;
-//! 7. the latest row of `docs/SYS-AUDITS.md` carries the SHA-256 of the
+//! 7. a **dispatcher** ([`DISPATCHERS`]: `objc_msgSend`, which must be called
+//!    through a function pointer of each method's exact type) is declared once,
+//!    in an `unsafe extern "C-unwind"` block, with no parameters, and never called
+//!    or named elsewhere; the only use is a `const` on its file's
+//!    [`DISPATCH_CASTS`] list, written exactly
+//!    `const NAME: unsafe extern "C-unwind" fn(..) -> .. = unsafe {
+//!    std::mem::transmute(objc_msgSend as unsafe extern "C-unwind" fn()) };` with
+//!    a `// SAFETY:` comment directly above it, and such a const is named nowhere
+//!    but in calls inside `unsafe` blocks. Every other `transmute` is rejected.
+//!    The ABI is `"C-unwind"` throughout, and only that: an Objective-C exception
+//!    unwinding out of a call through a `"C"` pointer is undefined behaviour
+//!    (Rust reference, `panic.unwind.ffi.undefined`), and through a `"C-unwind"`
+//!    one it is a defined unwind or abort (`items.fn.extern.unwind.behavior`).
+//!    The three places must agree: `D as T` coerces the function item only to a
+//!    pointer of its declared ABI, and the cast's type is the one called;
+//! 8. the latest row of `docs/SYS-AUDITS.md` carries the SHA-256 of the
 //!    crate's source ([`source_hash`]), so every change is audited.
 //!
 //! And the README's memory-safety sentence states the measured `unsafe` count
@@ -129,6 +146,103 @@ const WINDOW: &[&str] = &[
     "GetModuleHandleW",
 ];
 
+/// What `crates/clazel-sys/src/macos/metal.rs` may declare and call: Metal
+/// drawing for the GPU process (phase-5.md item 5.17b). `objc_msgSend` is a
+/// dispatcher ([`DISPATCHERS`]): it is only cast, in the consts of [`METAL_CASTS`].
+const METAL: &[&str] = &[
+    "objc_msgSend",
+    "objc_getClass",
+    "sel_registerName",
+    "MTLCreateSystemDefaultDevice",
+    "IOSurfaceCreate",
+    "CFRelease",
+];
+
+/// What `crates/clazel-sys/src/macos/window.rs` may declare and call: the host's
+/// window on macOS (phase-5.md item 5.21), AppKit and Core Animation through the
+/// Objective-C runtime, a CPU image through Core Graphics, and two questions about
+/// the process (is this the main thread, is there a window server). `objc_msgSend`
+/// is a dispatcher ([`DISPATCHERS`]): it is only cast, in the consts of
+/// [`APPKIT_CASTS`]. The file declares its own `objc_msgSend`, `objc_getClass`,
+/// `sel_registerName` and `CFRelease` with the same types as `metal.rs`, so that
+/// each file's casts and calls stay in that file.
+const APPKIT: &[&str] = &[
+    "objc_msgSend",
+    "objc_getClass",
+    "sel_registerName",
+    "pthread_main_np",
+    "CGSessionCopyCurrentDictionary",
+    "CFRelease",
+    "CFDataCreate",
+    "CGDataProviderCreateWithCFData",
+    "CGColorSpaceCreateDeviceRGB",
+    "CGImageCreate",
+];
+
+/// Foreign functions that must be called through a function pointer of the
+/// callee's exact type (Apple: "Messaging", in the Objective-C Runtime
+/// documentation, says `objc_msgSend` "must be cast to an appropriate function
+/// pointer type before being called"). Each is declared once, with no
+/// parameters, and used only in the consts of [`DISPATCH_CASTS`].
+pub const DISPATCHERS: &[&str] = &["objc_msgSend"];
+
+/// The typed casts of `crates/clazel-sys/src/macos/metal.rs`'s dispatcher, one
+/// per message signature, named for it.
+const METAL_CASTS: &[&str] = &[
+    "MSG_ID",
+    "MSG_VOID",
+    "MSG_USIZE",
+    "MSG_ID_ID",
+    "MSG_ID_USIZE",
+    "MSG_VOID_ID",
+    "MSG_VOID_USIZE",
+    "MSG_VOID_BOOL",
+    "MSG_ID_ID_ID_OUT",
+    "MSG_ID_ID_OUT",
+    "MSG_ID_PTR_USIZE_USIZE",
+    "MSG_ID_USIZE_USIZE",
+    "MSG_ID_ID_ID_USIZE",
+    "MSG_ID_IDS_IDS_USIZE",
+    "MSG_VOID_ID_USIZE_ID_USIZE_USIZE",
+    "MSG_VOID_ID_USIZE_USIZE",
+    "MSG_VOID_PTR_USIZE_USIZE",
+    "MSG_VOID_SCISSOR",
+    "MSG_VOID_CLEAR",
+    "MSG_VOID_USIZE_USIZE_USIZE_USIZE_USIZE",
+    "MSG_VOID_OUT_USIZE_REGION_USIZE",
+];
+
+/// The typed casts of `crates/clazel-sys/src/macos/window.rs`'s dispatcher, one
+/// per message signature, named for it. A name may repeat one of [`METAL_CASTS`]:
+/// each list belongs to its own file, which defines its own consts.
+const APPKIT_CASTS: &[&str] = &[
+    "MSG_ID",
+    "MSG_VOID",
+    "MSG_USIZE",
+    "MSG_BOOL",
+    "MSG_F64",
+    "MSG_U16",
+    "MSG_POINT",
+    "MSG_RECT",
+    "MSG_VOID_ID",
+    "MSG_VOID_BOOL",
+    "MSG_VOID_F64",
+    "MSG_VOID_U32",
+    "MSG_VOID_RECT",
+    "MSG_BOOL_ISIZE",
+    "MSG_U16_USIZE",
+    "MSG_ID_F64",
+    "MSG_ID_PTR_USIZE_USIZE",
+    "MSG_ID_USIZE_ID_ID_BOOL",
+    "MSG_ID_RECT_USIZE_USIZE_BOOL",
+];
+
+/// Consts that may each hold one cast of a dispatcher, by file (repo-relative).
+pub const DISPATCH_CASTS: &[(&str, &[&str])] = &[
+    ("crates/clazel-sys/src/macos/metal.rs", METAL_CASTS),
+    ("crates/clazel-sys/src/macos/window.rs", APPKIT_CASTS),
+];
+
 /// Foreign functions `clazel-sys` may declare or call, by the file that may do so
 /// (repo-relative). A file not named here may use none, so that an API's calls stay
 /// in its own module and a mistyped path fails the check. Errno is read with
@@ -138,11 +252,21 @@ pub const FOREIGN_FUNCTIONS: &[(&str, &[&str])] = &[
     ("crates/clazel-sys/src/macos.rs", MACOS),
     ("crates/clazel-sys/src/windows.rs", WINDOWS),
     ("crates/clazel-sys/src/windows/window.rs", WINDOW),
+    ("crates/clazel-sys/src/macos/metal.rs", METAL),
+    ("crates/clazel-sys/src/macos/window.rs", APPKIT),
 ];
 
 /// The foreign functions `path` may use.
 fn permitted_in(path: &str) -> &'static [&'static str] {
     FOREIGN_FUNCTIONS
+        .iter()
+        .find(|(file, _)| *file == path)
+        .map_or(&[], |(_, names)| *names)
+}
+
+/// The dispatcher casts `path` may define and call through.
+fn casts_in(path: &str) -> &'static [&'static str] {
+    DISPATCH_CASTS
         .iter()
         .find(|(file, _)| *file == path)
         .map_or(&[], |(_, names)| *names)
@@ -189,20 +313,35 @@ const NOT_CALLS: &[&str] = &[
 pub struct File {
     /// Violations as (1-based line, what).
     pub violations: Vec<(usize, String)>,
+    /// Dispatcher casts defined (each also an `unsafe` block).
+    pub dispatcher_casts: usize,
     /// The foreign functions this file may use.
     permitted: &'static [&'static str],
+    /// The dispatcher casts this file may define and call through.
+    casts: &'static [&'static str],
 }
 
 /// Check one source file of `clazel-sys`, at the repo-relative `path`, against
 /// rules 3 to 6.
 pub fn check_source(path: &str, source: &str) -> Result<File, String> {
+    check_with(path, source, permitted_in(path), casts_in(path))
+}
+
+/// [`check_source`] with the file's lists given.
+fn check_with(
+    _path: &str,
+    source: &str,
+    permitted: &'static [&'static str],
+    casts: &'static [&'static str],
+) -> Result<File, String> {
     let stream: TokenStream = source
         .parse()
         .map_err(|e: proc_macro2::LexError| format!("cannot tokenize: {e}"))?;
     let tokens: Vec<TokenTree> = stream.into_iter().collect();
     let lines: Vec<&str> = source.lines().collect();
     let mut file = File {
-        permitted: permitted_in(path),
+        permitted,
+        casts,
         ..File::default()
     };
     walk(&tokens, None, &lines, &mut file);
@@ -240,6 +379,45 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
         match tt {
             TokenTree::Ident(id) => {
                 let name = id.to_string();
+                if name == "const"
+                    && block.is_none()
+                    && let Some(TokenTree::Ident(c)) = next
+                    && file.casts.contains(&c.to_string().as_str())
+                {
+                    k = dispatcher_cast(tokens, k, lines, file);
+                    continue;
+                }
+                if name == "transmute" || name == "transmute_copy" {
+                    flag(
+                        file,
+                        line,
+                        format!(
+                            "`{name}` is only allowed as the cast of a dispatcher in a listed \
+                             `const` (see xtask/src/sys.rs)"
+                        ),
+                    );
+                }
+                if DISPATCHERS.contains(&name.as_str()) {
+                    flag(
+                        file,
+                        line,
+                        format!(
+                            "dispatcher `{name}` may only be declared and cast in a listed `const`"
+                        ),
+                    );
+                }
+                if file.casts.contains(&name.as_str())
+                    && !(block.is_some()
+                        && matches!(next, Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis))
+                {
+                    flag(
+                        file,
+                        line,
+                        format!(
+                            "dispatcher cast `{name}` may only be called, inside an `unsafe` block"
+                        ),
+                    );
+                }
                 if name == "unsafe" {
                     if block.is_some() {
                         flag(file, line, "nested `unsafe` inside an `unsafe` block");
@@ -262,15 +440,38 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                         }
                         k = k.saturating_add(2);
                         continue;
+                    } else if ident_is(next, "extern")
+                        && matches!(tokens.get(k.saturating_add(2)), Some(TokenTree::Literal(_)))
+                        && ident_is(tokens.get(k.saturating_add(3)), "fn")
+                        && !matches!(tokens.get(k.saturating_add(4)), Some(TokenTree::Ident(_)))
+                    {
+                        // `unsafe extern "C-unwind" fn(..)`: a function pointer type. Only a
+                        // listed dispatcher cast can give one a value that is
+                        // called (rule 7), so the type itself is not checked here.
+                        k = k.saturating_add(4);
+                        continue;
+                    } else if ident_is(next, "extern")
+                        && ident_is(tokens.get(k.saturating_add(3)), "fn")
+                    {
+                        flag(
+                            file,
+                            line,
+                            "`unsafe` may only start a block or an `unsafe extern` block, \
+                             not `unsafe fn`, `impl` or `trait`",
+                        );
                     } else if ident_is(next, "extern") {
                         require_safety_comment(lines, line, file);
                         // `unsafe extern "C" { ... }`: skip the ABI string.
+                        let abi = match tokens.get(k.saturating_add(2)) {
+                            Some(TokenTree::Literal(l)) => l.to_string(),
+                            _ => String::new(),
+                        };
                         let rest = tokens.get(k.saturating_add(2)..).unwrap_or(&[]);
                         let at = rest.iter().position(|t| {
                             matches!(t, TokenTree::Group(g) if g.delimiter() == Delimiter::Brace)
                         });
                         match at.and_then(|i| rest.get(i)) {
-                            Some(TokenTree::Group(g)) => check_extern(g, file),
+                            Some(TokenTree::Group(g)) => check_extern(g, &abi, file),
                             _ => flag(file, line, "`unsafe extern` without a block"),
                         }
                         k = k.saturating_add(3).saturating_add(at.unwrap_or(0));
@@ -347,6 +548,87 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
     }
 }
 
+/// `const NAME: unsafe extern "C-unwind" fn(..) -> .. = unsafe {
+/// std::mem::transmute(D as unsafe extern "C-unwind" fn()) };` at `k` (the `const`),
+/// with D a dispatcher this file may declare and a `// SAFETY:` comment directly
+/// above. Returns the index after the item's `;`.
+fn dispatcher_cast(tokens: &[TokenTree], k: usize, lines: &[&str], file: &mut File) -> usize {
+    let at = |i: usize| tokens.get(k.saturating_add(i));
+    let line = tokens.get(k).map_or(0, line_of);
+    require_safety_comment(lines, line, file);
+    let end = tokens
+        .get(k..)
+        .unwrap_or(&[])
+        .iter()
+        .position(|t| is_punct(Some(t), ';'))
+        .map_or(tokens.len(), |p| k.saturating_add(p).saturating_add(1));
+    let item: Vec<TokenTree> = tokens.get(k..end).unwrap_or(&[]).to_vec();
+    let eq = item.iter().position(|t| is_punct(Some(t), '='));
+    let ty = eq.and_then(|e| item.get(3..e)).unwrap_or(&[]);
+    let typed = is_punct(at(2), ':') && is_c_unwind_fn_pointer(ty);
+    let value = eq
+        .and_then(|e| item.get(e.saturating_add(1)..))
+        .unwrap_or(&[]);
+    let cast = match value {
+        [
+            TokenTree::Ident(u),
+            TokenTree::Group(g),
+            TokenTree::Punct(semi),
+        ] if *u == "unsafe" && g.delimiter() == Delimiter::Brace && semi.as_char() == ';' => {
+            transmute_of_dispatcher(&g.stream().into_iter().collect::<Vec<_>>(), file)
+        }
+        _ => false,
+    };
+    if !(typed && cast) {
+        flag(
+            file,
+            line,
+            "a dispatcher cast must be exactly `const NAME: unsafe extern \"C-unwind\" fn(..) = \
+             unsafe { std::mem::transmute(D as unsafe extern \"C-unwind\" fn()) };`",
+        );
+    } else {
+        file.dispatcher_casts = file.dispatcher_casts.saturating_add(1);
+    }
+    end
+}
+
+/// The one ABI a dispatcher is declared, cast and called with (rule 7).
+const DISPATCH_ABI: &str = "\"C-unwind\"";
+
+/// `unsafe extern "C-unwind" fn (..)`, optionally `-> T`, and nothing else.
+fn is_c_unwind_fn_pointer(ty: &[TokenTree]) -> bool {
+    matches!(ty,
+        [TokenTree::Ident(u), TokenTree::Ident(e), TokenTree::Literal(abi), TokenTree::Ident(f), TokenTree::Group(params), rest @ ..]
+            if *u == "unsafe" && *e == "extern" && abi.to_string() == DISPATCH_ABI && *f == "fn"
+                && params.delimiter() == Delimiter::Parenthesis
+                && (rest.is_empty() || (is_punct(rest.first(), '-') && is_punct(rest.get(1), '>') && rest.len() > 2)))
+}
+
+/// `std::mem::transmute(D as unsafe extern "C-unwind" fn())` with D a dispatcher of this
+/// file, and nothing else.
+fn transmute_of_dispatcher(body: &[TokenTree], file: &File) -> bool {
+    let path = ["std", ":", ":", "mem", ":", ":", "transmute"];
+    let head_ok = body.len() == path.len().saturating_add(1)
+        && body.iter().zip(path).all(|(t, want)| match t {
+            TokenTree::Ident(i) => *i == want,
+            TokenTree::Punct(p) => p.as_char().to_string() == want,
+            _ => false,
+        });
+    let Some(TokenTree::Group(args)) = body.last() else {
+        return false;
+    };
+    let args: Vec<TokenTree> = args.stream().into_iter().collect();
+    head_ok
+        && matches!(args.as_slice(),
+            [TokenTree::Ident(d), TokenTree::Ident(r#as), ty @ ..]
+                if DISPATCHERS.contains(&d.to_string().as_str())
+                    && file.permitted.contains(&d.to_string().as_str())
+                    && *r#as == "as"
+                    && is_c_unwind_fn_pointer(ty)
+                    && ty.len() == 5
+                    && matches!(ty.get(4), Some(TokenTree::Group(g)) if g.stream().is_empty()))
+}
+
 /// `name(` or `name::<..>(`: the identifier at `k` is being called.
 fn call_or_turbofish(next: Option<&TokenTree>, tokens: &[TokenTree], k: usize) -> bool {
     match next {
@@ -362,7 +644,11 @@ fn call_or_turbofish(next: Option<&TokenTree>, tokens: &[TokenTree], k: usize) -
 /// A call `name(args)` inside an `unsafe` block: it must be a permitted
 /// foreign function, and `syscall` only with a permitted number.
 fn check_call(name: &str, args: &Group, line: usize, block: &mut Block, file: &mut File) {
-    if !file.permitted.contains(&name) {
+    if file.casts.contains(&name) {
+        block.calls.push(name.to_owned());
+        return;
+    }
+    if !file.permitted.contains(&name) || DISPATCHERS.contains(&name) {
         flag(
             file,
             line,
@@ -394,8 +680,10 @@ fn check_call(name: &str, args: &Group, line: usize, block: &mut Block, file: &m
     block.calls.push(name.to_owned());
 }
 
-/// `unsafe extern { ... }`: only private function declarations from the list.
-fn check_extern(g: &Group, file: &mut File) {
+/// `unsafe extern ABI { ... }`: only private function declarations from the
+/// list, and a dispatcher only where `abi` (the ABI string, quoted, or empty) is
+/// `"C-unwind"`.
+fn check_extern(g: &Group, abi: &str, file: &mut File) {
     let body: Vec<TokenTree> = g.stream().into_iter().collect();
     for (k, tt) in body.iter().enumerate() {
         let TokenTree::Ident(id) = tt else { continue };
@@ -429,6 +717,29 @@ fn check_extern(g: &Group, file: &mut File) {
                             "`{name}` is not a permitted foreign function in this file (see xtask/src/sys.rs)"
                         ),
                     );
+                }
+                if DISPATCHERS.contains(&name.as_str()) {
+                    let params = body.get(k.saturating_add(2));
+                    let end = body.get(k.saturating_add(3));
+                    let bare = matches!(params, Some(TokenTree::Group(g))
+                        if g.delimiter() == Delimiter::Parenthesis && g.stream().is_empty())
+                        && is_punct(end, ';');
+                    if !bare {
+                        flag(
+                            file,
+                            line,
+                            format!("dispatcher `{name}` must be declared `fn {name}();`"),
+                        );
+                    }
+                    if abi != DISPATCH_ABI {
+                        flag(
+                            file,
+                            line,
+                            format!(
+                                "dispatcher `{name}` must be declared in an `unsafe extern \"C-unwind\"` block"
+                            ),
+                        );
+                    }
                 }
             }
             _ => {}
@@ -1024,6 +1335,8 @@ mod tests {
         assert!(violations(&nested)?.iter().any(|m| m.contains("nested")));
         for src in [
             "pub unsafe fn f() {}",
+            "pub unsafe extern \"C\" fn f() {}",
+            "unsafe extern \"C\" fn f() {}",
             "unsafe impl Send for X {}",
             "unsafe trait T {}",
         ] {
@@ -1175,5 +1488,232 @@ mod tests {
         assert!(!readme_problems("nothing", 7, 31).is_empty());
         let garbled = "100% safe Rust except `clazel-sys`: many `unsafe` blocks.";
         assert!(!readme_problems(garbled, 7, 31).is_empty());
+    }
+
+    // ------------------------------------------------------- dispatcher casts
+
+    const DISPATCH_FOREIGN: &[&str] = &["objc_msgSend", "objc_getClass"];
+    const DISPATCH_CASTS: &[&str] = &["MSG_ID"];
+
+    fn cast_violations(src: &str) -> Result<(Vec<String>, usize), String> {
+        let f = super::check_with("metal.rs", src, DISPATCH_FOREIGN, DISPATCH_CASTS)?;
+        Ok((
+            f.violations
+                .into_iter()
+                .map(|(line, what)| format!("{line}: {what}"))
+                .collect(),
+            f.dispatcher_casts,
+        ))
+    }
+
+    const DECL: &str = "// SAFETY: docs ObjectiveC/objc_msgSend.\nunsafe extern \"C-unwind\" { fn objc_msgSend(); }\n";
+    const CAST: &str = "// SAFETY: docs ObjectiveC/objc_msgSend; the cast Apple prescribes.\n\
+        const MSG_ID: unsafe extern \"C-unwind\" fn(*mut u8, *mut u8) -> *mut u8 =\n\
+        unsafe { std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) };\n";
+    const CALL: &str = "fn f(r: *mut u8, s: *mut u8) -> *mut u8 {\n\
+        // SAFETY: docs ObjectiveC/NSObject/new.\n    unsafe { MSG_ID(r, s) }\n}\n";
+
+    #[test]
+    fn accepts_a_dispatcher_cast_and_calls_through_it() -> Result<(), String> {
+        let (v, casts) = cast_violations(&format!("{DECL}{CAST}{CALL}"))?;
+        assert_eq!(v, Vec::<String>::new());
+        assert_eq!(casts, 1);
+        Ok(())
+    }
+
+    fn rejected(src: &str, why: &str) -> Result<(), String> {
+        let (v, _) = cast_violations(src)?;
+        assert!(v.iter().any(|m| m.contains(why)), "{why}: {v:?}\n{src}");
+        Ok(())
+    }
+
+    /// The macOS window's file has its own lists: its casts and calls pass there,
+    /// and the same source in `metal.rs` (whose lists lack `MSG_POINT` and
+    /// `CGImageCreate`) or in `macos.rs` (which may use no dispatcher) is rejected.
+    #[test]
+    fn the_window_file_has_its_own_lists() -> Result<(), String> {
+        const WINDOW_FILE: &str = "crates/clazel-sys/src/macos/window.rs";
+        const METAL_FILE: &str = "crates/clazel-sys/src/macos/metal.rs";
+        let point = "// SAFETY: docs ObjectiveC/objc_msgSend; the cast Apple prescribes.\n\
+            const MSG_POINT: unsafe extern \"C-unwind\" fn(*mut u8, *mut u8) -> [f64; 2] =\n\
+            unsafe { std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) };\n\
+            fn f(r: *mut u8, s: *mut u8) -> [f64; 2] {\n\
+            // SAFETY: docs AppKit/NSEvent/locationInWindow.\n    unsafe { MSG_POINT(r, s) }\n}\n";
+        let image = "// SAFETY: docs CoreGraphics/CGImageCreate.\n\
+            unsafe extern \"C\" { fn CGImageCreate(w: usize) -> *mut u8; }\n";
+        let source = format!("{DECL}{point}{image}");
+        assert_eq!(violations_in(WINDOW_FILE, &source)?, Vec::<String>::new());
+        let in_window = check_source(WINDOW_FILE, &source)?;
+        assert_eq!(in_window.dispatcher_casts, 1);
+        let in_metal = violations_in(METAL_FILE, &source)?;
+        assert!(
+            in_metal
+                .iter()
+                .any(|m| m.contains("`transmute` is only allowed"))
+        );
+        assert!(
+            in_metal
+                .iter()
+                .any(|m| m.contains("`CGImageCreate` is not a permitted"))
+        );
+        let in_macos = violations_in(MACOS_FILE, &source)?;
+        assert!(
+            in_macos
+                .iter()
+                .any(|m| m.contains("`objc_msgSend` is not a permitted"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn planted_transmute_of_data_or_elsewhere() -> Result<(), String> {
+        // Of data, in a listed const.
+        rejected(
+            &format!(
+                "{DECL}// SAFETY: docs X.\nconst MSG_ID: unsafe extern \"C-unwind\" fn() = unsafe {{ std::mem::transmute(7usize) }};"
+            ),
+            "must be exactly",
+        )?;
+        // Of a dispatcher, in a const not on the list.
+        rejected(
+            &format!(
+                "{DECL}// SAFETY: docs X.\nconst OTHER: unsafe extern \"C-unwind\" fn() = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) }};"
+            ),
+            "`transmute` is only allowed",
+        )?;
+        // In a function.
+        rejected(
+            &format!(
+                "{DECL}fn f() {{\n// SAFETY: docs X.\nunsafe {{ std::mem::transmute::<u32, f32>(1) }};\n}}"
+            ),
+            "`transmute` is only allowed",
+        )?;
+        rejected(
+            "fn f() { let x = std::mem::transmute_copy(&1u8); }",
+            "`transmute_copy` is only allowed",
+        )?;
+        // A turbofish, another path, or more than the one call.
+        for value in [
+            "std::mem::transmute::<unsafe extern \"C-unwind\" fn(), unsafe extern \"C-unwind\" fn()>(objc_msgSend as unsafe extern \"C-unwind\" fn())",
+            "core::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn())",
+            "std::mem::transmute(objc_getClass as unsafe extern \"C-unwind\" fn())",
+            "std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn(u8))",
+            "std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()); objc_getClass(p)",
+        ] {
+            rejected(
+                &format!(
+                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: unsafe extern \"C-unwind\" fn() = unsafe {{ {value} }};"
+                ),
+                "must be exactly",
+            )?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn planted_wrong_target_type_or_no_safety_comment() -> Result<(), String> {
+        for ty in [
+            "usize",
+            "unsafe extern \"C\" fn()",
+            "unsafe extern \"system\" fn()",
+            "extern \"C-unwind\" fn()",
+            "Option<unsafe extern \"C-unwind\" fn()>",
+        ] {
+            rejected(
+                &format!(
+                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: {ty} = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) }};"
+                ),
+                "must be exactly",
+            )?;
+        }
+        rejected(
+            &format!(
+                "{DECL}const MSG_ID: unsafe extern \"C-unwind\" fn() = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) }};"
+            ),
+            "without a `// SAFETY:`",
+        )
+    }
+
+    /// `"C"` anywhere a dispatcher is declared or cast is rejected, so no cast
+    /// can mix the two ABIs.
+    #[test]
+    fn planted_c_abi_instead_of_c_unwind() -> Result<(), String> {
+        let c_decl = "// SAFETY: docs X.\nunsafe extern \"C\" { fn objc_msgSend(); }\n";
+        rejected(
+            &format!("{c_decl}{CAST}{CALL}"),
+            "must be declared in an `unsafe extern \"C-unwind\"` block",
+        )?;
+        rejected(
+            "// SAFETY: docs X.\nunsafe extern { fn objc_msgSend(); }\n",
+            "must be declared in an `unsafe extern \"C-unwind\"` block",
+        )?;
+        // The cast's type, its source, or both, in `"C"`.
+        for (ty, source) in [
+            (
+                "unsafe extern \"C\" fn(*mut u8, *mut u8) -> *mut u8",
+                "C-unwind",
+            ),
+            (
+                "unsafe extern \"C-unwind\" fn(*mut u8, *mut u8) -> *mut u8",
+                "C",
+            ),
+            ("unsafe extern \"C\" fn(*mut u8, *mut u8) -> *mut u8", "C"),
+        ] {
+            rejected(
+                &format!(
+                    "{DECL}// SAFETY: docs X.\nconst MSG_ID: {ty} = unsafe {{ std::mem::transmute(objc_msgSend as unsafe extern \"{source}\" fn()) }};"
+                ),
+                "must be exactly",
+            )?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn planted_dispatcher_used_any_other_way() -> Result<(), String> {
+        // Called directly.
+        rejected(
+            &format!("{DECL}fn f() {{\n// SAFETY: docs X.\nunsafe {{ objc_msgSend() }};\n}}"),
+            "dispatcher `objc_msgSend` may only",
+        )?;
+        // Made into a function pointer another way.
+        rejected(
+            &format!("{DECL}fn f() {{ let p = objc_msgSend as unsafe extern \"C-unwind\" fn(); }}"),
+            "dispatcher `objc_msgSend` may only",
+        )?;
+        // Declared with parameters.
+        rejected(
+            "// SAFETY: docs X.\nunsafe extern \"C-unwind\" { fn objc_msgSend(a: u8); }",
+            "must be declared `fn objc_msgSend();`",
+        )?;
+        rejected(
+            "// SAFETY: docs X.\nunsafe extern \"C-unwind\" { fn objc_msgSend() -> u8; }",
+            "must be declared `fn objc_msgSend();`",
+        )
+    }
+
+    #[test]
+    fn planted_call_through_another_pointer_or_a_shadowed_cast() -> Result<(), String> {
+        // A local function pointer is not on the list.
+        rejected(
+            &format!("{DECL}{CAST}fn f(p: u8) {{\n// SAFETY: docs X.\nunsafe {{ p(1) }};\n}}"),
+            "`p` is not a permitted",
+        )?;
+        // A cast's name rebound, or passed around, or called outside `unsafe`.
+        rejected(
+            &format!("{DECL}{CAST}fn f() {{ let MSG_ID = 3; }}"),
+            "dispatcher cast `MSG_ID` may only be called",
+        )?;
+        rejected(
+            &format!("{DECL}{CAST}fn f() {{ let g = MSG_ID; }}"),
+            "dispatcher cast `MSG_ID` may only be called",
+        )?;
+        // Two calls in one block.
+        rejected(
+            &format!(
+                "{DECL}{CAST}fn f(r: *mut u8) {{\n// SAFETY: docs X.\nunsafe {{ MSG_ID(r, r); MSG_ID(r, r) }};\n}}"
+            ),
+            "found 2",
+        )
     }
 }

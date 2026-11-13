@@ -324,7 +324,7 @@ fn is_alias(defs: &HashMap<String, String>, name: &str) -> bool {
 fn allowlist_numbers_match_kernel_tables() -> Result<(), String> {
     let tbl = vendored("syscall_64.tbl")?;
     let generic = defines(&["unistd.h"])?;
-    for s in syscalls::ALLOWLIST {
+    for s in syscalls::ALLOWLIST.iter().chain(syscalls::GPU_EXTRA) {
         let x86 = x86_64_number(&tbl, s.name)
             .ok_or_else(|| format!("{}: not in syscall_64.tbl", s.name))?;
         assert_eq!(s.x86_64, x86, "{} on x86-64", s.name);
@@ -402,6 +402,68 @@ fn allowlist_has_no_duplicates_and_no_forbidden_names() {
             s.name
         );
         assert!(!s.reason.is_empty(), "{} has no reason", s.name);
+    }
+}
+
+/// Item 5.21a: the GPU list has no duplicate, still nothing that opens, connects,
+/// executes or changes the sandbox, and says of every addition that it is not
+/// measured.
+#[test]
+fn gpu_list_has_no_duplicates_and_no_forbidden_names() {
+    for arch in Arch::ALL {
+        let mut nums = syscalls::gpu_numbers(arch);
+        nums.sort_unstable();
+        let n = nums.len();
+        nums.dedup();
+        assert_eq!(nums.len(), n, "duplicate number on {arch:?}");
+    }
+    let forbidden = [
+        "open",
+        "openat",
+        "openat2",
+        "creat",
+        "socket",
+        "socketpair",
+        "connect",
+        "accept",
+        "accept4",
+        "bind",
+        "listen",
+        "fork",
+        "vfork",
+        "execve",
+        "execveat",
+        "ptrace",
+        "prctl",
+        "mount",
+        "umount2",
+        "unshare",
+        "setns",
+        "kill",
+        "tgkill",
+        "tkill",
+        "seccomp",
+        "bpf",
+        "io_uring_setup",
+        "perf_event_open",
+        "rt_sigaction",
+        "chroot",
+        "pivot_root",
+        "process_vm_readv",
+        "process_vm_writev",
+        "userfaultfd",
+        "landlock_create_ruleset",
+        "landlock_restrict_self",
+    ];
+    for s in syscalls::ALLOWLIST.iter().chain(syscalls::GPU_EXTRA) {
+        assert!(
+            !forbidden.contains(&s.name),
+            "{} must not be allowed",
+            s.name
+        );
+    }
+    for s in syscalls::GPU_EXTRA {
+        assert!(s.reason.starts_with("not measured: "), "{}", s.name);
     }
 }
 
