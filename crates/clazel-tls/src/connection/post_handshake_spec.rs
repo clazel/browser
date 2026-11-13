@@ -77,13 +77,29 @@
 //!    messages MUST NOT span key changes. Implementations MUST verify that
 //!    all messages immediately preceding a key change align with a record
 //!    boundary; if not, then they MUST terminate the connection with an
-//!    "unexpected_message" alert". With `update_requested`, the client then
-//!    sends KeyUpdate(`update_not_requested`) under its current key and moves
-//!    its write secret, key, IV and sequence number on in the same way, unless
-//!    its write side has closed (§6.1: nothing is written after it). An
-//!    invalid `request_update` is `illegal_parameter` (the parser's
-//!    `InvalidEnum`). Several KeyUpdates in one connection are fine; each
-//!    needs its own record.
+//!    "unexpected_message" alert". An invalid `request_update` is
+//!    `illegal_parameter` (the parser's `InvalidEnum`). Several KeyUpdates in
+//!    one connection are fine; each needs its own record.
+//!    **The answer to `update_requested` is owed, not sent at once.** §4.6.3:
+//!    "If the request_update field is set to "update_requested", then the
+//!    receiver MUST send a KeyUpdate of its own with request_update set to
+//!    "update_not_requested" prior to sending its next Application Data
+//!    record. This mechanism allows either side to force an update to the
+//!    entire connection, but causes an implementation which receives multiple
+//!    KeyUpdates while it is silent to respond with a single update." The
+//!    step that receives the request sends nothing; it sets
+//!    [`State::key_update_owed`], a flag and not a count, so several requests
+//!    before the next application data draw one answer. [`send_application`]
+//!    sends the owed KeyUpdate(`update_not_requested`) under the current
+//!    write key, clears the flag, moves the write secret, key, IV and
+//!    sequence number on as for any KeyUpdate it sends, and then sends the
+//!    data under the new key. Nothing else sends or clears the owed answer: a
+//!    client-initiated KeyUpdate ([`update_keys`]), our `close_notify` and a
+//!    fatal alert go out under the current write key with the answer still
+//!    owed (the RFC asks for it only before Application Data, and after
+//!    `close_notify` there is none, §6.1). This is the mechanism the
+//!    clean-room transcription models (`transcription::connection`:
+//!    `key_update_owed`, `send_application_data`).
 //! 10. **Sequence numbers (§5.3) close or rekey; they never wrap.** The
 //!     receive epoch of `traffic::spec` becomes exhausted after using
 //!     sequence number 2^64 - 1, and its next record is `Fail(internal_error)`:
@@ -93,13 +109,17 @@
 //!     which uses that number and moves the write keys on, and the data goes
 //!     out under the new key at sequence number 0 ([`needs_rekey`]). So the
 //!     send epoch is never exhausted while the connection is open ([`wf`]).
+//!     When an answer is owed (item 9) as well, that one KeyUpdate is both
+//!     the answer and the rekey, as in the transcription's
+//!     `send_application_data` (its `must_rekey` is either condition).
 //! 11. **Local operations.** [`send_application`] sends one record of at most
 //!     2^14 bytes (a longer one is `Fail(record_overflow)`: the caller
 //!     fragments, as `traffic::exec` says); [`update_keys`] is the
 //!     client-initiated KeyUpdate, with or without `update_requested`;
 //!     [`close`] sends `close_notify` and ends the write side; the read side
 //!     goes on until the server's own `close_notify`, which avoids truncation
-//!     (§6.1). Each does nothing once the write side has ended.
+//!     (§6.1). Each does nothing once the write side has ended. An answer
+//!     owed under item 9 goes out only before application data.
 //! 12. **No padding, no early data, no client authentication.** Records are
 //!     sent with zero padding. 0-RTT, `EndOfEarlyData` and post-handshake
 //!     client authentication are out of scope (an `EndOfEarlyData` or
@@ -214,6 +234,9 @@ pub struct State {
     pub server_secret: Seq<u8>,
     /// Bytes of one unfinished handshake message (§5.1).
     pub reassembly: crate::spec::Reasm,
+    /// §4.6.3: a KeyUpdate(`update_not_requested`) of ours is owed "prior to
+    /// sending its next Application Data record" (item 9).
+    pub key_update_owed: bool,
 }
 
 /// The state of a connection that has not ended.
@@ -229,7 +252,7 @@ pub open spec fn can_write(s: State) -> bool { s.phase == Phase::Open || s.phase
 /// failed; the send epoch has a next sequence number (item 10: it is never
 /// exhausted); both secrets are `Hash.length` bytes; the reassembly buffer is
 /// within its bound. A closed direction holds no epoch or secret, and the rest
-/// is as in `Open`. Ended: nothing is retained.
+/// is as in `Open`. Ended: nothing is retained, and no answer is owed.
 pub open spec fn wf(s: State) -> bool {
     match s.phase {
         Phase::Open => match (s.sender, s.receiver) {
@@ -255,7 +278,7 @@ pub open spec fn wf(s: State) -> bool {
         },
         Phase::Closed | Phase::Failed => s.sender is None && s.receiver is None
             && s.client_secret.len() == 0 && s.server_secret.len() == 0
-            && s.reassembly.buf.len() == 0,
+            && s.reassembly.buf.len() == 0 && !s.key_update_owed,
     }
 }
 
@@ -282,6 +305,7 @@ pub open spec fn failed() -> State {
         client_secret: seq![],
         server_secret: seq![],
         reassembly: crate::spec::reasm_new(),
+        key_update_owed: false,
     }
 }
 
@@ -450,15 +474,17 @@ pub open spec fn send_data_record(f: crate::traffic::spec::Cipher, s: State, dat
     }
 }
 
-/// §5, §5.3: send one application data record. On the last sequence number
-/// a KeyUpdate(`update_not_requested`) goes first (item 10).
+/// §5, §5.3, §4.6.3: send one application data record. A
+/// KeyUpdate(`update_not_requested`) goes first when one is owed (item 9) or
+/// on the last sequence number (item 10); it is one KeyUpdate if both, and
+/// nothing is owed after it.
 pub open spec fn send_application(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, data: Seq<u8>)
     -> (Out, State)
 {
     if !can_write(s) {
         (quiet(), s)
-    } else if needs_rekey(s) {
-        match send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED) {
+    } else if s.key_update_owed || needs_rekey(s) {
+        match send_key_update(c, f, State { key_update_owed: false, ..s }, crate::spec::UPDATE_NOT_REQUESTED) {
             (o1, s1) => if can_write(s1) {
                 match send_data_record(f, s1, data) {
                     (o2, s2) => (then(o1, o2), s2),
@@ -473,7 +499,7 @@ pub open spec fn send_application(c: crate::schedule::spec::Crypto, f: crate::tr
 }
 
 /// §4.6.3: the client-initiated KeyUpdate, asking the server to update too
-/// when `request_peer` is set.
+/// when `request_peer` is set. An owed answer stays owed (item 9).
 pub open spec fn update_keys(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, request_peer: bool)
     -> (Out, State)
 {
@@ -487,8 +513,10 @@ pub open spec fn close(f: crate::traffic::spec::Cipher, s: State) -> (Out, State
 
 /// §4.6.3 on receipt of KeyUpdate(`request`), a valid value: the message must
 /// end its record and leave no unfinished message (§5.1). The read keys are
-/// updated; with `update_requested` the reply goes out under the old write
-/// keys and the write keys are updated after it.
+/// updated; with `update_requested` an answer is owed and nothing is sent:
+/// the receiver "MUST send a KeyUpdate of its own ... prior to sending its
+/// next Application Data record" (item 9). A request while one is owed
+/// leaves one owed.
 pub open spec fn key_update_received(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, request: u8,
     last: bool) -> (Out, State)
 {
@@ -498,7 +526,7 @@ pub open spec fn key_update_received(c: crate::schedule::spec::Crypto, f: crate:
         match rotated_receiver(c, s) {
             Err(a) => fatal(f, s, a),
             Ok(s1) => if request == crate::spec::UPDATE_REQUESTED {
-                send_key_update(c, f, s1, crate::spec::UPDATE_NOT_REQUESTED)
+                (quiet(), State { key_update_owed: true, ..s1 })
             } else {
                 (quiet(), s1)
             },
@@ -617,6 +645,7 @@ pub open spec fn start(c: crate::schedule::spec::Crypto, client_secret: Seq<u8>,
             client_secret,
             server_secret,
             reassembly: crate::spec::reasm_new(),
+            key_update_owed: false,
         }),
         (Err(a), _) => Err(a),
         (_, Err(a)) => Err(a),

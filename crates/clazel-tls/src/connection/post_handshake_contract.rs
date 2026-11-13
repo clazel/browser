@@ -76,10 +76,11 @@ pub open spec fn close_ensures(f: crate::traffic::spec::Cipher,
         && actions == super::post_handshake_spec::actions(r.0)
 }
 
-/// A connection that ended retains no key, secret or partial input.
+/// A connection that ended retains no key, secret or partial input, and owes
+/// no KeyUpdate.
 pub open spec fn ended_ensures(s: super::post_handshake_spec::State) -> bool {
     (s.phase == super::post_handshake_spec::Phase::Closed || s.phase == super::post_handshake_spec::Phase::Failed)
         ==> s.sender is None && s.receiver is None && s.client_secret.len() == 0
-            && s.server_secret.len() == 0 && s.reassembly.buf.len() == 0
+            && s.server_secret.len() == 0 && s.reassembly.buf.len() == 0 && !s.key_update_owed
 }
 } // verus!
