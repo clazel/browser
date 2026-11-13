@@ -158,6 +158,27 @@ const METAL: &[&str] = &[
     "CFRelease",
 ];
 
+/// What `crates/clazel-sys/src/macos/window.rs` may declare and call: the host's
+/// window on macOS (phase-5.md item 5.21), AppKit and Core Animation through the
+/// Objective-C runtime, a CPU image through Core Graphics, and two questions about
+/// the process (is this the main thread, is there a window server). `objc_msgSend`
+/// is a dispatcher ([`DISPATCHERS`]): it is only cast, in the consts of
+/// [`APPKIT_CASTS`]. The file declares its own `objc_msgSend`, `objc_getClass`,
+/// `sel_registerName` and `CFRelease` with the same types as `metal.rs`, so that
+/// each file's casts and calls stay in that file.
+const APPKIT: &[&str] = &[
+    "objc_msgSend",
+    "objc_getClass",
+    "sel_registerName",
+    "pthread_main_np",
+    "CGSessionCopyCurrentDictionary",
+    "CFRelease",
+    "CFDataCreate",
+    "CGDataProviderCreateWithCFData",
+    "CGColorSpaceCreateDeviceRGB",
+    "CGImageCreate",
+];
+
 /// Foreign functions that must be called through a function pointer of the
 /// callee's exact type (Apple: "Messaging", in the Objective-C Runtime
 /// documentation, says `objc_msgSend` "must be cast to an appropriate function
@@ -191,9 +212,36 @@ const METAL_CASTS: &[&str] = &[
     "MSG_VOID_OUT_USIZE_REGION_USIZE",
 ];
 
+/// The typed casts of `crates/clazel-sys/src/macos/window.rs`'s dispatcher, one
+/// per message signature, named for it. A name may repeat one of [`METAL_CASTS`]:
+/// each list belongs to its own file, which defines its own consts.
+const APPKIT_CASTS: &[&str] = &[
+    "MSG_ID",
+    "MSG_VOID",
+    "MSG_USIZE",
+    "MSG_BOOL",
+    "MSG_F64",
+    "MSG_U16",
+    "MSG_POINT",
+    "MSG_RECT",
+    "MSG_VOID_ID",
+    "MSG_VOID_BOOL",
+    "MSG_VOID_F64",
+    "MSG_VOID_U32",
+    "MSG_VOID_RECT",
+    "MSG_BOOL_ISIZE",
+    "MSG_U16_USIZE",
+    "MSG_ID_F64",
+    "MSG_ID_PTR_USIZE_USIZE",
+    "MSG_ID_USIZE_ID_ID_BOOL",
+    "MSG_ID_RECT_USIZE_USIZE_BOOL",
+];
+
 /// Consts that may each hold one cast of a dispatcher, by file (repo-relative).
-pub const DISPATCH_CASTS: &[(&str, &[&str])] =
-    &[("crates/clazel-sys/src/macos/metal.rs", METAL_CASTS)];
+pub const DISPATCH_CASTS: &[(&str, &[&str])] = &[
+    ("crates/clazel-sys/src/macos/metal.rs", METAL_CASTS),
+    ("crates/clazel-sys/src/macos/window.rs", APPKIT_CASTS),
+];
 
 /// Foreign functions `clazel-sys` may declare or call, by the file that may do so
 /// (repo-relative). A file not named here may use none, so that an API's calls stay
@@ -205,6 +253,7 @@ pub const FOREIGN_FUNCTIONS: &[(&str, &[&str])] = &[
     ("crates/clazel-sys/src/windows.rs", WINDOWS),
     ("crates/clazel-sys/src/windows/window.rs", WINDOW),
     ("crates/clazel-sys/src/macos/metal.rs", METAL),
+    ("crates/clazel-sys/src/macos/window.rs", APPKIT),
 ];
 
 /// The foreign functions `path` may use.
@@ -1475,6 +1524,44 @@ mod tests {
     fn rejected(src: &str, why: &str) -> Result<(), String> {
         let (v, _) = cast_violations(src)?;
         assert!(v.iter().any(|m| m.contains(why)), "{why}: {v:?}\n{src}");
+        Ok(())
+    }
+
+    /// The macOS window's file has its own lists: its casts and calls pass there,
+    /// and the same source in `metal.rs` (whose lists lack `MSG_POINT` and
+    /// `CGImageCreate`) or in `macos.rs` (which may use no dispatcher) is rejected.
+    #[test]
+    fn the_window_file_has_its_own_lists() -> Result<(), String> {
+        const WINDOW_FILE: &str = "crates/clazel-sys/src/macos/window.rs";
+        const METAL_FILE: &str = "crates/clazel-sys/src/macos/metal.rs";
+        let point = "// SAFETY: docs ObjectiveC/objc_msgSend; the cast Apple prescribes.\n\
+            const MSG_POINT: unsafe extern \"C-unwind\" fn(*mut u8, *mut u8) -> [f64; 2] =\n\
+            unsafe { std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) };\n\
+            fn f(r: *mut u8, s: *mut u8) -> [f64; 2] {\n\
+            // SAFETY: docs AppKit/NSEvent/locationInWindow.\n    unsafe { MSG_POINT(r, s) }\n}\n";
+        let image = "// SAFETY: docs CoreGraphics/CGImageCreate.\n\
+            unsafe extern \"C\" { fn CGImageCreate(w: usize) -> *mut u8; }\n";
+        let source = format!("{DECL}{point}{image}");
+        assert_eq!(violations_in(WINDOW_FILE, &source)?, Vec::<String>::new());
+        let in_window = check_source(WINDOW_FILE, &source)?;
+        assert_eq!(in_window.dispatcher_casts, 1);
+        let in_metal = violations_in(METAL_FILE, &source)?;
+        assert!(
+            in_metal
+                .iter()
+                .any(|m| m.contains("`transmute` is only allowed"))
+        );
+        assert!(
+            in_metal
+                .iter()
+                .any(|m| m.contains("`CGImageCreate` is not a permitted"))
+        );
+        let in_macos = violations_in(MACOS_FILE, &source)?;
+        assert!(
+            in_macos
+                .iter()
+                .any(|m| m.contains("`objc_msgSend` is not a permitted"))
+        );
         Ok(())
     }
 
