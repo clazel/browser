@@ -95,6 +95,15 @@ pub enum Out {
     Send(u64, Vec<u8>),
     /// The kernel closed connection `conn`.
     Close(u64),
+    /// The GPU process paired with renderer `id` started (item 5.18).
+    SpawnGpu(u64),
+    /// A frame to the GPU process of renderer `id`, decoded.
+    ToGpu(u64, Msg),
+    /// A frame to a GPU process that does not decode (a kernel bug).
+    GarbledGpu(u64),
+    /// What the user is shown of a tab (item 5.18): the tab, the address
+    /// bar (the kernel's URL), the title, and the buffer and its size.
+    Paint(u64, Vec<u32>, Vec<u8>, u64, u64, u64),
 }
 
 /// The exec kernel, driven as the host shell would.
@@ -149,6 +158,18 @@ impl Kernel {
                     text,
                     links,
                 } => Out::Show(tab, url, title, text, links),
+                OutputRecord::SpawnGpu { id } => Out::SpawnGpu(id),
+                OutputRecord::ToGpu { id, bytes } => {
+                    decode_framed(&bytes).map_or(Out::GarbledGpu(id), |m| Out::ToGpu(id, m))
+                }
+                OutputRecord::Paint {
+                    tab,
+                    url,
+                    title,
+                    buffer,
+                    width,
+                    height,
+                } => Out::Paint(tab, url, title, buffer, width, height),
             })
             .collect()
     }

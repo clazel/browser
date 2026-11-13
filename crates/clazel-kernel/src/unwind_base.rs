@@ -252,8 +252,8 @@ pub proof fn lemma_addressed_same(
 {
     if crate::noninterference::addressed_to(rules, d, s1, s1b, o) {
         let r = choose|r: Renderer|
-            (s1.renderers.contains(r) || s1b.renderers.contains(r)) && (if o is Show {
-                r.tab == o->Show_tab
+            (s1.renderers.contains(r) || s1b.renderers.contains(r)) && (if o is Show || o is Paint {
+                r.tab == crate::domain::output_id(o)
             } else {
                 r.id == crate::domain::output_id(o)
             }) && crate::domain::domain_of_renderer(rules, r) == d;
@@ -267,8 +267,8 @@ pub proof fn lemma_addressed_same(
     }
     if crate::noninterference::addressed_to(rules, d, s2, s2b, o) {
         let r = choose|r: Renderer|
-            (s2.renderers.contains(r) || s2b.renderers.contains(r)) && (if o is Show {
-                r.tab == o->Show_tab
+            (s2.renderers.contains(r) || s2b.renderers.contains(r)) && (if o is Show || o is Paint {
+                r.tab == crate::domain::output_id(o)
             } else {
                 r.id == crate::domain::output_id(o)
             }) && crate::domain::domain_of_renderer(rules, r) == d;

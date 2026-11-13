@@ -92,7 +92,7 @@
 //! - **A renderer is committed once its first document is.** Its record
 //!   holds whether it is ([`Renderer::committed`]); until then its `url` is
 //!   the URL it is navigating to, not one it committed. Only a committed
-//!   renderer may send `Display`.
+//!   renderer may send `Display` (and, item 5.18, `Title`).
 //! - **What the user sees (phase-4.md item 4.12).** A committed renderer's
 //!   `Display { title, text, links }` becomes the output `Show { tab, url,
 //!   title, text, links }`, where `tab` is the sender's tab and `url` the
@@ -266,8 +266,9 @@
 //!   - an id that names no renderer: no state change, no output;
 //!   - a frame that does not decode to a message, or that decodes to a
 //!     message a renderer may not send (`Commit`, `Body`, `BodyEnd`,
-//!     `CookieValue`, `StorageValue`, `StorageLengthValue`, `Error`, and
-//!     `Display` before the renderer is committed, [`accepted_message`]):
+//!     `CookieValue`, `StorageValue`, `StorageLengthValue`, `Error`, item
+//!     5.18's GPU and kernel messages, and `Display` or `Title` before the
+//!     renderer is committed, [`accepted_message`]):
 //!     the sender is killed, `Kill(id)` and its record is removed (a
 //!     protocol violation is not recoverable; the host kills the process).
 //!     The tab is closed;
@@ -291,9 +292,93 @@
 //!   document's content type and body (inputs of the user or of the sender's
 //!   own navigation), cookie strings and storage values (of the sender's own
 //!   domain) and constant codes.
-//! - **A spawn names a policy.** `Spawn(id, policy)` carries [`Policy`], of
-//!   which there is one value (the renderer sandbox of item 2.14); the host
-//!   maps it to the platform's policy.
+//! - **A spawn names a policy.** `Spawn(id, policy)` carries [`Policy`]:
+//!   the renderer sandbox of item 2.14, or (item 5.18) the GPU process's
+//!   sandbox of item 5.21a; the host maps it to the platform's policy.
+//!
+//! # Surfaces, viewports and input (phase-5.md item 5.18)
+//!
+//! Item 5.18 as decided under 5.0 on 2026-11-09: the new path (the GPU
+//! process, `FrameReady`, `Paint`) is added **beside** `Display` and `Show`,
+//! which are unchanged until item 5.26 deletes them. The kernel decides who
+//! may draw, for which tab, under which URL; it carries no pixels and no
+//! display lists, and sees only buffer ids and sizes.
+//!
+//! - **One GPU process per renderer, named by the renderer's id.** Every
+//!   `Spawn { id, policy: Renderer }` is preceded, in the same step, by
+//!   `Spawn { id, policy: Gpu }`: start the GPU process paired with renderer
+//!   `id`. The host creates the socket pair the renderer's lists travel on
+//!   when it starts the GPU process and gives the renderer the other end when
+//!   it starts the renderer, so the pairing is fixed at spawn: the list
+//!   channel is inherited, and the renderer's sandbox has no `recvmsg` to be
+//!   handed one later. So the GPU process is started with the tab's first
+//!   renderer, before that renderer's first commit (the item says "with the
+//!   tab's first committed renderer"; it cannot be later, for that reason),
+//!   is kept by a same-origin navigation (which keeps the renderer) and is
+//!   replaced with the renderer by a cross-origin one. The host attaches the
+//!   renderer's id to each frame read from a GPU process's socket
+//!   ([`Event::FromGpu`]), never from the frame; `Kill { id }` ends the
+//!   renderer and its GPU process together. Renderer ids are never reused,
+//!   so a frame from a replaced GPU process names no renderer and is
+//!   dropped: an old site's frame is never shown under a new URL.
+//! - **The kernel pairs; the host's mode starts.** The kernel always names
+//!   the pair. Until the window exists (items 5.20, 5.21 to 5.23), the host
+//!   runs in its text mode, starts no GPU process and passes no list socket,
+//!   and a renderer without one sends `Display`, as today (the decision's
+//!   "a renderer with a paired GPU process (`Spawn` says) sends lists; one
+//!   without sends `Display`"). No theorem assumes the GPU process exists,
+//!   behaves, or was started: without it, no `FromGpu` event arrives and no
+//!   `Paint` is given.
+//! - **A viewport per tab** ([`TabViewport`], [`State::viewports`]), set by
+//!   the host's [`Event::Resize`] and kept across navigations: the tab's
+//!   renderer gets `Viewport` and its GPU process `GpuViewport`, and a
+//!   renderer that replaces it on a cross-origin navigation gets both before
+//!   its `Commit`. A tab the host never sized has no viewport
+//!   ([`no_viewport`]: 0 by 0), so nothing but an empty frame fits it. The
+//!   host is trusted with `scale` (1 or 2), which the kernel forwards.
+//! - **A title per renderer** ([`Titled`], [`State::titles`]), set by its
+//!   `Title` (only once it is committed, as for `Display`) and forgotten when
+//!   the renderer is killed, exits or is replaced. Each entry carries the
+//!   renderer's lock beside its id and is read only by the renderer with
+//!   that id and that lock ([`title_of`]): a title is then visibly one
+//!   domain's (item 2.11's noninterference compares only the entries of the
+//!   observer's domain), with no invariant needed to show that a fresh
+//!   renderer finds no stale entry. A same-origin navigation keeps the
+//!   renderer and its title until it sends the new document's `Title`.
+//! - **`Paint`.** A `FrameReady { buffer, width, height }` from the GPU
+//!   process of renderer `id` ([`from_gpu`]) gives `Paint { tab, url, title,
+//!   buffer, width, height }`, with `tab`, `url` and `title` the renderer's
+//!   from the kernel's state, never from the message, when the renderer is
+//!   committed, `buffer` is an id of the ring ([`ring_size`]) and the frame
+//!   fits the tab's viewport. A frame before the renderer's first commit, a
+//!   buffer outside the ring, a frame that does not decode, or a renderer's
+//!   message on a GPU socket is a disallowed frame under item 2.10's rules:
+//!   the renderer and its GPU process are killed and the tab closed
+//!   ([`kill_renderer`]). **One deviation from the item's "anything else is
+//!   a disallowed frame":** a frame larger than the viewport is dropped
+//!   (no state change, no output), not a kill, because the host can shrink
+//!   the viewport (`Resize`, then `GpuViewport`) while a frame drawn at the
+//!   old size is on its way, and a resize must not close tabs. Either way
+//!   no `Paint` exceeds the viewport (`theorem_paint_fits_viewport`).
+//!   `GpuReady` and `GpuRefused` are accepted and change nothing until item
+//!   5.17c gives them meaning. Within one site, a compromised GPU process
+//!   could show a stale frame under a newer same-origin URL, which gains
+//!   nothing the site's own renderer could not draw (listed in the item).
+//! - **The ring** is [`ring_size`] = 3 buffers per GPU process (one shown,
+//!   one being drawn, one spare: triple buffering), with ids 0 to 2. The
+//!   host allocates it per GPU process (items 5.21, 5.22); the kernel checks
+//!   only the id.
+//! - **Input** ([`Event::Input`]): the host's event on a tab's content area
+//!   becomes one `ToRenderer` of `Input` to that tab's renderer, and nothing
+//!   else; the kernel does not read it. A click becomes a navigation only by
+//!   the renderer's own `Navigate`, which item 2.11 already treats as the
+//!   user's; a scroll is the renderer's to apply (it keeps the offset and
+//!   sends a new list).
+//! - **What the kernel no longer proves**, because it does not see the
+//!   bytes: that a buffer's size matches the `FrameReady`, and that its
+//!   pixels are the ones the renderer's list asked for. The compositor and
+//!   the child window bound the first (items 5.21 to 5.23); the second only
+//!   ever concerns one tab's own drawing.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -402,6 +487,52 @@ pub struct Renderer {
     pub pending: Option<Navigation>,
 }
 
+/// The size of a tab's content area (item 5.18), as the host gives it.
+pub struct Viewport {
+    /// Its width, in device pixels.
+    pub width: u64,
+    /// Its height, in device pixels.
+    pub height: u64,
+    /// Device pixels per CSS pixel (1 or 2).
+    pub scale: u64,
+}
+
+/// A tab's viewport (item 5.18).
+pub struct TabViewport {
+    /// The tab.
+    pub tab: nat,
+    /// Its viewport.
+    pub viewport: Viewport,
+}
+
+/// A renderer's title (item 5.18): the last `Title` renderer `id`, locked to
+/// `lock`, sent. See the modelling choices.
+pub struct Titled {
+    /// The renderer's id.
+    pub id: nat,
+    /// The renderer's lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// The title, as UTF-8 octets.
+    pub title: Seq<u8>,
+}
+
+/// One event of the user's on a tab's content area (item 5.18): the fields
+/// of the `Input` message (`clazel_ipc::message::spec`).
+pub struct UserInput {
+    /// 0 a click, 1 a scroll, 2 a key.
+    pub kind: u64,
+    /// The position's x, in device pixels.
+    pub x: u64,
+    /// The position's y, in device pixels.
+    pub y: u64,
+    /// Whether the scroll delta is negative.
+    pub negative: bool,
+    /// The scroll delta's magnitude, in device pixels.
+    pub delta: u64,
+    /// The key's code.
+    pub key: u64,
+}
+
 /// A navigation in flight: the fetch of the URL the tab is navigating to.
 pub struct Navigation {
     /// The URL the tab is navigating to (absolute; what `begin_navigation`
@@ -461,6 +592,10 @@ pub struct State {
     /// The current time, seconds since 1601-01-01T00:00:00Z (the unit of
     /// `clazel-cookie`).
     pub now: int,
+    /// The tabs' viewports (item 5.18), at most one per tab.
+    pub viewports: Seq<TabViewport>,
+    /// The renderers' titles (item 5.18), at most one per renderer.
+    pub titles: Seq<Titled>,
 }
 
 /// What can happen to the kernel.
@@ -507,12 +642,44 @@ pub enum Event {
         /// The time, seconds since 1601-01-01T00:00:00Z.
         time: int,
     },
+    /// A whole frame arrived on the socket of the GPU process paired with
+    /// renderer `id` (item 5.18; the host attaches `id` from the socket,
+    /// never from the frame).
+    FromGpu {
+        /// The renderer whose GPU process's socket it was.
+        id: nat,
+        /// The raw frame bytes.
+        bytes: Seq<u8>,
+    },
+    /// The host sized the content area of `tab` (item 5.18).
+    Resize {
+        /// The tab.
+        tab: nat,
+        /// The width, in device pixels.
+        width: u64,
+        /// The height, in device pixels.
+        height: u64,
+        /// Device pixels per CSS pixel (1 or 2).
+        scale: u64,
+    },
+    /// The user clicked, scrolled or typed on the content area of `tab`
+    /// (item 5.18).
+    Input {
+        /// The tab.
+        tab: nat,
+        /// What the user did.
+        input: UserInput,
+    },
 }
 
-/// The sandbox policy a renderer is spawned under. There is one.
+/// The sandbox policy a process is spawned under.
 pub enum Policy {
     /// The renderer sandbox: no file, socket or process access (item 2.14).
     Renderer,
+    /// The GPU process paired with the renderer of the same id, in its own
+    /// sandbox (items 5.17b, 5.21a): no window-system connection and no
+    /// network (item 5.18).
+    Gpu,
 }
 
 /// What the kernel does.
@@ -531,7 +698,8 @@ pub enum Output {
         /// Its sandbox.
         policy: Policy,
     },
-    /// Kill the renderer process with this id.
+    /// Kill the renderer process with this id, and the GPU process paired
+    /// with it (item 5.18).
     Kill {
         /// The renderer.
         id: nat,
@@ -577,6 +745,33 @@ pub enum Output {
         /// The links it displays.
         links: Seq<Seq<u8>>,
     },
+    /// Send a whole frame to the GPU process paired with renderer `id`
+    /// (item 5.18).
+    ToGpu {
+        /// The renderer whose GPU process it is.
+        id: nat,
+        /// The frame.
+        bytes: Seq<u8>,
+    },
+    /// Show the user buffer `buffer` of the GPU process of `tab`'s renderer
+    /// in the tab's content area, with `url` in the address bar and `title`
+    /// as the tab's title (item 5.18). Addressed to the user, not to a
+    /// process; `tab`, `url` and `title` come from the kernel's state. The
+    /// host changes the address bar and the surface together.
+    Paint {
+        /// The tab.
+        tab: nat,
+        /// Its renderer's committed URL.
+        url: Seq<u32>,
+        /// Its renderer's title.
+        title: Seq<u8>,
+        /// The buffer's id in the GPU process's ring.
+        buffer: u64,
+        /// The frame's width, in device pixels.
+        width: u64,
+        /// The frame's height, in device pixels.
+        height: u64,
+    },
 }
 
 /// A document to commit (phase-4.md item 4.12): its content type, its kind
@@ -592,7 +787,7 @@ pub struct Document {
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0 }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![] }
 }
 
 // ---------------------------------------------------------------------
@@ -993,11 +1188,10 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, d
                     // renderer in the tab, the old one killed.
                     let id = s.next_id;
                     let r = Renderer { committed: true, id, tab, url, lock, pending: None };
-                    (State { renderers: s.renderers.update(i, r), next_id: id + 1, ..s }, seq![
-                        Output::Kill { id: old.id },
-                        Output::Spawn { id, policy: Policy::Renderer },
-                        Output::ToRenderer { id, bytes: commit_frames(url, doc) },
-                    ])
+                    (
+                        State { renderers: s.renderers.update(i, r), next_id: id + 1, titles: forget_title(s.titles, old.id, old.lock), ..s },
+                        replace_outputs(old.id, id, find_viewport(s.viewports, tab, 0), commit_frames(url, doc)),
+                    )
                 },
             }
         },
@@ -1068,12 +1262,16 @@ pub open spec fn open_tab(
         Some(lock) => match script {
             Some(script) => (
                 State { renderers: s.renderers.push(Renderer { committed: true, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s },
-                seq![Output::Spawn { id, policy: Policy::Renderer }, Output::ToRenderer { id, bytes: commit_frames(url, script_document(script)) }],
+                seq![
+                    Output::Spawn { id, policy: Policy::Gpu },
+                    Output::Spawn { id, policy: Policy::Renderer },
+                    Output::ToRenderer { id, bytes: commit_frames(url, script_document(script)) },
+                ],
             ),
             None => {
                 let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };
                 let (s2, out) = begin_navigation(rules, urls, fetch, s1, id, url);
-                (s2, seq![Output::Spawn { id, policy: Policy::Renderer }] + out)
+                (s2, seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + out)
             },
         },
     }
@@ -1375,7 +1573,200 @@ pub open spec fn renderer_exited(s: State, id: nat) -> (State, Seq<Output>) {
         None => (s, seq![]),
         Some(i) => {
             let (s0, closes) = close_tab_conns(s, s.renderers[i].tab);
-            (State { renderers: s.renderers.remove(i), ..s0 }, closes)
+            (State { renderers: s.renderers.remove(i), titles: forget_title(s.titles, s.renderers[i].id, s.renderers[i].lock), ..s0 }, closes)
+        },
+    }
+}
+
+// ---------------------------------------------------------------------
+// Surfaces, viewports and input (phase-5.md item 5.18).
+// ---------------------------------------------------------------------
+
+/// The number of buffers in a GPU process's ring: ids 0 to 2 (see the
+/// modelling choices).
+pub open spec fn ring_size() -> u64 {
+    3
+}
+
+/// The viewport of a tab the host never sized: nothing but an empty frame
+/// fits it.
+pub open spec fn no_viewport() -> Viewport {
+    Viewport { width: 0, height: 0, scale: 1 }
+}
+
+/// The viewport of `tab` among `vs`, searching from `i`.
+pub open spec fn find_viewport(vs: Seq<TabViewport>, tab: nat, i: nat) -> Option<Viewport>
+    decreases vs.len() - i,
+{
+    if i >= vs.len() {
+        None
+    } else if vs[i as int].tab == tab {
+        Some(vs[i as int].viewport)
+    } else {
+        find_viewport(vs, tab, i + 1)
+    }
+}
+
+/// The viewport of `tab` in `s`, or [`no_viewport`].
+pub open spec fn viewport_of(s: State, tab: nat) -> Viewport {
+    match find_viewport(s.viewports, tab, 0) {
+        Some(v) => v,
+        None => no_viewport(),
+    }
+}
+
+/// `vs` with the viewport of `tab` set to `v`: any earlier one is removed
+/// and the new one goes last.
+pub open spec fn set_viewport(vs: Seq<TabViewport>, tab: nat, v: Viewport) -> Seq<TabViewport> {
+    vs.filter(|x: TabViewport| x.tab != tab).push(TabViewport { tab, viewport: v })
+}
+
+/// The title of renderer `r`: the title of the first entry with its id and
+/// its lock, or empty.
+pub open spec fn title_of(ts: Seq<Titled>, r: Renderer) -> Seq<u8>
+    decreases ts.len(),
+{
+    if ts.len() == 0 {
+        seq![]
+    } else if ts[0].id == r.id && ts[0].lock == r.lock {
+        ts[0].title
+    } else {
+        title_of(ts.drop_first(), r)
+    }
+}
+
+/// `ts` without the title of renderer `id` locked to `lock`.
+pub open spec fn forget_title(ts: Seq<Titled>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<Titled> {
+    ts.filter(|x: Titled| !(x.id == id && x.lock == lock))
+}
+
+/// `ts` with the title of renderer `id` locked to `lock` set to `title`:
+/// any earlier one is removed and the new one goes last.
+pub open spec fn set_title(ts: Seq<Titled>, id: nat, lock: clazel_origin::spec::Origin, title: Seq<u8>) -> Seq<Titled> {
+    forget_title(ts, id, lock).push(Titled { id, lock, title })
+}
+
+/// The frame of `Viewport` for `v`.
+pub open spec fn viewport_frame(v: Viewport) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::Viewport { width: v.width, height: v.height, scale: v.scale })
+}
+
+/// The frame of `GpuViewport` for `v`.
+pub open spec fn gpu_viewport_frame(v: Viewport) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::GpuViewport { width: v.width, height: v.height, scale: v.scale })
+}
+
+/// The frame of `Input` for `input`.
+pub open spec fn input_frame(input: UserInput) -> Seq<u8> {
+    reply_frame(
+        clazel_ipc::message::spec::Message::Input {
+            kind: input.kind,
+            x: input.x,
+            y: input.y,
+            negative: input.negative,
+            delta: input.delta,
+            key: input.key,
+        },
+    )
+}
+
+/// The outputs of a cross-origin navigation that replaces renderer `old`
+/// with renderer `id` ([`navigate_tab`]): kill the old pair, start the new
+/// GPU process and then its renderer, give both the tab's viewport if the
+/// host has sized the tab, and commit.
+pub open spec fn replace_outputs(old: nat, id: nat, viewport: Option<Viewport>, commit: Seq<u8>) -> Seq<Output> {
+    match viewport {
+        None => seq![
+            Output::Kill { id: old },
+            Output::Spawn { id, policy: Policy::Gpu },
+            Output::Spawn { id, policy: Policy::Renderer },
+            Output::ToRenderer { id, bytes: commit },
+        ],
+        Some(v) => seq![
+            Output::Kill { id: old },
+            Output::Spawn { id, policy: Policy::Gpu },
+            Output::Spawn { id, policy: Policy::Renderer },
+            Output::ToRenderer { id, bytes: viewport_frame(v) },
+            Output::ToGpu { id, bytes: gpu_viewport_frame(v) },
+            Output::ToRenderer { id, bytes: commit },
+        ],
+    }
+}
+
+/// The host sized the content area of `tab` (item 5.18): the tab's viewport
+/// is `v`, and its renderer and GPU process are told. For a tab with no
+/// renderer the viewport is only recorded.
+pub open spec fn resize(s: State, tab: nat, v: Viewport) -> (State, Seq<Output>) {
+    let s1 = State { viewports: set_viewport(s.viewports, tab, v), ..s };
+    match find_by_tab(s.renderers, tab, 0) {
+        None => (s1, seq![]),
+        Some(i) => (
+            s1,
+            seq![
+                Output::ToRenderer { id: s.renderers[i].id, bytes: viewport_frame(v) },
+                Output::ToGpu { id: s.renderers[i].id, bytes: gpu_viewport_frame(v) },
+            ],
+        ),
+    }
+}
+
+/// The user's input on the content area of `tab` (item 5.18): one `Input`
+/// to the tab's renderer, and no state change.
+pub open spec fn user_input(s: State, tab: nat, input: UserInput) -> (State, Seq<Output>) {
+    match find_by_tab(s.renderers, tab, 0) {
+        None => (s, seq![]),
+        Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]),
+    }
+}
+
+/// A protocol violation by renderer `id`, the renderer `s.renderers[i]`, or
+/// by its GPU process (item 2.10's rule; item 5.18 for the GPU process):
+/// both processes are killed, the renderer's record and title are removed,
+/// and its tab is closed with its connections.
+pub open spec fn kill_renderer(s: State, i: int, id: nat) -> (State, Seq<Output>) {
+    let (s0, closes) = close_tab_conns(s, s.renderers[i].tab);
+    (
+        State { renderers: s.renderers.remove(i), titles: forget_title(s.titles, s.renderers[i].id, s.renderers[i].lock), ..s0 },
+        seq![Output::Kill { id }] + closes,
+    )
+}
+
+/// The message in a frame from a GPU process: `None` if the frame does not
+/// decode or holds a message a GPU process may not send.
+pub open spec fn decode_gpu_frame(bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
+    match clazel_ipc::message::spec::decode_framed(bytes) {
+        Some(m) => if clazel_ipc::message::spec::is_from_gpu(m) { Some(m) } else { None },
+        None => None,
+    }
+}
+
+/// A frame of `width` by `height` fits viewport `v`.
+pub open spec fn fits(v: Viewport, width: u64, height: u64) -> bool {
+    width <= v.width && height <= v.height
+}
+
+/// A whole frame from the GPU process paired with renderer `id` (item 5.18;
+/// see the modelling choices): a `Paint` of the renderer's tab, under its
+/// committed URL and title; nothing; or the pair killed.
+pub open spec fn from_gpu(s: State, id: nat, bytes: Seq<u8>) -> (State, Seq<Output>) {
+    match find_by_id(s.renderers, id, 0) {
+        // A replaced (or never started) GPU process: dropped.
+        None => (s, seq![]),
+        Some(i) => {
+            let r = s.renderers[i];
+            match decode_gpu_frame(bytes) {
+                None => kill_renderer(s, i, id),
+                Some(clazel_ipc::message::spec::Message::FrameReady { buffer, width, height }) => if !r.committed || buffer >= ring_size() {
+                    kill_renderer(s, i, id)
+                } else if fits(viewport_of(s, r.tab), width, height) {
+                    (s, seq![Output::Paint { tab: r.tab, url: r.url, title: title_of(s.titles, r), buffer, width, height }])
+                } else {
+                    // Drawn for a larger viewport than the tab now has.
+                    (s, seq![])
+                },
+                // `GpuReady`, `GpuRefused`: item 5.17c's.
+                Some(_) => (s, seq![]),
+            }
         },
     }
 }
@@ -1390,10 +1781,11 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 }
 
 /// The message in a frame renderer `r` sent, if `r` may send it: a message
-/// a renderer may send, and `Display` only once `r` is committed.
+/// a renderer may send, and `Display` or `Title` (item 5.18) only once `r`
+/// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if m is Display && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title) && !r.committed { None } else { Some(m) },
         None => None,
     }
 }
@@ -1461,6 +1853,8 @@ pub open spec fn handle_message(
         // `Display` (phase-4.md item 4.12): shown for the sender's tab, under
         // its committed URL; neither comes from the message.
         clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
+        // Item 5.18: the renderer's title, kept for its `Paint`s.
+        clazel_ipc::message::spec::Message::Title { title } => (State { titles: set_title(s.titles, r.id, r.lock, title), ..s }, seq![]),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),
@@ -1482,10 +1876,7 @@ pub open spec fn from_renderer(
         Some(i) => match accepted_message(s.renderers[i], bytes) {
             // A frame that is not a message this renderer may send: the
             // sender is killed.
-            None => {
-                let (s0, closes) = close_tab_conns(s, s.renderers[i].tab);
-                (State { renderers: s.renderers.remove(i), ..s0 }, seq![Output::Kill { id }] + closes)
-            },
+            None => kill_renderer(s, i, id),
             Some(m) => handle_message(rules, urls, fetch, s, s.renderers[i], m),
         },
     }
@@ -1500,6 +1891,9 @@ pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: F
         Event::Net { conn, input } => net(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => renderer_exited(s, id),
         Event::Tick { time } => tick(s, time),
+        Event::FromGpu { id, bytes } => from_gpu(s, id, bytes),
+        Event::Resize { tab, width, height, scale } => resize(s, tab, Viewport { width, height, scale }),
+        Event::Input { tab, input } => user_input(s, tab, input),
     }
 }
 

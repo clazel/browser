@@ -773,11 +773,11 @@ pub fn navigate_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(
                             lemma_ok_set_idle::<F>(old_renderers, i as int, rec);
                         }
                         s.next_id = id.saturating_add(1);
-                        let outs = three_outputs(
-                            OutputRecord::Kill { id: old.id },
-                            OutputRecord::Spawn { id },
-                            OutputRecord::ToRenderer { id, bytes: frame },
-                        );
+                        // Item 5.18: the old pair's title goes with it, and
+                        // the new pair gets the tab's viewport.
+                        let titles = super::surfaces::forget_title_exec(s.titles.as_slice(), old.id, &old.lock);
+                        s.titles = titles;
+                        let outs = super::surfaces::replace_outputs_exec(old.id, id, s.viewports.as_slice(), tab, frame);
                         (s, outs)
                     }
                 },
@@ -841,11 +841,11 @@ pub fn open_tab_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: Sta
                         assert(empty@ =~= Seq::<u8>::empty());
                         assert(script_document(script@) == Document { content_type: empty@, kind: 1, body: script@ });
                     }
-                    let outs = two_outputs(OutputRecord::Spawn { id }, OutputRecord::ToRenderer { id, bytes: frame });
+                    let outs = three_outputs(OutputRecord::SpawnGpu { id }, OutputRecord::Spawn { id }, OutputRecord::ToRenderer { id, bytes: frame });
                     (s, outs)
                 },
                 None => {
-                    let spawn = one_output(OutputRecord::Spawn { id });
+                    let spawn = two_outputs(OutputRecord::SpawnGpu { id }, OutputRecord::Spawn { id });
                     let (s2, out) = begin_navigation_exec(urls, fetch, s, id, url);
                     (s2, append_outputs(spawn, out))
                 },
@@ -1302,6 +1302,8 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                     let conns = s.conns;
                     let next_conn = s.next_conn;
                     let now = s.now;
+                    let viewports = s.viewports;
+                    let titles = s.titles;
                     let mut renderers = renderers;
                     let ghost old_renderers = renderers@;
                     let rec = renderers.remove(i);
@@ -1316,7 +1318,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                             proof {
                                 assert(false);
                             }
-                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now }, no_outputs())
+                            (StateRecord { renderers, jar, storage, next_id, conns, next_conn, now, viewports, titles }, no_outputs())
                         },
                         Some(nav) => {
                             let nurl = nav.url;
@@ -1361,7 +1363,7 @@ pub fn net_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRec
                                 lemma_ok_remove::<F>(old_renderers, i as int);
                                 lemma_ok_insert::<F>(old_renderers.remove(i as int), i as int, rec2);
                             }
-                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now };
+                            let s1 = StateRecord { renderers, jar: jar1, storage, next_id, conns: conns1, next_conn, now, viewports, titles };
                             carry_out_exec::<U, F>(urls, s1, ctab, &partition, Some(conn), actions)
                         },
                     }
@@ -1409,14 +1411,16 @@ pub fn renderer_exited_exec<F: FetchFnsExec>(s: StateRecord, id: u64) -> (out: (
     match find_by_id_exec(s.renderers.as_slice(), id) {
         None => (s, no_outputs()),
         Some(i) => {
-            let tab = match s.renderers.get(i) {
-                Some(r) => r.tab,
-                None => 0,
+            let (tab, rid, lock) = match s.renderers.get(i) {
+                Some(r) => (r.tab, r.id, clone_origin(&r.lock)),
+                None => (0, 0, ParsedOrigin::Opaque(0)),
             };
+            let titles = super::surfaces::forget_title_exec(s.titles.as_slice(), rid, &lock);
             let (s0, closes) = close_tab_conns_exec(s, tab);
             let mut s0 = s0;
             let ghost old_renderers = s0.renderers@;
             let _removed = s0.renderers.remove(i);
+            s0.titles = titles;
             proof {
                 lemma_renderers_view_remove(old_renderers, i as int);
                 lemma_ok_remove::<F>(old_renderers, i as int);
@@ -1542,6 +1546,12 @@ pub fn handle_message_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, 
             let outs = one_output(OutputRecord::Show { tab: r.tab, url: copy(r.url.as_slice()), title, text, links });
             (s, outs)
         },
+        Msg::Title { title } => {
+            let mut s = s;
+            let titles = super::surfaces::set_title_exec(s.titles.as_slice(), r.id, &r.lock, title);
+            s.titles = titles;
+            (s, no_outputs())
+        },
         _ => (s, no_outputs()),
     }
 }
@@ -1553,23 +1563,22 @@ pub fn kill_renderer_exec<F: FetchFnsExec>(s: StateRecord, i: usize, id: u64) ->
         i < s.renderers.len(),
         renderers_ok::<F>(s.renderers@),
     ensures
-        result_view(out) == ({
-            let (s0, closes) = close_tab_conns(s@, s@.renderers[i as int].tab);
-            (State { renderers: s@.renderers.remove(i as int), ..s0 }, seq![Output::Kill { id: id as nat }] + closes)
-        }),
+        result_view(out) == kill_renderer(s@, i as int, id as nat),
         keeps_storage_jar_now(s, out.0),
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
         renderers_ok::<F>(out.0.renderers@),
 {
-    let tab = match s.renderers.get(i) {
-        Some(r) => r.tab,
-        None => 0,
+    let (tab, rid, lock) = match s.renderers.get(i) {
+        Some(r) => (r.tab, r.id, clone_origin(&r.lock)),
+        None => (0, 0, ParsedOrigin::Opaque(0)),
     };
+    let titles = super::surfaces::forget_title_exec(s.titles.as_slice(), rid, &lock);
     let (s0, closes) = close_tab_conns_exec(s, tab);
     let mut s0 = s0;
     let ghost old_renderers = s0.renderers@;
     let _removed = s0.renderers.remove(i);
+    s0.titles = titles;
     proof {
         lemma_renderers_view_remove(old_renderers, i as int);
         lemma_ok_remove::<F>(old_renderers, i as int);
@@ -1602,7 +1611,7 @@ pub fn from_renderer_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s
                         Some(r) => r.committed,
                         None => false,
                     };
-                    let display = matches!(m, Msg::Display { .. });
+                    let display = matches!(m, Msg::Display { .. } | Msg::Title { .. });
                     if clazel_ipc::message::codec::is_from_renderer(&m) && (committed || !display) {
                         handle_message_exec(urls, fetch, s, i, m)
                     } else {
@@ -1640,6 +1649,11 @@ pub fn step_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: StateRe
         EventRecord::Net { conn, input } => net_exec(urls, fetch, s, *conn, input),
         EventRecord::RendererExited { id } => renderer_exited_exec::<F>(s, *id),
         EventRecord::Tick { time } => tick_exec(s, *time),
+        EventRecord::FromGpu { id, bytes } => super::surfaces::from_gpu_exec::<F>(s, *id, bytes.as_slice()),
+        EventRecord::Resize { tab, width, height, scale } => super::surfaces::resize_exec(s, *tab, *width, *height, *scale),
+        EventRecord::Input { tab, kind, x, y, negative, delta, key } => {
+            super::surfaces::user_input_exec(s, *tab, (*kind, *x, *y, *negative, *delta, *key))
+        },
     };
     proof {
         clazel_cookie::storage::exec::lemma_jar_view_in_range(out.0.jar@);

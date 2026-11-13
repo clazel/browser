@@ -73,6 +73,9 @@ pub open spec fn message_texts_ok(m: clazel_ipc::message::spec::Message) -> bool
             None => true,
             Some(v) => text_ok(v),
         },
+        clazel_ipc::message::spec::Message::Title { title } => text_ok(title),
+        clazel_ipc::message::spec::Message::FrameReady { .. } | clazel_ipc::message::spec::Message::GpuReady { .. } | clazel_ipc::message::spec::Message::GpuRefused => true,
+        clazel_ipc::message::spec::Message::Viewport { .. } | clazel_ipc::message::spec::Message::Input { .. } | clazel_ipc::message::spec::Message::GpuViewport { .. } => true,
     }
 }
 
@@ -172,7 +175,63 @@ pub proof fn lemma_message_ok(m: clazel_ipc::message::spec::Message)
                 lemma_two(clazel_ipc::cbor::spec::Token::Bool(true), clazel_ipc::cbor::spec::Token::Text(v));
             },
         },
+        clazel_ipc::message::spec::Message::Title { title } => {
+            lemma_msg(m, 2, 11, seq![clazel_ipc::cbor::spec::Token::Text(title)]);
+            lemma_one(clazel_ipc::cbor::spec::Token::Text(title));
+        },
+        clazel_ipc::message::spec::Message::FrameReady { buffer, width, height } => {
+            lemma_msg(m, 4, 15, seq![clazel_ipc::cbor::spec::Token::Uint(buffer), clazel_ipc::cbor::spec::Token::Uint(width), clazel_ipc::cbor::spec::Token::Uint(height)]);
+            lemma_three(clazel_ipc::cbor::spec::Token::Uint(buffer), clazel_ipc::cbor::spec::Token::Uint(width), clazel_ipc::cbor::spec::Token::Uint(height));
+        },
+        clazel_ipc::message::spec::Message::GpuReady { software } => {
+            lemma_msg(m, 2, 18, seq![clazel_ipc::cbor::spec::Token::Bool(software)]);
+            lemma_one(clazel_ipc::cbor::spec::Token::Bool(software));
+        },
+        clazel_ipc::message::spec::Message::GpuRefused => {
+            lemma_msg(m, 1, 19, Seq::empty());
+            lemma_items_empty(0);
+        },
+        clazel_ipc::message::spec::Message::Viewport { width, height, scale } => {
+            lemma_msg(m, 4, 108, seq![clazel_ipc::cbor::spec::Token::Uint(width), clazel_ipc::cbor::spec::Token::Uint(height), clazel_ipc::cbor::spec::Token::Uint(scale)]);
+            lemma_three(clazel_ipc::cbor::spec::Token::Uint(width), clazel_ipc::cbor::spec::Token::Uint(height), clazel_ipc::cbor::spec::Token::Uint(scale));
+        },
+        clazel_ipc::message::spec::Message::GpuViewport { width, height, scale } => {
+            lemma_msg(m, 4, 114, seq![clazel_ipc::cbor::spec::Token::Uint(width), clazel_ipc::cbor::spec::Token::Uint(height), clazel_ipc::cbor::spec::Token::Uint(scale)]);
+            lemma_three(clazel_ipc::cbor::spec::Token::Uint(width), clazel_ipc::cbor::spec::Token::Uint(height), clazel_ipc::cbor::spec::Token::Uint(scale));
+        },
+        clazel_ipc::message::spec::Message::Input { kind, x, y, negative, delta, key } => {
+            lemma_msg(
+                m,
+                7,
+                109,
+                seq![clazel_ipc::cbor::spec::Token::Uint(kind), clazel_ipc::cbor::spec::Token::Uint(x), clazel_ipc::cbor::spec::Token::Uint(y), clazel_ipc::cbor::spec::Token::Bool(negative), clazel_ipc::cbor::spec::Token::Uint(delta), clazel_ipc::cbor::spec::Token::Uint(key)],
+            );
+            lemma_six(clazel_ipc::cbor::spec::Token::Uint(kind), clazel_ipc::cbor::spec::Token::Uint(x), clazel_ipc::cbor::spec::Token::Uint(y), clazel_ipc::cbor::spec::Token::Bool(negative), clazel_ipc::cbor::spec::Token::Uint(delta), clazel_ipc::cbor::spec::Token::Uint(key));
+        },
     }
+}
+
+/// Six non-array tokens owed six times (item 5.18's `Input`).
+proof fn lemma_six(a: clazel_ipc::cbor::spec::Token, b: clazel_ipc::cbor::spec::Token, c: clazel_ipc::cbor::spec::Token, d: clazel_ipc::cbor::spec::Token, e: clazel_ipc::cbor::spec::Token, f: clazel_ipc::cbor::spec::Token)
+    requires
+        !(a is Array),
+        !(b is Array),
+        !(c is Array),
+        !(d is Array),
+        !(e is Array),
+        !(f is Array),
+    ensures
+        clazel_ipc::cbor::spec::is_items(seq![a, b, c, d, e, f], 6) == (clazel_ipc::cbor::spec::token_ok(a) && clazel_ipc::cbor::spec::token_ok(b)
+            && clazel_ipc::cbor::spec::token_ok(c) && clazel_ipc::cbor::spec::token_ok(d) && clazel_ipc::cbor::spec::token_ok(e)
+            && clazel_ipc::cbor::spec::token_ok(f)),
+{
+    lemma_items_step(seq![a, b, c, d, e, f], 6);
+    assert(seq![a, b, c, d, e, f].drop_first() =~= seq![b, c, d, e, f]);
+    lemma_items_step(seq![b, c, d, e, f], 5);
+    assert(seq![b, c, d, e, f].drop_first() =~= seq![c, d, e, f]);
+    lemma_items_step(seq![c, d, e, f], 4);
+    assert(seq![c, d, e, f].drop_first() =~= seq![d, e, f]);
+    lemma_three(d, e, f);
 }
 
 /// One non-array token owed once.
@@ -301,6 +360,9 @@ pub fn message_ok_exec(m: &Msg) -> (r: bool)
             None => true,
             Some(v) => text_ok_exec(v.as_slice()),
         },
+        Msg::Title { title } => text_ok_exec(title.as_slice()),
+        Msg::FrameReady { .. } | Msg::GpuReady { .. } | Msg::GpuRefused => true,
+        Msg::Viewport { .. } | Msg::Input { .. } | Msg::GpuViewport { .. } => true,
     }
 }
 

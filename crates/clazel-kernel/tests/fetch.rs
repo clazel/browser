@@ -199,9 +199,11 @@ fn a_redirect_to_another_origin_replaces_the_renderer_with_the_final_url() {
         [
             Out::Close(1),
             Out::Kill(old),
+            Out::SpawnGpu(gpu),
             Out::Spawn(new),
             Out::Commit(to, support::Doc { url, body, kind: 0, .. }),
         ] if *old == id
+            && gpu == new
             && new == to
             && *new != id
             && url.as_slice() == b"http://other.test/landed"
@@ -334,7 +336,10 @@ fn open_fetching(k: &mut Kernel, url: &str) -> Vec<Out> {
 fn a_tab_opened_without_a_script_fetches_and_commits_the_document() {
     let mut k = Kernel::new();
     let out = open_fetching(&mut k, "http://example.test/page");
-    assert_eq!(out, vec![Out::Spawn(0), connect(0, "example.test")]);
+    assert_eq!(
+        out,
+        vec![Out::SpawnGpu(0), Out::Spawn(0), connect(0, "example.test")]
+    );
     k.net(0, InputBuf::Connected);
     let body = b"<!DOCTYPE html><title>T</title><p>Hi".to_vec();
     let out = k.net(

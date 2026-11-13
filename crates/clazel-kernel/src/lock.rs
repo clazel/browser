@@ -323,6 +323,10 @@ pub proof fn lemma_step_renderers_shape(rules: Seq<clazel_psl::spec::Rule>, urls
         Event::RendererExited { id } => {
             crate::invariant::lemma_find_by_id(s.renderers, id, 0);
         },
+        Event::FromGpu { id, bytes } => {
+            crate::invariant::lemma_find_by_id(s.renderers, id, 0);
+            crate::surface_rel::lemma_from_gpu_shape(s, id, bytes);
+        },
         Event::FromRenderer { id, bytes } => {
             crate::invariant::lemma_find_by_id(s.renderers, id, 0);
             if let Some(i) = find_by_id(s.renderers, id, 0) {

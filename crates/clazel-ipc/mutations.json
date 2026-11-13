@@ -731,8 +731,8 @@
     {
       "id": "dir-navigate-not-renderer",
       "file": "src/message/spec.rs",
-      "find": "| Message::StorageLength\n        | Message::Navigate { .. }\n        | Message::Display { .. } => true,",
-      "replace": "| Message::StorageLength\n        | Message::Display { .. } => true,",
+      "find": "| Message::StorageLength\n        | Message::Navigate { .. }\n        | Message::Display { .. }\n        | Message::Title { .. } => true,",
+      "replace": "| Message::StorageLength\n        | Message::Display { .. }\n        | Message::Title { .. } => true,",
       "expect": "killed",
       "reason": "Navigate is not counted as a renderer message: the kernel rejects it, so lemma_example_renderer_navigate is false.",
       "certificate": {
@@ -744,8 +744,8 @@
     {
       "id": "dir-error-from-renderer",
       "file": "src/message/spec.rs",
-      "find": "        _ => false,\n    }\n}\n\n/// The kind of each field",
-      "replace": "        _ => true,\n    }\n}\n\n/// The kind of each field",
+      "find": "        | Message::Title { .. } => true,\n        _ => false,",
+      "replace": "        | Message::Title { .. } => true,\n        _ => true,",
       "expect": "killed",
       "reason": "Every message counts as renderer-to-kernel: the kernel accepts Error from a renderer, so lemma_reject_wrong_direction is false.",
       "certificate": {
@@ -978,8 +978,8 @@
     {
       "id": "msg-display-direction",
       "file": "src/message/spec.rs",
-      "find": "        | Message::Navigate { .. }\n        | Message::Display { .. } => true,",
-      "replace": "        | Message::Navigate { .. } => true,",
+      "find": "        | Message::Navigate { .. }\n        | Message::Display { .. }\n        | Message::Title { .. } => true,",
+      "replace": "        | Message::Navigate { .. }\n        | Message::Title { .. } => true,",
       "expect": "killed",
       "reason": "Display is not counted as a renderer message: the kernel rejects it, so lemma_example_display is false.",
       "certificate": {
@@ -991,8 +991,8 @@
     {
       "id": "msg-body-end-direction",
       "file": "src/message/spec.rs",
-      "find": "        | Message::Display { .. } => true,",
-      "replace": "        | Message::Display { .. }\n        | Message::BodyEnd => true,",
+      "find": "        | Message::Title { .. } => true,\n        _ => false,",
+      "replace": "        | Message::Title { .. }\n        | Message::BodyEnd => true,\n        _ => false,",
       "expect": "killed",
       "reason": "A renderer may send BodyEnd: the kernel accepts a kernel-to-renderer message, so lemma_reject_document_from_renderer is false.",
       "certificate": {
@@ -1038,6 +1038,162 @@
         "file": "src/message/codec.rs",
         "lemma": "lemma_max_body_chunk()",
         "witness": "max_body_chunk() != 1048568nat"
+      }
+    },
+    {
+      "id": "msg-title-tag",
+      "file": "src/message/spec.rs",
+      "find": "Message::Title { title } => seq![Token::Array(2), Token::Uint(11), Token::Text(title)],",
+      "replace": "Message::Title { title } => seq![Token::Array(2), Token::Uint(12), Token::Text(title)],",
+      "expect": "killed",
+      "reason": "Title is written with tag 12, which nothing reads: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Title { title: seq![0x74u8] })",
+        "witness": "message_ok(Message::Title { title: seq![0x74u8] }) && decode_message(encode_message(Message::Title { title: seq![0x74u8] })) != Some(Message::Title { title: seq![0x74u8] })"
+      }
+    },
+    {
+      "id": "msg-frame-ready-field-order",
+      "file": "src/message/spec.rs",
+      "find": "Token::Uint(15), Token::Uint(buffer), Token::Uint(width), Token::Uint(height)]",
+      "replace": "Token::Uint(15), Token::Uint(buffer), Token::Uint(height), Token::Uint(width)]",
+      "expect": "killed",
+      "reason": "FrameReady writes its height before its width: a 1 by 2 frame reads back as 2 by 1, so lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::FrameReady { buffer: 0, width: 1, height: 2 })",
+        "witness": "message_ok(Message::FrameReady { buffer: 0, width: 1, height: 2 }) && decode_message(encode_message(Message::FrameReady { buffer: 0, width: 1, height: 2 })) != Some(Message::FrameReady { buffer: 0, width: 1, height: 2 })"
+      }
+    },
+    {
+      "id": "msg-input-sign",
+      "file": "src/message/spec.rs",
+      "find": "            Token::Bool(negative),\n",
+      "replace": "            Token::Bool(false),\n",
+      "expect": "killed",
+      "reason": "Input drops the scroll delta's sign: a scroll up reads back as a scroll down, so lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })",
+        "witness": "message_ok(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }) && decode_message(encode_message(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })) != Some(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })"
+      }
+    },
+    {
+      "id": "msg-viewport-gpu-tag",
+      "file": "src/message/spec.rs",
+      "find": "Message::Viewport { width, height, scale } => seq![Token::Array(4), Token::Uint(108),",
+      "replace": "Message::Viewport { width, height, scale } => seq![Token::Array(4), Token::Uint(114),",
+      "expect": "killed",
+      "reason": "A renderer's Viewport is written with GpuViewport's tag: it reads back as the other message, so lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::Viewport { width: 1, height: 2, scale: 1 })",
+        "witness": "message_ok(Message::Viewport { width: 1, height: 2, scale: 1 }) && decode_message(encode_message(Message::Viewport { width: 1, height: 2, scale: 1 })) != Some(Message::Viewport { width: 1, height: 2, scale: 1 })"
+      }
+    },
+    {
+      "id": "msg-gpu-refused-parse-tag",
+      "file": "src/message/spec.rs",
+      "find": "} else if tag == 19 {",
+      "replace": "} else if tag == 20 {",
+      "expect": "killed",
+      "reason": "The parser reads GpuRefused under tag 20: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::GpuRefused)",
+        "witness": "message_ok(Message::GpuRefused) && decode_message(encode_message(Message::GpuRefused)) != Some(Message::GpuRefused)"
+      }
+    },
+    {
+      "id": "dir-frame-ready-from-renderer",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::Display { .. }\n        | Message::Title { .. } => true,",
+      "replace": "        | Message::Display { .. }\n        | Message::Title { .. }\n        | Message::FrameReady { .. } => true,",
+      "expect": "killed",
+      "reason": "A renderer may send FrameReady, so a renderer could name a buffer to show: lemma_example_frame_ready (the renderer decoder refuses it) is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_frame_ready()",
+        "witness": "decode_renderer_message(seq![0x84u8, 0x0F, 0x01, 0x19, 0x02, 0x80, 0x19, 0x01, 0xE0]) is Some"
+      }
+    },
+    {
+      "id": "dir-title-not-renderer",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::Display { .. }\n        | Message::Title { .. } => true,",
+      "replace": "        | Message::Display { .. } => true,",
+      "expect": "killed",
+      "reason": "Title is not counted as a renderer message: the kernel would refuse it, so lemma_example_title is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_title()",
+        "witness": "decode_renderer_message(seq![0x82u8, 0x0B, 0x61, 0x74]) is None"
+      }
+    },
+    {
+      "id": "dir-gpu-filter-removed",
+      "file": "src/message/spec.rs",
+      "find": "Some(m) => if is_from_gpu(m) { Some(m) } else { None },",
+      "replace": "Some(m) => Some(m),",
+      "expect": "killed",
+      "reason": "The kernel's decoder of a GPU process's frames does not check the direction, so a GPU process could send Title or Navigate: lemma_example_title (the GPU decoder refuses Title) is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_title()",
+        "witness": "decode_gpu_message(seq![0x82u8, 0x0B, 0x61, 0x74]) is Some"
+      }
+    },
+    {
+      "id": "dir-gpu-everything",
+      "file": "src/message/spec.rs",
+      "find": "        Message::FrameReady { .. } | Message::GpuReady { .. } | Message::GpuRefused => true,\n        _ => false,",
+      "replace": "        Message::FrameReady { .. } | Message::GpuReady { .. } | Message::GpuRefused => true,\n        _ => true,",
+      "expect": "killed",
+      "reason": "Every message counts as GPU-to-kernel: a GPU process could send a renderer's message, so lemma_gpu_decode_direction is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_gpu_decode_direction(seq![0x82u8, 0x0B, 0x61, 0x74])",
+        "witness": "decode_gpu_message(seq![0x82u8, 0x0B, 0x61, 0x74]) == Some(Message::Title { title: seq![0x74u8] })"
+      }
+    },
+    {
+      "id": "identity-frame-ready-tab",
+      "file": "src/message/spec.rs",
+      "find": "Message::FrameReady { .. } => seq![Field::Buffer, Field::Width, Field::Height],",
+      "replace": "Message::FrameReady { .. } => seq![Field::Buffer, Field::Width, Field::Height, Field::TabId],",
+      "expect": "killed",
+      "reason": "FrameReady names a tab: a GPU process would claim where its frame goes, so lemma_no_identity_fields (rule 1) is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_no_identity_fields(Message::FrameReady { buffer: 0, width: 1, height: 2 })",
+        "witness": "message_fields(Message::FrameReady { buffer: 0, width: 1, height: 2 }).len() == 4 && is_identity(message_fields(Message::FrameReady { buffer: 0, width: 1, height: 2 })[3])"
+      }
+    },
+    {
+      "id": "identity-title-sender-url",
+      "file": "src/message/spec.rs",
+      "find": "Message::Title { .. } => seq![Field::Title],",
+      "replace": "Message::Title { .. } => seq![Field::Title, Field::SenderUrl],",
+      "expect": "killed",
+      "reason": "Title names the sender's URL, which the kernel must take from its own state: lemma_no_identity_fields (rule 1) is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_no_identity_fields(Message::Title { title: seq![0x74u8] })",
+        "witness": "message_fields(Message::Title { title: seq![0x74u8] }).len() == 2 && is_identity(message_fields(Message::Title { title: seq![0x74u8] })[1])"
+      }
+    },
+    {
+      "id": "fields-input-arity",
+      "file": "src/message/spec.rs",
+      "find": "Message::Input { .. } => seq![Field::InputKind, Field::X, Field::Y, Field::Negative, Field::Delta, Field::KeyCode],",
+      "replace": "Message::Input { .. } => seq![Field::InputKind, Field::X, Field::Y, Field::Negative, Field::Delta],",
+      "expect": "killed",
+      "reason": "The field table leaves out Input's key: lemma_fields_match_tokens is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_fields_match_tokens(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })",
+        "witness": "message_tokens(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }).len() != 2 + message_fields(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }).len() + nested_len(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })"
       }
     }
   ]

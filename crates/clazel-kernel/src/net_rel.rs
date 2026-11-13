@@ -70,7 +70,7 @@ pub proof fn lemma_tabs_remove(urls: UrlFns, rs: Seq<Renderer>, next_id: nat, i:
 
 /// A state with the renderer table `rs` (for lemmas stated on tables).
 pub open spec fn ghost_state_of(rs: Seq<Renderer>, next_id: nat) -> State {
-    State { renderers: rs, jar: seq![], storage: Map::empty(), next_id, conns: seq![], next_conn: 0, now: 0 }
+    State { renderers: rs, jar: seq![], storage: Map::empty(), next_id, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![] }
 }
 
 // ---------------------------------------------------------------------
@@ -110,6 +110,10 @@ pub proof fn lemma_rel_conns_only(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         s2b.next_id == s2.next_id,
         s2b.now == s2.now,
         crate::noninterference::rel_conn(s1b, s2b),
+        s1b.viewports == s1.viewports,
+        s1b.titles == s1.titles,
+        s2b.viewports == s2.viewports,
+        s2b.titles == s2.titles,
     ensures
         crate::noninterference::rel(rules, urls, d, s1b, s2b),
 {
@@ -255,6 +259,23 @@ pub proof fn lemma_rel_conn_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: U
             assert(false);
         }
     }
+}
+
+/// [`crate::noninterference::rel_conn`] reads only the renderers and the
+/// connections: states that agree with related ones there are related
+/// (item 5.18: a kill also forgets a title, which it does not read).
+pub proof fn lemma_rel_conn_ext(a: State, b: State, a2: State, b2: State)
+    requires
+        crate::noninterference::rel_conn(a, b),
+        a2.renderers == a.renderers,
+        a2.conns == a.conns,
+        a2.next_conn == a.next_conn,
+        b2.renderers == b.renderers,
+        b2.conns == b.conns,
+        b2.next_conn == b.next_conn,
+    ensures
+        crate::noninterference::rel_conn(a2, b2),
+{
 }
 
 /// A renderer's exit, in both runs (the same renderer), keeps the connections related.
