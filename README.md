@@ -124,8 +124,9 @@ target/release/clazel browse --text http://info.cern.ch/  # text-mode browser: t
 
 On macOS on Apple silicon, `clazel browse URL` opens a window instead (phase-5.md
 item 5.23): an address bar drawn by the host and the page drawn by a sandboxed GPU
-process, one per tab (`cargo build --bin clazel-gpu` too). Until the renderer draws
-(item 5.20) the page area stays empty. `clazel browse --headless OUT URL` writes the
+process, one per tab (`cargo build --bin clazel-gpu` too), laid out by the renderer
+(item 5.20) in the system's TrueType fonts; linked style sheets wait for item 5.19.
+`clazel browse --headless OUT URL` writes the
 page as a PNG (or a PPM, for `OUT` ending in `.ppm`). Elsewhere, `browse URL` is the
 text mode.
 
