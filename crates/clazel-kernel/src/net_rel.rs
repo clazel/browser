@@ -118,6 +118,8 @@ pub proof fn lemma_rel_conns_only(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
         s1b.subcounts == s1.subcounts,
         s2b.subfetches == s2.subfetches,
         s2b.subcounts == s2.subcounts,
+        s1b.gpu == s1.gpu,
+        s2b.gpu == s2.gpu,
     ensures
         crate::noninterference::rel(rules, urls, d, s1b, s2b),
 {

@@ -52,6 +52,7 @@ pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rul
             Output::Show { tab: x, .. } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == x,
             Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
             Output::Paint { .. } => false,
+            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
             // Item 5.19: a `FetchStyle`'s sub-fetch is the sender's.
             Output::SubConnect { renderer: x, .. } => x == id,
             Output::SubSend { renderer: x, .. } => x == id,
@@ -240,6 +241,7 @@ pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, u
                 Output::Show { .. } => false,
                 Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                 Output::Paint { .. } => false,
+                Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                 Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
             },
     }

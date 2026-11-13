@@ -2301,35 +2301,37 @@ pub open spec fn gpu_exited(rules: Seq<clazel_psl::spec::Rule>, s: State, id: na
     match find_by_id(s.renderers, id, 0) {
         // A replaced (or never started) GPU process: ignored.
         None => (s, seq![]),
-        Some(i) => {
-            let r = s.renderers[i];
-            let g = gpu_of(s, r);
-            if !g.running {
-                if g.stopped {
-                    (s, seq![])
-                } else if g.software {
-                    gpu_stop(s, r, g)
-                } else {
-                    let (s1, all) = demote_all(s);
-                    let (s2, out) = gpu_restart(s1, r, g, true, seq![]);
-                    (s2, all + out)
-                }
-            } else if g.software {
-                if third_exit(g, s.now) {
-                    gpu_stop(s, r, g)
-                } else {
-                    gpu_restart(s, r, g, true, noted_exits(g, s.now))
-                }
-            } else {
-                let (s1, all) = gpu_site_exit(s, crate::domain::domain_of_renderer(rules, r));
-                let (s2, out) = if third_exit(g, s.now) || s1.gpu.demoted {
-                    gpu_restart(s1, r, g, true, seq![])
-                } else {
-                    gpu_restart(s1, r, g, false, noted_exits(g, s.now))
-                };
-                (s2, all + out)
-            }
-        },
+        Some(i) => gpu_exit_of(rules, s, s.renderers[i]),
+    }
+}
+
+/// [`gpu_exited`] for the live renderer `r`.
+pub open spec fn gpu_exit_of(rules: Seq<clazel_psl::spec::Rule>, s: State, r: Renderer) -> (State, Seq<Output>) {
+    let g = gpu_of(s, r);
+    if !g.running {
+        if g.stopped {
+            (s, seq![])
+        } else if g.software {
+            gpu_stop(s, r, g)
+        } else {
+            let (s1, all) = demote_all(s);
+            let (s2, out) = gpu_restart(s1, r, g, true, seq![]);
+            (s2, all + out)
+        }
+    } else if g.software {
+        if third_exit(g, s.now) {
+            gpu_stop(s, r, g)
+        } else {
+            gpu_restart(s, r, g, true, noted_exits(g, s.now))
+        }
+    } else {
+        let (s1, all) = gpu_site_exit(s, crate::domain::domain_of_renderer(rules, r));
+        let (s2, out) = if third_exit(g, s.now) || s1.gpu.demoted {
+            gpu_restart(s1, r, g, true, seq![])
+        } else {
+            gpu_restart(s1, r, g, false, noted_exits(g, s.now))
+        };
+        (s2, all + out)
     }
 }
 

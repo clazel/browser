@@ -315,6 +315,7 @@ pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, 
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
                     Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     _ => true,
                 }
         }),
@@ -442,6 +443,7 @@ pub proof fn lemma_commit_renderer_outputs(urls: UrlFns, s: State, tab: nat, hre
                     Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     Output::Paint { .. } => false,
                     Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     _ => true,
                 }
         }),
@@ -515,6 +517,7 @@ pub proof fn lemma_abort_renderer_outputs(urls: UrlFns, s: State, tab: nat, code
                     Output::ToGpu { .. } => false,
                     Output::Paint { .. } => false,
                     Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     _ => true,
                 }
         }),
@@ -724,6 +727,7 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                     Output::Show { .. } => false,
                     Output::ToGpu { .. } => false,
                     Output::Paint { .. } => false,
+                    Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                     Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Close { conn: x } => owned_in(s.conns, tab, x),
                 }
@@ -760,6 +764,7 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                         Output::Show { .. } => false,
                         Output::ToGpu { .. } => false,
                         Output::Paint { .. } => false,
+                        Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                         Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                         Output::Close { conn: x } => owned_in(s.conns, tab, x),
                     } by {
@@ -794,6 +799,7 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                             Output::Show { .. } => false,
                             Output::ToGpu { .. } => false,
                             Output::Paint { .. } => false,
+                            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                             Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                             Output::Close { conn: x } => owned_in(s.conns, tab, x),
                         } by {
@@ -833,6 +839,7 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                             Output::Show { .. } => false,
                             Output::ToGpu { .. } => false,
                             Output::Paint { .. } => false,
+                            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
                             Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                             Output::Close { conn: x } => owned_in(s.conns, tab, x),
                         } by {
@@ -1007,6 +1014,7 @@ pub proof fn lemma_net_mid(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fet
 }
 
 /// **`theorem_net_only_to_tab`.**
+#[verifier::rlimit(60)]
 pub proof fn theorem_net_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
         reachable(rules, urls, fetch, s),
@@ -1033,6 +1041,7 @@ pub proof fn theorem_net_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, urls: U
             Output::Show { .. } => false,
             Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
             Output::Paint { .. } => false,
+            Output::GpuStopped { .. } | Output::GpuAllSoftware => false,
             Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
             Output::Close { .. } => true,
         } by {
@@ -1839,6 +1848,7 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
         Event::FromGpu { id, bytes } => {
             lemma_own_all_from_gpu(rules, urls, fetch, s, id, bytes);
         },
+        Event::GpuExited { .. } | Event::GpuSoftware | Event::GpuSiteExit { .. } => {},
         Event::Resize { .. } | Event::Input { .. } | Event::SubNet { .. } => {
             let (s1, out) = step(rules, urls, fetch, s, e);
             crate::subfetch_rel::lemma_subfetch_events_own_none(rules, urls, fetch, s, e);

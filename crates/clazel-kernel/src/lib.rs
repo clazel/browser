@@ -30,6 +30,7 @@ pub mod counterexamples;
 pub mod display_theorems;
 pub mod domain;
 pub mod exec;
+pub mod gpu_rel;
 pub mod gpu_theorems;
 pub mod independent;
 pub mod independent_equivalence;

@@ -422,7 +422,7 @@ fn opt_canon_eq(a: &Option<CanonicalHostName>, b: &Option<CanonicalHostName>) ->
 }
 
 /// Whether two byte strings are equal.
-fn bytes_eq(a: &[u8], b: &[u8]) -> (r: bool)
+pub fn bytes_eq(a: &[u8], b: &[u8]) -> (r: bool)
     ensures
         r == (a@ == b@),
 {
