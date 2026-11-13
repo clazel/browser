@@ -48,6 +48,7 @@ use clazel_gpu::channel::SurfaceFrame;
 use clazel_kernel::exec::records::{EventRecord, OutputRecord};
 use clazel_window::keys::Named;
 
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
 use crate::picture;
 
 /// The font files a renderer is given (`--font`, item 5.20), those of these
@@ -146,6 +147,7 @@ pub fn pixels_for(host: &mut Host, tab: u64, paint: &Paint) -> Option<SurfaceFra
 /// The title bar's text.
 pub fn title_bar(url: &str, title: &str) -> String {
     let title: String = title.chars().take(200).collect();
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     if title.trim().is_empty() {
         url.to_owned()
     } else {
@@ -156,6 +158,7 @@ pub fn title_bar(url: &str, title: &str) -> String {
 /// The text being typed in the address bar.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Edit {
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     /// What is typed.
     pub text: String,
     /// The text is still the selected URL: the next character replaces it.
@@ -167,6 +170,7 @@ pub struct Edit {
 /// What a key or a character asks of the loop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     /// Nothing.
     None,
     /// The strip changed.
@@ -184,6 +188,7 @@ pub enum Action {
 /// The address bar: the URL shown and, while the user types, the edit.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Bar {
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     /// The URL the bar shows (the latest `Paint`'s, or the one asked for).
     pub url: String,
     /// Whether `url` is the kernel's.
@@ -194,6 +199,7 @@ pub struct Bar {
 
 impl Bar {
     /// Focus the bar, its URL selected.
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     pub fn focus(&mut self) -> Action {
         self.edit = Some(Edit {
             text: self.url.clone(),
@@ -273,12 +279,14 @@ impl Bar {
 /// The URLs a tab committed, the current one last, for going back.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct History {
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     urls: Vec<String>,
     going_back: bool,
 }
 
 impl History {
     /// A `Paint` showed `url`.
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     pub fn shown(&mut self, url: &str) {
         if !self.going_back && self.urls.last().map(String::as_str) != Some(url) {
             self.urls.push(url.to_owned());
@@ -306,6 +314,7 @@ impl History {
 /// pixels to scroll, positive down.
 pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
     let scale = i64::try_from(scale).unwrap_or(1);
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     i64::from(delta).saturating_mul(-48).saturating_mul(scale) / 120
 }
 
@@ -313,6 +322,7 @@ pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
 /// `code` asks for in a content area `page` pixels tall at `scale`.
 pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
     let page = (i64::from(page) / 8).saturating_mul(7);
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
     let line = 40i64.saturating_mul(i64::try_from(scale).unwrap_or(1));
     match code {
         32 | 34 => Some(page),
@@ -326,6 +336,7 @@ pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
 /// RGBA8 premultiplied pixels as the window's `0x00RRGGBB`, over white.
 pub fn window_pixels(rgba: &[u8]) -> Vec<u32> {
     picture::rgb_over_white(rgba)
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
         .as_chunks::<3>()
         .0
         .iter()
@@ -393,6 +404,7 @@ pub fn headless(
 /// click, 1 a scroll, 2 a key; the scroll delta signed.
 pub fn input(host: &mut Host, tab: u64, kind: u64, (x, y): (u64, u64), delta: i64, key: u64) {
     host.event(EventRecord::Input {
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
         tab,
         kind,
         x,

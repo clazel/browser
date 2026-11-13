@@ -30,6 +30,7 @@ mod strip;
 mod strip_tests;
 mod window;
 
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::time::Duration;
