@@ -407,6 +407,7 @@ dependencies = [
  "clazel-dns",
  "clazel-fetch",
  "clazel-http",
+ "clazel-kernel",
  "clazel-sys",
  "clazel-tls",
  "clazel-url",

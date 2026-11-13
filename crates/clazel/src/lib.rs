@@ -6,6 +6,7 @@
 //! exit and stderr (which names a failed sandbox layer) goes to stderr. The network (item 3.7) is
 //! `clazel-net`'s Driver. A `Show` (item 4.12) or `Paint` (5.18) waits in `shown` for the loop.
 //! Item 5.23: GPU processes are `launch::Gpus`, which `with_gpu` turns on; the shell routes.
+//! Item 5.19: sub-fetch connections run on the same Driver, numbered by `clazel_net::SubConns`.
 
 use std::collections::HashMap;
 use std::process::Command;
@@ -15,7 +16,7 @@ use std::time::{Duration, Instant};
 use clazel_ipc::frame::codec::payload_length;
 use clazel_kernel::exec::real_urls::{RealFetch, step_real};
 use clazel_kernel::exec::records::{EventRecord, OutputRecord, StateRecord, init_record};
-use clazel_net::{ChainVerifier, Driver, Op, Report, read_frames};
+use clazel_net::{ChainVerifier, Driver, Op, Report, SubConns, read_frames};
 use clazel_renderer::launch::{self, GpuReport, Gpus, Link, describe};
 
 /// What a socket's reader thread reports; the id is the socket's (a GPU process's, its renderer's).
@@ -34,6 +35,7 @@ pub struct Host {
     pub route: Option<std::net::SocketAddr>,
     /// The kernel's connections, on sockets (`clazel-net`).
     net: Driver<Ev>,
+    sub: SubConns,
     /// A fixed kernel clock (seconds since 1601) for tests; `None`: wall clock.
     pub clock: Option<u64>,
     table: HashMap<u64, Link>,
@@ -60,6 +62,7 @@ impl Host {
             state: init_record::<RealFetch>(),
             route: None,
             net: Driver::new(tx.clone(), Ev::Net),
+            sub: SubConns::default(),
             gpus: Gpus::new(tx.clone(), Ev::Gpu),
             clock: None,
             table: HashMap::new(),
@@ -113,6 +116,10 @@ impl Host {
         self.step(EventRecord::Tick { time });
         let (mut dead, mut failed) = (Vec::new(), Vec::new());
         for output in self.step(e) {
+            if let Some((conn, op)) = self.sub.op(&output) {
+                self.net_op(conn, op, &mut failed);
+                continue;
+            }
             match output {
                 OutputRecord::Spawn { id } => {
                     if let Err(e) = self.spawn(id) {
@@ -141,11 +148,9 @@ impl Host {
                 }
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
                 show @ OutputRecord::Show { .. } => self.shown.push(show),
-                // Item 5.19: no renderer sends `FetchStyle` before item 5.20,
-                // so no sub-fetch connection is asked for yet.
                 OutputRecord::SubConnect { .. }
                 | OutputRecord::SubSend { .. }
-                | OutputRecord::SubClose { .. } => {}
+                | OutputRecord::SubClose { .. } => {} // carried out above
                 paint @ OutputRecord::Paint { .. } => self.shown.push(paint),
             }
         }
@@ -170,9 +175,10 @@ impl Host {
     fn net_report(&mut self, conn: u64, report: Report) {
         let (input, note) = self.net.accept(conn, report);
         note.into_iter().for_each(|l| self.say(l));
-        input
-            .into_iter()
-            .for_each(|input| self.event(EventRecord::Net { conn, input }));
+        if let Some(input) = input {
+            let e = self.sub.event(conn, input);
+            self.event(e);
+        }
     }
 
     /// The user opens a tab at `url` with a script (`clazel-renderer`'s
