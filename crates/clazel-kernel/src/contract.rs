@@ -115,6 +115,13 @@ pub open spec fn decode_renderer_frame_ensures(bytes: Seq<u8>, output: Option<cl
     output == decode_renderer_frame(bytes)
 }
 
+/// Contract for `decode_gpu_frame(&[u8]) -> Option<Message>` (item 5.18):
+/// the message in a frame a GPU process sent, or `None` if the frame does
+/// not decode or holds a message a GPU process may not send.
+pub open spec fn decode_gpu_frame_ensures(bytes: Seq<u8>, output: Option<clazel_ipc::message::spec::Message>) -> bool {
+    output == decode_gpu_frame(bytes)
+}
+
 /// Contract for `reply_frame(&Message) -> Vec<u8>`: the frame of the
 /// message, or the frame of `Error { error_encode }` if the message cannot
 /// be sent (a text that is not UTF-8, or a payload over `MAX_FRAME`). Always

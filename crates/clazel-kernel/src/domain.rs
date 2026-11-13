@@ -34,7 +34,14 @@
 //!   depend on: its renderers' records (ids included: item 2.11 compares up
 //!   to a bijection of ids), the cookies under its root, the storage maps of
 //!   its origins, and the time. Not the other domains' renderers and
-//!   cookies, and not the id counter or the other domains' storage.
+//!   cookies, and not the id counter or the other domains' storage. Item
+//!   5.18 adds the tabs' viewports (the host's, so every domain's) and the
+//!   titles of the domain's renderers ([`titles_of_domain`]).
+//! - **Item 5.18.** A `FromGpu(id, _)` event belongs to the domain of
+//!   renderer `id`, like that renderer's own frames, and has no declassified
+//!   part; `Resize` and `Input` are the user's and are kept for every
+//!   observer, as `NavigateTab` is. A `Paint` is addressed by its tab, like
+//!   a `Show`, and a `ToGpu` by its renderer id, like a `ToRenderer`.
 
 #[allow(unused_imports)]
 use super::spec::*;
@@ -108,6 +115,15 @@ pub struct Observation {
     pub storage: Map<clazel_origin::spec::Origin, Seq<StorageEntry>>,
     /// The time.
     pub now: int,
+    /// The tabs' viewports (item 5.18).
+    pub viewports: Seq<TabViewport>,
+    /// The titles of its renderers (item 5.18).
+    pub titles: Seq<Titled>,
+}
+
+/// The titles of `ts` whose lock is in domain `d` (item 5.18), in order.
+pub open spec fn titles_of_domain(rules: Seq<clazel_psl::spec::Rule>, ts: Seq<Titled>, d: Domain) -> Seq<Titled> {
+    ts.filter(|x: Titled| domain_of_lock(rules, x.lock) == d)
 }
 
 /// `obs(s, D)`.
@@ -117,13 +133,16 @@ pub open spec fn obs(rules: Seq<clazel_psl::spec::Rule>, s: State, d: Domain) ->
         cookies: cookies_of_domain(rules, clazel_cookie::storage::spec::evict_expired(s.jar, s.now), d),
         storage: storage_of_domain(rules, s, d),
         now: s.now,
+        viewports: s.viewports,
+        titles: titles_of_domain(rules, s.titles, d),
     }
 }
 
 /// The domain a `FromRenderer(id, _)` event belongs to in state `s`: that
 /// of the renderer `id`; a `Net { conn, _ }` event (item 3.7), that of the
 /// renderer of the connection's tab, whose lock the fetch was started under
-/// (as a frame is attributed to its socket's renderer). Other events, an id
+/// (as a frame is attributed to its socket's renderer); a `FromGpu(id, _)`
+/// (item 5.18), that of renderer `id`, whose GPU process sent it. Other events, an id
 /// that names no renderer and a connection that is not open belong to none.
 pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: Event) -> Option<Domain> {
     match e {
@@ -133,6 +152,10 @@ pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: E
         },
         Event::Net { conn, .. } => match net_target(s, conn) {
             Some((_, i, _)) => Some(domain_of_renderer(rules, s.renderers[i])),
+            None => None,
+        },
+        Event::FromGpu { id, .. } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
             None => None,
         },
         _ => None,
@@ -190,7 +213,7 @@ pub open spec fn ipurge_event(
     e: Event,
 ) -> Option<Event> {
     match e {
-        Event::FromRenderer { .. } => match event_domain(rules, s, e) {
+        Event::FromRenderer { .. } | Event::FromGpu { .. } => match event_domain(rules, s, e) {
             Some(d2) => if d2 == d { Some(e) } else { declassified(urls, s, e) },
             None => None,
         },
@@ -237,6 +260,8 @@ pub open spec fn output_id(o: Output) -> nat {
         Output::Send { conn, .. } => conn,
         Output::Close { conn } => conn,
         Output::Show { tab, .. } => tab,
+        Output::ToGpu { id, .. } => id,
+        Output::Paint { tab, .. } => tab,
     }
 }
 

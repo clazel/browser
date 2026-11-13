@@ -35,7 +35,9 @@ verus! {
 /// counter); and a `Close` is for a connection of the sender's own tab (a
 /// navigation it starts replaces its tab's in-flight one, or it is killed and
 /// takes its tab's connections with it). Item 4.12: a `Show` is for the
-/// sender's own tab.
+/// sender's own tab. Item 5.18: a `ToGpu` is for the GPU process of the
+/// renderer spawned in that step (its `Spawn` with the GPU policy among the
+/// outputs), and a renderer's frame never gives a `Paint`.
 pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
     let (s1, out) = step(rules, urls, fetch, s, Event::FromRenderer { id, bytes });
     forall|k: int|
@@ -48,6 +50,8 @@ pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rul
             Output::Close { conn: x } => exists|i: int, j: int|
                 0 <= i < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i].tab,
             Output::Show { tab: x, .. } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == x,
+            Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+            Output::Paint { .. } => false,
         }
 }
 
@@ -212,7 +216,9 @@ pub open spec fn committed_only_after_commit_statement(rules: Seq<clazel_psl::sp
 /// `ToRenderer`s for that renderer or for the renderer spawned in that step (id
 /// `next_id`, with a `Spawn` among the outputs), a `Spawn` for `next_id`, and a
 /// `Kill` of that renderer. (Its `Connect`, `Send` and `Close` outputs concern
-/// only that tab's connections: `connection_ownership_statement`.)
+/// only that tab's connections: `connection_ownership_statement`.) Item 5.18:
+/// a `ToGpu` is for the GPU process of the renderer spawned in that step, and
+/// a `Net` event never gives a `Paint`.
 pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput) -> bool {
     let out = step(rules, urls, fetch, s, Event::Net { conn, input }).1;
     match net_target(s, conn) {
@@ -228,6 +234,8 @@ pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, u
                 Output::Send { .. } => true,
                 Output::Close { .. } => true,
                 Output::Show { .. } => false,
+                Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+                Output::Paint { .. } => false,
             },
     }
 }
@@ -328,8 +336,10 @@ pub open spec fn net_jar_frame_statement(rules: Seq<clazel_psl::spec::Rule>, url
 /// The tab an event is about, for connections: the sender's tab for a
 /// `FromRenderer` of a renderer that exists, the tab of a `NavigateTab`, the
 /// tab an `OpenTab` without a script opens (whose fetch it starts, item
-/// 4.12), the tab of the renderer that exits, and the owner of the
-/// connection of a `Net` (when it is open). Other events are about no tab.
+/// 4.12), the tab of the renderer that exits, the owner of the
+/// connection of a `Net` (when it is open), and (item 5.18) the tab of the
+/// renderer whose GPU process sent a frame (which may close the tab). Other
+/// events are about no tab.
 pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
     match e {
         Event::FromRenderer { id, .. } => match find_by_id(s.renderers, id, 0) {
@@ -348,6 +358,10 @@ pub open spec fn event_tab(s: State, e: Event) -> Option<nat> {
         },
         Event::Net { conn, .. } => match net_target(s, conn) {
             Some((c, _, _)) => Some(c.tab),
+            None => None,
+        },
+        Event::FromGpu { id, .. } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => Some(s.renderers[i].tab),
             None => None,
         },
         _ => None,
@@ -574,6 +588,129 @@ pub open spec fn storage_same_origin_statement(rules: Seq<clazel_psl::spec::Rule
             }
         },
         _ => true,
+    }
+}
+
+// ---------------------------------------------------------------------
+// Surfaces, viewports and input (phase-5.md item 5.18).
+// ---------------------------------------------------------------------
+
+/// `theorem_paint_only_own_tab`: a step outputs a `Paint` only for a
+/// `FromGpu(id, _)` event of a live renderer `r` (it is a `FrameReady` of
+/// `r`'s GPU process), and then the `Paint` is the step's only output, it is
+/// for `r`'s tab, and the state is unchanged. No other event (a renderer's
+/// frame, a fetch, the user, a timer, an exit) paints. And whatever frame
+/// the GPU process of `id` sends, its outputs are only that `Paint`, or the
+/// `Kill` of `id` with the `Close`s of its own tab's connections: a GPU
+/// process can affect no other tab.
+pub open spec fn paint_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    &&& ((exists|k: int| 0 <= k < out.len() && (#[trigger] out[k]) is Paint) ==> match e {
+        Event::FromGpu { id, .. } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => s1 == s && out.len() == 1 && out[0] is Paint && out[0]->Paint_tab == s.renderers[i].tab,
+            None => false,
+        },
+        _ => false,
+    })
+    &&& (e matches Event::FromGpu { id, .. } ==> forall|k: int|
+        0 <= k < out.len() ==> match #[trigger] out[k] {
+            Output::Paint { tab: x, .. } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == x,
+            Output::Kill { id: x } => x == id,
+            Output::Close { conn: x } => exists|i: int, j: int|
+                0 <= i < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i].tab,
+            _ => false,
+        })
+}
+
+/// `theorem_address_bar_integrity`, restated for item 5.18 (the second
+/// half; the first is [`address_bar_integrity_statement`], for `Show`):
+/// whatever frame `bytes` the GPU process of renderer `id` sends, every
+/// `Paint` it gives is labelled with the tab, the URL and the title the
+/// kernel holds for `id`, and `id` is committed, so the URL is the one the
+/// kernel committed there: nothing in the message reaches the address bar.
+/// The frame's sender is the GPU process paired with `id`, whose lock is the
+/// document's origin. With [`paint_only_own_tab_statement`] (no other event
+/// paints), this covers every message content from either process.
+pub open spec fn paint_address_bar_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    let out = step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1;
+    forall|k: int|
+        0 <= k < out.len() && (#[trigger] out[k]) is Paint ==> exists|i: int|
+            0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].committed && out[k]->Paint_url == s.renderers[i].url
+                && out[k]->Paint_tab == s.renderers[i].tab && out[k]->Paint_title == title_of(s.titles, s.renderers[i])
+}
+
+/// `theorem_paint_fits_viewport`: every `Paint` of every step is at most the
+/// viewport the kernel holds for its tab in both dimensions, and names a
+/// buffer of the ring.
+pub open spec fn paint_fits_viewport_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let out = step(rules, urls, fetch, s, e).1;
+    forall|k: int|
+        0 <= k < out.len() && (#[trigger] out[k]) is Paint ==> {
+            &&& out[k]->Paint_width <= viewport_of(s, out[k]->Paint_tab).width
+            &&& out[k]->Paint_height <= viewport_of(s, out[k]->Paint_tab).height
+            &&& out[k]->Paint_buffer < ring_size()
+        }
+}
+
+/// `theorem_channel_only_own_tab`: in every step, a GPU process is started
+/// only together with the renderer of the same id (the host's socket pair
+/// joins exactly those two), and that renderer is, after the step, the
+/// current renderer of its tab; every renderer is started with its GPU
+/// process; and a `ToGpu` goes only to the GPU process of a renderer that
+/// is, after the step, the current renderer of its tab. So a renderer's
+/// lists reach only its own tab's GPU process, and no list can reach
+/// another tab's.
+pub open spec fn channel_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    forall|k: int|
+        0 <= k < out.len() ==> match #[trigger] out[k] {
+            Output::Spawn { id: x, policy: Policy::Gpu } => out.contains(Output::Spawn { id: x, policy: Policy::Renderer }) && exists|j: int|
+                0 <= j < s1.renderers.len() && s1.renderers[j].id == x && find_by_tab(s1.renderers, s1.renderers[j].tab, 0) == Some(j),
+            Output::Spawn { id: x, policy: Policy::Renderer } => out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+            Output::ToGpu { id: x, .. } => exists|j: int|
+                0 <= j < s1.renderers.len() && s1.renderers[j].id == x && find_by_tab(s1.renderers, s1.renderers[j].tab, 0) == Some(j),
+            _ => true,
+        }
+}
+
+/// `theorem_input_only_to_own_tab`: the user's input on `tab` changes no
+/// state and gives exactly one output, the `Input` frame to `tab`'s
+/// renderer, or none if the tab has no renderer.
+pub open spec fn input_only_to_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, tab: nat, input: UserInput) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::Input { tab, input });
+    &&& s1 == s
+    &&& match find_by_tab(s.renderers, tab, 0) {
+        None => out == Seq::<Output>::empty(),
+        Some(i) => out == seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }],
+    }
+}
+
+/// `theorem_viewport_only_to_own_tab` (item 5.18; not named in the item, a
+/// companion of the input theorem): the host's `Resize` of `tab` changes only
+/// the viewport the kernel holds for `tab`, which becomes the one given, and
+/// tells only `tab`'s renderer (`Viewport`) and its GPU process
+/// (`GpuViewport`), or nobody if the tab has no renderer.
+pub open spec fn viewport_only_to_own_tab_statement(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    s: State,
+    tab: nat,
+    width: u64,
+    height: u64,
+    scale: u64,
+) -> bool {
+    let v = Viewport { width, height, scale };
+    let (s1, out) = step(rules, urls, fetch, s, Event::Resize { tab, width, height, scale });
+    &&& s1 == State { viewports: s1.viewports, ..s }
+    &&& viewport_of(s1, tab) == v
+    &&& forall|t: nat| t != tab ==> viewport_of(s1, t) == viewport_of(s, t)
+    &&& match find_by_tab(s.renderers, tab, 0) {
+        None => out == Seq::<Output>::empty(),
+        Some(i) => out == seq![
+            Output::ToRenderer { id: s.renderers[i].id, bytes: viewport_frame(v) },
+            Output::ToGpu { id: s.renderers[i].id, bytes: gpu_viewport_frame(v) },
+        ],
     }
 }
 
