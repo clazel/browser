@@ -89,8 +89,12 @@
 //! - The crate's resource policies are stated, not assumed: its caps
 //!   (2^18 handshake message, the transcript and cookie caps of the Hello,
 //!   `internal_error`) are cases of the record-level `fail_agrees` under
-//!   [`rejects_record`] and [`retry_then_fails`]; the 16 KiB key cap is in
-//!   [`validators`]; `dispatcher::room` remains a domain ([`beyond_room`]).
+//!   [`rejects_record`] and [`retry_then_fails`], and so is the 4 MiB
+//!   transcript cap in the flight (`dispatcher::transcript_cap`, a case of
+//!   the dispatcher's `fail_agrees`: the crate refuses with
+//!   `internal_error` a message the transcription accepts, which ends the
+//!   comparison under [`rejects_record`]); the 16 KiB key cap is in
+//!   [`validators`]. No record is outside the comparison.
 //!
 //! **Stated differences** (each a definition): [`rejects_early`] (the
 //! framer's timing on a header), [`peer_closed`] (the server's close_notify:
@@ -112,7 +116,7 @@
 //! stage; `connection.rs` leaves transport closure out of scope, so there
 //! is nothing to compare); a KeyUpdate of the caller's own (the driver has
 //! no such operation; `post_handshake::update_agrees` covers the
-//! transducer's `update_keys`); the comparison past [`beyond_room`].
+//! transducer's `update_keys`).
 
 #[cfg(verus_only)]
 use crate::connection::driver_contract::Models;
@@ -879,16 +883,6 @@ pub open spec fn goes_on_coalesced(m: Models, p: Primitives, scalar: Seq<u8>, ts
     &&& driver_agrees(m, p, scalar, cs2, tout.after)
 }
 
-/// **Domain: the crate's transcript cap** (`dispatcher::room`, as
-/// `framing::disp_room`): the whole record at the front could take the
-/// crate's 4 MiB transcript past its cap, which the dispatcher theorem does
-/// not compare. Nothing is claimed of this record or after it.
-pub open spec fn beyond_room(cs: CState, ts: TState, chunk: Seq<u8>) -> bool {
-    &&& whole(ts.buffer + chunk)
-    &&& cs.stage matches Stage::Flight(s)
-    &&& !super::framing::disp_room(crate::connection::dispatcher_spec::State { framing: seq![], ..s })
-}
-
 /// **Stated difference, the answer to `update_requested`**
 /// (`post_handshake::settle`; §4.6.3): the crate sends its KeyUpdate in the
 /// step that reads the request, the transcription marks it owed
@@ -936,7 +930,6 @@ pub open spec fn feed_verdict(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     ||| peer_closed(p, ts, cout, tout)
     ||| retry_then_fails(m, p, cs, ts, chunk, cout, tout)
     ||| goes_on_coalesced(m, p, scalar, ts, cout, cs2, tout)
-    ||| beyond_room(cs, ts, chunk)
     ||| settles(m, p, scalar, cs2, cout, tout)
     ||| exhausted_epoch(cs, cout, tout)
     ||| answers_twice(p, cs, ts, chunk, cout, tout)
@@ -1593,7 +1586,6 @@ pub proof fn lemma_hello_established(m: Models, p: Primitives, scalar: Seq<u8>, 
     hide(crate::hello::bootstrap_lemmas::record_step);
     hide(super::dispatcher::dispatcher_agrees);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(settles);
     hide(exhausted_epoch);
     hide(rejects_record);
@@ -1812,14 +1804,13 @@ pub open spec fn flight_whole(m: Models, p: Primitives, scalar: Seq<u8>, s: crat
         ==> feed_verdict(m, p, scalar, cs, ts, chunk, cout, cs2, tfeed(p, ts, chunk))
 }
 
-/// The record-level facts of a whole record in the flight, with room.
+/// The record-level facts of a whole record in the flight.
 pub proof fn lemma_flight_facts(m: Models, p: Primitives, s: crate::connection::dispatcher_spec::State, held: Seq<u8>,
     ts: TState, chunk: Seq<u8>)
     requires
         hypotheses(m, p),
         flight_agrees(p, m.verification, s, held, ts),
         whole(ts.buffer + chunk),
-        super::framing::disp_room(crate::connection::dispatcher_spec::State { framing: seq![], ..s }),
     ensures ({
         let w = ts.buffer + chunk;
         let b = front(w);
@@ -1845,14 +1836,13 @@ pub proof fn lemma_flight_facts(m: Models, p: Primitives, s: crate::connection::
     let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
     super::framing::lemma_disp_agrees_facts(p, m.verification, s0, ts.client);
     lemma_tfeed_whole(p, ts, chunk);
-    assert(super::dispatcher::room(s0, (s0.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat));
     super::dispatcher::lemma_receive(m.crypto, m.verification, ciphers(m), p, s0, ts.client, b);
     assert(super::dispatcher::in_flight(ts.client.connection.handshake.state)) by {
         reveal(super::dispatcher::dispatcher_agrees);
     }
 }
 
-/// The outcome facts of a whole record in the flight, with room: the
+/// The outcome facts of a whole record in the flight: the
 /// dispatcher theorem's `outcome_agrees`, and the transcription's result
 /// as its caller sees it.
 pub open spec fn flight_case(m: Models, p: Primitives, s: crate::connection::dispatcher_spec::State, ts: TState,
@@ -1874,7 +1864,6 @@ pub proof fn lemma_flight_case(m: Models, p: Primitives, s: crate::connection::d
         hypotheses(m, p),
         flight_agrees(p, m.verification, s, held, ts),
         whole(ts.buffer + chunk),
-        super::framing::disp_room(crate::connection::dispatcher_spec::State { framing: seq![], ..s }),
     ensures flight_case(m, p, s, ts, chunk),
 {
     lemma_flight_facts(m, p, s, held, ts, chunk);
@@ -1914,7 +1903,6 @@ pub proof fn lemma_flight_quiet(m: Models, p: Primitives, scalar: Seq<u8>, s: cr
     hide(settles);
     hide(exhausted_epoch);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(peer_closed);
     hide(ends_alike);
     let w = ts.buffer + chunk;
@@ -1969,7 +1957,6 @@ pub proof fn lemma_flight_send(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
     hide(retry_then_fails);
     hide(settles);
     hide(exhausted_epoch);
-    hide(beyond_room);
     hide(peer_closed);
     hide(ends_alike);
     let c = m.crypto;
@@ -2042,7 +2029,6 @@ pub proof fn lemma_flight_fail(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
     hide(settles);
     hide(exhausted_epoch);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(peer_closed);
     hide(goes_on);
     let w = ts.buffer + chunk;
@@ -2093,7 +2079,6 @@ pub proof fn lemma_flight_close(m: Models, p: Primitives, scalar: Seq<u8>, s: cr
     hide(settles);
     hide(exhausted_epoch);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(goes_on);
     hide(ends_alike);
     let w = ts.buffer + chunk;
@@ -2128,30 +2113,23 @@ pub proof fn lemma_flight_whole(m: Models, p: Primitives, scalar: Seq<u8>, s: cr
     hide(super::dispatcher::dispatcher_agrees);
     hide(crate::connection::dispatcher_spec::receive_record);
     let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
-    let cs = CState { stage: Stage::Flight(s), status: Status::Handshaking, held };
-    if !super::framing::disp_room(s0) {
-        assert(beyond_room(cs, ts, chunk));
-        reveal(feed_verdict);
-        reveal(flight_whole);
-    } else {
-        lemma_flight_facts(m, p, s, held, ts, chunk);
-        lemma_flight_case(m, p, s, held, ts, chunk);
-        let a = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0,
-            front(ts.buffer + chunk)).0;
-        match a {
-            crate::connection::dispatcher_spec::Action::None | crate::connection::dispatcher_spec::Action::Ignored
-                | crate::connection::dispatcher_spec::Action::Cancelled =>
-                lemma_flight_quiet(m, p, scalar, s, held, ts, chunk, cs2),
-            crate::connection::dispatcher_spec::Action::Send(_) =>
-                lemma_flight_send(m, p, scalar, s, held, ts, chunk, cs2),
-            crate::connection::dispatcher_spec::Action::Fail(_, _) | crate::connection::dispatcher_spec::Action::PeerAlert(_) =>
-                lemma_flight_fail(m, p, scalar, s, held, ts, chunk, cs2),
-            crate::connection::dispatcher_spec::Action::Close(_) =>
-                lemma_flight_close(m, p, scalar, s, held, ts, chunk, cs2),
-            crate::connection::dispatcher_spec::Action::Ready => {
-                reveal(flight_case);
-            },
-        }
+    lemma_flight_facts(m, p, s, held, ts, chunk);
+    lemma_flight_case(m, p, s, held, ts, chunk);
+    let a = crate::connection::dispatcher_spec::receive_record(m.crypto, m.verification, ciphers(m), s0,
+        front(ts.buffer + chunk)).0;
+    match a {
+        crate::connection::dispatcher_spec::Action::None | crate::connection::dispatcher_spec::Action::Ignored
+            | crate::connection::dispatcher_spec::Action::Cancelled =>
+            lemma_flight_quiet(m, p, scalar, s, held, ts, chunk, cs2),
+        crate::connection::dispatcher_spec::Action::Send(_) =>
+            lemma_flight_send(m, p, scalar, s, held, ts, chunk, cs2),
+        crate::connection::dispatcher_spec::Action::Fail(_, _) | crate::connection::dispatcher_spec::Action::PeerAlert(_) =>
+            lemma_flight_fail(m, p, scalar, s, held, ts, chunk, cs2),
+        crate::connection::dispatcher_spec::Action::Close(_) =>
+            lemma_flight_close(m, p, scalar, s, held, ts, chunk, cs2),
+        crate::connection::dispatcher_spec::Action::Ready => {
+            reveal(flight_case);
+        },
     }
 }
 
@@ -2174,7 +2152,6 @@ pub proof fn lemma_flight_partial(m: Models, p: Primitives, scalar: Seq<u8>, cs:
     hide(settles);
     hide(exhausted_epoch);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(peer_closed);
     hide(ends_alike);
     let s = cs.stage->Flight_0;
@@ -2503,7 +2480,6 @@ pub proof fn lemma_app_continue(m: Models, p: Primitives, scalar: Seq<u8>, cs: C
     hide(rejects_early);
     hide(retry_then_fails);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(exhausted_epoch);
     hide(peer_closed);
     hide(ends_alike);
@@ -2565,7 +2541,6 @@ pub proof fn lemma_app_fail(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
     hide(rejects_early);
     hide(retry_then_fails);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(exhausted_epoch);
     hide(peer_closed);
     hide(settles);
@@ -2633,7 +2608,6 @@ pub proof fn lemma_app_closed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     hide(rejects_early);
     hide(retry_then_fails);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(exhausted_epoch);
     hide(settles);
     hide(goes_on);
@@ -2717,7 +2691,6 @@ pub proof fn lemma_app_feed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
     hide(rejects_record);
     hide(retry_then_fails);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(settles);
     let w = ts.buffer + chunk;
     if whole(w) {
@@ -3040,7 +3013,8 @@ pub proof fn lemma_start(m: Models, p: Primitives, config: crate::hello::client_
 ///   differences holds, after which the comparison ends: [`rejects_early`],
 ///   [`peer_closed`], [`retry_then_fails`], [`goes_on_coalesced`] (which goes
 ///   on), [`settles`], [`exhausted_epoch`], [`oversized`],
-///   [`closes_in_handshake`], and the domain [`beyond_room`].
+///   and [`closes_in_handshake`]. Every record is compared: the crate's
+///   caps are cases of the record-level theorems' rejections.
 pub proof fn theorem_driver_equivalence(m: Models, p: Primitives)
     requires hypotheses(m, p),
     ensures
@@ -3517,7 +3491,6 @@ pub proof fn lemma_owed_whole(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     hide(rejects_early);
     hide(retry_then_fails);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(exhausted_epoch);
     hide(peer_closed);
     hide(settles);
@@ -3610,7 +3583,6 @@ pub proof fn lemma_owed_partial(m: Models, p: Primitives, scalar: Seq<u8>, cs: C
     hide(rejects_record);
     hide(retry_then_fails);
     hide(goes_on_coalesced);
-    hide(beyond_room);
     hide(settles);
     hide(fails_owing);
     hide(peer_closed_owing);

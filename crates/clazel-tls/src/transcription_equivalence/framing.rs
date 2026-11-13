@@ -51,9 +51,9 @@
 //!    - **dispatcher** ([`theorem_disp_stream`]): [`disp_drive`] is
 //!      [`disp_steps`] (`dispatcher_spec::receive_record` on each record),
 //!      and [`disp_stream_agrees`] carries `dispatcher::record_agrees`
-//!      against `client_receive_stream`, at each record within the
-//!      dispatcher theorem's domain ([`disp_room`]: the crate's transcript
-//!      cap does not fire);
+//!      against `client_receive_stream`, at every record (the crate's
+//!      transcript cap is the dispatcher theorem's stated difference
+//!      `dispatcher::transcript_cap`, not a domain);
 //!    - **post-handshake** ([`theorem_post_stream`]): [`post_drive`] is
 //!      [`post_steps`] (`step` on what is held, the caller resubmitting the
 //!      rest), and [`post_stream_agrees`] carries
@@ -1510,21 +1510,15 @@ pub proof fn lemma_disp_drive(c: crate::schedule::spec::Crypto, v: crate::auth::
     }
 }
 
-/// The dispatcher's domain condition `dispatcher::room` for the next record:
-/// the crate's 4 MiB transcript cap cannot fire on it.
-pub open spec fn disp_room(s: crate::connection::dispatcher_spec::State) -> bool {
-    super::dispatcher::room(s, (s.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat)
-}
-
 /// The dispatcher and the transcription's client (`client_receive_stream`)
 /// agree on the stream `w`, record by record, along [`disp_steps`] (as
 /// [`boot_stream_agrees`] for the bootstrap): the crate waits on a partial
 /// record and the transcription does nothing; the crate's framer fails on a
-/// whole record, which is `receive_record`'s `fatal` and, within the
-/// dispatcher theorem's domain ([`disp_room`]), `dispatcher::record_agrees`;
+/// whole record, which is `receive_record`'s `fatal` and
+/// `dispatcher::record_agrees`;
 /// it fails on a partial record ([`early_reject`]) with the transcription's
 /// `alert_record` of its alert, while the transcription waits or refuses
-/// the header's length; it completes a record, and within the domain
+/// the header's length; it completes a record, and
 /// `dispatcher::record_agrees` holds of it and, if the crate goes on, the
 /// states agree again (`dispatcher::dispatcher_agrees`) and the
 /// transcription's result is its result on the rest from there. In every
@@ -1551,7 +1545,7 @@ pub open spec fn disp_stream_agrees(c: crate::schedule::spec::Crypto, v: crate::
             &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(
                 super::bootstrap::one_record(p, y, b),
                 |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(n as int)).0))
-            &&& disp_room(s) ==> super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
+            &&& super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
         } else {
             &&& early_reject(w, true, a)
             &&& crate::connection::dispatcher_spec::fatal(f, s, a)
@@ -1569,13 +1563,11 @@ pub open spec fn disp_stream_agrees(c: crate::schedule::spec::Crypto, v: crate::
             &&& super::bootstrap::whole_record(b)
             &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(t,
                 |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(k as int)).0))
-            &&& disp_room(s) ==> {
-                &&& super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
-                &&& disp_goes_on(s2, a) ==> {
-                    &&& super::dispatcher::dispatcher_agrees(p, v, s2, cl2)
-                    &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
-                    &&& disp_stream_agrees(c, v, f, p, s2, cl2, w.skip(k as int))
-                }
+            &&& super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
+            &&& disp_goes_on(s2, a) ==> {
+                &&& super::dispatcher::dispatcher_agrees(p, v, s2, cl2)
+                &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
+                &&& disp_stream_agrees(c, v, f, p, s2, cl2, w.skip(k as int))
             }
         },
     }
@@ -1673,12 +1665,10 @@ pub proof fn lemma_disp_stream_whole(c: crate::schedule::spec::Crypto, v: crate:
         let u = crate::transcription::middlebox::client_receive_stream(p, cl, w).0;
         &&& u == super::dispatcher::lifted(cl, super::post_handshake::joined(t,
             |c2: Connection| crate::transcription::connection::receive_stream(p, c2, w.skip(k as int)).0))
-        &&& disp_room(s) ==> {
-            &&& super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
-            &&& disp_goes_on(s2, a) ==> {
-                &&& super::dispatcher::dispatcher_agrees(p, v, s2, cl2)
-                &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
-            }
+        &&& super::dispatcher::record_agrees(c, v, f, p, s, cl, b)
+        &&& disp_goes_on(s2, a) ==> {
+            &&& super::dispatcher::dispatcher_agrees(p, v, s2, cl2)
+            &&& u == crate::transcription::middlebox::client_receive_stream(p, cl2, w.skip(k as int)).0
         }
     }),
 {
@@ -1690,24 +1680,21 @@ pub proof fn lemma_disp_stream_whole(c: crate::schedule::spec::Crypto, v: crate:
     hide(crate::transcription::connection::receive_stream);
     hide(super::dispatcher::lifted);
     hide(super::dispatcher::hypotheses);
-    hide(super::dispatcher::room);
     hide(super::dispatcher::outcome_agrees);
     hide(super::post_handshake::joined);
     let b = w.take(k as int);
     lemma_disp_agrees_facts(p, v, s, cl);
     assert(b + w.skip(k as int) =~= w);
     lemma_client_prefix(p, cl, b, w.skip(k as int));
-    if disp_room(s) {
-        super::dispatcher::lemma_receive(c, v, f, p, s, cl, b);
-        let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, b);
-        if disp_goes_on(s2, a) {
-            let t = super::bootstrap::one_record(p, cl.connection, b);
-            assert(super::dispatcher::outcome_agrees(c, v, f, p, s, cl, a, s2, t, true)) by {
-                reveal(super::dispatcher::record_agrees);
-            }
-            lemma_disp_quiet(c, v, f, p, s, cl, a, s2, t);
-            lemma_client_continue_progress(p, cl, t->Continue_0, w.skip(k as int));
+    super::dispatcher::lemma_receive(c, v, f, p, s, cl, b);
+    let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, b);
+    if disp_goes_on(s2, a) {
+        let t = super::bootstrap::one_record(p, cl.connection, b);
+        assert(super::dispatcher::outcome_agrees(c, v, f, p, s, cl, a, s2, t, true)) by {
+            reveal(super::dispatcher::record_agrees);
         }
+        lemma_disp_quiet(c, v, f, p, s, cl, a, s2, t);
+        lemma_client_continue_progress(p, cl, t->Continue_0, w.skip(k as int));
     }
 }
 
@@ -1731,10 +1718,8 @@ pub proof fn lemma_disp_stream(c: crate::schedule::spec::Crypto, v: crate::auth:
     hide(split);
     hide(super::dispatcher::lifted);
     hide(super::dispatcher::hypotheses);
-    hide(super::dispatcher::room);
     hide(super::post_handshake::joined);
     hide(crate::connection::dispatcher_spec::fatal);
-    hide(disp_room);
     hide(too_long_agrees);
     let y = cl.connection;
     let (st, k) = first(w, true);
@@ -1763,7 +1748,7 @@ pub proof fn lemma_disp_stream(c: crate::schedule::spec::Crypto, v: crate::auth:
             lemma_disp_stream_whole(c, v, f, p, s, cl, w, k);
             let (a, s2) = crate::connection::dispatcher_spec::receive_record(c, v, f, s, w.take(k as int));
             let t = super::bootstrap::one_record(p, y, w.take(k as int));
-            if disp_room(s) && disp_goes_on(s2, a) {
+            if disp_goes_on(s2, a) {
                 lemma_disp_stream(c, v, f, p, s2,
                     crate::transcription::middlebox::ClientConnection { connection: t->Continue_0.connection, ..cl },
                     w.skip(k as int));
@@ -1778,8 +1763,7 @@ pub proof fn lemma_disp_stream(c: crate::schedule::spec::Crypto, v: crate::auth:
 /// [`disp_steps`] of the concatenated bytes: `receive_record` on each record
 /// its framer completes, in order; and along those records the crate and
 /// the transcription's `client_receive_stream` of the same bytes agree
-/// ([`disp_stream_agrees`], within the dispatcher theorem's domain,
-/// [`disp_room`], at each record).
+/// ([`disp_stream_agrees`], at every record).
 pub proof fn theorem_disp_stream(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification,
     f: crate::connection::dispatcher_spec::Ciphers, p: Primitives)
     requires super::dispatcher::hypotheses(c, v, f, p),
