@@ -94,6 +94,16 @@ pub open spec fn within_policy(s: crate::auth::spec::State, body: Seq<u8>) -> bo
         && s.transcript.messages.len() + body.len() + 4 + 8 + 36 <= crate::transcript::spec::MAX_TRANSCRIPT
 }
 
+/// The crate's transcript cap (4 MiB, `internal_error`) refuses a message
+/// the transcription accepts. It can fire only outside [`within_policy`].
+pub open spec fn transcript_capped(s: crate::auth::spec::State, body: Seq<u8>,
+    crate_step: (crate::auth::spec::State, crate::auth::spec::Action),
+    t_step: crate::transcription::state_machine::HandshakeStep) -> bool
+{
+    crate_step.1 == crate::auth::spec::Action::Fail(crate::spec::INTERNAL_ERROR) && t_step is Proceed
+        && !within_policy(s, body)
+}
+
 /// The crate's step and the transcription's agree on one message: the same
 /// alert, or both go on, with the states still related and the same
 /// messages sent.
@@ -198,11 +208,14 @@ pub proof fn lemma_certificate_verify(c: crate::schedule::spec::Crypto, v: crate
         verification_agrees(v, p),
         auth_agrees(p, s, hs),
         s.phase == crate::auth::spec::Phase::CertificateVerify,
-        within_policy(s, body),
+        body.len() <= crate::transcript::spec::MAX_BODY,
     ensures
         step_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(15, body)),
             crate::transcription::state_machine::receive_handshake_message(p, hs,
-                crate::transcription::key_exchange::write_handshake(15, body))),
+                crate::transcription::key_exchange::write_handshake(15, body)))
+            || transcript_capped(s, body, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(15, body)),
+                crate::transcription::state_machine::receive_handshake_message(p, hs,
+                    crate::transcription::key_exchange::write_handshake(15, body))),
 {
     hide(crate::auth::spec::step);
     hide(crate::transcription::state_machine::receive_handshake_message);
@@ -234,9 +247,12 @@ pub proof fn lemma_certificate_verify(c: crate::schedule::spec::Crypto, v: crate
             } else {
                 assert(failures =~= Seq::<crate::transcription::alerts::ClientError>::empty());
                 let kind = crate::transcript::spec::Kind::CertificateVerify;
-                assert(crate::transcript::spec::step(c.hash, checked.transcript, kind, body) is Ok);
-                super::transcript::lemma_step(p, checked.transcript, hs.transcript, retried, kind, body);
-                super::transcript::lemma_write_handshake(15, body);
+                if crate::transcript::spec::step(c.hash, checked.transcript, kind, body) is Ok {
+                    super::transcript::lemma_step(p, checked.transcript, hs.transcript, retried, kind, body);
+                    super::transcript::lemma_write_handshake(15, body);
+                } else {
+                    assert(!within_policy(s, body));
+                }
             }
         },
     }
@@ -308,7 +324,7 @@ pub proof fn lemma_finished(c: crate::schedule::spec::Crypto, v: crate::auth::sp
         super::transcript::hash_is_32(p.hash),
         auth_agrees(p, s, hs),
         s.phase == crate::auth::spec::Phase::Finished,
-        within_policy(s, body),
+        body.len() <= crate::transcript::spec::MAX_BODY,
     ensures ({
         let (after, action) = crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(20, body));
         let t = crate::transcription::state_machine::receive_handshake_message(p, hs,
@@ -318,7 +334,7 @@ pub proof fn lemma_finished(c: crate::schedule::spec::Crypto, v: crate::auth::sp
             crate::auth::spec::Action::Fail(alert) => match t {
                 crate::transcription::state_machine::HandshakeStep::Abort(e) =>
                     crate::transcription::alerts::required_alert(e) == alert as nat,
-                _ => false,
+                _ => alert == crate::spec::INTERNAL_ERROR && !within_policy(s, body),
             },
             crate::auth::spec::Action::Send(flight) => match t {
                 crate::transcription::state_machine::HandshakeStep::Proceed { handshake, actions, receive_key_changes } => {
@@ -366,6 +382,22 @@ pub proof fn lemma_finished(c: crate::schedule::spec::Crypto, v: crate::auth::sp
     if body.len() == 32 && body == crate::schedule::spec::finished(c, s.config.server_secret, s.transcript.messages) {
         let fin = crate::transcript::spec::Kind::Finished;
         let s0 = crate::auth::spec::State { finished_checked: true, ..s };
+        let ok1 = crate::transcript::spec::step(c.hash, s0.transcript, fin, body);
+        let cb = crate::auth::spec::empty_certificate();
+        let k11 = crate::transcript::spec::Kind::Certificate;
+        if !(ok1 is Ok) {
+            assert(!within_policy(s, body));
+        } else if s.requested && !(crate::transcript::spec::step(c.hash, ok1->Ok_0, k11, cb) is Ok) {
+            assert(!within_policy(s, body));
+        } else if s.requested && !(crate::transcript::spec::step(c.hash,
+            crate::transcript::spec::step(c.hash, ok1->Ok_0, k11, cb)->Ok_0, fin,
+            crate::schedule::spec::finished(c, s.config.client_secret,
+                crate::transcript::spec::step(c.hash, ok1->Ok_0, k11, cb)->Ok_0.messages)) is Ok) {
+            assert(!within_policy(s, body));
+        } else if !s.requested && !(crate::transcript::spec::step(c.hash, ok1->Ok_0, fin,
+            crate::schedule::spec::finished(c, s.config.client_secret, ok1->Ok_0.messages)) is Ok) {
+            assert(!within_policy(s, body));
+        } else {
         assert(crate::transcript::spec::step(c.hash, s0.transcript, fin, body) is Ok);
         super::transcript::lemma_step(p, s0.transcript, hs.transcript, retried, fin, body);
         super::transcript::lemma_write_handshake(20, body);
@@ -430,6 +462,7 @@ pub proof fn lemma_finished(c: crate::schedule::spec::Crypto, v: crate::auth::sp
             assert(m3.subrange(hs.transcript.len() as int + 1, m3.len() - 1) =~= Seq::<Seq<u8>>::empty());
             super::transcript::lemma_concatenate_one(crate::transcription::key_exchange::write_handshake(20, own));
             assert(Seq::<u8>::empty() + crate::spec::write_handshake(20, own) =~= crate::spec::write_handshake(20, own));
+        }
         }
     }
 }

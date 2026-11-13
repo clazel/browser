@@ -332,13 +332,16 @@ pub proof fn lemma_ee(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
         super::schedule::crypto_agrees(c, p),
         super::auth::auth_agrees(p, s, hs),
         s.phase == crate::auth::spec::Phase::EncryptedExtensions,
-        super::auth::within_policy(s, body),
+        body.len() <= crate::transcript::spec::MAX_BODY,
         crate::auth::spec::profile_extensions(s.config.extensions),
     ensures
         flight_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
             crate::transcription::state_machine::receive_handshake_message(p, hs,
                 crate::transcription::key_exchange::write_handshake(8, body)),
-            ee_failures(hs, body)),
+            ee_failures(hs, body))
+            || super::auth::transcript_capped(s, body, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(8, body)),
+                crate::transcription::state_machine::receive_handshake_message(p, hs,
+                    crate::transcription::key_exchange::write_handshake(8, body))),
 {
     hide(crate::auth::spec::step);
     hide(crate::transcription::state_machine::receive_handshake_message);
@@ -395,9 +398,12 @@ pub proof fn lemma_ee(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
             {
                 assert(failures.len() == 0);
                 let kind = crate::transcript::spec::Kind::EncryptedExtensions;
-                assert(crate::transcript::spec::step(c.hash, s.transcript, kind, body) is Ok);
-                super::transcript::lemma_step(p, s.transcript, hs.transcript, hs.retry is Some, kind, body);
-                super::transcript::lemma_write_handshake(8, body);
+                if crate::transcript::spec::step(c.hash, s.transcript, kind, body) is Ok {
+                    super::transcript::lemma_step(p, s.transcript, hs.transcript, hs.retry is Some, kind, body);
+                    super::transcript::lemma_write_handshake(8, body);
+                } else {
+                    assert(!super::auth::within_policy(s, body));
+                }
             }
         },
     }
@@ -415,12 +421,15 @@ pub proof fn lemma_cr(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
         super::schedule::crypto_agrees(c, p),
         super::auth::auth_agrees(p, s, hs),
         s.phase == crate::auth::spec::Phase::CertificateOrRequest,
-        super::auth::within_policy(s, body),
+        body.len() <= crate::transcript::spec::MAX_BODY,
     ensures
         flight_agrees(p, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
             crate::transcription::state_machine::receive_handshake_message(p, hs,
                 crate::transcription::key_exchange::write_handshake(13, body)),
-            cr_failures(body)),
+            cr_failures(body))
+            || super::auth::transcript_capped(s, body, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(13, body)),
+                crate::transcription::state_machine::receive_handshake_message(p, hs,
+                    crate::transcription::key_exchange::write_handshake(13, body))),
 {
     hide(crate::auth::spec::step);
     hide(crate::transcription::state_machine::receive_handshake_message);
@@ -476,9 +485,12 @@ pub proof fn lemma_cr(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Ve
                 assert(failures.len() == 0);
                 let kind = crate::transcript::spec::Kind::CertificateRequest;
                 let s1 = crate::auth::spec::State { requested: true, ..s };
-                assert(crate::transcript::spec::step(c.hash, s1.transcript, kind, body) is Ok);
-                super::transcript::lemma_step(p, s1.transcript, hs.transcript, hs.retry is Some, kind, body);
-                super::transcript::lemma_write_handshake(13, body);
+                if crate::transcript::spec::step(c.hash, s1.transcript, kind, body) is Ok {
+                    super::transcript::lemma_step(p, s1.transcript, hs.transcript, hs.retry is Some, kind, body);
+                    super::transcript::lemma_write_handshake(13, body);
+                } else {
+                    assert(!super::auth::within_policy(s, body));
+                }
             }
         },
     }
@@ -541,7 +553,7 @@ pub proof fn lemma_certificate(c: crate::schedule::spec::Crypto, v: crate::auth:
         super::schedule::crypto_agrees(c, p),
         super::auth::auth_agrees(p, s, hs),
         s.phase == crate::auth::spec::Phase::CertificateOrRequest || s.phase == crate::auth::spec::Phase::Certificate,
-        super::auth::within_policy(s, body),
+        body.len() <= crate::transcript::spec::MAX_BODY,
         chain_agrees(v, p, s.config.host, s.config.now),
         (v.chain)(s.config.host, s.config.now, body) matches Ok(key) ==> key.len() <= crate::auth::spec::MAX_KEY,
         crate::auth::spec::profile_extensions(s.config.extensions),
@@ -552,7 +564,10 @@ pub proof fn lemma_certificate(c: crate::schedule::spec::Crypto, v: crate::auth:
             match crate::transcription::authentication::read_certificate(body) {
                 Some(m) => crate::transcription::authentication::certificate_failures(hs.hello, m),
                 None => seq![],
-            }),
+            })
+            || super::auth::transcript_capped(s, body, crate::auth::spec::step(c, v, s, crate::auth::spec::Input::Handshake(11, body)),
+                crate::transcription::state_machine::receive_handshake_message(p, hs,
+                    crate::transcription::key_exchange::write_handshake(11, body))),
 {
     hide(crate::auth::spec::step);
     hide(crate::transcription::state_machine::receive_handshake_message);
@@ -626,9 +641,12 @@ pub proof fn lemma_certificate(c: crate::schedule::spec::Crypto, v: crate::auth:
                             Ok(key) => {
                                 let kind = crate::transcript::spec::Kind::Certificate;
                                 let s1 = crate::auth::spec::State { key, chain_checked: true, ..s };
-                                assert(crate::transcript::spec::step(c.hash, s1.transcript, kind, body) is Ok);
-                                super::transcript::lemma_step(p, s1.transcript, hs.transcript, hs.retry is Some, kind, body);
-                                super::transcript::lemma_write_handshake(11, body);
+                                if crate::transcript::spec::step(c.hash, s1.transcript, kind, body) is Ok {
+                                    super::transcript::lemma_step(p, s1.transcript, hs.transcript, hs.retry is Some, kind, body);
+                                    super::transcript::lemma_write_handshake(11, body);
+                                } else {
+                                    assert(!super::auth::within_policy(s, body));
+                                }
                             },
                         }
                     }
