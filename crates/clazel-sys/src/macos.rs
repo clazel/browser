@@ -1,11 +1,16 @@
 //! macOS: the Seatbelt sandbox (`sandbox_init`), the two escape attempts
-//! the sandbox tests make (`fork`, `ptrace`), and `getentropy`.
+//! the sandbox tests make (`fork`, `ptrace`), `getentropy`, and Metal drawing
+//! for the GPU process ([`metal`]).
 //!
 //! `sandbox_init` is deprecated, but it is what Chromium and Firefox still
 //! use, and no replacement exists for a process that is not an App Sandbox
 //! application. `libc` does not declare it, so it is declared here.
 
 use std::ffi::{CString, c_char, c_int, c_void};
+
+/// Metal drawing for the GPU process (phase-5.md item 5.17b), on Apple silicon.
+#[cfg(target_arch = "aarch64")]
+pub mod metal;
 use std::fmt;
 
 use crate::{Errno, RandomError};
