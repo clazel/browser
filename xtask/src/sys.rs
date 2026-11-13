@@ -72,6 +72,66 @@ const LINUX: &[&str] = &[
     // (`clazel_sys::fill_random`): the `libc` wrapper with flags 0, not
     // `syscall`. It only writes into a caller's buffer.
     "getrandom",
+    // `clazel_sys::linux::clear_close_on_exec` (items 5.18 and 5.23), as on
+    // macOS: only `F_SETFD` with 0, on a descriptor the caller borrows.
+    "fcntl",
+];
+
+/// What `crates/clazel-sys/src/linux/vulkan.rs` may declare and call: Vulkan
+/// core functions for the GPU process's drawing on Linux (phase-5.md item 5.17b),
+/// as `libvulkan` exports them (every one in Vulkan 1.0), cited by their
+/// reference pages (`man 3 vk…`), and `memcpy` for the one copy into and the one
+/// copy out of mapped device memory (the plan: "the checker forbids pointer
+/// arithmetic, so that is one audited call that copies"). No extension function,
+/// so nothing is looked up.
+const VULKAN: &[&str] = &[
+    "vkCreateInstance",
+    "vkEnumeratePhysicalDevices",
+    "vkGetPhysicalDeviceProperties",
+    "vkGetPhysicalDeviceQueueFamilyProperties",
+    "vkGetPhysicalDeviceMemoryProperties",
+    "vkCreateDevice",
+    "vkGetDeviceQueue",
+    "vkCreateCommandPool",
+    "vkAllocateCommandBuffers",
+    "vkCreateShaderModule",
+    "vkCreateRenderPass",
+    "vkCreateDescriptorSetLayout",
+    "vkCreatePipelineLayout",
+    "vkCreateGraphicsPipelines",
+    "vkCreateDescriptorPool",
+    "vkAllocateDescriptorSets",
+    "vkUpdateDescriptorSets",
+    "vkCreateImage",
+    "vkDestroyImage",
+    "vkGetImageMemoryRequirements",
+    "vkAllocateMemory",
+    "vkFreeMemory",
+    "vkBindImageMemory",
+    "vkCreateImageView",
+    "vkDestroyImageView",
+    "vkCreateFramebuffer",
+    "vkDestroyFramebuffer",
+    "vkCreateBuffer",
+    "vkDestroyBuffer",
+    "vkGetBufferMemoryRequirements",
+    "vkBindBufferMemory",
+    "vkMapMemory",
+    "vkUnmapMemory",
+    "vkBeginCommandBuffer",
+    "vkEndCommandBuffer",
+    "vkCmdBeginRenderPass",
+    "vkCmdEndRenderPass",
+    "vkCmdBindPipeline",
+    "vkCmdBindDescriptorSets",
+    "vkCmdPushConstants",
+    "vkCmdSetViewport",
+    "vkCmdSetScissor",
+    "vkCmdDraw",
+    "vkCmdCopyImageToBuffer",
+    "vkQueueSubmit",
+    "vkQueueWaitIdle",
+    "memcpy",
 ];
 
 /// What `crates/clazel-sys/src/macos.rs` may declare and call.
@@ -252,6 +312,7 @@ pub const DISPATCH_CASTS: &[(&str, &[&str])] = &[
 /// `std::io::Error::last_os_error`, which is safe, so it needs no entry.
 pub const FOREIGN_FUNCTIONS: &[(&str, &[&str])] = &[
     ("crates/clazel-sys/src/linux.rs", LINUX),
+    ("crates/clazel-sys/src/linux/vulkan.rs", VULKAN),
     ("crates/clazel-sys/src/macos.rs", MACOS),
     ("crates/clazel-sys/src/windows.rs", WINDOWS),
     ("crates/clazel-sys/src/windows/window.rs", WINDOW),
