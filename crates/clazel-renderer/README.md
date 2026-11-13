@@ -10,6 +10,26 @@ and is sent back as one `Display`.
 Tier 0: tests only. The pipeline is glue; every step that reads the page's
 bytes is a function of the crate that proves it, at that crate's own tier.
 
+## The GPU process's list socket (item 5.23), for item 5.20
+
+The host starts a renderer paired with a GPU process (`launch::Gpus`,
+`launch::spawn_with_list`) with `--list-fd N`: a socket inherited by number
+(its close-on-exec flag cleared for that one start, through `clazel-sys`). The
+renderer (`main.rs`) opens it again through `/dev/fd/N` **before** entering its
+sandbox, reads its `--font PATH` files then too, and runs `run_graphics`, which
+writes each display list with `clazel_gpu::channel::write_list` (`frame_bytes`: 4
+bytes of length, little-endian, then the list as `clazel_displaylist` encodes it,
+at most 256 MiB), the one definition of the framing, which the GPU process reads.
+The kernel's `Viewport` gives the size to lay out at; the GPU process draws every
+list in order at the size its `GpuViewport` gives. Without `--list-fd` (text mode,
+no GPU process) the text path (`Display`) runs, as item 5.18 decided. Only macOS
+passes `--list-fd` so far.
+
+`launch` also holds the host's side of the GPU processes (`Gpus`: start, reader
+threads, the ring of pixels, ending with the renderer) and the log's rendering of a
+frame (`describe`), so that the host shell (`crates/clazel/src`) only routes and
+stays under its 300 lines.
+
 ## The document pipeline (`src/pipeline.rs`)
 
 | Step | Function | Crate, item |
@@ -142,22 +162,22 @@ choice; `src/page/state.rs` states each state and contract.
   once, freed only when a frame's new masks would pass a limit; a frame's
   fills, clips and glyphs are capped at half of 5.17a's item limit, its
   clip kept balanced.
-- **The socket's framing** (a 4-byte big-endian length, then a list) is
-  ours; the GPU process's reader is not built yet.
+- **The socket's framing** was first a 4-byte big-endian length of 5.20's
+  own; item 5.23 made it `clazel_gpu::channel`'s (little-endian), the GPU
+  process's reader, so there is one definition, and
+  `the_gpu_process_reads_what_the_renderer_writes` checks the two ends agree.
 
 ### What waits
 
-- **The list socket**: the host must create a socket pair at the GPU
-  spawn and hand the renderer its end; adopting an inherited descriptor and
-  clearing its close-on-exec flag needs a new audited `clazel-sys` call
-  (phase-5.md, item 5.18's plan), outside this item. Until then the binary
-  runs the text path, and `run_graphics` is exercised by the tests with
-  in-memory sockets.
+- **The list socket on Linux and Windows**: wired on macOS (item 5.23: the
+  host clears close-on-exec with `clazel_sys::macos::clear_close_on_exec` and
+  passes `--list-fd`); Linux needs the same `clazel-sys` call, and neither has a
+  GPU process yet.
 - **Linked style sheets**: item 5.19's `FetchStyle` and `Style*` messages.
   Wiring them is `SheetWait::start` with fetches, a request per pending
   index, `SheetWait::answer` per reply, and rendering once ready.
-- **The GPU process's list reader** (it decodes and validates; the framing
-  above is what it will read).
+- **Keys**: a key `Input` still does nothing; the host (5.23) sends Space,
+  Page Up/Down and Up/Down as scrolls instead.
 
 ### Memory (item 5.20's terms, added to 4.13's above)
 

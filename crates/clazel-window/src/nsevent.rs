@@ -172,6 +172,7 @@ pub fn translate(event: &Recorded, geometry: &Geometry) -> Vec<Event> {
             if let Some(code) = event.key_code {
                 out.push(Event::Key {
                     code: u32::from(code),
+                    command: event.modifiers & COMMAND != 0,
                 });
             }
             if event.modifiers & COMMAND == 0 {
@@ -350,17 +351,32 @@ mod tests {
     fn a_key_is_its_code_then_what_it_typed() {
         assert_eq!(
             translate(&key(0x00, &[0x61], 0), &GEOMETRY),
-            vec![Event::Key { code: 0 }, Event::Char { unit: 0x61 }]
+            vec![
+                Event::Key {
+                    code: 0,
+                    command: false
+                },
+                Event::Char { unit: 0x61 }
+            ]
         );
         assert_eq!(
             translate(&key(0x24, &[0x0D], 0), &GEOMETRY),
-            vec![Event::Key { code: 0x24 }, Event::Char { unit: 0x0D }]
+            vec![
+                Event::Key {
+                    code: 0x24,
+                    command: false
+                },
+                Event::Char { unit: 0x0D }
+            ]
         );
         // A character outside the BMP is two code units, as on Windows.
         assert_eq!(
             translate(&key(0x00, &[0xD83D, 0xDE00], 0), &GEOMETRY),
             vec![
-                Event::Key { code: 0 },
+                Event::Key {
+                    code: 0,
+                    command: false
+                },
                 Event::Char { unit: 0xD83D },
                 Event::Char { unit: 0xDE00 }
             ]
@@ -372,12 +388,18 @@ mod tests {
         // The up arrow's characters are NSUpArrowFunctionKey, U+F700.
         assert_eq!(
             translate(&key(0x7E, &[0xF700], 0x00A0_0000), &GEOMETRY),
-            vec![Event::Key { code: 0x7E }]
+            vec![Event::Key {
+                code: 0x7E,
+                command: false
+            }]
         );
         // Command-L.
         assert_eq!(
             translate(&key(0x25, &[0x6C], COMMAND), &GEOMETRY),
-            vec![Event::Key { code: 0x25 }]
+            vec![Event::Key {
+                code: 0x25,
+                command: true
+            }]
         );
     }
 

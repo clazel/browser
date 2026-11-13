@@ -9,6 +9,9 @@ description = "The GPU process's drawing (Phase 5 items 5.17b, 5.17c and 5.21a):
 [dependencies]
 # The decoder and validator every list passes first (item 5.17a); our own crate.
 clazel-displaylist = { path = "../clazel-displaylist" }
+# The kernel's messages: `GpuViewport` in, `GpuReady`, `GpuRefused` and
+# `FrameReady` out (item 5.18); our own crate.
+clazel-ipc = { path = "../clazel-ipc" }
 
 # Every foreign call of the Metal backend is in `clazel-sys` (CLAUDE.md rule 1).
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]

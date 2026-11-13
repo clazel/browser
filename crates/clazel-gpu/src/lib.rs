@@ -22,6 +22,8 @@
 //! - [`blocklist`]: the driver blocklist and its parser (item 5.17c).
 //! - [`start`]: the start's answer, before any list (item 5.17c).
 //! - [`policy`]: the crash policy, for the kernel (item 5.17c).
+//! - [`channel`] and [`process`]: the GPU process's sockets and its loop (items
+//!   5.18 and 5.23); `src/main.rs` is the process.
 //! - [`soft`]: source-over in 8-bit sRGB, premultiplied, no gamma correction; the
 //!   fake backend.
 //! - [`reference`]: the expected pixels of a list, computed independently.
@@ -42,10 +44,12 @@ pub mod atlas;
 pub mod backend;
 pub mod batch;
 pub mod blocklist;
+pub mod channel;
 pub mod geom;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 pub mod metal;
 pub mod policy;
+pub mod process;
 pub mod reference;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 pub mod sandbox;

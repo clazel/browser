@@ -325,6 +325,35 @@ impl Window {
         Ok(())
     }
 
+    /// Show `width` by `height` pixels, each `0x00RRGGBB`, rows from the top, as the
+    /// page, at `x`, `y` from the content area's top left, cut at the content
+    /// area's edges (item 5.23, until a GPU process's surface can reach the host:
+    /// see `clazel_gpu::channel`). The length of `pixels` must match.
+    pub fn show_page_pixels(
+        &self,
+        pixels: &[u32],
+        (x, y): (u32, u32),
+        width: u32,
+        height: u32,
+    ) -> Result<(), Error> {
+        if self.closed {
+            return Ok(());
+        }
+        let w = usize::try_from(width).map_err(|_| Error::Os(size_error()))?;
+        let h = usize::try_from(height).map_err(|_| Error::Os(size_error()))?;
+        let image = Image::new(pixels, w, h)?;
+        let frame = nsevent::layer_frame(x, y, width, height, &self.geometry);
+        let scale = self.geometry.scale;
+        sys::without_animation(self.main, || -> Result<(), WindowError> {
+            self.page.set_frame(rect(frame))?;
+            self.page.set_contents_scale(scale)?;
+            self.page.set_contents_image(&image);
+            self.page.set_hidden(false);
+            Ok(())
+        })??;
+        Ok(())
+    }
+
     /// Show no page.
     pub fn hide_page(&self) -> Result<(), Error> {
         sys::without_animation(self.main, || {

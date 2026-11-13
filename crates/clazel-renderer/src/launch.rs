@@ -8,9 +8,15 @@
 //! pipes as its standard handles; `enter` there only checks that it is
 //! confined. The host sees the same [`Link`] either way.
 
+use std::collections::HashMap;
 use std::io::{self, Read};
 use std::process::Command;
+use std::sync::mpsc::Sender;
 use std::time::Duration;
+
+use clazel_gpu::channel::{SurfaceFrame, read_surface};
+use clazel_ipc::frame::codec::payload_length;
+use clazel_ipc::message::codec::{Msg, decode_framed};
 
 /// The host's end of a started renderer: write frames to it, then end it.
 pub struct Link(imp::Link);
@@ -23,6 +29,125 @@ pub struct Link(imp::Link);
 pub fn spawn(command: Command) -> io::Result<(Link, Box<dyn Read + Send>)> {
     let (link, reader) = imp::spawn(command)?;
     Ok((Link(link), reader))
+}
+
+/// The renderer's end of a GPU process's list socket, for [`spawn_with_list`].
+pub struct ListEnd(#[cfg(target_os = "macos")] std::os::unix::net::UnixStream);
+
+/// What the host holds of a started GPU process (items 5.18 and 5.23): its
+/// channel to the kernel, as a renderer's; a reader of the surface socket; and
+/// the renderer's end of the list socket.
+pub struct GpuStart {
+    /// The kernel's channel.
+    pub link: Link,
+    /// The GPU process's frames to the kernel, for a reader thread.
+    pub frames: Box<dyn Read + Send>,
+    /// The surface socket, for a reader thread (`clazel_gpu::channel`).
+    pub surface: Box<dyn Read + Send>,
+    /// The list socket's other end, for the paired renderer.
+    pub list: ListEnd,
+}
+
+/// Start the GPU process `command` describes, as [`spawn`] starts a renderer,
+/// with two more sockets inherited by number: the list socket's GPU end
+/// (`--list-fd N`) and the surface socket's (`--surface-fd M`). Only on macOS so
+/// far (clearing close-on-exec is `clazel_sys::macos::clear_close_on_exec`);
+/// elsewhere it fails with `Unsupported`.
+///
+/// Every program started while those flags are clear inherits the two
+/// descriptors, so the host must start nothing else between this call's
+/// clearing and its return, which closes its copies. The host shell spawns from
+/// one thread, so it does not.
+pub fn spawn_gpu(command: Command) -> io::Result<GpuStart> {
+    pairing::spawn_gpu(command)
+}
+
+/// [`spawn_with_list`] if there is a list socket for the renderer, else [`spawn`].
+pub fn spawn_paired(
+    command: Command,
+    list: Option<ListEnd>,
+) -> io::Result<(Link, Box<dyn Read + Send>)> {
+    match list {
+        Some(list) => spawn_with_list(command, list),
+        None => spawn(command),
+    }
+}
+
+/// Start a renderer as [`spawn`] does, with `list`, the list socket's renderer
+/// end from [`spawn_gpu`], inherited by number as `--list-fd N`; the host's copy
+/// is closed on return. Only on macOS so far.
+pub fn spawn_with_list(
+    command: Command,
+    list: ListEnd,
+) -> io::Result<(Link, Box<dyn Read + Send>)> {
+    pairing::spawn_with_list(command, list)
+}
+
+#[cfg(target_os = "macos")]
+mod pairing {
+    use std::io::{self, Read};
+    use std::os::unix::net::UnixStream;
+    use std::process::Command;
+
+    use super::{GpuStart, Link, ListEnd, spawn};
+
+    pub fn spawn_gpu(mut command: Command) -> io::Result<GpuStart> {
+        let (list, list_gpu) = UnixStream::pair()?;
+        let (surface, surface_gpu) = UnixStream::pair()?;
+        let list_fd = pass(&list_gpu)?;
+        let surface_fd = pass(&surface_gpu)?;
+        command.args(["--list-fd", &list_fd, "--surface-fd", &surface_fd]);
+        let started = spawn(command);
+        drop((list_gpu, surface_gpu));
+        let (link, frames) = started?;
+        Ok(GpuStart {
+            link,
+            frames,
+            surface: Box::new(surface),
+            list: ListEnd(list),
+        })
+    }
+
+    pub fn spawn_with_list(
+        mut command: Command,
+        list: ListEnd,
+    ) -> io::Result<(Link, Box<dyn Read + Send>)> {
+        command.args(["--list-fd", &pass(&list.0)?]);
+        let started = spawn(command);
+        drop(list);
+        started
+    }
+
+    /// Clear `socket`'s close-on-exec flag; its number, for the child's arguments.
+    fn pass(socket: &UnixStream) -> io::Result<String> {
+        use std::os::fd::{AsFd, AsRawFd};
+        clazel_sys::macos::clear_close_on_exec(socket.as_fd())
+            .map_err(|e| io::Error::from_raw_os_error(e.0))?;
+        Ok(socket.as_raw_fd().to_string())
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+mod pairing {
+    use std::io::{self, Read};
+    use std::process::Command;
+
+    use super::{GpuStart, Link, ListEnd};
+
+    fn unsupported() -> io::Error {
+        io::Error::new(
+            io::ErrorKind::Unsupported,
+            "no GPU process on this platform yet (phase-5.md items 5.22, 5.22a)",
+        )
+    }
+
+    pub fn spawn_gpu(_: Command) -> io::Result<GpuStart> {
+        Err(unsupported())
+    }
+
+    pub fn spawn_with_list(_: Command, _: ListEnd) -> io::Result<(Link, Box<dyn Read + Send>)> {
+        Err(unsupported())
+    }
 }
 
 impl Link {
@@ -254,4 +379,174 @@ mod imp {
             (status, stderr)
         }
     }
+}
+
+/// What a GPU process's reader threads report to the host.
+pub enum GpuReport {
+    /// A whole frame for the kernel (`FromGpu`).
+    Frame(Vec<u8>),
+    /// A frame's pixels from the surface socket.
+    Pixels(SurfaceFrame),
+    /// Its kernel channel ended, and why.
+    Gone(String),
+}
+
+/// The GPU processes the host runs (items 5.18 and 5.23), named by their
+/// renderers' ids, and the pixels each sent last per ring slot. Reports go to the
+/// host's channel as `wrap(id, report)`, the pattern of `clazel_net::Driver`.
+pub struct Gpus<E> {
+    tx: Sender<E>,
+    wrap: fn(u64, GpuReport) -> E,
+    command: Option<Box<dyn FnMut(u64) -> Command>>,
+    links: HashMap<u64, Link>,
+    lists: HashMap<u64, ListEnd>,
+    frames: HashMap<(u64, u32), SurfaceFrame>,
+}
+
+impl<E: Send + 'static> Gpus<E> {
+    /// No GPU process, and none started until [`Gpus::start_with`] (text mode).
+    pub fn new(tx: Sender<E>, wrap: fn(u64, GpuReport) -> E) -> Gpus<E> {
+        Gpus {
+            tx,
+            wrap,
+            command: None,
+            links: HashMap::new(),
+            lists: HashMap::new(),
+            frames: HashMap::new(),
+        }
+    }
+
+    /// Start GPU processes with `command(id)` from now on.
+    pub fn start_with(&mut self, command: impl FnMut(u64) -> Command + 'static) {
+        self.command = Some(Box::new(command));
+    }
+
+    /// `SpawnGpu { id }`: start the process ([`spawn_gpu`]) and its two reader
+    /// threads, and keep the list socket's renderer end for [`Gpus::take_list`].
+    /// Nothing in text mode. An error is a line for the host's log.
+    pub fn spawn(&mut self, id: u64) -> Result<(), String> {
+        let Some(command) = self.command.as_mut() else {
+            return Ok(());
+        };
+        let start = spawn_gpu(command(id)).map_err(|e| format!("gpu {id}: cannot start: {e}"))?;
+        let (tx, wrap, mut frames) = (self.tx.clone(), self.wrap, start.frames);
+        std::thread::spawn(move || {
+            let why = loop {
+                match read_frame(&mut frames) {
+                    Ok(frame) => {
+                        if tx.send(wrap(id, GpuReport::Frame(frame))).is_err() {
+                            return;
+                        }
+                    }
+                    Err(why) => break why,
+                }
+            };
+            let _ = tx.send(wrap(id, GpuReport::Gone(why)));
+        });
+        let (tx, wrap, mut surface) = (self.tx.clone(), self.wrap, start.surface);
+        std::thread::spawn(move || {
+            while let Ok(Some(f)) = read_surface(&mut surface) {
+                if tx.send(wrap(id, GpuReport::Pixels(f))).is_err() {
+                    return;
+                }
+            }
+        });
+        self.links.insert(id, start.link);
+        self.lists.insert(id, start.list);
+        Ok(())
+    }
+
+    /// The list socket's renderer end for renderer `id`, once.
+    pub fn take_list(&mut self, id: u64) -> Option<ListEnd> {
+        self.lists.remove(&id)
+    }
+
+    /// Whether the GPU process of renderer `id` runs.
+    pub fn has(&self, id: u64) -> bool {
+        self.links.contains_key(&id)
+    }
+
+    /// The ids of every running GPU process.
+    pub fn ids(&self) -> Vec<u64> {
+        self.links.keys().copied().collect()
+    }
+
+    /// `ToGpu`: write a frame. A failed write is not reported here: the process
+    /// is then gone, and its reader thread says so ([`GpuReport::Gone`]).
+    pub fn send(&mut self, id: u64, frame: &[u8]) {
+        if let Some(link) = self.links.get_mut(&id) {
+            link.send(frame);
+        }
+    }
+
+    /// Keep `frame` as slot `frame.slot`'s pixels of `id`'s process, if it runs.
+    pub fn keep(&mut self, id: u64, frame: SurfaceFrame) {
+        if self.has(id) {
+            self.frames.insert((id, frame.slot), frame);
+        }
+    }
+
+    /// The pixels slot `slot` of `id`'s process holds, taken out.
+    pub fn take_frame(&mut self, id: u64, slot: u32) -> Option<SurfaceFrame> {
+        self.frames.remove(&(id, slot))
+    }
+
+    /// End `id`'s process as [`Link::finish`] does and forget its pixels; the
+    /// line for the host's log, if it ran.
+    pub fn finish(&mut self, id: u64, why: &str, grace: Duration) -> Option<String> {
+        self.lists.remove(&id);
+        self.frames.retain(|(r, _), _| *r != id);
+        let (status, stderr) = self.links.remove(&id)?.finish(grace);
+        Some(format!("gpu {id} exited: {why}; {status}{}", note(&stderr)))
+    }
+}
+
+impl<E> Drop for Gpus<E> {
+    fn drop(&mut self) {
+        for (_, link) in self.links.drain() {
+            link.finish(Duration::ZERO);
+        }
+    }
+}
+
+/// `"; stderr: …"` for a process's log line, or nothing if it wrote nothing.
+pub fn note(stderr: &str) -> String {
+    Some(stderr.trim())
+        .filter(|s| !s.is_empty())
+        .map_or(String::new(), |s| format!("; stderr: {s}"))
+}
+
+/// For the host's log (`crates/clazel`): the first frame of one write (a document is `Commit`, `Body`s,
+/// `BodyEnd`) as the call or answer it carries.
+pub fn describe(frame: &[u8]) -> String {
+    let q = |b: &[u8]| format!("{:?}", String::from_utf8_lossy(b));
+    let len = frame.get(..4).and_then(payload_length);
+    let first = len.and_then(|n| frame.get(..n.checked_add(4)?));
+    match first.and_then(decode_framed) {
+        None => format!("undecodable frame of {} bytes", frame.len()),
+        Some(Msg::Commit { url, kind, .. }) => format!("commit {} (kind {kind})", q(&url)),
+        Some(Msg::CookieGet) => "document.cookie".to_owned(),
+        Some(Msg::CookieSet { cookie_string: c }) => format!("document.cookie = {}", q(&c)),
+        Some(Msg::StorageGetItem { key }) => format!("localStorage.getItem({})", q(&key)),
+        Some(Msg::StorageSetItem { key: k, value: v }) => {
+            format!("localStorage.setItem({}, {})", q(&k), q(&v))
+        }
+        Some(Msg::StorageRemoveItem { key }) => format!("localStorage.removeItem({})", q(&key)),
+        Some(Msg::CookieValue { cookie_string: c }) => format!("result {}", q(&c)),
+        Some(Msg::StorageValue { value: Some(v) }) => format!("result {}", q(&v)),
+        Some(Msg::StorageValue { value: None }) => "result null".to_owned(),
+        Some(other) => format!("{other:?}"),
+    }
+}
+
+/// One whole IPC frame, header included, or why the channel ended.
+fn read_frame(r: &mut impl Read) -> Result<Vec<u8>, String> {
+    let mut frame = vec![0u8; 4];
+    r.read_exact(&mut frame)
+        .map_err(|_| "closed its socket".to_owned())?;
+    let n = payload_length(&frame).ok_or("sent a frame over MAX_FRAME")?;
+    frame.resize(n.saturating_add(4), 0);
+    r.read_exact(frame.get_mut(4..).unwrap_or_default())
+        .map_err(|_| "closed its socket inside a frame".to_owned())?;
+    Ok(frame)
 }

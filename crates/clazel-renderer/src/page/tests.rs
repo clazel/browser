@@ -89,7 +89,13 @@ fn run(input: &[Msg]) -> Result<Sent, RunError> {
             decode_framed(&frame)
         })
         .collect();
-    let raw = split_frames(&list);
+    // The lists as the GPU process reads them (`clazel_gpu::channel`).
+    let mut raw = Vec::new();
+    let mut rest = &list[..];
+    while let Ok(Some(l)) = clazel_gpu::channel::read_list(&mut rest) {
+        raw.push(l);
+    }
+    assert!(rest.is_empty(), "bytes left after the last list");
     let lists = raw.iter().map(|b| decode(b).unwrap_or_default()).collect();
     Ok(Sent { kernel, lists, raw })
 }
@@ -139,6 +145,49 @@ fn count(l: &[ExecItem], f: fn(&ExecItem) -> bool) -> usize {
 const STYLED: &str = "<!DOCTYPE html><title>  A \n page </title>\
 <style>body { margin: 0; background: #ff0000 } p { margin: 0; color: #000000 }</style>\
 <div style='background: #0000ff; width: 10px; height: 10px'></div><p>Hello</p>";
+
+/// The renderer's list socket and the GPU process agree: the bytes the renderer
+/// writes go through the GPU process's own loop (`clazel_gpu::process::Server`:
+/// its reader's framing, 5.17a's decoder and validator, the batching) and draw
+/// the same pixels the test's own draw gives.
+#[test]
+fn the_gpu_process_reads_what_the_renderer_writes() -> Result<(), RunError> {
+    let mut input = commit(STYLED, "text/html");
+    input.push(viewport(100, 40));
+    let mut w = Vec::new();
+    let mut list = Vec::new();
+    run_graphics(
+        &mut Cursor::new(frames(&input)),
+        &mut w,
+        &mut list,
+        &fonts(),
+    )?;
+    let started = Gpu::start(SoftBackend::new(), Launch::SOFTWARE).ok();
+    assert!(started.is_some());
+    let Some((gpu, _)) = started else {
+        return Ok(());
+    };
+    let mut server = clazel_gpu::process::Server::new(gpu);
+    let size = encode_framed(&Msg::GpuViewport {
+        width: 100,
+        height: 40,
+        scale: 1,
+    })
+    .unwrap_or_default();
+    assert_eq!(server.kernel(&size), Ok(()));
+    let mut rest = &list[..];
+    let mut frames_drawn = Vec::new();
+    while let Ok(Some(l)) = clazel_gpu::channel::read_list(&mut rest) {
+        let frame = server.list(&l);
+        assert!(matches!(frame, Ok(Some(_))), "{frame:?}");
+        frames_drawn.extend(frame.ok().flatten());
+    }
+    assert!(rest.is_empty());
+    assert_eq!(frames_drawn.len(), 1);
+    let first = frames_drawn.first().map(|f| f.pixels.clone());
+    assert_eq!(first, Some(draw(&run(&input)?, 100, 40)));
+    Ok(())
+}
 
 /// A document with a `style` element and a `style` attribute, down to a list
 /// the validator accepts, drawn: the body's red covers the canvas, the

@@ -39,9 +39,26 @@
 //!   connection is made, never sees them again. Measured: after that warm-up, a
 //!   profile of `(deny default)` alone drew every scene correctly, creating new
 //!   IOSurfaces of each scene's size inside it, and the system log showed no denial.
-//! - **So the profile has no rule.** Every rule is "the least a measured run
-//!   needed"; none was. The renderer's two rules (a signal to itself, three
-//!   `sysctl` names) are not copied: the GPU process was not measured to need them.
+//! - **One rule: `mach-lookup` of `com.apple.MTLCompilerService`** (item 5.23).
+//!   5.21a's measurement drew the fixed scenes and needed none. Drawing real pages
+//!   (5.23, the renderer's lists of 5.20) then made the sandboxed process abort in
+//!   Apple's driver, `AGXMetalG13X`, while compiling a blit program variant
+//!   (`findOrCreateDriverProgramVariant<BlitComputeProgramVariant>`) on Metal's
+//!   compiler queue, with the system log's `launchd ... denied lookup: name =
+//!   com.apple.MTLCompilerService ... Sandbox restriction`. The driver compiles
+//!   such variants when first needed, so no warm-up of ours can promise to reach
+//!   them all (drawing every scene and every upload offset before entering, tried
+//!   the same day, did not prevent it). The service is the one the plan's 5.21a text
+//!   names ("the IOKit and Mach services Metal needs"), and Chromium's GPU sandbox
+//!   allows it. The cost: a compromised GPU process can send requests to Apple's
+//!   Metal compiler, itself a sandboxed XPC service. Measured on the same machine,
+//!   2026-11-13: with it, the page-flow test that aborted passes
+//!   (`crates/clazel/tests/browse_gpu.rs`), 5.21a's escape attempts are all still
+//!   denied (`clazel-gpu`'s `tests/sandbox_macos.rs`), and the only denial logged is
+//!   `mach-lookup` of `com.apple.analyticsd` (the driver's telemetry), denied
+//!   without effect and left denied.
+//! - The renderer's two rules (a signal to itself, three `sysctl` names) are not
+//!   copied: the GPU process was not measured to need them.
 //! - **What entering first would cost**, measured the same day and not used: a
 //!   process that enters before making the device needs `iokit-open-user-client`
 //!   for `AGXDeviceUserClient` and `IOSurfaceRootUserClient`, `mach-lookup` of
@@ -90,8 +107,13 @@ pub const RENDERER: &[Rule] = &[
 ];
 
 /// The GPU process's rules after `(deny default)`, entered after the warm-up
-/// (module documentation): none.
-pub const GPU: &[Rule] = &[];
+/// (module documentation).
+pub const GPU: &[Rule] = &[Rule {
+    operation: "mach-lookup",
+    filters: &["(global-name \"com.apple.MTLCompilerService\")"],
+    reason: "Apple's driver compiles blit program variants when first needed, through \
+             Metal's compiler service (measured, item 5.23)",
+}];
 
 /// Render `rules` as an SBPL profile.
 pub fn render(rules: &[Rule]) -> String {

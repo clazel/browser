@@ -1,0 +1,146 @@
+//! The GPU process (items 5.17b, 5.18, 5.21a, 5.23): one per tab, started by the
+//! host when the kernel says `SpawnGpu`, paired with that tab's renderer.
+//!
+//! `clazel-gpu --list-fd N --surface-fd M [--ignore-blocklist]`
+//!
+//! - Standard input and output are the kernel's channel (one socket, as the
+//!   renderer's), standard error the host's log.
+//! - `N` is the list socket's descriptor, `M` the surface socket's
+//!   ([`clazel_gpu::channel`]), inherited from the host, which cleared their
+//!   close-on-exec flags for this start. Each is opened again through `/dev/fd`,
+//!   which needs no `unsafe`, **before** the sandbox is entered.
+//! - `--ignore-blocklist` is `browse --gpu=hardware` (item 5.17c).
+//!
+//! Then, on macOS on Apple silicon: the Metal backend and the sandbox
+//! (`sandbox::start_metal`, item 5.21a), the blocklist (`Gpu::start`), the
+//! answer (`GpuReady` or `GpuRefused`) and the loop (`process::run`). Every other
+//! target has no GPU backend yet (item 5.17b's rest), so the process says so and
+//! exits, which the crash policy counts as a refusal.
+
+use std::process::ExitCode;
+
+/// The descriptor numbers given as `--list-fd` and `--surface-fd`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Args {
+    list: u32,
+    surface: u32,
+    ignore_blocklist: bool,
+}
+
+fn parse(args: &[String]) -> Option<Args> {
+    let value = |name: &str| {
+        let i = args.iter().position(|a| a == name)?;
+        args.get(i.checked_add(1)?)?.parse::<u32>().ok()
+    };
+    Some(Args {
+        list: value("--list-fd")?,
+        surface: value("--surface-fd")?,
+        ignore_blocklist: args.iter().any(|a| a == "--ignore-blocklist"),
+    })
+}
+
+fn main() -> ExitCode {
+    let args: Vec<String> = std::env::args().collect();
+    let Some(args) = parse(&args) else {
+        eprintln!("usage: clazel-gpu --list-fd N --surface-fd M [--ignore-blocklist]");
+        return ExitCode::from(2);
+    };
+    match run(args) {
+        Ok(why) => {
+            eprintln!("clazel-gpu: ended: {why}");
+            ExitCode::SUCCESS
+        }
+        Err(why) => {
+            eprintln!("clazel-gpu: {why}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+fn run(_: Args) -> Result<String, String> {
+    Err("no GPU backend on this platform yet (phase-5.md item 5.17b)".to_owned())
+}
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn run(args: Args) -> Result<String, String> {
+    use std::fs::{File, OpenOptions};
+    use std::io::Write;
+
+    use clazel_gpu::process::{Server, ready_frame, refused_frame, run};
+    use clazel_gpu::start::{Check, Launch, Mode};
+    use clazel_gpu::{Gpu, sandbox};
+
+    // Before the sandbox: `(deny default)` refuses every open after it.
+    let list = File::open(format!("/dev/fd/{}", args.list))
+        .map_err(|e| format!("cannot open the list socket {}: {e}", args.list))?;
+    let surface = OpenOptions::new()
+        .write(true)
+        .open(format!("/dev/fd/{}", args.surface))
+        .map_err(|e| format!("cannot open the surface socket {}: {e}", args.surface))?;
+    let backend = sandbox::start_metal().map_err(|e| e.to_string())?;
+    let launch = Launch {
+        mode: Mode::Hardware,
+        check: if args.ignore_blocklist {
+            Check::Ignore
+        } else {
+            Check::Obey
+        },
+    };
+    let mut out = std::io::stdout();
+    let answer = |out: &mut std::io::Stdout, frame: Option<Vec<u8>>| {
+        let frame = frame.ok_or("cannot encode the answer")?;
+        out.write_all(&frame)
+            .and_then(|()| out.flush())
+            .map_err(|e| format!("cannot answer the kernel: {e}"))
+    };
+    match Gpu::start(backend, launch) {
+        Ok((gpu, ready)) => {
+            answer(&mut out, ready_frame(ready))?;
+            let why = run(Server::new(gpu), std::io::stdin(), out, list, surface);
+            Ok(why.to_string())
+        }
+        Err(refusal) => {
+            if refusal.is_gpu_refused() {
+                answer(&mut out, refused_frame())?;
+            }
+            Err(format!("refused: {refusal:?}"))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Args, parse};
+
+    fn strings(a: &[&str]) -> Vec<String> {
+        a.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    #[test]
+    fn both_descriptors_are_needed() {
+        let got = parse(&strings(&["gpu", "--list-fd", "7", "--surface-fd", "9"]));
+        assert_eq!(
+            got,
+            Some(Args {
+                list: 7,
+                surface: 9,
+                ignore_blocklist: false
+            })
+        );
+        assert_eq!(parse(&strings(&["gpu", "--list-fd", "7"])), None);
+        assert_eq!(
+            parse(&strings(&["gpu", "--list-fd", "x", "--surface-fd", "9"])),
+            None
+        );
+        let ignore = parse(&strings(&[
+            "gpu",
+            "--surface-fd",
+            "1",
+            "--list-fd",
+            "2",
+            "--ignore-blocklist",
+        ]));
+        assert!(ignore.is_some_and(|a| a.ignore_blocklist));
+    }
+}

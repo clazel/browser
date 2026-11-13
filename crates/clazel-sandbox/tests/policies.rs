@@ -345,12 +345,16 @@ fn gpu_list_is_the_renderers_plus_the_additions() {
     );
 }
 
-/// The GPU profile is `(deny default)` and nothing else: the measured profile
-/// after the warm-up (`seatbelt.rs`).
+/// The GPU profile is `(deny default)` and one Mach lookup, of Metal's compiler
+/// service: the measured profile after the warm-up (`seatbelt.rs`, items 5.21a
+/// and 5.23). No file, network, process or IOKit rule.
 #[test]
-fn gpu_seatbelt_profile_is_deny_default_alone() {
-    assert!(seatbelt::GPU.is_empty());
-    assert_eq!(seatbelt::gpu_profile(), "(version 1)\n(deny default)\n");
+fn gpu_seatbelt_profile_is_deny_default_and_the_metal_compiler() {
+    assert_eq!(
+        seatbelt::gpu_profile(),
+        "(version 1)\n(deny default)\n\
+         (allow mach-lookup (global-name \"com.apple.MTLCompilerService\"))\n"
+    );
 }
 
 /// The Windows GPU policy is the renderer's less `win32k`, plus `registryRead`,

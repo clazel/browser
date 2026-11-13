@@ -9,6 +9,10 @@ description = "The renderer: enters the OS sandbox before reading a byte, then d
 [dependencies]
 # The wire format: frames and messages (items 2.1 to 2.3).
 clazel-ipc = { path = "../clazel-ipc" }
+# The GPU process's list and surface sockets (`clazel_gpu::channel`, items
+# 5.18 and 5.23): the host's side in `launch`, and the renderer's lists. The
+# tests also draw the pipeline's lists to pixels with its soft backend.
+clazel-gpu = { path = "../clazel-gpu" }
 # The sandbox policies as data (item 2.14): the renderer applies them.
 clazel-sandbox = { path = "../clazel-sandbox" }
 # The only way into the OS sandbox (item 2.0). Safe functions; the renderer
@@ -35,10 +39,6 @@ clazel-font = { path = "../clazel-font" }
 clazel-layout = { path = "../clazel-layout" }
 clazel-glyph-mask = { path = "../clazel-glyph-mask" }
 clazel-displaylist = { path = "../clazel-displaylist" }
-
-[dev-dependencies]
-# Draws the pipeline's lists to pixels in its tests (soft backend).
-clazel-gpu = { path = "../clazel-gpu", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The sandbox
 # calls are audited (docs/SYS-AUDITS.md) and exercised by the integration

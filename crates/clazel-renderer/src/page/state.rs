@@ -38,7 +38,8 @@
 //!   - Invariant ([`Masks::invariant`]): the live count is at most
 //!     `MAX_MASKS` and the live bytes at most `MAX_MASK_BYTES`.
 //! - **A list on the GPU process's socket** (`frame.rs`): `frame_bytes(list)
-//!   -> Vec<u8>`: a 4-byte big-endian length, then the encoded list. Contract:
+//!   -> Vec<u8>`: `clazel_gpu::channel::write_list`'s framing (a 4-byte
+//!   little-endian length), then the encoded list. Contract:
 //!   the length is the list's, which is at most `MAX_LIST_BYTES`, so a reader
 //!   can refuse an oversized list from its first four bytes.
 

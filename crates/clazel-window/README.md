@@ -13,11 +13,21 @@ Two backends behind one `Window` (`open`, `size`, `next_event`, `draw`,
   page.
 - **macOS on Apple silicon**, [item 5.21](../../docs/phases/phase-5.md): AppKit
   through the Objective-C runtime, with no Rust callback. Its content view hosts
-  two Core Animation layers: the page's, which shows an IOSurface and clips to
-  its rectangle, and the strip's above it, where `draw` puts the host's own
-  pixels. It adds `show_page`, `hide_page`, `activate` and `close`.
+  two Core Animation layers: the page's, which shows an IOSurface (`show_page`)
+  or pixels (`show_page_pixels`) and clips to its rectangle, and the strip's
+  above it, where `draw` puts the host's own pixels. It adds `show_page`,
+  `show_page_pixels`, `hide_page`, `activate` and `close`.
 
-`clazel browse` does not use it yet (item 5.23).
+`clazel browse` uses it on macOS (item 5.23, `crates/clazel/cli/window.rs`): the
+address bar in the strip, the GPU process's frames as the page. Until the GPU
+process's IOSurface can reach the host (a Mach port), frames arrive as pixels
+(`clazel_gpu::channel`), hence `show_page_pixels`.
+
+`Event::Key` says whether Command was held (`command`; always false on Windows
+until the backend reads Ctrl, which needs `GetKeyState` in `clazel-sys`), and
+[`src/keys.rs`](src/keys.rs) names the keys `browse` acts on from each platform's
+codes (`<HIToolbox/Events.h>` on macOS, `<WinUser.h>` on Windows), with their DOM
+`keyCode`s.
 
 See it run, on Windows or on an Apple silicon Mac:
 
@@ -71,7 +81,8 @@ The decisions are listed at the top of [`src/appkit.rs`](src/appkit.rs) and
   format it is known to show.
 - **The surface from another process**: a Mach port and
   `IOSurfaceLookupFromMachPort` (5.18, 5.21a), and the GPU process's sandbox.
-- **Modifiers** are not reported on either platform; 5.23's shortcuts need them.
+- **Modifiers** beyond Command on macOS are not reported, and on Windows none is,
+  so Windows has no shortcuts yet.
 - **Intel Macs** are not supported, as in `clazel-gpu`.
 
 Tier 0: tests only. Every foreign call is in `clazel-sys`, which is audited.
