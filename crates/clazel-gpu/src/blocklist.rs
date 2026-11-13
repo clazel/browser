@@ -73,6 +73,33 @@ pub const MAX_ENTRIES: usize = 1024;
 /// Apple's PCI vendor id, which a Metal adapter reports.
 pub const APPLE: u32 = 0x106b;
 
+/// NVIDIA's PCI vendor id.
+pub const NVIDIA: u32 = 0x10de;
+
+/// Vulkan's `VkPhysicalDeviceProperties::driverVersion` for a device of `vendor`,
+/// as a [`Version`]. The 32 bits are the vendor's to lay out (Vulkan
+/// specification, `VkPhysicalDeviceProperties`: "the vendor-specified version of
+/// the driver"):
+///
+/// - NVIDIA: 10, 8, 8 and 6 bits, from the top (as its drivers and
+///   vulkan.gpuinfo.org read it): 470.57.2 is `(470 << 22) | (57 << 14) | (2 << 6)`.
+/// - Everyone else, Mesa included: the `VK_MAKE_VERSION` layout, 10, 10 and 12
+///   bits, with the fourth part 0. Intel's Windows driver uses another layout,
+///   which matters only if Vulkan is ever used on Windows.
+pub fn vulkan_driver_version(vendor: u32, raw: u32) -> Version {
+    let part = |shift: u32, bits: u32| {
+        let mask = 1u32
+            .checked_shl(bits)
+            .map_or(u32::MAX, |m| m.saturating_sub(1));
+        u16::try_from(raw.checked_shr(shift).unwrap_or(0) & mask).unwrap_or(u16::MAX)
+    };
+    if vendor == NVIDIA {
+        Version([part(22, 10), part(14, 8), part(6, 8), part(0, 6)])
+    } else {
+        Version([part(22, 10), part(12, 10), part(0, 12), 0])
+    }
+}
+
 /// The drawing API an adapter is reached through.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Api {
@@ -415,6 +442,25 @@ mod tests {
 
     const GOOD: &str =
         "vulkan 0x10de 0x2204 470-470.57 https://example.org/1 hangs on the first frame";
+
+    #[test]
+    fn vulkan_driver_versions_are_decoded_per_vendor() {
+        use super::{NVIDIA, vulkan_driver_version};
+        // NVIDIA 470.57.2.0.
+        let raw = (470 << 22) | (57 << 14) | (2 << 6);
+        assert_eq!(vulkan_driver_version(NVIDIA, raw), Version([470, 57, 2, 0]));
+        // Mesa 25.2.8, as VK_MAKE_VERSION.
+        let raw = (25 << 22) | (2 << 12) | 8;
+        assert_eq!(vulkan_driver_version(0x10005, raw), Version([25, 2, 8, 0]));
+        assert_eq!(
+            vulkan_driver_version(0x8086, u32::MAX),
+            Version([1023, 1023, 4095, 0])
+        );
+        assert_eq!(
+            vulkan_driver_version(NVIDIA, u32::MAX),
+            Version([1023, 255, 255, 63])
+        );
+    }
 
     fn nvidia(driver: Option<[u16; 4]>) -> Adapter {
         Adapter {

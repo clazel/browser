@@ -5,14 +5,15 @@
 //!
 //! - Standard input and output are the kernel's channel (one socket, as the
 //!   renderer's), standard error the host's log.
-//! - `N` is the list socket's descriptor, `M` the surface socket's
+//! - `N` is the list channel's descriptor, `M` the surface channel's
 //!   ([`clazel_gpu::channel`]), inherited from the host, which cleared their
-//!   close-on-exec flags for this start. Each is opened again through `/dev/fd`,
-//!   which needs no `unsafe`, **before** the sandbox is entered.
+//!   close-on-exec flags for this start: socket pairs on macOS, pipes on Linux,
+//!   where `/dev/fd/N` cannot open a socket. Each is opened again through
+//!   `/dev/fd`, which needs no `unsafe`, **before** the sandbox is entered.
 //! - `--ignore-blocklist` is `browse --gpu=hardware` (item 5.17c).
 //!
-//! Then, on macOS on Apple silicon: the Metal backend and the sandbox
-//! (`sandbox::start_metal`, item 5.21a), the blocklist (`Gpu::start`), the
+//! Then the backend and the sandbox (`clazel_gpu::sandbox`, item 5.21a: Metal on
+//! macOS on Apple silicon, Vulkan on Linux), the blocklist (`Gpu::start`), the
 //! answer (`GpuReady` or `GpuRefused`) and the loop (`process::run`). Every other
 //! target has no GPU backend yet (item 5.17b's rest), so the process says so and
 //! exits, which the crash policy counts as a refusal.
@@ -57,28 +58,43 @@ fn main() -> ExitCode {
     }
 }
 
-#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux")))]
 fn run(_: Args) -> Result<String, String> {
     Err("no GPU backend on this platform yet (phase-5.md item 5.17b)".to_owned())
 }
 
+/// The backend, made and sandboxed (`clazel_gpu::sandbox`).
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn backend() -> Result<clazel_gpu::metal::MetalBackend, String> {
+    clazel_gpu::sandbox::start_metal().map_err(|e| e.to_string())
+}
+
+/// The backend, made and sandboxed (`clazel_gpu::sandbox`). The device is the
+/// machine's GPU if the loader lists one, else its software driver.
+#[cfg(target_os = "linux")]
+fn backend() -> Result<clazel_gpu::vulkan::VulkanBackend, String> {
+    let backend = clazel_gpu::sandbox::start_vulkan(false).map_err(|e| e.to_string())?;
+    eprintln!("clazel-gpu: drawing with {}", backend.device_name());
+    Ok(backend)
+}
+
+#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux"))]
 fn run(args: Args) -> Result<String, String> {
     use std::fs::{File, OpenOptions};
     use std::io::Write;
 
+    use clazel_gpu::Gpu;
     use clazel_gpu::process::{Server, ready_frame, refused_frame, run};
     use clazel_gpu::start::{Check, Launch, Mode};
-    use clazel_gpu::{Gpu, sandbox};
 
-    // Before the sandbox: `(deny default)` refuses every open after it.
+    // Before the sandbox, which refuses every open after it.
     let list = File::open(format!("/dev/fd/{}", args.list))
-        .map_err(|e| format!("cannot open the list socket {}: {e}", args.list))?;
+        .map_err(|e| format!("cannot open the list channel {}: {e}", args.list))?;
     let surface = OpenOptions::new()
         .write(true)
         .open(format!("/dev/fd/{}", args.surface))
-        .map_err(|e| format!("cannot open the surface socket {}: {e}", args.surface))?;
-    let backend = sandbox::start_metal().map_err(|e| e.to_string())?;
+        .map_err(|e| format!("cannot open the surface channel {}: {e}", args.surface))?;
+    let backend = backend()?;
     let launch = Launch {
         mode: Mode::Hardware,
         check: if args.ignore_blocklist {
