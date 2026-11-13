@@ -340,6 +340,7 @@ dependencies = [
  "clazel-font",
  "clazel-style",
  "clazel-treebuilder",
+ "clazel-url",
  "rustybuzz",
 ]
 
