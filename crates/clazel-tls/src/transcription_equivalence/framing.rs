@@ -655,8 +655,8 @@ pub proof fn lemma_early_reject(p: Primitives, c: Connection, w: Seq<u8>, protec
 /// `Truncated` with the connection unchanged (its modelling choice "bytes
 /// pending are discarded, and are not `decode_error`"). On the crate's
 /// side no layer's end of the transport reads the framer's bytes
-/// (`bootstrap_spec::eof` of the state alone, the dispatcher's `eof`
-/// contract, the transducer's `step` on `Input::Closed`, which consumes
+/// (`bootstrap_spec::eof` of the state alone, `dispatcher_spec::eof` of
+/// the mode and the send epoch, the transducer's `step` on `Input::Closed`, which consumes
 /// nothing), so both discard exactly the same bytes, and neither calls them
 /// a `decode_error`. What each layer does then is its theorem's
 /// (`bootstrap::eof_fails`, `dispatcher::truncation_fails`,

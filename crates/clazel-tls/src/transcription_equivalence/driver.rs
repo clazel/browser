@@ -112,27 +112,27 @@
 //! and [`closes_in_handshake`] (a close before the handshake completes:
 //! both write the close_notify and close their write side; the crate also
 //! stops reading, the transcription reads on), and [`eof_truncates`] (the
-//! end of the transport before the server's close_notify: the crate ends
-//! with a failure, the transcription reports truncation; neither writes).
+//! end of the transport before the server's close_notify: the crate closes
+//! its write side with exactly the record of the transcription's
+//! `close_write_side` and ends as truncated; the transcription writes
+//! nothing and reports truncation).
 //!
 //! **The end of the transport** (§6.1; `Driver::eof` against
-//! `connection::receive_transport_end`, [`teof`]) is compared for every
-//! output `Driver::eof`'s contract allows ([`eof_allowed`]: nothing sent or
-//! delivered, the stage `Ended`, a final status; it fixes no more), from
-//! every pair of agreeing states, so after every run of operations that
-//! keeps them agreeing. Both discard the bytes they hold
+//! `connection::receive_transport_end`, [`teof`]) is compared exactly as
+//! `Driver::eof`'s contract fixes it ([`ceof`], `driver_contract::eof_ensures`),
+//! from every pair of agreeing states, so after every run of operations
+//! that keeps them agreeing. Both discard the bytes they hold
 //! (`framing::eof_pending`). It is the stated difference
-//! [`eof_truncates`]: both write and deliver nothing; the crate ends, after
-//! the machine it runs fails with `internal_error` and no record
-//! ([`stage_eof_fails`]); the transcription reports `Truncated`, no error,
-//! its connection unchanged (in CONNECTED, its write side still open).
-//! After the server's close_notify, where [`closes_alike`] and
-//! [`peer_closed`] leave the comparison, [`eof_after_close`]: both write
-//! nothing, and the transcription reports `EndOfData`. The contract does
-//! not fix the crate's final status: `driver_exec`'s code reports
-//! `Failed(alert, Truncated)` before a close_notify and keeps `Closed` after
-//! one, but that it never reports `Closed` (end-of-data) on a truncation is
-//! not proven here.
+//! [`eof_truncates`]: neither delivers anything; the crate ends as
+//! `Failed(internal_error, Truncated)`, never `Closed` (its end-of-data),
+//! after writing exactly what the transcription's `close_write_side` would
+//! write from the same connection (our close_notify while our write side is
+//! open, nothing after it); the transcription writes nothing and reports
+//! `Truncated`, no error, its connection unchanged (in CONNECTED, its write
+//! side still open). After the server's close_notify, where
+//! [`closes_alike`] and [`peer_closed`] leave the comparison with the
+//! crate's driver ended, [`eof_after_close`]: the crate writes nothing and
+//! keeps its status (`Closed`), and the transcription reports `EndOfData`.
 //!
 //! **Not covered:** a KeyUpdate of the caller's own (the driver has
 //! no such operation; `post_handshake::update_agrees` covers the
@@ -1016,16 +1016,9 @@ pub open spec fn op_agrees(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState
 // §6.1: the end of the transport.
 // ---------------------------------------------------------------------------
 
-/// `Driver::eof` as its contract leaves it (the `ensures` of
-/// `driver_exec::Driver::eof`, on its output): nothing sent, nothing
-/// delivered, the stage `Ended` and a final status. The contract fixes
-/// nothing more: not which final status, and not the alert of a failure.
-/// So the end of the transport is compared for every output it allows.
-pub open spec fn eof_allowed(out: Step) -> bool {
-    &&& out.send.len() == 0
-    &&& out.deliver.len() == 0
-    &&& out.stage is Ended
-    &&& crate::connection::driver_spec::is_final(out.status)
+/// `Driver::eof`, as `driver_contract::eof_ensures` fixes it, exactly.
+pub open spec fn ceof(m: Models, stage: Stage, status: Status) -> Step {
+    crate::connection::driver_spec::eof(m.crypto, m.cipher, stage, status)
 }
 
 /// The transcription's caller at the end of the transport:
@@ -1036,62 +1029,41 @@ pub open spec fn teof(ts: TState) -> crate::transcription::connection::Transport
     crate::transcription::connection::receive_transport_end(ts.client.connection)
 }
 
-/// What each machine the driver runs reports on the end of the transport,
-/// by its own contract, from agreeing states: a failure with
-/// `internal_error` and no record. The bootstrap's `eof` is
-/// `Fail(internal_error)` (`bootstrap::eof_fails`); every result the
-/// dispatcher's `eof` contract allows is `Fail(internal_error, None)`
-/// (`dispatcher::truncation_fails`); the transducer's `step` on
-/// `Input::Closed` is `Fail(internal_error)` with no record
-/// (`post_handshake::truncation_fails`). This is the alert
-/// `driver_exec::Driver::eof` reads from the machine it runs.
-pub open spec fn stage_eof_fails(m: Models, stage: Stage) -> bool {
-    match stage {
-        Stage::Hello(s, _) => crate::hello::bootstrap_spec::eof(s).1
-            == crate::hello::bootstrap_spec::Action::Fail(crate::spec::INTERNAL_ERROR),
-        Stage::Flight(s) => forall|action: crate::connection::dispatcher_spec::Action,
-            after: crate::connection::dispatcher_spec::State|
-            #[trigger] crate::connection::dispatcher_contract::truncation_ensures(s, action, after)
-                ==> action == crate::connection::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR, None),
-        Stage::App(s) => {
-            let r = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
-                crate::connection::post_handshake_spec::Input::Closed);
-            &&& r.0.wires.len() == 0
-            &&& r.0.end == crate::connection::post_handshake_spec::End::Fail(crate::spec::INTERNAL_ERROR)
-        },
-        Stage::Ended => false,
-    }
-}
-
 /// **Stated difference, truncation** (§6.1: the end of the transport before
 /// the server's close_notify), from agreeing states, in every stage (the
 /// Hello exchange, the server's flight, application traffic with our write
-/// side open or closed). Both write nothing and deliver nothing, and both
-/// discard the bytes pending. The crate's driver ends (`Stage::Ended`, a
-/// final status) after the machine it runs reported a failure with
-/// `internal_error` and no record ([`stage_eof_fails`]); the transcription
-/// reports `Truncated`, with no error and the connection unchanged: its A.1
-/// state where it was, and in CONNECTED its write side open, so that its
-/// caller may still send and close (`close_write_side`).
+/// side open or closed). Neither delivers anything, and both discard the
+/// bytes pending. The crate's driver ends (`Stage::Ended`) as
+/// `Failed(internal_error, Truncated)`: never `Closed`, its end-of-data.
+/// As that closes its write side, it first writes exactly what the
+/// transcription's `close_write_side` would write from the same connection:
+/// our close_notify while our write side is open (in plaintext before the
+/// ServerHello, under the client handshake key in the server's flight,
+/// under the client application key in CONNECTED), nothing after our
+/// close_notify. The transcription writes nothing and reports `Truncated`,
+/// with no error and the connection unchanged: its A.1 state where it was,
+/// and in CONNECTED its write side open, so that its caller may still send
+/// and close (`close_write_side`).
 ///
-/// The transcription conforms (its modelling choices on §6.1). The crate
-/// conforms in what it writes: nothing, as §6.2 names no alert for a
-/// transport that ended. Whether it conforms in what it reports depends on
-/// its status: `driver_exec`'s code reports `Failed(alert, Truncated)`,
-/// which is not end-of-data and so meets §6.1's "the TLS implementation
-/// MUST receive a "close_notify" alert before indicating end-of-data to the
-/// application layer"; but its contract allows any final status, `Closed`
-/// (its end-of-data) included, so that MUST is not proven of the driver
-/// here. Ending the connection, its write side included, is a usage
-/// choice: "No part of this standard should be taken to dictate the manner
-/// in which a usage profile for TLS manages its data transport, including
-/// when connections are opened or closed."
-pub open spec fn eof_truncates(m: Models, cs: CState, ts: TState, out: Step) -> bool {
-    &&& out.send.len() == 0
+/// Both conform. Neither indicates end-of-data: §6.1, "the TLS
+/// implementation MUST receive a "close_notify" alert before indicating
+/// end-of-data to the application layer" (the crate's status is not
+/// `Closed`; the transcription's `Truncated` is not `EndOfData`). Neither
+/// writes an error alert, as §6.2 names none for a transport that ended;
+/// the `internal_error` is the crate's local report. Ending the connection,
+/// its write side included, is a usage choice ("No part of this standard
+/// should be taken to dictate the manner in which a usage profile for TLS
+/// manages its data transport, including when connections are opened or
+/// closed"), and the crate does it as §6.1 requires: "Each party MUST send a
+/// "close_notify" alert before closing its write side of the connection,
+/// unless it has already sent some error alert". The transcription closes
+/// nothing, so it owes no close_notify yet.
+pub open spec fn eof_truncates(m: Models, p: Primitives, cs: CState, ts: TState) -> bool {
+    let out = ceof(m, cs.stage, cs.status);
+    &&& out.send == flat(crate::transcription::connection::close_write_side(p, ts.client.connection).0)
     &&& out.deliver.len() == 0
     &&& out.stage is Ended
-    &&& crate::connection::driver_spec::is_final(out.status)
-    &&& stage_eof_fails(m, cs.stage)
+    &&& out.status == Status::Failed(crate::spec::INTERNAL_ERROR, Origin::Truncated)
     &&& teof(ts) == crate::transcription::connection::TransportEnd::Truncated(
         super::post_handshake::transport_end_progress(ts.client.connection))
 }
@@ -1099,15 +1071,12 @@ pub open spec fn eof_truncates(m: Models, cs: CState, ts: TState, out: Step) -> 
 /// **Compared exactly: the end of the transport after the server's
 /// close_notify**, where [`closes_alike`] and [`peer_closed`] left the
 /// comparison (the transcription's `read_closed` set, the crate's driver
-/// `Closed`). Both write nothing and deliver nothing; the transcription
-/// reports `EndOfData` with the connection unchanged (end-of-data was
-/// indicated on the close_notify, by both); the crate's driver stays
-/// `Ended` with a final status (its code keeps `Closed`; its contract says
-/// only "final").
-pub open spec fn eof_after_close(ts: TState, out: Step) -> bool {
-    &&& out.send.len() == 0
-    &&& out.deliver.len() == 0
-    &&& out.stage is Ended
+/// ended as `Closed`). The crate writes and delivers nothing and keeps its
+/// status, so it stays `Closed`; the transcription reports `EndOfData` with
+/// the connection unchanged. Both had indicated end-of-data on the
+/// close_notify.
+pub open spec fn eof_after_close(m: Models, cs: CState, ts: TState) -> bool {
+    &&& ceof(m, cs.stage, cs.status) == crate::connection::driver_contract::unchanged(cs.stage, cs.status)
     &&& teof(ts) == crate::transcription::connection::TransportEnd::EndOfData(
         super::post_handshake::transport_end_progress(ts.client.connection))
 }
@@ -3141,30 +3110,50 @@ pub proof fn lemma_start(m: Models, p: Primitives, config: crate::hello::client_
     }
 }
 
-/// [`eof_truncates`] from agreeing states, for every output
-/// `Driver::eof`'s contract allows: in every stage the transcription's
-/// read side is open, and the machine the driver runs fails as its own
-/// theorem says (`bootstrap::lemma_eof`, `dispatcher::lemma_eof`,
-/// `post_handshake::lemma_eof`).
-pub proof fn lemma_eof(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, out: Step)
+/// [`eof_truncates`] from agreeing states: in every stage the
+/// transcription's read side is open, the machine the driver runs fails as
+/// its own theorem says (`bootstrap::lemma_eof`, `dispatcher::lemma_eof`,
+/// `post_handshake::lemma_eof`), and the record it writes is the
+/// transcription's `close_write_side`.
+pub proof fn lemma_eof(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState)
     requires
+        hypotheses(m, p),
         driver_agrees(m, p, scalar, cs, ts),
-        eof_allowed(out),
-    ensures eof_truncates(m, cs, ts, out),
+    ensures eof_truncates(m, p, cs, ts),
 {
+    hide(super::post_handshake::post_agrees);
+    hide(crate::connection::dispatcher_spec::close_wire);
+    hide(super::bootstrap::bootstrap_agrees);
+    hide(super::dispatcher::dispatcher_agrees);
+    let conn = ts.client.connection;
     match cs.stage {
         Stage::Hello(s, _) => {
             super::bootstrap::lemma_eof(p, s, ts.client);
+            assert(!conn.write_closed && !conn.read_closed) by {
+                reveal(super::bootstrap::bootstrap_agrees);
+            }
+            super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, conn),
+                crate::transcription::connection::close_write(p, conn));
         },
         Stage::Flight(s) => {
-            assert forall|action: crate::connection::dispatcher_spec::Action,
-                after: crate::connection::dispatcher_spec::State|
-                #[trigger] crate::connection::dispatcher_contract::truncation_ensures(s, action, after)
-                    implies action == crate::connection::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR, None) by {
+            let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
+            super::framing::lemma_disp_agrees_facts(p, m.verification, s0, ts.client);
+            super::dispatcher::lemma_eof(ciphers(m), p, m.verification, s0, ts.client);
+            assert(crate::connection::dispatcher_spec::close_wire(ciphers(m), s)
+                == crate::connection::dispatcher_spec::close_wire(ciphers(m), s0)) by {
+                reveal(crate::connection::dispatcher_spec::close_wire);
             }
+            let r = crate::connection::dispatcher_spec::eof(ciphers(m), s0);
+            assert(crate::connection::dispatcher_spec::eof(ciphers(m), s).0 == r.0);
+            let record = r.0->Fail_1->Some_0;
+            super::ccs::lemma_flatten(record, record);
         },
         Stage::App(s) => {
-            super::post_handshake::lemma_eof(m.crypto, m.cipher, s, ts.client.connection);
+            super::post_handshake::lemma_receive_open_facts(s, conn);
+            super::post_handshake::lemma_eof(m.crypto, m.cipher, p, s, conn);
+            let r = crate::connection::post_handshake_spec::step(m.crypto, m.cipher, s,
+                crate::connection::post_handshake_spec::Input::Closed);
+            lemma_concat_flat(r.0.wires);
         },
         Stage::Ended => {},
     }
@@ -3190,14 +3179,16 @@ pub proof fn lemma_eof(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts
 ///   [`peer_closed`], [`retry_then_fails`], [`goes_on_coalesced`] (which goes
 ///   on), [`exhausted_epoch`], [`oversized`] and [`closes_in_handshake`]. Every record is compared: the crate's
 ///   caps are cases of the record-level theorems' rejections;
-/// - **the end of the transport** (§6.1), for every output `Driver::eof`'s
-///   contract allows ([`eof_allowed`]) against `receive_transport_end`
+/// - **the end of the transport** (§6.1), `Driver::eof` exactly as its
+///   contract fixes it ([`ceof`]) against `receive_transport_end`
 ///   ([`teof`]): from agreeing states, so after every run of operations
-///   that keeps them agreeing, the stated difference [`eof_truncates`]
-///   (both write and deliver nothing; the crate ends after its machine
-///   fails with `internal_error`, the transcription reports truncation);
-///   and after the server's close_notify, [`eof_after_close`] (both write
-///   nothing; the transcription reports `EndOfData`).
+///   that keeps them agreeing, the stated difference [`eof_truncates`] (the
+///   crate never reports end-of-data: it ends as `Failed(internal_error,
+///   Truncated)` after writing exactly `close_write_side`'s records; the
+///   transcription writes nothing and reports truncation); and after the
+///   server's close_notify, with the crate's driver ended,
+///   [`eof_after_close`] (the crate writes nothing and keeps its status; the
+///   transcription reports `EndOfData`).
 pub proof fn theorem_driver_equivalence(m: Models, p: Primitives)
     requires hypotheses(m, p),
     ensures
@@ -3210,11 +3201,10 @@ pub proof fn theorem_driver_equivalence(m: Models, p: Primitives)
         forall|scalar: Seq<u8>, cs: CState, ts: TState, ops: Seq<Op>|
             #[trigger] driver_agrees(m, p, scalar, cs, ts) ==> #[trigger] run_agrees(m, p, scalar, cs, ts, ops),
         // §6.1: the end of the transport.
-        forall|scalar: Seq<u8>, cs: CState, ts: TState, out: Step|
-            #[trigger] driver_agrees(m, p, scalar, cs, ts) && #[trigger] eof_allowed(out)
-                ==> eof_truncates(m, cs, ts, out),
-        forall|ts: TState, out: Step|
-            ts.client.connection.read_closed && eof_allowed(out) ==> #[trigger] eof_after_close(ts, out),
+        forall|scalar: Seq<u8>, cs: CState, ts: TState|
+            #[trigger] driver_agrees(m, p, scalar, cs, ts) ==> eof_truncates(m, p, cs, ts),
+        forall|cs: CState, ts: TState|
+            cs.stage is Ended && ts.client.connection.read_closed ==> #[trigger] eof_after_close(m, cs, ts),
 {
     assert forall|config: crate::hello::client_spec::Config, tconfig: crate::transcription::middlebox::ClientConfig,
         scalar: Seq<u8>|
@@ -3228,10 +3218,9 @@ pub proof fn theorem_driver_equivalence(m: Models, p: Primitives)
         #[trigger] driver_agrees(m, p, scalar, cs, ts) implies #[trigger] run_agrees(m, p, scalar, cs, ts, ops) by {
         lemma_run(m, p, scalar, cs, ts, ops);
     }
-    assert forall|scalar: Seq<u8>, cs: CState, ts: TState, out: Step|
-        #[trigger] driver_agrees(m, p, scalar, cs, ts) && #[trigger] eof_allowed(out)
-            implies eof_truncates(m, cs, ts, out) by {
-        lemma_eof(m, p, scalar, cs, ts, out);
+    assert forall|scalar: Seq<u8>, cs: CState, ts: TState|
+        #[trigger] driver_agrees(m, p, scalar, cs, ts) implies eof_truncates(m, p, cs, ts) by {
+        lemma_eof(m, p, scalar, cs, ts);
     }
 }
 

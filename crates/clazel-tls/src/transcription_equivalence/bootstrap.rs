@@ -59,9 +59,11 @@
 //!
 //! - **Truncation before the ServerHello** ([`eof_fails`]): the end of
 //!   the transport from agreeing states. The crate's `eof` fails with
-//!   `internal_error` (writing nothing itself); the transcription's
-//!   `receive_transport_end` reports `Truncated`, no error, nothing written,
-//!   the A.1 state where it was. Neither indicates end-of-data (§6.1).
+//!   `internal_error`, and its caller closes our write side with the
+//!   plaintext close_notify that is exactly the record of the transcription's
+//!   `close_write_side`; the transcription's `receive_transport_end` reports
+//!   `Truncated`, no error, nothing written, the A.1 state where it was.
+//!   Neither indicates end-of-data (§6.1).
 //!
 //! The end of the transport after the server's close_notify is compared
 //! exactly ([`ends_after_close`]): the crate does nothing, the transcription
@@ -877,15 +879,18 @@ pub proof fn lemma_start(p: Primitives, c: crate::hello::client_spec::Config,
 /// **Stated difference, truncation before the ServerHello** (§6.1: the end
 /// of the transport before the server's close_notify). From agreeing states
 /// (the crate waits for the server's Hello), the crate's `eof` fails the
-/// bootstrap with `internal_error` (`Mode::Failed`); it puts nothing on the
-/// wire itself (`Action::Fail` is a description for its caller,
-/// `driver_spec` choice 4, and the driver writes nothing on the end of the
-/// transport: `driver::eof_truncates`). The transcription reports
-/// `Truncated` with the connection unchanged, no error and nothing to write
-/// (its modelling choice "during the handshake": the A.1 state stays where
-/// it was, and the handshake can never complete). Neither reads the bytes
-/// pending (an incomplete record, or the handshake fragments the crate's
-/// reassembly holds).
+/// bootstrap with `internal_error` (`Mode::Failed`), never written. It puts
+/// nothing on the wire itself: its caller does (`driver_spec` choices 4
+/// and 7, `driver::eof_truncates`), and answers this `Fail` with our
+/// close_notify in plaintext, as the end of the connection closes our write
+/// side; that record is exactly the one record the transcription's
+/// `close_write_side` would write from the same connection. The
+/// transcription reports `Truncated` with the connection unchanged, no
+/// error and nothing to write (its modelling choice "during the handshake":
+/// the A.1 state stays where it was, and the handshake can never complete),
+/// its write side left to its caller. Neither reads the bytes pending (an
+/// incomplete record, or the handshake fragments the crate's reassembly
+/// holds).
 ///
 /// Both conform: neither indicates end-of-data ("the TLS implementation
 /// MUST receive a "close_notify" alert before indicating end-of-data to the
@@ -894,12 +899,17 @@ pub proof fn lemma_start(p: Primitives, c: crate::hello::client_spec::Config,
 /// such condition), so the crate's `internal_error` is a local report of a
 /// handshake that did not complete. §6.1: "If a transport-level close is
 /// received prior to a "close_notify", the receiver cannot know that all
-/// the data that was sent has been received."
-pub open spec fn eof_fails(cl: ClientConnection, r: (State, Action),
+/// the data that was sent has been received." The crate closes its write
+/// side as §6.1 requires ("Each party MUST send a "close_notify" alert
+/// before closing its write side of the connection, unless it has already
+/// sent some error alert"); the transcription closes nothing.
+pub open spec fn eof_fails(p: Primitives, cl: ClientConnection, r: (State, Action),
     t: crate::transcription::connection::TransportEnd) -> bool
 {
     &&& r.1 == Action::Fail(crate::spec::INTERNAL_ERROR)
     &&& r.0.mode == Mode::Failed
+    &&& seq![crate::connection::driver_spec::plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY)]
+        == crate::transcription::connection::close_write_side(p, cl.connection).0
     &&& t == crate::transcription::connection::TransportEnd::Truncated(
         super::post_handshake::transport_end_progress(cl.connection))
 }
@@ -923,12 +933,15 @@ pub open spec fn ends_after_close(s: State, c: Connection, r: (State, Action),
         super::post_handshake::transport_end_progress(c))
 }
 
-/// The end of the transport from agreeing states: [`eof_fails`].
+/// The end of the transport from agreeing states: [`eof_fails`]. The
+/// transcription's write side is open and unprotected in WAIT_SH, so its
+/// close_notify is the plaintext alert (`driver::lemma_alert_record_plain`).
 pub proof fn lemma_eof(p: Primitives, s: State, cl: ClientConnection)
     requires bootstrap_agrees(p, s, cl),
-    ensures eof_fails(cl, crate::hello::bootstrap_spec::eof(s),
+    ensures eof_fails(p, cl, crate::hello::bootstrap_spec::eof(s),
         crate::transcription::connection::receive_transport_end(cl.connection)),
 {
+    super::driver::lemma_alert_record_plain(p, cl.connection, 0);
 }
 
 /// The end of the transport after the server's close_notify:
@@ -968,7 +981,7 @@ pub proof fn theorem_bootstrap_equivalence(p: Primitives)
             #[trigger] bootstrap_agrees(p, s, cl) && whole_record(b) ==> #[trigger] record_agrees(p, s, cl, b),
         // §6.1: the end of the transport.
         forall|s: State, cl: ClientConnection| #[trigger] bootstrap_agrees(p, s, cl) ==>
-            eof_fails(cl, crate::hello::bootstrap_spec::eof(s),
+            eof_fails(p, cl, crate::hello::bootstrap_spec::eof(s),
                 crate::transcription::connection::receive_transport_end(cl.connection)),
         forall|s: State, c: Connection| s.mode == Mode::Closed && c.read_closed ==>
             ends_after_close(s, c, #[trigger] crate::hello::bootstrap_spec::eof(s),
@@ -990,7 +1003,7 @@ pub proof fn theorem_bootstrap_equivalence(p: Primitives)
         }
     }
     assert forall|s: State, cl: ClientConnection| #[trigger] bootstrap_agrees(p, s, cl) implies
-        eof_fails(cl, crate::hello::bootstrap_spec::eof(s),
+        eof_fails(p, cl, crate::hello::bootstrap_spec::eof(s),
             crate::transcription::connection::receive_transport_end(cl.connection)) by {
         lemma_eof(p, s, cl);
     }
