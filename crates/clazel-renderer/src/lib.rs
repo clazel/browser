@@ -26,6 +26,7 @@
 pub mod escape;
 pub mod hostile;
 pub mod launch;
+pub mod page;
 pub mod pipeline;
 pub mod sandbox;
 pub mod script;

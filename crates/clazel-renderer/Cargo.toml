@@ -26,6 +26,19 @@ clazel-dom = { path = "../clazel-dom" }
 clazel-treebuilder = { path = "../clazel-treebuilder" }
 clazel-url = { path = "../clazel-url" }
 clazel-text = { path = "../clazel-text" }
+# The graphical pipeline (phase-5.md item 5.20), each step a function of the
+# crate that implements it: style sources and the cascade (items 5.7, 5.8),
+# fonts (5.9), boxes, layout and paint (5.13 to 5.16), glyph masks (5.17)
+# and the display list's encoder (5.17a). All our own crates.
+clazel-style = { path = "../clazel-style" }
+clazel-font = { path = "../clazel-font" }
+clazel-layout = { path = "../clazel-layout" }
+clazel-glyph-mask = { path = "../clazel-glyph-mask" }
+clazel-displaylist = { path = "../clazel-displaylist" }
+
+[dev-dependencies]
+# Draws the pipeline's lists to pixels in its tests (soft backend).
+clazel-gpu = { path = "../clazel-gpu", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The sandbox
 # calls are audited (docs/SYS-AUDITS.md) and exercised by the integration
