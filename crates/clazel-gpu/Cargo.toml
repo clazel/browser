@@ -13,6 +13,8 @@ clazel-displaylist = { path = "../clazel-displaylist" }
 # Every foreign call of the Metal backend is in `clazel-sys` (CLAUDE.md rule 1).
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
 clazel-sys = { path = "../clazel-sys" }
+# The GPU process's Seatbelt profile, as data (item 5.21a); our own crate.
+clazel-sandbox = { path = "../clazel-sandbox" }
 
 # Verification tier (docs/VERIFICATION.md). The plan places this crate at tier 0
 # (item 5.17b): a GPU driver is in its trusted base whatever is proven here. The

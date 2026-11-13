@@ -47,6 +47,8 @@ pub mod geom;
 pub mod metal;
 pub mod policy;
 pub mod reference;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+pub mod sandbox;
 pub mod scenes;
 pub mod soft;
 pub mod start;
