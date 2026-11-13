@@ -183,6 +183,21 @@ const MEDIAQUERIES: (&str, &str) = (
     "css/mediaqueries",
 );
 
+/// The vendored references, laid out by their WPT paths (`README.md` there).
+const REFERENCES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/wpt-references");
+
+/// Every file under `dir`, keyed by its path below `root`.
+fn tree(root: &std::path::Path, dir: &std::path::Path, into: &mut HashMap<String, Vec<u8>>) {
+    for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            tree(root, &path, into);
+        } else if let (Ok(rel), Ok(bytes)) = (path.strip_prefix(root), std::fs::read(&path)) {
+            into.insert(rel.to_string_lossy().into_owned(), bytes);
+        }
+    }
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn the_vendored_wpt_reftests_are_run_and_counted() {
@@ -211,6 +226,24 @@ fn the_vendored_wpt_reftests_are_run_and_counted() {
         files.insert(path, bytes);
     }
     tests.sort();
+    let root = std::path::Path::new(REFERENCES);
+    tree(root, &root.join("css"), &mut files);
+    // Every reference the tests name is vendored, so none is "missing".
+    for t in &tests {
+        let meta = files.get(t).map(|b| crate::reftest::meta::read(t, b));
+        assert!(
+            matches!(meta, Some(Ok(_))),
+            "{t}: its metadata does not read"
+        );
+        let Some(Ok(meta)) = meta else { return };
+        for r in &meta.references {
+            assert!(
+                files.contains_key(&r.path),
+                "{t}: {} is not vendored",
+                r.path
+            );
+        }
+    }
     let read = reader(files);
     let mut headless = Headless::new(&f);
     let mut tally: HashMap<String, Vec<String>> = HashMap::new();
