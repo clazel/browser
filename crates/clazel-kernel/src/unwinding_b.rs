@@ -115,6 +115,8 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 }
 
 /// [`lemma_local_respect`] for a renderer's frame.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
@@ -229,6 +231,12 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         // another domain.
         if let Some(clazel_ipc::message::spec::Message::Title { title }) = accepted_message(r, bytes) {
             crate::surface_rel::lemma_titles_set_other(rules, s1.titles, r.id, r.lock, title, d);
+        }
+        // Item 5.19: a `FetchStyle` changes only its sender's sub-fetches and
+        // counts, of another domain.
+        if let Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) = accepted_message(r, bytes) {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
+            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, request, url);
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);
     }

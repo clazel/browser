@@ -120,6 +120,8 @@ proof fn lemma_storage_call_no_show(s: State, r: Renderer, m: clazel_ipc::messag
 }
 
 /// The outputs of every event but a renderer's frame show nothing.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 proof fn lemma_other_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
@@ -166,11 +168,8 @@ proof fn lemma_other_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
             lemma_surface_events_no_show(s, e);
         },
         // Item 5.19.
-        Event::Tick { time } => {
-            crate::subfetch_rel::lemma_tick_all_shape(s, time);
-        },
-        Event::SubNet { renderer, serial, hop, input } => {
-            crate::subfetch_rel::lemma_sub_net_shape(rules, fetch, s, renderer, serial, hop, input);
+        Event::Tick { .. } | Event::SubNet { .. } => {
+            lemma_subfetch_events_no_show(rules, urls, fetch, s, e);
         },
         _ => {},
     }
@@ -207,6 +206,21 @@ proof fn lemma_surface_events_no_show(s: State, e: Event)
                 }
             }
         },
+        _ => {},
+    }
+}
+
+/// Item 5.19's events show nothing: a `Tick`'s sweep and a `SubNet` answer
+/// renderers and write to sub-fetch connections only.
+proof fn lemma_subfetch_events_no_show(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
+    requires
+        e is Tick || e is SubNet,
+    ensures
+        no_show(step(rules, urls, fetch, s, e).1),
+{
+    match e {
+        Event::Tick { time } => crate::subfetch_rel::lemma_tick_all_shape(s, time),
+        Event::SubNet { renderer, serial, hop, input } => crate::subfetch_rel::lemma_sub_net_shape(rules, fetch, s, renderer, serial, hop, input),
         _ => {},
     }
 }

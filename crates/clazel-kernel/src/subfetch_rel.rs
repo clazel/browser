@@ -63,6 +63,34 @@ pub proof fn lemma_subfetch_of_domain(rules: Seq<clazel_psl::spec::Rule>, fs: Se
     }
 }
 
+/// The entry [`subfetch_of`] finds has the key it was asked for.
+pub proof fn lemma_subfetch_of_key(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin, serial: nat)
+    ensures
+        subfetch_of(fs, id, lock, serial) matches Some(f) ==> subfetch_is(f, id, lock, serial),
+    decreases fs.len(),
+{
+    if fs.len() > 0 {
+        lemma_subfetch_of_key(fs.drop_first(), id, lock, serial);
+    }
+}
+
+/// The sub-fetch a `SubNet` is about is its renderer's, under the renderer's
+/// lock.
+pub proof fn lemma_subnet_target_key(s: State, renderer: nat, serial: nat)
+    ensures
+        match subnet_target(s, renderer, serial) {
+            Some(f) => f.renderer == renderer && f.serial == serial && match find_by_id(s.renderers, renderer, 0) {
+                Some(i) => f.lock == s.renderers[i].lock,
+                None => false,
+            },
+            None => true,
+        },
+{
+    if let Some(i) = find_by_id(s.renderers, renderer, 0) {
+        lemma_subfetch_of_key(s.subfetches, renderer, s.renderers[i].lock, serial);
+    }
+}
+
 /// Replacing the first entry of a key commutes with taking a domain's part:
 /// for a key of `d`, both runs replace the same entry of `d`'s part; for a
 /// key of another domain, `d`'s part is unchanged.
@@ -613,6 +641,7 @@ pub proof fn lemma_sub_net_shape(rules: Seq<clazel_psl::spec::Rule>, fetch: Fetc
             &&& outputs_of(out, renderer)
         }),
 {
+    lemma_subnet_target_key(s, renderer, serial);
     if let Some(f) = subnet_target(s, renderer, serial) {
         if subfetch_live(s, f) && hop != 0 && f.hop == hop {
             let actions = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now).1;
@@ -720,6 +749,7 @@ pub open spec fn sub_net_after(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchF
 /// A `SubNet` of a renderer of `d`: related states, and the same
 /// renderer-bound outputs in both runs.
 #[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 pub proof fn lemma_d_subnet(
     rules: Seq<clazel_psl::spec::Rule>,
     urls: UrlFns,
@@ -759,9 +789,11 @@ pub proof fn lemma_d_subnet(
     assert(subnet_target(s1, renderer, serial) == subnet_target(s2, renderer, serial));
     let (s1b, o1) = step(rules, urls, fetch, s1, e);
     let (s2b, o2) = step(rules, urls, fetch, s2, e);
+    lemma_subnet_target_key(s1, renderer, serial);
     match subnet_target(s1, renderer, serial) {
         None => {},
         Some(f) => {
+            lemma_live_agree(rules, urls, d, s1, s2, f);
             assert(subfetch_live(s1, f) == subfetch_live(s2, f));
             if subfetch_live(s1, f) && hop != 0 && f.hop == hop {
                 crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
@@ -782,7 +814,6 @@ pub proof fn lemma_d_subnet(
                 if let Some(frames) = enda {
                     crate::net_rel::lemma_renderer_outs_concat(outa, seq![Output::ToRenderer { id: renderer, bytes: frames }]);
                     crate::net_rel::lemma_renderer_outs_concat(outb, seq![Output::ToRenderer { id: renderer, bytes: frames }]);
-                    crate::net_rel::lemma_renderer_outs_single(Output::ToRenderer { id: renderer, bytes: frames });
                     lemma_drop_domain(rules, s1.subfetches, g, d);
                     lemma_drop_domain(rules, s2.subfetches, g, d);
                 } else {
@@ -793,15 +824,8 @@ pub proof fn lemma_d_subnet(
                 if cred {
                     if let crate::domain::Domain::Root(root) = d {
                         let url = (fetch.urls.request_url)(f.fetch.url);
-                        assert(r.lock is Tuple) by {
-                            if r.lock is Opaque {
-                                assert(crate::domain::domain_of_lock(rules, r.lock) is Opaque);
-                            }
-                        }
+                        assert(r.lock is Tuple);
                         let h = lock_host(r.lock)->Some_0;
-                        assert(lock_host(r.lock) is Some) by {
-                            crate::unwinding_d::lemma_domain_of_tuple(rules, urls, s1, i1, d);
-                        }
                         crate::unwinding_d::lemma_domain_of_tuple(rules, urls, s1, i1, d);
                         assert(url.host == Some(h));
                         assert(ops_name(opsa, url, s1.now)) by {
@@ -828,9 +852,54 @@ pub proof fn lemma_d_subnet(
     }
 }
 
+/// The outputs of a `SubNet` of renderer `s1.renderers[i1]`, of another
+/// domain than `d`, are addressed to none of `d`'s.
+#[verifier::spinoff_prover]
+pub proof fn lemma_subnet_not_d(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    renderer: nat,
+    serial: nat,
+    hop: nat,
+    input: NetInput,
+    i1: int,
+)
+    requires
+        crate::invariant::renderers_wf(urls, s1.renderers, s1.next_id),
+        0 <= i1 < s1.renderers.len(),
+        s1.renderers[i1].id == renderer,
+        crate::domain::domain_of_renderer(rules, s1.renderers[i1]) != d,
+    ensures
+        ({
+            let (s1b, out1) = step(rules, urls, fetch, s1, Event::SubNet { renderer, serial, hop, input });
+            crate::noninterference::outputs_for(rules, d, s1, s1b, out1) == Seq::<Output>::empty()
+        }),
+{
+    let r = s1.renderers[i1];
+    let (s1b, out1) = step(rules, urls, fetch, s1, Event::SubNet { renderer, serial, hop, input });
+    lemma_sub_net_shape(rules, fetch, s1, renderer, serial, hop, input);
+    assert(s1.renderers.contains(r));
+    assert forall|k: int| 0 <= k < out1.len() implies !crate::noninterference::addressed_to(rules, d, s1, s1b, #[trigger] out1[k]) by {
+        if crate::noninterference::addressed_to(rules, d, s1, s1b, out1[k]) {
+            let q = choose|q: Renderer|
+                (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint {
+                    q.tab == crate::domain::output_id(out1[k])
+                } else {
+                    q.id == crate::domain::output_id(out1[k])
+                }) && crate::domain::domain_of_renderer(rules, q) == d;
+            crate::unwind_base::lemma_same_id_same_renderer(urls, s1.renderers, s1.next_id, q, r);
+        }
+    }
+    crate::unwind_base::lemma_filter_none(out1, |o: Output| crate::noninterference::addressed_to(rules, d, s1, s1b, o));
+}
+
 /// A `SubNet` of a renderer of another domain: nothing is sent to `d`, and
 /// the state stays related to the other run's.
 #[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 pub proof fn lemma_local_respect_subnet(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
@@ -851,6 +920,11 @@ pub proof fn lemma_local_respect_subnet(rules: Seq<clazel_psl::spec::Rule>, urls
     let i1 = find_by_id(s1.renderers, renderer, 0)->Some_0;
     let r = s1.renderers[i1];
     let (s1b, out1) = step(rules, urls, fetch, s1, e);
+    lemma_subnet_not_d(rules, urls, fetch, d, s1, renderer, serial, hop, input, i1);
+    lemma_subnet_target_key(s1, renderer, serial);
+    if !(subnet_target(s1, renderer, serial) matches Some(f) && subfetch_live(s1, f) && hop != 0 && f.hop == hop) {
+        assert(s1b == s1);
+    }
     if let Some(f) = subnet_target(s1, renderer, serial) {
         if subfetch_live(s1, f) && hop != 0 && f.hop == hop {
             crate::invariant::lemma_step_preserves_wf(rules, urls, fetch, s1, e);
@@ -863,21 +937,6 @@ pub proof fn lemma_local_respect_subnet(rules: Seq<clazel_psl::spec::Rule>, urls
             assert(f.lock == r.lock);
             assert(s1.renderers.contains(r));
             let g = SubFetch { fetch: fsa, hop: ha, ..f };
-            // Nothing is addressed to `d`.
-            assert forall|k: int| 0 <= k < out1.len() implies !crate::noninterference::addressed_to(rules, d, s1, s1b, #[trigger] out1[k]) by {
-                if k < outa.len() {
-                    assert(out1[k] == outa[k]);
-                } else if crate::noninterference::addressed_to(rules, d, s1, s1b, out1[k]) {
-                    let q = choose|q: Renderer|
-                        (s1.renderers.contains(q) || s1b.renderers.contains(q)) && (if out1[k] is Show || out1[k] is Paint {
-                            q.tab == crate::domain::output_id(out1[k])
-                        } else {
-                            q.id == crate::domain::output_id(out1[k])
-                        }) && crate::domain::domain_of_renderer(rules, q) == d;
-                    crate::unwind_base::lemma_same_id_same_renderer(urls, s1.renderers, s1.next_id, q, r);
-                }
-            }
-            crate::unwind_base::lemma_filter_none(out1, |o: Output| crate::noninterference::addressed_to(rules, d, s1, s1b, o));
             if enda is Some {
                 lemma_drop_domain(rules, s1.subfetches, g, d);
             } else {
@@ -887,6 +946,7 @@ pub proof fn lemma_local_respect_subnet(rules: Seq<clazel_psl::spec::Rule>, urls
                 if let crate::domain::Domain::Root(root) = d {
                     clazel_fetch::transducer::theorems::theorem_ops_name_request(fetch.http, fetch.urls, f.fetch, input, ja, s1.now);
                     let url = (fetch.urls.request_url)(f.fetch.url);
+                    assert(r.lock is Tuple);
                     crate::unwinding_d::lemma_domain_of_tuple(rules, urls, s1, i1, d2);
                     let h = lock_host(r.lock)->Some_0;
                     assert(url.host == Some(h));
@@ -912,6 +972,363 @@ pub proof fn lemma_local_respect_subnet(rules: Seq<clazel_psl::spec::Rule>, urls
             crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2);
         }
     }
+}
+
+// ---------------------------------------------------------------------
+// Noninterference over `FetchStyle`.
+// ---------------------------------------------------------------------
+
+/// A key of `d`'s is counted live the same in the table and in `d`'s part.
+pub proof fn lemma_live_domain(rules: Seq<clazel_psl::spec::Rule>, fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin, d: crate::domain::Domain)
+    requires
+        crate::domain::domain_of_lock(rules, lock) == d,
+    ensures
+        live_subfetches(fs, id, lock) == live_subfetches(crate::domain::subfetches_of_domain(rules, fs, d), id, lock),
+    decreases fs.len(),
+{
+    if fs.len() > 0 {
+        let x = fs[0];
+        let t = fs.drop_first();
+        assert(fs =~= seq![x] + t);
+        lemma_sub_prepend(rules, x, t, d);
+        lemma_live_domain(rules, t, id, lock, d);
+        let ft = crate::domain::subfetches_of_domain(rules, t, d);
+        if crate::domain::domain_of_lock(rules, x.lock) == d {
+            assert((seq![x] + ft)[0] == x);
+            assert((seq![x] + ft).drop_first() =~= ft);
+        }
+    } else {
+        reveal(Seq::filter);
+    }
+}
+
+/// A `FetchStyle` of a renderer of `d`, in two runs whose sub-fetches and
+/// counts of `d` agree, at the same time: the same outputs, and the tables
+/// of `d` still agree.
+pub proof fn lemma_fetch_style_domain(
+    rules: Seq<clazel_psl::spec::Rule>,
+    urls: UrlFns,
+    fetch: FetchFns,
+    d: crate::domain::Domain,
+    s1: State,
+    s2: State,
+    r: Renderer,
+    request: u64,
+    url: Seq<u8>,
+)
+    requires
+        crate::domain::domain_of_renderer(rules, r) == d,
+        crate::domain::subfetches_of_domain(rules, s1.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, s1.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2.subcounts, d),
+        s1.now == s2.now,
+    ensures
+        fetch_style(rules, urls, fetch, s1, r, request, url).1 == fetch_style(rules, urls, fetch, s2, r, request, url).1,
+        crate::domain::subfetches_of_domain(rules, fetch_style(rules, urls, fetch, s1, r, request, url).0.subfetches, d)
+            == crate::domain::subfetches_of_domain(rules, fetch_style(rules, urls, fetch, s2, r, request, url).0.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, fetch_style(rules, urls, fetch, s1, r, request, url).0.subcounts, d)
+            == crate::domain::subcounts_of_domain(rules, fetch_style(rules, urls, fetch, s2, r, request, url).0.subcounts, d),
+{
+    lemma_live_domain(rules, s1.subfetches, r.id, r.lock, d);
+    lemma_live_domain(rules, s2.subfetches, r.id, r.lock, d);
+    lemma_subcount_of_domain(rules, s1.subcounts, r.id, r.lock, d);
+    lemma_subcount_of_domain(rules, s2.subcounts, r.id, r.lock, d);
+    let (serial, in_document) = subcount_of(s1.subcounts, r.id, r.lock);
+    lemma_set_subcount_domain(rules, s1.subcounts, s2.subcounts, r.id, r.lock, serial + 1, in_document + 1, d);
+    if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+        if let Some(resolved) = (urls.resolve)(r.url, relative) {
+            if let Some(parsed) = (fetch.parse)(resolved) {
+                let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                let (hop, o, end) = sub_actions(r.id, serial, request, 0, actions);
+                let f = SubFetch {
+                    renderer: r.id,
+                    lock: r.lock,
+                    serial,
+                    request,
+                    tab: r.tab,
+                    fetch: fs,
+                    hop,
+                    started: s1.now,
+                    partition: crate::domain::domain_of_renderer(rules, r),
+                    ended: false,
+                };
+                lemma_push_domain(rules, s1.subfetches, f, d);
+                lemma_push_domain(rules, s2.subfetches, f, d);
+            }
+        }
+    }
+}
+
+/// A `FetchStyle` of a renderer of another domain leaves `d`'s tables as
+/// they are.
+pub proof fn lemma_fetch_style_other(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s: State, r: Renderer, request: u64, url: Seq<u8>)
+    requires
+        crate::domain::domain_of_renderer(rules, r) != d,
+    ensures
+        crate::domain::subfetches_of_domain(rules, fetch_style(rules, urls, fetch, s, r, request, url).0.subfetches, d)
+            == crate::domain::subfetches_of_domain(rules, s.subfetches, d),
+        crate::domain::subcounts_of_domain(rules, fetch_style(rules, urls, fetch, s, r, request, url).0.subcounts, d)
+            == crate::domain::subcounts_of_domain(rules, s.subcounts, d),
+{
+    let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
+    lemma_set_subcount_domain(rules, s.subcounts, s.subcounts, r.id, r.lock, serial + 1, in_document + 1, d);
+    if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+        if let Some(resolved) = (urls.resolve)(r.url, relative) {
+            if let Some(parsed) = (fetch.parse)(resolved) {
+                let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                let (hop, o, end) = sub_actions(r.id, serial, request, 0, actions);
+                let f = SubFetch {
+                    renderer: r.id,
+                    lock: r.lock,
+                    serial,
+                    request,
+                    tab: r.tab,
+                    fetch: fs,
+                    hop,
+                    started: s.now,
+                    partition: crate::domain::domain_of_renderer(rules, r),
+                    ended: false,
+                };
+                lemma_push_domain(rules, s.subfetches, f, d);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Noninterference over `Tick`.
+// ---------------------------------------------------------------------
+
+/// Whether a `Tick` keeps sub-fetch `f`: live, and not yet timed out.
+pub open spec fn kept_at(s: State, f: SubFetch) -> bool {
+    subfetch_live(s, f) && !(s.now >= f.started + subfetch_timeout())
+}
+
+/// [`sweep`]'s table is the table filtered by [`kept_at`].
+pub proof fn lemma_sweep_kept(s: State, fs: Seq<SubFetch>)
+    ensures
+        sweep(s, fs).0 == fs.filter(|f: SubFetch| kept_at(s, f)),
+    decreases fs.len(),
+{
+    if fs.len() > 0 {
+        let x = fs[0];
+        let t = fs.drop_first();
+        assert(fs =~= seq![x] + t);
+        lemma_sweep_kept(s, t);
+        t.lemma_filter_prepend(x, |f: SubFetch| kept_at(s, f));
+    } else {
+        reveal(Seq::filter);
+    }
+}
+
+/// A sub-fetch of `d` is live in both related states, or in neither.
+pub proof fn lemma_live_agree(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, t1: State, t2: State, f: SubFetch)
+    requires
+        crate::noninterference::rel(rules, urls, d, t1, t2),
+        crate::domain::domain_of_lock(rules, f.lock) == d,
+    ensures
+        subfetch_live(t1, f) == subfetch_live(t2, f),
+{
+    crate::unwind_base::lemma_found_contained(t1, f.renderer);
+    crate::unwind_base::lemma_found_contained(t2, f.renderer);
+    if let Some(i1) = find_by_id(t1.renderers, f.renderer, 0) {
+        let x = t1.renderers[i1];
+        assert(t2.renderers.contains(x));
+        crate::unwind_base::lemma_find_contained(urls, t2, x);
+    } else if let Some(i2) = find_by_id(t2.renderers, f.renderer, 0) {
+        let y = t2.renderers[i2];
+        if y.lock == f.lock {
+            assert(crate::domain::domain_of_renderer(rules, y) == d);
+            assert(t1.renderers.contains(y));
+            crate::unwind_base::lemma_find_contained(urls, t1, y);
+        }
+    }
+}
+
+/// Two sequences whose elements two predicates agree on filter the same.
+pub proof fn lemma_filter_agree<A>(s: Seq<A>, p: spec_fn(A) -> bool, q: spec_fn(A) -> bool)
+    requires
+        forall|i: int| 0 <= i < s.len() ==> p(#[trigger] s[i]) == q(s[i]),
+    ensures
+        s.filter(p) == s.filter(q),
+    decreases s.len(),
+{
+    reveal(Seq::filter);
+    if s.len() > 0 {
+        let t = s.drop_last();
+        assert forall|i: int| 0 <= i < t.len() implies p(#[trigger] t[i]) == q(t[i]) by {
+            assert(t[i] == s[i]);
+        }
+        lemma_filter_agree(t, p, q);
+        assert(p(s[s.len() - 1]) == q(s[s.len() - 1]));
+    }
+}
+
+/// The `StyleFailed`s a `Tick` sends to `d`'s renderers: for each sub-fetch
+/// of `d` that is live and timed out, in order.
+pub open spec fn d_failures(rules: Seq<clazel_psl::spec::Rule>, s: State, fs: Seq<SubFetch>, d: crate::domain::Domain) -> Seq<Output>
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        seq![]
+    } else {
+        let f = fs[0];
+        (if crate::domain::domain_of_lock(rules, f.lock) == d && subfetch_live(s, f) && s.now >= f.started + subfetch_timeout() {
+            seq![Output::ToRenderer { id: f.renderer, bytes: style_failed_frame(f.request) }]
+        } else {
+            seq![]
+        }) + d_failures(rules, s, fs.drop_first(), d)
+    }
+}
+
+/// [`d_failures`] reads only `d`'s part of the table.
+pub proof fn lemma_d_failures_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, fs: Seq<SubFetch>, d: crate::domain::Domain)
+    ensures
+        d_failures(rules, s, fs, d) == d_failures(rules, s, crate::domain::subfetches_of_domain(rules, fs, d), d),
+    decreases fs.len(),
+{
+    if fs.len() > 0 {
+        let x = fs[0];
+        let t = fs.drop_first();
+        assert(fs =~= seq![x] + t);
+        lemma_sub_prepend(rules, x, t, d);
+        lemma_d_failures_domain(rules, s, t, d);
+        let ft = crate::domain::subfetches_of_domain(rules, t, d);
+        if crate::domain::domain_of_lock(rules, x.lock) == d {
+            assert((seq![x] + ft)[0] == x);
+            assert((seq![x] + ft).drop_first() =~= ft);
+        } else {
+            assert(d_failures(rules, s, fs, d) =~= d_failures(rules, s, t, d));
+        }
+    } else {
+        reveal(Seq::filter);
+    }
+}
+
+/// [`d_failures`] of `d`'s sub-fetches is the same in related states.
+pub proof fn lemma_d_failures_agree(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, t1: State, t2: State, fs: Seq<SubFetch>)
+    requires
+        crate::noninterference::rel(rules, urls, d, t1, t2),
+        forall|i: int| 0 <= i < fs.len() ==> crate::domain::domain_of_lock(rules, (#[trigger] fs[i]).lock) == d,
+    ensures
+        d_failures(rules, t1, fs, d) == d_failures(rules, t2, fs, d),
+    decreases fs.len(),
+{
+    if fs.len() > 0 {
+        let t = fs.drop_first();
+        assert forall|i: int| 0 <= i < t.len() implies crate::domain::domain_of_lock(rules, (#[trigger] t[i]).lock) == d by {
+            assert(t[i] == fs[i + 1]);
+        }
+        lemma_d_failures_agree(rules, urls, d, t1, t2, t);
+        lemma_live_agree(rules, urls, d, t1, t2, fs[0]);
+    }
+}
+
+/// What a `Tick`'s sweep sends to `d` is [`d_failures`].
+#[verifier::spinoff_prover]
+pub proof fn lemma_sweep_outputs_for(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s: State, sb: State, t: State, fs: Seq<SubFetch>)
+    requires
+        crate::invariant::renderers_wf(urls, t.renderers, t.next_id),
+        s.renderers == t.renderers,
+        sb.renderers == t.renderers,
+    ensures
+        crate::noninterference::outputs_for(rules, d, s, sb, sweep(t, fs).1) == d_failures(rules, t, fs, d),
+    decreases fs.len(),
+{
+    let ad = |o: Output| crate::noninterference::addressed_to(rules, d, s, sb, o);
+    if fs.len() > 0 {
+        let f = fs[0];
+        let rest = fs.drop_first();
+        lemma_sweep_outputs_for(rules, urls, d, s, sb, t, rest);
+        let o = sweep(t, rest).1;
+        let close = if f.hop > 0 { seq![Output::SubClose { renderer: f.renderer, serial: f.serial, hop: f.hop }] } else { Seq::<Output>::empty() };
+        let failed = seq![Output::ToRenderer { id: f.renderer, bytes: style_failed_frame(f.request) }];
+        let pre = if !subfetch_live(t, f) {
+            close
+        } else if t.now >= f.started + subfetch_timeout() {
+            close + failed
+        } else {
+            Seq::<Output>::empty()
+        };
+        assert(sweep(t, fs).1 == pre + o);
+        Seq::filter_distributes_over_add(pre, o, ad);
+        crate::unwind_base::lemma_filter_none(close, ad);
+        if subfetch_live(t, f) && t.now >= f.started + subfetch_timeout() {
+            Seq::filter_distributes_over_add(close, failed, ad);
+            crate::unwind_base::lemma_found_contained(t, f.renderer);
+            let i = find_by_id(t.renderers, f.renderer, 0)->Some_0;
+            let x = t.renderers[i];
+            assert(x.lock == f.lock && x.id == f.renderer);
+            if crate::domain::domain_of_lock(rules, f.lock) == d {
+                assert(ad(failed[0])) by {
+                    assert(s.renderers.contains(x));
+                    assert(crate::domain::domain_of_renderer(rules, x) == d);
+                    assert(crate::domain::output_id(failed[0]) == x.id);
+                }
+                crate::surface_rel::lemma_filter_all(failed, ad);
+            } else {
+                assert(!ad(failed[0])) by {
+                    if ad(failed[0]) {
+                        let q = choose|q: Renderer|
+                            (s.renderers.contains(q) || sb.renderers.contains(q)) && q.id == f.renderer && crate::domain::domain_of_renderer(rules, q) == d;
+                        crate::unwind_base::lemma_same_id_same_renderer(urls, t.renderers, t.next_id, q, x);
+                    }
+                }
+                crate::unwind_base::lemma_filter_none(failed, ad);
+            }
+        }
+    } else {
+        reveal(Seq::filter);
+    }
+}
+
+/// `Tick` from related states: related states, and the same outputs to
+/// `d`.
+#[verifier::spinoff_prover]
+pub proof fn lemma_tick_all_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, time: int)
+    requires
+        crate::noninterference::rel(rules, urls, d, s1, s2),
+    ensures
+        crate::noninterference::rel(rules, urls, d, tick_all(s1, time).0, tick_all(s2, time).0),
+        crate::noninterference::outputs_for(rules, d, s1, tick_all(s1, time).0, tick_all(s1, time).1) == crate::noninterference::outputs_for(
+            rules,
+            d,
+            s2,
+            tick_all(s2, time).0,
+            tick_all(s2, time).1,
+        ),
+{
+    crate::unwinding::lemma_tick_consistency(rules, urls, fetch, d, s1, s2, time);
+    let t1 = tick(s1, time).0;
+    let t2 = tick(s2, time).0;
+    let (s1b, o1) = tick_all(s1, time);
+    let (s2b, o2) = tick_all(s2, time);
+    // The outputs.
+    lemma_sweep_outputs_for(rules, urls, d, s1, s1b, t1, t1.subfetches);
+    lemma_sweep_outputs_for(rules, urls, d, s2, s2b, t2, t2.subfetches);
+    lemma_d_failures_domain(rules, t1, t1.subfetches, d);
+    lemma_d_failures_domain(rules, t2, t2.subfetches, d);
+    let fd = crate::domain::subfetches_of_domain(rules, t1.subfetches, d);
+    assert forall|i: int| 0 <= i < fd.len() implies crate::domain::domain_of_lock(rules, (#[trigger] fd[i]).lock) == d by {
+        t1.subfetches.lemma_filter_pred(|x: SubFetch| crate::domain::domain_of_lock(rules, x.lock) == d, i);
+    }
+    lemma_d_failures_agree(rules, urls, d, t1, t2, fd);
+    // The table.
+    let ind = |x: SubFetch| crate::domain::domain_of_lock(rules, x.lock) == d;
+    let k1 = |f: SubFetch| kept_at(t1, f);
+    let k2 = |f: SubFetch| kept_at(t2, f);
+    lemma_sweep_kept(t1, t1.subfetches);
+    lemma_sweep_kept(t2, t2.subfetches);
+    crate::surface_rel::lemma_filter_commute(t1.subfetches, k1, ind);
+    crate::surface_rel::lemma_filter_commute(t2.subfetches, k2, ind);
+    assert forall|i: int| 0 <= i < fd.len() implies k1(#[trigger] fd[i]) == k2(fd[i]) by {
+        lemma_live_agree(rules, urls, d, t1, t2, fd[i]);
+    }
+    lemma_filter_agree(fd, k1, k2);
+    crate::net_rel::lemma_rel_conn_ext(t1, t2, s1b, s2b);
+    assert forall|x: Renderer| s1b.renderers.contains(x) implies s2b.renderers.contains(x) by {
+        let k = choose|k: int| 0 <= k < t1.renderers.len() && t1.renderers[k] == x;
+    }
+    crate::unwinding::lemma_rel_from_sets(rules, urls, d, s1b, s2b);
 }
 
 } // verus!

@@ -139,13 +139,30 @@ pub fn set_subcount_exec(cs: &[SubCountRecord], id: u64, lock: &ParsedOrigin, se
     out
 }
 
+/// One count after a commit of renderer `id` locked to `lock`.
+pub open spec fn reset_count(c: SubCount, id: nat, lock: clazel_origin::spec::Origin) -> SubCount {
+    if c.renderer == id && c.lock == lock {
+        SubCount { in_document: 0, ..c }
+    } else {
+        c
+    }
+}
+
+/// One sub-fetch after a commit of renderer `id` locked to `lock`.
+pub open spec fn end_one(f: SubFetch, id: nat, lock: clazel_origin::spec::Origin) -> SubFetch {
+    if f.renderer == id && f.lock == lock {
+        SubFetch { ended: true, ..f }
+    } else {
+        f
+    }
+}
+
 /// [`new_document_counts`].
 pub fn new_document_counts_exec(cs: &[SubCountRecord], id: u64, lock: &ParsedOrigin) -> (out: Vec<SubCountRecord>)
     ensures
         subcounts_view(out@) == new_document_counts(subcounts_view(cs@), id as nat, lock@),
 {
     let ghost cv = subcounts_view(cs@);
-    let ghost g = |c: SubCount| if c.renderer == id as nat && c.lock == lock@ { SubCount { in_document: 0, ..c } } else { c };
     let mut out: Vec<SubCountRecord> = Vec::new();
     let mut k: usize = 0;
     while k < cs.len()
@@ -153,7 +170,7 @@ pub fn new_document_counts_exec(cs: &[SubCountRecord], id: u64, lock: &ParsedOri
             k <= cs.len(),
             cv == subcounts_view(cs@),
             subcounts_view(out@).len() == k,
-            forall|j: int| 0 <= j < k ==> subcounts_view(out@)[j] == g(cv[j]),
+            forall|j: int| 0 <= j < k ==> subcounts_view(out@)[j] == reset_count(cv[j], id as nat, lock@),
         decreases cs.len() - k,
     {
         if let Some(c) = cs.get(k) {
@@ -166,11 +183,11 @@ pub fn new_document_counts_exec(cs: &[SubCountRecord], id: u64, lock: &ParsedOri
             }
             let ghost before = out@;
             let ghost dv = d@;
-            assert(dv == g(cv[k as int]));
+            assert(dv == reset_count(cv[k as int], id as nat, lock@));
             out.push(d);
             proof {
                 assert(subcounts_view(out@) =~= subcounts_view(before).push(dv));
-                assert forall|j: int| 0 <= j < k + 1 implies subcounts_view(out@)[j] == g(cv[j]) by {
+                assert forall|j: int| 0 <= j < k + 1 implies subcounts_view(out@)[j] == reset_count(cv[j], id as nat, lock@) by {
                     if j < k {
                         assert(subcounts_view(out@)[j] == subcounts_view(before)[j]);
                     }
@@ -180,8 +197,7 @@ pub fn new_document_counts_exec(cs: &[SubCountRecord], id: u64, lock: &ParsedOri
         k = k.saturating_add(1);
     }
     proof {
-        assert(subcounts_view(out@) =~= cv.map_values(g));
-        assert(new_document_counts(cv, id as nat, lock@) =~= cv.map_values(g));
+        assert(subcounts_view(out@) =~= new_document_counts(cv, id as nat, lock@));
     }
     out
 }
@@ -200,7 +216,6 @@ pub fn end_subfetches_exec<F: FetchFnsExec>(fs: Vec<SubFetchRecord>, id: u64, lo
 {
     let ghost fv = subfetches_view(fs@);
     let ghost orig = fs@;
-    let ghost g = |f: SubFetch| if f.renderer == id as nat && f.lock == lock@ { SubFetch { ended: true, ..f } } else { f };
     let mut fs = fs;
     let mut out: Vec<SubFetchRecord> = Vec::new();
     let mut k: usize = 0;
@@ -213,7 +228,7 @@ pub fn end_subfetches_exec<F: FetchFnsExec>(fs: Vec<SubFetchRecord>, id: u64, lo
             fv == subfetches_view(orig),
             fs@ == orig.skip(k as int),
             subfetches_view(out@).len() == k,
-            forall|j: int| 0 <= j < k ==> subfetches_view(out@)[j] == g(fv[j]),
+            forall|j: int| 0 <= j < k ==> subfetches_view(out@)[j] == end_one(fv[j], id as nat, lock@),
             subfetches_ok::<F>(orig),
             subfetches_ok::<F>(out@),
         decreases fs.len(),
@@ -233,7 +248,12 @@ pub fn end_subfetches_exec<F: FetchFnsExec>(fs: Vec<SubFetchRecord>, id: u64, lo
         out.push(f);
         proof {
             assert(subfetches_view(out@) =~= subfetches_view(before).push(fv2));
-            assert(fv2 == g(fv[k as int]));
+            assert(fv2 == end_one(fv[k as int], id as nat, lock@));
+            assert forall|j: int| 0 <= j < k + 1 implies subfetches_view(out@)[j] == end_one(fv[j], id as nat, lock@) by {
+                if j < k {
+                    assert(subfetches_view(out@)[j] == subfetches_view(before)[j]);
+                }
+            }
             assert forall|j: int| 0 <= j < out@.len() implies F::nav_ok(&(#[trigger] out@[j]).fetch) && out@[j].fetch@.redirects <= 20 && out@[j].hop as int
                 + clazel_fetch::transducer::theorems::connect_budget(out@[j].fetch@) <= 21 by {
                 if j < before.len() {
@@ -246,8 +266,7 @@ pub fn end_subfetches_exec<F: FetchFnsExec>(fs: Vec<SubFetchRecord>, id: u64, lo
         k = k.saturating_add(1);
     }
     proof {
-        assert(subfetches_view(out@) =~= fv.map_values(g));
-        assert(end_subfetches(fv, id as nat, lock@) =~= fv.map_values(g));
+        assert(subfetches_view(out@) =~= end_subfetches(fv, id as nat, lock@));
     }
     out
 }
@@ -439,7 +458,7 @@ pub fn credentialed_exec<F: FetchFnsExec>(fetch: &F, lock: &ParsedOrigin, url: &
     }
     let ru = u.request_url(url);
     let lh = lock_host_exec(lock);
-    opt_canon_eq(&ru.host, &lh)
+    lh.is_some() && opt_canon_eq(&ru.host, &lh)
 }
 
 // ---------------------------------------------------------------------

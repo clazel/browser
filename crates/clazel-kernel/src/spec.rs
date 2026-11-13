@@ -2044,11 +2044,13 @@ pub open spec fn drop_subfetch(fs: Seq<SubFetch>, f: SubFetch) -> Seq<SubFetch>
 
 /// Whether a request to `url` by a document locked to `lock` carries
 /// credentials (5.0(h)): its URL's origin is the lock, and its cookie host is
-/// the lock's host (the second holds of every same-origin URL in the shipped
-/// instantiation; it is stated so that the cookies a sub-fetch reads and
-/// writes are visibly the lock's, for every `FetchFns`).
+/// the lock's host, which it has (the second holds of every same-origin URL
+/// in the shipped instantiation; it is stated so that the cookies a
+/// sub-fetch reads and writes are visibly the lock's, for every `FetchFns`).
+/// An opaque-origin document has no host, so its requests carry none, as it
+/// is cookie-averse.
 pub open spec fn credentialed(fetch: FetchFns, lock: clazel_origin::spec::Origin, url: clazel_url::url::spec::Url) -> bool {
-    (fetch.urls.origin)(url) == lock && ((fetch.urls.request_url)(url)).host == lock_host(lock)
+    (fetch.urls.origin)(url) == lock && ((fetch.urls.request_url)(url)).host == lock_host(lock) && lock_host(lock) is Some
 }
 
 /// The jar a sub-fetch's step is given: the kernel's if its current request

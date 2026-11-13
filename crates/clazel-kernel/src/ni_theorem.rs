@@ -101,7 +101,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
         crate::noninterference::kept_event(rules, urls, d, s1, e),
-        !(e is Resize || e is Input),
+        !(e is Resize || e is Input || e is Tick),
     ensures
         crate::noninterference::renderer_outs(step(rules, urls, fetch, s1, e).1) == crate::noninterference::renderer_outs(step(rules, urls, fetch, s2, e).1),
         crate::noninterference::rel(rules, urls, d, step(rules, urls, fetch, s1, e).0, step(rules, urls, fetch, s2, e).0),
@@ -129,9 +129,7 @@ pub proof fn lemma_kept_step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
         Event::RendererExited { id } => {
             crate::unwinding::lemma_exited_consistency(rules, urls, fetch, d, s1, s2, id);
         },
-        Event::Tick { time } => {
-            crate::unwinding::lemma_tick_consistency(rules, urls, fetch, d, s1, s2, time);
-        },
+        Event::Tick { .. } => {},
         // Item 5.18. (`Resize` and `Input` are handled apart:
         // `crate::surface_rel::lemma_user_event_consistency`.)
         Event::FromGpu { id, bytes } => {
@@ -169,6 +167,10 @@ pub proof fn lemma_output_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: 
         crate::surface_rel::lemma_user_event_consistency(rules, urls, fetch, d, s1, s2, e);
         return;
     }
+    if let Event::Tick { time } = e {
+        crate::subfetch_rel::lemma_tick_all_consistency(rules, urls, fetch, d, s1, s2, time);
+        return;
+    }
     lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
     let (s1b, o1) = step(rules, urls, fetch, s1, e);
     let (s2b, o2) = step(rules, urls, fetch, s2, e);
@@ -185,6 +187,8 @@ pub proof fn lemma_step_consistency(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
 {
     if e is Resize || e is Input {
         crate::surface_rel::lemma_user_event_consistency(rules, urls, fetch, d, s1, s2, e);
+    } else if let Event::Tick { time } = e {
+        crate::subfetch_rel::lemma_tick_all_consistency(rules, urls, fetch, d, s1, s2, time);
     } else {
         lemma_kept_step(rules, urls, fetch, d, s1, s2, e);
     }

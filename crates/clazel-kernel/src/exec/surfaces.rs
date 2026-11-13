@@ -352,6 +352,7 @@ pub fn resize_exec(s: StateRecord, tab: u64, width: u64, height: u64, scale: u64
         out.0.renderers@ == s.renderers@,
         out.0.conns@ == s.conns@,
         out.0.titles@ == s.titles@,
+        out.0.subfetches@ == s.subfetches@,
         keeps_storage_jar_now(s, out.0),
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
@@ -425,6 +426,7 @@ pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> 
         keeps_storage_jar_now(s, out.0),
         out.0.next_id == s.next_id,
         out.0.next_conn == s.next_conn,
+        out.0.subfetches@ == s.subfetches@,
         renderers_ok::<F>(out.0.renderers@),
         super::subfetch::subfetches_ok::<F>(out.0.subfetches@),
 {
