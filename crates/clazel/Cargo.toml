@@ -21,6 +21,15 @@ clazel-ipc = { path = "../clazel-ipc" }
 clazel-net = { path = "../clazel-net" }
 # The network input of a `Net` event (`InputBuf`).
 clazel-fetch = { path = "../clazel-fetch" }
+# Item 5.23: the GPU process's surface socket (`channel`), the PNG and PPM of
+# `browse --headless` take its pixels; the window (`clazel-window`) and the
+# address bar's text (`clazel-font`, `clazel-layout`, `clazel-glyph-mask`),
+# drawn by the command line in `cli/`. All our own crates.
+clazel-gpu = { path = "../clazel-gpu" }
+clazel-window = { path = "../clazel-window" }
+clazel-font = { path = "../clazel-font" }
+clazel-layout = { path = "../clazel-layout" }
+clazel-glyph-mask = { path = "../clazel-glyph-mask" }
 
 # The command line (`clazel URL SCRIPT`, `clazel demo`) is outside `src/`, whose
 # line count the README reports: it only calls the host's public functions.
@@ -41,6 +50,14 @@ clazel-url = { path = "../clazel-url", version = "=0.0.0" }
 # The TLS 1.3 server of tests/host.rs's `https:` navigation, configured as
 # in clazel-net's tests/tls.rs (class `test`: never shipped; no new package).
 rustls = { version = "=0.23.46", default-features = false, features = ["std", "ring"] }
+# Item 5.23's tests build a display list and its reference pixels.
+clazel-displaylist = { path = "../clazel-displaylist", version = "=0.0.0" }
+
+# Item 5.23: a hand-built list's frame shown in a real window, which AppKit
+# allows only on the main thread, so the test is its own `main`.
+[[test]]
+name = "browse_window"
+harness = false
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The shell is
 # the I/O around the proven `step`; its line count is in the README table.

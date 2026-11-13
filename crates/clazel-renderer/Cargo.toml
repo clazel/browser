@@ -9,6 +9,9 @@ description = "The renderer: enters the OS sandbox before reading a byte, then d
 [dependencies]
 # The wire format: frames and messages (items 2.1 to 2.3).
 clazel-ipc = { path = "../clazel-ipc" }
+# The GPU process's list and surface sockets (`clazel_gpu::channel`, items
+# 5.18 and 5.23): the host's side in `launch`, and the renderer's lists.
+clazel-gpu = { path = "../clazel-gpu" }
 # The sandbox policies as data (item 2.14): the renderer applies them.
 clazel-sandbox = { path = "../clazel-sandbox" }
 # The only way into the OS sandbox (item 2.0). Safe functions; the renderer
