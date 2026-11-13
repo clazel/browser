@@ -379,7 +379,7 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     let (problems, notes) = ua_sheet::run(false);
     r.step("generated user agent style sheet", outcome(problems, notes));
     let (problems, notes) = shaders::run(false);
-    r.step("compiled GPU shaders (SPIR-V)", outcome(problems, notes));
+    r.step("compiled GPU shaders (SPIR-V, DXBC)", outcome(problems, notes));
     let (problems, notes) = entities::run(false);
     r.step(
         "generated named character references table",
