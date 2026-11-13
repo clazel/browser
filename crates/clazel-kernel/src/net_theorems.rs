@@ -1810,7 +1810,9 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
         reachable(rules, urls, fetch, s),
     ensures
         crate::statements::connection_ownership_statement(rules, urls, fetch, s, e),
+        crate::statements::subfetch_ownership_statement(rules, urls, fetch, s, e),
 {
+    crate::subfetch_theorems::theorem_subfetch_ownership(rules, urls, fetch, s, e);
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     assert(kernel_wf_conns(s));
     match e {

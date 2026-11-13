@@ -8,8 +8,8 @@ use super::records::*;
 #[allow(unused_imports)]
 use super::spec::*;
 use super::step::*;
-use clazel_cookie::matching::exec::CanonicalHostName;
 use super::urls::UrlFnsExec;
+use clazel_cookie::matching::exec::CanonicalHostName;
 use clazel_fetch::transducer::contract::UrlFnsExec as TransducerUrls;
 use clazel_fetch::transducer::types::{ActionBuf, InputBuf};
 use clazel_ipc::message::codec::Msg;

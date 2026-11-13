@@ -48,6 +48,7 @@ pub mod spec;
 pub mod statements;
 pub mod store_projection;
 pub mod subfetch_rel;
+pub mod subfetch_theorems;
 pub mod surface_rel;
 pub mod surface_theorems;
 pub mod theorems;
