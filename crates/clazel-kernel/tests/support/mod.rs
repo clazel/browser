@@ -101,6 +101,10 @@ pub enum Out {
     ToGpu(u64, Msg),
     /// A frame to a GPU process that does not decode (a kernel bug).
     GarbledGpu(u64),
+    /// Several frames to a renderer in one write that are not a commit: a
+    /// fetched style sheet's `StyleResponse`, `StyleBody`s and `StyleEnd`
+    /// (item 5.19).
+    Frames(u64, Vec<Msg>),
     /// A sub-fetch connection asked for (item 5.19): renderer, serial, hop,
     /// host, port, TLS.
     SubConnect(u64, u64, u64, Vec<u8>, u64, bool),
@@ -138,6 +142,9 @@ impl Kernel {
             .into_iter()
             .map(|o| match o {
                 OutputRecord::ToRenderer { id, bytes } => match split_frames(&bytes) {
+                    Some(msgs) if matches!(msgs.first(), Some(Msg::StyleResponse { .. })) => {
+                        Out::Frames(id, msgs)
+                    }
                     Some(msgs)
                         if msgs.len() == 1 && !matches!(msgs.first(), Some(Msg::Commit { .. })) =>
                     {

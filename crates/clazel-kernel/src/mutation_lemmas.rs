@@ -588,4 +588,122 @@ pub proof fn ml_resize(s: State, tab: nat, v: Viewport)
 {
 }
 
+// ---------------------------------------------------------------------
+// Style sheet fetches (item 5.19).
+// ---------------------------------------------------------------------
+
+/// A sub-fetch of renderer `renderer` locked to `lock`, serial 0, started
+/// at time 0 and not yet connected.
+pub open spec fn ml_subfetch(renderer: nat, lock: clazel_origin::spec::Origin, ended: bool) -> SubFetch {
+    SubFetch {
+        renderer,
+        lock,
+        serial: 0,
+        request: 0,
+        tab: renderer,
+        fetch: ml_nav(0x61).fetch,
+        hop: 0,
+        started: 0,
+        partition: crate::domain::Domain::Opaque(0),
+        ended,
+    }
+}
+
+/// Transducer functions under which every URL has the opaque origin 9.
+pub open spec fn ml_fetch_cross() -> FetchFns {
+    FetchFns {
+        urls: clazel_fetch::transducer::spec::UrlFns {
+            origin: |u: clazel_url::url::spec::Url| clazel_origin::spec::Origin::Opaque(9nat),
+            ..crate::counterexamples::ce_fetch().urls
+        },
+        ..crate::counterexamples::ce_fetch()
+    }
+}
+
+/// [`ml_urls_a`], resolving every reference to itself.
+pub open spec fn ml_urls_resolving() -> UrlFns {
+    UrlFns { resolve: |b: Seq<u32>, i: Seq<u32>| Some(i), ..ml_urls_a() }
+}
+
+/// The state of [`ml_state_one`] with the given jar, sub-fetch tables and
+/// time (renderer 0, opaque lock 0).
+pub open spec fn ml_s_sub(jar: Seq<clazel_cookie::storage::spec::Cookie>, fs: Seq<SubFetch>, cs: Seq<SubCount>, now: int) -> State {
+    State { jar, subfetches: fs, subcounts: cs, now, ..ml_state_one() }
+}
+
+/// Eight live sub-fetches of renderer 0.
+pub open spec fn ml_eight() -> Seq<SubFetch> {
+    let f = ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false);
+    seq![f, f, f, f, f, f, f, f]
+}
+
+/// 5.0(h): a sub-fetch whose request carries no credentials is given no
+/// jar.
+pub proof fn ml_uncredentialed_no_jar(fetch: FetchFns, s: State, f: SubFetch)
+    requires
+        !credentialed(fetch, f.lock, f.fetch.url),
+    ensures
+        subfetch_jar(fetch, s, f) == Seq::<clazel_cookie::storage::spec::Cookie>::empty(),
+{
+}
+
+/// A sub-fetch's frames go to its own renderer, after its outputs.
+pub proof fn ml_sub_finish_to_owner(fs: Seq<SubFetch>, f: SubFetch, out: Seq<Output>, frames: Seq<u8>)
+    ensures
+        sub_finish(fs, f, out, Some(frames)).1 == out + seq![Output::ToRenderer { id: f.renderer, bytes: frames }],
+{
+}
+
+/// A commit ends every sub-fetch of the renderer's document.
+pub proof fn ml_end_subfetches_ends(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin, j: int)
+    requires
+        0 <= j < fs.len(),
+        fs[j].renderer == id,
+        fs[j].lock == lock,
+    ensures
+        end_subfetches(fs, id, lock)[j].ended,
+{
+}
+
+/// A `FetchStyle` past a limit is refused: nothing changes, and the
+/// renderer is told `StyleFailed`.
+pub proof fn ml_fetch_style_refused(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>)
+    requires
+        live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || subcount_of(s.subcounts, r.id, r.lock).1 >= max_subfetches_per_document()
+            || subcount_of(s.subcounts, r.id, r.lock).0 >= max_subfetch_serial(),
+    ensures
+        fetch_style(rules, urls, fetch, s, r, request, url) == (s, reply(r, clazel_ipc::message::spec::Message::StyleFailed { request })),
+{
+}
+
+/// A live sub-fetch past its timeout is dropped from the table by a `Tick`.
+pub proof fn ml_sweep_timeout(s: State, f: SubFetch)
+    requires
+        subfetch_live(s, f),
+        s.now >= f.started + subfetch_timeout(),
+    ensures
+        sweep(s, seq![f]).0.len() == 0,
+{
+    reveal_with_fuel(sweep, 2);
+    assert(seq![f].drop_first() =~= Seq::<SubFetch>::empty());
+}
+
+/// A cookie `a=` for host `a`.
+pub open spec fn ml_cookie() -> clazel_cookie::storage::spec::Cookie {
+    clazel_cookie::storage::spec::Cookie {
+        name: seq![0x61u8],
+        value: Seq::<u8>::empty(),
+        expiry_time: 0,
+        domain: clazel_cookie::matching::spec::CanonicalHost { name: seq![0x61u8], is_ip_address: false },
+        path: Seq::<u8>::empty(),
+        creation_time: 0,
+        last_access_time: 0,
+        persistent_flag: false,
+        host_only_flag: true,
+        secure_only_flag: false,
+        http_only_flag: false,
+        same_site_flag: clazel_cookie::set_cookie::spec::SameSite::None,
+    }
+}
+
 } // verus!

@@ -221,7 +221,7 @@ pub fn end_subfetches_exec<F: FetchFnsExec>(fs: Vec<SubFetchRecord>, id: u64, lo
     let mut k: usize = 0;
     let n = fs.len();
     let _ = n;
-    while fs.len() > 0
+    while !fs.is_empty()
         invariant
             k + fs.len() == n,
             n == orig.len(),
@@ -302,7 +302,7 @@ pub fn live_subfetches_exec(fs: &[SubFetchRecord], id: u64, lock: &ParsedOrigin)
             count as nat <= fs.len() - k,
         decreases k,
     {
-        k = k - 1;
+        k = k.saturating_sub(1);
         proof {
             lemma_live_skip(fv, id as nat, lock@, k as int);
         }
@@ -311,7 +311,7 @@ pub fn live_subfetches_exec(fs: &[SubFetchRecord], id: u64, lock: &ParsedOrigin)
                 assert(fv[k as int] == f@);
             }
             if f.renderer == id && origin_eq_exec(&f.lock, lock) && !f.ended {
-                count = count + 1;
+                count = count.saturating_add(1);
             }
         }
     }
@@ -437,10 +437,13 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> (r: bool)
             forall|j: int| 0 <= j < i ==> a@[j] == b@[j],
         decreases a.len() - i,
     {
-        if a[i] != b[i] {
-            return false;
+        match (a.get(i), b.get(i)) {
+            (Some(x), Some(y)) if *x != *y => {
+                return false;
+            },
+            _ => {},
         }
-        i = i + 1;
+        i = i.saturating_add(1);
     }
     assert(a@ =~= b@);
     true
@@ -615,7 +618,7 @@ pub fn sub_actions_exec(id: u64, serial: u64, request: u64, hop: u64, actions: V
     }
     match act {
         ActionBuf::Connect { host, port, tls } => {
-            let h1 = hop + 1;
+            let h1 = hop.saturating_add(1);
             let (h, out, end) = sub_actions_exec(id, serial, request, h1, actions);
             let first = one_output(OutputRecord::SubConnect { renderer: id, serial, hop: h1, host, port: port as u64, tls });
             (h, append_outputs(first, out), end)
@@ -704,7 +707,7 @@ pub fn fetch_style_exec<U: UrlFnsExec, F: FetchFnsExec>(urls: &U, fetch: &F, s: 
     proof {
         lemma_sub_actions_hop(r.id as nat, serial as nat, request, 0, av);
     }
-    let counts = set_subcount_exec(s.subcounts.as_slice(), r.id, &r.lock, serial + 1, in_document + 1);
+    let counts = set_subcount_exec(s.subcounts.as_slice(), r.id, &r.lock, serial.saturating_add(1), in_document.saturating_add(1));
     let mut s = s;
     s.subcounts = counts;
     let ghost f = SubFetch {
@@ -961,7 +964,7 @@ pub fn sweep_exec<F: FetchFnsExec>(rs: &[RendererRecord], now: u64, fs: Vec<SubF
         assert(outputs_view(outs@) =~= Seq::<Output>::empty());
         assert(fs@ =~= orig.take(orig.len() as int));
     }
-    while fs.len() > 0
+    while !fs.is_empty()
         invariant
             fv == subfetches_view(orig),
             fs@ == orig.take(fs@.len() as int),

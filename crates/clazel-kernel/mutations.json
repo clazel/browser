@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if (m is Display || m is Title) && !r.committed { None } else { Some(m) },",
+      "find": "Some(m) => if (m is Display || m is Title || m is FetchStyle) && !r.committed { None } else { Some(m) },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -809,6 +809,104 @@
         "reveal": [
           "Seq::filter"
         ]
+      }
+    },
+    {
+      "id": "subfetch-jar-cross-origin",
+      "file": "src/spec.rs",
+      "find": "    if credentialed(fetch, f.lock, f.fetch.url) {\n        s.jar\n    } else {\n        seq![]\n    }\n}",
+      "replace": "    s.jar\n}",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "Every sub-fetch is given the kernel's jar, whether or not its request is same-origin with the document (5.0(h)): a cross-origin style sheet request carries the document's cookies. ml_uncredentialed_no_jar (what theorem_subfetch_credentials and the noninterference over SubNet rest on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_uncredentialed_no_jar(ml_fetch_cross(), ml_s_sub(seq![ml_cookie()], Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 0), ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false))",
+        "witness": "!credentialed(ml_fetch_cross(), clazel_origin::spec::Origin::Opaque(0nat), ml_url0()) && subfetch_jar(ml_fetch_cross(), ml_s_sub(seq![ml_cookie()], Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 0), ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false)).len() == 1"
+      }
+    },
+    {
+      "id": "subfetch-response-to-other-renderer",
+      "file": "src/spec.rs",
+      "find": "Some(frames) => (drop_subfetch(fs, f), out + seq![Output::ToRenderer { id: f.renderer, bytes: frames }]),",
+      "replace": "Some(frames) => (drop_subfetch(fs, f), out + seq![Output::ToRenderer { id: 0, bytes: frames }]),",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A finished sub-fetch's frames go to renderer 0 instead of the renderer that asked for the sheet: ml_sub_finish_to_owner (the core of theorem_subfetch_only_to_requester) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_sub_finish_to_owner(Seq::<SubFetch>::empty(), ml_subfetch(3, clazel_origin::spec::Origin::Opaque(0nat), false), Seq::<Output>::empty(), seq![1u8])",
+        "witness": "sub_finish(Seq::<SubFetch>::empty(), ml_subfetch(3, clazel_origin::spec::Origin::Opaque(0nat), false), Seq::<Output>::empty(), Some(seq![1u8])).1[0]->ToRenderer_id == 0nat"
+      }
+    },
+    {
+      "id": "subfetch-survives-navigation",
+      "file": "src/spec.rs",
+      "find": "    fs.map_values(|f: SubFetch| if f.renderer == id && f.lock == lock { SubFetch { ended: true, ..f } } else { f })",
+      "replace": "    fs",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A commit leaves the old document's sub-fetches live, so a style sheet of the previous page can still be delivered to the new one: ml_end_subfetches_ends (the core of theorem_commit_ends_subfetches) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_end_subfetches_ends(seq![ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false)], 0, clazel_origin::spec::Origin::Opaque(0nat), 0)",
+        "witness": "!end_subfetches(seq![ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false)], 0, clazel_origin::spec::Origin::Opaque(0nat))[0].ended"
+      }
+    },
+    {
+      "id": "subfetch-at-once-unlimited",
+      "file": "src/spec.rs",
+      "find": "live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || ",
+      "replace": "",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A renderer with max_subfetches_at_once sub-fetches in flight may start another: ml_fetch_style_refused (what theorem_subfetch_limits rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetch_style_refused(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), ml_eight(), Seq::<SubCount>::empty(), 0), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 0, seq![0x61u8])",
+        "witness": "live_subfetches(ml_eight(), 0, clazel_origin::spec::Origin::Opaque(0nat)) >= max_subfetches_at_once() && fetch_style(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), ml_eight(), Seq::<SubCount>::empty(), 0), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 0, seq![0x61u8]).1[0] is SubConnect"
+      }
+    },
+    {
+      "id": "subfetch-per-document-unlimited",
+      "file": "src/spec.rs",
+      "find": "in_document >= max_subfetches_per_document() || ",
+      "replace": "",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A document that has started max_subfetches_per_document sub-fetches may start another: ml_fetch_style_refused (what theorem_subfetch_limits rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetch_style_refused(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), seq![SubCount { renderer: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), serial: 0, in_document: 64 }], 0), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 0, seq![0x61u8])",
+        "witness": "subcount_of(seq![SubCount { renderer: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), serial: 0, in_document: 64 }], 0, clazel_origin::spec::Origin::Opaque(0nat)).1 >= max_subfetches_per_document() && fetch_style(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), seq![SubCount { renderer: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), serial: 0, in_document: 64 }], 0), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 0, seq![0x61u8]).1[0] is SubConnect"
+      }
+    },
+    {
+      "id": "subfetch-serial-unbounded",
+      "file": "src/spec.rs",
+      "find": " || serial\n        >= max_subfetch_serial()",
+      "replace": "",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A renderer whose serial counter is at its bound may start another sub-fetch, whose serial the exec kernel cannot represent: ml_fetch_style_refused is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_fetch_style_refused(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), seq![SubCount { renderer: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), serial: 18446744073709551615, in_document: 0 }], 0), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 0, seq![0x61u8])",
+        "witness": "subcount_of(seq![SubCount { renderer: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), serial: 18446744073709551615, in_document: 0 }], 0, clazel_origin::spec::Origin::Opaque(0nat)).0 >= max_subfetch_serial() && fetch_style(Seq::<clazel_psl::spec::Rule>::empty(), ml_urls_resolving(), crate::counterexamples::ce_fetch(), ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), seq![SubCount { renderer: 0, lock: clazel_origin::spec::Origin::Opaque(0nat), serial: 18446744073709551615, in_document: 0 }], 0), ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), 0, seq![0x61u8]).1[0] is SubConnect"
+      }
+    },
+    {
+      "id": "subfetch-no-timeout",
+      "file": "src/spec.rs",
+      "find": "} else if s.now >= f.started + subfetch_timeout() {",
+      "replace": "} else if false {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A Tick never fails a sub-fetch past its timeout, so a peer that never answers holds one of the renderer's slots for ever: ml_sweep_timeout is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_sweep_timeout(ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60), ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false))",
+        "witness": "subfetch_live(ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60), ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false)) && ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60).now >= ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false).started + subfetch_timeout() && sweep(ml_s_sub(Seq::<clazel_cookie::storage::spec::Cookie>::empty(), Seq::<SubFetch>::empty(), Seq::<SubCount>::empty(), 60), seq![ml_subfetch(0, clazel_origin::spec::Origin::Opaque(0nat), false)]).0.len() == 1"
       }
     }
   ]
