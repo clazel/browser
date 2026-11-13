@@ -246,17 +246,24 @@ fn window_available() -> Result<(), &'static str> {
     if !clazel_window::has_display() {
         return Err("DISPLAY names no local X display");
     }
+    // On Windows nothing is asked first: a process with no desktop to open a
+    // window on finds out when the window fails to open.
     if cfg!(any(
         all(target_os = "macos", target_arch = "aarch64"),
-        target_os = "linux"
+        target_os = "linux",
+        windows
     )) {
         Ok(())
     } else {
-        Err("no window on this platform yet (phase-5.md item 5.22a)")
+        Err("no window on this platform (phase-5.md items 5.21 to 5.22a)")
     }
 }
 
-#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux"))]
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 fn browse_window(mut host: clazel::Host, url: &str, _width: usize) -> ExitCode {
     match window::windowed::run(&mut host, url) {
         Ok(()) => ExitCode::SUCCESS,
@@ -267,7 +274,11 @@ fn browse_window(mut host: clazel::Host, url: &str, _width: usize) -> ExitCode {
     }
 }
 
-#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux")))]
+#[cfg(not(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+)))]
 fn browse_window(host: clazel::Host, url: &str, width: usize) -> ExitCode {
     browse_stdio(host, url, width)
 }

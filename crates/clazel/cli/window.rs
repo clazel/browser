@@ -63,6 +63,9 @@ pub const RENDERER_FONTS: &[&str] = &[
     "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
     "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\arialbd.ttf",
+    "C:\\Windows\\Fonts\\times.ttf",
+    "C:\\Windows\\Fonts\\cour.ttf",
 ];
 
 /// The [`RENDERER_FONTS`] that exist here.
@@ -405,9 +408,14 @@ pub fn input(host: &mut Host, tab: u64, kind: u64, (x, y): (u64, u64), delta: i6
     });
 }
 
-/// The window loop, on macOS on Apple silicon and on Linux: the same loop over
-/// `clazel_window::Window`, whose two backends give the same calls.
-#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux"))]
+/// The window loop, on macOS on Apple silicon, on Linux and on Windows: the same
+/// loop over `clazel_window::Window`, whose three backends give the same calls.
+/// On Windows it has been compiled and never run.
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 pub mod windowed {
     use std::time::Duration;
 

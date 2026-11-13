@@ -40,6 +40,7 @@ pub const FONT_PATHS: &[&str] = &[
     "/Library/Fonts/Arial Unicode.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "C:\\Windows\\Fonts\\arial.ttf",
+    "C:\\Windows\\Fonts\\segoeui.ttf",
 ];
 
 /// The first face of [`FONT_PATHS`] that reads and parses.
