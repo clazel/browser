@@ -40,3 +40,18 @@ been run in this repository, so that section is the measurement used. When
 
 The images (`mark.gif`, `s.gif`, `triangle.svg`) and the favicon are not
 here: Phase 5 decodes no image, and an `img` is a box of its attributes' size.
+
+## `screenshot-macos-metal.png`
+
+The page as `clazel browse --headless OUT --size 800x600 URL` wrote it on
+2026-11-13, served with its sheet (`site.css?v=7`) from loopback: macOS 26.7.2
+on an Apple M1 Pro, Metal, at commit `9006b6e9` of `claude/sheets-wired`, with
+`browse`'s own fonts (`RENDERER_FONTS` in `cli/window.rs`: the system's Arial,
+Arial Bold, Times New Roman and Courier New). It was stored because three runs
+gave byte-identical files (SHA-256
+`89d079fc3f547c50fbfa5d7e752e8e4b51ed274d01825253f943b44187d0e955`).
+
+Nothing compares against it yet. It shows what this machine draws. It is not a
+reference for other machines: other system fonts or another GPU change pixels.
+CI's exact comparison runs on lavapipe (Mesa's software Vulkan), a different
+driver, so it needs its own stored image, made by CI's job (5.25).
