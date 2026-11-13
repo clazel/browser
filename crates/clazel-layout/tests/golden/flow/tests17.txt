@@ -1,0 +1,113 @@
+#case 0
+#data "<!doctype html><table><tbody><select><tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+            row <tr> 8,8 0x0
+
+#case 1
+#data "<!doctype html><table><tr><select><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x18
+    block <body> 8,8 784x2 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 2x2 m=0,782,0,0
+        table <table> 8,8 2x2
+          row-group <tbody> 8,8 2x2
+            row <tr> 8,8 2x2
+              cell <td> 8,8 2x2 p=1,1,1,1
+
+#case 2
+#data "<!doctype html><table><tr><td><select><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x20
+    block <body> 8,8 784x4 m=8,8,8,8
+      table-wrapper <table> 8,8 2x4 m=0,782,0,0
+        table <table> 8,8 2x4
+          row-group <tbody> 8,8 2x4
+            row <tr> 8,8 2x4
+              cell <td> 8,8 2x2 p=1,1,1,1
+              cell <td> 8,10 2x2 p=1,1,1,1
+
+#case 3
+#data "<!doctype html><table><tr><th><select><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x20
+    block <body> 8,8 784x4 m=8,8,8,8
+      table-wrapper <table> 8,8 2x4 m=0,782,0,0
+        table <table> 8,8 2x4
+          row-group <tbody> 8,8 2x4
+            row <tr> 8,8 2x4
+              cell <th> 8,8 2x2 p=1,1,1,1
+              cell <td> 8,10 2x2 p=1,1,1,1
+
+#case 4
+#data "<!doctype html><table><caption><select><tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x16
+    block <body> 8,8 784x0 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        caption <caption> 8,8 0x0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+            row <tr> 8,8 0x0
+
+#case 5
+#data "<!doctype html><select><tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 6
+#data "<!doctype html><select><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 7
+#data "<!doctype html><select><th>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 8
+#data "<!doctype html><select><tbody>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 9
+#data "<!doctype html><select><thead>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 10
+#data "<!doctype html><select><tfoot>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 11
+#data "<!doctype html><select><caption>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 12
+#data "<!doctype html><table><tr></table>a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+            row <tr> 8,8 0x0
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "a" x=8 base=22.859375 w=9.546875
+

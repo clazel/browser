@@ -1,0 +1,283 @@
+#case 0
+#data "<!DOCTYPE html>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 1
+#data "<!dOctYpE HtMl>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 2
+#data "<!DOCTYPEhtml>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 3
+#data "<!DOCTYPE>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 4
+#data "<!DOCTYPE >Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 5
+#data "<!DOCTYPE potato>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 6
+#data "<!DOCTYPE potato >Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 7
+#data "<!DOCTYPE potato taco>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 8
+#data "<!DOCTYPE potato taco \"ddd>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 9
+#data "<!DOCTYPE potato sYstEM>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 10
+#data "<!DOCTYPE potato sYstEM    >Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 11
+#data "<!DOCTYPE   potato       sYstEM  ggg>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 12
+#data "<!DOCTYPE potato SYSTEM taco  >Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 13
+#data "<!DOCTYPE potato SYSTEM 'taco\"'>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 14
+#data "<!DOCTYPE potato SYSTEM \"taco\">Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 15
+#data "<!DOCTYPE potato SYSTEM \"tai'co\">Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 16
+#data "<!DOCTYPE potato SYSTEMtaco \"ddd\">Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 17
+#data "<!DOCTYPE potato grass SYSTEM taco>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 18
+#data "<!DOCTYPE potato pUbLIc>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 19
+#data "<!DOCTYPE potato pUbLIc >Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 20
+#data "<!DOCTYPE potato pUbLIcgoof>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 21
+#data "<!DOCTYPE potato PUBLIC goof>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 22
+#data "<!DOCTYPE potato PUBLIC \"go'of\">Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 23
+#data "<!DOCTYPE potato PUBLIC 'go'of'>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 24
+#data "<!DOCTYPE potato PUBLIC 'go:hh   of' >Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 25
+#data "<!DOCTYPE potato PUBLIC \"W3C-//dfdf\" SYSTEM ggg>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 26
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\n   \"http://www.w3.org/TR/html4/strict.dtd\">Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 27
+#data "<!DOCTYPE ...>Hello"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "Hello" x=8 base=22.859375 w=43.296875
+
+#case 28
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"\n\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 29
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\"\n\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\">"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 30
+#data "<!DOCTYPE root-element [SYSTEM OR PUBLIC FPI] \"uri\" [ \n<!-- internal declarations -->\n]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "]>" x=8 base=22.859375 w=19.65625
+
+#case 31
+#data "<!DOCTYPE html PUBLIC\n  \"-//WAPFORUM//DTD XHTML Mobile 1.0//EN\"\n    \"http://www.wapforum.org/DTD/xhtml-mobile10.dtd\">"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 32
+#data "<!DOCTYPE HTML SYSTEM \"http://www.w3.org/DTD/HTML4-strict.dtd\"><body><b>Mine!</b></body>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <b> 8,8 47.703125x18.640625 start end
+        text "Mine!" x=8 base=22.859375 w=47.703125
+
+#case 33
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"\"http://www.w3.org/TR/html4/strict.dtd\">"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 34
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"'http://www.w3.org/TR/html4/strict.dtd'>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 35
+#data "<!DOCTYPE HTML PUBLIC\"-//W3C//DTD HTML 4.01//EN\"'http://www.w3.org/TR/html4/strict.dtd'>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 36
+#data "<!DOCTYPE HTML PUBLIC'-//W3C//DTD HTML 4.01//EN''http://www.w3.org/TR/html4/strict.dtd'>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+

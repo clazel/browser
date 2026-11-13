@@ -3,15 +3,16 @@
 Layout for [Clazel](../../README.md), a web browser whose parsers of untrusted
 input carry machine-checked proofs (Phase 5, `docs/phases/phase-5.md`). So far:
 font matching (item 5.10, `src/fonts/`), shaping (item 5.11, `src/shape/`),
-white space and line breaking (item 5.12, `src/text/`), and the box tree
-(item 5.13, `src/boxes/`). Block, inline and table formatting and the display
-list (items 5.14 to 5.16) are not started.
+white space and line breaking (item 5.12, `src/text/`), the box tree (item
+5.13, `src/boxes/`), and block and inline formatting (item 5.14,
+`src/flow/`). Table formatting and the display list (items 5.15 and 5.16)
+are not started.
 
 Its dependencies are `clazel-font`, which reads every byte of a font,
 `clazel-style`, whose computed values the line breaker and the box tree read,
 and `clazel-dom`, whose arena the box tree is built from. `rustybuzz` is a
 dev-dependency, used only by the shaping differential, and `clazel-treebuilder`
-one used by the box tree's tests to parse documents.
+one used by the box tree's and the formatting's tests to parse documents.
 
 ## Font matching (item 5.10)
 
@@ -261,6 +262,139 @@ source.
 - **The golden dumps are added beside `clazel-text`'s golden test**, which
   decision 5.0(g) G3 keeps until item 5.26; they replace it when that crate is
   deleted.
+
+## Block and inline formatting (item 5.14)
+
+`src/flow/`, against CSS 2.1 (the Recommendation of 7 June 2011) §8.3.1,
+§9.4.1, §9.4.2, §10.1, §10.3.1 to §10.3.5, §10.3.9, §10.3.10, §10.4 to
+§10.8.1, §16.1, §16.2 and §17.4; the Quirks Mode Standard (Living Standard of
+19 October 2026, commit `5a06deb5`) §3.3 to §3.7; HTML at commit `4c54fae1`
+§15.2's "align descendants", §15.4 and §15.5; and CSS Text 3 through item
+5.12. `flow::layout(tree, arena, styles, fonts, viewport)` takes item 5.13's
+box tree, the DOM arena (for the document's mode and replaced elements'
+attributes), the computed style (`StyleFns`), the fonts (`flow::TextFns`)
+and the viewport, and returns a `FragmentTree`: for every box laid out as a
+box, its border box in document coordinates with its used margins, borders,
+padding and baselines; every line box with its inline box pieces, positioned
+glyph runs and atomic inlines; and the node each box came from. It runs:
+
+1. `style.rs`: each box's style (anonymous boxes inherit; §17.4's split of a
+   table's properties between its wrapper and table boxes);
+2. `inline.rs`: each inline formatting context's units, wrap opportunities
+   and shaped runs;
+3. `intrinsic.rs`: min-content and max-content widths, leaves first;
+4. `block.rs`: one walk with an explicit stack of tasks and a stack of
+   block container frames: widths top down (`widths.rs`, `replaced.rs`), the
+   block flow with margin collapsing (`margins.rs`), line boxes at each
+   inline formatting context's end (`inline.rs`), heights bottom up
+   (`heights.rs`), then every position made absolute.
+
+`state.rs` states each state (a set of adjoining margins, a block
+container's flow, the width equation's input and output, a line box's
+extent, each box's role), its invariant as a function, and each step's
+contract; it was committed before the implementation. Nothing recurses: a
+tree 100,000 blocks deep lays out in 0.04 s (release). Each file lists its
+modelling choices at its top; `src/flow/mod.rs` lists those that cross
+files.
+
+### Decisions taken for 5.14
+
+Taken from the plan while the maintainer was away; each is also in the
+source.
+
+- **Fonts are a parameter** (`flow::TextFns`: an element's first available
+  font's metrics, and a run's shaped glyphs), as computed style is for the
+  box tree. `flow::FaceFonts` is the real one, over `clazel-font` faces with
+  item 5.10's matching and item 5.11's shaper; `flow::BoxFont` gives every
+  glyph an em square with the metrics of WPT's Ahem font, for tests whose
+  geometry is worked out by hand.
+- **A and D** (§10.8.1) are `OS/2`'s typo metrics when `USE_TYPO_METRICS` is
+  set, else `hhea`'s, as engines read them; CSS 2.1's note recommends the
+  typo metrics always (a note, listed). `line-height: normal` is A + D + the
+  same table's line gap. An inline box's A and D are its first available
+  font's, whatever face draws a glyph. The x-height is `OS/2`'s `sxHeight`, or
+  half an em. `sub` lowers by a fifth of the parent's font size and `super`
+  raises by a third (CSS 2.1 leaves both to the user agent). The leading's
+  odd 1/64 px goes below.
+- **Tables are item 5.15's; until then a placeholder**: the table wrapper is
+  a block box with the table's margins and `width` (shrink-to-fit when
+  `auto`), the table box a block filling it with the table's borders and
+  padding, row groups, rows, cells and captions blocks in their parent's
+  flow one below the other (cells and captions as block formatting context
+  roots), and columns empty boxes. `border-spacing`, column widths, cell
+  `vertical-align` and `colspan` have no effect yet. Every box in a table is
+  laid out and its text readable.
+- **Markers** (item 5.13: always `outside`) are a line of their own text in
+  the list item's font, ending at its content edge, on its first baseline
+  (or at its content top without one).
+- **Inline boxes' edges** go before the box's first unit and after its last
+  (for line breaking, with the unit beside them). An empty inline box takes
+  no width and does not affect line heights, though CSS 2.1 §10.8 says empty
+  inline boxes "still have margins, padding, borders and a line height"
+  (listed). An edge beside a unit that Phase II removes at a line's end is
+  dropped with it.
+- **Default ignorable characters** (U+00AD, U+200B to U+200D, U+2060, U+FEFF),
+  forced breaks and tabs draw no glyph (a font's `.notdef` would draw a
+  box); a tab's advance is CSS Text 3 §4.2's.
+- **A text run is shaped once, as a whole**: kerning between the last glyph
+  of a line and the first of the next is applied as if they were adjacent.
+- **A negative `auto` width is zero**, and the box is then over-constrained
+  (`margin-right` follows from §10.3.3's equality).
+- **HTML's "align descendants"** (`center`, `div align`, table parts'
+  `align`, from `clazel-style`) is applied to a block-level box whose two
+  horizontal margins are not `auto` and which rule 2 over-constrained with a
+  greater `margin-right`, by the nearest aligning ancestor, unless the box
+  aligns descendants itself (other than `center`); "set accordingly" is read
+  as `auto` margins would place it. Table-internal boxes are never aligned
+  (their margins do not apply).
+- **`text-indent`**: a percentage is of the block container's own content
+  width; CSS Text 3's `each-line` and `hanging` are applied; §16.1's
+  anonymous-block rule is. `justify` is drawn as `left` (the plan), and a
+  line too wide for its box is start-aligned (CSS Text 3 §7.1†).
+- **The quirks**: §3.3 and §3.4 in quirks and limited-quirks mode, §3.5 to
+  §3.7 in quirks mode. §3.3's "contains only collapsed whitespace" is read
+  per line (collapsible spaces left by Phase I), and such a box is left out
+  of the line's height rather than kept as a zero-height point. With §3.4's
+  strut gone, the root inline box counts only on a line where it holds text
+  of its own. §3.5's "UA-defined value" for a table cell is none (the
+  percentage is `auto`). §3.7's parent content box is the `html` element's as
+  §3.6 makes it at least (the viewport less its margins, borders and
+  padding).
+- **Replaced elements' natural sizes**: `img` 0 by 0, `iframe` none (300 by
+  150), text `input` and `textarea` by HTML §15.5.6's character width
+  conversion (the average character width is the advance of `0`:
+  `clazel-font` does not read `xAvgCharWidth`) and the used line height,
+  buttons by the width of their `value` (or "Submit", "Reset"), checkboxes
+  and radio buttons 13px square. Their baseline is the bottom margin edge
+  (CSS 2.1's rule); engines align a text control's text instead (listed).
+- **Block formatting context roots**: the root element, inline blocks,
+  table cells, captions, the placeholder's table boxes, and blocks whose
+  `overflow` is not `visible` unless propagated to the viewport (the root
+  element's always is; the `body`'s when the root's is `visible`).
+- **CSS 2.1 §8.3.1's definition and bullets disagree**; the bullets are
+  followed (`docs/ERRATA.md`, "Reported upstream: not yet").
+- **A consequence to check against item 5.25's reference engine**: §8.3.1
+  reads the *computed* `height`, so in quirks mode a last child's bottom
+  margin still collapses through a `body` that §3.7 stretched; the
+  html5lib case `<p>One<p>Two` gives an `html` box of 608px in a 600px
+  viewport.
+- **The plan's section numbers**: CSS 2.1's (marked †) were checked against
+  the Recommendation; the Quirks Mode Standard's against the pinned text
+  (they are the plan's). CSS Text 3 §7.1 is cited with †.
+- **Target tier stays 0**, as the plan's Crates table gives for this crate;
+  the Kani harnesses below were added as the brief asked.
+- **WPT reftests wait for item 5.25**: `css/CSS2/normal-flow`,
+  `margin-padding-clear`, `box-display`, `linebox`, `visudet` and `visuren`
+  are reftests, which need the rendering harness. They are not vendored or
+  run here.
+
+### Not covered by 5.14
+
+Floats, positioning and clearance (not in the subset); table layout (item
+5.15; the placeholder above); `overflow` clipping and painting (item 5.16);
+bidirectional reordering (Phase 8); `letter-spacing`, `word-spacing`,
+justification, hyphenation; vertical writing modes; `box-sizing` (not in the
+subset).
 
 ## Verification
 
@@ -529,3 +663,110 @@ Miri: every test this item adds, one test per process with `cargo
 **WPT**: the anonymous table objects tests (`css/CSS2/tables/` and
 `css/css-tables/`) are reftests and wait for the rendering harness of item
 5.25.
+
+### Block and inline formatting (item 5.14)
+
+Unit tests (`src/flow/tests.rs`, 36): documents parsed by the tree builder,
+cascaded by item 5.7 with a user agent sheet of `display` values only, laid
+out with `flow::BoxFont` (every glyph an em square, Ahem's metrics), each
+expected position worked out by hand in a comment: each of §8.3.1's
+adjoining pairs (siblings, parent and first child, last child and parent
+with `height`, `min-height` and padding stopping it, a box collapsing through,
+at its parent's top), its results for positive, negative and mixed margins
+(Hacker News' `margin-bottom:-10px`), block formatting context roots,
+inline blocks and the root element; §10.3.3's five rules and the
+over-constrained cases, a negative `auto` width, §10.4; align descendants
+(`center`, `div align=right`); §10.3.5's shrink-to-fit and an inline block's
+baseline; replaced sizes; §10.5 percentages with the §3.5 quirk; §10.6 and
+§10.7; §3.6 and §3.7; §10.8.1's example (`1.2`, `1.2em`, `120%`), the
+half-leading, the strut with §3.4, §3.3 (a line holding a 1px image is 1px
+high in quirks mode, 10px in no-quirks mode), each `vertical-align` value;
+empty line boxes; wrapping and `br`; `text-align` (with `justify` and an
+overflowing line) and `text-indent` (with §16.1's anonymous block rule);
+inline boxes' edges; markers; the table placeholder; and a tree 100,000
+blocks deep (300 under Miri).
+
+Golden test (`tests/golden_flow.rs`): the 1,761 html5lib document cases
+item 5.13's golden test builds, and two pages of our own
+(`tests/golden/flow/pages/`: an HN-shaped table page in quirks mode, and a
+page of margins, lists, inline blocks and lines), cascaded under the user
+agent sheets in an 800 by 600 viewport, built into box trees and laid out in
+real fonts (the vendored DejaVu Serif and Source Serif 4, matched with
+Linux's generic families so the result is the same on every OS), printed by
+`flow::dump` and compared byte for byte with `tests/golden/flow/`
+(`CLAZEL_BLESS=1` regenerates them). They hold 8,108 fragments, 1,086 line
+boxes and 1,174 glyph runs; the two pages were checked by hand against the
+rules. Natively the test takes 2.6 s.
+
+Kani harnesses (`src/flow/proofs.rs`), measured as for items 5.12 and 5.13:
+one harness at a time with `cargo kani -p clazel-layout --harness … --exact`,
+each in its own process group capped at 20 minutes and 8 GB (resident set
+of the whole group, polled every 5 s), on an Apple-silicon Mac. Times are
+wall clock including cargo's start; memory is the larger of the 5 s samples
+and `time -l`'s peak.
+
+| Harness | Kind | What it checks | Time | Peak memory |
+|---------|------|----------------|------|-------------|
+| `collapsed_any` | step, every size | the margin set: invariant kept, adjoining in any order gives the same set, union symmetric, one margin is itself, two follow §8.3.1's rule written a second time | 15 s | 0.70 GB |
+| `enter_any` | step, every size | a child starts: the parent keeps nothing pending and does not move; the child opens exactly when its top adjoins its first child's | 5 s | 0.27 GB |
+| `place_any` | step, every size | content placed after the frame's `y` and the margins; nothing left pending | 5 s | 0.27 GB |
+| `close_any` | step, every size | an open frame closed at its top | 6 s | 0.26 GB |
+| `exit_any` | step, every size | a child that collapsed through hands its margins on; a placed one moves `y` to its bottom | 5 s | 0.27 GB |
+| `finish_any` | step, every size | §8.3.1's and §10.6.3's cases: collapse through only when open and allowed, with no content; nothing goes on past a bottom that does not adjoin | 5 s | 0.27 GB |
+| `line_extent_any` | step, every size | a line box's extent: invariant kept, covers every box | 5 s | 0.27 GB |
+| `solve_block_any` | any input | §10.3.3 never panics or overflows; the width is never negative | 5 s | 0.28 GB |
+| `solve_block_sum` | any input within 2^22 px | the equality holds; a given width and `margin-left` are kept; two `auto` margins are equal to 1/64 px | 20 s | 0.28 GB |
+| `align_any` | any input within 2^22 px | align descendants keeps the width and the margins' sum, and moves only a forced box | 5 s | 0.27 GB |
+| `width_min_max_any` | any input | §10.4's steps 2 and 3 | 5 s | 0.27 GB |
+| `shrink_to_fit_any` | any input | §10.3.5's formula, never negative for non-negative sizes | 5 s | 0.27 GB |
+| `heights_any` | any input | §10.7 (`min-height` wins, never negative), the fill quirks, the percentage basis | 5 s | 0.27 GB |
+| `half_leading_any` | any input (equation within 2^22 px) | §10.8.1: the halves add up to the line height, the upper one rounded down | 10 s | 0.27 GB |
+| `align_offset_any` | any input | §16.2: the content stays in the line box when it fits, start-aligned when it does not | 6 s | 0.27 GB |
+| `role_any` | any class | what each box is to the walk | 5 s | 0.27 GB |
+| `halves_any` | any value | a length's two halves add up to it | 5 s | 0.26 GB |
+| `times_any` | any value | a number times a length (`line-height: <number>`) never overflows | 5 s | 0.27 GB |
+
+**Proved for every size**: the margin set (`Collapsed::of`, `adjoin`,
+`join`, `resolve`), each step of a block container's flow
+(`margins::enter`, `place`, `close`, `exit`, `finish`, with
+`BlockFacts::top_adjoins`, `bottom_adjoins`, `may_collapse_through`) and
+`LineExtent::add`: the state each block container and each line box carry,
+so a tree of any size and depth has each step's properties. **For every
+input**: `widths::solve_block`, `align`, `min_max`, `shrink_to_fit`,
+`heights::min_max`, `quirk_fill`, `child_basis`, `half_leading`,
+`inline::align_offset`, `block::role`, `length::half_down`, `half_up`,
+`times`. **Only for bounded inputs**: §10.3.3's equality and §10.8.1's sum,
+on values within 2^22 px (beyond it they saturate, which `solve_block_any`
+and `half_leading_any` check is panic-free). No harness hit a cap; none was
+removed.
+
+**Not covered by Kani**: the drivers (`block.rs`'s walk and its resolution
+walk over the frame stack, `inline.rs`'s preparation, line building and
+vertical alignment loop, `intrinsic.rs`'s pass), whose state is the arena,
+the frames and the fragment vectors; reading style and fonts; item 5.12's
+line choice (proved there). The unit and golden tests run all of them. CI
+has not run these harnesses yet.
+
+Miri: every test this item adds, one test per process with `cargo
++nightly-2026-08-21 miri test -p clazel-layout … --exact -Z unstable-options
+--report-time`, each capped at 10 minutes and run alone under the shared
+lock. Times are on Miri's clock; all 37 passed.
+
+| Test | Miri time |
+|------|-----------|
+| `golden_flow::golden_fragment_trees` (case 0 only, no page: the user agent sheets and one cascade dominate) | 109.4 s |
+| `flow::tests::vertical_align` (seven documents) | 40.9 s |
+| `flow::tests::text_align` (six documents) | 38.8 s |
+| `flow::tests::last_child_and_parent_bottom` | 27.9 s |
+| `flow::tests::inline_blocks_shrink_to_fit` | 23.0 s |
+| `flow::tests::margins_collapse_through_an_empty_box` | 22.2 s |
+| `flow::tests::deep_trees_lay_out_without_recursion` (300 levels under Miri, 100,000 natively) | 8.7 s |
+| the other 30 tests in `flow::tests` | under 21 s each |
+
+**Performance not bounded**: a line's inline boxes are found by walking up
+from its units, so a paragraph nested *n* inline boxes deep over *L* lines
+costs about *n* × *L*; item 5.26's hostile pages will measure it.
+
+**WPT**: the `css/CSS2/` reftests the item names (`normal-flow`,
+`margin-padding-clear`, `box-display`, `linebox`, `visudet`, `visuren`) wait
+for the rendering harness of item 5.25.

@@ -1,0 +1,687 @@
+#case 0
+#data "<!doctype html><p>foo<address>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <address> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 1
+#data "<!doctype html><address><p>foo</address>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <address> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 2
+#data "<!doctype html><p>foo<article>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <article> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 3
+#data "<!doctype html><article><p>foo</article>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <article> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 4
+#data "<!doctype html><p>foo<aside>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <aside> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 5
+#data "<!doctype html><aside><p>foo</aside>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <aside> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 6
+#data "<!doctype html><p>foo<blockquote>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <blockquote> 48,50.640625 704x53.28125 m=16,40,16,40
+        block (anonymous) 48,50.640625 704x18.640625
+          line 48,50.640625 704x18.640625 base=65.5
+            text "bar" x=48 base=65.5 w=27.4375
+        block <p> 48,85.28125 704x18.640625 m=16,0,16,0
+          line 48,85.28125 704x18.640625 base=100.140625
+            text "baz" x=48 base=100.140625 w=28.21875
+
+#case 7
+#data "<!doctype html><blockquote><p>foo</blockquote>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <blockquote> 48,16 704x18.640625 m=16,40,16,40
+        block <p> 48,16 704x18.640625 m=16,0,16,0
+          line 48,16 704x18.640625 base=30.859375
+            text "foo" x=48 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 8
+#data "<!doctype html><p>foo<center>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <center> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=386.28125 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=385.890625 base=100.140625 w=28.21875
+
+#case 9
+#data "<!doctype html><center><p>foo</center>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <center> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=387.40625 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 10
+#data "<!doctype html><p>foo<details>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          inline <details> 8,50.640625 27.4375x18.640625 start
+          text "bar" x=8 base=65.5 w=27.4375
+      block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+        line 8,85.28125 784x18.640625 base=100.140625
+          text "baz" x=8 base=100.140625 w=28.21875
+      block (anonymous) 8,119.921875 784x0
+
+#case 11
+#data "<!doctype html><details><p>foo</details>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 12
+#data "<!doctype html><p>foo<dialog>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x50.640625
+    block <body> 8,16 784x18.640625 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+
+#case 13
+#data "<!doctype html><dialog><p>foo</dialog>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "bar" x=8 base=22.859375 w=27.4375
+
+#case 14
+#data "<!doctype html><p>foo<dir>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <dir> 8,50.640625 784x53.28125 m=16,0,16,0 p=0,0,0,40
+        block (anonymous) 48,50.640625 744x18.640625
+          line 48,50.640625 744x18.640625 base=65.5
+            text "bar" x=48 base=65.5 w=27.4375
+        block <p> 48,85.28125 744x18.640625 m=16,0,16,0
+          line 48,85.28125 744x18.640625 base=100.140625
+            text "baz" x=48 base=100.140625 w=28.21875
+
+#case 15
+#data "<!doctype html><dir><p>foo</dir>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <dir> 8,16 784x18.640625 m=16,0,16,0 p=0,0,0,40
+        block <p> 48,16 744x18.640625 m=16,0,16,0
+          line 48,16 744x18.640625 base=30.859375
+            text "foo" x=48 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 16
+#data "<!doctype html><p>foo<div>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <div> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 17
+#data "<!doctype html><div><p>foo</div>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <div> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 18
+#data "<!doctype html><p>foo<dl>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <dl> 8,50.640625 784x53.28125 m=16,0,16,0
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 19
+#data "<!doctype html><dl><p>foo</dl>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <dl> 8,16 784x18.640625 m=16,0,16,0
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 20
+#data "<!doctype html><p>foo<fieldset>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          inline <fieldset> 8,50.640625 27.4375x18.640625 start
+          text "bar" x=8 base=65.5 w=27.4375
+      block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+        line 8,85.28125 784x18.640625 base=100.140625
+          text "baz" x=8 base=100.140625 w=28.21875
+      block (anonymous) 8,119.921875 784x0
+
+#case 21
+#data "<!doctype html><fieldset><p>foo</fieldset>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 22
+#data "<!doctype html><p>foo<figcaption>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <figcaption> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 23
+#data "<!doctype html><figcaption><p>foo</figcaption>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <figcaption> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 24
+#data "<!doctype html><p>foo<figure>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <figure> 48,50.640625 704x53.28125 m=16,40,16,40
+        block (anonymous) 48,50.640625 704x18.640625
+          line 48,50.640625 704x18.640625 base=65.5
+            text "bar" x=48 base=65.5 w=27.4375
+        block <p> 48,85.28125 704x18.640625 m=16,0,16,0
+          line 48,85.28125 704x18.640625 base=100.140625
+            text "baz" x=48 base=100.140625 w=28.21875
+
+#case 25
+#data "<!doctype html><figure><p>foo</figure>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <figure> 48,16 704x18.640625 m=16,40,16,40
+        block <p> 48,16 704x18.640625 m=16,0,16,0
+          line 48,16 704x18.640625 base=30.859375
+            text "foo" x=48 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 26
+#data "<!doctype html><p>foo<footer>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <footer> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 27
+#data "<!doctype html><footer><p>foo</footer>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <footer> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 28
+#data "<!doctype html><p>foo<header>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <header> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 29
+#data "<!doctype html><header><p>foo</header>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <header> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 30
+#data "<!doctype html><p>foo<hgroup>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <hgroup> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 31
+#data "<!doctype html><hgroup><p>foo</hgroup>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <hgroup> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 32
+#data "<!doctype html><p>foo<listing>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <listing> 8,50.640625 784x53.28125 m=16,0,16,0
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 33
+#data "<!doctype html><listing><p>foo</listing>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <listing> 8,16 784x18.640625 m=16,0,16,0
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 34
+#data "<!doctype html><p>foo<menu>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <menu> 8,50.640625 784x53.28125 m=16,0,16,0 p=0,0,0,40
+        block (anonymous) 48,50.640625 744x18.640625
+          line 48,50.640625 744x18.640625 base=65.5
+            text "bar" x=48 base=65.5 w=27.4375
+        block <p> 48,85.28125 744x18.640625 m=16,0,16,0
+          line 48,85.28125 744x18.640625 base=100.140625
+            text "baz" x=48 base=100.140625 w=28.21875
+
+#case 35
+#data "<!doctype html><menu><p>foo</menu>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <menu> 8,16 784x18.640625 m=16,0,16,0 p=0,0,0,40
+        block <p> 48,16 744x18.640625 m=16,0,16,0
+          line 48,16 744x18.640625 base=30.859375
+            text "foo" x=48 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 36
+#data "<!doctype html><p>foo<nav>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <nav> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 37
+#data "<!doctype html><nav><p>foo</nav>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <nav> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 38
+#data "<!doctype html><p>foo<ol>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <ol> 8,50.640625 784x53.28125 m=16,0,16,0 p=0,0,0,40
+        block (anonymous) 48,50.640625 744x18.640625
+          line 48,50.640625 744x18.640625 base=65.5
+            text "bar" x=48 base=65.5 w=27.4375
+        block <p> 48,85.28125 744x18.640625 m=16,0,16,0
+          line 48,85.28125 744x18.640625 base=100.140625
+            text "baz" x=48 base=100.140625 w=28.21875
+
+#case 39
+#data "<!doctype html><ol><p>foo</ol>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <ol> 8,16 784x18.640625 m=16,0,16,0 p=0,0,0,40
+        block <p> 48,16 744x18.640625 m=16,0,16,0
+          line 48,16 744x18.640625 base=30.859375
+            text "foo" x=48 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 40
+#data "<!doctype html><p>foo<pre>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <pre> 8,50.640625 784x53.28125 m=16,0,16,0
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 41
+#data "<!doctype html><pre><p>foo</pre>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <pre> 8,16 784x18.640625 m=16,0,16,0
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 42
+#data "<!doctype html><p>foo<section>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <section> 8,50.640625 784x53.28125
+        block (anonymous) 8,50.640625 784x18.640625
+          line 8,50.640625 784x18.640625 base=65.5
+            text "bar" x=8 base=65.5 w=27.4375
+        block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+          line 8,85.28125 784x18.640625 base=100.140625
+            text "baz" x=8 base=100.140625 w=28.21875
+
+#case 43
+#data "<!doctype html><section><p>foo</section>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <section> 8,16 784x18.640625
+        block <p> 8,16 784x18.640625 m=16,0,16,0
+          line 8,16 784x18.640625 base=30.859375
+            text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 44
+#data "<!doctype html><p>foo<summary>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          inline <summary> 8,50.640625 27.4375x18.640625 start
+          text "bar" x=8 base=65.5 w=27.4375
+      block <p> 8,85.28125 784x18.640625 m=16,0,16,0
+        line 8,85.28125 784x18.640625 base=100.140625
+          text "baz" x=8 base=100.140625 w=28.21875
+      block (anonymous) 8,119.921875 784x0
+
+#case 45
+#data "<!doctype html><summary><p>foo</summary>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
+#case 46
+#data "<!doctype html><p>foo<ul>bar<p>baz"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x119.921875
+    block <body> 8,16 784x87.921875 m=8,8,8,8
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          text "foo" x=8 base=30.859375 w=25.1875
+      block <ul> 8,50.640625 784x53.28125 m=16,0,16,0 p=0,0,0,40
+        block (anonymous) 48,50.640625 744x18.640625
+          line 48,50.640625 744x18.640625 base=65.5
+            text "bar" x=48 base=65.5 w=27.4375
+        block <p> 48,85.28125 744x18.640625 m=16,0,16,0
+          line 48,85.28125 744x18.640625 base=100.140625
+            text "baz" x=48 base=100.140625 w=28.21875
+
+#case 47
+#data "<!doctype html><ul><p>foo</ul>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x77.28125
+    block <body> 8,16 784x53.28125 m=8,8,8,8
+      block <ul> 8,16 784x18.640625 m=16,0,16,0 p=0,0,0,40
+        block <p> 48,16 744x18.640625 m=16,0,16,0
+          line 48,16 744x18.640625 base=30.859375
+            text "foo" x=48 base=30.859375 w=25.1875
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "bar" x=8 base=65.5 w=27.4375
+
