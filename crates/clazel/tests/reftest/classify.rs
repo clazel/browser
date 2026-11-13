@@ -5,12 +5,17 @@
 //!
 //! 1. it is a print reftest (`-print` before the extension, or a `print`
 //!    directory): paged media is not in the subset;
-//! 2. it needs script: a `script` element, or `class="reftest-wait"` on the
+//! 2. it is XHTML (`.xht`, `.xhtml`: WPT serves them as
+//!    `application/xhtml+xml`): the renderer draws a notice for any type but
+//!    HTML and plain text, so a screenshot shows the notice and not the page.
+//!    Decided by the path alone, so a reference that is not vendored can be
+//!    judged too ([`xhtml`]);
+//! 3. it needs script: a `script` element, or `class="reftest-wait"` on the
 //!    root (which only script ends);
-//! 3. it needs an image or another embedded document: `img`, `picture`,
+//! 4. it needs an image or another embedded document: `img`, `picture`,
 //!    `video`, `canvas`, `object`, `embed`, `iframe`, `svg`, an `input` of
 //!    type `image`, or `url(` in its CSS;
-//! 4. its CSS uses a feature outside the subset: a property `clazel-style`
+//! 5. its CSS uses a feature outside the subset: a property `clazel-style`
 //!    does not know, one it parses with no effect (`transform`,
 //!    `text-overflow`, the background images and their positions, sizes,
 //!    repeats, attachments, origins and clips, `font-variant-caps`,
@@ -20,7 +25,7 @@
 //!    outside too (`var()` is not in the subset).
 //!
 //! A value the subset refuses is also what a test of error handling writes
-//! on purpose, so 4 may count some tests as not run that would pass; it
+//! on purpose, so 5 may count some tests as not run that would pass; it
 //! never counts as run a test that needs what we lack.
 
 use clazel_style::sources::{StyleSheet, sheet};
@@ -28,11 +33,19 @@ use clazel_style::values::{parse_items, property};
 
 use super::meta::{elements, parse};
 
+/// Whether WPT's server serves `path` as XHTML, `application/xhtml+xml`
+/// (by its extension, `.xht` or `.xhtml`).
+pub fn xhtml(path: &str) -> bool {
+    path.ends_with(".xht") || path.ends_with(".xhtml")
+}
+
 /// Why a test is not run.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NotRun {
     /// Paged media.
     Print,
+    /// XHTML, which the renderer does not take (2).
+    Xhtml,
     /// Script.
     Script,
     /// An image or an embedded document (the element or `url(`).
@@ -86,6 +99,9 @@ pub fn classify(path: &str, bytes: &[u8]) -> Option<NotRun> {
     let stem = file.split('.').next().unwrap_or(file);
     if stem.ends_with("-print") || path.split('/').any(|d| d == "print") {
         return Some(NotRun::Print);
+    }
+    if xhtml(path) {
+        return Some(NotRun::Xhtml);
     }
     let arena = parse(bytes);
     let els = elements(&arena);

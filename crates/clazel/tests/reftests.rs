@@ -159,11 +159,13 @@ fn the_fuzzy_rule() {
 
 // ---- classify ----
 
-/// Not run, by reason, in order: print, script, images, outside the subset.
+/// Not run, by reason, in order: print, XHTML, script, images, outside the subset.
 #[test]
 fn not_run_by_reason() {
     let c = |path: &str, html: &str| classify(path, html.as_bytes());
     assert_eq!(c("css/CSS2/a-print.html", "<p>x"), Some(NotRun::Print));
+    assert_eq!(c("css/a.xht", "<p>x"), Some(NotRun::Xhtml));
+    assert_eq!(c("css/a-print.xht", "<p>x"), Some(NotRun::Print));
     assert_eq!(
         c("css/a.html", "<script>1</script><img src=x>"),
         Some(NotRun::Script)

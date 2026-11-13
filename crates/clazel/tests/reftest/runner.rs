@@ -6,7 +6,7 @@
 //! references, at least one must match, and if there are any mismatch
 //! references, all must mismatch."
 
-use super::classify::{NotRun, classify};
+use super::classify::{NotRun, classify, xhtml};
 use super::meta::{MetaError, Relation, read};
 use super::pixels::{Image, differences, passes};
 
@@ -63,6 +63,9 @@ pub fn run(
     // Every reference must be runnable before anything is rendered.
     let mut refs = Vec::new();
     for r in &meta.references {
+        if xhtml(&r.path) {
+            return Outcome::NotRun(NotRun::Xhtml);
+        }
         let Some(b) = read_file(&r.path) else {
             return Outcome::Error(format!("{}: missing", r.path));
         };
