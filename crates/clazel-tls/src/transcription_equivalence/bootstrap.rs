@@ -57,9 +57,15 @@
 //!   different faults: the crate the bytes (`unexpected_message`), the
 //!   transcription the secret ([`buffer_fail_agrees`]).
 //!
-//! Not covered: the transport's end of file (the crate's `eof`: no
-//! transcription counterpart, as `connection.rs` leaves transport closure
-//! out of scope).
+//! - **Truncation before the ServerHello** ([`eof_fails`]): the end of
+//!   the transport from agreeing states. The crate's `eof` fails with
+//!   `internal_error` (writing nothing itself); the transcription's
+//!   `receive_transport_end` reports `Truncated`, no error, nothing written,
+//!   the A.1 state where it was. Neither indicates end-of-data (§6.1).
+//!
+//! The end of the transport after the server's close_notify is compared
+//! exactly ([`ends_after_close`]): the crate does nothing, the transcription
+//! reports `EndOfData`, and neither writes anything.
 
 #[cfg(verus_only)]
 use crate::hello::bootstrap_spec::{Action, Mode, State};
@@ -864,6 +870,76 @@ pub proof fn lemma_start(p: Primitives, c: crate::hello::client_spec::Config,
     }
 }
 
+// ---------------------------------------------------------------------------
+// §6.1: the end of the transport.
+// ---------------------------------------------------------------------------
+
+/// **Stated difference, truncation before the ServerHello** (§6.1: the end
+/// of the transport before the server's close_notify). From agreeing states
+/// (the crate waits for the server's Hello), the crate's `eof` fails the
+/// bootstrap with `internal_error` (`Mode::Failed`); it puts nothing on the
+/// wire itself (`Action::Fail` is a description for its caller,
+/// `driver_spec` choice 4, and the driver writes nothing on the end of the
+/// transport: `driver::eof_truncates`). The transcription reports
+/// `Truncated` with the connection unchanged, no error and nothing to write
+/// (its modelling choice "during the handshake": the A.1 state stays where
+/// it was, and the handshake can never complete). Neither reads the bytes
+/// pending (an incomplete record, or the handshake fragments the crate's
+/// reassembly holds).
+///
+/// Both conform: neither indicates end-of-data ("the TLS implementation
+/// MUST receive a "close_notify" alert before indicating end-of-data to the
+/// application layer"), and the RFC names no alert for a transport that
+/// ends during the handshake (A.1 has no arrow for it, and §6.2 lists no
+/// such condition), so the crate's `internal_error` is a local report of a
+/// handshake that did not complete. §6.1: "If a transport-level close is
+/// received prior to a "close_notify", the receiver cannot know that all
+/// the data that was sent has been received."
+pub open spec fn eof_fails(cl: ClientConnection, r: (State, Action),
+    t: crate::transcription::connection::TransportEnd) -> bool
+{
+    &&& r.1 == Action::Fail(crate::spec::INTERNAL_ERROR)
+    &&& r.0.mode == Mode::Failed
+    &&& t == crate::transcription::connection::TransportEnd::Truncated(
+        super::post_handshake::transport_end_progress(cl.connection))
+}
+
+/// **Compared exactly: the end of the transport after the server's
+/// close_notify** during the Hello exchange: the crate's bootstrap in
+/// `Mode::Closed` and the transcription with `read_closed`, which is what
+/// both reach on that alert ([`record_agrees`]'s `Close` case). The crate's
+/// `eof` keeps its state and does nothing (`Action::None`); the
+/// transcription reports `EndOfData` with the connection unchanged and
+/// nothing to write. Both had indicated the end of data on the close_notify
+/// (§6: "Upon receiving such an alert, the TLS implementation SHOULD
+/// indicate end-of-data to the application"), and neither reads what is
+/// pending: "Any data received after a closure alert has been received MUST
+/// be ignored."
+pub open spec fn ends_after_close(s: State, c: Connection, r: (State, Action),
+    t: crate::transcription::connection::TransportEnd) -> bool
+{
+    &&& r == (s, Action::None)
+    &&& t == crate::transcription::connection::TransportEnd::EndOfData(
+        super::post_handshake::transport_end_progress(c))
+}
+
+/// The end of the transport from agreeing states: [`eof_fails`].
+pub proof fn lemma_eof(p: Primitives, s: State, cl: ClientConnection)
+    requires bootstrap_agrees(p, s, cl),
+    ensures eof_fails(cl, crate::hello::bootstrap_spec::eof(s),
+        crate::transcription::connection::receive_transport_end(cl.connection)),
+{
+}
+
+/// The end of the transport after the server's close_notify:
+/// [`ends_after_close`].
+pub proof fn lemma_eof_closed(s: State, c: Connection)
+    requires s.mode == Mode::Closed, c.read_closed,
+    ensures ends_after_close(s, c, crate::hello::bootstrap_spec::eof(s),
+        crate::transcription::connection::receive_transport_end(c)),
+{
+}
+
 /// **The bootstrap theorem.** For every configuration the crate starts
 /// with, every private key whose public value it offers, and every
 /// transcription configuration in the crate's compatibility mode, the
@@ -873,7 +949,11 @@ pub proof fn lemma_start(p: Primitives, c: crate::hello::client_spec::Config,
 /// transcription's `client_receive_stream` agree ([`record_agrees`]),
 /// where after a HelloRetryRequest acknowledging exactly the ClientHello2
 /// flight processes what followed it in its record as the transcription
-/// does, and leads to agreeing states again ([`buffer_agrees`]). Hypothesis: the hash's
+/// does, and leads to agreeing states again ([`buffer_agrees`]); and the
+/// end of the transport (the crate's `eof` against
+/// `receive_transport_end`) compares from agreeing states as the stated
+/// difference [`eof_fails`], and exactly after the server's close_notify
+/// ([`ends_after_close`]). Hypothesis: the hash's
 /// outputs are 32 bytes, and the crate hashes with the transcription's
 /// hash.
 pub proof fn theorem_bootstrap_equivalence(p: Primitives)
@@ -886,6 +966,13 @@ pub proof fn theorem_bootstrap_equivalence(p: Primitives)
             ==> #[trigger] start_agrees(p, c, config, x25519_private_key, retry_private_key),
         forall|s: State, cl: ClientConnection, b: Seq<u8>|
             #[trigger] bootstrap_agrees(p, s, cl) && whole_record(b) ==> #[trigger] record_agrees(p, s, cl, b),
+        // §6.1: the end of the transport.
+        forall|s: State, cl: ClientConnection| #[trigger] bootstrap_agrees(p, s, cl) ==>
+            eof_fails(cl, crate::hello::bootstrap_spec::eof(s),
+                crate::transcription::connection::receive_transport_end(cl.connection)),
+        forall|s: State, c: Connection| s.mode == Mode::Closed && c.read_closed ==>
+            ends_after_close(s, c, #[trigger] crate::hello::bootstrap_spec::eof(s),
+                #[trigger] crate::transcription::connection::receive_transport_end(c)),
 {
     assert forall|c: crate::hello::client_spec::Config, config: crate::transcription::middlebox::ClientConfig,
         x25519_private_key: Seq<u8>, retry_private_key: Seq<u8>|
@@ -901,6 +988,16 @@ pub proof fn theorem_bootstrap_equivalence(p: Primitives)
         } else {
             lemma_other_record(p, s, cl, b);
         }
+    }
+    assert forall|s: State, cl: ClientConnection| #[trigger] bootstrap_agrees(p, s, cl) implies
+        eof_fails(cl, crate::hello::bootstrap_spec::eof(s),
+            crate::transcription::connection::receive_transport_end(cl.connection)) by {
+        lemma_eof(p, s, cl);
+    }
+    assert forall|s: State, c: Connection| s.mode == Mode::Closed && c.read_closed implies
+        ends_after_close(s, c, #[trigger] crate::hello::bootstrap_spec::eof(s),
+            #[trigger] crate::transcription::connection::receive_transport_end(c)) by {
+        lemma_eof_closed(s, c);
     }
 }
 
