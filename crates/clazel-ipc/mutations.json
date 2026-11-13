@@ -1195,6 +1195,84 @@
         "lemma": "lemma_fields_match_tokens(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })",
         "witness": "message_tokens(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }).len() != 2 + message_fields(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 }).len() + nested_len(Message::Input { kind: 1, x: 3, y: 4, negative: true, delta: 5, key: 0 })"
       }
+    },
+    {
+      "id": "msg-fetch-style-tag",
+      "file": "src/message/spec.rs",
+      "find": "Message::FetchStyle { request, url } => seq![Token::Array(3), Token::Uint(14),",
+      "replace": "Message::FetchStyle { request, url } => seq![Token::Array(3), Token::Uint(16),",
+      "expect": "killed",
+      "reason": "FetchStyle is written with tag 16, which nothing reads: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::FetchStyle { request: 1, url: seq![0x61u8] })",
+        "witness": "message_ok(Message::FetchStyle { request: 1, url: seq![0x61u8] }) && decode_message(encode_message(Message::FetchStyle { request: 1, url: seq![0x61u8] })) != Some(Message::FetchStyle { request: 1, url: seq![0x61u8] })"
+      }
+    },
+    {
+      "id": "msg-style-body-request-dropped",
+      "file": "src/message/spec.rs",
+      "find": "Token::Uint(111), Token::Uint(request), Token::Bytes(bytes)]",
+      "replace": "Token::Uint(111), Token::Uint(0), Token::Bytes(bytes)]",
+      "expect": "killed",
+      "reason": "A StyleBody loses its request id: the renderer would add the bytes to another fetch's sheet. lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::StyleBody { request: 2, bytes: seq![0x61u8] })",
+        "witness": "message_ok(Message::StyleBody { request: 2, bytes: seq![0x61u8] }) && decode_message(encode_message(Message::StyleBody { request: 2, bytes: seq![0x61u8] })) != Some(Message::StyleBody { request: 2, bytes: seq![0x61u8] })"
+      }
+    },
+    {
+      "id": "msg-style-failed-parse-tag",
+      "file": "src/message/spec.rs",
+      "find": "} else if tag == 113 {",
+      "replace": "} else if tag == 115 {",
+      "expect": "killed",
+      "reason": "The parser reads StyleFailed under tag 115: lemma_decode_encode_message is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "lemma_decode_encode_message(Message::StyleFailed { request: 3 })",
+        "witness": "message_ok(Message::StyleFailed { request: 3 }) && decode_message(encode_message(Message::StyleFailed { request: 3 })) != Some(Message::StyleFailed { request: 3 })"
+      }
+    },
+    {
+      "id": "dir-fetch-style-not-renderer",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::Title { .. }\n        | Message::FetchStyle { .. } => true,",
+      "replace": "        | Message::Title { .. } => true,",
+      "expect": "killed",
+      "reason": "FetchStyle is not counted as a renderer message: the kernel would refuse it, so lemma_example_style is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_style()",
+        "witness": "decode_renderer_message(seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73]) is None"
+      }
+    },
+    {
+      "id": "dir-style-end-from-renderer",
+      "file": "src/message/spec.rs",
+      "find": "        | Message::FetchStyle { .. } => true,\n        _ => false,",
+      "replace": "        | Message::FetchStyle { .. }\n        | Message::StyleEnd { .. } => true,\n        _ => false,",
+      "expect": "killed",
+      "reason": "A renderer may send StyleEnd, a kernel-to-renderer message: lemma_example_style (the kernel's decoder refuses it) is false.",
+      "certificate": {
+        "file": "src/message/lemmas.rs",
+        "lemma": "super::examples::lemma_example_style()",
+        "witness": "decode_renderer_message(seq![0x82u8, 0x18, 0x70, 0x01]) is Some"
+      }
+    },
+    {
+      "id": "msg-max-style-chunk",
+      "file": "src/message/spec.rs",
+      "find": "(crate::frame::spec::MAX_FRAME - 17) as nat",
+      "replace": "(crate::frame::spec::MAX_FRAME - 16) as nat",
+      "expect": "killed",
+      "reason": "The largest StyleBody (with a 9-octet request id) is one octet too long for a frame. lemma_style_body_fits_frame is false for it, but a certificate on a 1 MiB input is too large to evaluate; the certificate is lemma_max_style_chunk, which ties the codec's MAX_STYLE_CHUNK (1_048_559, the size a_largest_style_body_fits_one_frame checks on the real code) to the spec.",
+      "certificate": {
+        "file": "src/message/codec.rs",
+        "lemma": "lemma_max_style_chunk()",
+        "witness": "max_style_chunk() != 1048559nat"
+      }
     }
   ]
 }
