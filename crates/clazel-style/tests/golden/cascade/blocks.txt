@@ -1,0 +1,408 @@
+#case 0
+#data "<!doctype html><p>foo<address>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <address> display=Block font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 1
+#data "<!doctype html><address><p>foo</address>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <address> display=Block font-style=Italic
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 2
+#data "<!doctype html><p>foo<article>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <article> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 3
+#data "<!doctype html><article><p>foo</article>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <article> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 4
+#data "<!doctype html><p>foo<aside>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <aside> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 5
+#data "<!doctype html><aside><p>foo</aside>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <aside> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 6
+#data "<!doctype html><p>foo<blockquote>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <blockquote> margin-top=16px margin-right=40px margin-bottom=16px margin-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 7
+#data "<!doctype html><blockquote><p>foo</blockquote>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <blockquote> margin-top=16px margin-right=40px margin-bottom=16px margin-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 8
+#data "<!doctype html><p>foo<center>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <center> display=Block text-align=Center align-descendants=Some(Center)
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 9
+#data "<!doctype html><center><p>foo</center>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <center> display=Block text-align=Center align-descendants=Some(Center)
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 10
+#data "<!doctype html><p>foo<details>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <details>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 11
+#data "<!doctype html><details><p>foo</details>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <details>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 12
+#data "<!doctype html><p>foo<dialog>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <dialog> margin-top=auto padding-top=16px border-top-width=3px border-top-style=Solid margin-right=auto padding-right=16px border-right-width=3px border-right-style=Solid margin-bottom=auto padding-bottom=16px border-bottom-width=3px border-bottom-style=Solid margin-left=auto padding-left=16px border-left-width=3px border-left-style=Solid display=None
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 13
+#data "<!doctype html><dialog><p>foo</dialog>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <dialog> margin-top=auto padding-top=16px border-top-width=3px border-top-style=Solid margin-right=auto padding-right=16px border-right-width=3px border-right-style=Solid margin-bottom=auto padding-bottom=16px border-bottom-width=3px border-bottom-style=Solid margin-left=auto padding-left=16px border-left-width=3px border-left-style=Solid display=None
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 14
+#data "<!doctype html><p>foo<dir>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <dir> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 15
+#data "<!doctype html><dir><p>foo</dir>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <dir> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 16
+#data "<!doctype html><p>foo<div>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <div> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 17
+#data "<!doctype html><div><p>foo</div>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 18
+#data "<!doctype html><p>foo<dl>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <dl> margin-top=16px margin-bottom=16px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 19
+#data "<!doctype html><dl><p>foo</dl>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <dl> margin-top=16px margin-bottom=16px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 20
+#data "<!doctype html><p>foo<fieldset>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <fieldset>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 21
+#data "<!doctype html><fieldset><p>foo</fieldset>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <fieldset>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 22
+#data "<!doctype html><p>foo<figcaption>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <figcaption> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 23
+#data "<!doctype html><figcaption><p>foo</figcaption>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <figcaption> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 24
+#data "<!doctype html><p>foo<figure>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <figure> margin-top=16px margin-right=40px margin-bottom=16px margin-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 25
+#data "<!doctype html><figure><p>foo</figure>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <figure> margin-top=16px margin-right=40px margin-bottom=16px margin-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 26
+#data "<!doctype html><p>foo<footer>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <footer> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 27
+#data "<!doctype html><footer><p>foo</footer>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <footer> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 28
+#data "<!doctype html><p>foo<header>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <header> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 29
+#data "<!doctype html><header><p>foo</header>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <header> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 30
+#data "<!doctype html><p>foo<hgroup>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <hgroup> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 31
+#data "<!doctype html><hgroup><p>foo</hgroup>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <hgroup> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 32
+#data "<!doctype html><p>foo<listing>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <listing> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 33
+#data "<!doctype html><listing><p>foo</listing>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <listing> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 34
+#data "<!doctype html><p>foo<menu>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <menu> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 35
+#data "<!doctype html><menu><p>foo</menu>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <menu> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 36
+#data "<!doctype html><p>foo<nav>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <nav> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 37
+#data "<!doctype html><nav><p>foo</nav>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <nav> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 38
+#data "<!doctype html><p>foo<ol>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <ol> margin-top=16px margin-bottom=16px padding-left=40px display=Block list-style-type=decimal
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 39
+#data "<!doctype html><ol><p>foo</ol>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ol> margin-top=16px margin-bottom=16px padding-left=40px display=Block list-style-type=decimal
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 40
+#data "<!doctype html><p>foo<pre>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 41
+#data "<!doctype html><pre><p>foo</pre>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 42
+#data "<!doctype html><p>foo<section>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <section> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 43
+#data "<!doctype html><section><p>foo</section>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <section> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 44
+#data "<!doctype html><p>foo<summary>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <summary>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 45
+#data "<!doctype html><summary><p>foo</summary>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <summary>
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 46
+#data "<!doctype html><p>foo<ul>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <ul> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 47
+#data "<!doctype html><ul><p>foo</ul>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <ul> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+

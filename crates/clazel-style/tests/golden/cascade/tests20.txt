@@ -1,0 +1,561 @@
+#case 0
+#data "<!doctype html><p><button><button>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+      <button> display=InlineBlock text-align=Center
+
+#case 1
+#data "<!doctype html><p><button><address>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <address> display=Block font-style=Italic
+
+#case 2
+#data "<!doctype html><p><button><article>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <article> display=Block
+
+#case 3
+#data "<!doctype html><p><button><aside>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <aside> display=Block
+
+#case 4
+#data "<!doctype html><p><button><blockquote>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <blockquote> margin-top=16px margin-right=40px margin-bottom=16px margin-left=40px display=Block
+
+#case 5
+#data "<!doctype html><p><button><center>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <center> display=Block align-descendants=Some(Center)
+
+#case 6
+#data "<!doctype html><p><button><details>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <details>
+
+#case 7
+#data "<!doctype html><p><button><dialog>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <dialog> margin-top=auto padding-top=16px border-top-width=3px border-top-style=Solid margin-right=auto padding-right=16px border-right-width=3px border-right-style=Solid margin-bottom=auto padding-bottom=16px border-bottom-width=3px border-bottom-style=Solid margin-left=auto padding-left=16px border-left-width=3px border-left-style=Solid display=None
+
+#case 8
+#data "<!doctype html><p><button><dir>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <dir> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+
+#case 9
+#data "<!doctype html><p><button><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <div> display=Block
+
+#case 10
+#data "<!doctype html><p><button><dl>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <dl> margin-top=16px margin-bottom=16px display=Block
+
+#case 11
+#data "<!doctype html><p><button><fieldset>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <fieldset>
+
+#case 12
+#data "<!doctype html><p><button><figcaption>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <figcaption> display=Block
+
+#case 13
+#data "<!doctype html><p><button><figure>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <figure> margin-top=16px margin-right=40px margin-bottom=16px margin-left=40px display=Block
+
+#case 14
+#data "<!doctype html><p><button><footer>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <footer> display=Block
+
+#case 15
+#data "<!doctype html><p><button><header>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <header> display=Block
+
+#case 16
+#data "<!doctype html><p><button><hgroup>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <hgroup> display=Block
+
+#case 17
+#data "<!doctype html><p><button><main>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <main> display=Block
+
+#case 18
+#data "<!doctype html><p><button><menu>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <menu> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+
+#case 19
+#data "<!doctype html><p><button><nav>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <nav> display=Block
+
+#case 20
+#data "<!doctype html><p><button><ol>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <ol> margin-top=16px margin-bottom=16px padding-left=40px display=Block list-style-type=decimal
+
+#case 21
+#data "<!doctype html><p><button><p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 22
+#data "<!doctype html><p><button><search>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <search> display=Block
+
+#case 23
+#data "<!doctype html><p><button><section>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <section> display=Block
+
+#case 24
+#data "<!doctype html><p><button><summary>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <summary>
+
+#case 25
+#data "<!doctype html><p><button><ul>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <ul> margin-top=16px margin-bottom=16px padding-left=40px display=Block
+
+#case 26
+#data "<!doctype html><p><button><h1>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <h1> margin-top=21.4375px margin-bottom=21.4375px display=Block font-size=32px font-weight=700
+
+#case 27
+#data "<!doctype html><p><button><h6>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <h6> margin-top=24.9688px margin-bottom=24.9688px display=Block font-size=10.7188px font-weight=700
+
+#case 28
+#data "<!doctype html><p><button><listing>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <listing> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 29
+#data "<!doctype html><p><button><pre>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <pre> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 30
+#data "<!doctype html><p><button><form>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <form> display=Block
+
+#case 31
+#data "<!doctype html><p><button><li>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <li> display=ListItem
+
+#case 32
+#data "<!doctype html><p><button><dd>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <dd> margin-left=40px display=Block
+
+#case 33
+#data "<!doctype html><p><button><dt>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <dt> display=Block
+
+#case 34
+#data "<!doctype html><p><button><plaintext>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <plaintext> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 35
+#data "<!doctype html><p><button><table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <table> display=Table border-spacing=2px 2px
+
+#case 36
+#data "<!doctype html><p><button><hr>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <hr> color=#808080ff margin-top=8px border-top-width=1px border-top-style=Inset margin-right=auto border-right-width=1px border-right-style=Inset margin-bottom=8px border-bottom-width=1px border-bottom-style=Inset margin-left=auto border-left-width=1px border-left-style=Inset display=Block overflow-x=Hidden overflow-y=Hidden
+
+#case 37
+#data "<!doctype html><p><button><xmp>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <xmp> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 38
+#data "<!doctype html><p><button></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <button> display=InlineBlock text-align=Center
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 39
+#data "<!doctype html><button><p></button>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <button> display=InlineBlock text-align=Center
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 40
+#data "<!doctype html><address><button></address>a"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <address> display=Block font-style=Italic
+      <button> display=InlineBlock text-align=Center
+
+#case 41
+#data "<p><table></p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+      <table> display=Table border-spacing=2px 2px
+
+#case 42
+#data "<!doctype html><svg>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+
+#case 43
+#data "<!doctype html><p><figcaption>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <figcaption> display=Block
+
+#case 44
+#data "<!doctype html><p><summary>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <summary>
+
+#case 45
+#data "<!doctype html><form><table><form>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <form> display=Block
+      <table> display=Table border-spacing=2px 2px
+
+#case 46
+#data "<!doctype html><table><form><form>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <form> display=None
+
+#case 47
+#data "<!doctype html><table><form></table><form>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <form> display=None
+
+#case 48
+#data "<!doctype html><svg><foreignObject><p>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <foreignObject>
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 49
+#data "<!doctype html><svg><title>abc"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <title> display=None
+
+#case 50
+#data "<option><span><option>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <option>
+      <span>
+        <option>
+
+#case 51
+#data "<option><option>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <option>
+    <option>
+
+#case 52
+#data "<math><annotation-xml><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+    <div> display=Block
+
+#case 53
+#data "<math><annotation-xml encoding=\"application/svg+xml\"><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+    <div> display=Block
+
+#case 54
+#data "<math><annotation-xml encoding=\"application/xhtml+xml\"><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <div> display=Block
+
+#case 55
+#data "<math><annotation-xml encoding=\"aPPlication/xhtmL+xMl\"><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <div> display=Block
+
+#case 56
+#data "<math><annotation-xml encoding=\"text/html\"><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <div> display=Block
+
+#case 57
+#data "<math><annotation-xml encoding=\"Text/htmL\"><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <div> display=Block
+
+#case 58
+#data "<math><annotation-xml encoding=\" text/html \"><div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+    <div> display=Block
+
+#case 59
+#data "<math><annotation-xml> </annotation-xml>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+
+#case 60
+#data "<math><annotation-xml>c</annotation-xml>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+
+#case 61
+#data "<math><annotation-xml><!--foo-->"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+
+#case 62
+#data "<math><annotation-xml></svg>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+
+#case 63
+#data "<math><annotation-xml><svg>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <svg>
+

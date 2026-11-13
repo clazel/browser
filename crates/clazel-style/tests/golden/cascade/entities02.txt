@@ -1,0 +1,182 @@
+#case 0
+#data "<div bar=\"ZZ&gt;YY\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 1
+#data "<div bar=\"ZZ&\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 2
+#data "<div bar='ZZ&'></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 3
+#data "<div bar=ZZ&></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 4
+#data "<div bar=\"ZZ&gt=YY\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 5
+#data "<div bar=\"ZZ&gt0YY\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 6
+#data "<div bar=\"ZZ&gt9YY\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 7
+#data "<div bar=\"ZZ&gtaYY\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 8
+#data "<div bar=\"ZZ&gtZYY\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 9
+#data "<div bar=\"ZZ&gt YY\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 10
+#data "<div bar=\"ZZ&gt\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 11
+#data "<div bar='ZZ&gt'></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 12
+#data "<div bar=ZZ&gt></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 13
+#data "<div bar=\"ZZ&pound_id=23\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 14
+#data "<div bar=\"ZZ&prod_id=23\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 15
+#data "<div bar=\"ZZ&pound;_id=23\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 16
+#data "<div bar=\"ZZ&prod;_id=23\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 17
+#data "<div bar=\"ZZ&pound=23\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 18
+#data "<div bar=\"ZZ&prod=23\"></div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 19
+#data "<div>ZZ&pound_id=23</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 20
+#data "<div>ZZ&prod_id=23</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 21
+#data "<div>ZZ&pound;_id=23</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 22
+#data "<div>ZZ&prod;_id=23</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 23
+#data "<div>ZZ&pound=23</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 24
+#data "<div>ZZ&prod=23</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+
+#case 25
+#data "<div>ZZ&AElig=</div>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <div> display=Block
+

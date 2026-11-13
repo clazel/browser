@@ -14,6 +14,7 @@
 
 mod cbor_appendix_a;
 mod css_parsing_tests;
+mod fonts;
 mod hash;
 mod html5lib_encoding;
 mod html5lib_tokenizer;
@@ -25,13 +26,17 @@ mod llhttp;
 mod nist_cavp_sigver;
 mod wpt_base64;
 mod wpt_cookies;
+mod wpt_css_cascade;
 mod wpt_css_selectors;
 mod wpt_css_syntax;
+mod wpt_css_values;
 mod wpt_encoding;
 mod wpt_encoding_legacy;
 mod wpt_idna;
+mod wpt_mediaqueries;
 mod wpt_mime_types;
 mod wpt_mimesniff;
+mod wpt_quirks;
 mod wpt_url_hosts;
 mod wpt_url_percent;
 mod wpt_url_setters;
@@ -57,6 +62,22 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         wpt_css_selectors::FILES,
     ),
     (
+        "wpt-css-values",
+        wpt_css_values::convert,
+        wpt_css_values::FILES,
+    ),
+    ("wpt-quirks", wpt_quirks::convert, wpt_quirks::FILES),
+    (
+        "wpt-mediaqueries",
+        wpt_mediaqueries::convert,
+        wpt_mediaqueries::FILES,
+    ),
+    (
+        "wpt-css-cascade",
+        wpt_css_cascade::convert,
+        wpt_css_cascade::FILES,
+    ),
+    (
         "wpt-css-syntax",
         wpt_css_syntax::convert,
         wpt_css_syntax::FILES,
@@ -66,6 +87,18 @@ const CONVERTERS: &[(&str, Convert, &[&str])] = &[
         css_parsing_tests::convert,
         css_parsing_tests::FILES,
     ),
+    ("fonts-dejavu", fonts::convert, fonts::FILES_DEJAVU),
+    (
+        "fonts-source-serif",
+        fonts::convert,
+        fonts::FILES_SOURCE_SERIF,
+    ),
+    (
+        "fonts-source-code-pro",
+        fonts::convert,
+        fonts::FILES_SOURCE_CODE_PRO,
+    ),
+    ("fonts-fontations", fonts::convert, fonts::FILES_FONTATIONS),
     (
         "cbor-appendix-a",
         cbor_appendix_a::convert,

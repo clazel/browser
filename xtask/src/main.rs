@@ -21,9 +21,11 @@
 //!   vendored conformance suites (`tests/generated/*.rs`). `check` and
 //!   `verify` fail if a committed table is stale.
 //! - `cargo xtask tables`: regenerate the Unicode tables generated from
-//!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs`), the
+//!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs` and
+//!   `crates/clazel-layout/src/text/data.rs`), the
 //!   Public Suffix List, and the root certificate table from NSS's
-//!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`).
+//!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`), and the
+//!   user agent style sheet from HTML §15 (`crates/clazel-style/data/*.css`).
 //!   `check` and `verify` fail if they are stale or a data file's hash
 //!   differs from its `SOURCE.md`.
 //! - `cargo xtask report [--write] [--changed [base]]`: run the checks that produce the
@@ -37,6 +39,7 @@ mod conformance;
 mod deps;
 mod encoding_indexes;
 mod entities;
+mod linebreak;
 mod mutate;
 mod parts;
 mod pins;
@@ -48,6 +51,7 @@ mod scan;
 mod status;
 mod sys;
 mod testdata;
+mod ua_sheet;
 mod unicode;
 mod verus;
 mod workspace;
@@ -357,6 +361,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     r.step("generated test data", outcome(problems, notes));
     let (problems, notes) = unicode::run(false);
     r.step("generated Unicode tables", outcome(problems, notes));
+    let (problems, notes) = linebreak::run(false);
+    r.step("generated line breaking tables", outcome(problems, notes));
     let (problems, notes) = psl::run(false);
     r.step(
         "generated Public Suffix List tables",
@@ -364,6 +370,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     );
     let (problems, notes) = roots::run(false);
     r.step("generated root certificate table", outcome(problems, notes));
+    let (problems, notes) = ua_sheet::run(false);
+    r.step("generated user agent style sheet", outcome(problems, notes));
     let (problems, notes) = entities::run(false);
     r.step(
         "generated named character references table",
@@ -1010,6 +1018,8 @@ fn generate_tables() -> ExitCode {
     }
     let (problems, notes) = unicode::run(true);
     r.step("generate Unicode tables", outcome(problems, notes));
+    let (problems, notes) = linebreak::run(true);
+    r.step("generate line breaking tables", outcome(problems, notes));
     let (problems, notes) = psl::run(true);
     r.step(
         "generate Public Suffix List tables",
@@ -1017,6 +1027,8 @@ fn generate_tables() -> ExitCode {
     );
     let (problems, notes) = roots::run(true);
     r.step("generate root certificate table", outcome(problems, notes));
+    let (problems, notes) = ua_sheet::run(true);
+    r.step("generate user agent style sheet", outcome(problems, notes));
     let (problems, notes) = entities::run(true);
     r.step(
         "generate named character references table",

@@ -1,0 +1,308 @@
+#case 0
+#data "<!doctype html></head> <head>"
+root
+  block <html>
+    block <body>
+
+#case 1
+#data "<!doctype html><form><div></form><div>"
+root
+  block <html>
+    block <body>
+      block <form>
+        block <div>
+          block <div>
+
+#case 2
+#data "<!doctype html><title>&amp;</title>"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<!doctype html><title><!--&amp;--></title>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<!doctype>"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<!---x"
+root
+  block <html>
+    block <body>
+
+#case 7
+#data "<frameset></frameset>\nfoo"
+root
+  block <html>
+    inline <frameset>
+
+#case 8
+#data "<frameset></frameset>\n<noframes>"
+root
+  block <html>
+    inline <frameset>
+
+#case 9
+#data "<frameset></frameset>\n<div>"
+root
+  block <html>
+    inline <frameset>
+
+#case 10
+#data "<frameset></frameset>\n</html>"
+root
+  block <html>
+    inline <frameset>
+
+#case 11
+#data "<frameset></frameset>\n</div>"
+root
+  block <html>
+    inline <frameset>
+
+#case 12
+#data "<form><form>"
+root
+  block <html>
+    block <body>
+      block <form>
+
+#case 13
+#data "<button><button>"
+root
+  block <html>
+    block <body>
+      inline-block <button>
+      inline-block <button>
+
+#case 14
+#data "<table><tr><td></th>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 15
+#data "<table><caption><td>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 16
+#data "<table><caption><div>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          block <div>
+        table <table>
+
+#case 18
+#data "<table><caption><div></caption>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          block <div>
+        table <table>
+
+#case 19
+#data "<table><caption></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+        table <table>
+
+#case 21
+#data "<table><caption></body></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+        table <table>
+
+#case 22
+#data "<table><caption><div></div>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          block <div>
+        table <table>
+
+#case 23
+#data "<table><tr><td></body></caption></col></colgroup></html>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 25
+#data "<table><colgroup>foo"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "foo"
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+
+#case 27
+#data "<table><colgroup></col>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+
+#case 28
+#data "<frameset><div>"
+root
+  block <html>
+    inline <frameset>
+
+#case 30
+#data "<frameset></div>"
+root
+  block <html>
+    inline <frameset>
+
+#case 32
+#data "<table><tr><div>"
+root
+  block <html>
+    block <body>
+      block <div>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 35
+#data "<table><tr><div><td>"
+root
+  block <html>
+    block <body>
+      block <div>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+
+#case 37
+#data "<table><tbody></thead>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+
+#case 39
+#data "<table><tbody></body></caption></col></colgroup></html></td></th></tr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+
+#case 40
+#data "<table><tbody></div>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+
+#case 41
+#data "<table><table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+      table-wrapper <table>
+        table <table>
+
+#case 42
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 45
+#data "<html><frameset></frameset></html> "
+root
+  block <html>
+    inline <frameset>
+
+#case 46
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01//EN\"><html></html>"
+root
+  block <html>
+    block <body>
+
+#case 47
+#data "<param><frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 48
+#data "<source><frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 49
+#data "<track><frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 50
+#data "</html><frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 51
+#data "</body><frameset></frameset>"
+root
+  block <html>
+    inline <frameset>
+

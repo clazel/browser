@@ -1,0 +1,164 @@
+#case 0
+#data "<a><b><big><em><strong><div>X</a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          inline <b>
+            inline <big>
+              inline <em>
+                inline <strong>
+        inline <big> first
+          inline <em> first
+            inline <strong> first
+      block <div>
+        inline <a>
+          text "X"
+      block (anonymous)
+        inline <big> last
+          inline <em> last
+            inline <strong> last
+
+#case 1
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8>A</a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          inline <b>
+        inline <b> first
+      block <div>
+        block (anonymous)
+          inline <a>
+        block <div>
+          block (anonymous)
+            inline <a>
+          block <div>
+            block (anonymous)
+              inline <a>
+            block <div>
+              block (anonymous)
+                inline <a>
+              block <div>
+                block (anonymous)
+                  inline <a>
+                block <div>
+                  block (anonymous)
+                    inline <a>
+                  block <div>
+                    block (anonymous)
+                      inline <a>
+                    block <div>
+                      inline <a>
+                        text "A"
+      block (anonymous)
+        inline <b> last
+
+#case 2
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8><div id=9>A</a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          inline <b>
+        inline <b> first
+      block <div>
+        block (anonymous)
+          inline <a>
+        block <div>
+          block (anonymous)
+            inline <a>
+          block <div>
+            block (anonymous)
+              inline <a>
+            block <div>
+              block (anonymous)
+                inline <a>
+              block <div>
+                block (anonymous)
+                  inline <a>
+                block <div>
+                  block (anonymous)
+                    inline <a>
+                  block <div>
+                    block (anonymous)
+                      inline <a>
+                    block <div>
+                      block (anonymous)
+                        inline <a> first
+                      block <div>
+                        text "A"
+                      block (anonymous)
+                        inline <a> last
+      block (anonymous)
+        inline <b> last
+
+#case 3
+#data "<a><b><div id=1><div id=2><div id=3><div id=4><div id=5><div id=6><div id=7><div id=8><div id=9><div id=10>A</a>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <a>
+          inline <b>
+        inline <b> first
+      block <div>
+        block (anonymous)
+          inline <a>
+        block <div>
+          block (anonymous)
+            inline <a>
+          block <div>
+            block (anonymous)
+              inline <a>
+            block <div>
+              block (anonymous)
+                inline <a>
+              block <div>
+                block (anonymous)
+                  inline <a>
+                block <div>
+                  block (anonymous)
+                    inline <a>
+                  block <div>
+                    block (anonymous)
+                      inline <a>
+                    block <div>
+                      block (anonymous)
+                        inline <a> first
+                      block <div>
+                        block <div>
+                          text "A"
+                      block (anonymous)
+                        inline <a> last
+      block (anonymous)
+        inline <b> last
+
+#case 4
+#data "<cite><b><cite><i><cite><i><cite><i><div>X</b>TEST"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <cite> first
+          inline <b>
+            inline <cite>
+              inline <i>
+                inline <cite>
+                  inline <i>
+                    inline <cite>
+                      inline <i>
+          inline <i> first
+            inline <i> first
+      block <div>
+        inline <b>
+          text "X"
+        text "TEST"
+      block (anonymous)
+        inline <cite> last
+          inline <i> last
+            inline <i> last
+

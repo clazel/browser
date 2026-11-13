@@ -547,3 +547,98 @@ it evidently means. Each entry records what we specified instead.
   always, with `illegal_parameter` by §6's note (`certificate_verify_failures` in
   `crates/clazel-tls/src/transcription/authentication.rs`).
 - **Reported upstream:** not yet.
+
+## OpenType 1.9 `otff`: the checksum sample declares `Endptr` and tests `EndPtr`
+
+- **Spec:** OpenType specification version 1.9, "The OpenType Font File",
+  "Calculating Checksums",
+  <https://learn.microsoft.com/en-us/typography/opentype/otspec190/otff>
+- **Text:** the C sample declares `uint32 *Endptr = Table+((Length+3) & ~3) / sizeof(uint32);`
+  and loops `while (Table < EndPtr)`.
+- **Problem:** C is case-sensitive, so read literally the sample does not
+  compile (`EndPtr` is undeclared). The prose around it is unambiguous: "the
+  unsigned sum of the uint32 units of a given table", with data "treat[ed] …
+  as though it contains zero padding to a length that is a multiple of four".
+- **We specify:** the prose: a wrapping sum of the big-endian `uint32` words,
+  the last zero-padded (`table_checksum` in `crates/clazel-font/src/file.rs`).
+- **Reported upstream:** not yet.
+
+## OpenType 1.9 `cmap` format 4: the example's entrySelector is 4, the formula gives 2
+
+- **Spec:** OpenType specification version 1.9, "cmap — Character to Glyph
+  Index Mapping Table", "Format 4: Segment mapping to delta values",
+  <https://learn.microsoft.com/en-us/typography/opentype/otspec190/cmap>
+- **Text:** the field table defines entrySelector as "Log2 of the maximum
+  power of 2 less than or equal to segCount (log2(searchRange/2), which is
+  equal to floor(log2(segCount)))"; the example that maps "characters 10-20,
+  30-90, and 153-480" has segCountX2 8 (segCount 4), searchRange 8 and
+  entrySelector 4.
+- **Problem:** by the formula, segCount 4 gives entrySelector 2
+  (log2(8/2)); the example's 4 contradicts the field's own definition. Its
+  searchRange (8) and rangeShift (0) are consistent with segCount 4.
+- **We specify:** nothing depends on it: we never read entrySelector, as the
+  chapter recommends ("parsing implementations not rely on the searchRange,
+  entrySelector and rangeShift fields"). The unit test that transcribes the
+  example (`opentype_format4_example` in `crates/clazel-font/src/cmap.rs`)
+  says so.
+- **Reported upstream:** not yet.
+
+## OpenType 1.9 `chapter2` Example 7: "i" is class 0 in the data and "Ascender Class 1" in the comment
+
+- **Spec:** OpenType specification version 1.9, "OpenType Layout Common Table
+  Formats", Example 7 (ClassDefFormat1 Table),
+  <https://learn.microsoft.com/en-us/typography/opentype/otspec190/chapter2>
+- **Text:** the classValueArray row for the ninth glyph reads hex data `0000`,
+  source `0`, comment "iGlyph, Ascender Class 1".
+- **Problem:** the data and the comment disagree. The example's prose says
+  "x-height glyphs are in Class 0, the ascender glyphs are in Class 1"; "i"
+  is an x-height letter, so the data is evidently right and the comment
+  wrong.
+- **We specify:** the data (`chapter2_example_7_class_def_format_1` in
+  `crates/clazel-font/src/layout.rs`).
+- **Reported upstream:** not yet.
+
+## CSS Syntax 3 §5.4.10 drops a media query list's last empty query
+
+- **Spec:** CSS Syntax Module Level 3, Editor's Draft, `css-syntax-3/Overview.bs`
+  of `w3c/csswg-drafts` at commit `c410ee5e4d2afe6d8b2e8ce53723b8d1eb3b5b67`,
+  <https://drafts.csswg.org/css-syntax-3/#parse-comma-separated-list-of-component-values>,
+  as Media Queries Level 4 §3 (W3C CRD of 8 October 2026) uses it: "To parse a
+  `<media-query-list>` production, parse a comma-separated list of component
+  values, then parse each entry in the returned list as a `<media-query>`."
+- **Text:** "3. While input is not empty: Consume a list of component values
+  from input, with `<comma-token>` as the stop token, and append the result to
+  groups. Discard a token from input. 4. Return groups."
+- **Problem:** after the last comma's token is discarded the input is empty, so
+  `foo,` gives one group (`foo`), `,` one empty group, and `,,` two; and ` `
+  (whitespace only) gives one group of whitespace, which is not a
+  `<media-query>` and so becomes `not all`. WPT's `match-media-parsing.html`,
+  which cites this algorithm, expects `foo, not all`, `not all, not all`,
+  `not all, not all, not all` and the empty list, as engines give; HTML
+  §2.3.10 likewise treats an all-whitespace `media` value as matching. The
+  evident intent is that each comma ends a query.
+- **We specify:** a list whose tokens are all whitespace is the empty list;
+  otherwise every top-level comma ends a group, so there is one more group than
+  there are commas (`parse_media_query_list` in
+  `crates/clazel-style/src/sources/media.rs`). `clazel-css`'s transcription of
+  §5.4.10 is unchanged; the media query parser splits the list itself.
+- **Reported upstream:** not yet.
+
+## Media Queries 4 §3.2 replaces an unknown query with `not all`, which WPT and engines do not
+
+- **Spec:** Media Queries Level 4, W3C Candidate Recommendation Draft of
+  8 October 2026, <https://www.w3.org/TR/2026/CRD-mediaqueries-4-20261008/#error-handling>
+- **Text:** "An unknown `<mf-name>` or `<mf-value>`, or a feature value which
+  does not match the value syntax for that media feature, results in the value
+  'unknown'. A `<media-query>` whose value is 'unknown' must be replaced with
+  not all."
+- **Problem:** a query's value depends on the device, not only on its text, so
+  "replaced ... during parsing" cannot be done by a parser in general, and WPT's
+  `test_media_queries.html` requires the opposite for every unknown expression
+  (`expression_should_be_unknown` asserts that `(e)` is parseable, that is, that
+  `@media screen, (e)` does not serialize as `screen, not all`), as engines
+  keep such queries. Replacing it would change no result: an unknown query is
+  false (§3.1) and so is `not all`.
+- **We specify:** the query is kept as parsed and evaluates to false
+  (`crates/clazel-style/src/sources/media.rs`, its modelling choices).
+- **Reported upstream:** not yet.

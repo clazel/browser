@@ -93,13 +93,20 @@ pub fn run(write: bool) -> (Vec<String>, Vec<String>) {
 /// Every vendored file is listed in `SOURCE.md` with its SHA-256, and
 /// matches it; nothing else is in the directory.
 fn check_sources(dir: &Path) -> Vec<String> {
+    check_vendored(dir, FILES, "xtask/src/unicode.rs")
+}
+
+/// Every one of `files` in `dir` is listed in its `SOURCE.md` with its
+/// SHA-256, and matches it; nothing else but `SOURCE.md` and `LICENSE.md`
+/// is in the directory. `generator` names the module that reads them.
+pub(crate) fn check_vendored(dir: &Path, files: &[&str], generator: &str) -> Vec<String> {
     let rel = workspace::relative(dir);
     let source = match std::fs::read_to_string(dir.join("SOURCE.md")) {
         Ok(s) => s,
         Err(e) => return vec![format!("{rel}/SOURCE.md: {e}")],
     };
     let mut problems = Vec::new();
-    for file in FILES {
+    for file in files {
         let listed = source.lines().find_map(|l| {
             let rest = l.trim().strip_prefix("SHA-256:")?.trim();
             let (hash, name) = rest.split_once(char::is_whitespace)?;
@@ -126,10 +133,8 @@ fn check_sources(dir: &Path) -> Vec<String> {
         Ok(entries) => {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().into_owned();
-                if !FILES.contains(&name.as_str()) && name != "SOURCE.md" && name != "LICENSE.md" {
-                    problems.push(format!(
-                        "{rel}/{name}: not an input of xtask/src/unicode.rs"
-                    ));
+                if !files.contains(&name.as_str()) && name != "SOURCE.md" && name != "LICENSE.md" {
+                    problems.push(format!("{rel}/{name}: not an input of {generator}"));
                 }
             }
         }
@@ -138,17 +143,17 @@ fn check_sources(dir: &Path) -> Vec<String> {
     problems
 }
 
-fn read(dir: &Path, file: &str) -> Result<String, String> {
+pub(crate) fn read(dir: &Path, file: &str) -> Result<String, String> {
     std::fs::read_to_string(dir.join(file)).map_err(|e| format!("{file}: {e}"))
 }
 
-fn hex(s: &str, file: &str, line: usize) -> Result<u32, String> {
+pub(crate) fn hex(s: &str, file: &str, line: usize) -> Result<u32, String> {
     u32::from_str_radix(s.trim(), 16)
         .map_err(|e| format!("{file}:{line}: bad code point {s:?}: {e}"))
 }
 
 /// `XXXX` or `XXXX..YYYY`.
-fn range(s: &str, file: &str, line: usize) -> Result<(u32, u32), String> {
+pub(crate) fn range(s: &str, file: &str, line: usize) -> Result<(u32, u32), String> {
     match s.trim().split_once("..") {
         Some((a, b)) => Ok((hex(a, file, line)?, hex(b, file, line)?)),
         None => {
@@ -160,7 +165,7 @@ fn range(s: &str, file: &str, line: usize) -> Result<(u32, u32), String> {
 
 /// Data lines: (1-based line number, fields split at `;`, trimmed), with
 /// comments removed.
-fn data_lines(text: &str) -> impl Iterator<Item = (usize, Vec<&str>)> {
+pub(crate) fn data_lines(text: &str) -> impl Iterator<Item = (usize, Vec<&str>)> {
     text.lines().enumerate().filter_map(|(i, l)| {
         let l = l.split('#').next().unwrap_or("").trim();
         (!l.is_empty()).then(|| (i.saturating_add(1), l.split(';').map(str::trim).collect()))

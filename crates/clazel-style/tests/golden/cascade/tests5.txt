@@ -1,0 +1,120 @@
+#case 0
+#data "<style> <!-- </style>x"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 1
+#data "<style> <!-- </style> --> </style>x"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 2
+#data "<style> <!--> </style>x"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 3
+#data "<style> <!---> </style>x"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<iframe> <!---> </iframe>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 5
+#data "<iframe> <!--- </iframe>->x</iframe> --> </iframe>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <iframe> border-top-width=2px border-top-style=Inset border-right-width=2px border-right-style=Inset border-bottom-width=2px border-bottom-style=Inset border-left-width=2px border-left-style=Inset
+
+#case 6
+#data "<script> <!-- </script> --> </script>x"
+<html> display=Block
+  <head> display=None
+    <script> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 7
+#data "<title> <!-- </title> --> </title>x"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 8
+#data "<textarea> <!--- </textarea>->x</textarea> --> </textarea>x"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <textarea> white-space=PreWrap
+
+#case 9
+#data "<style> <!</-- </style>x"
+<html> display=Block
+  <head> display=None
+    <style> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 10
+#data "<p><xmp></xmp>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> display=Block
+    <xmp> margin-top=16px margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 11
+#data "<xmp> <!-- > --> </xmp>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <xmp> margin-bottom=16px display=Block font-family=monospace white-space=Pre
+
+#case 12
+#data "<title>&amp;</title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 13
+#data "<title><!--&amp;--></title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 14
+#data "<title><!--</title>"
+<html> display=Block
+  <head> display=None
+    <title> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 15
+#data "<noscript><!--</noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 16
+#data "<noscript><!--</noscript>--></noscript>"
+<html> display=Block
+  <head> display=None
+    <noscript>
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+

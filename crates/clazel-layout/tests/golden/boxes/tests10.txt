@@ -1,0 +1,665 @@
+#case 0
+#data "<!DOCTYPE html><svg></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 1
+#data "<!DOCTYPE html><svg></svg><![CDATA[a]]>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 2
+#data "<!DOCTYPE html><body><svg></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 3
+#data "<!DOCTYPE html><body><select><svg></svg></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <svg>
+
+#case 4
+#data "<!DOCTYPE html><body><select><option><svg></svg></option></select>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <option>
+          inline <svg>
+
+#case 5
+#data "<!DOCTYPE html><body><table><svg></svg></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+      table-wrapper <table>
+        table <table>
+
+#case 6
+#data "<!DOCTYPE html><body><table><svg><g>foo</g></svg></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+          inline <g>
+            text "foo"
+      table-wrapper <table>
+        table <table>
+
+#case 7
+#data "<!DOCTYPE html><body><table><svg><g>foo</g><g>bar</g></svg></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+          inline <g>
+            text "foo"
+          inline <g>
+            text "bar"
+      table-wrapper <table>
+        table <table>
+
+#case 8
+#data "<!DOCTYPE html><body><table><tbody><svg><g>foo</g><g>bar</g></svg></tbody></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+          inline <g>
+            text "foo"
+          inline <g>
+            text "bar"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+
+#case 9
+#data "<!DOCTYPE html><body><table><tbody><tr><svg><g>foo</g><g>bar</g></svg></tr></tbody></table>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+          inline <g>
+            text "foo"
+          inline <g>
+            text "bar"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 10
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg></td></tr></tbody></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                inline <svg>
+                  inline <g>
+                    text "foo"
+                  inline <g>
+                    text "bar"
+
+#case 11
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg><p>baz</td></tr></tbody></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <svg>
+                    inline <g>
+                      text "foo"
+                    inline <g>
+                      text "bar"
+                block <p>
+                  text "baz"
+
+#case 12
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g></svg><p>baz</caption></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          block (anonymous)
+            inline <svg>
+              inline <g>
+                text "foo"
+              inline <g>
+                text "bar"
+          block <p>
+            text "baz"
+        table <table>
+
+#case 13
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          block (anonymous)
+            inline <svg>
+              inline <g>
+                text "foo"
+              inline <g>
+                text "bar"
+          block <p>
+            text "baz"
+        table <table>
+      block <p>
+        text "quux"
+
+#case 14
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table-caption <caption>
+          inline <svg>
+            inline <g>
+              text "foo"
+            inline <g>
+              text "bar"
+            text "baz"
+        table <table>
+      block <p>
+        text "quux"
+
+#case 15
+#data "<!DOCTYPE html><body><table><colgroup><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+          inline <g>
+            text "foo"
+          inline <g>
+            text "bar"
+      block <p>
+        text "baz"
+      table-wrapper <table>
+        table <table>
+          table-column-group <colgroup>
+      block <p>
+        text "quux"
+
+#case 16
+#data "<!DOCTYPE html><body><table><tr><td><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <select> first
+                    inline <svg>
+                      inline <g>
+                        text "foo"
+                      inline <g>
+                        text "bar"
+                block <p>
+                  text "baz"
+                block (anonymous)
+                  inline <select> last
+      block <p>
+        text "quux"
+
+#case 17
+#data "<!DOCTYPE html><body><table><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <select> first
+          inline <svg>
+            inline <g>
+              text "foo"
+            inline <g>
+              text "bar"
+      block <p>
+        text "baz"
+      block (anonymous)
+        inline <select> last
+      table-wrapper <table>
+        table <table>
+      block <p>
+        text "quux"
+
+#case 18
+#data "<!DOCTYPE html><body></body></html><svg><g>foo</g><g>bar</g><p>baz"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+          inline <g>
+            text "foo"
+          inline <g>
+            text "bar"
+      block <p>
+        text "baz"
+
+#case 19
+#data "<!DOCTYPE html><body></body><svg><g>foo</g><g>bar</g><p>baz"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+          inline <g>
+            text "foo"
+          inline <g>
+            text "bar"
+      block <p>
+        text "baz"
+
+#case 20
+#data "<!DOCTYPE html><frameset><svg><g></g><g></g><p><span>"
+root
+  block <html>
+    inline <frameset>
+
+#case 21
+#data "<!DOCTYPE html><frameset></frameset><svg><g></g><g></g><p><span>"
+root
+  block <html>
+    inline <frameset>
+
+#case 22
+#data "<!DOCTYPE html><body xlink:href=foo><svg xlink:href=foo></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 23
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo></g></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <g>
+
+#case 24
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo /></svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <g>
+
+#case 25
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo />bar</svg>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <g>
+        text "bar"
+
+#case 26
+#data "<svg></path>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+
+#case 27
+#data "<div><svg></div>a"
+root
+  block <html>
+    block <body>
+      block <div>
+        inline <svg>
+      block (anonymous)
+        text "a"
+
+#case 28
+#data "<div><svg><path></div>a"
+root
+  block <html>
+    block <body>
+      block <div>
+        inline <svg>
+          inline <path>
+      block (anonymous)
+        text "a"
+
+#case 29
+#data "<div><svg><path></svg><path>"
+root
+  block <html>
+    block <body>
+      block <div>
+        inline <svg>
+          inline <path>
+        inline <path>
+
+#case 30
+#data "<div><svg><path><foreignObject><math></div>a"
+root
+  block <html>
+    block <body>
+      block <div>
+        inline <svg>
+          inline <path>
+            inline <foreignObject>
+              inline <math>
+                text "a"
+
+#case 31
+#data "<div><svg><path><foreignObject><p></div>a"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          inline <svg> first
+            inline <path> first
+              inline <foreignObject> first
+        block <p>
+          text "a"
+        block (anonymous)
+          inline <svg> last
+            inline <path> last
+              inline <foreignObject> last
+
+#case 32
+#data "<!DOCTYPE html><svg><desc><div><svg><ul>a"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg> first
+          inline <desc> first
+      block <div>
+        block (anonymous)
+          inline <svg>
+        block <ul>
+          text "a"
+      block (anonymous)
+        inline <svg> last
+          inline <desc> last
+
+#case 33
+#data "<!DOCTYPE html><svg><desc><svg><ul>a"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg> first
+          inline <desc> first
+            inline <svg>
+      block <ul>
+        text "a"
+      block (anonymous)
+        inline <svg> last
+          inline <desc> last
+
+#case 34
+#data "<!DOCTYPE html><p><svg><desc><p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <svg> first
+            inline <desc> first
+        block <p>
+        block (anonymous)
+          inline <svg> last
+            inline <desc> last
+
+#case 35
+#data "<!DOCTYPE html><p><svg><title><p>"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <svg>
+
+#case 36
+#data "<div><svg><path><foreignObject><p></foreignObject><p>"
+root
+  block <html>
+    block <body>
+      block <div>
+        block (anonymous)
+          inline <svg> first
+            inline <path> first
+              inline <foreignObject> first
+        block <p>
+        block <p>
+        block (anonymous)
+          inline <svg> last
+            inline <path> last
+              inline <foreignObject> last
+
+#case 37
+#data "<math><mi><div><object><div><span></span></div></object></div></mi><mi>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <mi> first
+      block <div>
+        block (anonymous)
+          inline <object> first
+        block <div>
+          inline <span>
+        block (anonymous)
+          inline <object> last
+      block (anonymous)
+        inline <math> last
+          inline <mi> last
+          inline <mi>
+
+#case 38
+#data "<math><mi><svg><foreignObject><div><div></div></div></foreignObject></svg></mi><mi>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <mi> first
+            inline <svg> first
+              inline <foreignObject> first
+      block <div>
+        block <div>
+      block (anonymous)
+        inline <math> last
+          inline <mi> last
+            inline <svg> last
+              inline <foreignObject> last
+          inline <mi>
+
+#case 39
+#data "<svg><script></script><path>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        inline <path>
+
+#case 40
+#data "<table><svg></svg><tr>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <svg>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 41
+#data "<math><mi><mglyph>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mi>
+          inline <mglyph>
+
+#case 42
+#data "<math><mi><malignmark>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mi>
+          inline <malignmark>
+
+#case 43
+#data "<math><mo><mglyph>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mo>
+          inline <mglyph>
+
+#case 44
+#data "<math><mo><malignmark>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mo>
+          inline <malignmark>
+
+#case 45
+#data "<math><mn><mglyph>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mn>
+          inline <mglyph>
+
+#case 46
+#data "<math><mn><malignmark>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mn>
+          inline <malignmark>
+
+#case 47
+#data "<math><ms><mglyph>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <ms>
+          inline <mglyph>
+
+#case 48
+#data "<math><ms><malignmark>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <ms>
+          inline <malignmark>
+
+#case 49
+#data "<math><mtext><mglyph>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mtext>
+          inline <mglyph>
+
+#case 50
+#data "<math><mtext><malignmark>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mtext>
+          inline <malignmark>
+
+#case 51
+#data "<math><annotation-xml><svg></svg></annotation-xml><mi>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          inline <svg>
+        inline <mi>
+
+#case 52
+#data "<math><annotation-xml><svg><foreignObject><div><math><mi></mi></math><span></span></div></foreignObject><path></path></svg></annotation-xml><mi>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <math> first
+          inline <annotation-xml> first
+            inline <svg> first
+              inline <foreignObject> first
+      block <div>
+        inline <math>
+          inline <mi>
+        inline <span>
+      block (anonymous)
+        inline <math> last
+          inline <annotation-xml> last
+            inline <svg> last
+              inline <foreignObject> last
+              inline <path>
+          inline <mi>
+
+#case 53
+#data "<math><annotation-xml><svg><foreignObject><math><mi><svg></svg></mi><mo></mo></math><span></span></foreignObject><path></path></svg></annotation-xml><mi>"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <annotation-xml>
+          inline <svg>
+            inline <foreignObject>
+              inline <math>
+                inline <mi>
+                  inline <svg>
+                inline <mo>
+              inline <span>
+            inline <path>
+        inline <mi>
+

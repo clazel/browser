@@ -1,0 +1,29 @@
+#case 0
+#data "<!doctype html><p>foo<main>bar<p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <main> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 1
+#data "<!doctype html><main><p>foo</main>bar"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <main> display=Block
+      <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 2
+#data "<!DOCTYPE html>xxx<svg><x><g><a><main><b>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <svg>
+      <x>
+        <g>
+          <a>
+            <main> display=Block
+    <b> font-weight=700
+

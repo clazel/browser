@@ -1,0 +1,755 @@
+#case 0
+#data "<body><?something>"
+root
+  block <html>
+    block <body>
+
+#case 1
+#data "<body><?something><span>"
+root
+  block <html>
+    block <body>
+      inline <span>
+
+#case 2
+#data "<body><?something good>"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<body><?something else is good>"
+root
+  block <html>
+    block <body>
+
+#case 4
+#data "<body><?one><?two>"
+root
+  block <html>
+    block <body>
+
+#case 5
+#data "<body><?a$><?b$><?good?>"
+root
+  block <html>
+    block <body>
+
+#case 6
+#data "<body><?hey there?>"
+root
+  block <html>
+    block <body>
+
+#case 7
+#data "<body><?hey   there?>"
+root
+  block <html>
+    block <body>
+
+#case 8
+#data "<body><?hey?there>"
+root
+  block <html>
+    block <body>
+
+#case 9
+#data "<body><?hey\tthere=1?>"
+root
+  block <html>
+    block <body>
+
+#case 10
+#data "<body><?hey\nthere=1?>"
+root
+  block <html>
+    block <body>
+
+#case 11
+#data "<body><?hey\rthere=1?>"
+root
+  block <html>
+    block <body>
+
+#case 12
+#data "<body><?hey\u{c}there=1?>"
+root
+  block <html>
+    block <body>
+
+#case 13
+#data "<body><?something ? >"
+root
+  block <html>
+    block <body>
+
+#case 14
+#data "<body><?something x >"
+root
+  block <html>
+    block <body>
+
+#case 15
+#data "<body><?something ?\\t   ??>"
+root
+  block <html>
+    block <body>
+
+#case 16
+#data "<body><?t d > ?>"
+root
+  block <html>
+    block <body>
+      text " ?>"
+
+#case 17
+#data "<body><?module-handler>"
+root
+  block <html>
+    block <body>
+
+#case 18
+#data "<body><?module-handler data>"
+root
+  block <html>
+    block <body>
+
+#case 19
+#data "<body><?view-port>"
+root
+  block <html>
+    block <body>
+
+#case 20
+#data "<body><?view-port data>"
+root
+  block <html>
+    block <body>
+
+#case 21
+#data "<body><?config-v2>"
+root
+  block <html>
+    block <body>
+
+#case 22
+#data "<body><?config-v2 data>"
+root
+  block <html>
+    block <body>
+
+#case 23
+#data "<body><?x>"
+root
+  block <html>
+    block <body>
+
+#case 24
+#data "<body><?x data>"
+root
+  block <html>
+    block <body>
+
+#case 25
+#data "<body><?zz2op>"
+root
+  block <html>
+    block <body>
+
+#case 26
+#data "<body><?zz2op data>"
+root
+  block <html>
+    block <body>
+
+#case 27
+#data "<body><?xla->"
+root
+  block <html>
+    block <body>
+
+#case 28
+#data "<body><?xla- data>"
+root
+  block <html>
+    block <body>
+
+#case 29
+#data "<body><?a-b-c>"
+root
+  block <html>
+    block <body>
+
+#case 30
+#data "<body><?a-b-c data>"
+root
+  block <html>
+    block <body>
+
+#case 31
+#data "<body><?v-123>"
+root
+  block <html>
+    block <body>
+
+#case 32
+#data "<body><?v-123 data>"
+root
+  block <html>
+    block <body>
+
+#case 33
+#data "<body><?a0-b1-c2>"
+root
+  block <html>
+    block <body>
+
+#case 34
+#data "<body><?a0-b1-c2 data>"
+root
+  block <html>
+    block <body>
+
+#case 35
+#data "<body><?page-404>"
+root
+  block <html>
+    block <body>
+
+#case 36
+#data "<body><?page-404 data>"
+root
+  block <html>
+    block <body>
+
+#case 37
+#data "<body><?r2-d2>"
+root
+  block <html>
+    block <body>
+
+#case 38
+#data "<body><?r2-d2 data>"
+root
+  block <html>
+    block <body>
+
+#case 39
+#data "<body><?level-99>"
+root
+  block <html>
+    block <body>
+
+#case 40
+#data "<body><?level-99 data>"
+root
+  block <html>
+    block <body>
+
+#case 41
+#data "<body><?UPPERCASE>"
+root
+  block <html>
+    block <body>
+
+#case 42
+#data "<body><?UPPERCASE data>"
+root
+  block <html>
+    block <body>
+
+#case 43
+#data "<body><?all-KINDS-of-CaSeS>"
+root
+  block <html>
+    block <body>
+
+#case 44
+#data "<body><?all-KINDS-of-CaSeS data>"
+root
+  block <html>
+    block <body>
+
+#case 45
+#data "<body><?user_name>"
+root
+  block <html>
+    block <body>
+
+#case 46
+#data "<body><?user_name data>"
+root
+  block <html>
+    block <body>
+
+#case 47
+#data "<body><?S_S-S_S>"
+root
+  block <html>
+    block <body>
+
+#case 48
+#data "<body><?S_S-S_S data>"
+root
+  block <html>
+    block <body>
+
+#case 49
+#data "<body><?b_>"
+root
+  block <html>
+    block <body>
+
+#case 50
+#data "<body><?b_ data>"
+root
+  block <html>
+    block <body>
+
+#case 51
+#data "<body><?_prefix>"
+root
+  block <html>
+    block <body>
+
+#case 52
+#data "<body><?_prefix data>"
+root
+  block <html>
+    block <body>
+
+#case 53
+#data "<body><?_x132>"
+root
+  block <html>
+    block <body>
+
+#case 54
+#data "<body><?_x132 data>"
+root
+  block <html>
+    block <body>
+
+#case 55
+#data "<body><?_-_>"
+root
+  block <html>
+    block <body>
+
+#case 56
+#data "<body><?_-_ data>"
+root
+  block <html>
+    block <body>
+
+#case 57
+#data "<body><?_>"
+root
+  block <html>
+    block <body>
+
+#case 58
+#data "<body><?_ data>"
+root
+  block <html>
+    block <body>
+
+#case 59
+#data "<body><?A---------------->"
+root
+  block <html>
+    block <body>
+
+#case 60
+#data "<body><?A---------------- data>"
+root
+  block <html>
+    block <body>
+
+#case 61
+#data "<body><?z0123456789>"
+root
+  block <html>
+    block <body>
+
+#case 62
+#data "<body><?z0123456789 data>"
+root
+  block <html>
+    block <body>
+
+#case 63
+#data "<body><?m-0>"
+root
+  block <html>
+    block <body>
+
+#case 64
+#data "<body><?m-0 data>"
+root
+  block <html>
+    block <body>
+
+#case 65
+#data "<body><?xml>"
+root
+  block <html>
+    block <body>
+
+#case 66
+#data "<body><?xml-stylesheet>"
+root
+  block <html>
+    block <body>
+
+#case 67
+#data "<body><?XML>"
+root
+  block <html>
+    block <body>
+
+#case 68
+#data "<body><?XML-stylesheet>"
+root
+  block <html>
+    block <body>
+
+#case 69
+#data "<body><?xML>"
+root
+  block <html>
+    block <body>
+
+#case 70
+#data "<body><?xml-STYLesheet>"
+root
+  block <html>
+    block <body>
+
+#case 71
+#data "<body><?1st-place>"
+root
+  block <html>
+    block <body>
+
+#case 72
+#data "<body><?2-factor>"
+root
+  block <html>
+    block <body>
+
+#case 73
+#data "<body><?99-problems>"
+root
+  block <html>
+    block <body>
+
+#case 74
+#data "<body><?٥-star>"
+root
+  block <html>
+    block <body>
+
+#case 75
+#data "<body><?-prefix>"
+root
+  block <html>
+    block <body>
+
+#case 76
+#data "<body><?--internal>"
+root
+  block <html>
+    block <body>
+
+#case 77
+#data "<body><?-data->"
+root
+  block <html>
+    block <body>
+
+#case 78
+#data "<body><?-100>"
+root
+  block <html>
+    block <body>
+
+#case 79
+#data "<body><?·middle-dot>"
+root
+  block <html>
+    block <body>
+
+#case 80
+#data "<body><?͵greek-numeral>"
+root
+  block <html>
+    block <body>
+
+#case 81
+#data "<body><?\u{301}accent-start>"
+root
+  block <html>
+    block <body>
+
+#case 82
+#data "<body><?price$value>"
+root
+  block <html>
+    block <body>
+
+#case 83
+#data "<body><?user@domain>"
+root
+  block <html>
+    block <body>
+
+#case 84
+#data "<body><?tag#id>"
+root
+  block <html>
+    block <body>
+
+#case 85
+#data "<body><?a+b>"
+root
+  block <html>
+    block <body>
+
+#case 86
+#data "<body><?100%>"
+root
+  block <html>
+    block <body>
+
+#case 87
+#data "<body><?data.v1>"
+root
+  block <html>
+    block <body>
+
+#case 88
+#data "<body><?namespace:tag>"
+root
+  block <html>
+    block <body>
+
+#case 89
+#data "<body><?error!code>"
+root
+  block <html>
+    block <body>
+
+#case 90
+#data "<body><?x=y>"
+root
+  block <html>
+    block <body>
+
+#case 91
+#data "<body><?a<b>"
+root
+  block <html>
+    block <body>
+
+#case 92
+#data "<body><?true&false>"
+root
+  block <html>
+    block <body>
+
+#case 93
+#data "<body><?not|or>"
+root
+  block <html>
+    block <body>
+
+#case 94
+#data "<body><?lit$123456789>"
+root
+  block <html>
+    block <body>
+
+#case 95
+#data "<body><?lit$$4x>"
+root
+  block <html>
+    block <body>
+
+#case 96
+#data "<body><?🚀-launch>"
+root
+  block <html>
+    block <body>
+
+#case 97
+#data "<body><?error-⚠\u{fe0f}>"
+root
+  block <html>
+    block <body>
+
+#case 98
+#data "<body><?fire-🔥>"
+root
+  block <html>
+    block <body>
+
+#case 99
+#data "<body><?v1-✅>"
+root
+  block <html>
+    block <body>
+
+#case 100
+#data "<body><?start"
+root
+  block <html>
+    block <body>
+
+#case 101
+#data "<body><?start?"
+root
+  block <html>
+    block <body>
+
+#case 102
+#data "<body><?start "
+root
+  block <html>
+    block <body>
+
+#case 103
+#data "<body><?start data"
+root
+  block <html>
+    block <body>
+
+#case 104
+#data "<body><?start ? ?"
+root
+  block <html>
+    block <body>
+
+#case 105
+#data "<body><?"
+root
+  block <html>
+    block <body>
+
+#case 106
+#data "<body><? "
+root
+  block <html>
+    block <body>
+
+#case 107
+#data "<div><?something></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 108
+#data "<div><?something good></div>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 109
+#data "<table><?something></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 110
+#data "<table><tr><?something></tr></table>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 111
+#data "<script><?something></script>"
+root
+  block <html>
+    block <body>
+
+#case 112
+#data "<style><?something></style>"
+root
+  block <html>
+    block <body>
+
+#case 113
+#data "<?something>"
+root
+  block <html>
+    block <body>
+
+#case 114
+#data "<head><?something>"
+root
+  block <html>
+    block <body>
+
+#case 115
+#data "<html><?something><head>"
+root
+  block <html>
+    block <body>
+
+#case 116
+#data "<html><head></head><?something><body>"
+root
+  block <html>
+    block <body>
+
+#case 117
+#data "<html><body></body><?something>"
+root
+  block <html>
+    block <body>
+
+#case 118
+#data "<html><body></body></html><?something>"
+root
+  block <html>
+    block <body>
+
+#case 119
+#data "<body><template><?something></template>"
+root
+  block <html>
+    block <body>
+
+#case 120
+#data "<body><textarea><?something></textarea>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 121
+#data "<body><title><?something></title>"
+root
+  block <html>
+    block <body>
+
+#case 122
+#data "<noscript><?pi>"
+root
+  block <html>
+    block <body>
+
+#case 123
+#data "<template><?pi>"
+root
+  block <html>
+    block <body>
+
