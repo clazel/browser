@@ -27,8 +27,37 @@ pub struct Link(imp::Link);
 /// settings of `command` are used only where the platform can honour them
 /// (the program, its arguments and, on Unix, its environment).
 pub fn spawn(command: Command) -> io::Result<(Link, Box<dyn Read + Send>)> {
+    let _alone = alone();
+    spawn_held(command)
+}
+
+/// [`spawn`] for a caller that already holds [`alone`].
+fn spawn_held(command: Command) -> io::Result<(Link, Box<dyn Read + Send>)> {
     let (link, reader) = imp::spawn(command)?;
     Ok((Link(link), reader))
+}
+
+/// Held by every start in this module, for the whole of it: from clearing a
+/// passed socket's close-on-exec flag to closing the host's copy.
+static STARTING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// One start at a time in this process. A descriptor whose close-on-exec flag
+/// [`spawn_gpu`] or [`spawn_with_list`] has cleared is inherited by every
+/// program started until its copy is closed. Another start in that window, by
+/// another `Host` of the same process on another thread, would also inherit
+/// it. Measured with `browse_gpu.rs`'s tests, which run several hosts at once:
+/// renderers killed after commit, GPU processes whose `--list-fd` was not
+/// their socket, and lost frames, in 3 of 15 runs. Serial runs had none in 15.
+/// (A poisoned lock still serializes: the `()` it guards has no state to
+/// break.)
+///
+/// Public so that other code starting programs in a process that runs hosts
+/// (tests that run `clazel browse` beside in-process hosts) can start them
+/// under the same lock: such a program would inherit the descriptors too.
+pub fn alone() -> std::sync::MutexGuard<'static, ()> {
+    STARTING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// The renderer's end of a GPU process's list socket, for [`spawn_with_list`].
@@ -55,9 +84,10 @@ pub struct GpuStart {
 /// elsewhere it fails with `Unsupported`.
 ///
 /// Every program started while those flags are clear inherits the two
-/// descriptors, so the host must start nothing else between this call's
-/// clearing and its return, which closes its copies. The host shell spawns from
-/// one thread, so it does not.
+/// descriptors. So nothing else is started between this call's clearing and
+/// its return, which closes its copies: every start in this module holds one
+/// process-wide lock (`alone`). Programs started outside this module
+/// (`std::process::Command` elsewhere in the same process) are not covered.
 pub fn spawn_gpu(command: Command) -> io::Result<GpuStart> {
     pairing::spawn_gpu(command)
 }
@@ -89,15 +119,16 @@ mod pairing {
     use std::os::unix::net::UnixStream;
     use std::process::Command;
 
-    use super::{GpuStart, Link, ListEnd, spawn};
+    use super::{GpuStart, Link, ListEnd, alone, spawn_held};
 
     pub fn spawn_gpu(mut command: Command) -> io::Result<GpuStart> {
+        let _alone = alone();
         let (list, list_gpu) = UnixStream::pair()?;
         let (surface, surface_gpu) = UnixStream::pair()?;
         let list_fd = pass(&list_gpu)?;
         let surface_fd = pass(&surface_gpu)?;
         command.args(["--list-fd", &list_fd, "--surface-fd", &surface_fd]);
-        let started = spawn(command);
+        let started = spawn_held(command);
         drop((list_gpu, surface_gpu));
         let (link, frames) = started?;
         Ok(GpuStart {
@@ -112,8 +143,9 @@ mod pairing {
         mut command: Command,
         list: ListEnd,
     ) -> io::Result<(Link, Box<dyn Read + Send>)> {
+        let _alone = alone();
         command.args(["--list-fd", &pass(&list.0)?]);
-        let started = spawn(command);
+        let started = spawn_held(command);
         drop(list);
         started
     }

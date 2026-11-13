@@ -140,22 +140,36 @@ impl Drop for Fixture {
     }
 }
 
+/// Run `command` to completion, started under the renderer's start lock
+/// (`clazel_renderer::launch::alone`), so it inherits no descriptor an
+/// in-process host is passing to its own child at that moment.
+pub fn output(command: &mut Command) -> std::io::Result<std::process::Output> {
+    let child = {
+        let _alone = clazel_renderer::launch::alone();
+        command
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+    }?;
+    child.wait_with_output()
+}
+
 /// Build the binaries and write the stand-in's files under a name with `tag`.
 pub fn fixture(tag: &str) -> Result<Fixture, String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let built = Command::new(cargo)
-        .args([
-            "build",
-            "--quiet",
-            "-p",
-            "clazel-gpu",
-            "-p",
-            "clazel",
-            "-p",
-            "clazel-renderer",
-        ])
-        .status();
-    if !built.is_ok_and(|s| s.success()) {
+    let mut build = Command::new(cargo);
+    build.args([
+        "build",
+        "--quiet",
+        "-p",
+        "clazel-gpu",
+        "-p",
+        "clazel",
+        "-p",
+        "clazel-renderer",
+    ]);
+    let built = output(&mut build);
+    if !built.is_ok_and(|s| s.status.success()) {
         return Err("cannot build clazel-gpu, clazel and clazel-renderer".to_owned());
     }
     let bin = std::env::current_exe()

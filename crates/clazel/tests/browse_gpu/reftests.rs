@@ -91,14 +91,15 @@ impl Render for Headless {
         }
         let _ = std::fs::remove_file(&self.out);
         let url = format!("http://{}/{path}", self.server.addr);
-        let ran = Command::new(&self.clazel)
-            .args(["browse", "--headless"])
-            .arg(&self.out)
-            .args(["--size", "800x600", &url])
-            .env("CLAZEL_RENDERER", &self.renderer)
-            .env("CLAZEL_GPU", &self.gpu)
-            .output()
-            .map_err(|e| format!("{path}: browse: {e}"))?;
+        let ran = crate::gpu::output(
+            Command::new(&self.clazel)
+                .args(["browse", "--headless"])
+                .arg(&self.out)
+                .args(["--size", "800x600", &url])
+                .env("CLAZEL_RENDERER", &self.renderer)
+                .env("CLAZEL_GPU", &self.gpu),
+        )
+        .map_err(|e| format!("{path}: browse: {e}"))?;
         if !ran.status.success() {
             let err = String::from_utf8_lossy(&ran.stderr);
             let last = err.lines().last().unwrap_or("").to_owned();

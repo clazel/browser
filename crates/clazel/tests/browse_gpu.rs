@@ -102,14 +102,15 @@ fn headless(kind: &str) {
     });
     let out = f.dir.join(format!("out.{kind}"));
     let url = format!("http://{}/", server.addr);
-    let ran = Command::new(&f.clazel)
-        .args(["browse", "--headless"])
-        .arg(&out)
-        .args(["--size", "64x48", &url])
-        .env("CLAZEL_RENDERER", &f.script)
-        .env("CLAZEL_GPU", &f.gpu)
-        .env("CLAZEL_TEST_LIST", &f.list)
-        .output();
+    let ran = gpu::output(
+        Command::new(&f.clazel)
+            .args(["browse", "--headless"])
+            .arg(&out)
+            .args(["--size", "64x48", &url])
+            .env("CLAZEL_RENDERER", &f.script)
+            .env("CLAZEL_GPU", &f.gpu)
+            .env("CLAZEL_TEST_LIST", &f.list),
+    );
     let ok = ran.as_ref().is_ok_and(|o| o.status.success());
     let log = ran.map(|o| String::from_utf8_lossy(&o.stderr).into_owned());
     assert!(ok, "browse --headless failed: {log:?}");
@@ -309,13 +310,14 @@ fn headless_writes_a_real_pages_png() {
         times: 1,
     });
     let out = f.dir.join("page.png");
-    let ran = Command::new(&f.clazel)
-        .args(["browse", "--headless"])
-        .arg(&out)
-        .args(["--size", "200x120", &format!("http://{}/", server.addr)])
-        .env("CLAZEL_RENDERER", &f.renderer)
-        .env("CLAZEL_GPU", &f.gpu)
-        .output();
+    let ran = gpu::output(
+        Command::new(&f.clazel)
+            .args(["browse", "--headless"])
+            .arg(&out)
+            .args(["--size", "200x120", &format!("http://{}/", server.addr)])
+            .env("CLAZEL_RENDERER", &f.renderer)
+            .env("CLAZEL_GPU", &f.gpu),
+    );
     let ok = ran.as_ref().is_ok_and(|o| o.status.success());
     assert!(
         ok,
