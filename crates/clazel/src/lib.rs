@@ -113,9 +113,11 @@ impl Host {
     /// Give the kernel an event, after a `Tick`, and carry out its outputs.
     pub fn event(&mut self, e: EventRecord) {
         let time = self.clock.unwrap_or_else(clazel_net::now_1601);
-        self.step(EventRecord::Tick { time });
+        // The `Tick`'s own outputs too: its sweep fails timed-out sub-fetches (item 5.19).
+        let mut outputs = self.step(EventRecord::Tick { time });
+        outputs.extend(self.step(e));
         let (mut dead, mut failed) = (Vec::new(), Vec::new());
-        for output in self.step(e) {
+        for output in outputs {
             if let Some((conn, op)) = self.sub.op(&output) {
                 self.net_op(conn, op, &mut failed);
                 continue;
@@ -266,7 +268,12 @@ impl Host {
             }
             Ok(Ev::Gpu(id, GpuReport::Pixels(frame))) => self.gpus.keep(id, frame),
             Ok(_) => {}
-            Err(_) => return false,
+            Err(_) => {
+                // Idle, the kernel's clock still moves, so its timeouts fire.
+                let time = self.clock.unwrap_or_else(clazel_net::now_1601);
+                self.event(EventRecord::Tick { time });
+                return false;
+            }
         }
         true
     }

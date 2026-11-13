@@ -25,6 +25,8 @@ mod gpu;
 mod picture;
 #[path = "support/server.rs"]
 mod server;
+#[path = "browse_gpu/sheets.rs"]
+mod sheets;
 
 use std::process::Command;
 
