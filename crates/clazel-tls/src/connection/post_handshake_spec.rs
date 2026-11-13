@@ -42,7 +42,9 @@
 //!    key, since protected records are all there is after the handshake. An
 //!    alert received from the peer is `Fail(description)` alone: §6.2 asks
 //!    for no reply. An error raised while sending (a record that is too long)
-//!    is `Fail` alone, because the sending epoch is what failed.
+//!    is `Fail` alone, because the sending epoch is what failed. The end of
+//!    the transport is not such an error: before its `Fail` the record sent,
+//!    if any, is our `close_notify` (item 14).
 //! 6. **Alerts.** Each direction closes on its own (§6.1, which drops the
 //!    earlier versions' immediate answer to a `close_notify`). The peer's
 //!    `close_notify` ends the read side: the output ends in `PeerClosed` and
@@ -55,9 +57,7 @@
 //!    caller can tell it from a failure of ours, and never answered. Data that arrives after the
 //!    read side ended is ignored (§6.1: "Any data received after a closure
 //!    alert has been received MUST be ignored"): it is consumed with no
-//!    action. `Closed` (the transport ended) while the read side is open is
-//!    a truncation, `Fail(internal_error)` with no alert, because nothing can
-//!    be sent.
+//!    action. The end of the transport (`Closed`) is item 14.
 //! 7. **NewSessionTicket (§4.6.1) is parsed, then ignored.** It is read with
 //!    the parser of `spec.rs` (so a malformed one is `decode_error` or
 //!    `illegal_parameter`, as the parser gives) and has no further effect.
@@ -128,7 +128,27 @@
 //!     `traffic::spec::Cipher` with the key taken from the epoch in use. The
 //!     key schedule's `schedule::spec::Crypto` is a parameter too. Nothing
 //!     about either is assumed here.
-//! 14. RFC prose and equations have no numbered algorithm steps; the
+//! 14. **The end of the transport (`Input::Closed`).** It means only that the
+//!     peer's direction of the transport ended (no more bytes will arrive); it
+//!     is not the peer's `close_notify`. While the read side is open it is a
+//!     truncation ([`truncated`]): "If a transport-level close is received
+//!     prior to a "close_notify", the receiver cannot know that all the data
+//!     that was sent has been received" (§6.1). The output ends in
+//!     `Fail(internal_error)`, never in `PeerClosed` or `Close`: "the TLS
+//!     implementation MUST receive a "close_notify" alert before indicating
+//!     end-of-data to the application layer" (§6.1). The connection ends, its
+//!     write side included, so while the write side is open our `close_notify`
+//!     goes out first, exactly the record [`close`] would send at that point
+//!     (under the current client key and its next sequence number): "Each party
+//!     MUST send a "close_notify" alert before closing its write side of the
+//!     connection, unless it has already sent some error alert" (§6.1). It is
+//!     the one `Send` before a `Fail` that is not a fatal alert (item 5); the
+//!     `internal_error` is a local report and is never written. After our
+//!     `close_notify` (`WriteClosed`) nothing is sent, as the write side has
+//!     already closed with one; after an error alert the connection has ended.
+//!     Once the read side has ended (the server's `close_notify`, or the end of
+//!     the connection), `Closed` changes nothing.
+//! 15. RFC prose and equations have no numbered algorithm steps; the
 //!     comments cite the section instead.
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -155,7 +175,8 @@ pub enum Phase {
 pub enum Input {
     /// Bytes of the server's stream, starting at a record boundary.
     Bytes(Seq<u8>),
-    /// The transport closed.
+    /// The peer's direction of the transport ended: no more bytes will
+    /// arrive. Not the peer's `close_notify` (item 14).
     Closed,
 }
 
@@ -407,6 +428,20 @@ pub open spec fn close_connection(f: crate::traffic::spec::Cipher, s: State) -> 
     }
 }
 
+/// §6.1: the end of the transport before the server's `close_notify`, a
+/// truncation (item 14). While the write side is open our `close_notify`
+/// goes out first, the record [`close`] sends at this point; then the
+/// connection fails with `internal_error`, which is not written, and every
+/// key is dropped. After our `close_notify` nothing is sent.
+pub open spec fn truncated(f: crate::traffic::spec::Cipher, s: State) -> (Out, State) {
+    if can_write(s) {
+        (Out { wires: close_connection(f, s).0.wires, delivered: seq![], end: End::Fail(crate::spec::INTERNAL_ERROR) },
+            failed())
+    } else {
+        die(crate::spec::INTERNAL_ERROR)
+    }
+}
+
 /// §7.2: the client write secret becomes the next generation, and §7.3 a
 /// fresh key and IV with sequence number 0 are derived from it.
 pub open spec fn rotated_sender(c: crate::schedule::spec::Crypto, s: State) -> Result<State, u8> {
@@ -620,14 +655,16 @@ pub open spec fn receive(c: crate::schedule::spec::Crypto, f: crate::traffic::sp
 }
 
 /// The transducer: `step(state, input) -> (output, state, consumed)`.
-/// After the read side ended, bytes are consumed and ignored (§6.1).
+/// After the read side ended, bytes are consumed and ignored (§6.1), and the
+/// end of the transport changes nothing; before, it is [`truncated`]
+/// (item 14).
 pub open spec fn step(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, input: Input) -> (Out, State, nat) {
     match input {
         Input::Bytes(wire) => {
             if can_read(s) { receive(c, f, s, wire) } else { (quiet(), s, wire.len()) }
         },
         Input::Closed => {
-            if can_read(s) { consuming(die(crate::spec::INTERNAL_ERROR), 0) } else { (quiet(), s, 0) }
+            if can_read(s) { consuming(truncated(f, s), 0) } else { (quiet(), s, 0) }
         },
     }
 }

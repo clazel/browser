@@ -31,6 +31,22 @@
 //! - RFC 8446 §6.1: a received user_canceled is not an error alert and
 //!   closes nothing (it "SHOULD be followed by a close_notify"): bootstrap
 //!   goes on reading, as the dispatcher and the post-handshake transducer do.
+//! - RFC 8446 §6.1: the end of the transport ([`eof`]) means only that the
+//!   peer's direction of the transport ended, not that the peer closed the
+//!   connection. Before the final ServerHello and the peer's close_notify it
+//!   is a truncation ("If a transport-level close is received prior to a
+//!   "close_notify", the receiver cannot know that all the data that was sent
+//!   has been received"): `Fail(internal_error)`, never `Close`, since "the
+//!   TLS implementation MUST receive a "close_notify" alert before indicating
+//!   end-of-data to the application layer". This model writes no alert
+//!   itself; its caller (`connection::driver_spec` choice 4) answers this
+//!   `Fail` not with a fatal alert but with our close_notify, in plaintext as
+//!   before the handshake keys, because the end of the connection closes our
+//!   write side: "Each party MUST send a "close_notify" alert before closing
+//!   its write side of the connection, unless it has already sent some error
+//!   alert". The `internal_error` is a local report and is never written.
+//!   After the peer's close_notify (`Closed`), a failure or `Established`,
+//!   the end of the transport changes nothing.
 //! - Authentication, key derivation, socket I/O, early data and PSK are outside
 //!   this bootstrap model.
 #[allow(unused_imports)]
@@ -390,7 +406,10 @@ pub open spec fn feed(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: State,
     }
 }
 
-/// EOF before a final ServerHello is truncation; terminal states stay terminal.
+/// §6.1: the end of the transport before a final ServerHello and before the
+/// peer's close_notify is a truncation, `Fail(internal_error)` (its caller
+/// answers it with our close_notify; see the top of this file); terminal
+/// states stay terminal.
 pub open spec fn eof(s: State) -> (State, Action) {
     if s.mode == Mode::Failed || s.mode == Mode::Closed || s.mode == Mode::Established {
         (s, Action::None)

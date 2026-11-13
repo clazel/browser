@@ -224,4 +224,16 @@ pub open spec fn close_ensures(m: Models, before: super::driver_spec::Stage, sta
         super::driver_spec::Stage::Ended => out == unchanged(before, status),
     }
 }
+
+/// RFC 8446 §6.1: the end of the transport (the server's direction of it
+/// ended) is [`super::driver_spec::eof`], exactly (`driver_spec` choice 7).
+/// While a machine runs the connection ends as `Failed(_, Origin::Truncated)`,
+/// never `Closed`, after our close_notify, the record a close would send at
+/// that point, if our write side is open; on an `Ended` stage nothing
+/// changes. `status` is where the connection was before the call.
+pub open spec fn eof_ensures(m: Models, before: super::driver_spec::Stage, status: super::driver_spec::Status,
+    out: super::driver_spec::Step) -> bool
+{
+    out == super::driver_spec::eof(m.crypto, m.cipher, before, status)
+}
 } // verus!
