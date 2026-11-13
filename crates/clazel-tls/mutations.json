@@ -3143,12 +3143,12 @@
       "find": "client_secret: next, ..s",
       "replace": "client_secret: s.client_secret, ..s",
       "expect": "killed",
-      "reason": "The client traffic secret does not move after the reply to an update_requested KeyUpdate (RFC 8446 4.6.3, 7.2): lemma_key_update_requested_is_answered is false.",
+      "reason": "The client traffic secret does not move after the owed answer to an update_requested KeyUpdate (RFC 8446 4.6.3, 7.2): lemma_key_update_requested_is_answered is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
-        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).1.client_secret == super::post_handshake_examples::ready().client_secret"
+        "witness": "super::post_handshake_examples::answered().1.client_secret == super::post_handshake_examples::ready().client_secret"
       }
     },
     {
@@ -3157,26 +3157,26 @@
       "find": "Ok(s1) => if request == crate::spec::UPDATE_REQUESTED {",
       "replace": "Ok(s1) => if request == 7 {",
       "expect": "killed",
-      "reason": "An update_requested KeyUpdate gets no reply (RFC 8446 4.6.3): lemma_key_update_requested_is_answered is false.",
+      "reason": "An update_requested KeyUpdate owes no answer, so the next data goes out without one (RFC 8446 4.6.3): lemma_key_update_requested_is_answered is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
-        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires.len() == 0"
+        "witness": "super::post_handshake_examples::answered().0.wires.len() == 1"
       }
     },
     {
       "id": "ph-key-update-reply-asks-again",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "send_key_update(c, f, s1, crate::spec::UPDATE_NOT_REQUESTED)",
-      "replace": "send_key_update(c, f, s1, crate::spec::UPDATE_REQUESTED)",
+      "find": "match send_key_update(c, f, State { key_update_owed: false, ..s }, crate::spec::UPDATE_NOT_REQUESTED) {",
+      "replace": "match send_key_update(c, f, State { key_update_owed: false, ..s }, if s.key_update_owed { crate::spec::UPDATE_REQUESTED } else { crate::spec::UPDATE_NOT_REQUESTED }) {",
       "expect": "killed",
-      "reason": "The reply asks the server to update again, so two peers would update forever (RFC 8446 4.6.3: the reply is update_not_requested): lemma_key_update_answer_does_not_ask_again is false.",
+      "reason": "The owed answer asks the server to update again, so two peers would update forever (RFC 8446 4.6.3: the answer is update_not_requested): lemma_key_update_answer_does_not_ask_again is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_answer_does_not_ask_again()",
-        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires[0][9] == 1u8"
+        "witness": "super::post_handshake_examples::answered().0.wires[0][9] == 1u8"
       }
     },
     {
@@ -3205,6 +3205,62 @@
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_key_update_must_end_its_record()",
         "witness": "super::post_handshake_examples::ku_rx(0, false, super::post_handshake_examples::ready()).0.end == super::post_handshake_spec::End::Continue"
+      }
+    },
+    {
+      "id": "ph-key-update-answered-at-once",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "(quiet(), State { key_update_owed: true, ..s1 })",
+      "replace": "send_key_update(c, f, s1, crate::spec::UPDATE_NOT_REQUESTED)",
+      "expect": "killed",
+      "reason": "The answer to update_requested is sent in the step that receives it instead of being owed until the next Application Data record (RFC 8446 4.6.3), so several requests while silent draw several answers: lemma_key_update_requested_is_owed is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_owed()",
+        "witness": "super::post_handshake_examples::msg(super::post_handshake_examples::ku(1), true).0.wires.len() == 1"
+      }
+    },
+    {
+      "id": "ph-owed-answer-forgotten",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "} else if s.key_update_owed || needs_rekey(s) {",
+      "replace": "} else if needs_rekey(s) {",
+      "expect": "killed",
+      "reason": "The owed KeyUpdate is never sent: the next Application Data record goes out without it (RFC 8446 4.6.3: MUST send ... prior to sending its next Application Data record): lemma_key_update_requested_is_answered is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
+        "witness": "super::post_handshake_examples::answered().0.wires.len() == 1"
+      }
+    },
+    {
+      "id": "ph-owed-answer-not-discharged",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "State { key_update_owed: false, ..s }",
+      "replace": "s",
+      "expect": "killed",
+      "reason": "Sending the owed KeyUpdate does not discharge it, so every later data record is preceded by another KeyUpdate (RFC 8446 4.6.3: a single update): lemma_key_update_requested_is_answered is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_key_update_requested_is_answered()",
+        "witness": "super::post_handshake_examples::answered().1.key_update_owed"
+      }
+    },
+    {
+      "id": "ph-owed-answer-per-request",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "key_update_owed: true, ..s1",
+      "replace": "key_update_owed: !s1.key_update_owed, ..s1",
+      "expect": "killed",
+      "reason": "A second update_requested while one answer is owed cancels it (the owed answer is counted per request, modulo two), so the server asked twice gets no answer (RFC 8446 4.6.3: multiple KeyUpdates while silent draw a single update): lemma_two_requests_one_answer is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_two_requests_one_answer()",
+        "witness": "!super::post_handshake_examples::twice().1.key_update_owed"
       }
     },
     {
@@ -3294,8 +3350,8 @@
     {
       "id": "ph-no-rekey-at-last-number",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "} else if needs_rekey(s) {",
-      "replace": "} else if false {",
+      "find": "} else if s.key_update_owed || needs_rekey(s) {",
+      "replace": "} else if s.key_update_owed {",
       "expect": "killed",
       "reason": "A data record goes out on the last sequence number with no KeyUpdate, so the counter would wrap on the next one (RFC 8446 5.3): lemma_last_sequence_number_rekeys_example is false.",
       "module": "connection::post_handshake_examples",
@@ -3308,8 +3364,8 @@
     {
       "id": "ph-rekey-asks-peer",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "match send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED) {",
-      "replace": "match send_key_update(c, f, s, crate::spec::UPDATE_REQUESTED) {",
+      "find": "match send_key_update(c, f, State { key_update_owed: false, ..s }, crate::spec::UPDATE_NOT_REQUESTED) {",
+      "replace": "match send_key_update(c, f, State { key_update_owed: false, ..s }, if needs_rekey(s) { crate::spec::UPDATE_REQUESTED } else { crate::spec::UPDATE_NOT_REQUESTED }) {",
       "expect": "killed",
       "reason": "The KeyUpdate that precedes the last sequence number asks the peer to update too, which the rekey does not need (RFC 8446 4.6.3): lemma_last_sequence_number_rekeys_example is false.",
       "module": "connection::post_handshake_examples",
