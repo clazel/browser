@@ -3336,15 +3336,29 @@
     {
       "id": "ph-truncation-is-clean",
       "file": "src/connection/post_handshake_spec.rs",
-      "find": "consuming(die(crate::spec::INTERNAL_ERROR), 0)",
+      "find": "consuming(truncated(f, s), 0)",
       "replace": "(Out { wires: seq![], delivered: seq![], end: End::Close }, closed(), 0)",
       "expect": "killed",
-      "reason": "The transport closing before close_notify is an orderly close instead of a truncation (RFC 8446 6.1): lemma_transport_closing is false.",
+      "reason": "The end of the transport before close_notify is an orderly close (end-of-data) instead of a truncation (RFC 8446 6.1: MUST receive a close_notify before indicating end-of-data): lemma_transport_closing is false.",
       "module": "connection::post_handshake_examples",
       "certificate": {
         "file": "src/connection/post_handshake_certificates.rs",
         "lemma": "super::post_handshake_examples::lemma_transport_closing()",
         "witness": "super::post_handshake_spec::step(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(), super::post_handshake_examples::ready(), super::post_handshake_spec::Input::Closed).0.end == super::post_handshake_spec::End::Close"
+      }
+    },
+    {
+      "id": "ph-eof-no-close-notify",
+      "file": "src/connection/post_handshake_spec.rs",
+      "find": "(Out { wires: close_connection(f, s).0.wires, delivered: seq![], end: End::Fail(crate::spec::INTERNAL_ERROR) },",
+      "replace": "(Out { wires: seq![], delivered: seq![], end: End::Fail(crate::spec::INTERNAL_ERROR) },",
+      "expect": "killed",
+      "reason": "The end of the transport ends the connection without our close_notify while the write side is open (RFC 8446 6.1: MUST send a close_notify before closing the write side): lemma_transport_closing is false.",
+      "module": "connection::post_handshake_examples",
+      "certificate": {
+        "file": "src/connection/post_handshake_certificates.rs",
+        "lemma": "super::post_handshake_examples::lemma_transport_closing()",
+        "witness": "super::post_handshake_spec::step(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(), super::post_handshake_examples::ready(), super::post_handshake_spec::Input::Closed).0.wires.len() == 0"
       }
     },
     {
@@ -3554,7 +3568,49 @@
       "certificate": {
         "file": "src/connection/driver_certificates.rs",
         "lemma": "super::driver_examples::lemma_nothing_sent()",
-        "witness": "super::driver_spec::truncated(80).status == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::NotSent)"
+        "witness": "super::driver_spec::truncated(seq![], 80).status == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::NotSent)"
+      }
+    },
+    {
+      "id": "driver-eof-reports-closed",
+      "file": "src/connection/driver_spec.rs",
+      "find": "status: Status::Failed(description, Origin::Truncated) }",
+      "replace": "status: Status::Closed }",
+      "expect": "killed",
+      "reason": "The end of the transport before the server's close_notify is reported as Closed, end-of-data (RFC 8446 6.1: MUST receive a close_notify before indicating end-of-data): lemma_eof_truncates is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_eof_truncates()",
+        "witness": "super::driver_examples::eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).status == super::driver_spec::Status::Closed"
+      }
+    },
+    {
+      "id": "driver-hello-eof-no-close-notify",
+      "file": "src/connection/driver_spec.rs",
+      "find": "truncated(plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY), alert),",
+      "replace": "truncated(seq![], alert),",
+      "expect": "killed",
+      "reason": "The end of the transport during the Hello exchange ends the connection without our plaintext close_notify while the write side is open (RFC 8446 6.1: MUST send a close_notify before closing the write side): lemma_eof_sends_close_notify is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_eof_sends_close_notify()",
+        "witness": "super::driver_examples::eof_at(super::driver_spec::Stage::Hello(super::driver_examples::hello_waiting(), seq![]), super::driver_spec::Status::Handshaking).send.len() == 0"
+      }
+    },
+    {
+      "id": "driver-eof-close-notify-after-close",
+      "file": "src/connection/driver_spec.rs",
+      "find": "Stage::Ended => Step { send: seq![], deliver: seq![], stage: Stage::Ended, status },",
+      "replace": "Stage::Ended => Step { send: plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY), deliver: seq![], stage: Stage::Ended, status },",
+      "expect": "killed",
+      "reason": "The end of the transport sends a close_notify after the connection has ended, our own close_notify sent (RFC 8446 6.1: the close_notify says the sender will not send any more messages): lemma_eof_after_close is false.",
+      "module": "connection::driver_examples",
+      "certificate": {
+        "file": "src/connection/driver_certificates.rs",
+        "lemma": "super::driver_examples::lemma_eof_after_close()",
+        "witness": "super::driver_examples::eof_at(super::driver_spec::Stage::Ended, super::driver_spec::Status::Closed).send == seq![21u8, 3, 3, 0, 2, 1, 0]"
       }
     },
     {
@@ -3569,6 +3625,20 @@
         "file": "src/connection/dispatcher_certificates.rs",
         "lemma": "super::dispatcher_lemmas::lemma_flight_close_sends_close_notify()",
         "witness": "super::dispatcher_spec::closing(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state()).0 != super::dispatcher_spec::Action::Close(Some(seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]))"
+      }
+    },
+    {
+      "id": "dispatcher-eof-no-close-notify",
+      "file": "src/connection/dispatcher_spec.rs",
+      "find": "(Action::Fail(crate::spec::INTERNAL_ERROR, close_wire(ciphers, s)), failed())",
+      "replace": "(Action::Fail(crate::spec::INTERNAL_ERROR, None), failed())",
+      "expect": "killed",
+      "reason": "The end of the transport during the server's flight ends the connection without our close_notify while the write side is open (RFC 8446 6.1: MUST send a close_notify before closing the write side): lemma_eof_sends_close_notify is false.",
+      "module": "connection::dispatcher_lemmas",
+      "certificate": {
+        "file": "src/connection/dispatcher_certificates.rs",
+        "lemma": "super::dispatcher_lemmas::lemma_eof_sends_close_notify()",
+        "witness": "super::dispatcher_spec::eof(super::dispatcher_certificates::alert_ciphers(), super::dispatcher_certificates::sample_flight_state()).0 == super::dispatcher_spec::Action::Fail(80u8, None)"
       }
     },
     {
