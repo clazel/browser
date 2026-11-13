@@ -89,3 +89,96 @@ MiB of a 1,361 MiB bound; 64 MiB of `&amp;` (an ignored test), 675 MiB;
 a page cut at `MAX_NODES`, 1,327 of 3,480 MiB; the active formatting list
 reconstructed 2,000 times (604,305 nodes from 18,977 bytes, 57 MiB of
 attribute copies), 335 of 571 MiB; every other page under 20 MiB.
+
+## The graphical pipeline (phase-5.md item 5.20)
+
+`src/page/`, beside item 4.13's text path (`pipeline.rs`, `Display`), which
+stays as it is until item 5.26 (item 5.18's decision). `run_graphics(r, w,
+list, fonts)` reads the kernel's messages from `r`, sends `Title` and
+`Navigate` to `w`, and writes display lists to `list`, the GPU process's
+socket:
+
+1. to 4. item 4.13's content type, encodings, parse and base URL;
+   `text/plain` becomes one `pre` block and any other type a drawn notice;
+5. the style sources in tree order (item 5.8): `style` elements, links and
+   `style` attributes;
+6. the wait for linked sheets (`page/sheets.rs`): the seam for item 5.19.
+   Today every pending link fails at once, so pages render with their
+   `style` elements and attributes and the user agent sheet;
+7. to 10. the cascade (5.7) for the viewport in CSS pixels, boxes (5.13),
+   layout at the viewport's width (5.14, 5.15) in the fonts read before the
+   sandbox, paint (5.16) at the viewport's scale;
+11. per frame (`page/frame.rs`): the items that meet the viewport at the
+    scroll offset, offset by it, the glyph masks (5.17) the GPU process does
+    not hold yet, encoded (5.17a) and written as a 4-byte big-endian length
+    and the list;
+12. `Title` when the title changes.
+
+`Viewport` lays out and paints again; `Input` scrolls (clamped to the page)
+and paints again, or hit-tests a click against the links' regions and sends
+`Navigate`; a key does nothing yet. `src/page/mod.rs` lists every modelling
+choice; `src/page/state.rs` states each state and contract.
+
+### Decisions taken for 5.20
+
+- **A sibling module, not `pipeline.rs` itself**: the text path stays whole
+  for Phases 2 to 4's tests, and `page/` calls its steps 1 to 4.
+- **Fonts**: `--font PATH` arguments, read in `main.rs` before the sandbox
+  is entered; the first face of each file; the bytes live for the process.
+  With no face, layout uses em boxes and no text is drawn.
+- **`text/plain` and notices** are made into HTML documents (`<pre>` and
+  `<p>`, escaped) and drawn by the same pipeline with the user agent sheet.
+- **The viewport**: at most 8,192 device pixels a side (the GPU process's
+  limit); scale 2, or 1 for any other value; the CSS viewport is the device
+  one divided by the scale. Nothing is painted before a viewport, or for a 0
+  by 0 one.
+- **The title** is `document.title` (the first `title`, stripped and
+  collapsed), at most 1,024 characters, sent when it differs from the last
+  one sent.
+- **Scroll** is vertical, clamped to the page's height; a click goes to the
+  topmost link region; a key does nothing.
+- **Masks** stay live in the GPU process across lists under ids the
+  renderer gives, within 5.17a's limits (65,536 masks, 64 MiB): uploaded
+  once, freed only when a frame's new masks would pass a limit; a frame's
+  fills, clips and glyphs are capped at half of 5.17a's item limit, its
+  clip kept balanced.
+- **The socket's framing** (a 4-byte big-endian length, then a list) is
+  ours; the GPU process's reader is not built yet.
+
+### What waits
+
+- **The list socket**: the host must create a socket pair at the GPU
+  spawn and hand the renderer its end; adopting an inherited descriptor and
+  clearing its close-on-exec flag needs a new audited `clazel-sys` call
+  (phase-5.md, item 5.18's plan), outside this item. Until then the binary
+  runs the text path, and `run_graphics` is exercised by the tests with
+  in-memory sockets.
+- **Linked style sheets**: item 5.19's `FetchStyle` and `Style*` messages.
+  Wiring them is `SheetWait::start` with fetches, a request per pending
+  index, `SheetWait::answer` per reply, and rendering once ready.
+- **The GPU process's list reader** (it decodes and validates; the framing
+  above is what it will read).
+
+### Memory (item 5.20's terms, added to 4.13's above)
+
+Sizes measured on this build (aarch64, `std::mem::size_of`): a computed
+style 432 bytes, a box 120, a box fragment 96 (`Option` adds 8), a line box
+56, a placed glyph 24, a paint item 56, a 5.17a item 32, a style sheet
+source 216. With `N` nodes and `M` boxes (item 5.13 makes at most a
+principal box, a marker and wrappers per node; 5.26 measures `M`):
+
+| Term | Bound | At `N` = 4,000,000 |
+|------|-------|--------------------|
+| Style sheets (`style` element text is in the tree, counted above; parsed rules) | in proportion to their text | not separately bounded |
+| Linked sheets (item 5.19) | the body limit each, times 5.19's per-document count | waits for 5.19 |
+| The computed table (one record per node) | `432·N` | 1.7 GB |
+| Each box's style while laying out and painting (`flow::style::box_styles`, made by each pass) | `432·M` | `M` boxes |
+| The box tree, fragments and layout state | about `350·M` | `M` boxes |
+| Glyphs (one per character, in shaping, lines and paint) | `24·C` per copy, three copies | `C` characters ≤ the text's |
+| The display list | `56` per item, at most one background, four border strips, three decorations and a text item per box or run | in proportion to `M` and runs |
+| One frame's 5.17a items | at most 524,288 draws (32 bytes) and the new masks | 16 MiB and at most 64 MiB of coverage |
+
+Only the display list is kept between frames (with the document tree, the
+style sources and the mask table); the computed table, boxes and fragments
+are dropped once a viewport's list is painted. None of this is measured yet:
+item 5.26's hostile pages measure it, as 4.16's did for the text path.
