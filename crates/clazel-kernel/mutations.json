@@ -702,7 +702,7 @@
       "find": "(s, seq![Output::Paint { tab: r.tab, url: r.url,",
       "replace": "(s, seq![Output::Paint { tab: r.id, url: r.url,",
       "expect": "killed",
-      "module": "mutation_lemmas",
+      "module": "surface_rel",
       "reason": "A Paint names the renderer's id as its tab: another tab's content area would show it. ml_gpu_paint (what theorem_paint_only_own_tab and theorem_address_bar_integrity rest on) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
@@ -716,12 +716,12 @@
       "find": "} else if fits(viewport_of(s, r.tab), width, height) {",
       "replace": "} else if true {",
       "expect": "killed",
-      "module": "mutation_lemmas",
+      "module": "surface_rel",
       "reason": "A frame is painted whatever its size: a 1 by 1 frame is shown in a tab the host never sized. ml_gpu_paint (what theorem_paint_fits_viewport rests on) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_gpu_paint(ml_gpu_state(true, false), 1, ml_frame_ready(0))",
-        "witness": "from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1[0] is Paint && find_by_id(ml_gpu_state(true, false).renderers, 1, 0) == Some(0int) && ml_gpu_state(true, false).renderers.len() > 0 && !fits(viewport_of(ml_gpu_state(true, false), 0), 1, 1)"
+        "witness": "from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1[0] is Paint && find_by_id(ml_gpu_state(true, false).renderers, 1, 0) == Some(0int) && ml_gpu_state(true, false).renderers.len() > 0 && from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1[0]->Paint_width == 1 && from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1[0]->Paint_height == 1 && ml_gpu_state(true, false).renderers[0].tab == 0 && !fits(viewport_of(ml_gpu_state(true, false), 0), 1, 1)"
       }
     },
     {
@@ -730,7 +730,7 @@
       "find": "if !r.committed || buffer >= ring_size() {",
       "replace": "if buffer >= ring_size() {",
       "expect": "killed",
-      "module": "mutation_lemmas",
+      "module": "surface_rel",
       "reason": "A frame is painted before the renderer's first commit, under the URL its tab was opened at, which no commit sent. ml_gpu_paint (the committed URL of theorem_address_bar_integrity) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
@@ -744,7 +744,7 @@
       "find": "if !r.committed || buffer >= ring_size() {",
       "replace": "if !r.committed || buffer > ring_size() {",
       "expect": "killed",
-      "module": "mutation_lemmas",
+      "module": "surface_rel",
       "reason": "Buffer 3, one past the ring, is painted: the host would be asked to show a buffer it never allocated. ml_gpu_paint (theorem_paint_fits_viewport's ring) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
