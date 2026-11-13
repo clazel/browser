@@ -1351,18 +1351,14 @@ proof fn nothing_sent_after_close()
 }
 
 /// §6.1: "This does not have any effect on its read side of the connection."
+/// The facts are computed assertions only, with no `ensures` repeating them: the solver's
+/// step from the assertions to identical postconditions ran out of its resource limit once
+/// `connection::TransportEnd` was added.
 proof fn reading_after_write_closure()
-    ensures
-        // Data is still delivered.
-        (stream_result(conn_write_closed(), server_ap_record(0, ct_application_data(), seq![1u8, 2]))->Continue_0).application_data == seq![1u8, 2],
-        // A KeyUpdate asking for one back still updates the receive keys, and writes nothing.
-        (stream_result(conn_write_closed(), server_ap_record(0, ct_handshake(), write_key_update(update_requested())))->Continue_0).records_to_send
-            == Seq::<Seq<u8>>::empty(),
-        (conn_after(stream_result(conn_write_closed(), server_ap_record(0, ct_handshake(), write_key_update(update_requested())))).receive->Protected_0).secret
-            == next_application_traffic_secret(toy_primitives(), (conn_connected().receive->Protected_0).secret),
-        // An error alert from the peer still ends the connection.
-        stream_result(conn_write_closed(), server_ap_record(0, ct_alert(), seq![2u8, 40])) == Receive::PeerError(40),
 {
+    // Data is still delivered.
+    // A KeyUpdate asking for one back still updates the receive keys, and writes nothing.
+    // An error alert from the peer still ends the connection.
     assert((stream_result(conn_write_closed(), server_ap_record(0, ct_application_data(), seq![1u8, 2]))->Continue_0).application_data == seq![1u8, 2]) by (compute);
     assert((stream_result(conn_write_closed(), server_ap_record(0, ct_handshake(), write_key_update(update_requested())))->Continue_0).records_to_send
         == Seq::<Seq<u8>>::empty()) by (compute);
@@ -1551,9 +1547,9 @@ pub open spec fn ee_partial_record() -> (Receive, Seq<u8>) {
     receive_stream(toy_primitives(), conn_wait_ee(), server_hs_record(0, ct_handshake(), toy_ee()).subrange(0, 6))
 }
 
-/// After EncryptedExtensions, with the start of the Certificate buffered.
+/// After EncryptedExtensions (10 bytes), with the first 4 bytes of the Certificate buffered.
 pub open spec fn conn_wait_cert_cr_fragment() -> Connection {
-    conn_after(stream_result(conn_wait_ee(), server_hs_record(0, ct_handshake(), toy_flight().subrange(0, 10))))
+    conn_after(stream_result(conn_wait_ee(), server_hs_record(0, ct_handshake(), toy_flight().subrange(0, 14))))
 }
 
 /// CONNECTED with the first 8 bytes of an application data record pending.
