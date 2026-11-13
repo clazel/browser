@@ -259,6 +259,11 @@ fn first_base_href(doc: &Arena) -> Option<Vec<u32>> {
     None
 }
 
+/// [`parse_url`], for the graphical pipeline (`page`).
+pub(crate) fn parse_url_pub(input: &[u32], base: Option<&ParsedUrl>) -> Option<ParsedUrl> {
+    parse_url(input, base)
+}
+
 /// Parse `input` against `base` (URL §4.4 basic URL parser): the URL, or
 /// `None` on failure. Input with a surrogate is failure (the parser takes
 /// scalar values only; decoders never produce one).

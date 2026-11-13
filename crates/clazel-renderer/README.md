@@ -122,9 +122,17 @@ socket:
    `text/plain` becomes one `pre` block and any other type a drawn notice;
 5. the style sources in tree order (item 5.8): `style` elements, links and
    `style` attributes;
-6. the wait for linked sheets (`page/sheets.rs`): the seam for item 5.19.
-   Today every pending link fails at once, so pages render with their
-   `style` elements and attributes and the user agent sheet;
+6. the wait for linked sheets (`page/sheets.rs`, item 5.19): a
+   `FetchStyle` for each `<link rel=stylesheet>` whose `media` matches the
+   viewport (800 by 600 before the first `Viewport`), with its `href` as
+   written (the kernel resolves it against the document's URL); nothing is
+   painted until every one is answered (`StyleResponse`, `StyleBody`,
+   `StyleEnd`, or `StyleFailed`, which the kernel also sends after 60
+   seconds without an answer). Each answer is HTML §4.6.8.23's "process this
+   type of linked resource" (`Sources::link_loaded`: the content type, the
+   quirks-mode same-origin exception, decoding with the response's charset
+   or the `link`'s or the document's encoding per CSS Syntax 3 §3.2, and
+   parsing); a failed sheet is left out;
 7. to 10. the cascade (5.7) for the viewport in CSS pixels, boxes (5.13),
    layout at the viewport's width (5.14, 5.15) in the fonts read before the
    sandbox, paint (5.16) at the viewport's scale;
@@ -173,9 +181,13 @@ choice; `src/page/state.rs` states each state and contract.
   host clears close-on-exec with `clazel_sys::macos::clear_close_on_exec` and
   passes `--list-fd`); Linux needs the same `clazel-sys` call, and neither has a
   GPU process yet.
-- **Linked style sheets**: item 5.19's `FetchStyle` and `Style*` messages.
-  Wiring them is `SheetWait::start` with fetches, a request per pending
-  index, `SheetWait::answer` per reply, and rendering once ready.
+- **A sheet's status**: `StyleResponse` (item 5.19) carries the content
+  type but no status, so any final response counts as HTML's "success";
+  a 404 page served as `text/css` (or as anything, same-origin, in quirks
+  mode) is applied. The kernel would have to send the status, or fail
+  non-ok responses, for this to be exact.
+- **`<base href>` and sheets**: the kernel resolves a sheet's `href` against
+  the document's URL, not its base URL.
 - **Keys**: a key `Input` still does nothing; the host (5.23) sends Space,
   Page Up/Down and Up/Down as scrolls instead.
 
@@ -190,7 +202,7 @@ principal box, a marker and wrappers per node; 5.26 measures `M`):
 | Term | Bound | At `N` = 4,000,000 |
 |------|-------|--------------------|
 | Style sheets (`style` element text is in the tree, counted above; parsed rules) | in proportion to their text | not separately bounded |
-| Linked sheets (item 5.19) | the body limit each, times 5.19's per-document count | waits for 5.19 |
+| Linked sheets (item 5.19): the bodies being received, and each sheet's text while it is parsed | at most `MAX_BODY` (64 MiB) each; at most 8 in flight at once and 64 per document (the kernel's limits); the parsed rules are kept with the sources | 512 MiB of bodies in flight at most |
 | The computed table (one record per node) | `432·N` | 1.7 GB |
 | Each box's style while laying out and painting (`flow::style::box_styles`, made by each pass) | `432·M` | `M` boxes |
 | The box tree, fragments and layout state | about `350·M` | `M` boxes |

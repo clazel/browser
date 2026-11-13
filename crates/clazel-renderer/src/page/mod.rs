@@ -162,6 +162,10 @@ pub struct Page {
     arena: Arena,
     base: Option<ParsedUrl>,
     wait: SheetWait,
+    /// The document's URL, against which the kernel resolves a sheet's
+    /// `href`, and its encoding (a sheet's fallback, CSS Syntax 3 §3.2).
+    url: Option<ParsedUrl>,
+    encoding: Encoding,
     /// HTML's `document.title`, cut to `MAX_TITLE` characters.
     pub title: String,
     laid: Option<Laid>,
@@ -237,7 +241,7 @@ pub fn title_of(arena: &Arena) -> String {
 impl Page {
     /// Steps 1 to 6 for the document committed at `url` with
     /// `content_type` and `body` (the module's pipeline).
-    pub fn load(url: &[u8], content_type: &[u8], body: &[u8]) -> Page {
+    pub fn load(url: &[u8], content_type: &[u8], body: &[u8], view: Option<View>) -> Page {
         let url_cps = code_points(url);
         let url_text = String::from_utf8_lossy(url).into_owned();
         let (supplied, computed) = computed_type(content_type, body);
@@ -283,18 +287,63 @@ impl Page {
         };
         let base = base_url(&arena, &url_cps);
         let title = title_of(&arena);
-        // Step 6: no fetch yet (item 5.19); the device only decides which
-        // links would block.
-        let wait = SheetWait::start(collect(&arena), Device::screen(0, 0), false, encoding);
+        // Step 6: a `FetchStyle` for each link whose `media` matches the
+        // viewport (800 by 600 before the first `Viewport`), which renders
+        // nothing until it is answered (`sheets.rs`).
+        let (cw, ch) = view.map_or((800, 600), View::css);
+        let wait = SheetWait::start(collect(&arena), Device::screen(cw, ch), true, encoding);
+        let document_url = crate::pipeline::parse_url_pub(&url_cps, None);
         Page {
             arena,
             base,
             wait,
+            url: document_url,
+            encoding,
             title,
             laid: None,
             view: None,
             scroll: 0,
         }
+    }
+
+    /// The `FetchStyle`s to send: each pending link's index (its request
+    /// id) and its `href` as the document wrote it, UTF-8 (the kernel
+    /// resolves it against the document's URL).
+    pub fn requests(&self) -> Vec<(u64, Vec<u8>)> {
+        self.wait
+            .pending
+            .iter()
+            .filter_map(|&i| {
+                let href = self.wait.href(i)?;
+                Some((u64::try_from(i).ok()?, string_of(&href)?.into_bytes()))
+            })
+            .collect()
+    }
+
+    /// The kernel's answer to request `request`: the response's content
+    /// type and body, or `None` for `StyleFailed`. Returns whether the page
+    /// became ready by it.
+    pub fn answer(&mut self, request: u64, response: Option<(&[u8], &[u8])>) -> bool {
+        let Ok(index) = usize::try_from(request) else {
+            return false;
+        };
+        let was = self.ready();
+        let same_origin = self
+            .wait
+            .href(index)
+            .and_then(|h| crate::pipeline::parse_url_pub(&h, self.url.as_ref()))
+            .zip(self.url.as_ref())
+            .is_some_and(|(a, b)| sheets::same_origin(&a, b));
+        let response = response.map(|(content_type, body)| clazel_style::sources::Response {
+            content_type: (!content_type.is_empty()).then_some(content_type),
+            same_origin,
+            // `StyleResponse` carries no status: any final response counts as
+            // "success" (README, what waits).
+            ok: true,
+            body,
+        });
+        self.wait.answer(index, response, self.encoding);
+        !was && self.ready()
     }
 
     /// Whether the page waits for no style sheet (step 6).

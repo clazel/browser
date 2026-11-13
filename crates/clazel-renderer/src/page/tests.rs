@@ -415,13 +415,18 @@ fn the_sheet_wait() {
 /// pipeline's layout at 800 by 600 to client rectangles (item 5.25's
 /// geometry dump): its outer table is 85% of the body's content width or
 /// its min-content width, whichever is larger; the dump reads back from its JSON, and compared with
-/// itself every rectangle is within the tolerance. (Its sheet is linked, so
-/// it waits for item 5.19; the page is laid out without it.)
+/// itself every rectangle is within the tolerance. Its linked sheet is
+/// requested and answered with the fixture's `site.css`.
 #[test]
 fn the_fixture_to_client_rects() {
     use clazel_layout::rects::{Meta, RectKind, compare, from_json, to_json};
     let html = include_str!("../../../clazel/tests/fixtures/hn/index.html");
-    let page = super::Page::load(b"http://fixture.test/", b"text/html", html.as_bytes());
+    let css = include_str!("../../../clazel/tests/fixtures/hn/site.css");
+    let mut page = super::Page::load(b"http://fixture.test/", b"text/html", html.as_bytes(), None);
+    // Its one linked sheet is requested, and answered here.
+    assert_eq!(page.requests(), vec![(0, b"site.css?v=7".to_vec())]);
+    assert!(!page.ready());
+    assert!(page.answer(0, Some((b"text/css", css.as_bytes()))));
     let Some(view) = super::View::new(800, 600, 1) else {
         return;
     };
@@ -430,16 +435,18 @@ fn the_fixture_to_client_rects() {
     let frame = rects
         .iter()
         .find(|r| r.kind == RectKind::Element && r.name == "table");
-    // §3.9.1: the larger of 85% of the body's 784px (666.40625px) and the
-    // table's min-content width. With no sheet the remark form's
-    // `textarea cols=80` is wider than 85%, and the outer table has no
-    // spacing, padding or border, so it is exactly the textarea's width.
+    // §3.9.1: the largest of 85% of the body's 784px (666.40625px), the
+    // sheet's `#frame { min-width: 796px }` and the table's min-content
+    // width (with no spacing, padding or border, the 80-column textarea's).
     let textarea = rects
         .iter()
         .find(|r| r.kind == RectKind::Element && r.name == "textarea")
         .map_or(0, |r| r.rect.width);
-    assert!(textarea > 42_650);
-    assert_eq!(frame.map(|r| r.rect.width), Some(textarea.max(42_650)));
+    assert_eq!(
+        frame.map(|r| r.rect.width),
+        Some(textarea.max(42_650).max(796 * 64)),
+        "textarea {textarea}"
+    );
     let texts = rects.iter().filter(|r| r.kind == RectKind::Text).count();
     assert!(texts > 50, "{texts}");
     let meta = Meta {
@@ -463,4 +470,95 @@ fn the_fixture_to_client_rects() {
         ),
         (rects.len(), 0, 0, 0)
     );
+}
+
+/// A linked sheet is render-blocking: `FetchStyle` with the `href` as
+/// written, no list until it is answered, then the page with its rules (the
+/// sheet's green body); a failed sheet renders the page without it (white).
+#[test]
+fn linked_sheets_block_rendering_until_answered() -> Result<(), RunError> {
+    let page = "<!DOCTYPE html><link rel=stylesheet href='s.css?x'><body style='margin:0'>";
+    let canvas = |s: &Sent| {
+        s.lists.last().and_then(|l| {
+            l.iter().find_map(|i| match i {
+                ExecItem::FillRect { colour, .. } => Some(*colour),
+                _ => None,
+            })
+        })
+    };
+    // Answered: the response, the body in two parts, the end.
+    let mut input = vec![viewport(40, 20)];
+    input.extend(commit(page, "text/html"));
+    input.push(Msg::StyleResponse {
+        request: 0,
+        content_type: b"text/css; charset=utf-8".to_vec(),
+    });
+    input.push(Msg::StyleBody {
+        request: 0,
+        bytes: b"body { backgr".to_vec(),
+    });
+    input.push(Msg::StyleBody {
+        request: 0,
+        bytes: b"ound: #00ff00 }".to_vec(),
+    });
+    input.push(Msg::StyleEnd { request: 0 });
+    let s = run(&input)?;
+    assert!(s.kernel.contains(&Msg::FetchStyle {
+        request: 0,
+        url: b"s.css?x".to_vec()
+    }));
+    // One list: the one painted when the sheet ended.
+    assert_eq!(s.lists.len(), 1);
+    assert!(all_valid(&s));
+    assert_eq!(canvas(&s), Some(0xff00_ff00));
+    // Failed: painted without it.
+    let mut input = vec![viewport(40, 20)];
+    input.extend(commit(page, "text/html"));
+    input.push(Msg::StyleFailed { request: 0 });
+    let s = run(&input)?;
+    assert_eq!(s.lists.len(), 1);
+    assert_eq!(canvas(&s), Some(0xffff_ffff));
+    // Unanswered: nothing painted, even for a new viewport.
+    let mut input = commit(page, "text/html");
+    input.push(viewport(40, 20));
+    let s = run(&input)?;
+    assert!(s.lists.is_empty());
+    Ok(())
+}
+
+/// A sheet served as another type is not applied in no-quirks mode, and is
+/// in quirks mode when same-origin (HTML §4.6.8.23's quirk); a
+/// cross-origin one never is.
+#[test]
+fn the_stylesheet_content_type_quirk() -> Result<(), RunError> {
+    let green = |doctype: &str, href: &str| -> Result<bool, RunError> {
+        let page = format!("{doctype}<link rel=stylesheet href='{href}'><body style='margin:0'>");
+        let mut input = vec![viewport(40, 20)];
+        input.extend(commit(&page, "text/html"));
+        input.push(Msg::StyleResponse {
+            request: 0,
+            content_type: b"text/plain".to_vec(),
+        });
+        input.push(Msg::StyleBody {
+            request: 0,
+            bytes: b"body { background: #00ff00 }".to_vec(),
+        });
+        input.push(Msg::StyleEnd { request: 0 });
+        let s = run(&input)?;
+        Ok(s.lists.last().is_some_and(|l| {
+            l.iter().any(|i| {
+                matches!(
+                    i,
+                    ExecItem::FillRect {
+                        colour: 0xff00_ff00,
+                        ..
+                    }
+                )
+            })
+        }))
+    };
+    assert!(!green("<!DOCTYPE html>", "s.css")?);
+    assert!(green("", "s.css")?);
+    assert!(!green("", "http://other.example/s.css")?);
+    Ok(())
 }

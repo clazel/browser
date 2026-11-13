@@ -211,6 +211,30 @@ fn send_list<L: Write>(
     Ok(())
 }
 
+/// A sheet of the current page answered (a body, or `None` for a failure):
+/// if that makes the page ready and there is a viewport, lay it out and
+/// paint it.
+fn sheet_answered<L: Write>(
+    current: &mut Option<page::Page>,
+    request: u64,
+    response: Option<(&[u8], &[u8])>,
+    view: Option<page::View>,
+    fonts: &page::fonts::Fonts,
+    list: &mut L,
+    cache: &mut page::frame::MaskCache,
+) -> Result<(), RunError> {
+    let Some(p) = current.as_mut() else {
+        return Ok(());
+    };
+    if p.answer(request, response)
+        && let Some(v) = view
+    {
+        p.lay_out(v, fonts);
+        send_list(list, p, v, fonts, cache)?;
+    }
+    Ok(())
+}
+
 /// The graphical renderer (phase-5.md item 5.20, `page`): take committed
 /// documents and the kernel's `Viewport` and `Input`; for a document, send
 /// `Title` to the kernel (`w`) when the title changes and write a display
@@ -227,6 +251,10 @@ pub fn run_graphics<R: Read, W: Write, L: Write>(
     let mut view: Option<page::View> = None;
     let mut cache = page::frame::MaskCache::default();
     let mut shown_title: Option<String> = None;
+    // Style sheet answers being received (item 5.19): request id to the
+    // response's content type and the body so far.
+    let mut sheets: std::collections::HashMap<u64, (Vec<u8>, Vec<u8>)> =
+        std::collections::HashMap::new();
     loop {
         let m = match read_message(r) {
             Ok(m) => m,
@@ -245,10 +273,16 @@ pub fn run_graphics<R: Read, W: Write, L: Write>(
                     0 => {}
                     _ => return Err(RunError::Protocol("unknown document kind")),
                 }
-                // The previous page and its lists are gone first.
+                // The previous page, its lists and its sheets are gone first.
                 drop(current.take());
-                let mut p = page::Page::load(&url, &content_type, &body);
+                sheets.clear();
+                let mut p = page::Page::load(&url, &content_type, &body, view);
                 drop(body);
+                // HTML's render-blocking style sheets: a `FetchStyle` each;
+                // the page is painted once every one is answered.
+                for (request, url) in p.requests() {
+                    send(w, &Msg::FetchStyle { request, url })?;
+                }
                 if shown_title.as_deref() != Some(p.title.as_str()) {
                     send(
                         w,
@@ -265,6 +299,46 @@ pub fn run_graphics<R: Read, W: Write, L: Write>(
                 current = Some(p);
             }
             Msg::Error { .. } => {}
+            Msg::StyleResponse {
+                request,
+                content_type,
+            } => {
+                sheets.insert(request, (content_type, Vec::new()));
+            }
+            Msg::StyleBody { request, bytes } => {
+                let over = match sheets.get_mut(&request) {
+                    Some((_, body)) if body.len().saturating_add(bytes.len()) <= MAX_BODY => {
+                        body.extend_from_slice(&bytes);
+                        false
+                    }
+                    Some(_) => true,
+                    None => false,
+                };
+                // A sheet over the body limit is failed (README, memory).
+                if over {
+                    sheets.remove(&request);
+                    sheet_answered(&mut current, request, None, view, fonts, list, &mut cache)?;
+                }
+            }
+            Msg::StyleEnd { request } => {
+                let answer = sheets.remove(&request);
+                let response = answer.as_ref().map(|(t, b)| (t.as_slice(), b.as_slice()));
+                if response.is_some() {
+                    sheet_answered(
+                        &mut current,
+                        request,
+                        response,
+                        view,
+                        fonts,
+                        list,
+                        &mut cache,
+                    )?;
+                }
+            }
+            Msg::StyleFailed { request } => {
+                sheets.remove(&request);
+                sheet_answered(&mut current, request, None, view, fonts, list, &mut cache)?;
+            }
             Msg::Viewport {
                 width,
                 height,

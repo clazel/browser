@@ -7,18 +7,39 @@
 //! linked resource", whose failure leaves no sheet) and §4.2.6 (`media`),
 //! through `clazel-style`'s `Sources` (item 5.8).
 //!
-//! Contracts: `state.rs`. Today nothing is fetched: [`SheetWait::start`]
-//! with `fetch` false answers every pending link as a failed fetch, so the
-//! wait starts ready and the page renders with its `style` elements and
-//! attributes only. Wiring 5.19 is: call `start` with `fetch` true, send a
-//! `FetchStyle` for each index in `pending`, call [`SheetWait::answer`] for
-//! each reply, and render when [`SheetWait::ready`].
+//! Contracts: `state.rs`. `Page::load` starts the wait with fetches; the
+//! renderer (`crate::run_graphics`) sends a `FetchStyle` for each index in
+//! `pending`, gives each `StyleResponse`, `StyleBody` and `StyleEnd` (or
+//! `StyleFailed`) to [`SheetWait::answer`], and renders when
+//! [`SheetWait::ready`]. A sheet that never answers is failed by the kernel's
+//! timeout (`StyleFailed` after 60 seconds, item 5.19), so the page renders
+//! without it.
 
 use clazel_encoding::labels::spec::Encoding;
 use clazel_style::sources::media::evaluate;
 use clazel_style::sources::{Device, Response, Sources};
 
+use clazel_style::sources::Owner;
+use clazel_url::url::record::ParsedUrl;
+
 use super::state::SheetWait;
+
+/// Whether `a` and `b` are same origin (HTML §7.1.1): both tuple origins
+/// (`http`, `https`, `ws`, `wss`, `ftp`) with equal schemes, hosts and ports.
+pub fn same_origin(a: &ParsedUrl, b: &ParsedUrl) -> bool {
+    let tuple = |s: &[u32]| {
+        ["http", "https", "ws", "wss", "ftp"]
+            .iter()
+            .any(|t| s.iter().copied().eq(t.chars().map(u32::from)))
+    };
+    tuple(&a.scheme)
+        && a.scheme == b.scheme
+        && a.port == b.port
+        && match (&a.host, &b.host) {
+            (Some(x), Some(y)) => x.serialize() == y.serialize(),
+            _ => false,
+        }
+}
 
 /// A failed fetch, as `link_loaded` reads one: "success" is false.
 const FAILED: Response<'static> = Response {
@@ -65,6 +86,14 @@ impl SheetWait {
         self.pending.remove(at);
         self.sources
             .link_loaded(index, response.unwrap_or(FAILED), encoding);
+    }
+
+    /// The `href` of link `index`, if it is one.
+    pub fn href(&self, index: usize) -> Option<Vec<u32>> {
+        match &self.sources.sheets.get(index)?.owner {
+            Owner::Link(l) => Some(l.href.clone()),
+            Owner::Style => None,
+        }
     }
 
     /// No request is unanswered: the page may render.
