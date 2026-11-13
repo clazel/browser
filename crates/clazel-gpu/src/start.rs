@@ -102,7 +102,7 @@ impl Refusal {
 /// Item 5.17c, the blocklist paragraph: the answer the GPU process gives for
 /// `adapter`, started by `launch`, with the blocklist `table` (the shipped one in the
 /// GPU process; tests pass others). It reads no list.
-pub fn admit(adapter: &Adapter, launch: Launch, table: &[u8]) -> Result<Ready, Refusal> {
+pub fn answer(adapter: &Adapter, launch: Launch, table: &[u8]) -> Result<Ready, Refusal> {
     match launch.mode {
         Mode::Software if adapter.software => Ok(Ready { software: true }),
         Mode::Software => Err(Refusal::NotSoftware),
@@ -120,7 +120,7 @@ pub fn admit(adapter: &Adapter, launch: Launch, table: &[u8]) -> Result<Ready, R
 
 #[cfg(test)]
 mod tests {
-    use super::{Check, Launch, Mode, Ready, Refusal, admit};
+    use super::{Check, Launch, Mode, Ready, Refusal, answer};
     use crate::blocklist::{APPLE, Adapter, Api, Version};
 
     const TABLE: &[u8] = b"vulkan 0x10de * 470-470.57 https://e/1 hangs";
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn a_listed_device_is_refused_as_gpu_refused() {
-        let got = admit(&nvidia(false), Launch::HARDWARE, TABLE);
+        let got = answer(&nvidia(false), Launch::HARDWARE, TABLE);
         assert!(matches!(&got, Err(Refusal::Blocked(e)) if e.line == 1));
         assert!(got.is_err_and(|r| r.is_gpu_refused()));
     }
@@ -147,7 +147,7 @@ mod tests {
         let mut other = nvidia(false);
         other.driver = Some(Version([471, 0, 0, 0]));
         assert_eq!(
-            admit(&other, Launch::HARDWARE, TABLE),
+            answer(&other, Launch::HARDWARE, TABLE),
             Ok(Ready { software: false })
         );
     }
@@ -159,19 +159,19 @@ mod tests {
             check: Check::Ignore,
         };
         assert_eq!(
-            admit(&nvidia(false), launch, TABLE),
+            answer(&nvidia(false), launch, TABLE),
             Ok(Ready { software: false })
         );
         // Even an unreadable one.
         assert_eq!(
-            admit(&nvidia(false), launch, b"\0"),
+            answer(&nvidia(false), launch, b"\0"),
             Ok(Ready { software: false })
         );
     }
 
     #[test]
     fn an_unreadable_table_refuses() {
-        let got = admit(&nvidia(false), Launch::HARDWARE, b"opengl");
+        let got = answer(&nvidia(false), Launch::HARDWARE, b"opengl");
         assert!(matches!(&got, Err(Refusal::Unreadable(_))));
         assert!(got.is_err_and(|r| r.is_gpu_refused()));
     }
@@ -179,18 +179,18 @@ mod tests {
     #[test]
     fn a_software_adapter_is_never_checked() {
         assert_eq!(
-            admit(&nvidia(true), Launch::HARDWARE, b"\0"),
+            answer(&nvidia(true), Launch::HARDWARE, b"\0"),
             Ok(Ready { software: true })
         );
         assert_eq!(
-            admit(&nvidia(true), Launch::SOFTWARE, TABLE),
+            answer(&nvidia(true), Launch::SOFTWARE, TABLE),
             Ok(Ready { software: true })
         );
     }
 
     #[test]
     fn software_on_a_hardware_adapter_is_a_wrong_start() {
-        let got = admit(&nvidia(false), Launch::SOFTWARE, b"");
+        let got = answer(&nvidia(false), Launch::SOFTWARE, b"");
         assert_eq!(got, Err(Refusal::NotSoftware));
         assert!(got.is_err_and(|r| !r.is_gpu_refused()));
     }
@@ -205,7 +205,7 @@ mod tests {
             software: false,
         };
         assert_eq!(
-            admit(
+            answer(
                 &metal,
                 Launch::HARDWARE,
                 b"metal 0x106b * 1-99 https://e/1 r"
@@ -213,7 +213,7 @@ mod tests {
             Ok(Ready { software: false })
         );
         assert!(matches!(
-            admit(&metal, Launch::HARDWARE, b"metal 0x106b * * https://e/1 r"),
+            answer(&metal, Launch::HARDWARE, b"metal 0x106b * * https://e/1 r"),
             Err(Refusal::Blocked(_))
         ));
     }

@@ -119,7 +119,7 @@ impl<B: Backend> Gpu<B> {
         launch: start::Launch,
         table: &[u8],
     ) -> Result<(Gpu<B>, start::Ready), start::Refusal> {
-        let ready = start::admit(&backend.adapter(), launch, table)?;
+        let ready = start::answer(&backend.adapter(), launch, table)?;
         let gpu = Gpu {
             validator: Validator::empty(),
             atlas: atlas::Atlas::new(),
