@@ -1996,17 +1996,49 @@ pub open spec fn live_subfetches(fs: Seq<SubFetch>, id: nat, lock: clazel_origin
     }
 }
 
-/// The index of the sub-fetch of renderer `id` with serial `serial`, from
-/// `i`.
-pub open spec fn find_subfetch(fs: Seq<SubFetch>, id: nat, serial: nat, i: nat) -> Option<int>
-    decreases fs.len() - i,
+/// Whether `f` is sub-fetch `serial` of renderer `id` locked to `lock`.
+pub open spec fn subfetch_is(f: SubFetch, id: nat, lock: clazel_origin::spec::Origin, serial: nat) -> bool {
+    f.renderer == id && f.lock == lock && f.serial == serial
+}
+
+/// The first sub-fetch `serial` of renderer `id` locked to `lock` in `fs`.
+/// (The table is read by key, never by position, so that what a renderer's
+/// entries say does not depend on where another domain's entries are.)
+pub open spec fn subfetch_of(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin, serial: nat) -> Option<SubFetch>
+    decreases fs.len(),
 {
-    if i >= fs.len() {
+    if fs.len() == 0 {
         None
-    } else if fs[i as int].renderer == id && fs[i as int].serial == serial {
-        Some(i as int)
+    } else if subfetch_is(fs[0], id, lock, serial) {
+        Some(fs[0])
     } else {
-        find_subfetch(fs, id, serial, i + 1)
+        subfetch_of(fs.drop_first(), id, lock, serial)
+    }
+}
+
+/// `fs` with the first sub-fetch of `f`'s key replaced by `f`.
+pub open spec fn replace_subfetch(fs: Seq<SubFetch>, f: SubFetch) -> Seq<SubFetch>
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        fs
+    } else if subfetch_is(fs[0], f.renderer, f.lock, f.serial) {
+        seq![f] + fs.drop_first()
+    } else {
+        seq![fs[0]] + replace_subfetch(fs.drop_first(), f)
+    }
+}
+
+/// `fs` without the first sub-fetch of `f`'s key.
+pub open spec fn drop_subfetch(fs: Seq<SubFetch>, f: SubFetch) -> Seq<SubFetch>
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        fs
+    } else if subfetch_is(fs[0], f.renderer, f.lock, f.serial) {
+        fs.drop_first()
+    } else {
+        seq![fs[0]] + drop_subfetch(fs.drop_first(), f)
     }
 }
 
@@ -2086,12 +2118,12 @@ pub open spec fn sub_actions(id: nat, serial: nat, request: u64, hop: nat, actio
     }
 }
 
-/// `fs` with the entry at `k` replaced by `f`, or removed if the fetch
-/// ended; and the outputs, the frames to the renderer last.
-pub open spec fn sub_finish(fs: Seq<SubFetch>, k: int, f: SubFetch, out: Seq<Output>, end: Option<Seq<u8>>) -> (Seq<SubFetch>, Seq<Output>) {
+/// `fs` with `f` (by key) replaced, or dropped if the fetch ended; and the
+/// outputs, the frames to the renderer last.
+pub open spec fn sub_finish(fs: Seq<SubFetch>, f: SubFetch, out: Seq<Output>, end: Option<Seq<u8>>) -> (Seq<SubFetch>, Seq<Output>) {
     match end {
-        None => (fs.update(k, f), out),
-        Some(frames) => (fs.remove(k), out + seq![Output::ToRenderer { id: f.renderer, bytes: frames }]),
+        None => (replace_subfetch(fs, f), out),
+        Some(frames) => (drop_subfetch(fs, f), out + seq![Output::ToRenderer { id: f.renderer, bytes: frames }]),
     }
 }
 
@@ -2129,7 +2161,14 @@ pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, f
                         };
                         let (hop, out, end) = sub_actions(r.id, serial, request, 0, actions);
                         let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
-                        let (table, outs) = sub_finish(s.subfetches.push(f), s.subfetches.len() as int, SubFetch { hop, ..f }, out, end);
+                        let table = match end {
+                            None => s.subfetches.push(SubFetch { hop, ..f }),
+                            Some(_) => s.subfetches,
+                        };
+                        let outs = match end {
+                            None => out,
+                            Some(frames) => out + seq![Output::ToRenderer { id: r.id, bytes: frames }],
+                        };
                         (State { subfetches: table, subcounts: counts, ..s }, outs)
                     },
                 },
@@ -2154,21 +2193,27 @@ pub open spec fn subfetch_live(s: State, f: SubFetch) -> bool {
 /// credentials and with no jar if not; its jar operations are applied only
 /// in the first case.
 pub open spec fn sub_net(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, renderer: nat, serial: nat, hop: nat, input: NetInput) -> (State, Seq<Output>) {
-    match find_subfetch(s.subfetches, renderer, serial, 0) {
+    match subnet_target(s, renderer, serial) {
         None => (s, seq![]),
-        Some(k) => {
-            let f = s.subfetches[k];
-            if !subfetch_live(s, f) || hop == 0 || f.hop != hop {
-                (s, seq![])
-            } else {
-                let cred = credentialed(fetch, f.lock, f.fetch.url);
-                let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
-                let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
-                let (h, out, end) = sub_actions(renderer, serial, f.request, hop, actions);
-                let (table, outs) = sub_finish(s.subfetches, k, SubFetch { fetch: fs, hop: h, ..f }, out, end);
-                (State { subfetches: table, jar, ..s }, outs)
-            }
+        Some(f) => if !subfetch_live(s, f) || hop == 0 || f.hop != hop {
+            (s, seq![])
+        } else {
+            let cred = credentialed(fetch, f.lock, f.fetch.url);
+            let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+            let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
+            let (h, out, end) = sub_actions(renderer, serial, f.request, hop, actions);
+            let (table, outs) = sub_finish(s.subfetches, SubFetch { fetch: fs, hop: h, ..f }, out, end);
+            (State { subfetches: table, jar, ..s }, outs)
         },
+    }
+}
+
+/// The sub-fetch a `SubNet` of renderer `renderer` and serial `serial` is
+/// about: the renderer's (by its current lock), if the renderer is live.
+pub open spec fn subnet_target(s: State, renderer: nat, serial: nat) -> Option<SubFetch> {
+    match find_by_id(s.renderers, renderer, 0) {
+        None => None,
+        Some(i) => subfetch_of(s.subfetches, renderer, s.renderers[i].lock, serial),
     }
 }
 

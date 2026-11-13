@@ -52,6 +52,10 @@ pub open spec fn reply_only_to_sender_statement(rules: Seq<clazel_psl::spec::Rul
             Output::Show { tab: x, .. } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == x,
             Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
             Output::Paint { .. } => false,
+            // Item 5.19: a `FetchStyle`'s sub-fetch is the sender's.
+            Output::SubConnect { renderer: x, .. } => x == id,
+            Output::SubSend { renderer: x, .. } => x == id,
+            Output::SubClose { renderer: x, .. } => x == id,
         }
 }
 
@@ -236,6 +240,7 @@ pub open spec fn net_only_to_tab_statement(rules: Seq<clazel_psl::spec::Rule>, u
                 Output::Show { .. } => false,
                 Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                 Output::Paint { .. } => false,
+                Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
             },
     }
 }
@@ -563,9 +568,8 @@ pub open spec fn cookie_integrity_statement(rules: Seq<clazel_psl::spec::Rule>, 
             Some((_, _, nav)) => s1.jar == apply_net_ops(rules, s.jar, net_transducer_step(fetch, s, nav, input).2),
             None => s1.jar == s.jar,
         },
-        Event::SubNet { renderer, serial, hop, input } => match find_subfetch(s.subfetches, renderer, serial, 0) {
-            Some(j) => {
-                let f = s.subfetches[j];
+        Event::SubNet { renderer, serial, hop, input } => match subnet_target(s, renderer, serial) {
+            Some(f) => {
                 if subfetch_live(s, f) && hop != 0 && f.hop == hop && credentialed(fetch, f.lock, f.fetch.url) {
                     s1.jar == apply_net_ops(
                         rules,
@@ -760,12 +764,12 @@ pub open spec fn subfetch_only_to_requester_statement(rules: Seq<clazel_psl::spe
     let out = step(rules, urls, fetch, s, e).1;
     forall|k: int|
         0 <= k < out.len() && (#[trigger] out[k]) is ToRenderer ==> match e {
-            Event::SubNet { renderer, serial, .. } => match find_subfetch(s.subfetches, renderer, serial, 0) {
-                Some(j) => {
+            Event::SubNet { renderer, serial, .. } => match subnet_target(s, renderer, serial) {
+                Some(f) => {
                     &&& out[k]->ToRenderer_id == renderer
-                    &&& subfetch_live(s, s.subfetches[j])
-                    &&& (out[k]->ToRenderer_bytes == style_failed_frame(s.subfetches[j].request) || exists|doc: Document|
-                        out[k]->ToRenderer_bytes == #[trigger] style_frames(s.subfetches[j].request, doc))
+                    &&& subfetch_live(s, f)
+                    &&& (out[k]->ToRenderer_bytes == style_failed_frame(f.request) || exists|doc: Document|
+                        out[k]->ToRenderer_bytes == #[trigger] style_frames(f.request, doc))
                 },
                 None => false,
             },
@@ -788,9 +792,8 @@ pub open spec fn subfetch_credentials_statement(rules: Seq<clazel_psl::spec::Rul
     let out = step(rules, urls, fetch, s, e).1;
     fetch.urls.rules == rules ==> forall|k: int|
         0 <= k < out.len() && (#[trigger] out[k]) is SubSend ==> match e {
-            Event::SubNet { renderer, serial, hop, input } => match find_subfetch(s.subfetches, renderer, serial, 0) {
-                Some(j) => {
-                    let f = s.subfetches[j];
+            Event::SubNet { renderer, serial, hop, input } => match subnet_target(s, renderer, serial) {
+                Some(f) => {
                     let jar = if credentialed(fetch, f.lock, f.fetch.url) { s.jar } else { Seq::<clazel_cookie::storage::spec::Cookie>::empty() };
                     &&& out[k]->SubSend_renderer == renderer && out[k]->SubSend_serial == serial && out[k]->SubSend_hop == hop
                     &&& clazel_fetch::transducer::contract::is_wire_request(
@@ -833,9 +836,13 @@ pub open spec fn subfetch_ownership_statement(rules: Seq<clazel_psl::spec::Rule>
             _ => false,
         }
     &&& forall|j: int|
-        0 <= j < s1.subfetches.len() ==> match find_subfetch(s.subfetches, (#[trigger] s1.subfetches[j]).renderer, s1.subfetches[j].serial, 0) {
-            Some(i) => s1.subfetches[j].lock == s.subfetches[i].lock && s1.subfetches[j].tab == s.subfetches[i].tab && s1.subfetches[j].partition
-                == s.subfetches[i].partition,
+        0 <= j < s1.subfetches.len() ==> match subfetch_of(
+            s.subfetches,
+            (#[trigger] s1.subfetches[j]).renderer,
+            s1.subfetches[j].lock,
+            s1.subfetches[j].serial,
+        ) {
+            Some(f) => s1.subfetches[j].tab == f.tab && s1.subfetches[j].partition == f.partition,
             None => e matches Event::FromRenderer { id, .. } && s1.subfetches[j].renderer == id && exists|i: int|
                 0 <= i < s.renderers.len() && s.renderers[i].id == id && s1.subfetches[j].lock == s.renderers[i].lock && s1.subfetches[j].tab
                     == s.renderers[i].tab && s1.subfetches[j].partition == crate::domain::domain_of_renderer(rules, s.renderers[i]),
