@@ -1,7 +1,7 @@
 //! The GPU process (items 5.17b, 5.18, 5.21a, 5.23): one per tab, started by the
 //! host when the kernel says `SpawnGpu`, paired with that tab's renderer.
 //!
-//! `clazel-gpu --list-fd N --surface-fd M [--ignore-blocklist]`
+//! `clazel-gpu --list-fd N --surface-fd M [--ignore-blocklist] [--software]`
 //!
 //! - Standard input and output are the kernel's channel (one socket, as the
 //!   renderer's), standard error the host's log.
@@ -11,6 +11,8 @@
 //!   where `/dev/fd/N` cannot open a socket. Each is opened again through
 //!   `/dev/fd`, which needs no `unsafe`, **before** the sandbox is entered.
 //! - `--ignore-blocklist` is `browse --gpu=hardware` (item 5.17c).
+//! - `--software` is `browse --gpu=software`: the software driver (lavapipe on
+//!   Linux). On macOS there is none, so the start is refused.
 //!
 //! Then the backend and the sandbox (`clazel_gpu::sandbox`, item 5.21a: Metal on
 //! macOS on Apple silicon, Vulkan on Linux), the blocklist (`Gpu::start`), the
@@ -26,6 +28,7 @@ struct Args {
     list: u32,
     surface: u32,
     ignore_blocklist: bool,
+    software: bool,
 }
 
 fn parse(args: &[String]) -> Option<Args> {
@@ -37,13 +40,14 @@ fn parse(args: &[String]) -> Option<Args> {
         list: value("--list-fd")?,
         surface: value("--surface-fd")?,
         ignore_blocklist: args.iter().any(|a| a == "--ignore-blocklist"),
+        software: args.iter().any(|a| a == "--software"),
     })
 }
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let Some(args) = parse(&args) else {
-        eprintln!("usage: clazel-gpu --list-fd N --surface-fd M [--ignore-blocklist]");
+        eprintln!("usage: clazel-gpu --list-fd N --surface-fd M [--ignore-blocklist] [--software]");
         return ExitCode::from(2);
     };
     match run(args) {
@@ -65,15 +69,16 @@ fn run(_: Args) -> Result<String, String> {
 
 /// The backend, made and sandboxed (`clazel_gpu::sandbox`).
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-fn backend() -> Result<clazel_gpu::metal::MetalBackend, String> {
+fn backend(_software: bool) -> Result<clazel_gpu::metal::MetalBackend, String> {
     clazel_gpu::sandbox::start_metal().map_err(|e| e.to_string())
 }
 
 /// The backend, made and sandboxed (`clazel_gpu::sandbox`). The device is the
-/// machine's GPU if the loader lists one, else its software driver.
+/// machine's GPU if the loader lists one, else its software driver; with
+/// `software`, the software driver if there is one.
 #[cfg(target_os = "linux")]
-fn backend() -> Result<clazel_gpu::vulkan::VulkanBackend, String> {
-    let backend = clazel_gpu::sandbox::start_vulkan(false).map_err(|e| e.to_string())?;
+fn backend(software: bool) -> Result<clazel_gpu::vulkan::VulkanBackend, String> {
+    let backend = clazel_gpu::sandbox::start_vulkan(software).map_err(|e| e.to_string())?;
     eprintln!("clazel-gpu: drawing with {}", backend.device_name());
     Ok(backend)
 }
@@ -94,9 +99,13 @@ fn run(args: Args) -> Result<String, String> {
         .write(true)
         .open(format!("/dev/fd/{}", args.surface))
         .map_err(|e| format!("cannot open the surface channel {}: {e}", args.surface))?;
-    let backend = backend()?;
+    let backend = backend(args.software)?;
     let launch = Launch {
-        mode: Mode::Hardware,
+        mode: if args.software {
+            Mode::Software
+        } else {
+            Mode::Hardware
+        },
         check: if args.ignore_blocklist {
             Check::Ignore
         } else {
@@ -141,7 +150,8 @@ mod tests {
             Some(Args {
                 list: 7,
                 surface: 9,
-                ignore_blocklist: false
+                ignore_blocklist: false,
+                software: false
             })
         );
         assert_eq!(parse(&strings(&["gpu", "--list-fd", "7"])), None);
@@ -157,6 +167,15 @@ mod tests {
             "2",
             "--ignore-blocklist",
         ]));
-        assert!(ignore.is_some_and(|a| a.ignore_blocklist));
+        assert!(ignore.is_some_and(|a| a.ignore_blocklist && !a.software));
+        let software = parse(&strings(&[
+            "gpu",
+            "--list-fd",
+            "1",
+            "--surface-fd",
+            "2",
+            "--software",
+        ]));
+        assert!(software.is_some_and(|a| a.software && !a.ignore_blocklist));
     }
 }

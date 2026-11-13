@@ -8,13 +8,15 @@
 //! - `clazel fetch URL`: one `http://` GET, printing the response
 //!   (`fetch.rs`, Phase 3 item 3.8; no renderer involved).
 //! - `clazel browse URL`: the browser with a window of phase-5.md item 5.23
-//!   (`window.rs`), on macOS on Apple silicon in a window server session;
-//!   elsewhere, or with `--text`, the text-mode browser of phase-4.md item 4.15
-//!   (`browse.rs`). The host's log of frames goes to standard error.
+//!   (`window.rs`), on macOS on Apple silicon in a window server session and on
+//!   Linux with a local X display (`DISPLAY`); elsewhere, or with `--text`, the
+//!   text-mode browser of phase-4.md item 4.15 (`browse.rs`). The host's log of
+//!   frames goes to standard error.
 //! - `clazel browse --headless OUT URL [--size WxH] [--wait S]`: render one page to `OUT`, a
 //!   PNG or (`.ppm`) a PPM, without a window (item 5.23).
 //! - `--gpu=hardware` with `browse` ignores the driver blocklist (item 5.17c), with
-//!   a warning.
+//!   a warning. `--gpu=software` starts every GPU process on the software driver
+//!   (lavapipe on Linux; macOS has none, so nothing is drawn there).
 //!
 //! The renderer is `$CLAZEL_RENDERER`, or `clazel-renderer` next to this
 //! binary, built with `cargo build -p clazel-renderer` if it is not there
@@ -136,7 +138,7 @@ fn main() -> ExitCode {
 fn usage() -> ExitCode {
     eprintln!(
         "usage: clazel URL SCRIPT | clazel demo | clazel fetch URL | \
-         clazel browse [--text | --headless OUT [--size WxH] [--wait S]] [--gpu=hardware] URL"
+         clazel browse [--text | --headless OUT [--size WxH] [--wait S]] [--gpu=hardware | --gpu=software] URL"
     );
     ExitCode::from(2)
 }
@@ -189,6 +191,10 @@ fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode 
     if ignore {
         eprintln!("clazel: --gpu=hardware: the driver blocklist is ignored");
     }
+    // Item 5.17c's `--gpu=software`, here as far as the GPU process's start: every
+    // GPU process is started for the software driver. The kernel's part (falling
+    // back by itself after a refusal or a crash) is not wired to the host yet.
+    let software = flag("--gpu=software");
     // Item 5.23: renderers paired with a GPU process get its list socket
     // (`--list-fd`, added by the host) and the fonts to lay out in.
     let fonts = window::renderer_fonts();
@@ -204,6 +210,9 @@ fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode 
         let mut c = Command::new(&gpu);
         if ignore {
             c.arg("--ignore-blocklist");
+        }
+        if software {
+            c.arg("--software");
         }
         c
     });
