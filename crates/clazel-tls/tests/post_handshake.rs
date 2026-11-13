@@ -757,6 +757,9 @@ fn close_notify_ends_delivery_and_leaves_the_write_side_open() -> Result<(), Str
     // Data after the closure alert is ignored (§6.1): consumed, nothing delivered.
     let (consumed, actions) = h.client.step(Input::Bytes(&late));
     assert_eq!((consumed, actions), (late.len(), vec![]));
+    // §6.1: the end of the transport after the closure alert is the orderly
+    // end: nothing is sent or reported, and the write side stays open.
+    assert_eq!(h.client.step(Input::Closed), (0, vec![]));
     // §6.1: the write side is still open; the client ends it when it chooses.
     let sent = h.client.send_application(b"more");
     let wire = sends(&sent)
@@ -906,12 +909,44 @@ fn a_record_of_only_zeros_is_unexpected_message() -> Result<(), String> {
     check_fatal_alert(&mut h, &actions, UNEXPECTED_MESSAGE)
 }
 
+/// §6.1: the end of the transport before the server's close_notify is a
+/// truncation, never end-of-data. It ends the connection, so while the write
+/// side is open our close_notify goes out first: exactly the one record a
+/// close would send, under the current key at the next sequence number.
 #[test]
-fn the_transport_closing_before_close_notify_is_a_failure_with_no_alert() -> Result<(), String> {
+fn the_end_of_the_transport_before_close_notify_sends_ours_and_is_a_truncation()
+-> Result<(), String> {
+    let mut twin = Harness::new()?;
     let mut h = Harness::new()?;
+    for harness in [&mut twin, &mut h] {
+        let sent = harness.client.send_application(b"request");
+        let wire = sends(&sent)
+            .first()
+            .map(|w| (*w).clone())
+            .ok_or("no send")?;
+        assert_eq!(
+            harness.server_reads(&wire),
+            Some((CT_APPLICATION_DATA, b"request".to_vec()))
+        );
+    }
+    let closing = twin.client.close();
     let (consumed, actions) = h.client.step(Input::Closed);
-    assert_eq!((consumed, actions), (0, vec![Action::Fail(INTERNAL_ERROR)]));
+    assert_eq!(consumed, 0);
+    assert_eq!(actions.len(), 2);
+    assert_eq!(sends(&actions), sends(&closing));
+    assert_eq!(actions.last(), Some(&Action::Fail(INTERNAL_ERROR)));
+    let wire = sends(&actions)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no close_notify")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_ALERT, vec![1, CLOSE_NOTIFY]))
+    );
     assert!(!h.client.is_open());
+    // The connection has ended: nothing more is sent.
+    assert_eq!(h.client.step(Input::Closed), (0, vec![]));
+    assert_eq!(h.client.close(), vec![]);
     Ok(())
 }
 
