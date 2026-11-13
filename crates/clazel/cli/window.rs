@@ -542,8 +542,12 @@ pub mod mac {
                 let pixels = window_pixels(&frame.pixels);
                 let shown =
                     window.show_page_pixels(&pixels, (0, t.strip_px), frame.width, frame.height);
-                if let Err(e) = shown {
-                    eprintln!("clazel: cannot show the page: {e:?}");
+                match shown {
+                    Ok(()) => eprintln!(
+                        "clazel: showing {} ({} by {}, slot {})",
+                        paint.url, frame.width, frame.height, paint.buffer
+                    ),
+                    Err(e) => eprintln!("clazel: cannot show the page: {e:?}"),
                 }
                 dirty = true;
             }
