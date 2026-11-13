@@ -718,13 +718,16 @@ impl<C: Crypto> Bootstrap<C> {
         (consumed, action)
     }
 
-    /// EOF before final ServerHello is a truncation failure.
+    /// RFC 8446 §6.1: the end of the transport before the final ServerHello
+    /// (and before the server's close_notify) is a truncation failure; its
+    /// caller answers it with our close_notify (`bootstrap_spec`).
     pub fn eof(&mut self) -> (out: Action)
         requires old(self).wf(),
         ensures
             final(self).crypto_functions() == old(self).crypto_functions(),
             final(self).wf(),
             super::bootstrap_contract::eof_ensures(old(self).state(), final(self).state(), out@),
+            super::bootstrap_contract::eof_ensures(old(self)@.0, final(self)@.0, out@),
     {
         let ghost before = self.state();
         match self.mode {

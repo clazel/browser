@@ -43,7 +43,8 @@ impl View for Phase {
 pub enum Input<'a> {
     /// Bytes of the server's stream, starting at a record boundary.
     Bytes(&'a [u8]),
-    /// The transport closed.
+    /// The server's direction of the transport ended: no more bytes will
+    /// arrive. Not its `close_notify` (`post_handshake_spec` item 14).
     Closed,
 }
 impl<'a> View for Input<'a> {
@@ -638,6 +639,37 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         }
     }
 
+    /// §6.1: the end of the transport before the server's `close_notify`
+    /// (`post_handshake_spec` item 14). While the write side is open our
+    /// `close_notify` goes out first, as [`Self::close`] would send it; then
+    /// the connection fails with `internal_error`.
+    fn truncated(&mut self) -> (out: Out)
+        requires old(self).resources_wf(), old(self).bound(),
+        ensures
+            out@ == spec::truncated(old(self).cipher_functions(), old(self)@).0,
+            final(self)@ == spec::truncated(old(self).cipher_functions(), old(self)@).1,
+            final(self).resources_wf(), final(self).bound(),
+            final(self).crypto_functions() == old(self).crypto_functions(),
+            final(self).cipher_functions() == old(self).cipher_functions(),
+    {
+        let ghost before = self@;
+        let ghost f = self.cipher_functions();
+        if matches!(self.phase, Phase::Open | Phase::ReadClosed) {
+            let closing = self.close_connection();
+            let ghost wires = closing@.wires;
+            self.terminal(Phase::Failed);
+            let o = Out { wires: closing.wires, delivered: Vec::new(), end: End::Fail(crate::spec::INTERNAL_ERROR) };
+            proof {
+                assert(o@.wires == wires);
+                assert(o.delivered@ =~= Seq::<u8>::empty());
+                assert(o@ =~= spec::truncated(f, before).0);
+            }
+            o
+        } else {
+            self.die(crate::spec::INTERNAL_ERROR)
+        }
+    }
+
     /// §7.2, §7.3: move the client write secret on and install its keys.
     fn rotate_sender(&mut self) -> (out: Result<(), u8>)
         requires old(self).resources_wf(), old(self).bound(), old(self)@.client_secret.len() == 32,
@@ -1071,7 +1103,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             },
             Input::Closed => {
                 if matches!(self.phase, Phase::Open | Phase::WriteClosed) {
-                    let o = self.die(crate::spec::INTERNAL_ERROR);
+                    let o = self.truncated();
                     (0, o)
                 } else {
                     (0, Out::quiet())

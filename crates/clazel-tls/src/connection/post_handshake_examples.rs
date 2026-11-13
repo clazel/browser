@@ -384,14 +384,24 @@ pub proof fn lemma_unexpected_records()
         == super::post_handshake_spec::End::Fail(10u8)) by (compute_only);
 }
 
-/// §6.1: the transport closing before `close_notify` is a truncation:
-/// `Fail(internal_error)` (80), nothing sent, no input consumed; once the
-/// connection ended, the transport closing is not an error.
+/// §6.1 (item 14): the end of the transport before `close_notify` is a
+/// truncation: `Fail(internal_error)` (80), no input consumed, and while the
+/// write side is open our close_notify goes out first, the one record a
+/// close sends; after our close_notify nothing is sent; once the connection
+/// ended, the end of the transport is not an error.
 pub proof fn lemma_transport_closing()
     ensures
         super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.end
             == super::post_handshake_spec::End::Fail(80u8),
         super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).2 == 0,
+        super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.wires
+            == super::post_handshake_spec::close(cipher(), ready()).0.wires,
+        super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.wires.len()
+            == 1,
+        super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+            super::post_handshake_spec::Input::Closed).0.wires.len() == 0,
+        super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+            super::post_handshake_spec::Input::Closed).0.end == super::post_handshake_spec::End::Fail(80u8),
         super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::closed(),
             super::post_handshake_spec::Input::Closed).0 == super::post_handshake_spec::quiet(),
 {
@@ -400,6 +410,14 @@ pub proof fn lemma_transport_closing()
         by (compute_only);
     assert(super::post_handshake_spec::step(crypto(), cipher(), ready(),
         super::post_handshake_spec::Input::Closed).2 == 0) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), ready(), super::post_handshake_spec::Input::Closed).0.wires
+        == super::post_handshake_spec::close(cipher(), ready()).0.wires) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), ready(),
+        super::post_handshake_spec::Input::Closed).0.wires.len() == 1) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+        super::post_handshake_spec::Input::Closed).0.wires.len() == 0) by (compute_only);
+    assert(super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::close(cipher(), ready()).1,
+        super::post_handshake_spec::Input::Closed).0.end == super::post_handshake_spec::End::Fail(80u8)) by (compute_only);
     assert(super::post_handshake_spec::step(crypto(), cipher(), super::post_handshake_spec::closed(),
         super::post_handshake_spec::Input::Closed).0 == super::post_handshake_spec::quiet()) by (compute_only);
 }

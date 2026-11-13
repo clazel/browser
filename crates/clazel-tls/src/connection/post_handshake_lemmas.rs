@@ -6,6 +6,10 @@
 //!   whose inner type is `application_data` ([`lemma_delivered_is_application_data`]);
 //!   a record that failed to open, or was incomplete, delivers nothing
 //!   ([`lemma_failed_open_delivers_nothing`]).
+//! - **The end of the transport** (item 14). While the read side is open
+//!   it is a truncation, never an orderly end, and it sends exactly what a
+//!   close would send, our close_notify, while the write side is open
+//!   ([`lemma_truncation`]).
 //! - **Ending.** A step that ends the read side leaves a connection that
 //!   cannot be read ([`lemma_step_end_ends_connection`]), and such a
 //!   connection delivers and sends nothing for any later input
@@ -65,6 +69,36 @@ pub proof fn lemma_terminal_silent(c: crate::schedule::spec::Crypto, f: crate::t
 {
     assert(super::post_handshake_spec::actions(super::post_handshake_spec::quiet())
         =~= Seq::<super::post_handshake_spec::Action>::empty());
+}
+
+/// §6.1 (item 14): the end of the transport while the read side is open is a
+/// truncation. It never ends in order (`PeerClosed` or `Close`: "MUST receive
+/// a "close_notify" alert before indicating end-of-data"), consumes and
+/// delivers nothing, and drops every key; it sends exactly the records a
+/// close would send while the write side is open ("Each party MUST send a
+/// "close_notify" alert before closing its write side"), and nothing after
+/// our close_notify.
+pub proof fn lemma_truncation(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: super::post_handshake_spec::State)
+    requires super::post_handshake_spec::can_read(s),
+    ensures
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.end
+            == super::post_handshake_spec::End::Fail(crate::spec::INTERNAL_ERROR),
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.delivered.len() == 0,
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).1
+            == super::post_handshake_spec::failed(),
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).2 == 0,
+        super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.wires
+            == if super::post_handshake_spec::can_write(s) {
+                super::post_handshake_spec::close(f, s).0.wires
+            } else {
+                Seq::<Seq<u8>>::empty()
+            },
+{
+    if !super::post_handshake_spec::can_write(s) {
+        assert(super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0.wires
+            =~= Seq::<Seq<u8>>::empty());
+    }
 }
 
 /// No message of a record delivers plaintext.

@@ -25,7 +25,9 @@ pub enum Origin {
     NotSent,
     /// The server sent this fatal alert. It is not answered.
     Peer,
-    /// The transport closed before a close_notify (§6.1); nothing was sent.
+    /// The server's direction of the transport ended before its close_notify
+    /// (§6.1): a truncation, not end-of-data. Our close_notify, if our write
+    /// side was open, is the last record sent; no alert is.
     Truncated,
 }
 impl View for Origin {
@@ -697,35 +699,54 @@ impl<C: Crypto, K: KeyExchange, F: Factory, V: Verifier> Driver<C, K, F, V> wher
         }
     }
 
-    /// §6.1: the transport ended. Before a close_notify that is a truncation.
+    /// §6.1: the server's direction of the transport ended (no more bytes
+    /// will arrive), which is not its close_notify (`driver_spec` choice 7).
+    /// While a machine runs it is a truncation: our close_notify goes out
+    /// first if our write side is open, the record [`Self::close`] would send,
+    /// and the connection fails as `Origin::Truncated`, never `Closed`. Once
+    /// the connection has ended nothing changes.
     pub fn eof(&mut self) -> (out: Output)
         requires old(self).wf(),
         ensures final(self).wf(), final(self).models() == old(self).models(), final(self).status() == out.state,
-            final(self).stage() == spec::Stage::Ended, spec::is_final(out.state@),
-            out.send@.len() == 0, out.deliver@.len() == 0,
+            contract::eof_ensures(old(self).models(), old(self).stage(), old(self).status()@,
+                contract_step(out, final(self))),
     {
-        let alert = match self.stage.take() {
-            None => return quiet(self.state),
+        let deliver = Vec::new();
+        proof { assert(deliver@ =~= seq![]); }
+        match self.stage.take() {
+            None => {
+                let out = quiet(self.state);
+                proof { assert(self.stage() == spec::Stage::Ended); }
+                out
+            },
             Some(Stage::App { mut app }) => {
                 let (_, o) = app.step_out(Input::Closed);
-                match o.end {
+                let send = concat(o.wires.as_slice());
+                let alert = match o.end {
                     End::Fail(alert) => alert,
                     _ => crate::spec::INTERNAL_ERROR,
-                }
+                };
+                self.ended(send, deliver, State::Failed(Failure { alert, origin: Origin::Truncated }))
             },
             Some(Stage::Flight { conn }) => {
                 let mut conn = *conn;
                 match conn.eof() {
-                    ConnAction::Fail(alert, _) => alert,
-                    _ => crate::spec::INTERNAL_ERROR,
+                    ConnAction::Fail(alert, Some(record)) =>
+                        self.ended(record, deliver, State::Failed(Failure { alert, origin: Origin::Truncated })),
+                    ConnAction::Fail(alert, None) =>
+                        self.ended(Vec::new(), deliver, State::Failed(Failure { alert, origin: Origin::Truncated })),
+                    _ => self.ended(Vec::new(), deliver,
+                        State::Failed(Failure { alert: crate::spec::INTERNAL_ERROR, origin: Origin::Truncated })),
                 }
             },
+            // Choice 4: before the handshake keys our close_notify is plaintext.
             Some(Stage::Hello { mut boot, .. }) => match boot.eof() {
-                BootAction::Fail(alert) => alert,
-                _ => crate::spec::INTERNAL_ERROR,
+                BootAction::Fail(alert) => self.ended(plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY),
+                    deliver, State::Failed(Failure { alert, origin: Origin::Truncated })),
+                _ => self.ended(Vec::new(), deliver,
+                    State::Failed(Failure { alert: crate::spec::INTERNAL_ERROR, origin: Origin::Truncated })),
             },
-        };
-        self.ended(Vec::new(), Vec::new(), State::Failed(Failure { alert, origin: Origin::Truncated }))
+        }
     }
 }
 
@@ -751,7 +772,7 @@ impl fmt::Display for Failure {
             Origin::Sent => write!(f, "{name} ({}), sent to the server", self.alert),
             Origin::NotSent => write!(f, "{name} ({}), not sent", self.alert),
             Origin::Peer => write!(f, "{name} ({}), from the server", self.alert),
-            Origin::Truncated => write!(f, "connection closed without close_notify"),
+            Origin::Truncated => write!(f, "transport ended without the server's close_notify"),
         }
     }
 }

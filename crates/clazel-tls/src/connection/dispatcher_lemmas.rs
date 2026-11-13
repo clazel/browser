@@ -1,4 +1,4 @@
-//! RFC 8446 KeyUpdate and fatal-alert facts about the dispatcher spec, used
+//! RFC 8446 KeyUpdate, fatal-alert and end-of-transport facts about the dispatcher spec, used
 //! by proofs and mutation certificates: general lemmas, and concrete ones
 //! evaluated on the fixtures of `dispatcher_certificates`.
 #[allow(unused_imports)]
@@ -106,11 +106,45 @@ pub proof fn lemma_peer_alert_not_answered(ciphers: super::dispatcher_spec::Ciph
         == (super::dispatcher_spec::Action::PeerAlert(description), super::dispatcher_spec::failed()),
 {}
 
-/// §6.1: a truncated connection sends nothing.
-pub proof fn lemma_truncation_sends_nothing(description: u8)
-    ensures super::dispatcher_spec::die(description)
-        == (super::dispatcher_spec::Action::Fail(description, None), super::dispatcher_spec::failed()),
+/// §6.1: the end of the transport while the connection is live sends exactly
+/// the close_notify a close would send then (`close_wire`), fails with
+/// `internal_error`, never closes in order, and drops every key; after an
+/// error alert or a close_notify it does nothing.
+pub proof fn lemma_eof_closes_our_side(ciphers: super::dispatcher_spec::Ciphers, s: super::dispatcher_spec::State)
+    ensures
+        s.mode != super::dispatcher_spec::Mode::Failed && s.mode != super::dispatcher_spec::Mode::Closed ==>
+            super::dispatcher_spec::eof(ciphers, s) == (super::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR,
+                super::dispatcher_spec::close_wire(ciphers, s)), super::dispatcher_spec::failed())
+            && super::dispatcher_spec::eof(ciphers, s).0 == super::dispatcher_spec::Action::Fail(crate::spec::INTERNAL_ERROR,
+                match super::dispatcher_spec::closing(ciphers, s).0 {
+                    super::dispatcher_spec::Action::Close(wire) => wire,
+                    _ => None,
+                }),
+        s.mode == super::dispatcher_spec::Mode::Failed || s.mode == super::dispatcher_spec::Mode::Closed ==>
+            super::dispatcher_spec::eof(ciphers, s) == (super::dispatcher_spec::Action::None, s),
+        !(super::dispatcher_spec::eof(ciphers, s).0 is Close),
 {}
+
+/// §6.1: during the server's flight the end of the transport sends our
+/// close_notify at warning level (1, 0), sealed under the client handshake
+/// epoch at its next sequence number (here 0), then fails with
+/// internal_error (80); after a failure it sends nothing.
+pub proof fn lemma_eof_sends_close_notify()
+    ensures
+        super::dispatcher_spec::eof(super::dispatcher_certificates::alert_ciphers(),
+            super::dispatcher_certificates::sample_flight_state()).0
+            == super::dispatcher_spec::Action::Fail(80u8, Some(seq![23u8, 3, 3, 0, 19,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21])),
+        super::dispatcher_spec::eof(super::dispatcher_certificates::alert_ciphers(),
+            super::dispatcher_spec::failed()).0 == super::dispatcher_spec::Action::None,
+{
+    assert(super::dispatcher_spec::eof(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_flight_state()).0
+        == super::dispatcher_spec::Action::Fail(80u8, Some(seq![23u8, 3, 3, 0, 19,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]))) by (compute_only);
+    assert(super::dispatcher_spec::eof(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_spec::failed()).0 == super::dispatcher_spec::Action::None) by (compute_only);
+}
 
 /// §6.2: during the server's flight, a local error (here bad_certificate, 42)
 /// is sent as a fatal alert, sealed under the client handshake epoch at
