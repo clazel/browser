@@ -173,6 +173,12 @@ fn text_style(s: &ComputedStyle) -> TextStyle {
 /// context: it has an inline-level child and every child is inline-level
 /// or a marker (item 5.13 leaves no block container with both).
 pub fn has_inline_content(tree: &BoxTree, b: BoxId) -> bool {
+    // A table wrapper box's children (captions, then the table box, which
+    // is "inline-level" for `inline-table`) are in its flow (§17.4; item
+    // 5.15).
+    if matches!(tree.class(b), Class::TableWrapper { .. }) {
+        return false;
+    }
     let children = tree.children(b);
     children.iter().any(|&c| tree.class(c).is_inline_level())
         && children.iter().all(|&c| {
