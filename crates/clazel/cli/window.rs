@@ -32,7 +32,8 @@
 //! - **The address bar**: Command-L focuses it with its URL selected (typing
 //!   replaces it); typing edits it (Backspace deletes the last character);
 //!   Return navigates (`navigate_tab`) to what was typed, Escape cancels. A
-//!   control character is never typed. Command-`[` goes back along the URLs the
+//!   control character is never typed. Command-`[`, or a click on the strip's
+//!   back button, goes back along the URLs the
 //!   tab has committed (this loop's list, as in item 4.15), Command-R reloads.
 //! - **Headless**: one tab sized `--size W×H` (default 1024 by 768) at scale 1;
 //!   the first `Paint` with its pixels is written, PPM if `OUT` ends in `.ppm`,
@@ -285,6 +286,11 @@ impl History {
         self.going_back = false;
     }
 
+    /// Whether there is a URL to go back to.
+    pub fn can_go_back(&self) -> bool {
+        self.urls.len() >= 2
+    }
+
     /// Where going back goes, if anywhere.
     pub fn back(&mut self) -> Option<String> {
         if self.urls.len() < 2 {
@@ -492,7 +498,15 @@ pub mod mac {
                     self.resize(host, window);
                     true
                 }
-                Event::Click { y, .. } if y < strip => self.bar.focus() == Action::Redraw,
+                Event::Click { x, y } if y < strip => {
+                    let backing = f64::from(window.dpi().unwrap_or(96)) / 96.0;
+                    if strip::on_back_button(x.into(), y.into(), self.strip_px, backing) {
+                        self.bar.edit = None;
+                        self.act(host, Action::Back)
+                    } else {
+                        self.bar.focus() == Action::Redraw
+                    }
+                }
                 Event::Click { x, y } => {
                     let at = (
                         u64::try_from(x).unwrap_or(0),
@@ -604,6 +618,7 @@ pub mod mac {
                     text,
                     editing: t.bar.edit.is_some(),
                     committed: t.bar.committed || t.bar.edit.is_some(),
+                    can_go_back: t.history.can_go_back(),
                 };
                 let backing = f64::from(window.dpi().unwrap_or(96)) / 96.0;
                 let pixels = strip::render(font.as_deref(), t.size.0, t.strip_px, backing, &what);
@@ -711,6 +726,7 @@ mod tests {
     fn back_walks_the_committed_urls() {
         let mut h = History::default();
         assert_eq!(h.back(), None);
+        assert!(!h.can_go_back());
         h.shown("a");
         h.shown("a");
         h.shown("b");

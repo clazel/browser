@@ -9,9 +9,15 @@
 //!   [`FONT_PATHS`] that parses. None found: the strip is drawn without text and
 //!   the host says so once on stderr. Nothing is bundled yet.
 //! - **Geometry, in points times the backing scale**: the strip is
-//!   [`STRIP_POINTS`] tall, with a field inset by 6 points, text at 13 points, 8
-//!   points from the field's left, its baseline 4.5 points below the field's
-//!   middle. Colours are fixed greys; the field's border is blue while editing.
+//!   [`STRIP_POINTS`] tall. At its left is the back button ([`back_button`]): a
+//!   square 8 points from the left edge and inset by 6 points above and below.
+//!   The field starts 6 points after it and is inset by 6 points, text at 13
+//!   points, 8 points from the field's left, its baseline 4.5 points below the
+//!   field's middle. Colours are fixed greys; the field's border is blue while
+//!   editing.
+//! - **The back button is drawn by the host, without the font**: a chevron of
+//!   filled rows, dark when the host's list of committed URLs has somewhere to go
+//!   back to and pale when it has not. Nothing of the page is in it.
 //! - **Blending** is coverage over the background, per channel,
 //!   `(fg·c + bg·(255 − c)) / 255` rounded down, the text black (the URL before
 //!   the first `Paint` is grey: it is what was asked for, not yet committed).
@@ -52,6 +58,8 @@ const BORDER: u32 = 0x00B0_B0B0;
 const EDITING: u32 = 0x003B_82F6;
 const TEXT: u32 = 0x0000_0000;
 const PENDING: u32 = 0x0080_8080;
+pub(crate) const BACK_ENABLED: u32 = 0x0040_4040;
+pub(crate) const BACK_DISABLED: u32 = 0x00B8_B8B8;
 
 /// What the strip shows.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -63,6 +71,29 @@ pub struct Contents<'a> {
     /// The text is the kernel's committed URL (black), not only what was asked
     /// for (grey).
     pub committed: bool,
+    /// There is a URL to go back to: the back button is drawn dark.
+    pub can_go_back: bool,
+}
+
+/// `points` at backing `scale`, in pixels. `as` saturates a float at the
+/// integer's ends.
+fn pixels(points: f64, scale: f64) -> i64 {
+    (points * scale).round() as i64
+}
+
+/// The back button's rectangle `(x0, y0, x1, y1)` in a strip `height` pixels
+/// tall at backing `scale`: what [`render`] draws and what a click is tested
+/// against.
+pub fn back_button(height: u32, scale: f64) -> (i64, i64, i64, i64) {
+    let (x0, y0) = (pixels(8.0, scale), pixels(6.0, scale));
+    let y1 = sub(i64::from(height), y0);
+    (x0, y0, add(x0, sub(y1, y0).max(0)), y1)
+}
+
+/// Whether the point `(x, y)` of the strip is on the back button.
+pub fn on_back_button(x: i64, y: i64, height: u32, scale: f64) -> bool {
+    let (x0, y0, x1, y1) = back_button(height, scale);
+    x >= x0 && x < x1 && y >= y0 && y < y1
 }
 
 /// A `width` by `height` image (pixels, rows from the top, `0x00RRGGBB`).
@@ -134,12 +165,18 @@ pub fn render(
         height,
         pixels: vec![BACKGROUND; usize::try_from(len).unwrap_or(0)],
     };
-    // `as` saturates a float at the integer's ends.
-    let px = |points: f64| (points * scale).round() as i64;
+    let px = |points: f64| pixels(points, scale);
     let one = px(1.0).max(1);
     let (w, h) = (i64::from(width), i64::from(height));
     canvas.fill((0, sub(h, one), w, h), RULE);
-    let field = (px(8.0), px(6.0), sub(w, px(8.0)), sub(h, px(6.0)));
+    let button = back_button(height, scale);
+    chevron(&mut canvas, button, scale, what.can_go_back);
+    let field = (
+        add(button.2, px(6.0)),
+        px(6.0),
+        sub(w, px(8.0)),
+        sub(h, px(6.0)),
+    );
     let border = if what.editing { EDITING } else { BORDER };
     canvas.fill(field, border);
     let inner = (
@@ -170,6 +207,27 @@ pub fn render(
         canvas.fill(caret, TEXT);
     }
     canvas.pixels
+}
+
+/// The back button's chevron, pointing left, in the middle of `button`: one
+/// filled run per row, 5 points above and below the middle, its point 3 points
+/// left of the middle and its ends 3 points right of it.
+fn chevron(canvas: &mut Canvas, button: (i64, i64, i64, i64), scale: f64, enabled: bool) {
+    let colour = if enabled { BACK_ENABLED } else { BACK_DISABLED };
+    let (cx, cy) = (add(button.0, button.2) / 2, add(button.1, button.3) / 2);
+    let reach = pixels(5.0, scale).max(1);
+    let (half, thick) = (pixels(3.0, scale), pixels(2.0, scale).max(1));
+    for dy in sub(0, reach)..=reach {
+        // `reach` is at least 1, so the division is defined.
+        let across = dy
+            .saturating_abs()
+            .saturating_mul(half.saturating_mul(2))
+            .checked_div(reach)
+            .unwrap_or(0);
+        let x = add(sub(cx, half), across);
+        let y = add(cy, dy);
+        canvas.fill((x, y, add(x, thick), add(y, 1)), colour);
+    }
 }
 
 /// Draw `what.text` from `left` on `baseline`, cut at `right` and inside `clip`;

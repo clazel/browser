@@ -210,9 +210,14 @@ mod mac {
             text: &p.url,
             editing: false,
             committed: true,
+            can_go_back: false,
         };
         let bar = strip::render(font.as_deref(), width, strip_px, backing, &what);
         assert!(window.draw(&bar, width, strip_px).is_ok());
+        // The back button is on the strip this window draws, at its left.
+        let (x0, y0, x1, y1) = strip::back_button(strip_px, backing);
+        assert!(strip::on_back_button(x0, y0, strip_px, backing));
+        assert!(x1 <= i64::from(width) && y1 <= i64::from(strip_px));
         assert!(
             window
                 .set_title(&format!("{} — a hand-built list", p.url))
