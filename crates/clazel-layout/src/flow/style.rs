@@ -25,10 +25,11 @@
 //!   `border-collapse` and `list-style-type` (each property's definition
 //!   table, "Inherited: yes").
 //! - **The table wrapper box** takes the table's margins, as §17.4 says, and
-//!   also its `width`, `min-width` and `max-width` (the placeholder of
-//!   `mod.rs`: item 5.15 sizes the wrapper from the table); its borders,
-//!   padding and background are the table box's. **The table box** has no
-//!   margins and an `auto` width, so it fills its wrapper.
+//!   also holds its `width`, `min-width` and `max-width`, which item 5.15
+//!   reads there as the table's to size the wrapper ("The width of the table
+//!   wrapper box is the border-edge width of the table box inside it"); its
+//!   borders, padding and background are the table box's. **The table box**
+//!   has no margins and an `auto` width, so it fills its wrapper.
 //! - **Row groups, rows and cells have no margins** (§8.3).
 
 use clazel_dom::exec::Arena;

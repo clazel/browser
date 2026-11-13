@@ -1,7 +1,7 @@
 //! Min-content and max-content widths: CSS 2.1 §10.3.5's "preferred
 //! minimum width" and "preferred width", which the shrink-to-fit width of
-//! inline blocks (§10.3.9) and of the table placeholder reads (phase-5.md
-//! item 5.14).
+//! inline blocks (§10.3.9) reads (phase-5.md item 5.14), and the table
+//! measures of item 5.15 read.
 //!
 //! Source: CSS 2.1 §10.3.5 ("Roughly: calculate the preferred width by
 //! formatting the content without breaking lines other than where explicit
@@ -25,11 +25,26 @@
 //!   each atomic inline's outer sizes as its unit's advance.
 //! - **A replaced element** has its used width with no containing block
 //!   (percentages as zero) as both sizes.
+//! - **Tables** (item 5.15): a table cell's content sizes are a block
+//!   container's (with the Quirks Mode Standard's §3.8 in quirks mode); a
+//!   table box's content sizes are its columns' (`table/measure.rs`: the
+//!   sums of their min-content and max-content widths with the border
+//!   spacing, or fixed layout's lengths), so its outer sizes are GRIDMIN
+//!   and GRIDMAX; a table wrapper box's are CSS Tables 3 §3.9.1's used
+//!   width with no room and with unlimited room (`measure::table_intrinsic`),
+//!   from its table's and captions' outer sizes and the table's `width` and
+//!   `min-width`, which it holds. Rows and row groups have none.
 
 use std::collections::HashMap;
 
 use clazel_dom::exec::Arena;
 use clazel_style::cascade::computed::{ComputedStyle, Lp, MaxSize, Size};
+
+use crate::boxes::Class;
+use crate::boxes::replaced::Replaced;
+use crate::table::grid::Grid;
+use crate::table::measure::{self, Inputs};
+use crate::table::state::TableWidthInput;
 
 use super::fonts::TextFns;
 use super::inline::{Ifc, intrinsic as line_sizes};
@@ -93,9 +108,17 @@ pub struct Intrinsic {
     pub content: Vec<(i32, i32)>,
 }
 
+/// What the intrinsic sizes read about tables (item 5.15).
+pub struct Tables<'a> {
+    /// Each table box's grid.
+    pub grids: &'a HashMap<BoxId, Grid>,
+    /// The document is in quirks mode.
+    pub quirks: bool,
+}
+
 /// The intrinsic sizes of every box of `tree` (see the module's modelling
-/// choices); `ifcs` holds each inline formatting context by container, and
-/// `role` says what each box is to the walk.
+/// choices); `ifcs` holds each inline formatting context by container,
+/// `role` says what each box is to the walk, and `tables` what tables need.
 pub fn sizes(
     tree: &BoxTree,
     styles: &[ComputedStyle],
@@ -103,7 +126,9 @@ pub fn sizes(
     role: &dyn Fn(BoxId) -> Role,
     fonts: &impl TextFns,
     arena: &Arena,
+    tables: &Tables<'_>,
 ) -> Intrinsic {
+    let (grids, quirks) = (tables.grids, tables.quirks);
     let n = tree.boxes.len();
     let mut outer = vec![(0i32, 0i32); n];
     let mut content = vec![(0i32, 0i32); n];
@@ -116,9 +141,40 @@ pub fn sizes(
                 let w = used_width(natural(what, s, fonts, arena, lb.node), s, 0);
                 (w, w)
             }
-            _ if matches!(role(b), Role::Flow | Role::Atomic | Role::Root) => {
+            BoxKind::Table { .. } => {
+                let c = table_sizes(tree, arena, styles, &content, grids, quirks, b);
+                if let Some(slot) = content.get_mut(b) {
+                    *slot = c;
+                }
+                c
+            }
+            BoxKind::TableWrapper { .. } => {
+                let c = wrapper_sizes(tree, s, &outer, b);
+                if let Some(slot) = content.get_mut(b) {
+                    *slot = c;
+                }
+                c
+            }
+            _ if matches!(role(b), Role::Flow | Role::Atomic | Role::Root | Role::Cell) => {
                 let c = if let Some(ifc) = ifcs.get(&b) {
-                    line_sizes(ifc, styles, &|a| outer.get(a).copied().unwrap_or((0, 0)))
+                    // The Quirks Mode Standard's §3.8: "if cell has a computed
+                    // value of the 'width' property that is 'auto'".
+                    let is_image = |a: BoxId| {
+                        matches!(
+                            tree.get(a).map(|x| &x.kind),
+                            Some(BoxKind::Replaced {
+                                what: Replaced::Image,
+                                inline: true,
+                            })
+                        )
+                    };
+                    let quirk = quirks && role(b) == Role::Cell && matches!(s.width, Size::Auto);
+                    line_sizes(
+                        ifc,
+                        styles,
+                        &|a| outer.get(a).copied().unwrap_or((0, 0)),
+                        quirk.then_some(&is_image as &dyn Fn(BoxId) -> bool),
+                    )
                 } else {
                     lb.children
                         .iter()
@@ -142,4 +198,67 @@ pub fn sizes(
     }
 
     Intrinsic { outer, content }
+}
+
+/// Table box `t`'s content sizes: its columns' widths with the border
+/// spacing (item 5.15).
+fn table_sizes(
+    tree: &BoxTree,
+    arena: &Arena,
+    styles: &[ComputedStyle],
+    content: &[(i32, i32)],
+    grids: &HashMap<BoxId, Grid>,
+    quirks: bool,
+    t: BoxId,
+) -> (i32, i32) {
+    let Some(grid) = grids.get(&t).filter(|g| g.has_slots()) else {
+        return (0, 0);
+    };
+    let s = styles.get(t);
+    let hs = s
+        .filter(|s| !s.border_collapse)
+        .map_or(0, |s| s.border_spacing[0].max(0));
+    let x = Inputs {
+        tree,
+        arena,
+        styles,
+        content,
+        quirks,
+    };
+    if crate::table::is_fixed(tree, styles, t) {
+        let w = measure::fixed_sizes(&measure::fixed_columns(grid, &x, hs), hs);
+        (w, w)
+    } else {
+        measure::grid_sizes(&measure::columns(grid, &x, hs), hs)
+    }
+}
+
+/// Table wrapper box `w`'s content sizes (style `s`, which holds its
+/// table's `width` and `min-width`): CSS Tables 3 §3.9.1's used width of its
+/// table with no room and with unlimited room (item 5.15).
+fn wrapper_sizes(tree: &BoxTree, s: &ComputedStyle, outer: &[(i32, i32)], w: BoxId) -> (i32, i32) {
+    let children = tree.children(w);
+    let table = children
+        .iter()
+        .copied()
+        .find(|&c| matches!(tree.class(c), Class::Table { .. }));
+    let (gridmin, gridmax) = table.and_then(|t| outer.get(t).copied()).unwrap_or((0, 0));
+    let capmin = children
+        .iter()
+        .filter(|&&c| tree.class(c) == Class::Caption)
+        .map(|&c| outer.get(c).map_or(0, |o| o.0))
+        .max()
+        .unwrap_or(0);
+    measure::table_intrinsic(TableWidthInput {
+        gridmin,
+        gridmax,
+        capmin,
+        min_width: fixed_size(s.min_width),
+        // A percentage `width` counts as `auto` here.
+        width: match s.width {
+            Size::Lp(Lp::Px64(v)) => Some(v),
+            _ => None,
+        },
+        available: 0,
+    })
 }

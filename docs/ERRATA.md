@@ -671,3 +671,59 @@ it evidently means. Each entry records what we specified instead.
   `BlockFacts::may_collapse_through` in
   `crates/clazel-layout/src/flow/margins.rs`.
 - **Reported upstream:** not yet.
+
+## CSS Tables 3 §3.9.1: GRIDMIN, GRIDMAX and the assignable width leave out the table's borders and padding
+
+- **Spec:** CSS Table Module Level 3, Editor's Draft, `css-tables-3/Overview.bs`
+  at w3c/csswg-drafts commit `e13fe879106ad83dd89faecab5edad868c7efbfa`,
+  <https://drafts.csswg.org/css-tables-3/#computing-the-table-width>
+- **Text:** "The row/column-grid width minimum (GRIDMIN) width is the sum of
+  the min-content width of all the columns plus cell spacing or borders. The
+  row/column-grid width maximum (GRIDMAX) width is the sum of the max-content
+  width of all the columns plus cell spacing or borders." "The used min-width
+  of a table is the greater of the resolved 'min-width', CAPMIN, and GRIDMIN."
+  "If the table-root's 'width' property has a computed value … other than auto,
+  the used width is the greater of resolved-table-width, and the used min-width
+  of the table." "The assignable table width is the used width of the table
+  minus the total horizontal border spacing (if any)."
+- **Problem:** a table's `width` is its border box's (HTML's user agent sheet
+  has `table { box-sizing: border-box }`, and CSS 2.1 §17.6.1 says so for
+  HTML), but GRIDMIN and GRIDMAX, read literally, are the columns and the
+  spacing only. Compared with a border-box width, a table with borders or
+  padding could then be made narrower than its columns need, and the
+  assignable width would count the table's borders and padding as room for
+  columns. §3.8.2 defines the "table intrinsic offsets" ("the parts of the
+  padding and border of a table that are relevant to intrinsic width
+  calculation") for exactly this use, and nothing else in the draft uses them.
+- **We specify:** GRIDMIN and GRIDMAX include the table intrinsic offsets (its
+  horizontal borders and padding), and the assignable width is the used width
+  less them and the total horizontal border spacing (the table box's content
+  width less the spacing). See `table_width` and `enter_table` in
+  `crates/clazel-layout/src/flow/block.rs` and `crates/clazel-layout/src/table/mod.rs`.
+- **Reported upstream:** not yet.
+
+## CSS Tables 3 §3.8.3: a spanning cell's contribution divides by a baseline max-content width that can be zero
+
+- **Spec:** CSS Table Module Level 3, Editor's Draft, `css-tables-3/Overview.bs`
+  at w3c/csswg-drafts commit `e13fe879106ad83dd89faecab5edad868c7efbfa`,
+  <https://drafts.csswg.org/css-tables-3/#computing-column-measures>
+- **Text:** in "min-content width of a column based on cells of span up to N
+  (N > 1)": "the product of: the ratio of the max-content width based on cells
+  of span up to N-1 of the column to the baseline max-content width [and] the
+  outer min-content width of the cell minus the baseline max-content width and
+  baseline border spacing, or 0 if this is negative"; the max-content
+  contribution has the same ratio.
+- **Problem:** the baseline max-content width is the sum of the spanned
+  columns' max-content widths, which is zero whenever every spanned column is
+  empty so far, for example a table whose only cell is `<td colspan=2>`. The
+  ratio is then undefined and the cell contributes nothing defined, though its
+  width must go somewhere. The first product of the same contribution says "or
+  zero if this ratio is undefined", but zero here would leave the cell's width
+  unaccounted for. The percentage contribution handles its own zero
+  denominator with "1 divided by the number of columns spanned", and §3.9.3.2
+  increases columns with no max-content width "by equal amounts".
+- **We specify:** when the baseline max-content width is zero, the cell's
+  excess min-content and max-content widths are shared equally among the
+  columns it spans (`span_contribution` in
+  `crates/clazel-layout/src/table/measure.rs`).
+- **Reported upstream:** not yet.

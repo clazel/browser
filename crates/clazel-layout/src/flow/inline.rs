@@ -1187,6 +1187,7 @@ pub fn intrinsic(
     ifc: &Ifc,
     styles: &[ComputedStyle],
     atomic: &dyn Fn(BoxId) -> (i32, i32),
+    keep_images: Option<&dyn Fn(BoxId) -> bool>,
 ) -> (i32, i32) {
     let edges: Vec<InlineEdges> = ifc
         .inlines
@@ -1214,8 +1215,30 @@ pub fn intrinsic(
         base.saturating_add(lead.get(k).copied().unwrap_or(0))
             .saturating_add(trail.get(k).copied().unwrap_or(0))
     };
-    let min =
-        crate::text::lines::min_content(&ifc.units, &ifc.wraps, |k, pen| width(k, pen, false));
+    // The Quirks Mode Standard's §3.8 (item 5.15): in the min-content width
+    // of an auto-width table cell's own inline formatting context, "img
+    // elements that are inline-level replaced elements … must not have a
+    // soft wrap opportunity before or after them".
+    let quirk_wraps: Option<Vec<Wrap>> = keep_images.map(|is_image| {
+        let mut wraps = ifc.wraps.clone();
+        for (k, u) in ifc.units.iter().enumerate() {
+            let image =
+                matches!(u.kind, Kind::Atomic) && ifc.owner.get(k).is_some_and(|&b| is_image(b));
+            if !image {
+                continue;
+            }
+            for at in [k.checked_sub(1), Some(k)].into_iter().flatten() {
+                if let Some(w) = wraps.get_mut(at)
+                    && matches!(w, Wrap::Soft | Wrap::Emergency { .. })
+                {
+                    *w = Wrap::None;
+                }
+            }
+        }
+        wraps
+    });
+    let wraps = quirk_wraps.as_deref().unwrap_or(&ifc.wraps);
+    let min = crate::text::lines::min_content(&ifc.units, wraps, |k, pen| width(k, pen, false));
     let max = crate::text::lines::max_content(&ifc.units, &ifc.wraps, |k, pen| width(k, pen, true));
     let indent = styles
         .get(ifc.container)

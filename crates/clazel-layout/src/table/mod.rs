@@ -209,4 +209,26 @@
 //!   inline formatting context), §3.9 (a `nowrap` cell's `width` as its
 //!   minimum), §3.10 (an empty table's height and borders) and §3.13.
 
+pub mod distribute;
+pub mod grid;
+pub mod measure;
+pub mod rows;
 pub mod state;
+
+use clazel_style::cascade::computed::{ComputedStyle, Size};
+
+use crate::boxes::{BoxId, BoxTree};
+
+/// Whether table box `table` is laid out by CSS 2.1 §17.5.2.1's fixed
+/// algorithm: its `table-layout` is `fixed` and its `width` (held by its
+/// wrapper box, `flow/style.rs`) is not `auto` ("A value of 'auto' (for
+/// both 'display: table' and 'display: inline-table') means use the
+/// automatic table layout algorithm").
+pub fn is_fixed(tree: &BoxTree, styles: &[ComputedStyle], table: BoxId) -> bool {
+    let fixed = styles.get(table).is_some_and(|s| s.table_layout_fixed);
+    let wrapper = tree.get(table).and_then(|t| t.parent);
+    fixed
+        && wrapper
+            .and_then(|w| styles.get(w))
+            .is_some_and(|s| !matches!(s.width, Size::Auto))
+}
