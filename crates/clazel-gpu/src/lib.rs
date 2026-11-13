@@ -45,6 +45,8 @@ pub mod backend;
 pub mod batch;
 pub mod blocklist;
 pub mod channel;
+#[cfg(windows)]
+pub mod d3d12;
 pub mod geom;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 pub mod metal;

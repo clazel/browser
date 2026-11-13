@@ -43,8 +43,17 @@
 //! `GpuReady`, which the crash policy (item 5.17c) counts as a refusal of the
 //! machine's GPU.
 //!
-//! Windows has no GPU backend yet (item 5.17b's rest), so nothing here enters
-//! its policy; `clazel-sandbox` holds it as data.
+//! **Windows** ([`start_d3d12`]), where a running process cannot be confined:
+//! the host starts the GPU process already inside its AppContainer and Job
+//! Object (`clazel-renderer`'s `launch`, with `clazel_sandbox::appcontainer`'s
+//! `GPU_*` policy), so there is no moment before the sandbox and nothing to
+//! enter. The order here is:
+//!
+//! 1. check that the process is in an AppContainer, and stop if it is not;
+//! 2. make the Direct3D 12 backend;
+//! 3. draw and check the warm-up frame, as on Linux.
+//!
+//! None of this has run on Windows.
 
 use std::fmt;
 
@@ -197,6 +206,26 @@ pub fn start_vulkan(software: bool) -> Result<crate::vulkan::VulkanBackend, Fail
     layer("landlock", landlock())?;
     let software = crate::backend::Backend::adapter(&backend).software;
     seccomp(software).map_err(|e| Failure::Layer("seccomp", e))?;
+    Ok(backend)
+}
+
+/// Steps 1 to 3 on Windows: the Direct3D 12 backend (`software` chooses the
+/// adapter, `crate::d3d12`), in a process that the host started inside the GPU
+/// process's AppContainer. On `Err` the process must exit.
+#[cfg(windows)]
+pub fn start_d3d12(software: bool) -> Result<crate::d3d12::D3d12Backend, Failure> {
+    match clazel_sys::windows::is_appcontainer() {
+        Ok(true) => {}
+        Ok(false) => {
+            return Err(Failure::Layer(
+                "appcontainer",
+                "the GPU process was not started inside an AppContainer".to_owned(),
+            ));
+        }
+        Err(e) => return Err(Failure::Layer("appcontainer", e.to_string())),
+    }
+    let mut backend = crate::d3d12::D3d12Backend::new(software).map_err(Failure::Device)?;
+    warm_up(&mut backend)?;
     Ok(backend)
 }
 

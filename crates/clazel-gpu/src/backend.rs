@@ -79,6 +79,20 @@ pub fn quad_bytes(quads: &[Quad]) -> Vec<u8> {
     out
 }
 
+/// The first `row` bytes of each `pitch` bytes of `padded`: the rows of a
+/// target copied with padding after each (Direct3D 12 pads a copied row to a
+/// multiple of 256 bytes), packed. `None` if either is 0 or `row > pitch`.
+pub fn packed_rows(padded: &[u8], pitch: usize, row: usize) -> Option<Vec<u8>> {
+    if pitch == 0 || row == 0 || row > pitch {
+        return None;
+    }
+    let mut out = Vec::with_capacity(padded.len().checked_div(pitch)?.checked_mul(row)?);
+    for line in padded.chunks_exact(pitch) {
+        out.extend_from_slice(line.get(..row)?);
+    }
+    Some(out)
+}
+
 /// One step of a frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Op {
@@ -150,6 +164,22 @@ pub trait Backend {
 mod tests {
     use super::{QUAD_BYTES, Quad, quad_bytes};
     use crate::geom::Rect;
+
+    #[test]
+    fn padded_rows_are_packed() {
+        use super::packed_rows;
+        // Two rows of 3 bytes, each padded to 4.
+        let padded = [1, 2, 3, 0, 4, 5, 6, 0];
+        assert_eq!(packed_rows(&padded, 4, 3), Some(vec![1, 2, 3, 4, 5, 6]));
+        // No padding.
+        assert_eq!(packed_rows(&padded, 4, 4), Some(padded.to_vec()));
+        // A last row cut short is left out; the sizes must make sense.
+        assert_eq!(packed_rows(&padded[..6], 4, 3), Some(vec![1, 2, 3]));
+        assert_eq!(packed_rows(&padded, 0, 0), None);
+        assert_eq!(packed_rows(&padded, 4, 0), None);
+        assert_eq!(packed_rows(&padded, 3, 4), None);
+        assert_eq!(packed_rows(&[], 4, 3), Some(Vec::new()));
+    }
 
     #[test]
     fn a_quad_is_nine_little_endian_words() {

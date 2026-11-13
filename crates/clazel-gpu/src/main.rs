@@ -9,13 +9,16 @@
 //!   ([`clazel_gpu::channel`]), inherited from the host, which cleared their
 //!   close-on-exec flags for this start: socket pairs on macOS, pipes on Linux,
 //!   where `/dev/fd/N` cannot open a socket. Each is opened again through
-//!   `/dev/fd`, which needs no `unsafe`, **before** the sandbox is entered.
+//!   `/dev/fd`, which needs no `unsafe`, **before** the sandbox is entered. On
+//!   Windows they are the values of two inherited pipe handles, each duplicated
+//!   and read or written through `clazel_sys::windows::Inherited`.
 //! - `--ignore-blocklist` is `browse --gpu=hardware` (item 5.17c).
 //! - `--software` is `browse --gpu=software`: the software driver (lavapipe on
-//!   Linux). On macOS there is none, so the start is refused.
+//!   Linux, WARP on Windows). On macOS there is none, so the start is refused.
 //!
 //! Then the backend and the sandbox (`clazel_gpu::sandbox`, item 5.21a: Metal on
-//! macOS on Apple silicon, Vulkan on Linux), the blocklist (`Gpu::start`), the
+//! macOS on Apple silicon, Vulkan on Linux, Direct3D 12 on Windows, where the
+//! host has already confined the process), the blocklist (`Gpu::start`), the
 //! answer (`GpuReady` or `GpuRefused`) and the loop (`process::run`). Every other
 //! target has no GPU backend yet (item 5.17b's rest), so the process says so and
 //! exits, which the crash policy counts as a refusal.
@@ -62,7 +65,11 @@ fn main() -> ExitCode {
     }
 }
 
-#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux")))]
+#[cfg(not(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+)))]
 fn run(_: Args) -> Result<String, String> {
     Err("no GPU backend on this platform yet (phase-5.md item 5.17b)".to_owned())
 }
@@ -83,22 +90,62 @@ fn backend(software: bool) -> Result<clazel_gpu::vulkan::VulkanBackend, String> 
     Ok(backend)
 }
 
+/// The backend (`clazel_gpu::sandbox`), in a process the host started inside
+/// the GPU process's AppContainer. The adapter is the machine's GPU if DXGI
+/// lists one, else WARP; with `software`, WARP.
+#[cfg(windows)]
+fn backend(software: bool) -> Result<clazel_gpu::d3d12::D3d12Backend, String> {
+    let backend = clazel_gpu::sandbox::start_d3d12(software).map_err(|e| e.to_string())?;
+    eprintln!("clazel-gpu: drawing with {}", backend.device_name());
+    Ok(backend)
+}
+
+/// The list channel to read and the surface channel to write, from their
+/// descriptor numbers. Before the sandbox, which refuses every open after it.
 #[cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux"))]
+fn channels(args: Args) -> Result<(std::fs::File, std::fs::File), String> {
+    let list = std::fs::File::open(format!("/dev/fd/{}", args.list))
+        .map_err(|e| format!("cannot open the list channel {}: {e}", args.list))?;
+    let surface = std::fs::OpenOptions::new()
+        .write(true)
+        .open(format!("/dev/fd/{}", args.surface))
+        .map_err(|e| format!("cannot open the surface channel {}: {e}", args.surface))?;
+    Ok((list, surface))
+}
+
+/// The list channel to read and the surface channel to write, from the values
+/// of the two handles this process inherited.
+#[cfg(windows)]
+fn channels(
+    args: Args,
+) -> Result<
+    (
+        clazel_sys::windows::Inherited,
+        clazel_sys::windows::Inherited,
+    ),
+    String,
+> {
+    use clazel_sys::windows::Inherited;
+    let list = Inherited::open(u64::from(args.list))
+        .map_err(|e| format!("cannot open the list channel {}: {e}", args.list))?;
+    let surface = Inherited::open(u64::from(args.surface))
+        .map_err(|e| format!("cannot open the surface channel {}: {e}", args.surface))?;
+    Ok((list, surface))
+}
+
+#[cfg(any(
+    all(target_os = "macos", target_arch = "aarch64"),
+    target_os = "linux",
+    windows
+))]
 fn run(args: Args) -> Result<String, String> {
-    use std::fs::{File, OpenOptions};
     use std::io::Write;
 
     use clazel_gpu::Gpu;
     use clazel_gpu::process::{Server, ready_frame, refused_frame, run};
     use clazel_gpu::start::{Check, Launch, Mode};
 
-    // Before the sandbox, which refuses every open after it.
-    let list = File::open(format!("/dev/fd/{}", args.list))
-        .map_err(|e| format!("cannot open the list channel {}: {e}", args.list))?;
-    let surface = OpenOptions::new()
-        .write(true)
-        .open(format!("/dev/fd/{}", args.surface))
-        .map_err(|e| format!("cannot open the surface channel {}: {e}", args.surface))?;
+    let (list, surface) = channels(args)?;
     let backend = backend(args.software)?;
     let launch = Launch {
         mode: if args.software {
