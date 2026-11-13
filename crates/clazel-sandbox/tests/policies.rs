@@ -281,3 +281,97 @@ fn seatbelt_profile_shape() {
     assert_eq!(p.matches("(deny default)").count(), 1);
     assert!(!p.contains("(allow default)"));
 }
+
+// Item 5.21a: the GPU process's policies.
+
+#[test]
+fn gpu_programs_allow_exactly_the_gpu_list_below_1024() -> Result<(), String> {
+    use clazel_sandbox::seccomp::gpu_program;
+    for arch in Arch::ALL {
+        let prog = gpu_program(arch).map_err(|e| format!("{e:?}"))?;
+        validate(&prog).map_err(|e| format!("{e:?}"))?;
+        assert_eq!(
+            prog.len(),
+            syscalls::ALLOWLIST.len() + syscalls::GPU_EXTRA.len() + 6
+        );
+        for nr in (0..1024u32).step_by(miri_step()) {
+            let got = run(&prog, &SeccompData::new(nr, arch.audit_arch()));
+            let want = if syscalls::is_gpu_allowed(arch, nr) {
+                SECCOMP_RET_ALLOW
+            } else {
+                SECCOMP_RET_KILL_PROCESS
+            };
+            assert_eq!(got, Ok(want), "{arch:?} syscall {nr}");
+            let other = match arch {
+                Arch::X86_64 => AUDIT_ARCH_AARCH64,
+                Arch::Aarch64 => AUDIT_ARCH_X86_64,
+            };
+            assert_eq!(
+                run(&prog, &SeccompData::new(nr, other)),
+                Ok(SECCOMP_RET_KILL_PROCESS)
+            );
+        }
+    }
+    Ok(())
+}
+
+/// The GPU list is the renderer's plus its additions: everything the renderer may
+/// call, the GPU process may too, and the additions are exactly the plan's.
+#[test]
+fn gpu_list_is_the_renderers_plus_the_additions() {
+    for arch in Arch::ALL {
+        for s in syscalls::ALLOWLIST {
+            assert!(syscalls::is_gpu_allowed(arch, s.number(arch)), "{}", s.name);
+        }
+        for s in syscalls::GPU_EXTRA {
+            assert!(!syscalls::is_allowed(arch, s.number(arch)), "{}", s.name);
+            assert!(syscalls::is_gpu_allowed(arch, s.number(arch)), "{}", s.name);
+        }
+    }
+    let names: Vec<&str> = syscalls::GPU_EXTRA.iter().map(|s| s.name).collect();
+    assert_eq!(
+        names,
+        [
+            "ioctl",
+            "getpid",
+            "sendmsg",
+            "recvmsg",
+            "clone",
+            "sched_getaffinity",
+            "set_robust_list",
+            "rseq",
+            "clone3"
+        ]
+    );
+}
+
+/// The GPU profile is `(deny default)` and nothing else: the measured profile
+/// after the warm-up (`seatbelt.rs`).
+#[test]
+fn gpu_seatbelt_profile_is_deny_default_alone() {
+    assert!(seatbelt::GPU.is_empty());
+    assert_eq!(seatbelt::gpu_profile(), "(version 1)\n(deny default)\n");
+}
+
+/// The Windows GPU policy is the renderer's less `win32k`, plus `registryRead`,
+/// under its own name (the plan's measured decision).
+#[test]
+fn gpu_appcontainer_policy_is_the_renderers_less_win32k() {
+    use clazel_sandbox::appcontainer as ac;
+    let win32k = ac::MITIGATIONS
+        .iter()
+        .find(|m| m.name == "WIN32K_SYSTEM_CALL_DISABLE_ALWAYS_ON")
+        .map(|m| m.mask);
+    assert_eq!(win32k, Some(1 << 28));
+    assert_eq!(
+        ac::gpu_mitigation_mask(),
+        ac::mitigation_mask() & !(1u64 << 28)
+    );
+    assert_eq!(ac::GPU_CAPABILITIES, ["registryRead"]);
+    assert!(ac::CAPABILITIES.is_empty());
+    assert_ne!(ac::GPU_CONTAINER_NAME, ac::CONTAINER_NAME);
+    assert_eq!(ac::GPU_JOB, ac::RENDERER_JOB);
+    for name in ac::GPU_WITHOUT {
+        assert!(ac::MITIGATIONS.iter().any(|m| m.name == *name), "{name}");
+    }
+}

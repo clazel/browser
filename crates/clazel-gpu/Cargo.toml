@@ -16,6 +16,12 @@ clazel-sys = { path = "../clazel-sys" }
 # The GPU process's Seatbelt profile, as data (item 5.21a); our own crate.
 clazel-sandbox = { path = "../clazel-sandbox" }
 
+# The GPU process's sandbox entered for real (item 5.21a): the test runs itself
+# again as a child, which must be on its main thread with no harness around it.
+[[test]]
+name = "sandbox_macos"
+harness = false
+
 # Verification tier (docs/VERIFICATION.md). The plan places this crate at tier 0
 # (item 5.17b): a GPU driver is in its trusted base whatever is proven here. The
 # Kani harnesses in src/proofs.rs are evidence for the batching and atlas
