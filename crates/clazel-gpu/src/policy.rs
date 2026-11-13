@@ -552,3 +552,626 @@ impl Policy {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Action, Config, Demotion, Event, Phase, Policy, Reason, SiteId, TabId, WINDOW_MS};
+    use crate::start::Mode;
+
+    const LINUX: Config = Config {
+        fallback: true,
+        software_only: false,
+    };
+    const MACOS: Config = Config {
+        fallback: false,
+        software_only: false,
+    };
+    const T: TabId = TabId(1);
+    const U: TabId = TabId(2);
+    const MIN: u64 = 60_000;
+
+    fn start(tab: TabId, software: bool) -> Option<Action> {
+        Some(Action::Start { tab, software })
+    }
+
+    fn notice(tab: TabId, reason: Reason) -> Option<Action> {
+        Some(Action::Notice { tab, reason })
+    }
+
+    /// A policy with tab `tab` open on `site` and drawing in hardware.
+    fn drawing(config: Config, tabs: &[(TabId, u64)]) -> Policy {
+        let mut p = Policy::new(config);
+        for &(tab, site) in tabs {
+            assert_eq!(
+                p.step(
+                    Event::Opened {
+                        tab,
+                        site: SiteId(site)
+                    },
+                    0
+                ),
+                start(tab, false)
+            );
+            assert_eq!(
+                p.step(
+                    Event::Ready {
+                        tab,
+                        software: false
+                    },
+                    0
+                ),
+                Some(Action::Drawing {
+                    tab,
+                    software: false
+                })
+            );
+        }
+        p
+    }
+
+    /// Exit and come back up, at `now`; the action of the exit.
+    fn crash(p: &mut Policy, tab: TabId, now: u64) -> Option<Action> {
+        let a = p.step(Event::Exited { tab }, now);
+        if let Some(Action::Start { software, .. }) = a {
+            p.step(Event::Ready { tab, software }, now);
+        }
+        a
+    }
+
+    fn phase(p: &Policy, tab: TabId) -> Option<Phase> {
+        p.tab(tab).map(|t| t.phase)
+    }
+
+    // Opened.
+
+    #[test]
+    fn a_tab_opens_in_hardware() {
+        let mut p = Policy::new(LINUX);
+        assert_eq!(
+            p.step(
+                Event::Opened {
+                    tab: T,
+                    site: SiteId(1)
+                },
+                0
+            ),
+            start(T, false)
+        );
+        assert_eq!(phase(&p, T), Some(Phase::Starting));
+        // Opening it again changes nothing.
+        let before = p.clone();
+        assert_eq!(
+            p.step(
+                Event::Opened {
+                    tab: T,
+                    site: SiteId(2)
+                },
+                0
+            ),
+            None
+        );
+        assert_eq!(p, before);
+    }
+
+    #[test]
+    fn gpu_software_opens_in_software_or_the_notice() {
+        let mut p = Policy::new(Config {
+            fallback: true,
+            software_only: true,
+        });
+        let open = Event::Opened {
+            tab: T,
+            site: SiteId(1),
+        };
+        assert_eq!(p.step(open, 0), start(T, true));
+        let mut p = Policy::new(Config {
+            fallback: false,
+            software_only: true,
+        });
+        assert_eq!(p.step(open, 0), notice(T, Reason::NoSoftware));
+        assert!(p.invariant());
+    }
+
+    // Ready.
+
+    #[test]
+    fn ready_rows() {
+        // Hardware says hardware: drawing.
+        let p = drawing(LINUX, &[(T, 1)]);
+        assert_eq!(phase(&p, T), Some(Phase::Running));
+        // Hardware says software (only lavapipe was found): drawing in software.
+        let mut p = Policy::new(LINUX);
+        p.step(
+            Event::Opened {
+                tab: T,
+                site: SiteId(1),
+            },
+            0,
+        );
+        assert_eq!(
+            p.step(
+                Event::Ready {
+                    tab: T,
+                    software: true
+                },
+                0
+            ),
+            Some(Action::Drawing {
+                tab: T,
+                software: true
+            })
+        );
+        assert_eq!(p.tab(T).map(|t| t.mode), Some(Mode::Software));
+        // A second Ready, once running: ignored.
+        let before = p.clone();
+        assert_eq!(
+            p.step(
+                Event::Ready {
+                    tab: T,
+                    software: true
+                },
+                0
+            ),
+            None
+        );
+        assert_eq!(p, before);
+        // Without a fallback, hardware saying software is out of order.
+        let mut p = Policy::new(MACOS);
+        p.step(
+            Event::Opened {
+                tab: T,
+                site: SiteId(1),
+            },
+            0,
+        );
+        assert_eq!(
+            p.step(
+                Event::Ready {
+                    tab: T,
+                    software: true
+                },
+                0
+            ),
+            None
+        );
+        assert_eq!(phase(&p, T), Some(Phase::Starting));
+        // Software saying hardware is out of order.
+        let mut p = Policy::new(Config {
+            fallback: true,
+            software_only: true,
+        });
+        p.step(
+            Event::Opened {
+                tab: T,
+                site: SiteId(1),
+            },
+            0,
+        );
+        assert_eq!(
+            p.step(
+                Event::Ready {
+                    tab: T,
+                    software: false
+                },
+                0
+            ),
+            None
+        );
+        assert_eq!(
+            p.step(
+                Event::Ready {
+                    tab: T,
+                    software: true
+                },
+                0
+            ),
+            Some(Action::Drawing {
+                tab: T,
+                software: true
+            })
+        );
+    }
+
+    // Refused, and exits before Ready.
+
+    #[test]
+    fn a_refusal_puts_every_tab_in_software() {
+        let mut p = drawing(LINUX, &[(U, 2)]);
+        p.step(
+            Event::Opened {
+                tab: T,
+                site: SiteId(1),
+            },
+            0,
+        );
+        assert_eq!(p.step(Event::Refused { tab: T }, 1), start(T, true));
+        assert_eq!(p.shared.demoted, Some(Demotion::Refused));
+        // The other tab keeps drawing in hardware until its next start.
+        assert_eq!(
+            p.tab(U).map(|t| (t.mode, t.phase)),
+            Some((Mode::Hardware, Phase::Running))
+        );
+        assert_eq!(crash(&mut p, U, 2), start(U, true));
+        // A refusal from a software process, or once drawing, is ignored.
+        let before = p.clone();
+        assert_eq!(p.step(Event::Refused { tab: T }, 3), None);
+        p.step(
+            Event::Ready {
+                tab: T,
+                software: true,
+            },
+            3,
+        );
+        let mut q = drawing(LINUX, &[(T, 1)]);
+        let q_before = q.clone();
+        assert_eq!(q.step(Event::Refused { tab: T }, 3), None);
+        assert_eq!(q, q_before);
+        assert_ne!(p, before);
+    }
+
+    #[test]
+    fn an_exit_before_ready_is_a_refusal() {
+        let mut p = Policy::new(LINUX);
+        p.step(
+            Event::Opened {
+                tab: T,
+                site: SiteId(1),
+            },
+            0,
+        );
+        assert_eq!(p.step(Event::Exited { tab: T }, 1), start(T, true));
+        assert_eq!(p.shared.demoted, Some(Demotion::Refused));
+        // Software also dies before Ready: the notice.
+        assert_eq!(
+            p.step(Event::Exited { tab: T }, 2),
+            notice(T, Reason::NoSoftware)
+        );
+        // Stopped: an exit changes nothing.
+        let before = p.clone();
+        assert_eq!(p.step(Event::Exited { tab: T }, 3), None);
+        assert_eq!(p, before);
+    }
+
+    #[test]
+    fn without_a_fallback_a_refusal_is_the_notice() {
+        for event in [Event::Refused { tab: T }, Event::Exited { tab: T }] {
+            let mut p = Policy::new(MACOS);
+            p.step(
+                Event::Opened {
+                    tab: T,
+                    site: SiteId(1),
+                },
+                0,
+            );
+            assert_eq!(p.step(event, 1), notice(T, Reason::Refused));
+            assert_eq!(p.shared.demoted, None);
+            // A reload tries once more, in hardware.
+            assert_eq!(p.step(Event::Reload { tab: T }, 2), start(T, false));
+            assert_eq!(p.step(event, 3), notice(T, Reason::Refused));
+        }
+    }
+
+    // Exits while drawing: rules 1, 2 and 4.
+
+    #[test]
+    fn three_exits_in_five_minutes_go_to_software_then_the_notice() {
+        let mut p = drawing(LINUX, &[(T, 1)]);
+        assert_eq!(crash(&mut p, T, MIN), start(T, false));
+        assert_eq!(crash(&mut p, T, 2 * MIN), start(T, false));
+        assert_eq!(crash(&mut p, T, 3 * MIN), start(T, true));
+        assert_eq!(p.shared.demoted, None);
+        assert_eq!(crash(&mut p, T, 4 * MIN), start(T, true));
+        assert_eq!(crash(&mut p, T, 5 * MIN), start(T, true));
+        assert_eq!(crash(&mut p, T, 6 * MIN), notice(T, Reason::Crashed));
+        assert!(p.invariant());
+    }
+
+    #[test]
+    fn exits_further_apart_than_the_window_keep_restarting() {
+        let mut p = drawing(LINUX, &[(T, 1)]);
+        // The first and third of any three are five minutes apart or more.
+        for n in 1..=20 {
+            assert_eq!(crash(&mut p, T, n * WINDOW_MS / 2), start(T, false));
+        }
+        // Just inside: the third goes to software.
+        let mut p = drawing(LINUX, &[(T, 1)]);
+        assert_eq!(crash(&mut p, T, 10), start(T, false));
+        assert_eq!(crash(&mut p, T, 20), start(T, false));
+        assert_eq!(crash(&mut p, T, 10 + WINDOW_MS - 1), start(T, true));
+    }
+
+    #[test]
+    fn without_a_fallback_three_exits_are_the_notice() {
+        let mut p = drawing(MACOS, &[(T, 1)]);
+        assert_eq!(crash(&mut p, T, 1), start(T, false));
+        assert_eq!(crash(&mut p, T, 2), start(T, false));
+        assert_eq!(crash(&mut p, T, 3), notice(T, Reason::Crashed));
+    }
+
+    #[test]
+    fn a_clock_going_back_counts_as_no_time() {
+        let mut p = drawing(LINUX, &[(T, 1)]);
+        assert_eq!(crash(&mut p, T, 10 * MIN), start(T, false));
+        assert_eq!(crash(&mut p, T, 20 * MIN), start(T, false));
+        assert_eq!(crash(&mut p, T, MIN), start(T, true));
+    }
+
+    // Sites: rule 3.
+
+    #[test]
+    fn three_sites_put_every_tab_in_software() {
+        let mut p = drawing(
+            LINUX,
+            &[(TabId(1), 1), (TabId(2), 2), (TabId(3), 3), (TabId(4), 4)],
+        );
+        assert_eq!(crash(&mut p, TabId(1), MIN), start(TabId(1), false));
+        assert_eq!(crash(&mut p, TabId(2), 2 * MIN), start(TabId(2), false));
+        assert_eq!(p.shared.demoted, None);
+        // The third site: it restarts in software, and so will every other tab.
+        assert_eq!(crash(&mut p, TabId(3), 3 * MIN), start(TabId(3), true));
+        assert_eq!(p.shared.demoted, Some(Demotion::Sites));
+        assert_eq!(
+            p.tab(TabId(4)).map(|t| (t.mode, t.phase)),
+            Some((Mode::Hardware, Phase::Running))
+        );
+        assert_eq!(crash(&mut p, TabId(4), 3 * MIN), start(TabId(4), true));
+        // For the rest of the run: another site does not bring hardware back.
+        assert_eq!(
+            p.step(
+                Event::Navigated {
+                    tab: TabId(4),
+                    site: SiteId(9)
+                },
+                100 * MIN
+            ),
+            start(TabId(4), true)
+        );
+    }
+
+    #[test]
+    fn one_or_two_sites_never_demote_another() {
+        // One page crashing its own process on purpose, in many tabs.
+        let mut p = drawing(
+            LINUX,
+            &[(TabId(1), 1), (TabId(2), 1), (TabId(3), 2), (TabId(4), 3)],
+        );
+        for n in 0..50 {
+            crash(&mut p, TabId(1 + n % 3), n);
+        }
+        assert_eq!(p.shared.demoted, None);
+        assert_eq!(
+            p.tab(TabId(4)).map(|t| (t.mode, t.phase)),
+            Some((Mode::Hardware, Phase::Running))
+        );
+        // Three sites, but not within one window.
+        let mut p = drawing(LINUX, &[(TabId(1), 1), (TabId(2), 2), (TabId(3), 3)]);
+        crash(&mut p, TabId(1), 0);
+        crash(&mut p, TabId(2), 3 * MIN);
+        crash(&mut p, TabId(3), 3 * MIN + WINDOW_MS);
+        assert_eq!(p.shared.demoted, None);
+        // Software exits are not counted by site.
+        let mut p = drawing(LINUX, &[(TabId(1), 1), (TabId(2), 2), (TabId(3), 3)]);
+        for t in 1..=3 {
+            crash(&mut p, TabId(1), t);
+        }
+        assert_eq!(p.tab(TabId(1)).map(|t| t.mode), Some(Mode::Software));
+        // Its hardware exits are now out of the window; its software exit is not
+        // counted, so two hardware sites remain.
+        crash(&mut p, TabId(1), WINDOW_MS + 4);
+        crash(&mut p, TabId(2), WINDOW_MS + 5);
+        assert_eq!(p.shared.demoted, None);
+        crash(&mut p, TabId(3), WINDOW_MS + 6);
+        assert_eq!(p.shared.demoted, None);
+    }
+
+    #[test]
+    fn without_a_fallback_sites_demote_nothing() {
+        let mut p = drawing(MACOS, &[(TabId(1), 1), (TabId(2), 2), (TabId(3), 3)]);
+        for t in 1..=3 {
+            assert_eq!(crash(&mut p, TabId(t), t), start(TabId(t), false));
+        }
+        assert_eq!(p.shared.demoted, None);
+    }
+
+    // Navigation and reload.
+
+    #[test]
+    fn another_site_brings_a_tab_back_to_hardware() {
+        let mut p = drawing(LINUX, &[(T, 1)]);
+        for t in 1..=3 {
+            crash(&mut p, T, t);
+        }
+        assert_eq!(p.tab(T).map(|t| t.mode), Some(Mode::Software));
+        // The same site: nothing.
+        let before = p.clone();
+        assert_eq!(
+            p.step(
+                Event::Navigated {
+                    tab: T,
+                    site: SiteId(1)
+                },
+                4
+            ),
+            None
+        );
+        assert_eq!(p, before);
+        assert_eq!(
+            p.step(
+                Event::Navigated {
+                    tab: T,
+                    site: SiteId(2)
+                },
+                4
+            ),
+            start(T, false)
+        );
+        assert_eq!(p.tab(T).map(|t| t.exits), Some([None, None]));
+    }
+
+    #[test]
+    fn a_stopped_tab_restarts_on_another_site_not_the_same() {
+        let mut p = drawing(MACOS, &[(T, 1)]);
+        for t in 1..=3 {
+            crash(&mut p, T, t);
+        }
+        assert_eq!(phase(&p, T), Some(Phase::Stopped(Reason::Crashed)));
+        assert_eq!(
+            p.step(
+                Event::Navigated {
+                    tab: T,
+                    site: SiteId(1)
+                },
+                4
+            ),
+            None
+        );
+        assert_eq!(
+            p.step(
+                Event::Navigated {
+                    tab: T,
+                    site: SiteId(2)
+                },
+                4
+            ),
+            start(T, false)
+        );
+    }
+
+    #[test]
+    fn a_reload_tries_once_more() {
+        let mut p = drawing(LINUX, &[(T, 1)]);
+        for t in 1..=6 {
+            crash(&mut p, T, t);
+        }
+        assert_eq!(phase(&p, T), Some(Phase::Stopped(Reason::Crashed)));
+        // A reload of a tab that is not stopped does nothing.
+        let mut q = drawing(LINUX, &[(T, 1)]);
+        let before = q.clone();
+        assert_eq!(q.step(Event::Reload { tab: T }, 7), None);
+        assert_eq!(q, before);
+        // Once more, then the notice at the next exit within the window.
+        assert_eq!(p.step(Event::Reload { tab: T }, 10), start(T, true));
+        p.step(
+            Event::Ready {
+                tab: T,
+                software: true,
+            },
+            10,
+        );
+        assert_eq!(crash(&mut p, T, 10 + MIN), notice(T, Reason::Crashed));
+        // After a window, the reloaded tab counts afresh.
+        assert_eq!(p.step(Event::Reload { tab: T }, 20 * MIN), start(T, true));
+        p.step(
+            Event::Ready {
+                tab: T,
+                software: true,
+            },
+            20 * MIN,
+        );
+        assert_eq!(crash(&mut p, T, 26 * MIN), start(T, true));
+    }
+
+    // Closed, and unknown tabs.
+
+    #[test]
+    fn closed_tabs_and_unknown_tabs() {
+        let mut p = drawing(LINUX, &[(T, 1), (U, 2)]);
+        assert_eq!(p.step(Event::Closed { tab: T }, 1), None);
+        assert!(p.tab(T).is_none());
+        let before = p.clone();
+        for event in [
+            Event::Ready {
+                tab: T,
+                software: false,
+            },
+            Event::Refused { tab: T },
+            Event::Exited { tab: T },
+            Event::Navigated {
+                tab: T,
+                site: SiteId(5),
+            },
+            Event::Reload { tab: T },
+            Event::Closed { tab: T },
+        ] {
+            assert_eq!(p.step(event, 2), None);
+        }
+        assert_eq!(p, before);
+    }
+
+    /// The restart bound over a trace: a tab whose process crashes every second
+    /// starts twice in hardware, once into software, twice more there, and then
+    /// shows the notice. No reload, so nothing more.
+    #[test]
+    fn a_tab_crashing_forever_restarts_five_times() {
+        let mut p = drawing(LINUX, &[(T, 1)]);
+        let mut starts = 0;
+        for s in 1..=3600 {
+            if let Some(Action::Start { .. }) = crash(&mut p, T, s * 1000) {
+                starts += 1;
+            }
+        }
+        assert_eq!(starts, 5);
+        assert_eq!(phase(&p, T), Some(Phase::Stopped(Reason::Crashed)));
+    }
+
+    /// Containment and the invariants over a long pseudo-random trace: every step
+    /// leaves every other tab's record unchanged, acts only for the event's tab, and
+    /// keeps the invariants; every-tab demotion by sites needs three sites.
+    #[test]
+    fn every_step_is_contained() {
+        let steps = if cfg!(miri) { 300 } else { 20_000 };
+        for config in [LINUX, MACOS] {
+            let mut p = Policy::new(config);
+            let mut seed: u64 = 0xc1a2e1;
+            let mut now = 0u64;
+            for _ in 0..steps {
+                seed = seed
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                let r = seed >> 33;
+                let tab = TabId(r % 5);
+                let site = SiteId((r >> 3) % 4);
+                now = now.saturating_add((r >> 5) % (2 * MIN));
+                let event = match (r >> 12) % 8 {
+                    0 => Event::Opened { tab, site },
+                    1 | 2 => Event::Ready {
+                        tab,
+                        software: (r >> 16).is_multiple_of(2),
+                    },
+                    3 => Event::Refused { tab },
+                    4 | 5 => Event::Exited { tab },
+                    6 => Event::Navigated { tab, site },
+                    _ => {
+                        if (r >> 16).is_multiple_of(4) {
+                            Event::Closed { tab }
+                        } else {
+                            Event::Reload { tab }
+                        }
+                    }
+                };
+                let before = p.clone();
+                let action = p.step(event, now);
+                assert!(p.invariant());
+                assert!(action.is_none_or(|a| a.tab() == event.tab()));
+                for t in &before.tabs {
+                    if t.id != event.tab() {
+                        assert_eq!(p.tab(t.id), Some(t));
+                    }
+                }
+                if before.shared.demoted.is_none() && p.shared.demoted == Some(Demotion::Sites) {
+                    let others = before
+                        .shared
+                        .sites
+                        .iter()
+                        .flatten()
+                        .filter(|&&(s, t)| {
+                            Some(s) != before.tab(event.tab()).map(|r| r.site)
+                                && super::within(t, now)
+                        })
+                        .count();
+                    assert_eq!(others, 2);
+                }
+            }
+        }
+    }
+}

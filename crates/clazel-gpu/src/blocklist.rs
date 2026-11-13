@@ -405,3 +405,262 @@ impl Blocklist {
         self.entries.iter().find(|e| e.matches(adapter))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        APPLE, Adapter, Api, Blocklist, Drivers, MAX_BYTES, MAX_ENTRIES, MAX_LINE, ParseError,
+        Problem, Version, parse_hex,
+    };
+
+    const GOOD: &str =
+        "vulkan 0x10de 0x2204 470-470.57 https://example.org/1 hangs on the first frame";
+
+    fn nvidia(driver: Option<[u16; 4]>) -> Adapter {
+        Adapter {
+            api: Api::Vulkan,
+            vendor: 0x10de,
+            device: 0x2204,
+            driver: driver.map(Version),
+            software: false,
+        }
+    }
+
+    fn problem(text: &str) -> Option<ParseError> {
+        Blocklist::parse(text.as_bytes()).err()
+    }
+
+    #[test]
+    fn the_shipped_table_parses_and_is_empty() -> Result<(), ParseError> {
+        // The plan: the table starts empty, and an entry is added only when a real
+        // failure is recorded.
+        assert_eq!(Blocklist::shipped()?.entries(), &[]);
+        Ok(())
+    }
+
+    #[test]
+    fn an_entry_has_six_fields() -> Result<(), ParseError> {
+        let list = Blocklist::parse(format!("# a comment\n\n   \n  {GOOD}  \n").as_bytes())?;
+        let [e] = list.entries() else {
+            return Err(ParseError {
+                line: 0,
+                what: Problem::MissingField,
+            });
+        };
+        assert_eq!(e.line, 4);
+        assert_eq!(e.api, Api::Vulkan);
+        assert_eq!(e.vendor, 0x10de);
+        assert_eq!(e.device, Some(0x2204));
+        assert_eq!(
+            e.drivers,
+            Drivers::Range {
+                first: Version([470, 0, 0, 0]),
+                last: Version([470, 57, u16::MAX, u16::MAX]),
+            }
+        );
+        assert_eq!(e.evidence, "https://example.org/1");
+        assert_eq!(e.reason, "hangs on the first frame");
+        assert!(e.well_formed());
+        Ok(())
+    }
+
+    #[test]
+    fn apis_wildcards_and_single_versions() -> Result<(), ParseError> {
+        let list = Blocklist::parse(
+            b"d3d12 0x8086 * 31.0.101.4502 https://e/x a\nmetal 0x106B * * https://e/y b",
+        )?;
+        let [d3d, metal] = list.entries() else {
+            return Err(ParseError {
+                line: 0,
+                what: Problem::MissingField,
+            });
+        };
+        assert_eq!((d3d.api, d3d.device), (Api::D3d12, None));
+        assert_eq!(
+            d3d.drivers,
+            Drivers::Range {
+                first: Version([31, 0, 101, 4502]),
+                last: Version([31, 0, 101, 4502]),
+            }
+        );
+        assert_eq!(
+            (metal.api, metal.vendor, metal.drivers),
+            (Api::Metal, APPLE, Drivers::Any)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn hostile_text_is_refused_with_its_line() {
+        let cases: &[(&str, u32, Problem)] = &[
+            ("vulkan\t0x1 * * https://e r", 1, Problem::Byte),
+            ("# fine\r\nvulkan 0x1 * * https://e r", 1, Problem::Byte),
+            ("# caf\u{e9}", 1, Problem::Byte),
+            ("\n\0", 2, Problem::Byte),
+            ("\u{7f}", 1, Problem::Byte),
+            ("vulkan 0x1 * * https://e", 1, Problem::MissingField),
+            ("vulkan 0x1 * * https://e    ", 1, Problem::MissingField),
+            ("vulkan", 1, Problem::MissingField),
+            ("opengl 0x1 * * https://e r", 1, Problem::Api),
+            ("Vulkan 0x1 * * https://e r", 1, Problem::Api),
+            ("vulkan 10de * * https://e r", 1, Problem::Vendor),
+            ("vulkan 0x * * https://e r", 1, Problem::Vendor),
+            ("vulkan 0x123456789 * * https://e r", 1, Problem::Vendor),
+            ("vulkan 0xg * * https://e r", 1, Problem::Vendor),
+            ("vulkan 0X1 * * https://e r", 1, Problem::Vendor),
+            ("vulkan * * * https://e r", 1, Problem::Vendor),
+            ("vulkan 0x1 ** * https://e r", 1, Problem::Device),
+            ("vulkan 0x1 -1 * https://e r", 1, Problem::Device),
+            ("vulkan 0x1 * 1.2.3.4.5 https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * 65536 https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * 1..2 https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * 1. https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * - https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * 1- https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * 1-2-3 https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * 000001 https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * +1 https://e r", 1, Problem::Drivers),
+            ("vulkan 0x1 * 2-1 https://e r", 1, Problem::EmptyRange),
+            ("vulkan 0x1 * 1.1-1.0 https://e r", 1, Problem::EmptyRange),
+            // A shorter last version covers what it is a prefix of: not empty.
+            (
+                "# ok\nvulkan 0x1 * 1.0.1-1 https://e r\nvulkan",
+                3,
+                Problem::MissingField,
+            ),
+            ("vulkan 0x1 * * http://e r", 1, Problem::Evidence),
+            ("vulkan 0x1 * * https:// r", 1, Problem::Evidence),
+            ("vulkan 0x1 * * HTTPS://e r", 1, Problem::Evidence),
+        ];
+        for &(text, line, what) in cases {
+            assert_eq!(problem(text), Some(ParseError { line, what }), "{text:?}");
+        }
+    }
+
+    #[test]
+    fn limits_are_kept() {
+        let long_line = format!("# {}", "x".repeat(MAX_LINE));
+        assert_eq!(
+            problem(&long_line),
+            Some(ParseError {
+                line: 1,
+                what: Problem::LineTooLong
+            })
+        );
+        let at_limit = format!("#{}", "x".repeat(MAX_LINE - 1));
+        assert_eq!(problem(&at_limit), None);
+        let huge = "\n".repeat(MAX_BYTES + 1);
+        assert_eq!(
+            problem(&huge),
+            Some(ParseError {
+                line: 0,
+                what: Problem::TooLong
+            })
+        );
+        let short = "vulkan 0x1 * * https://e r\n";
+        let full = short.repeat(MAX_ENTRIES);
+        assert_eq!(problem(&full), None);
+        let over = short.repeat(MAX_ENTRIES + 1);
+        assert_eq!(
+            problem(&over),
+            Some(ParseError {
+                line: 1025,
+                what: Problem::TooManyEntries
+            })
+        );
+    }
+
+    #[test]
+    fn hex_and_versions() {
+        assert_eq!(parse_hex(b"0xffffffff"), Some(u32::MAX));
+        assert_eq!(parse_hex(b"0x00000000"), Some(0));
+        assert_eq!(parse_hex(b"0xAbC"), Some(0xabc));
+        assert_eq!(parse_hex(b"0x"), None);
+        assert_eq!(Version::parse(b"1", 7), Some(Version([1, 7, 7, 7])));
+        assert_eq!(
+            Version::parse(b"65535.0.1.2", 7),
+            Some(Version([65535, 0, 1, 2]))
+        );
+        assert_eq!(Version::parse(b"00001", 0), Some(Version([1, 0, 0, 0])));
+        assert_eq!(Version::parse(b"", 0), None);
+        assert_eq!(Version::parse(b"1.", 0), None);
+        assert_eq!(Version::parse(b".1", 0), None);
+        assert!(Version([1, 2, 0, 0]) < Version([1, 10, 0, 0]));
+    }
+
+    #[test]
+    fn matching() -> Result<(), ParseError> {
+        let list = Blocklist::parse(GOOD.as_bytes())?;
+        // In range, at both ends, and either side of them.
+        assert!(list.check(&nvidia(Some([470, 0, 0, 0]))).is_some());
+        assert!(list.check(&nvidia(Some([470, 57, 2, 0]))).is_some());
+        assert!(list.check(&nvidia(Some([470, 57, 65535, 65535]))).is_some());
+        assert!(
+            list.check(&nvidia(Some([469, 65535, 65535, 65535])))
+                .is_none()
+        );
+        assert!(list.check(&nvidia(Some([470, 58, 0, 0]))).is_none());
+        // An unknown version matches only `*`.
+        assert!(list.check(&nvidia(None)).is_none());
+        // Another device, vendor or API.
+        let mut other = nvidia(Some([470, 1, 0, 0]));
+        other.device = 0x2205;
+        assert!(list.check(&other).is_none());
+        let mut other = nvidia(Some([470, 1, 0, 0]));
+        other.vendor = 0x10df;
+        assert!(list.check(&other).is_none());
+        let mut other = nvidia(Some([470, 1, 0, 0]));
+        other.api = Api::D3d12;
+        assert!(list.check(&other).is_none());
+        // A software adapter is never refused.
+        let mut soft = nvidia(Some([470, 1, 0, 0]));
+        soft.software = true;
+        assert!(list.check(&soft).is_none());
+        // Wildcards, and the first match is reported.
+        let list = Blocklist::parse(
+            b"vulkan 0x10de * * https://e/a first\nvulkan 0x10de 0x2204 * https://e/b second",
+        )?;
+        assert_eq!(list.check(&nvidia(None)).map(|e| e.line), Some(1));
+        Ok(())
+    }
+
+    /// Any bytes: an answer, never a panic. A fixed pseudo-random sequence, and
+    /// every one-byte change of a good line.
+    #[test]
+    fn arbitrary_bytes_never_panic() {
+        let mut seed: u64 = 0x5eed;
+        let rounds = if cfg!(miri) { 40 } else { 4000 };
+        for _ in 0..rounds {
+            let mut bytes = Vec::new();
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            let len = usize::try_from(seed >> 58).unwrap_or(0);
+            for _ in 0..len {
+                seed = seed
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407);
+                // Mostly the format's own bytes, so lines get past the first field.
+                let alphabet = b"vulkan 0x1fd*.-https://e r\n#";
+                let pick = usize::try_from(seed >> 59).unwrap_or(0);
+                bytes.push(alphabet.get(pick).copied().unwrap_or(seed.to_le_bytes()[7]));
+            }
+            if let Ok(list) = Blocklist::parse(&bytes) {
+                assert!(list.entries().iter().all(super::Entry::well_formed));
+            }
+        }
+        let good = GOOD.as_bytes();
+        let step = if cfg!(miri) { 9 } else { 1 };
+        for i in (0..good.len()).step_by(step) {
+            for b in [0u8, b' ', b'-', b'.', b'*', b'9', 0xff] {
+                let mut bytes = good.to_vec();
+                if let Some(slot) = bytes.get_mut(i) {
+                    *slot = b;
+                }
+                if let Ok(list) = Blocklist::parse(&bytes) {
+                    assert!(list.entries().iter().all(super::Entry::well_formed));
+                }
+            }
+        }
+    }
+}
