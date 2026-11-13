@@ -84,8 +84,15 @@
 //! The framer's timing on a partial record, and `feed` over a stream in any
 //! chunks, are [`super::framing`]'s ([`super::framing::theorem_disp_stream`]).
 //!
-//! Not covered: transport end of file (the crate's `die`; `connection.rs` leaves
-//! transport closure out of scope); `acknowledge` of bytes other than the
+//! - [`truncation_fails`]: the end of the transport during the server's
+//!   flight (§6.1), from agreeing states. Every result the crate's `eof`
+//!   contract allows is `die`: `internal_error` with no record; the
+//!   transcription's `receive_transport_end` reports `Truncated`, no error,
+//!   nothing written. Neither indicates end-of-data.
+//!
+//! Not covered: the end of the transport outside `Handshake` (after the
+//! peer's close_notify the crate's `eof` contract says nothing, and the
+//! driver has ended by then); `acknowledge` of bytes other than the
 //! flight (a local `internal_error`; the transcription has no transport);
 //! `feed` outside the `Handshake` mode (it does nothing).
 
@@ -2247,6 +2254,52 @@ pub proof fn lemma_start_agrees(c: crate::schedule::spec::Crypto, k: crate::hell
     }
 }
 
+// ---------------------------------------------------------------------------
+// §6.1: the end of the transport.
+// ---------------------------------------------------------------------------
+
+/// **Stated difference, truncation in the server's flight** (§6.1: the end
+/// of the transport before the server's close_notify, from WAIT_EE to
+/// WAIT_FINISHED). From agreeing states, every result the crate's `eof`
+/// may give (`dispatcher_contract::truncation_ensures`) is `die`: it fails
+/// the connection with `internal_error` and no record
+/// (`Action::Fail(internal_error, None)`, the state `failed()`, every key
+/// dropped). The transcription's `receive_transport_end` reports
+/// `Truncated` with the connection unchanged, no error and nothing to write
+/// (its modelling choice "during the handshake": the A.1 state stays where
+/// it was, and the handshake can never complete). Neither writes anything
+/// and neither reads the bytes pending (an incomplete record, the crate's
+/// reassembly and the transcription's `handshake_fragments`).
+///
+/// Both conform: neither indicates end-of-data (§6.1: "the TLS
+/// implementation MUST receive a "close_notify" alert before indicating
+/// end-of-data to the application layer"); the RFC names no alert for a
+/// transport that ends during the handshake (A.1 has no arrow for it, §6.2
+/// lists no such condition), so the crate's `internal_error` is a local
+/// report, never written; and the crate's ending the connection at once is
+/// a usage choice: "No part of this standard should be taken to dictate the
+/// manner in which a usage profile for TLS manages its data transport,
+/// including when connections are opened or closed."
+pub open spec fn truncation_fails(cl: ClientConnection, action: Action, after: State,
+    t: crate::transcription::connection::TransportEnd) -> bool
+{
+    &&& action == Action::Fail(crate::spec::INTERNAL_ERROR, None)
+    &&& after == crate::connection::dispatcher_spec::failed()
+    &&& t == crate::transcription::connection::TransportEnd::Truncated(
+        super::post_handshake::transport_end_progress(cl.connection))
+}
+
+/// [`truncation_fails`], from agreeing states, for every result the crate's
+/// `eof` contract allows.
+pub proof fn lemma_eof(p: Primitives, v: crate::auth::spec::Verification, s: State, cl: ClientConnection,
+    action: Action, after: State)
+    requires
+        dispatcher_agrees(p, v, s, cl),
+        crate::connection::dispatcher_contract::truncation_ensures(s, action, after),
+    ensures truncation_fails(cl, action, after, crate::transcription::connection::receive_transport_end(cl.connection)),
+{
+}
+
 /// **The dispatcher theorem.** RFC 8446 §4.3, §4.4, §5, §5.1 to §5.4, §6,
 /// §6.1, §7.1, §7.3 and Appendix D.4, under [`hypotheses`] (the two sides'
 /// primitives are the same functions, with the lengths both model) and
@@ -2276,7 +2329,11 @@ pub proof fn lemma_start_agrees(c: crate::schedule::spec::Crypto, k: crate::hell
 ///   theorem's `post_agrees` holds ([`ack_agrees`], [`sent_agrees`]);
 /// - `feed` on a completed record is that record's step
 ///   ([`lemma_feed_complete`]), and the transcription reads a stream one
-///   whole record at a time (`post_handshake::lemma_stream_prefix`).
+///   whole record at a time (`post_handshake::lemma_stream_prefix`);
+/// - **the end of the transport** from agreeing states: every result the
+///   crate's `eof` contract allows against `receive_transport_end`, the
+///   stated difference [`truncation_fails`] (both write nothing; the crate
+///   fails with `internal_error`, the transcription reports truncation).
 pub proof fn theorem_dispatcher_equivalence(c: crate::schedule::spec::Crypto, k: crate::hello::join_spec::KeyExchange,
     v: crate::auth::spec::Verification, f: Ciphers, p: Primitives)
     requires
@@ -2302,6 +2359,12 @@ pub proof fn theorem_dispatcher_equivalence(c: crate::schedule::spec::Crypto, k:
             (#[trigger] crate::transcription::connection::receive_stream(p, conn, b + rest)).0
                 == super::post_handshake::joined(crate::transcription::connection::receive_stream(p, conn, b).0,
                     |c2: Connection| crate::transcription::connection::receive_stream(p, c2, rest).0),
+        // §6.1: the end of the transport.
+        forall|s: State, cl: ClientConnection, action: Action, after: State|
+            #[trigger] dispatcher_agrees(p, v, s, cl)
+                && #[trigger] crate::connection::dispatcher_contract::truncation_ensures(s, action, after)
+                ==> truncation_fails(cl, action, after,
+                    crate::transcription::connection::receive_transport_end(cl.connection)),
 {
     assert forall|cl: ClientConnection, c0: Connection, sh: crate::transcription::key_exchange::ServerHello, raw: Seq<u8>,
         config: crate::hello::client_spec::Config, transcript: crate::transcript::spec::State, peer_key: Seq<u8>,
@@ -2329,6 +2392,13 @@ pub proof fn theorem_dispatcher_equivalence(c: crate::schedule::spec::Crypto, k:
             == super::post_handshake::joined(crate::transcription::connection::receive_stream(p, conn, b).0,
                 |c2: Connection| crate::transcription::connection::receive_stream(p, c2, rest).0) by {
         super::post_handshake::lemma_stream_prefix(p, conn, b, rest);
+    }
+    assert forall|s: State, cl: ClientConnection, action: Action, after: State|
+        #[trigger] dispatcher_agrees(p, v, s, cl)
+            && #[trigger] crate::connection::dispatcher_contract::truncation_ensures(s, action, after)
+            implies truncation_fails(cl, action, after,
+                crate::transcription::connection::receive_transport_end(cl.connection)) by {
+        lemma_eof(p, v, s, cl, action, after);
     }
 }
 
