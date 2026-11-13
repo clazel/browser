@@ -1,0 +1,46 @@
+#case 0
+#data "<!DOCTYPE html><html><body><xyz:abc></xyz:abc>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <xyz:abc>
+
+#case 1
+#data "<!DOCTYPE html><html><body><xyz:abc></xyz:abc><span></span>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <xyz:abc>
+    <span>
+
+#case 2
+#data "<!DOCTYPE html><html><html abc:def=gh><xyz:abc></xyz:abc>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <xyz:abc>
+
+#case 3
+#data "<!DOCTYPE html><html xml:lang=bar><html xml:lang=foo>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 4
+#data "<!DOCTYPE html><html 123=456>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 5
+#data "<!DOCTYPE html><html 123=456><html 789=012>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+
+#case 6
+#data "<!DOCTYPE html><html><body 789=012>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+

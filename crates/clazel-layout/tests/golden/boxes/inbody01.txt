@@ -1,0 +1,42 @@
+#case 0
+#data "<button>1</foo>"
+root
+  block <html>
+    block <body>
+      inline-block <button>
+        text "1"
+
+#case 1
+#data "<foo>1<p>2</foo>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <foo> first
+          text "1"
+      block <p>
+        text "2"
+      block (anonymous)
+        inline <foo> last
+
+#case 2
+#data "<dd>1</foo>"
+root
+  block <html>
+    block <body>
+      block <dd>
+        text "1"
+
+#case 3
+#data "<foo>1<dd>2</foo>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <foo> first
+          text "1"
+      block <dd>
+        text "2"
+      block (anonymous)
+        inline <foo> last
+

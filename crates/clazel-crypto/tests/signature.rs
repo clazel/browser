@@ -1,13 +1,18 @@
 //! CertificateVerify signature checks (`clazel_crypto::signature::exec::verify`)
 //! with the standards' own vectors where they exist: RFC 8032 §7.1 TEST 1
 //! and TEST 2 (Ed25519) and RFC 6979 A.2.5 (ECDSA P-256, SHA-256, message
-//! "sample"). RSA-PSS has no deterministic vector; its fixtures are in
-//! tests/fixtures/rsa-pss (see SOURCE.md there). Every refusal the spec's
-//! modelling choices list is exercised.
+//! "sample") and Wycheproof's tcId 1 of `ecdsa_secp384r1_sha384_test.json`
+//! and `ecdsa_secp384r1_sha256_test.json` (ECDSA P-384; the files are in
+//! `clazel-p384`, whose conformance test runs all of them). RSA-PSS has no
+//! deterministic vector; its fixtures are in tests/fixtures/rsa-pss (see
+//! SOURCE.md there). Every refusal the spec's modelling choices list is
+//! exercised.
 
 use clazel_crypto::signature::exec::verify;
 
 const ECDSA_P256_SHA256: u16 = 0x0403;
+const ECDSA_P384_SHA384: u16 = 0x0503;
+const ECDSA_P521_SHA512: u16 = 0x0603;
 const RSA_PSS_RSAE_SHA256: u16 = 0x0804;
 const RSA_PSS_RSAE_SHA384: u16 = 0x0805;
 const RSA_PSS_RSAE_SHA512: u16 = 0x0806;
@@ -57,6 +62,19 @@ fn p256_spki(point: &[u8]) -> Result<Vec<u8>, String> {
         &[
             tlv(0x06, &hex("2a8648ce3d0201")?)?,
             tlv(0x06, &hex("2a8648ce3d030107")?)?,
+        ]
+        .concat(),
+    )?;
+    let key = tlv(0x03, &[&[0u8][..], point].concat())?;
+    tlv(0x30, &[algorithm, key].concat())
+}
+
+fn p384_spki(point: &[u8]) -> Result<Vec<u8>, String> {
+    let algorithm = tlv(
+        0x30,
+        &[
+            tlv(0x06, &hex("2a8648ce3d0201")?)?,
+            tlv(0x06, &hex("2b81040022")?)?,
         ]
         .concat(),
     )?;
@@ -333,6 +351,102 @@ fn rsa_refuses_keys_outside_the_profile() -> TestResult {
     Ok(())
 }
 
+/// Wycheproof's key of group 0, in both `ecdsa_secp384r1_sha*_test.json`.
+fn wycheproof_p384_spki() -> Result<Vec<u8>, String> {
+    p384_spki(&hex(
+        "0429bdb76d5fa741bfd70233cb3a66cc7d44beb3b0663d92a8136650478bcefb61
+         ef182e155a54345a5e8e5e88f064e5bc9a525ab7f764dad3dae1468c2b419f3b62
+         b9ba917d5e8c4fb1ec47404a3fc76474b2713081be9db4c00e043ada9fc4a3",
+    )?)
+}
+
+/// tcId 1 of `ecdsa_secp384r1_sha384_test.json`, over the empty message.
+fn wycheproof_p384_sha384_signature() -> Result<Vec<u8>, String> {
+    hex(
+        "3064023032401249714e9091f05a5e109d5c1216fdc05e98614261aa0dbd9e9cd4
+         415dee29238afbd3b103c1e40ee5c9144aee0f02304326756fb2c4fd726360dd64
+         79b5849478c7a9d054a833a58c1631c33b63c3441336ddf2c7fe0ed129aae6d4dd
+         feb753",
+    )
+}
+
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "three verifications of about 1,150 group operations each; too slow under Miri"
+)]
+fn ecdsa_p384_sha384_verifies_wycheproof_tc1() -> TestResult {
+    let key = wycheproof_p384_spki()?;
+    let sig = wycheproof_p384_sha384_signature()?;
+    assert!(verify(&key, ECDSA_P384_SHA384, b"", &sig));
+    assert!(!verify(&key, ECDSA_P384_SHA384, b"x", &sig));
+    let mut wrong = sig.clone();
+    let last = wrong.last_mut().ok_or("empty signature")?;
+    *last ^= 1;
+    assert!(!verify(&key, ECDSA_P384_SHA384, b"", &wrong));
+    Ok(())
+}
+
+/// RFC 8446 §4.2.3: 0x0503 hashes with SHA-384. A signature over the
+/// SHA-256 digest, valid for this key and message, is refused.
+#[test]
+#[cfg_attr(
+    miri,
+    ignore = "a verification is about 1,150 group operations, too slow under Miri"
+)]
+fn ecdsa_p384_sha384_refuses_a_sha256_signature() -> TestResult {
+    let sig = hex(
+        "3065023100d670d637fcb2da85a22f74ac92939ee2ee5e7d1bb8d6d0afd6f1ef0f
+         883a43872ba285430d4df43f93784e1cd6e6f63702303774da5d699f6bd62b3293
+         76e3b6d3612abc67cb945a109d506d3fde45f4c33893c4428250ef6ccfd6e41740
+         0344eabb",
+    )?;
+    assert!(!verify(
+        &wycheproof_p384_spki()?,
+        ECDSA_P384_SHA384,
+        b"",
+        &sig
+    ));
+    Ok(())
+}
+
+/// RFC 8446 §4.2.3: the scheme names the curve as well as the hash.
+#[test]
+fn ecdsa_schemes_are_bound_to_their_curves() -> TestResult {
+    let key = wycheproof_p384_spki()?;
+    let sig = wycheproof_p384_sha384_signature()?;
+    for scheme in [
+        ECDSA_P256_SHA256,
+        ECDSA_P521_SHA512,
+        RSA_PSS_RSAE_SHA384,
+        ED25519,
+    ] {
+        assert!(!verify(&key, scheme, b"", &sig), "scheme {scheme:#06x}");
+    }
+    let v = rfc_6979()?;
+    assert!(!verify(
+        &v.spki,
+        ECDSA_P384_SHA384,
+        b"sample",
+        &ecdsa_sig(&v.r, &v.s)?
+    ));
+    Ok(())
+}
+
+#[test]
+fn ecdsa_p384_refuses_malformed_signatures() -> TestResult {
+    let key = wycheproof_p384_spki()?;
+    let sig = wycheproof_p384_sha384_signature()?;
+    let mut trailing = sig.clone();
+    trailing.push(0);
+    assert!(!verify(&key, ECDSA_P384_SHA384, b"", &trailing));
+    assert!(!verify(&key, ECDSA_P384_SHA384, b"", &[]));
+    // A 49-octet magnitude does not fit in P-384's r.
+    let long = ecdsa_sig(&[0x7f; 49], &[1])?;
+    assert!(!verify(&key, ECDSA_P384_SHA384, b"", &long));
+    Ok(())
+}
+
 #[test]
 fn garbage_keys_and_unknown_schemes_are_refused() -> TestResult {
     let v = rfc_6979()?;
@@ -344,7 +458,7 @@ fn garbage_keys_and_unknown_schemes_are_refused() -> TestResult {
         b"sample",
         &sig
     ));
-    for scheme in [0x0000u16, 0x0401, 0x0503, 0x0808, 0x0809, 0xffff] {
+    for scheme in [0x0000u16, 0x0401, 0x0503, 0x0603, 0x0808, 0x0809, 0xffff] {
         assert!(
             !verify(&v.spki, scheme, b"sample", &sig),
             "scheme {scheme:#06x}"

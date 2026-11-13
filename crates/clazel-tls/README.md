@@ -12,10 +12,11 @@ profile. Protected traffic-key epochs, the handshake record-key handoff, and
 an initial byte-stream connection dispatcher are built, and so is a
 post-handshake transducer (not yet through Verus; see below). **Socket I/O, entropy
 sourcing and the production cryptography provider (items 3.5e and 3.5f) remain**,
-as do X.509 certificate interpretation and path validation (3.5b). The crate stays at
-`tier = 0` with `target-tier = 2` until they are, and until CI's full run
-has checked every proof, mutation and conformance test on a pull request;
-what is proven today is stated below, not implied by the tier.
+as do X.509 certificate interpretation and path validation (3.5b). The crate is at
+`tier = 2`: CI's full run checks every proof, mutation and conformance
+test, and the clean-room transcription of RFC 8446 is proven equivalent to
+the specs, each difference stated in `src/transcription_equivalence/`.
+What is proven is stated below, not implied by the tier.
 
 ## What it is
 
@@ -192,9 +193,11 @@ what is proven today is stated below, not implied by the tier.
   says how many bytes it consumed. `application_data` is delivered as plaintext
   in order; NewSessionTicket is parsed and then ignored (**no resumption** in
   this phase: no PSK is derived or cached); KeyUpdate updates the server secret
-  and read keys for the next record and, when `update_requested`, sends
-  KeyUpdate(`update_not_requested`) under the old write keys and then updates
-  the write keys; `update_keys` is the client-initiated update. A KeyUpdate has
+  and read keys for the next record and, when `update_requested`, owes one
+  answer (a flag: several requests while silent draw one answer, §4.6.3),
+  sent before the next application data record: KeyUpdate(`update_not_requested`)
+  under the old write keys, then the write keys are updated and the data goes
+  out under them; `update_keys` is the client-initiated update. A KeyUpdate has
   to be the last message of its record and leave no unfinished message (§5.1).
   Any other handshake message after the handshake, an unprotected or protected
   `change_cipher_spec`, and a handshake message interleaved with another record
@@ -221,7 +224,7 @@ no network I/O is included.
 
 ## Verification
 
-Tier 0, target tier 2. The current numbers are in the
+Tier 2, target tier 2. The current numbers are in the
 [status table](../../README.md#verification-status).
 
 - **Proven (Verus, `cargo verus verify`: 814 verified, 0 errors):** the

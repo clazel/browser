@@ -1,0 +1,600 @@
+#case 0
+#data "FOO&gt;BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO>BAR" x=8 base=22.859375 w=86.109375
+
+#case 1
+#data "FOO&gtBAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO>BAR" x=8 base=22.859375 w=86.109375
+
+#case 2
+#data "FOO&gt BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO> BAR" x=8 base=22.859375 w=91.1875
+
+#case 3
+#data "FOO&gt;;;BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO>;;BAR" x=8 base=22.859375 w=96.890625
+
+#case 4
+#data "I'm &notit; I tell you"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "I'm ¬it; I tell you" x=8 base=22.859375 w=138.015625
+
+#case 5
+#data "I'm &notin; I tell you"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "I'm ∉ I tell you" x=8 base=22.859375 w=119.515625
+
+#case 6
+#data "&ammmp;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "&ammmp;" x=8 base=22.859375 w=84.9375
+
+#case 7
+#data "&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;" x=8 base=22.859375 w=14392.015625
+
+#case 8
+#data "FOO& BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO& BAR" x=8 base=22.859375 w=92.03125
+
+#case 9
+#data "FOO&<BAR>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO&" x=8 base=22.859375 w=51.578125
+
+#case 10
+#data "FOO&&&&gt;BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO&&&>BAR" x=8 base=22.859375 w=128.828125
+
+#case 11
+#data "FOO&#41;BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO)BAR" x=8 base=22.859375 w=78.9375
+
+#case 12
+#data "FOO&#x41;BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOABAR" x=8 base=22.859375 w=84.25
+
+#case 13
+#data "FOO&#X41;BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOABAR" x=8 base=22.859375 w=84.25
+
+#case 14
+#data "FOO&#BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO&#BAR" x=8 base=22.859375 w=100.34375
+
+#case 15
+#data "FOO&#ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO&#ZOO" x=8 base=22.859375 w=102.34375
+
+#case 16
+#data "FOO&#xBAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOºR" x=8 base=22.859375 w=56.90625
+
+#case 17
+#data "FOO&#xZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO&#xZOO" x=8 base=22.859375 w=111.359375
+
+#case 18
+#data "FOO&#XZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO&#XZOO" x=8 base=22.859375 w=113.734375
+
+#case 19
+#data "FOO&#41BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO)BAR" x=8 base=22.859375 w=78.9375
+
+#case 20
+#data "FOO&#x41BAR"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO䆺R" x=8 base=22.859375 w=58.984375
+
+#case 21
+#data "FOO&#x41ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOAZOO" x=8 base=22.859375 w=86.25
+
+#case 22
+#data "FOO&#x0000;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 23
+#data "FOO&#x0078;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOxZOO" x=8 base=22.859375 w=83.71875
+
+#case 24
+#data "FOO&#x0079;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOyZOO" x=8 base=22.859375 w=83.734375
+
+#case 25
+#data "FOO&#x0080;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO€ZOO" x=8 base=22.859375 w=84.875
+
+#case 26
+#data "FOO&#x0081;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{81}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 27
+#data "FOO&#x0082;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO‚ZOO" x=8 base=22.859375 w=79.78125
+
+#case 28
+#data "FOO&#x0083;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOƒZOO" x=8 base=22.859375 w=80.609375
+
+#case 29
+#data "FOO&#x0084;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO„ZOO" x=8 base=22.859375 w=82.984375
+
+#case 30
+#data "FOO&#x0085;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO…ZOO" x=8 base=22.859375 w=90.6875
+
+#case 31
+#data "FOO&#x0086;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO†ZOO" x=8 base=22.859375 w=82.6875
+
+#case 32
+#data "FOO&#x0087;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO‡ZOO" x=8 base=22.859375 w=82.6875
+
+#case 33
+#data "FOO&#x0088;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOˆZOO" x=8 base=22.859375 w=82.6875
+
+#case 34
+#data "FOO&#x0089;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO‰ZOO" x=8 base=22.859375 w=96.15625
+
+#case 35
+#data "FOO&#x008A;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOŠZOO" x=8 base=22.859375 w=85.65625
+
+#case 36
+#data "FOO&#x008B;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO‹ZOO" x=8 base=22.859375 w=81.09375
+
+#case 37
+#data "FOO&#x008C;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOŒZOO" x=8 base=22.859375 w=92.890625
+
+#case 38
+#data "FOO&#x008D;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{8d}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 39
+#data "FOO&#x008E;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOŽZOO" x=8 base=22.859375 w=85.8125
+
+#case 40
+#data "FOO&#x008F;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{8f}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 41
+#data "FOO&#x0090;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{90}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 42
+#data "FOO&#x0091;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO‘ZOO" x=8 base=22.859375 w=79.78125
+
+#case 43
+#data "FOO&#x0092;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO’ZOO" x=8 base=22.859375 w=79.78125
+
+#case 44
+#data "FOO&#x0093;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO“ZOO" x=8 base=22.859375 w=82.875
+
+#case 45
+#data "FOO&#x0094;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO”ZOO" x=8 base=22.859375 w=82.875
+
+#case 46
+#data "FOO&#x0095;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO•ZOO" x=8 base=22.859375 w=84.125
+
+#case 47
+#data "FOO&#x0096;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO–ZOO" x=8 base=22.859375 w=82.6875
+
+#case 48
+#data "FOO&#x0097;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO—ZOO" x=8 base=22.859375 w=90.6875
+
+#case 49
+#data "FOO&#x0098;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO˜ZOO" x=8 base=22.859375 w=82.6875
+
+#case 50
+#data "FOO&#x0099;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO™ZOO" x=8 base=22.859375 w=90.6875
+
+#case 51
+#data "FOO&#x009A;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOšZOO" x=8 base=22.859375 w=82.90625
+
+#case 52
+#data "FOO&#x009B;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO›ZOO" x=8 base=22.859375 w=81.09375
+
+#case 53
+#data "FOO&#x009C;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOœZOO" x=8 base=22.859375 w=90.515625
+
+#case 54
+#data "FOO&#x009D;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{9d}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 55
+#data "FOO&#x009E;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOžZOO" x=8 base=22.859375 w=83.125
+
+#case 56
+#data "FOO&#x009F;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOOŸZOO" x=8 base=22.859375 w=85.25
+
+#case 57
+#data "FOO&#x00A0;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{a0}ZOO" x=8 base=22.859375 w=79.78125
+
+#case 58
+#data "FOO&#xD7FF;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{d7ff}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 59
+#data "FOO&#xD800;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 60
+#data "FOO&#xD801;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 61
+#data "FOO&#xDFFE;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 62
+#data "FOO&#xDFFF;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 63
+#data "FOO&#xE000;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{e000}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 64
+#data "FOO&#x10FFFE;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{10fffe}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 65
+#data "FOO&#x1087D4;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{1087d4}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 66
+#data "FOO&#x10FFFF;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO\u{10ffff}ZOO" x=8 base=22.859375 w=84.296875
+
+#case 67
+#data "FOO&#x110000;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 68
+#data "FOO&#xFFFFFF;ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 69
+#data "FOO&#11111111111"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�" x=8 base=22.859375 w=53.75
+
+#case 70
+#data "FOO&#1111111111"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�" x=8 base=22.859375 w=53.75
+
+#case 71
+#data "FOO&#111111111111"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�" x=8 base=22.859375 w=53.75
+
+#case 72
+#data "FOO&#11111111111ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 73
+#data "FOO&#1111111111ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+
+#case 74
+#data "FOO&#111111111111ZOO"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "FOO�ZOO" x=8 base=22.859375 w=91.09375
+

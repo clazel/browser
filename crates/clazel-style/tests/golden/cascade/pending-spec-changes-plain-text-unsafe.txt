@@ -1,0 +1,7 @@
+#case 0
+#data "<body><table>\0filler\0text\0"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+

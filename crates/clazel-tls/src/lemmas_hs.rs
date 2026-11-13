@@ -27,7 +27,7 @@ pub open spec fn server_hello_requires(sh: ServerHello) -> bool {
     &&& sh.random.len() == 32
     &&& vec_in_bounds(sh.session_id_echo, 0, 32)
     &&& forall|i: int| 0 <= i < sh.extensions.len() ==> (#[trigger] sh.extensions[i]).data.len() <= 65535
-    &&& vec_in_bounds(write_list(sh.extensions, |e: Ext| write_ext(e)), 0, 65535)
+    &&& vec_in_bounds(write_list(sh.extensions, |e: Ext| write_ext(e)), 6, 65535)
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ pub proof fn lemma_read_server_hello_write(sh: ServerHello)
     super::lemmas_pl::lemma_read_uint_write(sh.cipher_suite as nat, 2, cm);
     lemma_be_bytes_one(sh.compression);
     super::lemmas_pl::lemma_read_uint_write(sh.compression as nat, 1, e);
-    super::lemmas_ext::lemma_read_exts_write_exts(sh.extensions, 0, 65535, seq![]);
+    super::lemmas_ext::lemma_read_exts_write_exts(sh.extensions, 6, 65535, seq![]);
     assert(e + Seq::<u8>::empty() =~= e);
 }
 
@@ -137,9 +137,9 @@ pub proof fn lemma_read_server_hello_canonical(b: Seq<u8>)
         super::lemmas_pl::lemma_read_uint_canonical(r3, 2);
         let (comp, r5) = read_uint(r4, 1)->Some_0;
         super::lemmas_pl::lemma_read_uint_canonical(r4, 1);
-        let (exts, r6) = read_exts(r5, 0, 65535)->Some_0;
+        let (exts, r6) = read_exts(r5, 6, 65535)->Some_0;
         assert(r6.len() == 0);
-        super::lemmas_ext::lemma_read_exts_canonical(r5, 0, 65535);
+        super::lemmas_ext::lemma_read_exts_canonical(r5, 6, 65535);
         assert(r5 =~= write_exts(exts, 65535));
         assert(b =~= write_server_hello(sh));
         assert(write_u16(ver as u16) =~= be_bytes(ver, 2));

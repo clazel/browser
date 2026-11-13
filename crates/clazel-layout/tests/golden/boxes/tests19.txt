@@ -1,0 +1,976 @@
+#case 0
+#data "<!doctype html><math><mn DefinitionUrl=\"foo\">"
+root
+  block <html>
+    block <body>
+      inline <math>
+        inline <mn>
+
+#case 1
+#data "<!doctype html><html></p><!--foo-->"
+root
+  block <html>
+    block <body>
+
+#case 2
+#data "<!doctype html><head></head></p><!--foo-->"
+root
+  block <html>
+    block <body>
+
+#case 3
+#data "<!doctype html><body><p><pre>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <pre>
+
+#case 4
+#data "<!doctype html><body><p><listing>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <listing>
+
+#case 5
+#data "<!doctype html><p><plaintext>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <plaintext>
+
+#case 6
+#data "<!doctype html><p><h1>"
+root
+  block <html>
+    block <body>
+      block <p>
+      block <h1>
+
+#case 7
+#data "<!doctype html><isindex type=\"hidden\">"
+root
+  block <html>
+    block <body>
+      inline <isindex>
+
+#case 8
+#data "<!doctype html><ruby><p><rp>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <ruby> first
+      block <p>
+      block (anonymous)
+        inline <ruby> last
+
+#case 9
+#data "<!doctype html><ruby><div><span><rp>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <ruby> first
+      block <div>
+        inline <span>
+      block (anonymous)
+        inline <ruby> last
+
+#case 10
+#data "<!doctype html><ruby><div><p><rp>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <ruby> first
+      block <div>
+        block <p>
+      block (anonymous)
+        inline <ruby> last
+
+#case 11
+#data "<!doctype html><ruby><p><rt>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <ruby> first
+      block <p>
+      block (anonymous)
+        inline <ruby> last
+          inline <rt>
+
+#case 12
+#data "<!doctype html><ruby><div><span><rt>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <ruby> first
+      block <div>
+        inline <span>
+          inline <rt>
+      block (anonymous)
+        inline <ruby> last
+
+#case 13
+#data "<!doctype html><ruby><div><p><rt>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <ruby> first
+      block <div>
+        block <p>
+        block (anonymous)
+          inline <rt>
+      block (anonymous)
+        inline <ruby> last
+
+#case 14
+#data "<html><ruby>a<rb>b<rt></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rb>
+          text "b"
+        inline <rt>
+
+#case 15
+#data "<html><ruby>a<rp>b<rt></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+
+#case 16
+#data "<html><ruby>a<rt>b<rt></ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rt>
+          text "b"
+        inline <rt>
+
+#case 17
+#data "<html><ruby>a<rtc>b<rt>c<rb>d</ruby></html>"
+root
+  block <html>
+    block <body>
+      inline <ruby>
+        text "a"
+        inline <rtc>
+          text "b"
+          inline <rt>
+            text "c"
+        inline <rb>
+          text "d"
+
+#case 18
+#data "<!doctype html><math/><foo>"
+root
+  block <html>
+    block <body>
+      inline <math>
+      inline <foo>
+
+#case 19
+#data "<!doctype html><svg/><foo>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+      inline <foo>
+
+#case 20
+#data "<!doctype html><div></body><!--foo-->"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 21
+#data "<!doctype html><h1><div><h3><span></h1>foo"
+root
+  block <html>
+    block <body>
+      block <h1>
+        block <div>
+          block <h3>
+            inline <span>
+          block (anonymous)
+            text "foo"
+
+#case 22
+#data "<!doctype html><p></h3>foo"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+
+#case 23
+#data "<!doctype html><h3><li>abc</h2>foo"
+root
+  block <html>
+    block <body>
+      block <h3>
+        block <li>
+          marker <li> "• "
+          text "abc"
+      block (anonymous)
+        text "foo"
+
+#case 24
+#data "<!doctype html><table>abc<!--foo-->"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "abc"
+      table-wrapper <table>
+        table <table>
+
+#case 25
+#data "<!doctype html><table>  <!--foo-->"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 26
+#data "<!doctype html><table> b <!--foo-->"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text " b "
+      table-wrapper <table>
+        table <table>
+
+#case 27
+#data "<!doctype html><select><option><option>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <option>
+        inline <option>
+
+#case 28
+#data "<!doctype html><select><option></optgroup>"
+root
+  block <html>
+    block <body>
+      inline <select>
+        inline <option>
+
+#case 29
+#data "<!doctype html><dd><optgroup><dd>"
+root
+  block <html>
+    block <body>
+      block <dd>
+        inline <optgroup>
+      block <dd>
+
+#case 30
+#data "<!doctype html><p><math><mi><p><h1>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <math> first
+            inline <mi> first
+        block <p>
+        block <h1>
+        block (anonymous)
+          inline <math> last
+            inline <mi> last
+
+#case 31
+#data "<!doctype html><p><math><mo><p><h1>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <math> first
+            inline <mo> first
+        block <p>
+        block <h1>
+        block (anonymous)
+          inline <math> last
+            inline <mo> last
+
+#case 32
+#data "<!doctype html><p><math><mn><p><h1>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <math> first
+            inline <mn> first
+        block <p>
+        block <h1>
+        block (anonymous)
+          inline <math> last
+            inline <mn> last
+
+#case 33
+#data "<!doctype html><p><math><ms><p><h1>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <math> first
+            inline <ms> first
+        block <p>
+        block <h1>
+        block (anonymous)
+          inline <math> last
+            inline <ms> last
+
+#case 34
+#data "<!doctype html><p><math><mtext><p><h1>"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <math> first
+            inline <mtext> first
+        block <p>
+        block <h1>
+        block (anonymous)
+          inline <math> last
+            inline <mtext> last
+
+#case 35
+#data "<!doctype html><frameset></noframes>"
+root
+  block <html>
+    inline <frameset>
+
+#case 36
+#data "<!doctype html><html c=d><body></html><html a=b>"
+root
+  block <html>
+    block <body>
+
+#case 37
+#data "<!doctype html><html c=d><frameset></frameset></html><html a=b>"
+root
+  block <html>
+    inline <frameset>
+
+#case 38
+#data "<!doctype html><html><frameset></frameset></html><!--foo-->"
+root
+  block <html>
+    inline <frameset>
+
+#case 39
+#data "<!doctype html><html><frameset></frameset></html>  "
+root
+  block <html>
+    inline <frameset>
+
+#case 40
+#data "<!doctype html><html><frameset></frameset></html>abc"
+root
+  block <html>
+    inline <frameset>
+
+#case 41
+#data "<!doctype html><html><frameset></frameset></html><p>"
+root
+  block <html>
+    inline <frameset>
+
+#case 42
+#data "<!doctype html><html><frameset></frameset></html></p>"
+root
+  block <html>
+    inline <frameset>
+
+#case 43
+#data "<html><frameset></frameset></html><!doctype html>"
+root
+  block <html>
+    inline <frameset>
+
+#case 44
+#data "<!doctype html><body><frameset>"
+root
+  block <html>
+    block <body>
+
+#case 45
+#data "<!doctype html><p><frameset><frame>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+
+#case 46
+#data "<!doctype html><p>a<frameset>"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "a"
+
+#case 47
+#data "<!doctype html>�<frameset><frame>"
+root
+  block <html>
+    block <body>
+      text "�"
+
+#case 48
+#data "<!doctype html>&#xFFFD;<frameset><frame>"
+root
+  block <html>
+    block <body>
+      text "�"
+
+#case 49
+#data "<!doctype html>&#0;<frameset><frame>"
+root
+  block <html>
+    block <body>
+      text "�"
+
+#case 50
+#data "<!doctype html><svg>&#xFFFD;</svg><frameset><frame>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "�"
+
+#case 51
+#data "<!doctype html><p> <frameset><frame>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+
+#case 52
+#data "<!doctype html><pre><frameset>"
+root
+  block <html>
+    block <body>
+      block <pre>
+
+#case 53
+#data "<!doctype html><listing><frameset>"
+root
+  block <html>
+    block <body>
+      block <listing>
+
+#case 54
+#data "<!doctype html><li><frameset>"
+root
+  block <html>
+    block <body>
+      block <li>
+        marker <li> "• "
+
+#case 55
+#data "<!doctype html><dd><frameset>"
+root
+  block <html>
+    block <body>
+      block <dd>
+
+#case 56
+#data "<!doctype html><dt><frameset>"
+root
+  block <html>
+    block <body>
+      block <dt>
+
+#case 57
+#data "<!doctype html><button><frameset>"
+root
+  block <html>
+    block <body>
+      inline-block <button>
+
+#case 58
+#data "<!doctype html><applet><frameset>"
+root
+  block <html>
+    block <body>
+      inline <applet>
+
+#case 59
+#data "<!doctype html><marquee><frameset>"
+root
+  block <html>
+    block <body>
+      inline <marquee>
+
+#case 60
+#data "<!doctype html><object><frameset>"
+root
+  block <html>
+    block <body>
+      inline <object>
+
+#case 61
+#data "<!doctype html><table><frameset>"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+
+#case 62
+#data "<!doctype html><area><frameset>"
+root
+  block <html>
+    block <body>
+
+#case 63
+#data "<!doctype html><basefont><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 64
+#data "<!doctype html><bgsound><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 65
+#data "<!doctype html><br><frameset>"
+root
+  block <html>
+    block <body>
+      text <br> "\n" white-space=Pre
+
+#case 66
+#data "<!doctype html><embed><frameset>"
+root
+  block <html>
+    block <body>
+      inline <embed>
+
+#case 67
+#data "<!doctype html><img><frameset>"
+root
+  block <html>
+    block <body>
+      replaced <img> inline Image
+
+#case 68
+#data "<!doctype html><input><frameset>"
+root
+  block <html>
+    block <body>
+      replaced <input> inline Input(Text { chars: 20 })
+
+#case 69
+#data "<!doctype html><keygen><frameset>"
+root
+  block <html>
+    block <body>
+      inline <keygen>
+
+#case 70
+#data "<!doctype html><wbr><frameset>"
+root
+  block <html>
+    block <body>
+      text <wbr> "\u{200b}"
+
+#case 71
+#data "<!doctype html><hr><frameset>"
+root
+  block <html>
+    block <body>
+      block <hr>
+
+#case 72
+#data "<!doctype html><textarea></textarea><frameset>"
+root
+  block <html>
+    block <body>
+      replaced <textarea> inline TextArea { cols: 20, rows: 2 }
+
+#case 73
+#data "<!doctype html><xmp></xmp><frameset>"
+root
+  block <html>
+    block <body>
+      block <xmp>
+
+#case 74
+#data "<!doctype html><iframe></iframe><frameset>"
+root
+  block <html>
+    block <body>
+      replaced <iframe> inline Iframe { src: None }
+
+#case 75
+#data "<!doctype html><select></select><frameset>"
+root
+  block <html>
+    block <body>
+      inline <select>
+
+#case 76
+#data "<!doctype html><svg></svg><frameset><frame>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+
+#case 77
+#data "<!doctype html><math></math><frameset><frame>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+
+#case 78
+#data "<!doctype html><svg><foreignObject><div> <frameset><frame>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+
+#case 79
+#data "<!doctype html><svg>a</svg><frameset><frame>"
+root
+  block <html>
+    block <body>
+      inline <svg>
+        text "a"
+
+#case 80
+#data "<!doctype html><svg> </svg><frameset><frame>"
+root
+  block <html>
+    inline <frameset>
+      inline <frame>
+
+#case 81
+#data "<html>aaa<frameset></frameset>"
+root
+  block <html>
+    block <body>
+      text "aaa"
+
+#case 82
+#data "<html> a <frameset></frameset>"
+root
+  block <html>
+    block <body>
+      text "a "
+
+#case 83
+#data "<!doctype html><div><frameset>"
+root
+  block <html>
+    inline <frameset>
+
+#case 84
+#data "<!doctype html><div><body><frameset>"
+root
+  block <html>
+    block <body>
+      block <div>
+
+#case 85
+#data "<!doctype html><p><math></p>a"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <math>
+      block (anonymous)
+        text "a"
+
+#case 86
+#data "<!doctype html><p><math><mn><span></p>a"
+root
+  block <html>
+    block <body>
+      block <p>
+        block (anonymous)
+          inline <math> first
+            inline <mn> first
+              inline <span> first
+        block <p>
+        block (anonymous)
+          inline <math> last
+            inline <mn> last
+              inline <span> last
+                text "a"
+
+#case 87
+#data "<!doctype html><math></html>"
+root
+  block <html>
+    block <body>
+      inline <math>
+
+#case 88
+#data "<!doctype html><meta charset=\"ascii\">"
+root
+  block <html>
+    block <body>
+
+#case 89
+#data "<!doctype html><meta http-equiv=\"content-type\" content=\"text/html;charset=ascii\">"
+root
+  block <html>
+    block <body>
+
+#case 90
+#data "<!doctype html><head><!--aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa--><meta charset=\"utf8\">"
+root
+  block <html>
+    block <body>
+
+#case 91
+#data "<!doctype html><html a=b><head></head><html c=d>"
+root
+  block <html>
+    block <body>
+
+#case 92
+#data "<!doctype html><image/>"
+root
+  block <html>
+    block <body>
+      replaced <img> inline Image
+
+#case 93
+#data "<!doctype html>a<i>b<table>c<b>d</i>e</b>f"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        text "a"
+        inline <i> first
+          text "bc"
+          inline <b>
+            text "de"
+          text "f"
+      table-wrapper <table>
+        table <table>
+      block (anonymous)
+        inline <i> last
+
+#case 94
+#data "<!doctype html><table><i>a<b>b<div>c<a>d</i>e</b>f"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <i>
+          text "a"
+          inline <b>
+            text "b"
+        inline <b>
+      block <div>
+        inline <b>
+          inline <i>
+            text "c"
+            inline <a>
+              text "d"
+          inline <a>
+            text "e"
+        inline <a>
+          text "f"
+      table-wrapper <table>
+        table <table>
+
+#case 95
+#data "<!doctype html><i>a<b>b<div>c<a>d</i>e</b>f"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <i>
+          text "a"
+          inline <b>
+            text "b"
+        inline <b>
+      block <div>
+        inline <b>
+          inline <i>
+            text "c"
+            inline <a>
+              text "d"
+          inline <a>
+            text "e"
+        inline <a>
+          text "f"
+
+#case 96
+#data "<!doctype html><table><i>a<b>b<div>c</i>"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <i>
+          text "a"
+          inline <b>
+            text "b"
+        inline <b> first
+      block <div>
+        inline <i>
+          text "c"
+      block (anonymous)
+        inline <b> last
+      table-wrapper <table>
+        table <table>
+
+#case 97
+#data "<!doctype html><table><i>a<div>b<tr>c<b>d</i>e"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <i> first
+          text "a"
+      block <div>
+        text "b"
+      block (anonymous)
+        inline <i> last
+        inline <i>
+          text "c"
+          inline <b>
+            text "d"
+        inline <b>
+          text "e"
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+
+#case 98
+#data "<!doctype html><table><td><table><i>a<div>b<b>c</i>d"
+root
+  block <html>
+    block <body>
+      table-wrapper <table>
+        table <table>
+          table-row-group <tbody>
+            table-row <tr>
+              table-cell <td>
+                block (anonymous)
+                  inline <i>
+                    text "a"
+                block <div>
+                  inline <i>
+                    text "b"
+                    inline <b>
+                      text "c"
+                  inline <b>
+                    text "d"
+                table-wrapper <table>
+                  table <table>
+
+#case 99
+#data "<!doctype html><body><bgsound>"
+root
+  block <html>
+    block <body>
+      inline <bgsound>
+
+#case 100
+#data "<!doctype html><body><basefont>"
+root
+  block <html>
+    block <body>
+
+#case 101
+#data "<!doctype html><a><b></a><basefont>"
+root
+  block <html>
+    block <body>
+      inline <a>
+        inline <b>
+
+#case 102
+#data "<!doctype html><a><b></a><bgsound>"
+root
+  block <html>
+    block <body>
+      inline <a>
+        inline <b>
+      inline <bgsound>
+
+#case 103
+#data "<!doctype html><figcaption><article></figcaption>a"
+root
+  block <html>
+    block <body>
+      block <figcaption>
+        block <article>
+      block (anonymous)
+        text "a"
+
+#case 104
+#data "<!doctype html><summary><article></summary>a"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <summary> first
+      block <article>
+      block (anonymous)
+        inline <summary> last
+        text "a"
+
+#case 105
+#data "<!doctype html><p><a><plaintext>b"
+root
+  block <html>
+    block <body>
+      block <p>
+        inline <a>
+      block <plaintext>
+        inline <a>
+          text "b" white-space=Pre
+
+#case 106
+#data "<!DOCTYPE html><div>a<a></div>b<p>c</p>d"
+root
+  block <html>
+    block <body>
+      block <div>
+        text "a"
+        inline <a>
+      block (anonymous)
+        inline <a> first
+          text "b"
+      block <p>
+        text "c"
+      block (anonymous)
+        inline <a> last
+          text "d"
+

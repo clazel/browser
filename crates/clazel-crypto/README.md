@@ -19,7 +19,7 @@ independent). Its own code is the adapters, which Verus checks against
 | `Crypto::expand` | HKDF-Expand, RFC 5869 §2.3 | `libcrux_hkdf::sha2_256::expand` |
 | `traffic::provider::Factory` and `record::Aead` | ChaCha20-Poly1305, RFC 8439 §2.8 | `libcrux_chacha20poly1305::{encrypt, decrypt}` |
 | `hello::key_exchange::KeyExchange` | X25519, RFC 7748 | `libcrux_curve25519::{secret_to_public, ecdh}` |
-| `auth::spec::Verification::signature` (CertificateVerify), as `signature::exec::verify` | ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256/384/512, ed25519 (RFC 8446 §4.2.3) | `libcrux_ecdsa::p256::verify`, `libcrux_rsa::verify`, `libcrux_ed25519::verify` |
+| `auth::spec::Verification::signature` (CertificateVerify), as `signature::exec::verify` | ecdsa_secp256r1_sha256, ecdsa_secp384r1_sha384, rsa_pss_rsae_sha256/384/512, ed25519 (RFC 8446 §4.2.3) | `libcrux_ecdsa::p256::verify`, `libcrux_sha2::sha384` then `clazel-p384` (ours) for P-384, `libcrux_rsa::verify`, `libcrux_ed25519::verify` |
 | `clazel_x509::path::contract::LinkVerifier` (certificate-chain links), as `chain::exec::CertificateLinks` | sha256/384/512WithRSAEncryption (RFC 4055 §5, RFC 8017 §8.2.2), ecdsa-with-SHA256/384 under P-256 (RFC 5758 §3.2) | `libcrux_sha2::{sha256, sha384, sha512}` for the RSA digests, then `clazel-pkcs1` (ours); `libcrux_ecdsa::p256::verify` |
 | Finished comparison (`Verifier::finished_equal`), as `compare::constant_time_eq` | RFC 8446 §4.4.4 | none: ours, proven, no data-dependent branch |
 

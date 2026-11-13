@@ -1,0 +1,112 @@
+#case 0
+#data "<head><noscript><!doctype html><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 1
+#data "<head><noscript><html class=\"foo\"><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 2
+#data "<head><noscript></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 3
+#data "<head><noscript>   </noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 4
+#data "<head><noscript><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 5
+#data "<head><noscript><basefont><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 6
+#data "<head><noscript><bgsound><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 7
+#data "<head><noscript><link><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 8
+#data "<head><noscript><meta><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 9
+#data "<head><noscript><noframes>XXX</noscript></noframes></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 10
+#data "<head><noscript><style>XXX</style></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 11
+#data "<head><noscript></br><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+
+#case 12
+#data "<head><noscript><head class=\"foo\"><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 13
+#data "<head><noscript><noscript class=\"foo\"><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 14
+#data "<head><noscript></p><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 15
+#data "<head><noscript><p><!--foo--></noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <p> 8,8 784x0
+
+#case 16
+#data "<head><noscript>XXX<!--foo--></noscript></head>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        text "XXX" x=8 base=22.859375 w=34.171875
+
+#case 17
+#data "<head><noscript>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+

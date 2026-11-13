@@ -1,0 +1,2048 @@
+  <h2 split-filename="rendering" id="rendering">Rendering</h2>
+
+  <p><i>User agents are not required to present HTML documents in any particular way. However, this
+  section provides a set of suggestions for rendering HTML documents that, if followed, are likely
+  to lead to a user experience that closely resembles the experience intended by the documents'
+  authors. So as to avoid confusion regarding the normativity of this section, "must" has not been
+  used. Instead, the term "expected" is used to indicate behavior that will lead to this experience.
+  For the purposes of conformance for user agents designated as <a href="#renderingUA">supporting
+  the suggested default rendering</a>, the term "<dfn>expected</dfn>" in this section has the same
+  conformance implications as "must".</i></p>
+
+
+  <h3>Introduction</h3>
+
+  <p>The suggestions in this section are generally expressed in CSS terms. User agents are
+  <span>expected</span> to either support CSS, or translate from the CSS rules given in this
+  section to approximations for other presentation mechanisms.</p>
+
+  <p>In the absence of style-layer rules to the contrary (e.g. author style sheets), user agents are
+  <span>expected</span> to render an element so that it conveys to the user the meaning that the
+  element <span>represents</span>, as described by this specification.</p>
+
+  <p>The suggestions in this section generally assume a visual output medium with a resolution of
+  96dpi or greater, but HTML is intended to apply to multiple media (it is a
+  <i>media-independent</i> language). User agent implementers are encouraged to adapt the
+  suggestions in this section to their target media.</p>
+
+  <hr>
+
+  <div algorithm>
+  <p>An element is <dfn export>being rendered</dfn> if it has any associated CSS layout boxes, SVG
+  layout boxes, or some equivalent in other styling languages.</p>
+  </div>
+
+  <p class="note">Just being off-screen does not mean the element is not <span>being
+  rendered</span>. The presence of the <code data-x="attr-hidden">hidden</code> attribute normally
+  means the element is not <span>being rendered</span>, though this might be overridden by the style
+  sheets.</p>
+
+  <p class="note">The <span>fully active</span> state does not affect whether an element is
+  <span>being rendered</span> or not. Even if a document is not <span>fully active</span> and not
+  shown at all to the user, elements within it can still qualify as "being rendered".</p>
+
+  <div algorithm>
+  <p>An element is said to <dfn>intersect the viewport</dfn> when it is <span>being rendered</span>
+  and its associated CSS layout box intersects the <span>viewport</span>.</p>
+  </div>
+
+  <p class="note">Similar to the <span>being rendered</span> state, elements in non-<span>fully
+  active</span> documents can still <span>intersect the viewport</span>. The <span>viewport</span>
+  is not shared between documents and might not always be shown to the user, so an element in a
+  non-<span>fully active</span> document can still intersect the <span>viewport</span> associated
+  with its document.</p>
+
+  <p class="note">This specification does not define the precise timing for when the intersection is
+  tested, but it is suggested that the timing match that of the Intersection Observer API. <ref>INTERSECTIONOBSERVER</ref></p>
+
+  <div algorithm>
+  <p>An element is <dfn>delegating its rendering to its children</dfn> if it is not <span>being
+  rendered</span> but its children (if any) could <span data-x="being rendered">be rendered</span>,
+  as a result of CSS 'display: contents', or some equivalent in other styling languages.
+  <ref>CSSDISPLAY</ref></p>
+  </div>
+
+  <hr>
+
+  <p>User agents that do not honor author-level CSS style sheets are nonetheless
+  <span>expected</span> to act as if they applied the CSS rules given in these sections in a manner
+  consistent with this specification and the relevant CSS and Unicode specifications.
+  <ref>CSS</ref> <ref>UNICODE</ref> <ref>BIDI</ref></p>
+
+  <p class="note">This is especially important for issues relating to the <span>'display'</span>,
+  <span>'unicode-bidi'</span>, and <span>'direction'</span> properties.</p>
+
+
+
+  <h3>The CSS user agent style sheet and presentational hints</h3>
+
+  <p>The CSS rules given in these subsections are, except where otherwise specified,
+  <span>expected</span> to be used as part of the user-agent level style sheet defaults for all
+  documents that contain <span>HTML elements</span>.</p>
+
+  <p>Some rules are intended for the author-level zero-specificity presentational hints part of the
+  CSS cascade; these are explicitly called out as <dfn data-lt="presentational hint"
+  export>presentational hints</dfn>.</p>
+
+  <hr>
+
+  <div algorithm>
+  <p>When the text below says that an attribute <var>attribute</var> on an element
+  <var>element</var> <dfn>maps to the pixel length property</dfn> (or properties)
+  <var>properties</var>, it means that if <var>element</var> has an attribute <var>attribute</var>
+  set, and parsing that attribute's value using the <span>rules for parsing non-negative
+  integers</span> doesn't generate an error, then the user agent is <span>expected</span> to use
+  the parsed value as a pixel length for a <span data-x="presentational hints">presentational
+  hint</span> for <var>properties</var>.</p>
+  </div>
+
+  <div algorithm>
+  <p>When the text below says that an attribute <var>attribute</var> on an element
+  <var>element</var> <dfn>maps to the dimension property</dfn> (or properties)
+  <var>properties</var>, it means that if <var>element</var> has an attribute <var>attribute</var>
+  set, and parsing that attribute's value using the <span>rules for parsing dimension values</span>
+  doesn't generate an error, then the user agent is <span>expected</span> to use the parsed
+  dimension as the value for a <span data-x="presentational hints">presentational hint</span> for
+  <var>properties</var>, with the value given as a pixel length if the dimension was a length, and
+  with the value given as a percentage if the dimension was a percentage.</p>
+  </div>
+
+  <div algorithm>
+  <p>When the text below says that an attribute <var>attribute</var> on an element
+  <var>element</var> <dfn>maps to the dimension property (ignoring zero)</dfn> (or properties)
+  <var>properties</var>, it means that if <var>element</var> has an attribute <var>attribute</var>
+  set, and parsing that attribute's value using the <span>rules for parsing nonzero dimension
+  values</span> doesn't generate an error, then the user agent is <span>expected</span> to use the
+  parsed dimension as the value for a <span data-x="presentational hints">presentational
+  hint</span> for <var>properties</var>, with the value given as a pixel length if the dimension
+  was a length, and with the value given as a percentage if the dimension was a percentage.</p>
+  </div>
+
+  <div algorithm>
+  <p>When the text below says that a pair of attributes <var>w</var> and <var>h</var> on an
+  element <var>element</var> <dfn>map to the aspect-ratio property</dfn>, it means that if
+  <var>element</var> has both attributes <var>w</var> and <var>h</var>, and parsing those
+  attributes' values using the <span>rules for parsing non-negative integers</span> doesn't
+  generate an error for either, then the user agent is <span>expected</span> to use the parsed
+  integers as a <span data-x="presentational hints">presentational hint</span> for the
+  <span>'aspect-ratio'</span> property of the form <code data-x="">auto <var>w</var> /
+  <var>h</var></code>.</p>
+  </div>
+
+  <div algorithm>
+  <p>When the text below says that a pair of attributes <var>w</var> and <var>h</var> on an
+  element <var>element</var> <dfn>map to the aspect-ratio property (using dimension rules)</dfn>, it
+  means that if <var>element</var> has both attributes <var>w</var> and <var>h</var>, and parsing
+  those attributes' values using the <span>rules for parsing dimension values</span> doesn't
+  generate an error or return a percentage for either, then the user agent is <span>expected</span>
+  to use the parsed dimensions as a <span data-x="presentational hints">presentational hint</span>
+  for the <span>'aspect-ratio'</span> property of the form <code data-x="">auto <var>w</var> /
+  <var>h</var></code>.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a user agent is to <dfn>align descendants</dfn> of a node, the user agent is
+  <span>expected</span> to align only those descendants that have both their
+  <span>'margin-inline-start'</span> and <span>'margin-inline-end'</span> properties computing to a
+  value other than 'auto', that are over-constrained and that have one of those two margins with a
+  <span>used value</span> forced to a greater value, and that do not themselves have an applicable
+  <code data-x="">align</code> attribute. When multiple elements are to <span data-x="align
+  descendants">align</span> a particular descendant, the most deeply nested such element is
+  <span>expected</span> to override the others. Aligned elements are <span>expected</span> to be
+  aligned by having the <span data-x="used value">used values</span> of their margins on the
+  <span>line-left</span> and <span>line-right</span> sides be set accordingly.
+  <ref>CSSLOGICAL</ref> <ref>CSSWM</ref></p>
+  </div>
+
+
+
+  <h3>Non-replaced elements</h3>
+
+
+  <h4>Hidden elements</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+area, base, basefont, datalist, head, link, meta, noembed,
+noframes, param, rp, script, style, template, title {
+  display: none;
+}
+
+<span id="hiddenCSS" data-x="">[hidden]:not([hidden=until-found i]):not(embed)</span> {
+  display: none;
+}
+
+[hidden=until-found i]:not(embed) {
+  content-visibility: hidden;
+}
+
+embed[hidden] { display: inline; height: 0; width: 0; } <!-- because for legacy reasons it still needs to instantiate the plugin -->
+
+input[type=hidden i] { display: none !important; }
+
+@media (scripting) {
+  noscript { display: none !important; }
+}</code></pre>
+
+
+  <h4>The page</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+html, body { display: block; }</code></pre>
+
+
+  <!-- body { margin: 8px; } -->
+
+  <div algorithm>
+  <p>For each property in the table below, given a <code>body</code> element, the first attribute
+  that exists <span>maps to the pixel length property</span> on the <code>body</code> element. If
+  none of the attributes for a property are found, or if the value of the attribute that was found
+  cannot be parsed successfully, then a default value of 8px is <span>expected</span> to be used
+  for that property instead.</p>
+
+  <table>
+   <thead>
+    <tr>
+     <th>Property
+     <th>Source
+   <tbody>
+    <tr>
+     <td rowspan="3"><span>'margin-top'</span>, <span>'margin-bottom'</span>
+     <td>The <code>body</code> element's <code data-x="attr-body-marginheight">marginheight</code> attribute
+    <tr>
+     <td>The <code>body</code> element's <code data-x="attr-body-topmargin">topmargin</code> attribute
+    <tr>
+     <td>The <code>body</code> element's <span>container frame element</span>'s <code data-x="attr-iframe-marginheight">marginheight</code> attribute
+   <tbody>
+    <tr>
+     <td rowspan="3"><span>'margin-left'</span>, <span>'margin-right'</span>
+     <td>The <code>body</code> element's <code data-x="attr-body-marginwidth">marginwidth</code> attribute
+    <tr>
+     <td>The <code>body</code> element's <code data-x="attr-body-leftmargin">leftmargin</code> attribute
+    <tr>
+     <td>The <code>body</code> element's <span>container frame element</span>'s <code data-x="attr-iframe-marginwidth">marginwidth</code> attribute
+  </table>
+  </div>
+
+  <div algorithm>
+  <p>If the <code>body</code> element's <span>node document</span>'s <span>node navigable</span> is
+  a <span>child navigable</span>, and the <span data-x="nav-container">container</span> of that
+  <span>navigable</span> is a <code>frame</code> or <code>iframe</code> element, then the
+  <dfn>container frame element</dfn> of the <code>body</code> element is that <code>frame</code> or
+  <code>iframe</code> element. Otherwise, there is no <span>container frame element</span>.</p>
+  </div>
+
+  <p class="warning">The above requirements imply that a page can change the margins of another page
+  (including one from another <span>origin</span>) using, for example, an <code>iframe</code>. This
+  is potentially a security risk, as it might in some cases allow an attack to contrive a situation
+  in which a page is rendered not as the author intended, possibly for the purposes of phishing or
+  otherwise misleading the user.</p>
+
+  <hr>
+
+  <div algorithm>
+  <p>If a <code>Document</code>'s <span>node navigable</span> is a <span>child navigable</span>,
+  then it is <span>expected</span> to be positioned and sized to fit inside the <span>content
+  box</span> of the <span data-x="nav-container">container</span> of that <span>navigable</span>.
+  If the <span data-x="nav-container">container</span> is not <span>being rendered</span>, the
+  <span>navigable</span> is <span>expected</span> to have a <span>viewport</span> with zero width
+  and zero height.</p>
+  </div>
+
+  <div algorithm>
+  <p>If a <code>Document</code>'s <span>node navigable</span> is a <span>child navigable</span>,
+  the <span data-x="nav-container">container</span> of that <span>navigable</span> is a
+  <code>frame</code> or <code>iframe</code> element, that element has a <code
+  data-x="">scrolling</code> attribute, and that attribute's value is an <span>ASCII
+  case-insensitive</span> match for the string "<code data-x="">off</code>", "<code
+  data-x="">noscroll</code>", or "<code data-x="">no</code>", then the user agent is
+  <span>expected</span> to prevent any scrollbars from being shown for the <span>viewport</span> of
+  the <code>Document</code>'s <span>node navigable</span>, regardless of the
+  <span>'overflow'</span> property that applies to that <span>viewport</span>.</p>
+  </div>
+
+  <hr>
+
+  <div algorithm>
+  <p>When a <code>body</code> element has a <code data-x="attr-background">background</code>
+  attribute set to a non-empty value, the new value is <span>expected</span> to be <span
+  data-x="encoding-parsing-and-serializing a URL">encoding-parsed-and-serialized</span> relative to
+  the element's <span>node document</span>, and if that does not return failure, the user agent is
+  <span>expected</span> to treat the attribute as a <span data-x="presentational
+  hints">presentational hint</span> setting the element's <span>'background-image'</span> property
+  to the return value.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>body</code> element has a <code data-x="attr-body-bgcolor">bgcolor</code>
+  attribute set, the new value is <span>expected</span> to be parsed using the <span>rules for
+  parsing a legacy color value</span>, and if that does not return failure, the user agent is
+  <span>expected</span> to treat the attribute as a <span data-x="presentational
+  hints">presentational hint</span> setting the element's <span>'background-color'</span> property
+  to the resulting color.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>body</code> element has a <code data-x="attr-body-text">text</code> attribute, its
+  value is <span>expected</span> to be parsed using the <span>rules for parsing a legacy color
+  value</span>, and if that does not return failure, the user agent is <span>expected</span> to
+  treat the attribute as a <span data-x="presentational hints">presentational hint</span> setting
+  the element's <span>'color'</span> property to the resulting color.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>body</code> element has a <code data-x="attr-body-link">link</code> attribute, its
+  value is <span>expected</span> to be parsed using the <span>rules for parsing a legacy color
+  value</span>, and if that does not return failure, the user agent is <span>expected</span> to
+  treat the attribute as a <span data-x="presentational hints">presentational hint</span> setting
+  the <span>'color'</span> property of any element in the <code>Document</code> matching the <code
+  data-x="selector-link">:link</code> <span>pseudo-class</span> to the resulting color.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>body</code> element has a <code data-x="attr-body-vlink">vlink</code> attribute,
+  its value is <span>expected</span> to be parsed using the <span>rules for parsing a legacy color
+  value</span>, and if that does not return failure, the user agent is <span>expected</span> to
+  treat the attribute as a <span data-x="presentational hints">presentational hint</span> setting
+  the <span>'color'</span> property of any element in the <code>Document</code> matching the <code
+  data-x="selector-visited">:visited</code> <span>pseudo-class</span> to the resulting color.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>body</code> element has an <code data-x="attr-body-alink">alink</code> attribute,
+  its value is <span>expected</span> to be parsed using the <span>rules for parsing a legacy color
+  value</span>, and if that does not return failure, the user agent is <span>expected</span> to
+  treat the attribute as a <span data-x="presentational hints">presentational hint</span> setting
+  the <span>'color'</span> property of any element in the <code>Document</code> matching the
+  <code data-x="selector-active">:active</code> <span>pseudo-class</span> and either the <code
+  data-x="selector-link">:link</code> <span>pseudo-class</span> or the <code
+  data-x="selector-visited">:visited</code> <span>pseudo-class</span> to the resulting color.</p>
+  </div>
+
+
+
+  <h4>Flow content</h4>
+
+  <!-- del, ins, and map are inline. -->
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+address, blockquote, center, dialog, div, figure, figcaption, footer, form,
+header, hr, legend, listing, main, p, plaintext, pre, search, xmp {
+  display: block;<!-- see also unicode-bidi: isolate rules-->
+}
+
+blockquote, figure, listing, p, plaintext, pre, xmp {
+  margin-block: 1em;
+}
+
+blockquote, figure { margin-inline: 40px; }
+
+address { font-style: italic; }
+listing, plaintext, pre, xmp {
+  font-family: monospace; white-space: pre;
+}
+
+dialog:not([open]) { display: none; }
+dialog {
+  position: absolute;
+  inset-inline-start: 0; inset-inline-end: 0;
+  width: fit-content;
+  height: fit-content;
+  margin: auto;
+  border: solid;
+  padding: 1em;
+  background-color: Canvas;
+  color: CanvasText;
+}
+dialog:modal {
+  position: fixed;
+  overflow: auto;
+  inset-block: 0;
+  max-width: calc(100% - 6px - 2em);
+  max-height: calc(100% - 6px - 2em);
+}
+dialog::backdrop {
+  background: rgba(0,0,0,0.1);
+}
+
+[popover]:not(:popover-open):not(dialog[open]) {
+  display:none;
+}
+
+dialog:popover-open {
+  display:block;
+}
+
+[popover] {
+  position: fixed;
+  inset: 0;
+  width: fit-content;
+  height: fit-content;
+  margin: auto;
+  border: solid;
+  padding: 0.25em;
+  overflow: auto;
+  color: CanvasText;
+  background-color: Canvas;
+}
+
+:popover-open::backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none !important;
+  background-color: transparent;
+}
+
+slot {
+  display: contents;
+}</code></pre>
+
+  <p>The following rules are also <span>expected</span> to apply, as <span>presentational
+  hints</span>:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+pre[wrap] { white-space: pre-wrap; }</code></pre>
+
+  <p>In <span>quirks mode</span>, the following rules are also <span>expected</span> to apply:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+form { margin-block-end: 1em; }</code></pre>
+
+  <hr>
+
+  <div algorithm>
+  <p>The <code>center</code> element, and the <code>div</code> element when it has an <code
+  data-x="attr-div-align">align</code> attribute whose value is an <span>ASCII
+  case-insensitive</span> match for either the string "<code data-x="">center</code>" or the string
+  "<code data-x="">middle</code>", are <span>expected</span> to center text within themselves, as
+  if they had their <span>'text-align'</span> property set to 'center' in a <span
+  data-x="presentational hints">presentational hint</span>, and to <span>align descendants</span>
+  to the center.</p>
+  </div>
+
+  <div algorithm>
+  <p>The <code>div</code> element, when it has an <code data-x="attr-div-align">align</code>
+  attribute whose value is an <span>ASCII case-insensitive</span> match for the string "<code
+  data-x="">left</code>", is <span>expected</span> to left-align text within itself, as if it had
+  its <span>'text-align'</span> property set to 'left' in a <span data-x="presentational
+  hints">presentational hint</span>, and to <span>align descendants</span> to the left.</p>
+  </div>
+
+  <div algorithm>
+  <p>The <code>div</code> element, when it has an <code data-x="attr-div-align">align</code>
+  attribute whose value is an <span>ASCII case-insensitive</span> match for the string "<code
+  data-x="">right</code>", is <span>expected</span> to right-align text within itself, as if it had
+  its <span>'text-align'</span> property set to 'right' in a <span data-x="presentational
+  hints">presentational hint</span>, and to <span>align descendants</span> to the right.</p>
+  </div>
+
+  <div algorithm>
+  <p>The <code>div</code> element, when it has an <code data-x="attr-div-align">align</code>
+  attribute whose value is an <span>ASCII case-insensitive</span> match for the string "<code
+  data-x="">justify</code>", is <span>expected</span> to full-justify text within itself, as if it
+  had its <span>'text-align'</span> property set to 'justify' in a <span data-x="presentational
+  hints">presentational hint</span>, and to <span>align descendants</span> to the left.</p>
+  </div>
+
+  <h4>Phrasing content</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+cite, dfn, em, i, var { font-style: italic; }
+b, strong { font-weight: bolder; }
+code, kbd, samp, tt { font-family: monospace; }
+big { font-size: larger; }
+small { font-size: smaller; }
+
+sub { vertical-align: sub; }
+sup { vertical-align: super; }
+sub, sup { line-height: normal; font-size: smaller; }
+
+ruby { display: ruby; }
+rt { display: ruby-text; }
+
+:link { color: #0000EE; }
+:visited { color: #551A8B; }
+:link:active, :visited:active { color: #FF0000; }
+:link, :visited { text-decoration: underline; cursor: pointer; }
+
+:focus-visible { outline: auto; }
+
+mark { background: yellow; color: black; } /* this color is just a suggestion and can be changed based on implementation feedback */
+
+abbr[title], acronym[title] { text-decoration: dotted underline; }<!-- CSS3 https://drafts.csswg.org/css3-text/#text-decoration-style -->
+ins, u { text-decoration: underline; }
+del, s, strike { text-decoration: line-through; }
+
+q::before { content: open-quote; }
+q::after { content: close-quote; }
+
+<span data-x="" id="br-wbr-content">br { display-outside: newline; } /* <a href="#bidi-rendering">this also has bidi implications</a> */
+nobr { white-space: nowrap; }
+wbr { display-outside: break-opportunity; } /* <a href="#bidi-rendering">this also has bidi implications</a> */
+nobr wbr { white-space: normal; }</span></code></pre>
+
+  <p>The following rules are also <span>expected</span> to apply, as
+  <span>presentational hints</span>:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+br[clear=left i] { clear: left; }
+br[clear=right i] { clear: right; }
+br[clear=all i], br[clear=both i] { clear: both; }</code></pre>
+
+  <p>For the purposes of the CSS ruby model, runs of children of <code>ruby</code> elements that are
+  not <code>rt</code> or <code>rp</code> elements are <span>expected</span> to be wrapped in
+  anonymous boxes whose <span>'display'</span> property has the value <span>'ruby-base'</span>.
+  <ref>CSSRUBY</ref></p>
+
+  <p>When a particular part of a ruby has more than one annotation, the annotations should be
+  distributed on both sides of the base text so as to minimize the stacking of ruby annotations on
+  one side.</p>
+
+  <p class="note">When it becomes possible to do so, the preceding requirement will be updated to be
+  expressed in terms of CSS ruby. (Currently, CSS ruby does not handle nested <code>ruby</code>
+  elements or multiple sequential <code>rt</code> elements, which is how this semantic is
+  expressed.)</p>
+
+  <p>User agents that do not support correct ruby rendering are <span>expected</span> to render
+  parentheses around the text of <code>rt</code> elements in the absence of <code>rp</code>
+  elements.</p>
+
+  <hr>
+
+  <p>User agents are <span>expected</span> to support the <span>'clear'</span> property on inline
+  elements (in order to render <code>br</code> elements with <code
+  data-x="attr-br-clear">clear</code> attributes) in the manner described in the non-normative note
+  to this effect in <cite>CSS</cite>.</p> <!-- section 9.5.2 of CSS2.1 -->
+
+  <p>The initial value for the <span>'color'</span> property is <span>expected</span> to be black.
+  The initial value for the <span>'background-color'</span> property is <span>expected</span> to be
+  'transparent'. The canvas's background is <span>expected</span> to be white.</p>
+
+  <hr>
+
+  <div algorithm>
+  <p>When a <code>font</code> element has a <code data-x="attr-font-color" undefined>color</code>
+  attribute, its value is <span>expected</span> to be parsed using the <span>rules for parsing a
+  legacy color value</span>, and if that does not return failure, the user agent is
+  <span>expected</span> to treat the attribute as a <span data-x="presentational
+  hints">presentational hint</span> setting the element's <span>'color'</span> property to the
+  resulting color.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>font</code> element has a <code data-x="attr-font-face" undefined>face</code>
+  attribute, the user agent is <span>expected</span> to treat the attribute as a <span
+  data-x="presentational hints">presentational hint</span> setting the element's
+  <span>'font-family'</span> property to the attribute's value.</p>
+  </div>
+
+  <!-- (Apparently only IE supports this?) (Note: if you add this back, make sure to define which of
+  'size' vs 'pointsize' wins.)
+
+  <p>When a <code>font</code> element has a <code data-x="attr-font-pointsize"
+  undefined>pointsize</code> attribute, the user agent is <span>expected</span> to parse that
+  attribute's value using the <span>rules for parsing non-negative integers</span>, and if this
+  doesn't generate an error, then the user agent is <span>expected</span> to use the parsed value
+  as a <em>point</em> length for a <span data-x="presentational hints">presentational hint</span>
+  for the <span>'font-size'</span> property on the element.</p>
+  -->
+
+  <div algorithm>
+  <p>When a <code>font</code> element has a <code data-x="attr-font-size" undefined>size</code>
+  attribute, the user agent is <span>expected</span> to use the following steps, known as the
+  <dfn>rules for parsing a legacy font size</dfn>, to treat the attribute as a <span
+  data-x="presentational hints">presentational hint</span> setting the element's
+  <span>'font-size'</span> property:</p>
+
+  <ol>
+   <li><p>Let <var>input</var> be the attribute's value.</p></li>
+
+   <li><p>Let <var>position</var> be a pointer into <var>input</var>, initially pointing at the
+   start of the string.</p></li>
+
+   <li><p><span>Skip ASCII whitespace</span> within <var>input</var> given
+   <var>position</var>.</p></li>
+
+   <li><p>If <var>position</var> is past the end of <var>input</var>, there is no <span
+   data-x="presentational hints">presentational hint</span>. Return.</p></li>
+
+   <li><p>If the character at <var>position</var> is a U+002B PLUS SIGN character (+), then let
+   <var>mode</var> be <i>relative-plus</i>, and advance <var>position</var> to the next character.
+   Otherwise, if the character at <var>position</var> is a U+002D HYPHEN-MINUS character (-), then
+   let <var>mode</var> be <i>relative-minus</i>, and advance <var>position</var> to the next
+   character. Otherwise, let <var>mode</var> be <i>absolute</i>.</p></li>
+
+   <li><p><span>Collect a sequence of code points</span> that are <span>ASCII digits</span> from
+   <var>input</var> given <var>position</var>, and let <var>digits</var> be the resulting
+   sequence.</p></li>
+
+   <li><p>If <var>digits</var> is the empty string, there is no <span data-x="presentational
+   hints">presentational hint</span>. Return.</p></li>
+
+   <li><p>Interpret <var>digits</var> as a base-ten integer. Let <var>value</var> be the resulting
+   number.</p></li>
+
+   <li>
+    <!-- basefont support would go here, but we removed it -->
+
+    <p>If <var>mode</var> is <i>relative-plus</i>, then increment <var>value</var> by 3. If
+    <var>mode</var> is <i>relative-minus</i>, then let <var>value</var> be the result of subtracting
+    <var>value</var> from 3.</p>
+   </li>
+
+   <li><p>If <var>value</var> is greater than 7, let it be 7.</p></li>
+
+   <li><p>If <var>value</var> is less than 1, let it be 1.</p></li>
+
+   <li>
+    <p>Set the <span>'font-size'</span> property to the keyword corresponding to the value of <var>value</var>
+    according to the following table:</p>
+
+    <table>
+     <thead>
+      <tr>
+       <th><var>value</var>
+       <th><span>'font-size'</span> keyword
+     <tbody>
+      <tr>
+       <td>1
+       <td>'x-small'
+      <tr>
+       <td>2
+       <td>'small'
+      <tr>
+       <td>3
+       <td>'medium'
+      <tr>
+       <td>4
+       <td>'large'
+      <tr>
+       <td>5
+       <td>'x-large'
+      <tr>
+       <td>6
+       <td>'xx-large'
+      <tr>
+       <td>7
+       <td>'xxx-large'
+    </table>
+   </li>
+  </ol>
+  </div>
+
+
+  <h4 id="bidi-rendering">Bidirectional text</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+[dir]:dir(ltr), bdi:dir(ltr), input[type=tel i]:dir(ltr) { direction: ltr; }
+[dir]:dir(rtl), bdi:dir(rtl) { direction: rtl; }
+
+address, blockquote, center, div, figure, figcaption, footer, form, header, hr,
+legend, listing, main, p, plaintext, pre, summary, xmp, article, aside,
+:heading, hgroup, nav, search, section, table, caption, colgroup, col, thead,
+tbody, tfoot, tr, td, th, dir, dd, dl, dt, menu, ol, ul, li, bdi, output,
+[dir=ltr i], [dir=rtl i], [dir=auto i] {
+  unicode-bidi: isolate; <!-- anything that's similar to display:block, plus <bdi>, <output>, and dir="" -->
+}
+
+bdo, bdo[dir] { unicode-bidi: isolate-override; } <!-- bdo[dir] rule is to override the otherwise higher-specificity attribute selectors in the previous rule -->
+
+input[dir=auto i]:is([type=search i], [type=tel i], [type=url i],
+[type=email i]), textarea[dir=auto i], pre[dir=auto i] {
+  unicode-bidi: plaintext;
+}
+/* see prose for input elements whose type attribute is in the Text state */
+
+/* the <a href="#br-wbr-content">rules setting the 'content' property</a> on <code>br</code> and <code>wbr</code> elements also has bidi implications */</code></pre>
+
+  <p>When an <code>input</code> element's <code data-x="attr-dir">dir</code> attribute is in the
+  <span data-x="attr-dir-auto">auto</span> state and its <code data-x="attr-input-type">type</code>
+  attribute is in the <span data-x="attr-input-type-text">Text</span> state, then the user agent is
+  <span>expected</span> to act as if it had a user-agent-level style sheet rule setting the
+  <span>'unicode-bidi'</span> property to 'plaintext'.</p>
+
+  <p>Input fields (i.e. <code>textarea</code> elements, and <code>input</code> elements when their
+  <code data-x="attr-input-type">type</code> attribute is in the <span
+  data-x="attr-input-type-text">Text</span>, <span data-x="attr-input-type-search">Search</span>,
+  <span data-x="attr-input-type-tel">Telephone</span>, <span data-x="attr-input-type-url">URL</span>,
+  or <span data-x="attr-input-type-email">Email</span> state) are <span>expected</span> to present
+  an editing user interface with a directionality that matches the element's
+  <span>'direction'</span> property.</p>
+
+  <p>When the document's character encoding is <span>ISO-8859-8</span>, the following rules are
+  additionally <span>expected</span> to apply, following those above: <ref>ENCODING</ref></p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+address, blockquote, center, div, figure, figcaption, footer, form, header, hr,
+legend, listing, main, p, plaintext, pre, summary, xmp, article, aside,
+:heading, hgroup, nav, search, section, table, caption, colgroup, col, thead,
+tbody, tfoot, tr, td, th, dir, dd, dl, dt, menu, ol, ul, li, [dir=ltr i],
+[dir=rtl i], [dir=auto i], *|* {
+  unicode-bidi: bidi-override;
+}
+input:not([type=submit i]):not([type=reset i]):not([type=button i]),
+textarea {
+  unicode-bidi: normal;
+}</code></pre>
+
+
+  <h4>Sections and headings</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+article, aside, :heading, hgroup, nav, section {
+  display: block;<!-- see also unicode-bidi: isolate rules-->
+}
+
+:heading { font-weight: bold; }
+
+:heading(1) { margin-block: 0.67em; font-size: 2.00em; }
+:heading(2) { margin-block: 0.83em; font-size: 1.50em; }
+:heading(3) { margin-block: 1.00em; font-size: 1.17em; }
+:heading(4) { margin-block: 1.33em; font-size: 1.00em; }
+:heading(5) { margin-block: 1.67em; font-size: 0.83em; }
+:heading(6, 7, 8, 9) {
+  font-size: 0.67em;
+  margin-block: 2.33em;
+}
+</code></pre>
+
+
+
+  <h4>Lists</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+dir, dd, dl, dt, menu, ol, ul { display: block; }<!-- see also unicode-bidi:isolate rules -->
+li { display: list-item; text-align: match-parent; }<!-- see also unicode-bidi:isolate rules -->
+
+dir, dl, menu, ol, ul { margin-block: 1em; }
+
+:is(dir, dl, menu, ol, ul) :is(dir, dl, menu, ol, ul) {
+  margin-block: 0;
+}
+
+dd { margin-inline-start: 40px; }
+dir, menu, ol, ul { padding-inline-start: 40px; }
+
+ol, ul, menu { counter-reset: list-item; }
+ol { list-style-type: decimal; }
+
+dir, menu, ul {
+  list-style-type: disc;
+}
+:is(dir, menu, ol, ul) :is(dir, menu, ul) {
+  list-style-type: circle;
+}
+:is(dir, menu, ol, ul) :is(dir, menu, ol, ul) :is(dir, menu, ul) {
+  list-style-type: square;
+}</code></pre>
+
+  <p id="decohints">The following rules are also <span>expected</span> to apply, as
+  <span>presentational hints</span>:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+ol[type="1"], li[type="1"] { list-style-type: decimal; }
+ol[type=a <!--grammar-check-override-->s], li[type=a <!--grammar-check-override-->s] { list-style-type: lower-alpha; }
+ol[type=A <!--grammar-check-override-->s], li[type=A <!--grammar-check-override-->s] { list-style-type: upper-alpha; }
+ol[type=i s], li[type=i s] { list-style-type: lower-roman; }
+ol[type=I s], li[type=I s] { list-style-type: upper-roman; }
+ul[type=none i], li[type=none i] { list-style-type: none; }
+ul[type=disc i], li[type=disc i] { list-style-type: disc; }
+ul[type=circle i], li[type=circle i] { list-style-type: circle; }
+ul[type=square i], li[type=square i] { list-style-type: square; }</code></pre>
+
+  <p>In <span>quirks mode</span>, the following rules are also <span>expected</span> to apply:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+li { list-style-position: inside; }
+li :is(dir, menu, ol, ul) { list-style-position: outside; }
+:is(dir, menu, ol, ul) :is(dir, menu, ol, ul, li) { list-style-position: unset; }</code></pre>
+
+  <p>When rendering <code>li</code> elements, non-CSS user agents are <span>expected</span> to use
+  the <span>ordinal value</span> of the <code>li</code> element to render the counter in the list
+  item marker.</p>
+
+  <p id="css-list-rendering">For CSS user agents, some aspects of rendering <span
+  data-x="css-list-item">list items</span> are defined by the <cite>CSS Lists</cite> specification.
+  Additionally, the following attribute mappings are <span>expected</span> to apply:
+  <ref>CSSLISTS</ref></p>
+
+  <div algorithm>
+  <p>When an <code>li</code> element has a <code
+  data-x="attr-li-value">value</code> attribute, and parsing that attribute's value using the
+  <span>rules for parsing integers</span> doesn't generate an error, the user agent is
+  <span>expected</span> to use the parsed value <var>value</var> as a <span data-x="presentational
+  hints">presentational hint</span> for the <span>'counter-set'</span> property of the form <code
+  data-x="">list-item <var>value</var></code>.</p>
+  </div>
+
+  <div algorithm>
+  <p>When an <code>ol</code> element has a <code data-x="attr-ol-start">start</code>
+  attribute or a <code data-x="attr-ol-reversed">reversed</code> attribute, or both, the user agent
+  is <span>expected</span> to use the following steps to treat the attributes as a <span
+  data-x="presentational hints">presentational hint</span> for the <span>'counter-reset'</span>
+  property:</p>
+
+  <ol>
+   <li><p>Let <var>value</var> be null.</p></li>
+
+   <li><p>If the element has a <code data-x="attr-ol-start">start</code> attribute, then set
+   <var>value</var> to the result of parsing the attribute's value using the <span>rules for
+   parsing integers</span>.</p></li>
+
+   <li>
+    <p>If the element has a <code data-x="attr-ol-reversed">reversed</code> attribute:</p>
+
+    <ol>
+     <li><p>If <var>value</var> is an integer, then increment <var>value</var> by 1 and return
+     <code data-x="">reversed(list-item) <var>value</var></code>.</p></li>
+
+     <li>
+      <p>Otherwise, return <code data-x="">reversed(list-item)</code>.</p>
+
+      <p class="note">Either the <code data-x="attr-ol-start">start</code> attribute was absent, or
+      parsing its value resulted in an error.</p>
+     </li>
+    </ol>
+   </li>
+
+   <li>
+    <p>Otherwise:</p>
+
+    <ol>
+     <li><p>If <var>value</var> is an integer, then decrement <var>value</var> by 1 and return
+     <code data-x="">list-item <var>value</var></code>.</p></li>
+
+     <li><p>Otherwise, there is no <span data-x="presentational hints">presentational
+     hint</span>.</p></li>
+    </ol>
+   </li>
+  </ol>
+  </div>
+
+
+  <h4>Tables</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+table { display: table; }<!-- see also unicode-bidi:isolate rules -->
+caption { display: table-caption; }<!-- see also unicode-bidi:isolate rules -->
+colgroup, colgroup[hidden] { display: table-column-group; }<!-- see also unicode-bidi:isolate rules -->
+col, col[hidden] { display: table-column; }<!-- see also unicode-bidi:isolate rules -->
+thead, thead[hidden] { display: table-header-group; }<!-- see also unicode-bidi:isolate rules -->
+tbody, tbody[hidden] { display: table-row-group; }<!-- see also unicode-bidi:isolate rules -->
+tfoot, tfoot[hidden] { display: table-footer-group; }<!-- see also unicode-bidi:isolate rules -->
+tr, tr[hidden] { display: table-row; }<!-- see also unicode-bidi:isolate rules -->
+td, th { display: table-cell; }<!-- see also unicode-bidi:isolate rules -->
+
+colgroup[hidden], col[hidden], thead[hidden], tbody[hidden],
+tfoot[hidden], tr[hidden] {
+  visibility: collapse;
+}
+
+table {
+  box-sizing: border-box;
+  border-spacing: 2px;
+  border-collapse: separate;
+  text-indent: initial;
+}
+td, th { padding: 1px; }
+th { font-weight: bold; }
+
+caption { text-align: center; }
+thead, tbody, tfoot, table > tr { vertical-align: middle; }
+tr, td, th { vertical-align: inherit; }
+
+thead, tbody, tfoot, tr { border-color: inherit; }
+table[rules=none i], table[rules=groups i], table[rules=rows i],
+table[rules=cols i], table[rules=all i], table[frame=void i],
+table[frame=above i], table[frame=below i], table[frame=hsides i],
+table[frame=lhs i], table[frame=rhs i], table[frame=vsides i],
+table[frame=box i], table[frame=border i],
+table[rules=none i] > tr > td, table[rules=none i] > tr > th,
+table[rules=groups i] > tr > td, table[rules=groups i] > tr > th,
+table[rules=rows i] > tr > td, table[rules=rows i] > tr > th,
+table[rules=cols i] > tr > td, table[rules=cols i] > tr > th,
+table[rules=all i] > tr > td, table[rules=all i] > tr > th,
+table[rules=none i] > thead > tr > td, table[rules=none i] > thead > tr > th,
+table[rules=groups i] > thead > tr > td, table[rules=groups i] > thead > tr > th,
+table[rules=rows i] > thead > tr > td, table[rules=rows i] > thead > tr > th,
+table[rules=cols i] > thead > tr > td, table[rules=cols i] > thead > tr > th,
+table[rules=all i] > thead > tr > td, table[rules=all i] > thead > tr > th,
+table[rules=none i] > tbody > tr > td, table[rules=none i] > tbody > tr > th,
+table[rules=groups i] > tbody > tr > td, table[rules=groups i] > tbody > tr > th,
+table[rules=rows i] > tbody > tr > td, table[rules=rows i] > tbody > tr > th,
+table[rules=cols i] > tbody > tr > td, table[rules=cols i] > tbody > tr > th,
+table[rules=all i] > tbody > tr > td, table[rules=all i] > tbody > tr > th,
+table[rules=none i] > tfoot > tr > td, table[rules=none i] > tfoot > tr > th,
+table[rules=groups i] > tfoot > tr > td, table[rules=groups i] > tfoot > tr > th,
+table[rules=rows i] > tfoot > tr > td, table[rules=rows i] > tfoot > tr > th,
+table[rules=cols i] > tfoot > tr > td, table[rules=cols i] > tfoot > tr > th,
+table[rules=all i] > tfoot > tr > td, table[rules=all i] > tfoot > tr > th {
+  border-color: black;
+}</code></pre>
+
+  <p>The following rules are also <span>expected</span> to apply, as <span>presentational
+  hints</span>:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+table[align=left i] { float: left; }
+table[align=right i] { float: right; }
+table[align=center i] { margin-inline: auto; }
+thead[align=absmiddle i], tbody[align=absmiddle i], tfoot[align=absmiddle i],
+tr[align=absmiddle i], td[align=absmiddle i], th[align=absmiddle i] {
+  text-align: center;
+}
+
+caption[align=bottom i] { caption-side: bottom; }
+p[align=left i], h1[align=left i], h2[align=left i], h3[align=left i],
+h4[align=left i], h5[align=left i], h6[align=left i] {
+  text-align: left;
+}
+p[align=right i], h1[align=right i], h2[align=right i], h3[align=right i],
+h4[align=right i], h5[align=right i], h6[align=right i] {
+  text-align: right;
+}
+p[align=center i], h1[align=center i], h2[align=center i], h3[align=center i],
+h4[align=center i], h5[align=center i], h6[align=center i] {
+  text-align: center;
+}
+p[align=justify i], h1[align=justify i], h2[align=justify i], h3[align=justify i],
+h4[align=justify i], h5[align=justify i], h6[align=justify i] {
+  text-align: justify;
+}
+thead[valign=top i], tbody[valign=top i], tfoot[valign=top i],
+tr[valign=top i], td[valign=top i], th[valign=top i] {
+  vertical-align: top;
+}
+thead[valign=middle i], tbody[valign=middle i], tfoot[valign=middle i],
+tr[valign=middle i], td[valign=middle i], th[valign=middle i] {
+  vertical-align: middle;
+}
+thead[valign=bottom i], tbody[valign=bottom i], tfoot[valign=bottom i],
+tr[valign=bottom i], td[valign=bottom i], th[valign=bottom i] {
+  vertical-align: bottom;
+}
+thead[valign=baseline i], tbody[valign=baseline i], tfoot[valign=baseline i],
+tr[valign=baseline i], td[valign=baseline i], th[valign=baseline i] {
+  vertical-align: baseline;
+}
+
+td[nowrap], th[nowrap] { white-space: nowrap; }
+
+table[rules=none i], table[rules=groups i], table[rules=rows i],
+table[rules=cols i], table[rules=all i] {
+  border-style: hidden;
+  border-collapse: collapse;
+}
+table[border] { border-style: outset; } /* <span>only if border is not equivalent to zero</span> */
+table[frame=void i] { border-style: hidden; }
+table[frame=above i] { border-style: outset hidden hidden hidden; }
+table[frame=below i] { border-style: hidden hidden outset hidden; }
+table[frame=hsides i] { border-style: outset hidden outset hidden; }
+table[frame=lhs i] { border-style: hidden hidden hidden outset; }
+table[frame=rhs i] { border-style: hidden outset hidden hidden; }
+table[frame=vsides i] { border-style: hidden outset; }
+table[frame=box i], table[frame=border i] { border-style: outset; }
+
+table[border] > tr > td, table[border] > tr > th,
+table[border] > thead > tr > td, table[border] > thead > tr > th,
+table[border] > tbody > tr > td, table[border] > tbody > tr > th,
+table[border] > tfoot > tr > td, table[border] > tfoot > tr > th {
+  /* <span>only if border is not equivalent to zero</span> */
+  border-width: 1px;
+  border-style: inset;
+}
+table[rules=none i] > tr > td, table[rules=none i] > tr > th,
+table[rules=none i] > thead > tr > td, table[rules=none i] > thead > tr > th,
+table[rules=none i] > tbody > tr > td, table[rules=none i] > tbody > tr > th,
+table[rules=none i] > tfoot > tr > td, table[rules=none i] > tfoot > tr > th,
+table[rules=groups i] > tr > td, table[rules=groups i] > tr > th,
+table[rules=groups i] > thead > tr > td, table[rules=groups i] > thead > tr > th,
+table[rules=groups i] > tbody > tr > td, table[rules=groups i] > tbody > tr > th,
+table[rules=groups i] > tfoot > tr > td, table[rules=groups i] > tfoot > tr > th,
+table[rules=rows i] > tr > td, table[rules=rows i] > tr > th,
+table[rules=rows i] > thead > tr > td, table[rules=rows i] > thead > tr > th,
+table[rules=rows i] > tbody > tr > td, table[rules=rows i] > tbody > tr > th,
+table[rules=rows i] > tfoot > tr > td, table[rules=rows i] > tfoot > tr > th {
+  border-width: 1px;
+  border-style: none;
+}
+table[rules=cols i] > tr > td, table[rules=cols i] > tr > th,
+table[rules=cols i] > thead > tr > td, table[rules=cols i] > thead > tr > th,
+table[rules=cols i] > tbody > tr > td, table[rules=cols i] > tbody > tr > th,
+table[rules=cols i] > tfoot > tr > td, table[rules=cols i] > tfoot > tr > th {
+  border-width: 1px;
+  border-block-style: none;
+  border-inline-style: solid;
+}
+table[rules=all i] > tr > td, table[rules=all i] > tr > th,
+table[rules=all i] > thead > tr > td, table[rules=all i] > thead > tr > th,
+table[rules=all i] > tbody > tr > td, table[rules=all i] > tbody > tr > th,
+table[rules=all i] > tfoot > tr > td, table[rules=all i] > tfoot > tr > th {
+  border-width: 1px;
+  border-style: solid;
+}
+
+table[rules=groups i] > colgroup {
+  border-inline-width: 1px;
+  border-inline-style: solid;
+}
+table[rules=groups i] > thead,
+table[rules=groups i] > tbody,
+table[rules=groups i] > tfoot {
+  border-block-width: 1px;
+  border-block-style: solid;
+}
+
+table[rules=rows i] > tr, table[rules=rows i] > thead > tr,
+table[rules=rows i] > tbody > tr, table[rules=rows i] > tfoot > tr {
+  border-block-width: 1px;
+  border-block-style: solid;
+}</code></pre>
+
+<!--
+ Demos that the above (and prose below) must explain:
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1191
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1194
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1195
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1196
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1197
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1199
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1200
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1201
+   https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1209
+-->
+
+
+  <p>In <span>quirks mode</span>, the following rules are also <span>expected</span> to apply:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+table {
+  font-weight: initial;
+  font-style: initial;
+  font-variant: initial;
+  font-size: initial;
+  line-height: initial;
+  white-space: initial;
+  text-align: initial;
+}</code></pre>
+
+  <hr>
+
+  <p>For the purposes of the CSS table model, the <code>col</code> element is <span>expected</span>
+  to be treated as if it was present as many times as its <code data-x="attr-col-span">span</code>
+  attribute <span data-x="rules for parsing non-negative integers">specifies</span>.</p>
+
+  <p>For the purposes of the CSS table model, the <code>colgroup</code> element, if it contains no
+  <code>col</code> element, is <span>expected</span> to be treated as if it had as many such
+  children as its <code data-x="attr-colgroup-span">span</code> attribute <span data-x="rules for
+  parsing non-negative integers">specifies</span>.</p>
+
+  <p>For the purposes of the CSS table model, the <code data-x="attr-tdth-colspan">colspan</code> and
+  <code data-x="attr-tdth-rowspan">rowspan</code> attributes on <code>td</code> and <code>th</code>
+  elements are <span>expected</span> to <span data-x="rules for parsing non-negative
+  integers">provide</span> the <i>special knowledge</i> regarding cells spanning rows and columns.</p>
+
+  <p>In <span>HTML documents</span>, the following rules are also <span>expected</span> to apply:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+:is(table, thead, tbody, tfoot, tr) > form { display: none !important; }</code></pre>
+
+  <hr>
+
+  <p>The <code>table</code> element's <code data-x="attr-table-cellspacing">cellspacing</code>
+  attribute <span>maps to the pixel length property</span> <span>'border-spacing'</span> on the
+  element.</p>
+
+  <p>The <code>table</code> element's <code data-x="attr-table-cellpadding">cellpadding</code>
+  attribute <span data-x="maps to the pixel length property">maps to the pixel length
+  properties</span> <span>'padding-top'</span>, <span>'padding-right'</span>,
+  <span>'padding-bottom'</span>, and <span>'padding-left'</span> of any <code>td</code> and
+  <code>th</code> elements that have corresponding <span data-x="concept-cell">cells</span> in the
+  <span data-x="concept-table">table</span> corresponding to the <code>table</code> element.</p>
+
+  <p>The <code>table</code> element's <code data-x="attr-table-height">height</code> attribute
+  <span>maps to the dimension property</span> <span>'height'</span> on the <code>table</code>
+  element.</p>
+
+  <p>The <code>table</code> element's <code data-x="attr-table-width">width</code> attribute
+  <span>maps to the dimension property (ignoring zero)</span> <span>'width'</span> on the
+  <code>table</code> element.</p>
+
+  <p>The <code>col</code> element's <code data-x="attr-col-width">width</code> attribute <span>maps
+  to the dimension property</span> <span>'width'</span> on the <code>col</code>
+  element.</p>
+
+  <p>The <code>thead</code>, <code>tbody</code>, and <code>tfoot</code> elements' <code
+  data-x="attr-tbody-height">height</code> attribute <span>maps to the dimension property</span>
+  <span>'height'</span> on the element.</p>
+
+  <p>The <code>tr</code> element's <code data-x="attr-tr-height">height</code> attribute <span>maps
+  to the dimension property</span> <span>'height'</span> on the <code>tr</code> element.</p>
+
+  <p>The <code>td</code> and <code>th</code> elements' <code data-x="attr-tdth-height">height</code>
+  attributes <span data-x="maps to the dimension property (ignoring zero)">map to the dimension
+  property (ignoring zero)</span> <span>'height'</span> on the element.</p>
+
+  <p>The <code>td</code> and <code>th</code> elements' <code data-x="attr-tdth-width">width</code>
+  attributes <span data-x="maps to the dimension property (ignoring zero)">map to the dimension
+  property (ignoring zero)</span> <span>'width'</span> on the element.</p>
+
+  <hr>
+
+  <div algorithm>
+  <p>The <code>thead</code>, <code>tbody</code>, <code>tfoot</code>, <code>tr</code>,
+  <code>td</code>, and <code>th</code> elements, when they have an <code data-x="">align</code>
+  attribute whose value is an <span>ASCII case-insensitive</span> match for either the string "<code
+  data-x="">center</code>" or the string "<code data-x="">middle</code>", are <span>expected</span>
+  to center text within themselves, as if they had their <span>'text-align'</span> property set to
+  'center' in a <span data-x="presentational hints">presentational hint</span>, and to <span>align
+  descendants</span> to the center.</p>
+  </div>
+
+  <div algorithm>
+  <p>The <code>thead</code>, <code>tbody</code>, <code>tfoot</code>, <code>tr</code>,
+  <code>td</code>, and <code>th</code> elements, when they have an <code data-x="">align</code>
+  attribute whose value is an <span>ASCII case-insensitive</span> match for the string "<code
+  data-x="">left</code>", are <span>expected</span> to left-align text within themselves, as if
+  they had their <span>'text-align'</span> property set to 'left' in a <span data-x="presentational
+  hints">presentational hint</span>, and to <span>align descendants</span> to the left.</p>
+  </div>
+
+  <div algorithm>
+  <p>The <code>thead</code>, <code>tbody</code>, <code>tfoot</code>, <code>tr</code>,
+  <code>td</code>, and <code>th</code> elements, when they have an <code data-x="">align</code>
+  attribute whose value is an <span>ASCII case-insensitive</span> match for the string "<code
+  data-x="">right</code>", are <span>expected</span> to right-align text within themselves, as if
+  they had their <span>'text-align'</span> property set to 'right' in a <span
+  data-x="presentational hints">presentational hint</span>, and to <span>align descendants</span>
+  to the right.</p>
+  </div>
+
+  <div algorithm>
+  <p>The <code>thead</code>, <code>tbody</code>, <code>tfoot</code>, <code>tr</code>,
+  <code>td</code>, and <code>th</code> elements, when they have an <code data-x="">align</code>
+  attribute whose value is an <span>ASCII case-insensitive</span> match for the string "<code
+  data-x="">justify</code>", are <span>expected</span> to full-justify text within themselves, as
+  if they had their <span>'text-align'</span> property set to 'justify' in a <span
+  data-x="presentational hints">presentational hint</span>, and to <span>align descendants</span>
+  to the left.</p>
+  </div>
+
+  <p>User agents are <span>expected</span> to have a rule in their user agent style sheet that
+  matches <code>th</code> elements that have a parent node whose <span>computed value</span> for
+  the <span>'text-align'</span> property is its initial value, whose declaration block consists of
+  just a single declaration that sets the <span>'text-align'</span> property to the value
+  'center'.</p>
+  <!-- q.v. '-moz-center-or-inherit' -->
+
+  <hr>
+
+  <div algorithm>
+  <p>When a <code>table</code>, <code>thead</code>, <code>tbody</code>, <code>tfoot</code>,
+  <code>tr</code>, <code>td</code>, or <code>th</code> element has a <code
+  data-x="attr-background">background</code> attribute set to a non-empty value, the new value is
+  <span>expected</span> to be <span data-x="encoding-parsing-and-serializing a
+  URL">encoding-parsed-and-serialized</span> relative to the element's <span>node document</span>,
+  and if that does not return failure, the user agent is <span>expected</span> to treat the
+  attribute as a <span data-x="presentational hints">presentational hint</span> setting the
+  element's <span>'background-image'</span> property to the return value.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>table</code>, <code>thead</code>, <code>tbody</code>, <code>tfoot</code>,
+  <code>tr</code>, <code>td</code>, or <code>th</code> element has a <code data-x="">bgcolor</code>
+  attribute set, the new value is <span>expected</span> to be parsed using the <span>rules for
+  parsing a legacy color value</span>, and if that does not return failure, the user agent is
+  <span>expected</span> to treat the attribute as a <span data-x="presentational
+  hints">presentational hint</span> setting the element's <span>'background-color'</span> property
+  to the resulting color.</p>
+  </div>
+
+  <div algorithm>
+  <p>When a <code>table</code> element has a <code data-x="attr-table-bordercolor">bordercolor</code>
+  attribute, its value is <span>expected</span> to be parsed using the <span>rules for parsing a
+  legacy color value</span>, and if that does not return failure, the user agent is
+  <span>expected</span> to treat the attribute as a <span data-x="presentational
+  hints">presentational hint</span> setting the element's <span>'border-top-color'</span>,
+  <span>'border-right-color'</span>, <span>'border-bottom-color'</span>, and
+  <span>'border-left-color'</span> properties to the resulting color.</p>
+  </div>
+
+  <hr>
+
+  <p>The <code>table</code> element's <code data-x="attr-table-border">border</code> attribute <span
+  data-x="maps to the pixel length property">maps to the pixel length properties</span>
+  <span>'border-top-width'</span>, <span>'border-right-width'</span>,
+  <span>'border-bottom-width'</span>, <span>'border-left-width'</span> on the element. If the
+  attribute is present but parsing the attribute's value using the <span>rules for parsing
+  non-negative integers</span> generates an error, a default value of 1px is <span>expected</span>
+  to be used for that property instead.</p>
+
+  <div algorithm>
+  <p>Rules marked "<dfn id="magic-border-selector">only if border is not equivalent to zero</dfn>"
+  in the CSS block above is <span>expected</span> to only be applied if the <code
+  data-x="attr-table-border">border</code> attribute mentioned in the selectors for the rule is not
+  only present but, when parsed using the <span>rules for parsing non-negative integers</span>, is
+  also found to have a value other than zero or to generate an error.</p>
+  </div>
+
+  <hr>
+
+  <div algorithm>
+  <p>In <span>quirks mode</span>, a <code>td</code> element or a <code>th</code> element that has a
+  <code data-x="attr-tdth-nowrap">nowrap</code> attribute but also has a <code
+  data-x="attr-tdth-width">width</code> attribute whose value, when parsed using the <span>rules for
+  parsing nonzero dimension values</span>, is found to be a length (not an error or a number
+  classified as a percentage), is <span>expected</span> to have a <span data-x="presentational
+  hints">presentational hint</span> setting the element's <span>'white-space'</span> property to
+  'normal', overriding the rule in the CSS block above that sets it to 'nowrap'.</p> <!--
+  https://software.hixie.ch/utilities/js/live-dom-viewer/?saved=1793 --> <!-- note that the "rules for
+  parsing nonzero dimension values" can't return 0, if the value is "0" they treat it as an error
+  -->
+  </div>
+
+  <h4>Margin collapsing quirks</h4>
+
+  <div algorithm>
+  <p>A node is <dfn data-x="concept-rendering-substantial">substantial</dfn> if it is a text node
+  that is not <span>inter-element whitespace</span>, or if it is an element node.</p>
+  </div>
+
+  <div algorithm>
+  <p>A node is <dfn data-x="concept-rendering-blank">blank</dfn> if it is an element that contains no
+  <span data-x="concept-rendering-substantial">substantial</span> nodes.</p>
+  </div>
+
+  <div algorithm>
+  <p>The <dfn data-x="concept-rendering-elements-with-margins">elements with default margins</dfn>
+  are the following elements: <code>blockquote</code>, <code>dir</code>, <code>dl</code>,
+  <code>h1</code>, <code>h2</code>, <code>h3</code>, <code>h4</code>, <code>h5</code>,
+  <code>h6</code>, <code>listing</code>, <code>menu</code>, <code>ol</code>,
+  <code>p</code>, <code>plaintext</code>, <code>pre</code>, <code>ul</code>, <code>xmp</code>.</p>
+  </div>
+
+  <div algorithm>
+  <p>In <span>quirks mode</span>, any <span data-x="concept-rendering-elements-with-margins">element
+  with default margins</span> that is the <span data-x="concept-tree-child">child</span> of a
+  <code>body</code>, <code>td</code>, or <code>th</code> element and has no <span
+  data-x="concept-rendering-substantial">substantial</span> previous siblings is
+  <span>expected</span> to have a user-agent level style sheet rule that sets its
+  <span>'margin-block-start'</span> property to zero.</p>
+  </div>
+
+  <div algorithm>
+  <p>In <span>quirks mode</span>, any <span data-x="concept-rendering-elements-with-margins">element
+  with default margins</span> that is the <span data-x="concept-tree-child">child</span> of a
+  <code>body</code>, <code>td</code>, or <code>th</code> element, has no <span
+  data-x="concept-rendering-substantial">substantial</span> previous siblings, and is <span
+  data-x="concept-rendering-blank">blank</span>, is <span>expected</span> to have a user-agent
+  level style sheet rule that sets its <span>'margin-block-end'</span> property to zero also.</p>
+  </div>
+
+  <div algorithm>
+  <p>In <span>quirks mode</span>, any <span data-x="concept-rendering-elements-with-margins">element
+  with default margins</span> that is the <span data-x="concept-tree-child">child</span> of a
+  <code>td</code> or <code>th</code> element, has no <span
+  data-x="concept-rendering-substantial">substantial</span> following siblings, and is <span
+  data-x="concept-rendering-blank">blank</span>, is <span>expected</span> to have a user-agent
+  level style sheet rule that sets its <span>'margin-block-start'</span> property to zero.</p>
+  </div>
+
+  <div algorithm>
+  <p>In <span>quirks mode</span>, any <code>p</code> element that is the <span
+  data-x="concept-tree-child">child</span> of a <code>td</code> or <code>th</code> element and has
+  no <span data-x="concept-rendering-substantial">substantial</span> following siblings, is
+  <span>expected</span> to have a user-agent level style sheet rule that sets its
+  <span>'margin-block-end'</span> property to zero.</p>
+  </div>
+
+
+  <h4>Form controls</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+input, button, textarea {
+  letter-spacing: initial;
+  word-spacing: initial;
+  line-height: initial;
+}
+
+input, select, button, textarea {
+  text-transform: initial;
+  text-indent: initial;
+  text-shadow: initial;
+  appearance: auto;
+}
+
+input:not([type=range i], [type=checkbox i], [type=radio i]) {
+  overflow: clip !important;
+  overflow-clip-margin: 0 !important;
+}
+
+input[type=image i] {
+  overflow-clip-margin: content-box !important;
+}
+
+input, select, textarea {
+  text-align: initial;
+}
+
+:autofill {
+  field-sizing: fixed !important;
+}
+
+input:is([type=reset i], [type=button i], [type=submit i]), button {
+  text-align: center;
+}
+
+input, button {
+  display: inline-block;
+}
+
+input[type=hidden i], input[type=file i], input[type=image i] {
+  appearance: none;
+}
+
+input:is([type=radio i], [type=checkbox i], [type=reset i], [type=button i],
+[type=submit i], [type=color i], [type=search i]), select, button {
+  box-sizing: border-box;
+}
+
+textarea { white-space: pre-wrap; }
+
+input:not([type=file i], [type=range i], [type=checkbox i], [type=radio i]) {
+  align-content: unsafe center;
+}
+
+button,
+::file-selector-button,
+input:is([type=color i], [type=reset i], [type=button i], [type=submit i]) {
+  align-content: center;
+}
+</code></pre>
+
+  <p>In <span>quirks mode</span>, the following rules are also <span>expected</span> to apply:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+input:not([type=image i]), textarea { box-sizing: border-box; }</code></pre>
+
+  <p>Each kind of form control is also described in the <a href="#widgets">Widgets</a> section,
+  which describes the look and feel of the control.</p>
+
+  <p>For <code>input</code> elements where the <code data-x="attr-input-type">type</code> attribute
+  is not in the <span data-x="attr-input-type-hidden">Hidden</span> state or the <span
+  data-x="attr-input-type-image">Image Button</span> state, and that are <span>being
+  rendered</span>, are <span>expected</span> to act as follows:</p>
+
+  <ul>
+   <li><p>The <span>inner display type</span> is always 'flow-root'.</p></li>
+  </ul>
+
+
+  <h4>The <code>hr</code> element</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+hr {
+  color: gray;
+  border-style: inset;
+  border-width: 1px;
+  margin-block: 0.5em;
+  margin-inline: auto;
+  overflow: hidden;
+}</code></pre>
+
+  <p>The following rules are also <span>expected</span> to apply, as <span>presentational
+  hints</span>:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+hr[align=left i] { margin-left: 0; margin-right: auto; }
+hr[align=right i] { margin-left: auto; margin-right: 0; }
+hr[align=center i] { margin-left: auto; margin-right: auto; }
+hr[color], hr[noshade] { border-style: solid; }</code></pre>
+
+  <div algorithm>
+  <p>If an <code>hr</code> element has either a <code data-x="attr-hr-color">color</code> attribute
+  or a <code data-x="attr-hr-noshade">noshade</code> attribute, and furthermore also has a <code
+  data-x="attr-hr-size">size</code> attribute, and parsing that attribute's value using the
+  <span>rules for parsing non-negative integers</span> doesn't generate an error, then the user
+  agent is <span>expected</span> to use the parsed value divided by two as a pixel length for
+  <span>presentational hints</span> for the properties <span>'border-top-width'</span>,
+  <span>'border-right-width'</span>, <span>'border-bottom-width'</span>, and
+  <span>'border-left-width'</span> on the element.</p>
+
+  <p>Otherwise, if an <code>hr</code> element has neither a <code data-x="attr-hr-color">color</code>
+  attribute nor a <code data-x="attr-hr-noshade">noshade</code> attribute, but does have a <code
+  data-x="attr-hr-size">size</code> attribute, and parsing that attribute's value using the
+  <span>rules for parsing non-negative integers</span> doesn't generate an error, then: if the
+  parsed value is one, then the user agent is <span>expected</span> to use the attribute as a <span
+  data-x="presentational hints">presentational hint</span> setting the element's
+  <span>'border-bottom-width'</span> to 0; otherwise, if the parsed value is greater than one, then
+  the user agent is <span>expected</span> to use the parsed value minus two as a pixel length for
+  <span>presentational hints</span> for the <span>'height'</span> property on the element.</p>
+  </div>
+
+  <p>The <code data-x="attr-hr-width">width</code> attribute on an <code>hr</code> element <span>maps
+  to the dimension property</span> <span>'width'</span> on the element.</p>
+
+  <p>When an <code>hr</code> element has a <code data-x="attr-hr-color">color</code> attribute, its
+  value is <span>expected</span> to be parsed using the <span>rules for parsing a legacy color
+  value</span>, and if that does not return failure, the user agent is <span>expected</span> to
+  treat the attribute as a <span data-x="presentational hints">presentational hint</span> setting
+  the element's <span>'color'</span> property to the resulting color.</p>
+
+
+
+  <h4>The <code>fieldset</code> and <code>legend</code> elements</h4>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+fieldset {
+  display: block;
+  margin-inline: 2px;
+  border: groove 2px ThreeDFace;
+  padding-block: 0.35em 0.625em;
+  padding-inline: 0.75em;
+  min-inline-size: min-content;
+}
+
+legend {
+  padding-inline: 2px;
+}
+
+legend[align=left i] {
+  justify-self: left;
+}
+
+legend[align=center i] {
+  justify-self: center;
+}
+
+legend[align=right i] {
+  justify-self: right;
+}</code></pre>
+
+  <div algorithm>
+  <p>The <code>fieldset</code> element, when it generates a <span>CSS box</span>, is
+  <span>expected</span> to act as follows:</p>
+
+  <ul>
+   <li><p>The element is <span>expected</span> to establish a new <span>block formatting
+   context</span>.</p></li>
+
+   <li>
+    <p>The <span>'display'</span> property is <span>expected</span> to act as follows:</p>
+
+    <ul>
+     <li><p>If the computed value of <span>'display'</span> is a value such that the <span>outer
+     display type</span> is 'inline', then behave as 'inline-block'.</p></li>
+
+     <li><p>Otherwise, behave as 'flow-root'.</p></li>
+    </ul>
+
+    <p class="note">This does not change the computed value.</p>
+   </li>
+
+   <li>
+    <p>If the element's box has a child box that matches the conditions in the list below, then the
+    first such child box is the 'fieldset' element's <dfn>rendered legend</dfn>:</p>
+
+    <ul class="brief">
+     <li>The child is a <code>legend</code> element.</li>
+     <li>The child's used value of <span>'float'</span> is 'none'.</li>
+     <li>The child's used value of <span>'position'</span> is not 'absolute' or 'fixed'.</li>
+    </ul>
+   </li>
+
+   <li>
+    <p>If the element has a <span>rendered legend</span>, then the border is <span>expected</span>
+    to not be painted behind the rectangle defined as follows, using the writing mode of the
+    fieldset:</p>
+
+    <ol>
+     <li><p>The block-start edge of the rectangle is the smaller of the block-start edge of the
+     <span>rendered legend</span>'s margin rectangle at its static position (ignoring transforms),
+     and the block-start outer edge of the <code>fieldset</code>'s border.</p></li>
+
+     <li><p>The block-end edge of the rectangle is the larger of the block-end edge of the
+     <span>rendered legend</span>'s margin rectangle at its static position (ignoring transforms),
+     and the block-end outer edge of the <code>fieldset</code>'s border.</p></li>
+
+     <li><p>The inline-start edge of the rectangle is the smaller of the inline-start edge of the
+     <span>rendered legend</span>'s border rectangle at its static position (ignoring transforms),
+     and the inline-start outer edge of the <code>fieldset</code>'s border.</p></li>
+
+     <li><p>The inline-end edge of the rectangle is the larger of the inline-end edge of the
+     <span>rendered legend</span>'s border rectangle at its static position (ignoring transforms),
+     and the inline-end outer edge of the <code>fieldset</code>'s border.</p></li>
+    </ol>
+   </li>
+
+   <li><p>The space allocated for the element's border on the block-start side is
+   <span>expected</span> to be the element's <span>'border-block-start-width'</span> or the
+   <span>rendered legend</span>'s margin box size in the <code>fieldset</code>'s block-flow
+   direction, whichever is greater.</p></li>
+
+   <li><p>For the purpose of calculating the used <span>'block-size'</span>, if the computed
+   <span>'block-size'</span> is not 'auto', the space allocated for the <span>rendered
+   legend</span>'s margin box that spills out past the border, if any, is <span>expected</span> to
+   be subtracted from the <span>'block-size'</span>. If the content box's block-size would be
+   negative, then let the content box's block-size be 0 instead.</p></li>
+
+   <li><p>If the element has a <span>rendered legend</span>, then that element is
+   <span>expected</span> to be the first child box.</p></li>
+
+   <li><p>The <span>anonymous fieldset content box</span> is <span>expected</span> to appear after
+   the <span>rendered legend</span> and is <span>expected</span> to contain the content (including
+   the '::before' and '::after' pseudo-elements) of the <code>fieldset</code> element except for
+   the <span>rendered legend</span>, if there is one.</p></li>
+
+   <li><p>The used value of the <span>'padding-top'</span>, <span>'padding-right'</span>,
+   <span>'padding-bottom'</span>, and <span>'padding-left'</span> properties are
+   <span>expected</span> to be zero.</p></li>
+
+   <li><p>For the purpose of calculating the min-content inline size, use the greater of the
+   min-content inline size of the <span>rendered legend</span> and the min-content inline size of
+   the <span>anonymous fieldset content box</span>.</p></li>
+
+   <li><p>For the purpose of calculating the max-content inline size, use the greater of the
+   max-content inline size of the <span>rendered legend</span> and the max-content inline size of
+   the <span>anonymous fieldset content box</span>.</p></li>
+ </ul>
+  </div>
+
+  <div algorithm>
+  <p>A <code>fieldset</code> element's <span>rendered legend</span>, if any, is
+  <span>expected</span> to act as follows:</p>
+
+  <ul>
+   <li><p>The element is <span>expected</span> to establish a new <span>formatting context</span>
+   for its contents. The type of this <span>formatting context</span> is determined by its
+   <span>'display'</span> value, as usual.</p></li>
+
+   <li>
+    <p>The <span>'display'</span> property is <span>expected</span> to behave as if its computed
+    value was blockified.</p>
+
+    <p class="note">This does not change the computed value.</p>
+   </li>
+
+   <li><p>If the <span>computed value</span> of <span>'inline-size'</span> is 'auto', then the
+   <span>used value</span> is the <span>fit-content inline size</span>.</p></li>
+
+   <li><p>The element is <span>expected</span> to be positioned in the inline direction as is
+   normal for blocks (e.g., taking into account margins and the <span>'justify-self'</span>
+   property).</p></li>
+
+   <li>
+    <p>The element's box is <span>expected</span> to be constrained in the inline direction by the
+    inline content size of the <code>fieldset</code> as if it had used its computed inline
+    padding.</p>
+
+    <div class="example">
+     <p>For example, if the <code>fieldset</code> has a specified padding of 50px, then the
+     <span>rendered legend</span> will be positioned 50px in from the <code>fieldset</code>'s
+     border. The padding will further apply to the <span>anonymous fieldset content box</span>
+     instead of the <code>fieldset</code> element itself.</p>
+    </div>
+   </li>
+
+   <li><p>The element is <span>expected</span> to be positioned in the block-flow direction such
+   that its border box is centered over the border on the block-start side of the
+   <code>fieldset</code> element.</p></li>
+  </ul>
+  </div>
+
+
+  <div algorithm>
+  <p>A <code>fieldset</code> element's <dfn>anonymous fieldset content box</dfn> is
+  <span>expected</span> to act as follows:</p>
+
+  <ul>
+   <li>
+    <p>The <span>'display'</span> property is <span>expected</span> to act as follows:</p>
+
+    <ul>
+     <li><p>If the computed value of <span>'display'</span> on the <code>fieldset</code> element
+     is 'grid' or 'inline-grid', then set the used value to 'grid'.</p></li>
+
+     <li><p>If the computed value of <span>'display'</span> on the <code>fieldset</code> element
+     is 'flex' or 'inline-flex', then set the used value to 'flex'.</p></li>
+
+     <li><p>Otherwise, set the used value to 'flow-root'.</p></li>
+    </ul>
+   </li>
+
+   <li>
+    <p>The following properties are <span>expected</span> to inherit from the <code>fieldset</code>
+    element:</p>
+
+    <ul class="brief">
+     <li><span>'align-content'</span></li>
+     <li><span>'align-items'</span></li>
+     <li><span>'border-radius'</span></li>
+     <li><span>'column-count'</span></li>
+     <li><span>'column-fill'</span></li>
+     <li><span>'column-width'</span></li>
+     <li><span>'flex-direction'</span></li>
+     <li><span>'flex-wrap'</span></li>
+     <li><span>'gap'</span></li>
+     <li><span>'grid-auto-columns'</span></li>
+     <li><span>'grid-auto-flow'</span></li>
+     <li><span>'grid-auto-rows'</span></li>
+     <li><span>'grid-template-areas'</span></li>
+     <li><span>'grid-template-columns'</span></li>
+     <li><span>'grid-template-rows'</span></li>
+     <li><span>'justify-content'</span></li>
+     <li><span>'justify-items'</span></li>
+     <li><span>'overflow'</span></li>
+     <li><span>'padding-bottom'</span></li>
+     <li><span>'padding-left'</span></li>
+     <li><span>'padding-right'</span></li>
+     <li><span>'padding-top'</span></li>
+     <li><span>'rule'</span></li>
+     <li><span>'rule-break'</span></li>
+     <li><span>'rule-inset'</span></li>
+     <li><span>'rule-overlap'</span></li>
+     <li><span>'rule-visibility-items'</span></li>
+     <li><span>'text-overflow'</span></li>
+     <li><span>'unicode-bidi'</span></li>
+    </ul>
+   </li>
+
+   <li><p>The <span>'block-size'</span> property is <span>expected</span> to be set to
+   '100%'.</p></li>
+
+   <li><p>For the purpose of calculating percentage padding, act as if the padding was calculated
+   for the <code>fieldset</code> element.</p></li>
+  </ul>
+  </div>
+
+  <div class="note" id="fieldset-layout-model">
+   <figure>
+    <svg viewBox="0 0 400 270" width="480" height="324" role="img" aria-label="Fieldset layout
+    model">
+
+     <defs>
+      <marker id='arrow-red' orient='auto' markerWidth='5' markerHeight='4'
+              refX='0.1' refY='2'>
+       <path d='M0,0 V4 L5,2 Z' fill='red' />
+      </marker>
+      <marker id='arrow-blue' orient='auto' markerWidth='5' markerHeight='4'
+              refX='0.1' refY='2'>
+       <path d='M0,0 V4 L5,2 Z' fill='blue' />
+      </marker>
+     </defs>
+
+     <!-- outer outline -->
+     <rect stroke-dasharray="6" stroke-width="1" stroke="black" width="304" height="176" x="48"
+     y="48" fill="none"/>
+
+     <line marker-end="url(#arrow-blue)" x1="200" x2="200" y1="48" y2="20" stroke-width="2"
+     stroke="blue"/>
+     <line marker-end="url(#arrow-blue)" x1="48" x2="20" y1="136" y2="136" stroke-width="2"
+     stroke="blue"/>
+     <line marker-end="url(#arrow-blue)" x1="352" x2="380" y1="136" y2="136" stroke-width="2"
+     stroke="blue"/>
+     <line marker-end="url(#arrow-blue)" x1="200" x2="200" y1="224" y2="250" stroke-width="2"
+     stroke="blue"/>
+     <text x="210" y="35" font-size="12" font-family="sans-serif" font-style="normal"
+     fill="blue">fieldset's margin</text>
+
+     <!-- fieldset -->
+     <rect stroke-width="2" stroke="blue" width="300" height="116.5" x="50" y="105" fill="white"/>
+
+     <!-- rendered legend -->
+     <rect stroke-width="2" stroke="red" width="85" height="60" x="100" y="75" fill="white"/>
+     <text x="120" y="105" dominant-baseline="central" fill="red" font-family="serif"
+     font-style="normal">legend</text>
+
+     <!-- legend padding -->
+     <rect x="110" y="85" width="65" height="40" fill="none" stroke="#eee" stroke-width="18"/>
+     <text x="133" y="88" font-size="12" font-family="sans-serif" font-style="normal"
+     fill="gray">padding</text>
+
+     <line marker-end="url(#arrow-red)" x1="185" x2="325" y1="90" y2="90" stroke-width="2"
+     stroke="red"/>
+     <text x="210" y="85" font-size="12" font-family="sans-serif" font-style="normal"
+     fill="red">legend's margin</text>
+
+     <line marker-end="url(#arrow-red)" x1="100" x2="75" y1="90" y2="90" stroke-width="2"
+     stroke="red"/>
+     <line marker-end="url(#arrow-red)" x1="143" x2="143" y1="75" y2="60" stroke-width="2"
+     stroke="red"/>
+     <line marker-end="url(#arrow-red)" x1="143" x2="143" y1="135" y2="150" stroke-width="2"
+     stroke="red"/>
+
+     <!-- fieldset padding -->
+     <rect x="60" y="171" width="280" height="40" fill="none" stroke="#eee" stroke-width="18"/>
+     <text x="297" y="174" font-size="12" font-family="sans-serif" font-style="normal"
+     fill="gray">padding</text>
+
+     <!-- anonymous fieldset content box outline -->
+     <rect stroke-dasharray="6" stroke-width="1" stroke="black" width="296" height="58" x="52"
+     y="161" fill="none"/>
+     <text x="170" y="156" font-size="12" font-family="sans-serif" font-style="normal">anonymous
+     fieldset content box</text>
+     <text x="70" y="191" dominant-baseline="central" fill="blue" font-family="serif"
+     font-style="normal">content</text>
+
+    </svg>
+
+    <figcaption>The legend is rendered over the top border, and the top border area reserves
+    vertical space for the legend. The fieldset's top margin starts at the top margin edge of the
+    legend. The legend's horizontal margins, or the <span>'justify-self'</span> property, gives
+    its horizontal position. The <span>anonymous fieldset content box</span> appears below the
+    legend.</figcaption>
+   </figure>
+  </div>
+
+
+  <h3>Replaced elements</h3>
+
+  <p class="note">The following elements can be <span data-x="replaced element">replaced
+  elements</span>: <code>audio</code>, <code>canvas</code>, <code>embed</code>, <code>iframe</code>,
+  <code>img</code>, <code>input</code>, <code>object</code>, and <code>video</code>.</p>
+
+
+  <h4 id="embedded-content-rendering-rules">Embedded content</h4>
+
+  <p>The <code>embed</code>, <code>iframe</code>, and <code>video</code> elements are
+  <span>expected</span> to be treated as <span data-x="replaced element">replaced
+  elements</span>.</p>
+
+  <p>A <code>canvas</code> element that <span>represents</span> <span>embedded content</span> is
+  <span>expected</span> to be treated as a <span>replaced element</span>; the contents of such
+  elements are the element's bitmap, if any, or else a <span>transparent black</span> bitmap with
+  the same <span>natural dimensions</span> as the element. Other <code>canvas</code> elements are
+  <span>expected</span> to be treated as ordinary elements in the rendering model.</p>
+
+  <p>An <code>object</code> element that <span>represents</span> an image, plugin, or its
+  <span>content navigable</span> is <span>expected</span> to be treated as a <span>replaced
+  element</span>. Other <code>object</code> elements are <span>expected</span> to be treated as
+  ordinary elements in the rendering model.</p>
+
+  <p>The <code>audio</code> element, when it is <span data-x="expose a user interface to the
+  user">exposing a user interface</span>, is <span>expected</span> to be treated as a
+  <span>replaced element</span> about one line high, as wide as is necessary to expose the user
+  agent's user interface features. When an <code>audio</code> element is not <span data-x="expose a
+  user interface to the user">exposing a user interface</span>, the user agent is
+  <span>expected</span> to force its <span>'display'</span> property to compute to 'none',
+  irrespective of CSS rules.</p>
+
+  <p>Whether a <code>video</code> element is <span data-x="expose a user interface to the
+  user">exposing a user interface</span> is not <span>expected</span> to affect the size of the
+  rendering; controls are <span>expected</span> to be overlaid above the page content without
+  causing any layout changes, and are <span>expected</span> to disappear when the user does not
+  need them.</p>
+
+  <p>When a <code>video</code> element represents a poster frame or frame of video, the poster frame
+  or frame of video is <span>expected</span> to be rendered at the largest size that maintains the
+  aspect ratio of that poster frame or frame of video without being taller or wider than the
+  <code>video</code> element itself, and is <span>expected</span> to be centered in the
+  <code>video</code> element.</p>
+
+  <p>Any subtitles or captions are <span>expected</span> to be overlaid directly on top of their
+  <code>video</code> element, as defined by the relevant rendering rules; for WebVTT, those are the
+  <span>rules for updating the display of WebVTT text tracks</span>. <ref>WEBVTT</ref></p>
+
+  <p>When the user agent starts <span data-x="expose a user interface to the user">exposing a user
+  interface</span> for a <code>video</code> element, the user agent should run the <span>rules for
+  updating the text track rendering</span> of each of the <span data-x="text track">text
+  tracks</span> in the <code>video</code> element's <span>list of text tracks</span> that are <span
+  data-x="text track showing">showing</span> and whose <span>text track kind</span> is one of <code
+  data-x="dom-TextTrack-kind-subtitles">subtitles</code> or <code
+  data-x="dom-TextTrack-kind-captions">captions</code> (e.g., for <span data-x="text track">text
+  tracks</span> based on WebVTT, the <span>rules for updating the display of WebVTT text
+  tracks</span>). <ref>WEBVTT</ref></p>
+
+  <p class="note">Resizing <code>video</code> and <code>canvas</code> elements does not interrupt
+  video playback or clear the canvas.</p>
+
+  <hr>
+
+  <p>The following CSS rules are <span>expected</span> to apply:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+iframe { border: 2px inset; }
+<span id="video-object-fit">video { object-fit: contain; }</span></code></pre>
+
+
+  <h4>Images</h4>
+
+  <p>User agents are <span>expected</span> to render <code>img</code> elements and
+  <code>input</code> elements whose <code data-x="attr-input-type">type</code> attributes are in
+  the <span data-x="attr-input-type-image">Image Button</span> state, according to the first
+  applicable rules from the following list:</p>
+
+  <dl class="switch">
+
+
+   <dt>If the element <span>represents</span> an image</dt>
+
+   <dd>The user agent is <span>expected</span> to treat the element as a <span>replaced
+   element</span> and render the image according to the rules for doing so defined in CSS.</dd>
+
+
+   <dt>
+
+    If the element does not <span data-x="represents">represent</span> an image and either:
+
+    <ul>
+     <li>the user agent has reason to believe that the image will become <i
+     data-x="img-available">available</i><!--input-img-available also--> and be rendered in due
+     course, or
+
+     <li>the element has no <code data-x="">alt</code> attribute<!-- attr-img-alt, attr-input-alt -->, or
+
+     <li>the <code>Document</code> is in <span>quirks mode</span>, and the element already has
+     <span>natural dimensions</span> (e.g., from the <span>dimension attributes</span> or CSS
+     rules)
+    </ul>
+
+   </dt>
+
+   <dd>The user agent is <span>expected</span> to treat the element as a <span>replaced
+   element</span> whose content is the text that the element represents, if any, optionally
+   alongside an icon indicating that the image is being obtained (if applicable). For
+   <code>input</code> elements, the element is <span>expected</span> to appear button-like to
+   indicate that the element is a <span data-x="concept-button">button</span>.</dd>
+
+
+   <!-- no-quirks and limited-quirks modes only-->
+   <dt>If the element is an <code>img</code> element that <span>represents</span> some text and the
+   user agent does not expect this to change</dt>
+
+   <dd>The user agent is <span>expected</span> to treat the element as a non-replaced phrasing
+   element whose content is the text, optionally with an icon indicating that an image is missing,
+   so that the user can request the image be displayed or investigate why it is not rendering. In
+   non-graphical contexts, such an icon should be omitted.</dd>
+
+
+   <!-- no-quirks and limited-quirks modes only-->
+   <dt>If the element is an <code>img</code> element that <span>represents</span> nothing and the
+   user agent does not expect this to change</dt>
+
+   <dd>The user agent is <span>expected</span> to treat the element as a <span>replaced
+   element</span> whose <span>natural dimensions</span> are 0. (In the absence of further styles,
+   this will cause the element to essentially not be rendered.)</dd>
+
+
+   <!-- no-quirks and limited-quirks modes only-->
+   <dt>If the element is an <code>input</code> element that does not <span
+   data-x="represents">represent</span> an image and the user agent does not expect this to change</dt>
+
+   <dd>The user agent is <span>expected</span> to treat the element as a <span>replaced
+   element</span> consisting of a button whose content is the element's alternative text. The
+   <span>natural dimensions</span> of the button are <span>expected</span> to be about one line in
+   height and whatever width is necessary to render the text on one line.</dd>
+  </dl>
+
+  <p>The icons mentioned above are <span>expected</span> to be relatively small so as not to
+  disrupt most text but be easily clickable. In a visual environment, for instance, icons could be
+  16 pixels by 16 pixels square, or 1em by 1em if the images are scalable. In an audio environment,
+  the icon could be a short bleep. The icons are intended to indicate to the user that they can be
+  used to get to whatever options the UA provides for images, and, where appropriate, are
+  <span>expected</span> to provide access to the context menu that would have come up if the user
+  interacted with the actual image.</p>
+
+  <hr>
+
+  <p>All animated images with the same <span>absolute URL</span> and the same image data are
+  <span>expected</span> to be rendered synchronized to the same timeline as a group, with the
+  timeline starting at the time of the least recent addition to the group.</p>
+
+  <p class="note">In other words, when a second image with the same <span>absolute URL</span> and
+  animated image data is inserted into a document, it jumps to the point in the animation cycle that
+  is currently being displayed by the first image.</p>
+
+  <div algorithm>
+  <p>When a user agent is to <dfn>restart the animation</dfn> for an <code>img</code> element
+  showing an animated image, all animated images with the same <span>absolute URL</span> and the
+  same image data in that <code>img</code> element's <span>node document</span> are
+  <span>expected</span> to restart their animation from the beginning.</p>
+  </div>
+
+  <hr>
+
+  <p>The following CSS rules are <span>expected</span> to apply:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+<span id="img-contain-size">img:is([sizes="auto" i], [sizes^="auto," i]) {
+  contain: size !important;
+  contain-intrinsic-size: 300px 150px;
+}</span></code></pre>
+
+  <p>The following CSS rules are <span>expected</span> to apply when the <code>Document</code> is
+  in <span>quirks mode</span>:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+img[align=left i] { margin-right: 3px; }
+img[align=right i] { margin-left: 3px; }</code></pre>
+
+  </div>
+
+
+  <div w-nodev>
+
+  <h4>Attributes for embedded content and images</h4>
+
+  <p>The following CSS rules are <span>expected</span> to apply as <span>presentational
+  hints</span>:</p>
+
+  <pre><code class="css">@namespace "http://www.w3.org/1999/xhtml";
+
+embed[align=left i], iframe[align=left i], img[align=left i],
+input[type=image i][align=left i], object[align=left i] {
+  float: left;
+}
+
+embed[align=right i], iframe[align=right i], img[align=right i],
+input[type=image i][align=right i], object[align=right i] {
+  float: right;
+}
+
+embed[align=top i], iframe[align=top i], img[align=top i],
+input[type=image i][align=top i], object[align=top i] {
+  vertical-align: top;
+}
+
+embed[align=baseline i], iframe[align=baseline i], img[align=baseline i],
+input[type=image i][align=baseline i], object[align=baseline i] {
+  vertical-align: baseline;
+}
+
+embed[align=texttop i], iframe[align=texttop i], img[align=texttop i],
+input[type=image i][align=texttop i], object[align=texttop i] {
+  vertical-align: text-top;
+}
+
+embed[align=absmiddle i], iframe[align=absmiddle i], img[align=absmiddle i],
+input[type=image i][align=absmiddle i], object[align=absmiddle i],
+embed[align=abscenter i], iframe[align=abscenter i], img[align=abscenter i],
+input[type=image i][align=abscenter i], object[align=abscenter i] {
+  vertical-align: middle;
+}
+
+embed[align=bottom i], iframe[align=bottom i], img[align=bottom i],
+input[type=image i][align=bottom i], object[align=bottom i] {
+  vertical-align: bottom;
+}</code></pre>
+
+  <p>When an <code>embed</code>, <code>iframe</code>, <code>img</code>, or <code>object</code>
+  element, or an <code>input</code> element whose <code data-x="attr-input-type">type</code>
+  attribute is in the <span data-x="attr-input-type-image">Image Button</span> state, has an <code
+  data-x="">align</code> attribute whose value is an <span>ASCII case-insensitive</span> match for
+  the string "<code data-x="">center</code>" or the string "<code data-x="">middle</code>", the user
+  agent is <span>expected</span> to act as if the element's <span>'vertical-align'</span> property
+  was set to a value that aligns the vertical middle of the element with the parent element's
+  baseline.</p>
+
+  <p>The <code data-x="">hspace</code> attribute of <code>embed</code>,
+  <code>img</code>, or <code>object</code> elements, and <code>input</code> elements with a <code
+  data-x="attr-input-type">type</code> attribute in the <span data-x="attr-input-type-image">Image
+  Button</span> state, <span data-x="maps to the dimension property">maps to the dimension
+  properties</span> <span>'margin-left'</span> and <span>'margin-right'</span> on the element.</p>
+
+  <p>The <code data-x="">vspace</code> attribute of <code>embed</code>,
+  <code>img</code>, or <code>object</code> elements, and <code>input</code> elements with a <code
+  data-x="attr-input-type">type</code> attribute in the <span data-x="attr-input-type-image">Image
+  Button</span> state, <span data-x="maps to the dimension property">maps to the dimension
+  properties</span> <span>'margin-top'</span> and <span>'margin-bottom'</span> on the element.</p>
+
+  <p>When an <code>iframe</code> element has a <code
+  data-x="attr-iframe-frameborder">frameborder</code> attribute whose value, when parsed using the
+  <span>rules for parsing integers</span>, is zero or an error, the user agent is
+  <span>expected</span> to have <span>presentational hints</span> setting the element's
+  <span>'border-top-width'</span>, <span>'border-right-width'</span>,
+  <span>'border-bottom-width'</span>, and <span>'border-left-width'</span> properties to zero.</p>
+
+  <p>When an <code>img</code> element, <code>object</code> element, or <code>input</code> element
+  with a <code data-x="attr-input-type">type</code> attribute in the <span
+  data-x="attr-input-type-image">Image Button</span> state has a <code
+  data-x="">border</code> attribute whose value, when parsed using the <span>rules for
+  parsing non-negative integers</span>, is found to be a number greater than zero, the user agent is
+  <span>expected</span> to use the parsed value for eight <span>presentational hints</span>: four
+  setting the parsed value as a pixel length for the element's <span>'border-top-width'</span>,
+  <span>'border-right-width'</span>, <span>'border-bottom-width'</span>, and
+  <span>'border-left-width'</span> properties, and four setting the element's
+  <span>'border-top-style'</span>, <span>'border-right-style'</span>,
+  <span>'border-bottom-style'</span>, and <span>'border-left-style'</span> properties to the value
+  'solid'.</p>
+
+  <p id="dimRendering">The <code data-x="attr-dim-width">width</code> and <code
+  data-x="attr-dim-height">height</code> attributes on an <code>img</code> element's <span
+  data-x="concept-img-dimension-attribute-source">dimension attribute source</span> <span
+  data-x="maps to the dimension property">map to the dimension properties</span>
+  <span>'width'</span> and <span>'height'</span> on the <code>img</code> element respectively. They
+  similarly <span>map to the aspect-ratio property (using dimension rules)</span> of the
+  <code>img</code> element.</p>
+
+  <p>The <code data-x="attr-dim-width">width</code> and <code data-x="attr-dim-height">height</code>
+  attributes on <code>embed</code>, <code>iframe</code>, <code>object</code>, and <code>video</code>
+  elements, and <code>input</code> elements with a <code data-x="attr-input-type">type</code>
+  attribute in the <span data-x="attr-input-type-image">Image Button</span> state and that either
+  represents an image or that the user expects will eventually represent an image, <span
+  data-x="maps to the dimension property">map to the dimension properties</span>
+  <span>'width'</span> and <span>'height'</span> on the element respectively.</p>
+
+  <p>The <code data-x="attr-dim-width">width</code> and <code data-x="attr-dim-height">height</code>
+  attributes <span>map to the aspect-ratio property (using dimension rules)</span> on
+  <code>img</code> and <code>video</code> elements, and <code>input</code> elements with a <code
+  data-x="attr-input-type">type</code> attribute in the <span data-x="attr-input-type-image">Image
+  Button</span> state.</p>
+
+  <p>The <code data-x="attr-canvas-width">width</code> and <code
+  data-x="attr-canvas-height">height</code> attributes <span>map to the aspect-ratio property</span>
+  on <code>canvas</code> elements.</p>
+  </div>
+
+
+  <div w-nodev>
+
+  <h4>Image maps</h4>
+
+  <p>Shapes on an <span>image map</span> are <span>expected</span> to act, for the purpose of the
+  CSS cascade, as elements independent of the original <code>area</code> element that happen to
+  match the same style rules but inherit from the <code>img</code> or <code>object</code>
+  element.</p>
+
+  <p>For the purposes of the rendering, only the <span>'cursor'</span> property is
+  <span>expected</span> to have any effect on the shape.</p>
+
+  <p class="example">Thus, for example, if an <code>area</code> element has a <code
+  data-x="attr-style">style</code> attribute that sets the <span>'cursor'</span> property to 'help',
+  then when the user designates that shape, the cursor would change to a Help cursor.</p>
+
+  <p class="example">Similarly, if an <code>area</code> element had a CSS rule that set its
+  <span>'cursor'</span> property to 'inherit' (or if no rule setting the <span>'cursor'</span>
+  property matched the element at all), the shape's cursor would be inherited from the
+  <code>img</code> or <code>object</code> element of the <span>image map</span>, not from the parent
+  of the <code>area</code> element.</p>
+
+  </div>
+
+
+  <div w-nodev>
+

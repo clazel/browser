@@ -1,0 +1,268 @@
+#case 0
+#data "<!DOCTYPE html><math></math>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 1
+#data "<!DOCTYPE html><body><math></math>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 2
+#data "<!DOCTYPE html><math><mi>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+
+#case 3
+#data "<!DOCTYPE html><math><annotation-xml><svg><u>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <annotation-xml>
+        <svg>
+    <u> text-decoration-line=DecorationLines { underline: true, overline: false, line_through: false, blink: false }
+
+#case 4
+#data "<!DOCTYPE html><body><select><math></math></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <math>
+
+#case 5
+#data "<!DOCTYPE html><body><select><option><math></math></option></select>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <option>
+        <math>
+
+#case 6
+#data "<!DOCTYPE html><body><table><math></math></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+    <table> display=Table border-spacing=2px 2px
+
+#case 7
+#data "<!DOCTYPE html><body><table><math><mi>foo</mi></math></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+    <table> display=Table border-spacing=2px 2px
+
+#case 8
+#data "<!DOCTYPE html><body><table><math><mi>foo</mi><mi>bar</mi></math></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+      <mi>
+    <table> display=Table border-spacing=2px 2px
+
+#case 9
+#data "<!DOCTYPE html><body><table><tbody><math><mi>foo</mi><mi>bar</mi></math></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+      <mi>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+
+#case 10
+#data "<!DOCTYPE html><body><table><tbody><tr><math><mi>foo</mi><mi>bar</mi></math></tr></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+      <mi>
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+
+#case 11
+#data "<!DOCTYPE html><body><table><tbody><tr><td><math><mi>foo</mi><mi>bar</mi></math></td></tr></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <math>
+              <mi>
+              <mi>
+
+#case 12
+#data "<!DOCTYPE html><body><table><tbody><tr><td><math><mi>foo</mi><mi>bar</mi></math><p>baz</td></tr></tbody></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <math>
+              <mi>
+              <mi>
+            <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 13
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi></math><p>baz</caption></table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <math>
+          <mi>
+          <mi>
+        <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 14
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <math>
+          <mi>
+          <mi>
+        <p> margin-top=16px margin-bottom=16px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 15
+#data "<!DOCTYPE html><body><table><caption><math><mi>foo</mi><mi>bar</mi>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <caption> display=TableCaption text-align=Center
+        <math>
+          <mi>
+          <mi>
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 16
+#data "<!DOCTYPE html><body><table><colgroup><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+      <mi>
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <colgroup> display=TableColumnGroup
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 17
+#data "<!DOCTYPE html><body><table><tr><td><select><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <table> display=Table border-spacing=2px 2px
+      <tbody> display=TableRowGroup vertical-align=Middle
+        <tr> display=TableRow vertical-align=Middle
+          <td> padding-top=1px padding-right=1px padding-bottom=1px padding-left=1px display=TableCell vertical-align=Middle
+            <select>
+              <math>
+                <mi>
+                <mi>
+              <p> margin-top=16px margin-bottom=16px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 18
+#data "<!DOCTYPE html><body><table><select><math><mi>foo</mi><mi>bar</mi><p>baz</table><p>quux"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <select>
+      <math>
+        <mi>
+        <mi>
+      <p> margin-top=16px margin-bottom=16px display=Block
+    <table> display=Table border-spacing=2px 2px
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 19
+#data "<!DOCTYPE html><body></body></html><math><mi>foo</mi><mi>bar</mi><p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+      <mi>
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 20
+#data "<!DOCTYPE html><body></body><math><mi>foo</mi><mi>bar</mi><p>baz"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+      <mi>
+    <p> margin-top=16px margin-bottom=16px display=Block
+
+#case 21
+#data "<!DOCTYPE html><frameset><math><mi></mi><mi></mi><p><span>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 22
+#data "<!DOCTYPE html><frameset></frameset><math><mi></mi><mi></mi><p><span>"
+<html> display=Block
+  <head> display=None
+  <frameset>
+
+#case 23
+#data "<!DOCTYPE html><body xlink:href=foo><math xlink:href=foo></math>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+
+#case 24
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo></mi></math>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+
+#case 25
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo /></math>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+
+#case 26
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><math><mi xml:lang=en xlink:href=foo />bar</math>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <math>
+      <mi>
+

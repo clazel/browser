@@ -1,0 +1,88 @@
+#case 0
+#data "<p><font size=4><font color=red><font size=4><font size=4><font size=4><font size=4><font size=4><font color=red><p>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <font> font-size=18px
+        <font> color=#ff0000ff
+          <font>
+            <font>
+              <font>
+                <font>
+                  <font>
+                    <font>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <font> color=#ff0000ff
+        <font> font-size=18px
+          <font>
+            <font>
+              <font>
+
+#case 1
+#data "<p><font size=4><font size=4><font size=4><font size=4><p>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <font> font-size=18px
+        <font>
+          <font>
+            <font>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <font> font-size=18px
+        <font>
+          <font>
+
+#case 2
+#data "<p><font size=4><font size=4><font size=4><font size=\"5\"><font size=4><p>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <font> font-size=18px
+        <font>
+          <font>
+            <font> font-size=24px
+              <font> font-size=18px
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <font> font-size=18px
+        <font>
+          <font> font-size=24px
+            <font> font-size=18px
+
+#case 3
+#data "<p><font size=4 id=a><font size=4 id=b><font size=4><font size=4><p>X"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <font> font-size=18px
+        <font>
+          <font>
+            <font>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <font> font-size=18px
+        <font>
+          <font>
+            <font>
+
+#case 4
+#data "<p><b id=a><b id=a><b id=a><b><object><b id=a><b id=a>X</object><p>Y"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <b> font-weight=700
+        <b> font-weight=900
+          <b>
+            <b>
+              <object>
+                <b>
+                  <b>
+    <p> margin-top=16px margin-bottom=16px display=Block
+      <b> font-weight=700
+        <b> font-weight=900
+          <b>
+            <b>
+

@@ -206,7 +206,9 @@ We list this openly. Proofs are only as good as their assumptions.
   standard's algorithm, and that it is that algorithm is HACL\*'s proof.
   The axioms cover TLS (SHA-256, HMAC, HKDF, ChaCha20-Poly1305, X25519 and
   the CertificateVerify signatures) and certificate-chain links (SHA-384
-  and SHA-512 digests for RSA PKCS#1 v1.5, and ECDSA P-256 with SHA-384).
+  and SHA-512 digests for RSA PKCS#1 v1.5, and ECDSA P-256 with SHA-384);
+  SHA-384 also hashes the CertificateVerify content of
+  ecdsa_secp384r1_sha384.
   RSA PKCS#1 v1.5 itself is not trusted: it is `clazel-pkcs1`, our own
   proven code, over those digests; nor is ECDSA P-384 (design P17), which
   is `clazel-p384` over the SHA-256 or SHA-384 digest
@@ -224,9 +226,8 @@ We list this openly. Proofs are only as good as their assumptions.
   into fiat is one of six axioms in `crates/clazel-p384/src/axioms.rs`, each
   stating only the postcondition fiat prints above that function. The
   conversions into and out of the Montgomery domain, the octet-string
-  conversions, exponentiation and inversion are our own code, proven over
-  those axioms; the ECDSA group law and verification steps will be too, but
-  are not written yet
+  conversions, exponentiation and inversion, the ECDSA group law and the
+  verification steps are our own code, proven over those axioms
 - The Tier 0 code on a page's path, small and tested rather than proven
   ([Phase 4](phases/phase-4.md#what-is-proven-and-what-is-assumed)): the
   text layout (`clazel-text`, replaced by Phase 5's layout), the renderer's

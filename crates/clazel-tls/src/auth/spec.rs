@@ -175,10 +175,11 @@ pub open spec fn profile_extensions(es: Seq<u16>) -> bool
         || es[0] == 44 || es[0] == 50 || es[0] == 51) && profile_extensions(es.skip(1)))
 }
 /// §4.4.3: permitted TLS 1.3 schemes in the selected library profile:
-/// ecdsa_secp256r1_sha256, rsa_pss_rsae_sha256/384/512 and ed25519. The
-/// rsa_pss_pss_* schemes are not offered (see hello::client_spec).
+/// ecdsa_secp256r1_sha256, ecdsa_secp384r1_sha384, rsa_pss_rsae_sha256/384/512
+/// and ed25519 (§4.2.3). The rsa_pss_pss_* schemes are not offered (see
+/// hello::client_spec).
 pub open spec fn signature_scheme(scheme: u16) -> bool {
-    scheme == 0x0403 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
+    scheme == 0x0403 || scheme == 0x0503 || scheme == 0x0804 || scheme == 0x0805 || scheme == 0x0806
         || scheme == 0x0807
 }
 /// §4.2: EE responses must have been offered. Placement/body rules are parsed first.
@@ -273,10 +274,22 @@ pub open spec fn initial_request_context_valid(context: Seq<u8>) -> bool {
 pub open spec fn initial_certificate_context_valid(context: Seq<u8>) -> bool {
     context.len() == 0
 }
+/// RFC 8446 §4.2.5: "Any given OID MUST NOT appear more than once in the
+/// filters list", for every oid_filters extension of the block
+/// ([`crate::spec::oid_filters_distinct`]), as a recursion.
+pub open spec fn request_filters_distinct(es: Seq<crate::spec::Ext>) -> bool
+    decreases es.len(),
+{
+    es.len() == 0 || ((es[0].etype != crate::spec::EXT_OID_FILTERS || crate::spec::oid_filters_distinct(es[0].data))
+        && request_filters_distinct(es.skip(1)))
+}
 /// §4.3.2: one initial CertificateRequest, with empty context and signature_algorithms.
-pub open spec fn on_request(c: crate::schedule::spec::Crypto, s: State, body: Seq<u8>, empty_context: bool, has_algorithms: bool) -> (State, Action) {
+/// §4.2.5's repeated OID is a well-formed but invalid body, `illegal_parameter`
+/// by §6 ("syntactically correct but semantically invalid").
+pub open spec fn on_request(c: crate::schedule::spec::Crypto, s: State, body: Seq<u8>, empty_context: bool, has_algorithms: bool, filters_distinct: bool) -> (State, Action) {
     if s.phase != Phase::CertificateOrRequest { fail(s, crate::spec::UNEXPECTED_MESSAGE) }
     else if !empty_context { fail(s, crate::spec::ILLEGAL_PARAMETER) }
+    else if !filters_distinct { fail(s, crate::spec::ILLEGAL_PARAMETER) }
     else if !has_algorithms { fail(s, crate::spec::MISSING_EXTENSION) }
     else { record(c, State { requested: true, ..s }, crate::transcript::spec::Kind::CertificateRequest, body, Phase::Certificate) }
 }
@@ -312,7 +325,8 @@ pub open spec fn on_verify(c: crate::schedule::spec::Crypto, v: Verification, s:
 pub open spec fn dispatch(c: crate::schedule::spec::Crypto, v: Verification, s: State, body: Seq<u8>, message: crate::spec::HsMsg) -> (State, Action) {
     match message {
         crate::spec::HsMsg::EncryptedExtensions(es) => on_extensions(c, s, body, es),
-        crate::spec::HsMsg::CertificateRequest(request) => on_request(c, s, body, initial_request_context_valid(request.context), crate::spec::has_ext(request.extensions, 13)),
+        crate::spec::HsMsg::CertificateRequest(request) => on_request(c, s, body, initial_request_context_valid(request.context), crate::spec::has_ext(request.extensions, 13),
+            request_filters_distinct(request.extensions)),
         crate::spec::HsMsg::Certificate(certificate) => on_certificate(c, v, s, body,
             initial_certificate_context_valid(certificate.context), certificate.entries.len() == 0,
             certificate_extensions_offered(certificate.entries, s.config.extensions)),

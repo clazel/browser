@@ -1,0 +1,32 @@
+#case 0
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Frameset//EN\"\n\"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd\"><p><table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-top=16px margin-bottom=16px display=Block
+    <table> display=Table border-spacing=2px 2px
+
+#case 1
+#data "<!DOCTYPE html SYSTEM \"http://www.ibm.com/data/dtd/v11/ibmxhtml1-transitional.dtd\"><p><table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <table> display=Table border-spacing=2px 2px
+
+#case 2
+#data "<!DOCTYPE html PUBLIC \"html\"><p><table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <table> display=Table border-spacing=2px 2px
+
+#case 3
+#data "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2//EN\"\n   \"http://www.w3.org/TR/html4/strict.dtd\"><p><table>"
+<html> display=Block
+  <head> display=None
+  <body> margin-top=8px margin-right=8px margin-bottom=8px margin-left=8px display=Block
+    <p> margin-bottom=16px display=Block
+      <table> display=Table border-spacing=2px 2px
+

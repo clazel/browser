@@ -30,7 +30,7 @@ impl View for Config {
 pub fn signatures() -> (out: Vec<u16>)
     ensures out@ == super::client_spec::signatures(),
 {
-    let out = vec![0x0403u16, 0x0804u16, 0x0805u16, 0x0806u16, 0x0807u16,
+    let out = vec![0x0403u16, 0x0503u16, 0x0804u16, 0x0805u16, 0x0806u16, 0x0807u16,
         0x0401u16, 0x0501u16, 0x0601u16];
     proof { assert(out@ =~= super::client_spec::signatures()); }
     out
@@ -203,7 +203,8 @@ impl Hello {
         ensures super::client_contract::start_ensures(config@, start_view(out)),
     {
         if !config.host.is_ok() || config.random.len() != 32
-            || config.session_id.len() > 32 || config.public_key.len() != 32 { return Err(80); }
+            || (!config.session_id.is_empty() && config.session_id.len() != 32)
+            || config.public_key.len() != 32 { return Err(80); }
         let b = build(&config, &[]);
         let transcript = match Transcript::new(b.as_slice()) { Ok(t) => t, Err(_) => return Err(80) };
         let mut flight = Vec::new();
