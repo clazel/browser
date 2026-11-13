@@ -77,6 +77,9 @@ pub mod frame;
 pub mod sheets;
 pub mod state;
 
+#[cfg(test)]
+mod tests;
+
 use clazel_dom::exec::{Arena, ExecKind};
 use clazel_dom::spec::Namespace;
 use clazel_encoding::labels::spec::Encoding;
