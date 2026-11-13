@@ -3,7 +3,7 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 138 `unsafe` blocks (338 lines) that enter the OS sandbox, machine-checked and audited. Of those, 21 are `"C-unwind"` casts of `objc_msgSend` to a typed function pointer, one per Objective-C message signature that Metal drawing uses. Shipped dependencies are `libc` and libcrux.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 227 `unsafe` blocks (468 lines) that enter the OS sandbox, machine-checked and audited. Of those, 40 are `"C-unwind"` casts of `objc_msgSend` to a typed function pointer, one per Objective-C message signature that Metal drawing (21) and the macOS window (19) use. Shipped dependencies are `libc` and libcrux.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Honest about it:** each crate declares its verification tier, and the
@@ -170,9 +170,9 @@ and much of it is work only a person can do.
 - **Run it where we have not.** The Phase 2 and 4 process tests (the sandbox,
   the hostile renderer, the hostile pages) run in CI on `ubuntu-24.04` and
   macOS arm64 only. Other Linux distributions and kernels are untested.
-- **Read `clazel-sys`.** It is the only crate with `unsafe`: 62 blocks that
-  enter the OS sandbox, read the OS random source, or list the DNS servers and
-  open the host's window (Windows). Every change is audited
+- **Read `clazel-sys`.** It is the only crate with `unsafe`: 227 blocks that
+  enter the OS sandbox, read the OS random source, list the DNS servers, open
+  the host's window (Windows and macOS) and draw with Metal. Every change is audited
   by a second model ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person
   reading it too is welcome.
 - **Build the next phases.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md)
