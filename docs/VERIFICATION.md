@@ -192,6 +192,10 @@ We list this openly. Proofs are only as good as their assumptions.
 - `clazel-sys`, the one crate with `unsafe` (see "The `unsafe` exception"
   below): a handful of foreign calls that enter the OS sandbox, and `libc`,
   its only shipped dependency, for struct layouts and constants
+- On Windows, Direct3D 12, DXGI and the driver they load (or WARP), in the GPU
+  process, inside its AppContainer, which is weaker than the renderer's (it
+  keeps `win32k` and can read the registry: phase-5.md item 5.21a). This path
+  has been compiled and has never run.
 - On Linux, the Vulkan loader (`libvulkan`) and the driver it loads, in the GPU
   process: Mesa's lavapipe with LLVM for software drawing, or the machine's
   hardware driver. They run inside the GPU process's sandbox, which is weaker

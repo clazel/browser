@@ -114,7 +114,7 @@ and compiles its fixed pipelines from our own shader source, never a page's.
 |----|--------|-------|
 | macOS | `seatbelt::GPU`: `(deny default)` and one rule, `mach-lookup` of `com.apple.MTLCompilerService` (item 5.23) | **measured** on one machine (below); entered by `clazel_gpu::sandbox::start_metal` |
 | Linux | `namespaces::GPU`, Landlock with no rule, and `syscalls::GPU_EXTRA` added to the renderer's list (`seccomp::gpu_program`); with a hardware device also `GPU_HARDWARE_EXTRA` (`seccomp::gpu_hardware_program`) | **measured** on lavapipe on aarch64 only (below); the hardware addition is **not measured**; entered by `clazel_gpu::sandbox::start_vulkan` |
-| Windows | `appcontainer::GPU_*`: the renderer's policy less `WIN32K`, plus `registryRead`, container `clazel.gpu` | decided by the plan's measurement (2026-11-04); data only, nothing starts a process with it yet |
+| Windows | `appcontainer::GPU_*`: the renderer's policy less `WIN32K`, plus `registryRead`, container `clazel.gpu` | decided by the plan's measurement (2026-11-04); data; the code that starts a process with it has never run |
 
 ### macOS, measured
 
@@ -232,10 +232,10 @@ data, without a new measurement. The cost the plan states: the GPU process can
 read `HKCU\Software`, `HKCU\Environment` and `HKLM\SOFTWARE`, and it has
 `win32k`.
 
-Starting a process with the `registryRead` capability needs
-`clazel_sys::windows::spawn` to take capabilities (`DeriveCapabilitySidsFromName`).
-That change to `clazel-sys` cannot be compiled or run from a Mac, so it waits
-for a Windows machine.
+`clazel_sys::windows::spawn` takes capabilities by name
+(`DeriveCapabilitySidsFromName`), and `clazel-renderer`'s `launch` starts the GPU
+process with this policy. Both were written on a Mac and compiled for Windows
+without tests: **no process has been started with this policy by this code**.
 
 ### Kani
 

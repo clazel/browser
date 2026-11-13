@@ -128,7 +128,9 @@ process, one per tab (`cargo build --bin clazel-gpu` too), laid out by the rende
 (item 5.20) in the system's TrueType fonts; linked style sheets wait for item 5.19.
 `clazel browse --headless OUT URL` writes the
 page as a PNG (or a PPM, for `OUT` ending in `.ppm`). Elsewhere, `browse URL` is the
-text mode.
+text mode. On Windows the window, a Direct3D 12 GPU process and its AppContainer
+start are written and compile, but **have never been run**: no Windows machine
+was at hand (`crates/clazel-gpu/README.md`, "The Direct3D 12 backend").
 
 In text mode, `browse` shows a page as text, with its links numbered: type a number to
 follow a link, `g URL` to go elsewhere, `b` to go back, `q` to quit. The

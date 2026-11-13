@@ -51,11 +51,11 @@
 //! `HKLM\SOFTWARE`, and it has the whole `win32k` system call table. The separate
 //! [`GPU_CONTAINER_NAME`] keeps it from sharing the renderer's writable folder.
 //!
-//! Only the data is here. Starting a process with a capability needs
-//! `clazel_sys::windows::spawn` to take one (`DeriveCapabilitySidsFromName`),
-//! which is a change to `clazel-sys` that cannot be compiled or run from a Mac, so
-//! it waits for a Windows machine, and nothing starts a GPU process with this
-//! policy yet.
+//! Only the data is here. `clazel-renderer`'s `launch` starts the GPU process
+//! with it, through `clazel_sys::windows::spawn`, which takes capabilities by
+//! name (`DeriveCapabilitySidsFromName`). That code was written on a Mac and
+//! compiled for Windows; **no process has been started with this policy by this
+//! code** (the plan's measurement used a throwaway probe).
 
 /// The AppContainer profile name, which the SID is derived from. Changing it
 /// changes the SID, so files granted to the old one are no longer readable.

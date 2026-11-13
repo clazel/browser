@@ -174,12 +174,11 @@ information, not noise.
   needs the checker's dispatcher casts (below) extended to a second kind of
   dispatcher, a looked-up pointer rather than a symbol. Today the target is read
   back and its pixels are copied to the host (`src/channel.rs`).
-- **The Direct3D 12 backend** (Windows, WARP as fallback). It needs: the checker
-  taught to accept a COM call through a vtable, with hand-written vtable declarations
-  audited against the headers; the shaders stored compiled for Direct3D (DXBC, unless
-  the prototype finds DXIL's signing workable) with a check like the SPIR-V one;
-  presenting with `CreateSwapChainForCompositionSurfaceHandle`, with no window.
-- **Neither can run on the development machine** (an Apple-silicon Mac).
+- **The Direct3D 12 backend's presentation** (Windows). The backend exists
+  (`src/d3d12.rs`, below) and, like the others, reads its target back; presenting
+  with `CreateSwapChainForCompositionSurfaceHandle`, with no window, is not built.
+- **The Direct3D 12 backend has never run**: it was written on the development
+  machine (an Apple-silicon Mac), where it can only be compiled.
 - **Intel Macs** are not supported by the Metal backend (shared-storage textures and
   `BOOL` as `bool` are Apple silicon's).
 - **The shared buffers and the process boundary** are items 5.18 and 5.21a.
@@ -207,7 +206,8 @@ built here, and what waits for other items:
   drawing backend): lavapipe on Linux, WARP on Windows. `SoftBackend` stays a test
   double and is never a fallback. lavapipe is reached through the Vulkan backend
   (`clazel-gpu --software`, `browse --gpu=software`, or by itself when the loader
-  lists no other device); WARP waits for the Direct3D 12 backend.
+  lists no other device); WARP through the Direct3D 12 backend (`--software`, or
+  by itself when DXGI lists no hardware adapter), which has not run.
 
 ### Decisions
 
@@ -396,7 +396,29 @@ on aarch64 Linux and narrowed to what was called; with a hardware device `ioctl`
 is added, which **no hardware driver has been measured with**. x86-64 has not been
 measured either.
 
-Windows has no GPU backend yet, so nothing in this crate enters its policy.
+On Windows a running process cannot be confined, so the host starts the GPU
+process already inside its AppContainer and Job Object (`clazel-renderer`'s
+`launch`, with `clazel-sandbox`'s `GPU_*` policy: the renderer's, less the
+`win32k` lockdown, plus the `registryRead` capability, under its own container
+name). `sandbox::start_d3d12` checks that the process is in an AppContainer,
+makes the backend, and draws and checks the warm-up frame. **None of it has
+run.**
+
+## The Direct3D 12 backend
+
+`src/d3d12.rs`, over `clazel_sys::windows::d3d12`, in the shape of the Vulkan
+backend below: offscreen, read back, one submission per run of draws, each
+waited for. **Written on a Mac, compiled for `x86_64-pc-windows-msvc` without
+tests, never run.** What is checked without Windows: the structures, vtable
+slots and constants it passes, against the headers (`clazel-sys`'s `d3d12_abi`
+tests, which run on every target); the shaders' containers, and their bytes
+against the HLSL where `vkd3d-compiler` 1.19 is installed (`cargo xtask check`).
+What is not: every call's order and arguments, whether Direct3D accepts
+bytecode that `vkd3d-compiler` (not Microsoft's compiler) produced, and every
+pixel. Its differences from the Vulkan backend are listed at the top of the
+file: the atlas is kept in memory too and written whole after an upload, each
+draw's first quad is a constant (Direct3D numbers a draw's instances from 0),
+and copied rows are unpadded. The shaders are `shaders/quad.hlsl`.
 
 ## The Vulkan backend
 
