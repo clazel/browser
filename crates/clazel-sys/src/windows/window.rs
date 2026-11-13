@@ -508,7 +508,7 @@ mod tests {
         let handle = WindowHandle(0);
         let refused = |pixels: &[u32], w, h| {
             matches!(
-                draw_bgra(handle, pixels, w, h),
+                draw_bgra(handle, pixels, w, h, (0, 0)),
                 Err(SpawnError::Call("draw_bgra", Errno(INVALID_PARAMETER)))
             )
         };
