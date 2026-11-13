@@ -34,11 +34,8 @@ pub fn within_exec(then: u64, now: u64) -> (r: bool)
     ensures
         r == within(then as int, now as int),
 {
-    if now >= then {
-        now - then < 300
-    } else {
-        true
-    }
+    // `saturating_sub` is 0 for a later `then`: no time passed.
+    now.saturating_sub(then) < 300
 }
 
 /// A copy of a list of times.
@@ -185,11 +182,20 @@ pub fn key_at(s: &StateRecord, i: usize) -> (k: RendKey)
     ensures
         key_of(k, s@.renderers[i as int]),
 {
-    let r = &s.renderers[i];
-    proof {
-        assert(s@.renderers[i as int] == r@);
+    match s.renderers.get(i) {
+        Some(r) => {
+            proof {
+                assert(s@.renderers[i as int] == r@);
+            }
+            RendKey { id: r.id, tab: r.tab, url: clazel_url::host::record::copy(r.url.as_slice()), lock: clone_origin(&r.lock) }
+        },
+        None => {
+            proof {
+                assert(false);
+            }
+            RendKey { id: 0, tab: 0, url: Vec::new(), lock: ParsedOrigin::Opaque(0) }
+        },
     }
-    RendKey { id: r.id, tab: r.tab, url: clazel_url::host::record::copy(r.url.as_slice()), lock: clone_origin(&r.lock) }
 }
 
 /// [`gpu_of`] for the renderer `r` of `s`, whose key is `k`.
@@ -265,18 +271,13 @@ pub fn noted_exits_exec(g: &GpuRecRecord, now: u64) -> (out: Vec<u64>)
 {
     let mut out: Vec<u64> = Vec::new();
     out.push(now);
-    if g.exits.len() > 1 {
-        if let Some(t) = g.exits.get(0) {
-            out.push(*t);
-        }
-        proof {
+    if let Some(t) = g.exits.first() {
+        out.push(*t);
+    }
+    proof {
+        if g.exits.len() > 1 {
             assert(out@.map_values(|t: u64| t as int) =~= seq![now as int] + g@.exits.take(1));
-        }
-    } else {
-        if let Some(t) = g.exits.get(0) {
-            out.push(*t);
-        }
-        proof {
+        } else {
             assert(out@.map_values(|t: u64| t as int) =~= seq![now as int] + g@.exits);
         }
     }
@@ -345,7 +346,8 @@ pub fn site_demotes_exec(sites: &[SiteExitRecord], site: &DomainRecord, now: u64
                 assert(sv.take(k as int + 1).last() == x@);
             }
             if !domain_eq_exec(&x.site, site) && within_exec(x.time, now) {
-                count = count + 1;
+                // Never saturates: count <= k < sites.len().
+                count = count.saturating_add(1);
             }
         }
         // Never saturates: k < sites.len().
@@ -403,18 +405,13 @@ pub fn note_site_exec(sites: &[SiteExitRecord], site: DomainRecord, now: u64) ->
     let ghost rv = sites_view(rest@);
     let mut out: Vec<SiteExitRecord> = Vec::new();
     out.push(SiteExitRecord { site, time: now });
-    if rest.len() > 1 {
-        if let Some(x) = rest.get(0) {
-            out.push(clone_site(x));
-        }
-        proof {
+    if let Some(x) = rest.first() {
+        out.push(clone_site(x));
+    }
+    proof {
+        if rest.len() > 1 {
             assert(sites_view(out@) =~= seq![SiteExit { site: sd, time: now as int }] + rv.take(1));
-        }
-    } else {
-        if let Some(x) = rest.get(0) {
-            out.push(clone_site(x));
-        }
-        proof {
+        } else {
             assert(sites_view(out@) =~= seq![SiteExit { site: sd, time: now as int }] + rv);
         }
     }

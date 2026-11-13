@@ -115,6 +115,12 @@ pub enum Out {
     /// What the user is shown of a tab (item 5.18): the tab, the address
     /// bar (the kernel's URL), the title, and the buffer and its size.
     Paint(u64, Vec<u32>, Vec<u8>, u64, u64, u64),
+    /// The GPU process of renderer `id` started in software (item 5.17c).
+    SpawnGpuSoftware(u64),
+    /// The tab's GPU process is not restarted: the notice, with the URL.
+    GpuStopped(u64, Vec<u32>),
+    /// Every later GPU process in software (to the host).
+    GpuAllSoftware,
 }
 
 /// The exec kernel, driven as the host shell would.
@@ -184,6 +190,9 @@ impl Kernel {
                     width,
                     height,
                 } => Out::Paint(tab, url, title, buffer, width, height),
+                OutputRecord::SpawnGpuSoftware { id } => Out::SpawnGpuSoftware(id),
+                OutputRecord::GpuStopped { tab, url } => Out::GpuStopped(tab, url),
+                OutputRecord::GpuAllSoftware => Out::GpuAllSoftware,
                 OutputRecord::SubConnect {
                     renderer,
                     serial,
