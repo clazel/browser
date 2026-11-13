@@ -229,19 +229,27 @@ fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode 
 
 /// Whether `browse` can open a window here, or why not.
 fn window_available() -> Result<(), &'static str> {
-    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        return Err("no window on this platform yet (phase-5.md items 5.22, 5.22a)");
-    }
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     if !clazel_window::has_window_server() {
         return Err("no window server session");
     }
-    Ok(())
+    #[cfg(target_os = "linux")]
+    if !clazel_window::has_display() {
+        return Err("DISPLAY names no local X display");
+    }
+    if cfg!(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        target_os = "linux"
+    )) {
+        Ok(())
+    } else {
+        Err("no window on this platform yet (phase-5.md item 5.22a)")
+    }
 }
 
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux"))]
 fn browse_window(mut host: clazel::Host, url: &str, _width: usize) -> ExitCode {
-    match window::mac::run(&mut host, url) {
+    match window::windowed::run(&mut host, url) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("clazel: browse: {e}");
@@ -250,7 +258,7 @@ fn browse_window(mut host: clazel::Host, url: &str, _width: usize) -> ExitCode {
     }
 }
 
-#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+#[cfg(not(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux")))]
 fn browse_window(host: clazel::Host, url: &str, width: usize) -> ExitCode {
     browse_stdio(host, url, width)
 }

@@ -29,6 +29,8 @@
 //!   1), since the renderer (5.20) scrolls on scrolls and ignores keys; Left
 //!   and Right do nothing (scrolling is vertical, 5.20). A click in the strip
 //!   focuses the address bar.
+//! - **The shortcut modifier** is Command on macOS and Control on Linux
+//!   (`clazel_window::Event::Key`'s `command`); "Command" below means either.
 //! - **The address bar**: Command-L focuses it with its URL selected (typing
 //!   replaces it); typing edits it (Backspace deletes the last character);
 //!   Return navigates (`navigate_tab`) to what was typed, Escape cancels. A
@@ -403,9 +405,10 @@ pub fn input(host: &mut Host, tab: u64, kind: u64, (x, y): (u64, u64), delta: i6
     });
 }
 
-/// The window loop, on macOS on Apple silicon.
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-pub mod mac {
+/// The window loop, on macOS on Apple silicon and on Linux: the same loop over
+/// `clazel_window::Window`, whose two backends give the same calls.
+#[cfg(any(all(target_os = "macos", target_arch = "aarch64"), target_os = "linux"))]
+pub mod windowed {
     use std::time::Duration;
 
     use clazel::Host;
