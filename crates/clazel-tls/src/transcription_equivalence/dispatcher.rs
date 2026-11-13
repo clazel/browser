@@ -48,9 +48,9 @@
 //! for the start, `keys::x25519_agrees`.
 //!
 //! Domain conditions (kept, stated, until the driver theorem):
-//! - the crate's resource caps: [`room`] (the 4 MiB transcript cap cannot
-//!   fire on the record) and the 16 KiB key cap ([`validator_agrees`]); the
-//!   2^18 handshake-message cap is a case of [`fail_agrees`] instead;
+//! - the crate's 16 KiB key cap ([`validator_agrees`]); its other caps
+//!   (2^18 handshake message, 4 MiB transcript) are cases of
+//!   [`fail_agrees`] instead, so every record is compared;
 //! - offers are the client's profile (`auth::spec::profile_extensions`);
 //! - the certificate validators agree (`auth_flight::chain_agrees`);
 //! - for the start, [`accepts_server_hello`]: what the bootstrap theorem's
@@ -67,6 +67,11 @@
 //! - `post_handshake::two_faults`: an unknown record type longer than
 //!   2^14.
 //! - the 2^18 handshake-message cap (`internal_error`), in [`fail_agrees`].
+//! - [`transcript_cap`]: the crate's 4 MiB transcript cap refuses, with
+//!   `internal_error`, a message the transcription accepts (only when the
+//!   transcript, the message and the client's 48-octet flight would pass
+//!   4 MiB: `auth::transcript_capped`). Short of that, the crate proceeds
+//!   exactly as the record-level comparison says, with no condition.
 //! - [`coalesced`]: the crate's flight is one record; the transcription
 //!   writes the empty Certificate and the Finished in two. The same bytes
 //!   with no CertificateRequest.
@@ -462,9 +467,12 @@ pub proof fn lemma_message(c: crate::schedule::spec::Crypto, v: crate::auth::spe
         crate::auth::spec::profile_extensions(a.config.extensions),
         m.len() >= 4,
         m.len() == 4 + crate::spec::be_value(m.subrange(1, 4)),
-        super::auth::within_policy(a, m.skip(4)),
+        m.skip(4).len() <= crate::transcript::spec::MAX_BODY,
     ensures
         message_agrees(p, a, hs, m, crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(m[0], m.skip(4))),
+            crate::transcription::state_machine::receive_handshake_message(p, hs, m))
+        || super::auth::transcript_capped(a, m.skip(4),
+            crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(m[0], m.skip(4))),
             crate::transcription::state_machine::receive_handshake_message(p, hs, m)),
 {
     hide(crate::auth::spec::step);
@@ -486,7 +494,9 @@ pub proof fn lemma_message(c: crate::schedule::spec::Crypto, v: crate::auth::spe
         super::auth::lemma_finished(c, v, p, a, hs, body);
         match r.1 {
             crate::auth::spec::Action::Fail(alert) => {
-                lemma_in_first(alert, ts->Abort_0, message_failures(hs, m));
+                if ts is Abort {
+                    lemma_in_first(alert, ts->Abort_0, message_failures(hs, m));
+                }
             },
             crate::auth::spec::Action::Send(flight) => {
                 lemma_finished_send(c, v, p, a, hs, m);
@@ -513,11 +523,14 @@ pub proof fn lemma_message_flight(c: crate::schedule::spec::Crypto, v: crate::au
         crate::auth::spec::profile_extensions(a.config.extensions),
         m.len() >= 4,
         m == crate::transcription::key_exchange::write_handshake(m[0] as nat, m.skip(4)),
-        super::auth::within_policy(a, m.skip(4)),
+        m.skip(4).len() <= crate::transcript::spec::MAX_BODY,
         expected(hs.state, m[0]),
         hs.state != ClientState::WaitFinished,
     ensures
         message_agrees(p, a, hs, m, crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(m[0], m.skip(4))),
+            crate::transcription::state_machine::receive_handshake_message(p, hs, m))
+        || super::auth::transcript_capped(a, m.skip(4),
+            crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(m[0], m.skip(4))),
             crate::transcription::state_machine::receive_handshake_message(p, hs, m)),
 {
     hide(crate::auth::spec::step);
@@ -543,7 +556,9 @@ pub proof fn lemma_message_flight(c: crate::schedule::spec::Crypto, v: crate::au
         super::auth::lemma_certificate_verify(c, v, p, a, hs, body);
         match r.1 {
             crate::auth::spec::Action::Fail(alert) => {
-                lemma_in_first(alert, ts->Abort_0, message_failures(hs, m));
+                if ts is Abort {
+                    lemma_in_first(alert, ts->Abort_0, message_failures(hs, m));
+                }
             },
             _ => {},
         }
@@ -575,7 +590,7 @@ pub proof fn lemma_finished_send(c: crate::schedule::spec::Crypto, v: crate::aut
         m.len() >= 4,
         m[0] == 20,
         m == crate::transcription::key_exchange::write_handshake(20, m.skip(4)),
-        super::auth::within_policy(a, m.skip(4)),
+        m.skip(4).len() <= crate::transcript::spec::MAX_BODY,
         crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(20, m.skip(4))).1 is Send,
     ensures
         finished_agrees(p, hs, m, crate::auth::spec::step(c, v, a, crate::auth::spec::Input::Handshake(20, m.skip(4))).0,
@@ -795,14 +810,6 @@ pub open spec fn agrees_but_buffer(p: Primitives, v: crate::auth::spec::Verifica
 /// reassembly buffer is the transcription's `handshake_fragments`.
 pub open spec fn dispatcher_agrees(p: Primitives, v: crate::auth::spec::Verification, s: State, cl: ClientConnection) -> bool {
     agrees_but_buffer(p, v, s, cl) && cl.connection.handshake_fragments == s.reassembly.buf
-}
-
-/// The crate's transcript cap (4 MiB, `internal_error`) cannot fire on
-/// `extra` more octets of handshake messages and the client's own flight
-/// (at most 48 octets: §4.4.2's empty Certificate and §4.4.4's Finished).
-/// This is the domain condition "the crate's resource caps do not fire".
-pub open spec fn room(s: State, extra: nat) -> bool {
-    s.auth->Some_0.transcript.messages.len() + extra + 48 <= crate::transcript::spec::MAX_TRANSCRIPT
 }
 
 // ---------------------------------------------------------------------------
@@ -1136,6 +1143,58 @@ pub open spec fn fails_as(p: Primitives, hs: ClientHandshake, bf: Seq<u8>, alert
     }
 }
 
+/// **A stated difference: the crate's transcript cap** (4 MiB,
+/// `transcript::spec::MAX_TRANSCRIPT`, `internal_error`). Along the
+/// transcription's processing of the handshake bytes `bf`, it reaches a
+/// message it accepts while the crate's transcript (the bytes the
+/// transcription's list stands for, `transcript::hashed_bytes`) with that
+/// message and the 48 octets of the client's own flight would pass 4 MiB.
+/// The crate may refuse such a message with `internal_error`
+/// (`auth::transcript_capped`), where the transcription has no failure:
+/// §4's `uint24 length` allows it, and the cap is the crate's resource
+/// policy (§6.2 `internal_error`: "unrelated to the peer or the
+/// correctness of the protocol").
+pub open spec fn transcript_cap(p: Primitives, hs: ClientHandshake, bf: Seq<u8>) -> bool
+    decreases bf.len(),
+{
+    match crate::transcription::key_exchange::read_handshake_header(bf) {
+        None => false,
+        Some(h) => if bf.len() < 4 + h.length {
+            false
+        } else {
+            let raw = bf.subrange(0, (4 + h.length) as int);
+            let rest = bf.subrange((4 + h.length) as int, bf.len() as int);
+            match crate::transcription::state_machine::receive_handshake_message(p, hs, raw) {
+                HandshakeStep::Abort(_) => false,
+                HandshakeStep::Proceed { handshake, receive_key_changes, .. } =>
+                    super::transcript::hashed_bytes(p, hs.transcript, hs.retry is Some).len() + raw.len() + 48
+                        > crate::transcript::spec::MAX_TRANSCRIPT
+                    || (!(receive_key_changes && rest.len() != 0) && transcript_cap(p, handshake, rest)),
+            }
+        },
+    }
+}
+
+/// [`transcript_cap`] on its first whole message.
+pub proof fn lemma_cap_first(p: Primitives, hs: ClientHandshake, bf: Seq<u8>, n: nat)
+    requires
+        4 <= n <= bf.len(),
+        crate::transcription::key_exchange::read_handshake_header(bf) is Some,
+        4 + crate::transcription::key_exchange::read_handshake_header(bf)->Some_0.length == n,
+    ensures ({
+        let raw = bf.subrange(0, n as int);
+        let rest = bf.subrange(n as int, bf.len() as int);
+        transcript_cap(p, hs, bf) == match crate::transcription::state_machine::receive_handshake_message(p, hs, raw) {
+            HandshakeStep::Abort(_) => false,
+            HandshakeStep::Proceed { handshake, receive_key_changes, .. } =>
+                super::transcript::hashed_bytes(p, hs.transcript, hs.retry is Some).len() + raw.len() + 48
+                    > crate::transcript::spec::MAX_TRANSCRIPT
+                || (!(receive_key_changes && rest.len() != 0) && transcript_cap(p, handshake, rest)),
+        }
+    }),
+{
+}
+
 /// What the crate sends on the server Finished and the transcription's
 /// records agree: the transcription is in CONNECTED with the client's
 /// flight as the last messages of its transcript; its records are each
@@ -1189,8 +1248,8 @@ pub open spec fn messages_agree(c: crate::schedule::spec::Crypto, v: crate::auth
             &&& r.1 == crate::connection::dispatcher_spec::failed()
             &&& alert != 0 && alert != 90
             &&& w == Some(crate::transcription::connection::alert_record(p, cl.connection, alert as nat))
-            &&& t is Abort
-            &&& fails_as(p, cl.connection.handshake, bf, alert)
+            &&& ((t is Abort && fails_as(p, cl.connection.handshake, bf, alert))
+                || (alert == crate::spec::INTERNAL_ERROR && transcript_cap(p, cl.connection.handshake, bf)))
         },
         Action::Send(wire) => match t {
             Receive::Continue(pr) => sent_agrees(c, v, f, p, cl, pr, wire, r.1),
@@ -1432,6 +1491,7 @@ pub proof fn lemma_messages_more(c: crate::schedule::spec::Crypto, v: crate::aut
     let cl2 = ClientConnection { connection: y2, ..cl };
     let rest = bf.subrange(n as int, bf.len() as int);
     lemma_fails_first(p, y.handshake, bf, n, match r.0 { Action::Fail(a, _) => a, _ => 0u8 });
+    lemma_cap_first(p, y.handshake, bf, n);
     match t {
         Receive::Continue(pr) => {
             assert(Seq::<Seq<u8>>::empty() + pr.records_to_send =~= pr.records_to_send);
@@ -1451,7 +1511,7 @@ pub proof fn lemma_messages_more(c: crate::schedule::spec::Crypto, v: crate::aut
 /// §4, §5.1, A.1: the crate's `run_messages` on the complete messages of a
 /// buffer and the transcription's `process_handshake_bytes` of it agree
 /// ([`messages_agree`]), the crate's reassembly state being the bytes after
-/// them, no Finished out of place, and room in the crate's transcript.
+/// them, and no Finished out of place.
 #[verifier::rlimit(80)]
 pub proof fn lemma_messages(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, f: Ciphers,
     p: Primitives, s: State, cl: ClientConnection, bf: Seq<u8>)
@@ -1462,7 +1522,6 @@ pub proof fn lemma_messages(c: crate::schedule::spec::Crypto, v: crate::auth::sp
         s.reassembly.buf == crate::spec::extract_messages(bf)->Ok_0.1,
         !crate::connection::dispatcher_spec::finished_out_of_place(crate::spec::extract_messages(bf)->Ok_0.0,
             s.reassembly.buf.len() == 0),
-        room(s, bf.len()),
     ensures
         messages_agree(c, v, f, p, s, cl, bf,
             crate::connection::dispatcher_spec::run_messages(c, v, f, s, crate::spec::extract_messages(bf)->Ok_0.0),
@@ -1476,6 +1535,7 @@ pub proof fn lemma_messages(c: crate::schedule::spec::Crypto, v: crate::auth::sp
     hide(crate::transcription::state_machine::receive_handshake_message);
     hide(crate::spec::extract_messages);
     hide(fails_as);
+    hide(transcript_cap);
     hide(crate::connection::dispatcher_spec::finished_out_of_place);
     let y = cl.connection;
     let (ms, r) = crate::spec::extract_messages(bf)->Ok_0;
@@ -1499,6 +1559,7 @@ pub proof fn lemma_messages(c: crate::schedule::spec::Crypto, v: crate::auth::sp
         assert(m.subrange(1, 4) =~= bf.subrange(1, 4));
         assert(m.skip(4).len() == n - 4);
         lemma_message(c, v, p, a, hs, m);
+        lemma_cap_first(p, hs, bf, n);
         lemma_t_first(p, y, bf, n);
         lemma_run_first(c, v, f, s, ms);
         lemma_in_place(ms, r.len() == 0);
@@ -1508,7 +1569,13 @@ pub proof fn lemma_messages(c: crate::schedule::spec::Crypto, v: crate::auth::sp
         assert(super::auth::phase_is(a.phase, hs.state));
         match rs.1 {
             crate::auth::spec::Action::Fail(alert) => {
-                lemma_message_fails_alert(hs, m, ts->Abort_0, alert);
+                if ts is Abort {
+                    lemma_message_fails_alert(hs, m, ts->Abort_0, alert);
+                } else {
+                    assert(super::auth::transcript_capped(a, m.skip(4), rs, ts));
+                    assert(a.transcript.messages == super::transcript::hashed_bytes(p, hs.transcript, hs.retry is Some));
+                    assert(transcript_cap(p, hs, bf));
+                }
                 lemma_fatal(f, p, stepped, y, alert);
                 lemma_fails_first(p, hs, bf, n, alert);
                 reveal(messages_agree);
@@ -1575,7 +1642,9 @@ pub open spec fn handshake_bytes(f: Ciphers, s: State, b: Seq<u8>) -> Option<Seq
 /// crate's alert is that of a failure of the message the transcription
 /// aborts on ([`fails_as`], the membership comparison); or the crate's 2^18
 /// handshake-message cap fired (`internal_error`; §4's `uint24 length`
-/// allows the message and the transcription has no cap).
+/// allows the message and the transcription has no cap); or its 4 MiB
+/// transcript cap refused a message the transcription accepts
+/// ([`transcript_cap`], `internal_error` too).
 pub open spec fn fail_agrees(f: Ciphers, p: Primitives, s: State, y: Connection, b: Seq<u8>, t: Receive, alert: u8) -> bool {
     ||| t is Abort && crate::transcription::alerts::required_alert(t->Abort_0) == alert as nat
     ||| t is Abort && super::post_handshake::two_faults(b)
@@ -1583,6 +1652,8 @@ pub open spec fn fail_agrees(f: Ciphers, p: Primitives, s: State, y: Connection,
         && (fails_as(p, y.handshake, bf, alert) || finished_first(bf)))
     ||| alert == crate::spec::INTERNAL_ERROR && (handshake_bytes(f, s, b) matches Some(bf)
         && crate::spec::extract_messages(bf) is Err)
+    ||| alert == crate::spec::INTERNAL_ERROR && (handshake_bytes(f, s, b) matches Some(bf)
+        && transcript_cap(p, y.handshake, bf))
 }
 
 /// What the crate does with a record (`a`, `s2`) and what the
@@ -1806,7 +1877,6 @@ pub proof fn lemma_content(c: crate::schedule::spec::Crypto, v: crate::auth::spe
     requires
         hypotheses(c, v, f, p),
         dispatcher_agrees(p, v, s, cl),
-        room(s, (s.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat),
         typ == 21 || typ == 22 || typ == 23,
         x.len() <= crate::spec::MAX_PLAINTEXT,
         typ != 23 ==> x.len() > 0,
@@ -1818,6 +1888,7 @@ pub proof fn lemma_content(c: crate::schedule::spec::Crypto, v: crate::auth::spe
             ||| t is Abort && crate::transcription::alerts::required_alert(t->Abort_0) == a->Fail_0 as nat
             ||| typ == 22 && t is Abort && (fails_as(p, cl.connection.handshake, bf, a->Fail_0) || finished_first(bf))
             ||| typ == 22 && a->Fail_0 == crate::spec::INTERNAL_ERROR && crate::spec::extract_messages(bf) is Err
+            ||| typ == 22 && a->Fail_0 == crate::spec::INTERNAL_ERROR && transcript_cap(p, cl.connection.handshake, bf)
         })
     }),
 {
@@ -1874,7 +1945,6 @@ pub proof fn lemma_receive(c: crate::schedule::spec::Crypto, v: crate::auth::spe
     requires
         hypotheses(c, v, f, p),
         dispatcher_agrees(p, v, s, cl),
-        room(s, (s.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat),
         super::bootstrap::whole_record(b),
     ensures record_agrees(c, v, f, p, s, cl, b),
 {
@@ -1944,7 +2014,9 @@ pub proof fn lemma_receive(c: crate::schedule::spec::Crypto, v: crate::auth::spe
                         || (typ == 22 && t1 is Abort && (fails_as(p, y1.handshake, opened.reassembly.buf + x, a2->Fail_0)
                             || finished_first(opened.reassembly.buf + x)))
                         || (typ == 22 && a2->Fail_0 == crate::spec::INTERNAL_ERROR
-                            && crate::spec::extract_messages(opened.reassembly.buf + x) is Err);
+                            && crate::spec::extract_messages(opened.reassembly.buf + x) is Err)
+                        || (typ == 22 && a2->Fail_0 == crate::spec::INTERNAL_ERROR
+                            && transcript_cap(p, y1.handshake, opened.reassembly.buf + x));
                     lemma_outcome_transfer(c, v, f, p, s, cl, opened, y1, a2, s2, t, failed);
                     assert(crate::connection::dispatcher_spec::receive_record(c, v, f, s, b) == (a2, s2));
                     assert(handshake_bytes(f, s, b) == if typ == 22 { Some(s.reassembly.buf + x) } else { None::<Seq<u8>> });
@@ -2159,15 +2231,14 @@ pub proof fn lemma_start_agrees(c: crate::schedule::spec::Crypto, k: crate::hell
 ///   it accepts the same ServerHello ([`accepts_server_hello`]), when the
 ///   validators agree and the dummy change_cipher_spec is owed exactly when
 ///   the transcription has not written it;
-/// - **every whole record** from agreeing states with room in the crate's
-///   transcript ([`room`], the resource-cap domain): the crate's
+/// - **every whole record** from agreeing states: the crate's
 ///   `receive_record` (which `feed` runs on each record its framer
 ///   completes) and the transcription's `client_receive_stream` agree
 ///   ([`record_agrees`]): the crate rejects exactly when the transcription
 ///   does (its alert that of some failure in the transcription's list,
 ///   [`fail_agrees`], its alert record the transcription's `alert_record`),
 ///   with the stated differences [`wrong_type`], [`finished_first`],
-///   `post_handshake::two_faults` and the 2^18 cap; the peer's error alert
+///   `post_handshake::two_faults`, the 2^18 cap and [`transcript_cap`]; the peer's error alert
 ///   is `PeerError` on both sides; a close_notify is the stated difference
 ///   of [`outcome_agrees`]; a compatibility change_cipher_spec is dropped at
 ///   a message boundary and refused inside a fragmented message on both
@@ -2191,8 +2262,8 @@ pub proof fn theorem_dispatcher_equivalence(c: crate::schedule::spec::Crypto, k:
             private_key: Seq<u8>|
             #[trigger] start_agrees(c, k, v, p, cl, c0, sh, raw, config, transcript, peer_key, private_key),
         forall|s: State, cl: ClientConnection, b: Seq<u8>|
-            #[trigger] dispatcher_agrees(p, v, s, cl) && room(s, (s.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat)
-                && #[trigger] super::bootstrap::whole_record(b) ==> record_agrees(c, v, f, p, s, cl, b),
+            #[trigger] dispatcher_agrees(p, v, s, cl) && #[trigger] super::bootstrap::whole_record(b)
+                ==> record_agrees(c, v, f, p, s, cl, b),
         forall|s: State, input: Seq<u8>|
             s.mode == Mode::Handshake && (#[trigger] crate::connection::framing_spec::feed(s.framing, input)).status
                 == crate::connection::framing_spec::Status::Complete ==> {
@@ -2213,8 +2284,8 @@ pub proof fn theorem_dispatcher_equivalence(c: crate::schedule::spec::Crypto, k:
         lemma_start_agrees(c, k, v, f, p, cl, c0, sh, raw, config, transcript, peer_key, private_key);
     }
     assert forall|s: State, cl: ClientConnection, b: Seq<u8>|
-        #[trigger] dispatcher_agrees(p, v, s, cl) && room(s, (s.reassembly.buf.len() + crate::spec::MAX_PLAINTEXT) as nat)
-            && #[trigger] super::bootstrap::whole_record(b) implies record_agrees(c, v, f, p, s, cl, b) by {
+        #[trigger] dispatcher_agrees(p, v, s, cl) && #[trigger] super::bootstrap::whole_record(b)
+            implies record_agrees(c, v, f, p, s, cl, b) by {
         lemma_receive(c, v, f, p, s, cl, b);
     }
     assert forall|s: State, input: Seq<u8>|
