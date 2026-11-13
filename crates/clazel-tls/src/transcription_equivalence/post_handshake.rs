@@ -59,6 +59,12 @@
 //!   `close` against `close_write_side` (the close_notify once, then
 //!   nothing; the crate's connection ends when the read side had already
 //!   ended: [`close_agrees`]).
+//! - **The end of the transport** (§6.1), the crate's `step` on
+//!   `Input::Closed` against `connection::receive_transport_end`
+//!   ([`eof_agrees`], [`lemma_eof`]): after the server's close_notify both
+//!   write, deliver and change nothing, the transcription reporting
+//!   `EndOfData` ([`ends_after_close`], exact); before it, see
+//!   [`truncation_fails`] below.
 //!
 //! Hypotheses (true of what both sides model; not axioms): the crate's
 //! `Crypto` is the transcription's `Primitives` field by field
@@ -91,10 +97,13 @@
 //!   counts it as the owed answer; the crate keeps the answer owed and sends
 //!   one more KeyUpdate before its next application data. The same record;
 //!   the states agree but for the owed flag.
+//! - **Truncation** ([`truncation_fails`]; §6.1, the end of the transport
+//!   before the server's close_notify): both write and deliver nothing and
+//!   neither indicates end-of-data; the crate ends the connection as a
+//!   failure (`internal_error`, never written), the transcription reports
+//!   `Truncated`, no error, with its write side left open.
 //!
 //! Not covered:
-//! - Transport end of file (the crate's `Input::Closed`): `connection.rs`
-//!   leaves transport closure out of scope.
 //! - In this file (covered in [`super::framing`] instead): the timing on a
 //!   partial record (the crate decides on a record's type and length as soon
 //!   as its header has arrived, the
@@ -1785,6 +1794,101 @@ pub proof fn lemma_oversized(c: crate::schedule::spec::Crypto, f: crate::traffic
     }
 }
 
+// ---------------------------------------------------------------------------
+// §6.1: the end of the transport.
+// ---------------------------------------------------------------------------
+
+/// The transcription's connection after the end of the transport
+/// (`connection::receive_transport_end`): unchanged, no application data,
+/// nothing to write.
+pub open spec fn transport_end_progress(conn: Connection) -> crate::transcription::connection::Progress {
+    crate::transcription::connection::Progress { connection: conn, application_data: seq![], records_to_send: seq![] }
+}
+
+/// **Compared exactly: the end of the transport after the server's
+/// close_notify** (the crate's `ReadClosed` and `Closed`, the
+/// transcription's `read_closed`). The crate's `step` on `Input::Closed`
+/// writes, delivers and consumes nothing, reports nothing new and keeps its
+/// state; the transcription reports `EndOfData` with the connection
+/// unchanged. Both had indicated end-of-data on the close_notify (the
+/// crate's `PeerClosed` or `Close`, the transcription's `end_of_data`), as
+/// §6 says: "Upon receiving such an alert, the TLS implementation SHOULD
+/// indicate end-of-data to the application"; neither writes anything for
+/// the end of the transport, and neither reads the bytes pending: "Any data
+/// received after a closure alert has been received MUST be ignored." The
+/// states still agree ([`post_agrees`]).
+pub open spec fn ends_after_close(s: State, conn: Connection,
+    r: (crate::connection::post_handshake_spec::Out, State, nat),
+    t: crate::transcription::connection::TransportEnd) -> bool
+{
+    &&& r == (crate::connection::post_handshake_spec::quiet(), s, 0nat)
+    &&& t == crate::transcription::connection::TransportEnd::EndOfData(transport_end_progress(conn))
+}
+
+/// **Stated difference, truncation** (§6.1: the end of the transport before
+/// the server's close_notify, our write side open or closed). Both write
+/// nothing, deliver nothing and read none of the bytes pending (an
+/// incomplete record or handshake message). The crate's `step` on
+/// `Input::Closed` ends the connection as a failure, `Fail(internal_error)`
+/// with no record (`post_handshake_spec` item 6), dropping every key, so the
+/// application can send no more; the transcription reports `Truncated` with
+/// the connection unchanged and no error, its write side left to the
+/// application.
+///
+/// Both conform to what §6.1 requires of the receiver. "If a
+/// transport-level close is received prior to a "close_notify", the
+/// receiver cannot know that all the data that was sent has been received",
+/// and "the TLS implementation MUST receive a "close_notify" alert before
+/// indicating end-of-data to the application layer": neither indicates
+/// end-of-data (the crate's `Fail` is not its `PeerClosed`; the
+/// transcription's `Truncated` is not `EndOfData`). The `internal_error` is
+/// the crate's local report and is never written: neither sends an alert,
+/// and §6.2 names none for the end of the transport. The crate's ending its
+/// own write side at the same time is a usage choice: "No part of this
+/// standard should be taken to dictate the manner in which a usage profile
+/// for TLS manages its data transport, including when connections are
+/// opened or closed." It does so without a close_notify while our write
+/// side is open, against which §6.1 says "Each party MUST send a
+/// "close_notify" alert before closing its write side of the connection,
+/// unless it has already sent some error alert"; the crate does not close
+/// the transport itself (its caller does), so whether that MUST is met is
+/// its caller's.
+pub open spec fn truncation_fails(conn: Connection, r: (crate::connection::post_handshake_spec::Out, State, nat),
+    t: crate::transcription::connection::TransportEnd) -> bool
+{
+    &&& r.0.wires.len() == 0
+    &&& r.0.delivered.len() == 0
+    &&& r.0.end == End::Fail(crate::spec::INTERNAL_ERROR)
+    &&& r.1 == crate::connection::post_handshake_spec::failed()
+    &&& r.2 == 0
+    &&& t == crate::transcription::connection::TransportEnd::Truncated(transport_end_progress(conn))
+}
+
+/// How the end of the transport compares, from agreeing states: as the
+/// stated difference [`truncation_fails`] while the read side is open, and
+/// exactly after the server's close_notify ([`ends_after_close`]), the
+/// states still agreeing.
+pub open spec fn eof_agrees(s: State, conn: Connection, r: (crate::connection::post_handshake_spec::Out, State, nat),
+    t: crate::transcription::connection::TransportEnd) -> bool
+{
+    if crate::connection::post_handshake_spec::can_read(s) {
+        truncation_fails(conn, r, t)
+    } else {
+        &&& ends_after_close(s, conn, r, t)
+        &&& post_agrees(r.1, t->EndOfData_0.connection)
+    }
+}
+
+/// [`eof_agrees`], from agreeing states: the crate's read side is open
+/// exactly when the transcription's `read_closed` is unset.
+pub proof fn lemma_eof(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, s: State, conn: Connection)
+    requires post_agrees(s, conn),
+    ensures eof_agrees(s, conn,
+        crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Closed),
+        crate::transcription::connection::receive_transport_end(conn)),
+{
+}
+
 /// RFC 8446 §4.6, §5, §6, §6.1, §7.2 and §7.3: the crate's post-handshake
 /// transducer (`connection/post_handshake_spec.rs`) is the clean-room
 /// transcription's CONNECTED state and record layer, for every state,
@@ -1815,6 +1919,12 @@ pub proof fn lemma_oversized(c: crate::schedule::spec::Crypto, f: crate::traffic
 ///   transcription's `receive_stream` of it is its handling of that record
 ///   joined with the rest ([`joined`]), so the record-by-record comparison
 ///   composes.
+/// - from agreeing states, the end of the transport (`step` on
+///   `Input::Closed`) against `receive_transport_end` ([`eof_agrees`]):
+///   exactly after the server's close_notify ([`ends_after_close`]), and
+///   before it as the stated difference [`truncation_fails`] (both write and
+///   deliver nothing; the crate fails, the transcription reports
+///   truncation).
 pub proof fn theorem_post_handshake_equivalence(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
     p: Primitives)
     requires hypotheses(c, f, p),
@@ -1856,6 +1966,10 @@ pub proof fn theorem_post_handshake_equivalence(c: crate::schedule::spec::Crypto
             #[trigger] post_agrees(s, conn) ==> #[trigger] update_agrees(c, f, p, s, conn, request_peer),
         // §6.1: close_notify, once.
         forall|s: State, conn: Connection| #[trigger] post_agrees(s, conn) ==> close_agrees(f, p, s, conn),
+        // §6.1: the end of the transport.
+        forall|s: State, conn: Connection| #[trigger] post_agrees(s, conn) ==> eof_agrees(s, conn,
+            crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Closed),
+            crate::transcription::connection::receive_transport_end(conn)),
 {
     assert forall|client_secret: Seq<u8>, server_secret: Seq<u8>, conn: Connection|
         client_secret.len() == 32 && server_secret.len() == 32
@@ -1909,6 +2023,11 @@ pub proof fn theorem_post_handshake_equivalence(c: crate::schedule::spec::Crypto
     }
     assert forall|s: State, conn: Connection| #[trigger] post_agrees(s, conn) implies close_agrees(f, p, s, conn) by {
         lemma_close(f, p, s, conn);
+    }
+    assert forall|s: State, conn: Connection| #[trigger] post_agrees(s, conn) implies eof_agrees(s, conn,
+        crate::connection::post_handshake_spec::step(c, f, s, crate::connection::post_handshake_spec::Input::Closed),
+        crate::transcription::connection::receive_transport_end(conn)) by {
+        lemma_eof(c, f, s, conn);
     }
 }
 
