@@ -439,6 +439,90 @@
 //!   the kernel a `Tick` before every event, so that is at once.
 //! - **A `Tick` fails a sub-fetch** that started [`subfetch_timeout`] (60)
 //!   seconds ago or more: `StyleFailed`, its connection closed.
+//!
+//! # The GPU crash policy (phase-5.md item 5.17c)
+//!
+//! The item's four rules over the host's new event `GpuExited` and 5.18's
+//! `GpuReady` and `GpuRefused`, with the numbers stated once:
+//! [`gpu_window`] (five minutes), [`gpu_exits`] and [`gpu_sites`] (three).
+//! This is the specification of the policy; `clazel-gpu`'s `policy.rs`, built
+//! first (item 5.17c, on its own branch), is to be removed where the two
+//! branches join (the crate README says why).
+//!
+//! - **`GpuExited { id }`, not `{ tab }`.** The host attaches the id of the
+//!   renderer whose GPU process exited, as it does for `FromGpu`. The item
+//!   names `{ tab }`; by id, an exit of a GPU process that was replaced (a
+//!   cross-origin navigation) names no live renderer and is ignored, which a
+//!   tab could not tell.
+//! - **One record per renderer** ([`GpuRec`]), tagged with its id and lock as
+//!   5.18's titles are, and read only by that pair ([`gpu_rec_of`]). A
+//!   renderer with none has a process just started ([`gpu_of`]). Records are
+//!   not removed when their renderer goes (ids are never reused, so a stale
+//!   one is never read); the table grows by one small record per renderer
+//!   that ever had a GPU process message or exit, listed in the README.
+//! - **Per renderer, so per origin, not per site.** Rule 2 says a tab goes to
+//!   software "until it navigates to another site"; here until its renderer
+//!   is replaced, which a navigation to another origin of the same site also
+//!   does. A tab may so go back to hardware sooner, and count afresh.
+//! - **Time is the kernel's** ([`State::now`], seconds, from the host's
+//!   `Tick`, which comes before every event): an exit is counted at `now`. A
+//!   time before a recorded one counts as no time passed.
+//! - **Which mode a process starts in.** A new tab's or a new renderer's GPU
+//!   process is `Spawn { id, Gpu }`, as in item 5.18: the run's mode. The
+//!   kernel tells the host once, with [`Output::GpuAllSoftware`], when every
+//!   tab goes to software; from then on the host starts every `Policy::Gpu`
+//!   process in software. A restart names its mode: [`Policy::GpuSoftware`],
+//!   or `Policy::Gpu` only while not every tab is in software.
+//! - **Rule 1, the restart** ([`gpu_restart_outputs`]): a new GPU process for
+//!   the renderer, and the tab's viewport again to the renderer and the new
+//!   process, which makes the renderer send its whole list again. The
+//!   renderer cannot receive a new descriptor (no `recvmsg` in its sandbox),
+//!   so the host keeps the GPU process's end of the list channel it made at
+//!   the first spawn and gives it to the new process. The tab keeps its last
+//!   `Paint`, which is the host's.
+//! - **Rules 2 and 4 count the record's last exits in its current mode**
+//!   ([`GpuRec::exits`], newest first, at most two): the third within the
+//!   window ([`third_exit`]) moves a hardware process to software, or stops a
+//!   software one ([`Output::GpuStopped`]). A change of mode clears them.
+//! - **Rule 3 counts hardware exits while drawing, by site** (the renderer's
+//!   [`crate::domain::Domain`]), keeping the most recent distinct sites
+//!   ([`GpuState::sites`], at most two): an exit with two other sites within
+//!   the window ([`site_demotes`]) puts every tab in software.
+//! - **A refusal is the machine's.** An exit before `GpuReady` in hardware
+//!   puts every tab in software and restarts the tab in software; it is not
+//!   counted by site, since no page has reached a process before `GpuReady`
+//!   (it reads no list until then). `GpuRefused` itself changes nothing: the
+//!   refused process exits next, and that exit is the refusal. An exit before
+//!   `GpuReady` in software is rule 4 (software cannot start).
+//! - **No fallback (macOS) is the host's.** The kernel always has software to
+//!   ask for; a host with none starts no process for `Policy::GpuSoftware`, or
+//!   for `Policy::Gpu` after `GpuAllSoftware`, and draws the notice itself.
+//!   `--gpu=software` is the host's [`Event::GpuSoftware`] at start.
+//! - **`GpuReady { software: true }` from a process started in hardware**
+//!   (the loader offered only a software driver) marks the record software,
+//!   so its exits count as software ones; `software: false` from one started
+//!   in software changes nothing.
+//! - **A frame is painted only from a running process** (5.18's paint
+//!   theorems over restarts): a `FrameReady` while the record is not running
+//!   (after an exit, until the new process's `GpuReady`) is dropped, so a late
+//!   frame of an exited process is never shown.
+//! - **Every-tab software takes effect at each tab's next start.** No running
+//!   process is ended for it, so an exit changes no other tab's state or
+//!   output (`theorem_gpu_exit_contained`).
+//! - **A reload does not try again.** Rule 4's "reloading tries once more" is
+//!   not built: a stopped tab starts again when its renderer is replaced
+//!   (another origin) or the tab is opened again. Restarting on a same-origin
+//!   commit adds outputs to the commit path every navigation theorem covers,
+//!   and is left for a later change (listed in the README).
+//! - **Noninterference.** A `GpuExited` belongs to its renderer's domain, as
+//!   its frames do. Its declassified part is exactly what it does to what
+//!   every tab shares: an exit before `GpuReady` in hardware is
+//!   [`Event::GpuSoftware`] (every tab to software), a hardware exit while
+//!   drawing is [`Event::GpuSiteExit`] (its site counted, and every tab to
+//!   software if that makes three); nothing else of another domain's exit
+//!   reaches an observer. That is the one channel the item specifies, and it
+//!   carries, per exit, the site's lock to the shared count and one bit out of
+//!   it.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -696,6 +780,8 @@ pub struct State {
     pub subfetches: Seq<SubFetch>,
     /// The renderers' counts of style sheet fetches (item 5.19).
     pub subcounts: Seq<SubCount>,
+    /// The GPU crash policy's state (item 5.17c).
+    pub gpu: GpuState,
 }
 
 /// What can happen to the kernel.
@@ -782,6 +868,26 @@ pub enum Event {
         /// What the user did.
         input: UserInput,
     },
+    /// The GPU process paired with renderer `id` exited (item 5.17c; the host
+    /// attaches `id` from the process it started, as for `FromGpu`).
+    GpuExited {
+        /// The renderer whose GPU process it was.
+        id: nat,
+    },
+    /// Every tab is in software from its next start, for the rest of the run
+    /// (item 5.17c): the host's `--gpu=software`, sent once at start. It is
+    /// also the declassified part of another domain's GPU process refusing
+    /// the machine's GPU (`crate::domain::declassified`).
+    GpuSoftware,
+    /// A hardware GPU process of a renderer locked to `lock` exited while
+    /// drawing (item 5.17c): the shared count of sites. The host never sends
+    /// it; it is the declassified part of another domain's `GpuExited`
+    /// (`crate::domain::declassified`), so that the noninterference theorem
+    /// states exactly what crosses domains: rule 3's count.
+    GpuSiteExit {
+        /// The lock of the renderer whose GPU process it was.
+        lock: clazel_origin::spec::Origin,
+    },
 }
 
 /// The sandbox policy a process is spawned under.
@@ -790,8 +896,13 @@ pub enum Policy {
     Renderer,
     /// The GPU process paired with the renderer of the same id, in its own
     /// sandbox (items 5.17b, 5.21a): no window-system connection and no
-    /// network (item 5.18).
+    /// network (item 5.18). It runs on the hardware device, or in software
+    /// once the host has been told [`Output::GpuAllSoftware`] (item 5.17c).
     Gpu,
+    /// The GPU process paired with the renderer of the same id, started in
+    /// software (item 5.17c): lavapipe or WARP, in 5.21a's sandbox without
+    /// device access.
+    GpuSoftware,
 }
 
 /// What the kernel does.
@@ -920,6 +1031,22 @@ pub enum Output {
         /// The frame's height, in device pixels.
         height: u64,
     },
+    /// The GPU process of `tab`'s renderer is not restarted (item 5.17c, rule
+    /// 4): the host draws the notice in the tab's content area, with `url`
+    /// and the reason, until the tab navigates to another origin. Addressed
+    /// to the user, like `Paint`; `tab` and `url` come from the kernel's
+    /// state.
+    GpuStopped {
+        /// The tab.
+        tab: nat,
+        /// Its renderer's URL.
+        url: Seq<u32>,
+    },
+    /// Every tab is in software from its next start (item 5.17c, rules 3 and
+    /// the refusal): the host starts every later [`Policy::Gpu`] process in
+    /// software. Addressed to the host, not to a renderer or tab; given once,
+    /// when the kernel's bit is set.
+    GpuAllSoftware,
 }
 
 /// A document to commit (phase-4.md item 4.12): its content type, its kind
@@ -935,7 +1062,7 @@ pub struct Document {
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![] }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu() }
 }
 
 // ---------------------------------------------------------------------
@@ -1912,14 +2039,295 @@ pub open spec fn from_gpu(s: State, id: nat, bytes: Seq<u8>) -> (State, Seq<Outp
                 None => kill_renderer(s, i, id),
                 Some(clazel_ipc::message::spec::Message::FrameReady { buffer, width, height }) => if !r.committed || buffer >= ring_size() {
                     kill_renderer(s, i, id)
+                } else if !gpu_of(s, r).running {
+                    // Item 5.17c: no `GpuReady` from the current process yet,
+                    // so the frame is a late one of a process that exited
+                    // (or out of order): dropped.
+                    (s, seq![])
                 } else if fits(viewport_of(s, r.tab), width, height) {
                     (s, seq![Output::Paint { tab: r.tab, url: r.url, title: title_of(s.titles, r), buffer, width, height }])
                 } else {
                     // Drawn for a larger viewport than the tab now has.
                     (s, seq![])
                 },
-                // `GpuReady`, `GpuRefused`: item 5.17c's.
+                // Item 5.17c: the start answer.
+                Some(clazel_ipc::message::spec::Message::GpuReady { software }) => (gpu_ready(s, r, software), seq![]),
+                // `GpuRefused` (item 5.17c): the refused process then exits,
+                // and its exit before `GpuReady` is the refusal
+                // ([`gpu_exited`]); the message itself changes nothing.
                 Some(_) => (s, seq![]),
+            }
+        },
+    }
+}
+
+
+// ---------------------------------------------------------------------
+// The GPU crash policy (phase-5.md item 5.17c).
+// ---------------------------------------------------------------------
+
+/// The window in which GPU process exits are counted: five minutes, in the
+/// kernel's seconds ([`State::now`], the host's `Tick`).
+pub open spec fn gpu_window() -> int {
+    300
+}
+
+/// The exits of one GPU process in one mode within [`gpu_window`] that move
+/// its tab on (rules 2 and 4).
+pub open spec fn gpu_exits() -> nat {
+    3
+}
+
+/// The sites with hardware exits within [`gpu_window`] that put every tab in
+/// software (rule 3).
+pub open spec fn gpu_sites() -> nat {
+    3
+}
+
+/// One renderer's GPU record (item 5.17c), tagged with its id and lock as
+/// titles are. A renderer with no record has a process starting in the mode
+/// every tab starts in ([`gpu_of`]).
+pub struct GpuRec {
+    /// The renderer.
+    pub id: nat,
+    /// Its lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// Its process runs, or will run, in software.
+    pub software: bool,
+    /// Its current process said `GpuReady` (and has not exited since).
+    pub running: bool,
+    /// Not restarted: the host shows the notice (rule 4).
+    pub stopped: bool,
+    /// The times of its last exits in this mode, newest first: at most
+    /// `gpu_exits() - 1` of them.
+    pub exits: Seq<int>,
+}
+
+/// A site with a hardware exit (rule 3), and the time of its latest.
+pub struct SiteExit {
+    /// The site: the domain of the renderer whose GPU process exited.
+    pub site: crate::domain::Domain,
+    /// When.
+    pub time: int,
+}
+
+/// What the crash policy keeps (item 5.17c).
+pub struct GpuState {
+    /// The renderers' records.
+    pub recs: Seq<GpuRec>,
+    /// Every tab is in software from its next start, for the rest of the run.
+    pub demoted: bool,
+    /// The most recent distinct sites with a hardware exit, newest first: at
+    /// most `gpu_sites() - 1` of them.
+    pub sites: Seq<SiteExit>,
+}
+
+/// The crash policy before anything happens.
+pub open spec fn init_gpu() -> GpuState {
+    GpuState { recs: seq![], demoted: false, sites: seq![] }
+}
+
+/// `then` is within [`gpu_window`] before `now` (a later `then` counts as no
+/// time passed).
+pub open spec fn within(then: int, now: int) -> bool {
+    now - then < gpu_window()
+}
+
+/// The record of renderer `id` locked to `lock`: the first entry with both.
+pub open spec fn gpu_rec_of(gs: Seq<GpuRec>, id: nat, lock: clazel_origin::spec::Origin) -> Option<GpuRec>
+    decreases gs.len(),
+{
+    if gs.len() == 0 {
+        None
+    } else if gs[0].id == id && gs[0].lock == lock {
+        Some(gs[0])
+    } else {
+        gpu_rec_of(gs.drop_first(), id, lock)
+    }
+}
+
+/// `gs` with the record of `g`'s renderer set to `g`: any earlier one is
+/// removed and `g` goes last.
+pub open spec fn set_gpu_rec(gs: Seq<GpuRec>, g: GpuRec) -> Seq<GpuRec> {
+    gs.filter(|x: GpuRec| !(x.id == g.id && x.lock == g.lock)).push(g)
+}
+
+/// The record of renderer `r` in `s`: its entry, or that of a process just
+/// started: not yet running, in software exactly when every tab is.
+///
+/// (A renderer's first process is spawned as [`Policy::Gpu`], which the host
+/// starts in software once told [`Output::GpuAllSoftware`]. So a process with
+/// no record runs in software if every tab did when it was spawned; reading
+/// the bit now instead differs only for a process spawned in hardware just
+/// before every tab went to software, which is then taken for a software one:
+/// an exit of it before `GpuReady` stops its tab instead of restarting it in
+/// software, and a reload of another origin starts it again.)
+pub open spec fn gpu_of(s: State, r: Renderer) -> GpuRec {
+    match gpu_rec_of(s.gpu.recs, r.id, r.lock) {
+        Some(g) => g,
+        None => GpuRec { id: r.id, lock: r.lock, software: s.gpu.demoted, running: false, stopped: false, exits: seq![] },
+    }
+}
+
+/// `s` with the record of `g`'s renderer set to `g`.
+pub open spec fn with_gpu_rec(s: State, g: GpuRec) -> State {
+    State { gpu: GpuState { recs: set_gpu_rec(s.gpu.recs, g), ..s.gpu }, ..s }
+}
+
+/// The policy a GPU process is started under: [`Policy::Gpu`] for hardware,
+/// which the kernel asks for only while not every tab is in software.
+pub open spec fn gpu_policy(software: bool) -> Policy {
+    if software { Policy::GpuSoftware } else { Policy::Gpu }
+}
+
+/// `GpuReady { software }` from the GPU process of renderer `r`: its record
+/// is running, and in software if the device it found is a software one (a
+/// process started in software that says otherwise stays in software). A
+/// process already running or stopped is not starting: ignored.
+pub open spec fn gpu_ready(s: State, r: Renderer, software: bool) -> State {
+    let g = gpu_of(s, r);
+    if g.running || g.stopped {
+        s
+    } else {
+        with_gpu_rec(s, GpuRec { running: true, software: g.software || software, ..g })
+    }
+}
+
+/// The third exit within the window (rules 2 and 4): the record already
+/// holds `gpu_exits() - 1` exits and the oldest is within the window.
+pub open spec fn third_exit(g: GpuRec, now: int) -> bool {
+    g.exits.len() >= gpu_exits() - 1 && within(g.exits[gpu_exits() - 2], now)
+}
+
+/// The exits after one more at `now`: it first, then the newest
+/// `gpu_exits() - 2` of the old ones.
+pub open spec fn noted_exits(g: GpuRec, now: int) -> Seq<int> {
+    seq![now] + (if g.exits.len() > gpu_exits() - 2 { g.exits.take(gpu_exits() - 2) } else { g.exits })
+}
+
+/// Hardware exits within the window from sites other than `site` (rule 3).
+pub open spec fn other_sites(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> Seq<SiteExit> {
+    sites.filter(|x: SiteExit| x.site != site && within(x.time, now))
+}
+
+/// A hardware exit of `site` at `now` makes `gpu_sites()` sites (rule 3).
+pub open spec fn site_demotes(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> bool {
+    other_sites(sites, site, now).len() >= gpu_sites() - 1
+}
+
+/// The sites after a hardware exit of `site` at `now`: it first, then the
+/// others, newest first, at most `gpu_sites() - 1` in all.
+pub open spec fn note_site(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> Seq<SiteExit> {
+    let rest = sites.filter(|x: SiteExit| x.site != site);
+    seq![SiteExit { site, time: now }] + (if rest.len() > gpu_sites() - 2 { rest.take(gpu_sites() - 2) } else { rest })
+}
+
+/// Every tab to software from its next start: the bit is set, and the host
+/// told once ([`Output::GpuAllSoftware`]). No running process is ended.
+pub open spec fn demote_all(s: State) -> (State, Seq<Output>) {
+    if s.gpu.demoted {
+        (s, seq![])
+    } else {
+        (State { gpu: GpuState { demoted: true, ..s.gpu }, ..s }, seq![Output::GpuAllSoftware])
+    }
+}
+
+/// The host's `--gpu=software` (or another domain's refusal, declassified):
+/// [`demote_all`].
+pub open spec fn gpu_software(s: State) -> (State, Seq<Output>) {
+    demote_all(s)
+}
+
+/// A hardware exit of `site` while drawing, as the shared count sees it
+/// (rule 3): the site is noted and, if it makes `gpu_sites()` sites within
+/// the window, every tab goes to software. This is all another domain's such
+/// exit does to what `site`'s observers share ([`Event::GpuSiteExit`]).
+pub open spec fn gpu_site_exit(s: State, site: crate::domain::Domain) -> (State, Seq<Output>) {
+    let flips = !s.gpu.demoted && site_demotes(s.gpu.sites, site, s.now);
+    let s1 = State { gpu: GpuState { sites: note_site(s.gpu.sites, site, s.now), ..s.gpu }, ..s };
+    if flips {
+        demote_all(s1)
+    } else {
+        (s1, seq![])
+    }
+}
+
+/// The outputs that start the GPU process of renderer `r` again (rule 1): a
+/// new process in the given mode, and, if the tab has a viewport, the
+/// viewport to both, which makes the renderer send its whole list again.
+/// The host gives the new process the renderer's channel (it kept the GPU
+/// process's end); the renderer's process is not touched.
+pub open spec fn gpu_restart_outputs(s: State, r: Renderer, software: bool) -> Seq<Output> {
+    seq![Output::Spawn { id: r.id, policy: gpu_policy(software) }] + match find_viewport(s.viewports, r.tab, 0) {
+        None => seq![],
+        Some(v) => seq![
+            Output::ToRenderer { id: r.id, bytes: viewport_frame(v) },
+            Output::ToGpu { id: r.id, bytes: gpu_viewport_frame(v) },
+        ],
+    }
+}
+
+/// Restart the GPU process of `r` in the given mode with these exits.
+pub open spec fn gpu_restart(s: State, r: Renderer, g: GpuRec, software: bool, exits: Seq<int>) -> (State, Seq<Output>) {
+    (
+        with_gpu_rec(s, GpuRec { software, running: false, stopped: false, exits, ..g }),
+        gpu_restart_outputs(s, r, software),
+    )
+}
+
+/// Stop the GPU process of `r` (rule 4): no restart; the host draws the
+/// notice.
+pub open spec fn gpu_stop(s: State, r: Renderer, g: GpuRec) -> (State, Seq<Output>) {
+    (with_gpu_rec(s, GpuRec { running: false, stopped: true, ..g }), seq![Output::GpuStopped { tab: r.tab, url: r.url }])
+}
+
+/// `GpuExited(id)` (item 5.17c): the GPU process of renderer `id` exited.
+/// The tab keeps showing its last `Paint` (the host's), and:
+///
+/// - a stopped tab (not running) has no process: nothing;
+/// - **before `GpuReady`, in hardware** (a refused device, a driver 5.21a's
+///   sandbox kills at start): the machine's GPU is refused, so every tab goes
+///   to software ([`demote_all`]) and this one restarts in software; not
+///   counted by site, since no page has reached a process before
+///   `GpuReady`;
+/// - **before `GpuReady`, in software**: software cannot start: rule 4;
+/// - **drawing in software**: the third exit within the window is rule 4;
+///   otherwise rule 1, in software;
+/// - **drawing in hardware**: the site is counted (rule 3, [`gpu_site_exit`]);
+///   then the third exit within the window (rule 2), or every tab being in
+///   software, restarts it in software with no exits recorded (a new mode
+///   counts afresh); otherwise rule 1, in hardware.
+pub open spec fn gpu_exited(rules: Seq<clazel_psl::spec::Rule>, s: State, id: nat) -> (State, Seq<Output>) {
+    match find_by_id(s.renderers, id, 0) {
+        // A replaced (or never started) GPU process: ignored.
+        None => (s, seq![]),
+        Some(i) => {
+            let r = s.renderers[i];
+            let g = gpu_of(s, r);
+            if !g.running {
+                if g.stopped {
+                    (s, seq![])
+                } else if g.software {
+                    gpu_stop(s, r, g)
+                } else {
+                    let (s1, all) = demote_all(s);
+                    let (s2, out) = gpu_restart(s1, r, g, true, seq![]);
+                    (s2, all + out)
+                }
+            } else if g.software {
+                if third_exit(g, s.now) {
+                    gpu_stop(s, r, g)
+                } else {
+                    gpu_restart(s, r, g, true, noted_exits(g, s.now))
+                }
+            } else {
+                let (s1, all) = gpu_site_exit(s, crate::domain::domain_of_renderer(rules, r));
+                let (s2, out) = if third_exit(g, s.now) || s1.gpu.demoted {
+                    gpu_restart(s1, r, g, true, seq![])
+                } else {
+                    gpu_restart(s1, r, g, false, noted_exits(g, s.now))
+                };
+                (s2, all + out)
             }
         },
     }
@@ -2375,6 +2783,9 @@ pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: F
         Event::FromGpu { id, bytes } => from_gpu(s, id, bytes),
         Event::Resize { tab, width, height, scale } => resize(s, tab, Viewport { width, height, scale }),
         Event::Input { tab, input } => user_input(s, tab, input),
+        Event::GpuExited { id } => gpu_exited(rules, s, id),
+        Event::GpuSoftware => gpu_software(s),
+        Event::GpuSiteExit { lock } => gpu_site_exit(s, crate::domain::domain_of_lock(rules, lock)),
     }
 }
 

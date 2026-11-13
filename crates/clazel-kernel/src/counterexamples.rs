@@ -383,7 +383,7 @@ pub open spec fn ce_c0() -> Connection {
 /// counters 1 and (the number of connections opened) `nc`, an empty jar at
 /// time 0.
 pub open spec fn ce_state(rs: Seq<Renderer>, cs: Seq<Connection>, nid: nat, nc: nat) -> State {
-    State { renderers: rs, jar: Seq::<clazel_cookie::storage::spec::Cookie>::empty(), storage: Map::empty(), next_id: nid, conns: cs, next_conn: nc, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![] }
+    State { renderers: rs, jar: Seq::<clazel_cookie::storage::spec::Cookie>::empty(), storage: Map::empty(), next_id: nid, conns: cs, next_conn: nc, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu() }
 }
 
 /// Filtering one element.

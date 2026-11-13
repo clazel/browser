@@ -690,19 +690,29 @@ pub open spec fn paint_fits_viewport_statement(rules: Seq<clazel_psl::spec::Rule
 /// current renderer. That half follows from the fresh id and `renderers_wf`
 /// but needs a frame lemma through every navigation path, and is not part of
 /// what this theorem states now; see the crate README.)
+///
+/// Item 5.17c adds the restart: on the host's `GpuExited` of renderer `x`'s
+/// GPU process, a new GPU process for `x` alone (no renderer is started, and
+/// `x` names a live renderer), and its `GpuViewport`.
 pub open spec fn channel_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
     let out = step(rules, urls, fetch, s, e).1;
     forall|k: int|
         0 <= k < out.len() ==> match #[trigger] out[k] {
-            Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(
+            Output::Spawn { id: x, policy: p } => (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(
                 Output::Spawn { id: x, policy: Policy::Renderer },
-            ),
+            )) || (gpu_restarted(s, e, x) && p != Policy::Renderer),
             Output::ToGpu { id: x, .. } => (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu })) || (e matches Event::Resize {
                 tab,
                 ..
-            } && find_by_tab(s.renderers, tab, 0) matches Some(i) && s.renderers[i].id == x),
+            } && find_by_tab(s.renderers, tab, 0) matches Some(i) && s.renderers[i].id == x) || gpu_restarted(s, e, x),
             _ => true,
         }
+}
+
+/// The event is the host's `GpuExited` of the GPU process of live renderer
+/// `x` (item 5.17c).
+pub open spec fn gpu_restarted(s: State, e: Event, x: nat) -> bool {
+    e == Event::GpuExited { id: x } && find_by_id(s.renderers, x, 0) is Some
 }
 
 /// `theorem_input_only_to_own_tab`: the user's input on `tab` changes no
@@ -870,6 +880,126 @@ pub open spec fn commit_ends_subfetches_statement(urls: UrlFns, s: State, tab: n
         Some(i) => forall|j: int|
             0 <= j < s1.subfetches.len() && (#[trigger] s1.subfetches[j]).renderer == s.renderers[i].id && s1.subfetches[j].lock == s.renderers[i].lock
                 && s1 != s ==> !subfetch_live(s1, s1.subfetches[j]),
+        None => true,
+    }
+}
+
+// ---------------------------------------------------------------------
+// The GPU crash policy (phase-5.md item 5.17c).
+// ---------------------------------------------------------------------
+
+/// `theorem_gpu_exit_contained`: a GPU process's exit changes no other tab's
+/// state or output. The step changes nothing but the crash policy's state;
+/// every record but that of the exiting process's renderer is unchanged; and
+/// every output is for that renderer (its new GPU process, its viewport) or
+/// its tab (the notice), or is the host's [`Output::GpuAllSoftware`]. Another
+/// tab's next start can change only through `s.gpu.demoted`, which
+/// [`site_cannot_demote_others_statement`] bounds.
+pub open spec fn gpu_exit_contained_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::GpuExited { id });
+    &&& s1 == State { gpu: s1.gpu, ..s }
+    &&& forall|x: nat, lock: clazel_origin::spec::Origin| x != id ==> gpu_rec_of(s1.gpu.recs, x, lock) == gpu_rec_of(s.gpu.recs, x, lock)
+    &&& forall|k: int|
+        0 <= k < out.len() ==> match #[trigger] out[k] {
+            Output::Spawn { id: x, policy: p } => x == id && p != Policy::Renderer,
+            Output::ToRenderer { id: x, .. } => x == id,
+            Output::ToGpu { id: x, .. } => x == id,
+            Output::GpuStopped { tab, url } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].id == id && s.renderers[i].tab == tab && s.renderers[i].url == url,
+            Output::GpuAllSoftware => true,
+            _ => false,
+        }
+}
+
+/// `theorem_gpu_restart_bounded`: a GPU process that exits while drawing is
+/// started again in the same mode only if its record does not already hold
+/// two exits of that mode, the older within five minutes (300 seconds), and
+/// then the record holds this exit and the newer of the two. So within any
+/// five minutes a tab's GPU process is restarted in one mode at most twice
+/// after exits in that mode; the third such exit moves it to software (rule
+/// 2) or stops it (rule 4). A restart in another mode records no exit.
+///
+/// The numbers are written out here (`300`, two exits), not read from
+/// `gpu_window` and `gpu_exits`, so that a change to those is a change to
+/// what is proven.
+pub open spec fn gpu_restart_bounded_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat) -> bool {
+    let (s1, out) = step(rules, urls, fetch, s, Event::GpuExited { id });
+    match find_by_id(s.renderers, id, 0) {
+        None => out.len() == 0 && s1 == s,
+        Some(i) => {
+            let r = s.renderers[i];
+            let g = gpu_of(s, r);
+            &&& (g.running && out.contains(Output::Spawn { id, policy: gpu_policy(g.software) })) ==> {
+                &&& !(g.exits.len() >= 2 && s.now - g.exits[1] < 300)
+                &&& gpu_of(s1, r).exits == seq![s.now] + g.exits.take(if g.exits.len() >= 1 { 1int } else { 0int })
+                &&& gpu_of(s1, r).software == g.software
+            }
+            &&& (out.contains(Output::Spawn { id, policy: gpu_policy(!g.software) }) ==> gpu_of(s1, r).exits.len() == 0)
+            &&& (g.running && g.exits.len() >= 2 && s.now - g.exits[1] < 300 ==> !out.contains(Output::Spawn { id, policy: gpu_policy(g.software) }))
+        },
+    }
+}
+
+/// `theorem_site_cannot_demote_others`: every tab goes to software
+/// (`gpu.demoted` set) only through one of: the host's `GpuSoftware`; a GPU
+/// process exiting before `GpuReady` in hardware (the machine's GPU refused,
+/// before any page reached the process); or a hardware exit while drawing of
+/// a site, or the declassified count of one (`GpuSiteExit`), when at least
+/// two **other** sites have hardware exits recorded within five minutes (300
+/// seconds). With [`gpu_sites_wf`] those two are different sites, so exits
+/// from fewer than three sites never change another site's mode.
+pub open spec fn site_cannot_demote_others_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    let s1 = step(rules, urls, fetch, s, e).0;
+    (!s.gpu.demoted && s1.gpu.demoted) ==> match e {
+        Event::GpuSoftware => true,
+        Event::GpuSiteExit { lock } => two_other_sites(s.gpu.sites, crate::domain::domain_of_lock(rules, lock), s.now),
+        Event::GpuExited { id } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => {
+                let g = gpu_of(s, s.renderers[i]);
+                (!g.running && !g.software && !g.stopped) || (g.running && !g.software && two_other_sites(
+                    s.gpu.sites,
+                    crate::domain::domain_of_renderer(rules, s.renderers[i]),
+                    s.now,
+                ))
+            },
+            None => false,
+        },
+        _ => false,
+    }
+}
+
+/// Two entries of `sites` from sites other than `site`, within 300 seconds of
+/// `now`.
+pub open spec fn two_other_sites(sites: Seq<SiteExit>, site: crate::domain::Domain, now: int) -> bool {
+    exists|a: int, b: int|
+        0 <= a < b < sites.len() && sites[a].site != site && sites[b].site != site && now - sites[a].time < 300 && now - sites[b].time < 300
+}
+
+/// The sites the crash policy keeps are distinct, and at most two.
+pub open spec fn gpu_sites_wf(sites: Seq<SiteExit>) -> bool {
+    &&& sites.len() <= 2
+    &&& forall|a: int, b: int| 0 <= a < b < sites.len() ==> sites[a].site != sites[b].site
+}
+
+/// Every step keeps [`gpu_sites_wf`] (with `theorem_site_cannot_demote_others`:
+/// the two other sites are different sites).
+pub open spec fn gpu_sites_wf_kept_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
+    gpu_sites_wf(s.gpu.sites) ==> gpu_sites_wf(step(rules, urls, fetch, s, e).0.gpu.sites)
+}
+
+/// `theorem_paint_after_restart` (5.18's paint theorems restated over
+/// restarts): after the host's `GpuExited` of renderer `id`'s GPU process,
+/// its record is not running; and a frame from the GPU process of a renderer
+/// whose record is not running is never a `Paint`. So a message on `id`'s
+/// socket from an exited process (or from its successor before `GpuReady`)
+/// is never painted.
+pub open spec fn paint_after_restart_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>) -> bool {
+    &&& match find_by_id(s.renderers, id, 0) {
+        Some(i) => !gpu_of(step(rules, urls, fetch, s, Event::GpuExited { id }).0, s.renderers[i]).running,
+        None => true,
+    }
+    &&& match find_by_id(s.renderers, id, 0) {
+        Some(i) => !gpu_of(s, s.renderers[i]).running ==> forall|k: int|
+            0 <= k < step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1.len() ==> !(#[trigger] step(rules, urls, fetch, s, Event::FromGpu { id, bytes }).1[k] is Paint),
         None => true,
     }
 }

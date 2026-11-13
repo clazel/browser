@@ -43,6 +43,7 @@ pub open spec fn ml_state_one() -> State {
         titles: Seq::empty(),
         subfetches: Seq::empty(),
         subcounts: Seq::empty(),
+        gpu: init_gpu(),
     }
 }
 
@@ -535,6 +536,12 @@ pub open spec fn ml_gpu_state(committed: bool, sized: bool) -> State {
         titles: Seq::empty(),
         subfetches: Seq::empty(),
         subcounts: Seq::empty(),
+        // Item 5.17c: its GPU process said `GpuReady`, so its frames paint.
+        gpu: GpuState {
+            recs: seq![GpuRec { id: 1, lock: clazel_origin::spec::Origin::Opaque(1nat), software: false, running: true, stopped: false, exits: seq![] }],
+            demoted: false,
+            sites: seq![],
+        },
     }
 }
 

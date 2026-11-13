@@ -70,7 +70,7 @@ pub proof fn lemma_tabs_remove(urls: UrlFns, rs: Seq<Renderer>, next_id: nat, i:
 
 /// A state with the renderer table `rs` (for lemmas stated on tables).
 pub open spec fn ghost_state_of(rs: Seq<Renderer>, next_id: nat) -> State {
-    State { renderers: rs, jar: seq![], storage: Map::empty(), next_id, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![] }
+    State { renderers: rs, jar: seq![], storage: Map::empty(), next_id, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![], gpu: init_gpu() }
 }
 
 // ---------------------------------------------------------------------
