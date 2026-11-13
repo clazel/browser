@@ -18,9 +18,15 @@
 //!   every weight 1.
 //! - **The sizing guesses' percentages** are of the assignable width,
 //!   rounded down to 1/64 px.
+//! - **Weights adding up to more than 2^31** (lengths over 33 million px, or
+//!   percentages over 21 columns of 100%) are shifted right until they fit
+//!   [`MAX_WEIGHTS`], so every product stays in an `i64`; the shares then
+//!   follow the shifted weights, and still add up to the total.
+//! - **No 128-bit arithmetic**: the floors are formed by quotient and
+//!   remainder ([`floor_share`], [`percent_of`]), exactly.
 
 use super::measure::Column;
-use super::state::{HUNDRED, Share};
+use super::state::{HUNDRED, MAX_WEIGHTS, Share, floor_share};
 
 impl Share {
     /// A share of `total` among weights adding up to `weights` (requires
@@ -38,11 +44,7 @@ impl Share {
 /// The next piece of share `s`, for weight `w` (`state.rs`'s contract).
 pub fn share_step(s: Share, w: i64) -> (i64, Share) {
     let seen = s.seen.saturating_add(w).min(s.weights).max(s.seen);
-    let product = i128::from(s.total).saturating_mul(i128::from(seen));
-    let floor = product
-        .checked_div_euclid(i128::from(s.weights))
-        .unwrap_or(0);
-    let given = i64::try_from(floor).unwrap_or(s.given);
+    let given = floor_share(s.total, seen, s.weights);
     let piece = given.saturating_sub(s.given).max(0);
     (
         piece,
@@ -63,6 +65,21 @@ pub fn share(total: i64, weights: &[i64]) -> Vec<i64> {
         .iter()
         .fold(0i64, |a, &w| a.saturating_add(w.max(0)));
     let ones: Vec<i64>;
+    let shifted: Vec<i64>;
+    // Shift weights whose sum passes MAX_WEIGHTS (the module's choices).
+    let (weights, positive) = if positive > MAX_WEIGHTS {
+        let k = 64u32
+            .saturating_sub(positive.leading_zeros())
+            .saturating_sub(31);
+        shifted = weights
+            .iter()
+            .map(|&w| w.max(0).checked_shr(k).unwrap_or(0))
+            .collect();
+        let sum = shifted.iter().fold(0i64, |a, &w| a.saturating_add(w));
+        (&shifted[..], sum)
+    } else {
+        (weights, positive)
+    };
     let (weights, sum) = if positive == 0 {
         ones = vec![1i64; weights.len()];
         (&ones[..], i64::try_from(ones.len()).unwrap_or(i64::MAX))
@@ -87,11 +104,18 @@ pub fn to_px(v: i64) -> i32 {
     i32::try_from(v).unwrap_or(if v < 0 { i32::MIN } else { i32::MAX })
 }
 
-/// `pct` (millionths of a percent) of `basis`, rounded down.
+/// `pct` (millionths of a percent) of `basis`, rounded down: with `pct =
+/// q * 100% + r` (`0 <= r < 100%`), `floor(basis * pct / 100%) = basis * q +
+/// floor(basis * r / 100%)`, where `basis * r` fits an `i64`; a product too
+/// large saturates, as the result is clamped to `i32` anyway.
 pub fn percent_of(pct: i64, basis: i32) -> i32 {
-    let product = i128::from(pct).saturating_mul(i128::from(basis));
-    let q = product.checked_div_euclid(i128::from(HUNDRED)).unwrap_or(0);
-    i32::try_from(q).unwrap_or(if q < 0 { i32::MIN } else { i32::MAX })
+    let b = i64::from(basis);
+    let q = pct.div_euclid(HUNDRED);
+    let r = pct.rem_euclid(HUNDRED);
+    let v = b
+        .saturating_mul(q)
+        .saturating_add(b.saturating_mul(r).div_euclid(HUNDRED));
+    to_px(v)
 }
 
 /// What a column is to §3.9.3: "percent-column: a column whose any

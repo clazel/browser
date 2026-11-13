@@ -51,8 +51,8 @@
 //!   weights)`, so they add up to exactly `total` (CSS Tables 3's Rule 3,
 //!   "The sum of width assigned to all columns should be equal to the
 //!   assignable table width"). Steps (`distribute.rs`):
-//!   - `Share::new(total, weights)`: requires `total >= 0` and
-//!     `weights > 0`. Contract: the invariant holds.
+//!   - `Share::new(total, weights)`: requires `total >= 0` and `0 <
+//!     weights <= MAX_WEIGHTS` (2^31). Contract: the invariant holds.
 //!   - `share_step(s, w) -> (piece, Share)`: the next weight `w`. Requires
 //!     `0 <= w <= weights - seen`. Contract: the invariant is kept; the
 //!     piece is not negative; `given` grows by `piece`; the piece is at
@@ -181,6 +181,23 @@ pub struct Placed {
     pub height: u32,
 }
 
+/// The largest sum of weights a [`Share`] takes: with it, every product
+/// [`floor_share`] forms fits in an `i64` (`distribute.rs` scales larger
+/// weights down).
+pub const MAX_WEIGHTS: i64 = 1 << 31;
+
+/// `floor(total * seen / weights)` for `total >= 0`, `0 <= seen <= weights`
+/// and `0 < weights <= MAX_WEIGHTS`, without forming the product: with
+/// `total = q * weights + r` (`0 <= r < weights`), it is `q * seen +
+/// floor(r * seen / weights)`, where `q * seen <= total` and `r * seen <
+/// 2^62`.
+pub fn floor_share(total: i64, seen: i64, weights: i64) -> i64 {
+    let q = total.checked_div(weights).unwrap_or(0);
+    let r = total.checked_rem(weights).unwrap_or(0);
+    let rest = r.saturating_mul(seen).checked_div(weights).unwrap_or(0);
+    q.saturating_mul(seen).saturating_add(rest)
+}
+
 /// A running share of `total` among weights adding up to `weights`
 /// (`distribute.rs`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,16 +214,20 @@ pub struct Share {
 }
 
 impl Share {
-    /// The invariant: the total is not negative, the weights are positive,
-    /// the weights seen are within them, and what was given is the floor of
-    /// the total's share for the weights seen.
+    /// The invariant: the total is not negative, the weights are positive
+    /// and at most [`MAX_WEIGHTS`], the weights seen are within them, and
+    /// what was given is the floor of the total's share for the weights seen,
+    /// `floor(total * seen / weights)` ([`floor_share`]).
     pub fn invariant(&self) -> bool {
-        if self.total < 0 || self.weights <= 0 || self.seen < 0 || self.seen > self.weights {
+        if self.total < 0
+            || self.weights <= 0
+            || self.weights > MAX_WEIGHTS
+            || self.seen < 0
+            || self.seen > self.weights
+        {
             return false;
         }
-        let product = i128::from(self.total).saturating_mul(i128::from(self.seen));
-        let floor = product.div_euclid(i128::from(self.weights));
-        i128::from(self.given) == floor
+        self.given == floor_share(self.total, self.seen, self.weights)
     }
 }
 

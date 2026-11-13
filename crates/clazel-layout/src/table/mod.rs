@@ -215,6 +215,8 @@ pub mod measure;
 pub mod rows;
 pub mod state;
 
+#[cfg(kani)]
+mod proofs;
 #[cfg(test)]
 mod tests;
 

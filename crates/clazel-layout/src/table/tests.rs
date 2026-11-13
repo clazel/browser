@@ -586,3 +586,34 @@ fn shares_add_up() {
     assert_eq!(share(100, &[1, 3]), vec![25, 75]);
     assert_eq!(share(5, &[]), Vec::<i64>::new());
 }
+
+/// The 64-bit floors agree with 128-bit arithmetic: `floor_share` on
+/// totals up to 2^62 and weights up to 2^31, `percent_of` on any
+/// percentage and length (a fixed pseudo-random walk; 200 steps under
+/// Miri, 200,000 natively).
+#[test]
+fn floors_match_wide_arithmetic() {
+    use super::distribute::percent_of;
+    use super::state::{HUNDRED, MAX_WEIGHTS, floor_share};
+    let steps: u64 = if cfg!(miri) { 200 } else { 200_000 };
+    let mut x: u64 = 0x9E37_79B9_7F4A_7C15;
+    let mut next = || {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        x
+    };
+    for _ in 0..steps {
+        let weights =
+            i64::try_from(next() % u64::try_from(MAX_WEIGHTS).unwrap_or(1)).unwrap_or(0) + 1;
+        let seen = i64::try_from(next() % u64::try_from(weights + 1).unwrap_or(1)).unwrap_or(0);
+        let total = i64::try_from(next() >> 2).unwrap_or(0);
+        let wide = i128::from(total) * i128::from(seen) / i128::from(weights);
+        assert_eq!(i128::from(floor_share(total, seen, weights)), wide);
+        let pct = i64::from_ne_bytes(next().to_ne_bytes()) >> (next() % 60);
+        let basis = i32::from_ne_bytes(u32::try_from(next() >> 32).unwrap_or(0).to_ne_bytes());
+        let exact = (i128::from(pct) * i128::from(basis)).div_euclid(i128::from(HUNDRED));
+        let clamped = exact.clamp(i128::from(i32::MIN), i128::from(i32::MAX));
+        assert_eq!(i128::from(percent_of(pct, basis)), clamped, "{pct} {basis}");
+    }
+}
