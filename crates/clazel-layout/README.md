@@ -5,12 +5,13 @@ input carry machine-checked proofs (Phase 5, `docs/phases/phase-5.md`). So far:
 font matching (item 5.10, `src/fonts/`), shaping (item 5.11, `src/shape/`),
 white space and line breaking (item 5.12, `src/text/`), the box tree (item
 5.13, `src/boxes/`), block and inline formatting (item 5.14, `src/flow/`),
-and table layout (item 5.15, `src/table/`). The display list (item 5.16) is
-not started.
+table layout (item 5.15, `src/table/`), and paint, the display list (item
+5.16, `src/paint/`).
 
 Its dependencies are `clazel-font`, which reads every byte of a font,
 `clazel-style`, whose computed values the line breaker and the box tree read,
-and `clazel-dom`, whose arena the box tree is built from. `rustybuzz` is a
+`clazel-dom`, whose arena the box tree is built from, and `clazel-url`,
+whose parser resolves links' `href` for paint's hit regions. `rustybuzz` is a
 dev-dependency, used only by the shaping differential, and `clazel-treebuilder`
 one used by the box tree's and the formatting's tests to parse documents.
 
@@ -532,6 +533,113 @@ The collapsing border model (§17.6.2); `caption-side: bottom`;
 content (percentage heights in cells); row and column backgrounds and
 painting (item 5.16).
 
+## Paint: the display list (item 5.16)
+
+`src/paint/`, against CSS 2.1 (the Recommendation of 7 June 2011) Appendix
+E.2, §8.5, §11.1, §11.1.1, §11.2, §14.2, §16.3.1, §17.5.1 and §17.6.1; HTML
+at commit `4c54fae1` §4.6.2 and §4.6.4; the Quirks Mode Standard at commit
+`5a06deb5` §3.11. `paint::paint(frags, tree, arena, styles, fonts, base,
+scale)` takes the fragment tree (items 5.14 and 5.15), the box tree, the
+document, the computed style, the fonts, the document's base URL and the
+device pixels per CSS pixel, and returns a `DisplayList`: items in paint
+order (`Fill`, `Text`, `PushClip`, `PopClip`), each with integer
+device-pixel bounds in document coordinates, and the hit regions of links
+with their resolved URLs.
+
+1. `order.rs`: E.2 for the root stacking context with an explicit task
+   stack: the canvas (step 1), every block-level box's background and
+   borders in tree order with tables in their layers (steps 2 and 4), then
+   every line box (step 7.2): inline box pieces, text runs with their
+   underline, overline, glyphs and line-through, and atomic inlines painted
+   whole where they sit.
+2. `geometry.rs`: device-pixel snapping, each edge on its own;
+   premultiplied colours; the four border strips; clip intersection.
+3. `decor.rs`: §16.3.1's decorations carried down the tree, and each line's
+   rectangle.
+4. `dump.rs`: a list as text, for the tests.
+
+`state.rs` states the list's types, each state (the clip stack, the
+decorations), its invariant and each step's contract; it was committed
+before the implementation. Nothing recurses: a tree 100,000 blocks deep
+paints.
+
+### Decisions taken for 5.16
+
+Taken from the plan and the brief while the maintainer was away; each is
+also in `src/paint/mod.rs`.
+
+- **Its own list, which item 5.20 converts** into `clazel-displaylist`'s
+  items (5.17a), which needs no change to that crate's proven spec: 5.17a
+  holds viewport-relative device rectangles, clips and glyph masks, and
+  nothing about text or links. Paint's items are in document coordinates,
+  already in device pixels with premultiplied `0xAARRGGBB` colours; 5.20
+  culls them to the viewport, subtracts the scroll, clamps to 5.17a's
+  coordinate range, and turns a text item's glyphs into masks (item 5.17)
+  and `DrawMask`s. A scroll draws again without a relayout.
+- **E.2 as written**: every block's background and borders before any line
+  box, where the plan's summary reads "for each block … its background and
+  borders, then its in-flow blocks, then its inline content". With Hacker
+  News' negative margins the two differ; E.2 is followed.
+- **Within a line**, inline box pieces' backgrounds and borders come first,
+  then text and atomic inlines (5.14's item order); E.2 7.2.1 interleaves
+  them, which differs only where an inline background overlaps earlier text
+  on the same line.
+- **The canvas** is filled over the document's extent: the root's
+  background, else an `html` root's `body`'s (which then paints none), else
+  opaque white.
+- **Borders are solid** (the plan), four strips with the corners in the top
+  and bottom ones; no diagonal joins.
+- **Backgrounds** are `background-color` over the border box; images are
+  not applied (item 5.6).
+- **Tables**: the table's background, then the column group, column, row
+  group and row backgrounds each over the cells in that track (none in the
+  border spacing, §17.6.1; a column's cells are those starting in it), then
+  the cells', then the table's and cells' borders in tree order.
+- **`visibility`** other than `visible` paints nothing of the box itself.
+- **`overflow`** other than `visible` clips descendants to the padding box,
+  except where it goes to the viewport (the root, a propagating `body`);
+  `scroll` and `auto` clip as `hidden` (no scrollbars). **Clips never nest
+  in the list**: the intersection of the clips in force is pushed, so
+  5.17a's depth limit of 256 is never reached.
+- **Decorations**: a deeper element's line of a kind replaces an outer
+  one's (they share a position; only the colour would show); each run's
+  own font places them: the underline at `post`'s `underlinePosition` and
+  `underlineThickness` (5.14's `FontMetrics` gains both), the overline at
+  the ascent's top, the line-through half the x-height up; at least one
+  device pixel thick. Not into atomic inlines, nor, in quirks mode, tables
+  (§3.11). A hidden box's text gets no decoration, even its parent's
+  (§16.3.1 leaves the child case open).
+- **Text items' bounds** for culling are the pen extent widened by a font
+  size on each side, two above the baseline and one below; glyphs keep
+  exact positions in 1/64 device px.
+- **Replaced boxes** paint their background and borders, not content.
+- **Hit regions**, in paint order: every box in a link (`a` or `area` with
+  `href`) gives its border box, every inline piece its border area. URLs are
+  parsed with `clazel-url`'s basic URL parser against the base URL the
+  caller gives (5.20 already computes the document base URL) and
+  serialized; the query is UTF-8, where HTML's "encoding-parsing" would use
+  the document's encoding. A failed URL gives a region with no URL. A
+  box whose `visibility` is not `visible` gives no region.
+- **Device pixels**: an integer scale from 1 to 16; fractional device pixel
+  ratios are item 5.21's to decide.
+- **No item cap**: 5.17a's 1,048,576 items per list applies to what 5.20
+  sends for one viewport.
+- **New dependency**: `clazel-url` (ours) for the hit regions' URLs.
+- **The plan's section numbers** (E.2, §14.2, §8.5, §16.3.1, §11.1.1, all
+  †) were checked against the Recommendation; E.2's steps are numbered by
+  their nesting in `src/paint/mod.rs`.
+- **Target tier stays 0**; the Kani harnesses below were added as the brief
+  asked.
+- **WPT reftests wait for item 5.25**: `css/CSS2/colors`, `backgrounds` and
+  `text` are reftests; not vendored or run here.
+
+### Not covered by 5.16
+
+Background images and gradients; border styles other than solid; outlines;
+`box-shadow` and the rest of CSS 3's effects; `text-decoration-style`
+(every line solid); `visibility: collapse` on table tracks (painted as
+hidden); positioned elements, floats and `z-index` (not in the subset).
+
 ## Verification
 
 Tier: `tier = 0`, `target-tier = 0` in `Cargo.toml` (the plan's Crates table).
@@ -1001,3 +1109,68 @@ so a row costs at most the row-spanning cells to its left.
 
 **WPT**: `css/CSS2/tables` and the `css-tables` reftests wait for item
 5.25's rendering harness.
+
+### Paint: the display list (item 5.16)
+
+Unit tests (`src/paint/tests.rs`, 16), as for 5.14 and 5.15 (a
+`display`-only user agent sheet, `BoxFont`, expected items worked out by
+hand): the canvas from the root, from `body`, and white; a background and
+its four border strips; every block background before any text (E.2 steps 4
+and 7, with a negative margin); a text item's glyph positions and
+premultiplied colour; scale 2; each decoration line, its position and
+order; decorations reaching a span in the declaring colour but not an
+inline block; `visibility: hidden` with a visible child; nested `overflow`
+clips flattened, never deeper than one; a replaced box's borders only; an
+inline box's pieces and their edges across two lines; an inline block
+painted in line order; a table's layers (none in the spacing); hit regions
+with resolved and failed URLs in paint order; hidden links with no region;
+100,000 nested blocks (300 under Miri).
+
+Golden test (`tests/golden_paint.rs`): the same 1,763 documents as 5.14's
+golden test, laid out the same way and painted at scale 1 with links
+resolved against `http://example.com/dir/page`, printed by `paint::dump` and
+compared with `tests/golden/paint/` (`CLAZEL_BLESS=1` regenerates them):
+3,114 items, 1,175 text items and 23 hit regions. The HN-shaped page was
+checked by hand (`#hnmain`'s `#f6f6ef` over its snapped border box, the
+`#ff6600` header cell, link colour and underline, three hit regions).
+
+Kani harnesses (`src/paint/proofs.rs`), measured as for 5.14 and 5.15:
+
+| Harness | Kind | What it checks | Time | Peak memory |
+|---------|------|----------------|------|-------------|
+| `clips_any` | step, every size | entering and leaving a clip keep the invariant and pair up; the clip in force lies within each clip entered | 4 s | 0.30 GB |
+| `propagate_any` | step, every size | an atomic inline starts afresh; a box's own lines replace its parent's, the rest are kept | 6 s | 0.32 GB |
+| `snap_any` | any input | snapping is monotone and exact on whole CSS pixels | 22 s | 0.41 GB |
+| `snap_rect_any` | any input | a snapped rectangle's size is its snapped far edges less its near ones | 84 s | 0.41 GB |
+| `snap_tiles_any` | any input within 2^22 px | two rectangles sharing an edge share it in device pixels | 29 s | 0.41 GB |
+| `premultiply_any` | any input | no channel above the alpha; opaque unchanged; transparent 0 | 3 s | 0.30 GB |
+| `intersect_any` | any input | the intersection lies within both rectangles | 4 s | 0.30 GB |
+| `border_rects_any` | within 2^22 px | the four strips lie inside the border box and do not overlap | 7 s | 0.41 GB |
+| `line_rect_any` | any input | a decoration line spans its run and is as thick as the underline, at least 1/64 px | 3 s | 0.30 GB |
+
+**Proved for every size**: the clip stack (`Clips::enter`, `leave`), so no
+document nests clips in the list; decoration propagation. **For every
+input**: `snap`, `snap_rect`, `premultiply`, `intersect`, `line_rect`.
+**Only bounded**: tiling and the border strips, within 2^22 px (beyond, they
+saturate). No harness hit a cap; none was removed.
+
+**Not covered by Kani**: the walk (`order.rs`), whose state is the fragment
+tree, the task stack and the list; resolving URLs (`clazel-url`'s, proven
+there). The unit and golden tests run them. CI has not run these harnesses
+yet.
+
+Miri: every test this item adds and the golden test, one test per process
+(`cargo +nightly-2026-08-21 miri test -p clazel-layout … --exact -Z
+unstable-options --report-time`), each capped at 10 minutes and run alone
+under the shared lock, never beside Kani. All 17 passed; times on Miri's
+clock:
+
+| Test | Miri time |
+|------|-----------|
+| `golden_paint::golden_display_lists` (case 0 only, no page) | 109.7 s |
+| `paint::tests::deep_trees_paint_without_recursion` (300 levels under Miri) | 23.4 s |
+| `paint::tests::the_canvas_background` (three documents) | 23.0 s |
+| the other 14 tests in `paint::tests` | under 12 s each |
+
+**WPT**: `css/CSS2/colors`, `backgrounds` and `text` wait for item 5.25's
+rendering harness.
