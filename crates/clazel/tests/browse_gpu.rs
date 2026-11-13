@@ -23,6 +23,10 @@
 mod gpu;
 #[path = "../cli/picture.rs"]
 mod picture;
+#[path = "reftest/mod.rs"]
+mod reftest;
+#[path = "browse_gpu/reftests.rs"]
+mod reftests;
 #[path = "support/server.rs"]
 mod server;
 #[path = "browse_gpu/sheets.rs"]
