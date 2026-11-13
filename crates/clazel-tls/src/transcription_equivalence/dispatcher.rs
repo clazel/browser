@@ -4,7 +4,7 @@
 //! `traffic/handshake_spec.rs`'s handoff, against the clean-room
 //! transcription's record layer (`connection::receive_stream`,
 //! `receive_record`, `receive_ciphertext`, `process_handshake_bytes`,
-//! `apply_actions`, `alert_record`, `close_write`) around A.1's states
+//! `apply_actions`, `alert_record`, `close_write_side`) around A.1's states
 //! WAIT_EE to WAIT_FINISHED (`state_machine::receive_handshake_message`),
 //! with D.4's change_cipher_spec (`middlebox::client_receive_stream`):
 //! [`theorem_dispatcher_equivalence`]. It sits between
@@ -75,9 +75,11 @@
 //! - [`coalesced`]: the crate's flight is one record; the transcription
 //!   writes the empty Certificate and the Finished in two. The same bytes
 //!   with no CertificateRequest.
-//! - the peer's close_notify during its flight ([`outcome_agrees`]): the
-//!   crate closes at once, sending exactly the transcription's
-//!   `close_write` record; the transcription only stops reading.
+//! - [`closes_on_peer_close`]: the peer's close_notify during its flight.
+//!   The crate closes at once, sending exactly the record of the
+//!   transcription's `close_write_side` from its state after the alert; the
+//!   transcription closes its read side only (`read_closed`, its write side
+//!   still open), leaving its close_notify to its caller.
 //!
 //! The framer's timing on a partial record, and `feed` over a stream in any
 //! chunks, are [`super::framing`]'s ([`super::framing::theorem_disp_stream`]).
@@ -785,7 +787,7 @@ pub open spec fn receiver_agrees(s: State, c: Connection) -> bool {
 /// state); the domain on the validators and offers holds; the server
 /// handshake epoch is the transcription's `receive`; the client handshake
 /// epoch is unused ([`sender_fresh`]) and the transcription's `send` is not
-/// engaged; nothing is closed or owed; the crate's master secret is the
+/// engaged; nothing is closed (`read_closed`, `write_closed`) or owed; the crate's master secret is the
 /// transcription's of its Handshake Secret; the framer holds no partial
 /// record; and the dummy change_cipher_spec is still owed exactly when the
 /// transcription, in compatibility mode, has not written it (Appendix D.4).
@@ -802,6 +804,7 @@ pub open spec fn agrees_but_buffer(p: Primitives, v: crate::auth::spec::Verifica
     &&& c.send == Protection::Unprotected
     &&& !c.read_closed
     &&& !c.key_update_owed
+    &&& !c.write_closed
     &&& s.master == crate::transcription::key_schedule::master_secret(p, c.handshake.handshake_secret)
     &&& s.ccs_pending == (cl.compatibility_mode && !cl.change_cipher_spec_sent)
 }
@@ -931,6 +934,7 @@ pub proof fn lemma_apply_send(p: Primitives, y: Connection, m: Seq<u8>,
     rest: Seq<crate::transcription::state_machine::Action>)
     requires
         y.send is Protected,
+        !y.write_closed,
         m.len() <= crate::spec::MAX_PLAINTEXT,
     ensures ({
         let t = y.send->Protected_0;
@@ -955,6 +959,7 @@ pub proof fn lemma_apply_send(p: Primitives, y: Connection, m: Seq<u8>,
 #[verifier::rlimit(40)]
 pub proof fn lemma_apply_flight(p: Primitives, y: Connection, chts: Seq<u8>, msgs: Seq<Seq<u8>>, cas: Seq<u8>, sas: Seq<u8>)
     requires
+        !y.write_closed,
         msgs.len() == 1 || msgs.len() == 2,
         forall|i: int| 0 <= i < msgs.len() ==> #[trigger] msgs[i].len() <= crate::spec::MAX_PLAINTEXT,
     ensures
@@ -1091,6 +1096,7 @@ pub proof fn lemma_ack(c: crate::schedule::spec::Crypto, v: crate::auth::spec::V
         conn.handshake_fragments.len() == 0,
         !conn.read_closed,
         !conn.key_update_owed,
+        !conn.write_closed,
     ensures ack_agrees(c, v, f, p, s, conn),
 {
     let a = s.auth->Some_0;
@@ -1666,11 +1672,8 @@ pub open spec fn fail_agrees(f: Ciphers, p: Primitives, s: State, y: Connection,
 ///   transcription's `alert_record` of its alert, and `failed` (the
 ///   transcription aborts as [`fail_agrees`] says);
 /// - the peer's error alert: `PeerError` with the same description;
-/// - **a stated difference, the peer's close_notify during its flight**
-///   (§6.1): the transcription stops reading (`read_closed`) and keeps its
-///   write side, its own close_notify being the separate `close_write`, so
-///   its handshake can no longer complete; the crate closes at once,
-///   sending exactly that `close_write` record, and drops every key.
+/// - the peer's close_notify during its flight: every key is dropped and
+///   the stated difference [`closes_on_peer_close`] holds.
 pub open spec fn outcome_agrees(c: crate::schedule::spec::Crypto, v: crate::auth::spec::Verification, f: Ciphers,
     p: Primitives, s: State, cl: ClientConnection, a: Action, s2: State, t: Receive, failed: bool) -> bool
 {
@@ -1700,15 +1703,36 @@ pub open spec fn outcome_agrees(c: crate::schedule::spec::Crypto, v: crate::auth
         },
         Action::Close(w) => {
             &&& s2 == crate::connection::dispatcher_spec::closed()
-            &&& w == Some(crate::transcription::connection::close_write(p, y))
-            &&& t is Continue
-            &&& t->Continue_0.connection.read_closed
-            &&& t->Continue_0.connection.handshake == y.handshake
-            &&& t->Continue_0.application_data.len() == 0
-            &&& t->Continue_0.records_to_send.len() == 0
+            &&& closes_on_peer_close(p, y, w, t)
         },
         Action::Ready => false,
     }
+}
+
+/// **Stated difference, the peer's close_notify during its flight** (§6.1).
+/// The transcription closes its read side (`read_closed`), writes nothing,
+/// and keeps its write side open (`write_closed` unset), its own close_notify
+/// being its caller's `close_write_side`; its handshake can no longer
+/// complete, since it ignores what the server sends next. The crate closes at
+/// once: it sends exactly the record that `close_write_side` would write
+/// from the transcription's state after the alert (`w`), and drops every
+/// key. Both are allowed: "Either party MAY initiate a close of its write
+/// side of the connection by sending a "close_notify" alert", and the
+/// immediate answer is no longer required, not forbidden: "Note that this
+/// is a change from versions of TLS prior to TLS 1.3 in which
+/// implementations were required to react to a "close_notify" by discarding
+/// pending writes and sending an immediate "close_notify" alert of their
+/// own." The transcription's modelling choice "close_notify during the
+/// handshake" leaves our close_notify to the application.
+pub open spec fn closes_on_peer_close(p: Primitives, y: Connection, w: Option<Seq<u8>>, t: Receive) -> bool {
+    &&& t is Continue
+    &&& t->Continue_0.connection.read_closed
+    &&& !t->Continue_0.connection.write_closed
+    &&& t->Continue_0.connection.handshake == y.handshake
+    &&& t->Continue_0.application_data.len() == 0
+    &&& t->Continue_0.records_to_send.len() == 0
+    &&& w is Some
+    &&& seq![w->Some_0] == crate::transcription::connection::close_write_side(p, t->Continue_0.connection).0
 }
 
 /// `connection::receive_stream`'s result as `middlebox::client_receive_stream`
@@ -1910,6 +1934,7 @@ pub proof fn lemma_content(c: crate::schedule::spec::Crypto, v: crate::auth::spe
             let d = x[1];
             if d == 0 {
                 lemma_closing(f, p, s, y);
+                lemma_alert_record_kept(p, y, Connection { read_closed: true, ..y }, 0);
             } else if d == 90 {
             } else {
             }
@@ -2087,6 +2112,7 @@ pub open spec fn accepts_server_hello(p: Primitives, c0: Connection, sh: crate::
     &&& c0.send == Protection::Unprotected
     &&& !c0.read_closed
     &&& !c0.key_update_owed
+    &&& !c0.write_closed
 }
 
 /// The start: from the crate's handoff (`handshake_spec::start`, then

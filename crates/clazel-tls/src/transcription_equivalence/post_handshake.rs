@@ -2,19 +2,23 @@
 //! `connection/post_handshake_spec.rs`, against the clean-room
 //! transcription's CONNECTED state (`state_machine::receive_post_handshake`,
 //! `post_handshake.rs`) and the record layer of `connection.rs` around it
-//! (`receive_stream`, `send_application_data`, `send_key_update`,
-//! `close_write`, `updated_traffic`): [`theorem_post_handshake_equivalence`].
+//! (`receive_stream`, `send_application_data`, `request_key_update`,
+//! `close_write_side`, `abort_records`, `updated_traffic`):
+//! [`theorem_post_handshake_equivalence`].
 //!
 //! The two states are tied by [`post_agrees`]: the transcription is in
-//! CONNECTED; while the crate's write side is open, its client epoch and
+//! CONNECTED; the crate's write side has ended (our close_notify, §6.1)
+//! exactly when the transcription's `write_closed` is set, and its read
+//! side exactly when `read_closed` is; while the crate's write side is open, its client epoch and
 //! `client_application_traffic_secret_N` are the transcription's `send`
 //! (key, IV, sequence number and secret: [`direction_agrees`]) and a
 //! KeyUpdate is owed on one side exactly when it is on the other (§4.6.3:
 //! both record the answer to `update_requested` and send it before the next
 //! application data); while its read side is open, its server epoch and
 //! secret are the transcription's `receive`, its reassembly buffer is the
-//! transcription's `handshake_fragments`, and `read_closed` is false; once
-//! the read side has ended, `read_closed` is true. [`lemma_start`] ties the
+//! transcription's `handshake_fragments`, and the owed KeyUpdate is still
+//! compared after our close_notify (a KeyUpdate read then sets it on both
+//! sides, and neither ever sends it). [`lemma_start`] ties the
 //! crate's `start` to the transcription's connection as A.1's last actions
 //! leave it ([`established`]).
 //!
@@ -35,20 +39,26 @@
 //!   the read side has ended both ignore the record (§6.1).
 //! - **Rejections.** The crate rejects exactly when the transcription aborts.
 //!   For every post-handshake message the two check in the same order, so
-//!   the alerts are equal (no membership comparison is needed); the crate's
-//!   alert record is the transcription's `alert_record` of the same
-//!   description, under the current client key ([`alert_wires`]).
+//!   the alerts are equal (no membership comparison is needed); what the
+//!   crate sends is the transcription's `abort_records` of the failure
+//!   ([`alert_wires`], [`lemma_abort_records`]): its `alert_record` of the
+//!   same description, under the current client key, or nothing after our
+//!   close_notify (§6.1).
 //! - **A stream of records**, one whole record at a time: the crate's `step`
 //!   on a wire that starts with a whole record is its step on that record
 //!   (modelling choice 1; [`lemma_step_prefix`]), and the transcription's
 //!   `receive_stream` of it is its handling of the record joined with the
 //!   rest ([`lemma_stream_prefix`]).
-//! - **The local operations** with the write side open: `send_application`
-//!   of at most 2^14 octets against `send_application_data`, including
-//!   the owed KeyUpdate (§4.6.3) and §5.3's KeyUpdate before the last
-//!   sequence number, one KeyUpdate when both are due ([`send_agrees`]);
-//!   `update_keys` against `send_key_update` ([`update_agrees`]); `close`
-//!   against `close_write` ([`close_agrees`]).
+//! - **The local operations**, in every state: `send_application` against
+//!   `send_application_data` (with the write side open, of at most 2^14
+//!   octets, including the owed KeyUpdate of §4.6.3 and §5.3's KeyUpdate
+//!   before the last sequence number, one KeyUpdate when both are due;
+//!   after our close_notify, the crate's nothing against `WriteClosed`, any
+//!   length: [`send_agrees`]); `update_keys` against `request_key_update`
+//!   ([`update_agrees`], likewise `WriteClosed` after our close_notify);
+//!   `close` against `close_write_side` (the close_notify once, then
+//!   nothing; the crate's connection ends when the read side had already
+//!   ended: [`close_agrees`]).
 //!
 //! Hypotheses (true of what both sides model; not axioms): the crate's
 //! `Crypto` is the transcription's `Primitives` field by field
@@ -76,13 +86,13 @@
 //!   more with a local `record_overflow` (its item 11: the caller
 //!   fragments), after the KeyUpdate due on the last sequence number if any;
 //!   the transcription fragments.
+//! - **A KeyUpdate asked for while one is owed** ([`update_keeps_owed`]):
+//!   with `update_not_requested`, the transcription's `request_key_update`
+//!   counts it as the owed answer; the crate keeps the answer owed and sends
+//!   one more KeyUpdate before its next application data. The same record;
+//!   the states agree but for the owed flag.
 //!
 //! Not covered:
-//! - The crate's write-closed state: after `close`, the crate's
-//!   `send_application`, `update_keys`, `close` and fatal alerts send
-//!   nothing (§6.1). The transcription has no write-closed state
-//!   (`close_write` only gives the record), so there is nothing to compare;
-//!   [`post_agrees`] says nothing of its `send` or owed KeyUpdate then.
 //! - Transport end of file (the crate's `Input::Closed`): `connection.rs`
 //!   leaves transport closure out of scope.
 //! - In this file (covered in [`super::framing`] instead): the timing on a
@@ -171,18 +181,26 @@ pub open spec fn receiver_agrees(s: State, c: Connection) -> bool {
 }
 
 /// The crate's post-handshake state and the transcription's connection in
-/// CONNECTED stand for the same connection. The transcription has no
-/// write-closed state (`close_write` only gives the record), so once the
-/// crate's write side has ended nothing is said of the transcription's
-/// `send` or `key_update_owed`; a failed connection has no counterpart (the
-/// transcription's run ended with `Abort` or `PeerError`).
+/// CONNECTED stand for the same connection. Each direction is closed on one
+/// side exactly when it is on the other: the crate's write side has ended
+/// (`WriteClosed`, `Closed`) exactly when the transcription's
+/// `write_closed` is set (§6.1, our close_notify), and its read side
+/// (`ReadClosed`, `Closed`) exactly when `read_closed` is. An open direction
+/// agrees as [`sender_agrees`] or [`receiver_agrees`] say. With the write
+/// side closed, neither side ever uses its send keys again, so nothing is
+/// said of the transcription's `send`; the owed KeyUpdate is still compared
+/// while the read side is open (a KeyUpdate read after our close sets it on
+/// both sides, and neither sends it). A failed connection has no counterpart
+/// (the transcription's run ended with `Abort` or `PeerError`).
 pub open spec fn post_agrees(s: State, c: Connection) -> bool {
     &&& c.handshake.state == ClientState::Connected
     &&& match s.phase {
-        Phase::Open => sender_agrees(s, c) && receiver_agrees(s, c) && c.handshake_fragments == s.reassembly.buf,
-        Phase::WriteClosed => s.sender is None && receiver_agrees(s, c) && c.handshake_fragments == s.reassembly.buf,
-        Phase::ReadClosed => sender_agrees(s, c) && s.receiver is None && c.read_closed,
-        Phase::Closed => s.sender is None && s.receiver is None && c.read_closed,
+        Phase::Open => sender_agrees(s, c) && receiver_agrees(s, c) && c.handshake_fragments == s.reassembly.buf
+            && !c.write_closed,
+        Phase::WriteClosed => s.sender is None && receiver_agrees(s, c) && c.handshake_fragments == s.reassembly.buf
+            && c.write_closed && s.key_update_owed == c.key_update_owed,
+        Phase::ReadClosed => sender_agrees(s, c) && s.receiver is None && c.read_closed && !c.write_closed,
+        Phase::Closed => s.sender is None && s.receiver is None && c.read_closed && c.write_closed,
         Phase::Failed => false,
     }
 }
@@ -197,6 +215,7 @@ pub open spec fn established(p: Primitives, c: Connection, client_secret: Seq<u8
     &&& c.handshake_fragments.len() == 0
     &&& !c.read_closed
     &&& !c.key_update_owed
+    &&& !c.write_closed
 }
 
 // ---------------------------------------------------------------------------
@@ -382,7 +401,7 @@ pub proof fn lemma_send_application(c: crate::schedule::spec::Crypto, f: crate::
                 &&& s2.phase == s.phase
                 &&& post_agrees(s2, conn2)
             },
-            SendResult::NotConnected => false,
+            _ => false,
         }
     }),
 {
@@ -409,49 +428,58 @@ pub proof fn lemma_send_application(c: crate::schedule::spec::Crypto, f: crate::
     }
 }
 
+/// After our close_notify (§6.1): the crate's `send_application` sends
+/// nothing and keeps its state, and the transcription's
+/// `send_application_data` is `WriteClosed`, whatever the data's length.
+pub proof fn lemma_send_closed(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
+    s: State, conn: Connection, data: Seq<u8>)
+    requires
+        post_agrees(s, conn),
+        !crate::connection::post_handshake_spec::can_write(s),
+    ensures send_agrees(c, f, p, s, conn, data),
+{
+}
+
 /// §4.6.3: the crate's client-initiated KeyUpdate is the transcription's
-/// `send_key_update` of the same request.
+/// `request_key_update` of the same request ([`update_agrees`]): the same
+/// record and agreeing states, but for [`update_keeps_owed`]; after our
+/// close_notify, nothing on either side (§6.1).
 pub proof fn lemma_update_keys(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, conn: Connection, request_peer: bool)
     requires
         hypotheses(c, f, p),
         post_agrees(s, conn),
-        crate::connection::post_handshake_spec::can_write(s),
-    ensures ({
-        let (o, s2) = crate::connection::post_handshake_spec::update_keys(c, f, s, request_peer);
-        let (records, conn2) = crate::transcription::connection::send_key_update(p, conn,
-            if request_peer { crate::transcription::post_handshake::update_requested() }
-            else { crate::transcription::post_handshake::update_not_requested() });
-        &&& o.wires == records
-        &&& o.delivered.len() == 0
-        &&& o.end == End::Continue
-        &&& s2.phase == s.phase
-        &&& post_agrees(s2, conn2)
-    }),
+    ensures update_agrees(c, f, p, s, conn, request_peer),
 {
-    let request = if request_peer { crate::spec::UPDATE_REQUESTED } else { crate::spec::UPDATE_NOT_REQUESTED };
-    lemma_send_key_update(c, f, p, s, conn, request);
+    if crate::connection::post_handshake_spec::can_write(s) {
+        let request = if request_peer { crate::spec::UPDATE_REQUESTED } else { crate::spec::UPDATE_NOT_REQUESTED };
+        lemma_send_key_update(c, f, p, s, conn, request);
+        let after = crate::transcription::connection::send_key_update(p, conn, request as nat).1;
+        assert(after.key_update_owed == s.key_update_owed);
+        if s.key_update_owed {
+            assert(Connection { key_update_owed: true, ..Connection { key_update_owed: false, ..after } } == after);
+        } else {
+            assert(Connection { key_update_owed: false, ..after } == after);
+        }
+    }
 }
 
-/// §6.1: the crate's close is the transcription's `close_write`: the same
-/// `close_notify` record; the crate's write side then ends, which the
-/// transcription does not record.
+/// §6.1: the crate's close is the transcription's `close_write_side`
+/// ([`close_agrees`]): with the write side open, the same close_notify
+/// record, after which both write sides are closed (and if the read side had
+/// already ended, the crate's connection ends); after our close_notify,
+/// nothing on either side.
 pub proof fn lemma_close(f: crate::traffic::spec::Cipher, p: Primitives, s: State, conn: Connection)
     requires
         cipher_agrees(f, p),
         post_agrees(s, conn),
-        crate::connection::post_handshake_spec::can_write(s),
-    ensures ({
-        let (o, s2) = crate::connection::post_handshake_spec::close(f, s);
-        &&& o.wires == seq![crate::transcription::connection::close_write(p, conn)]
-        &&& o.delivered.len() == 0
-        &&& o.end == (if s.phase == Phase::Open { End::Continue } else { End::Close })
-        &&& post_agrees(s2, conn)
-    }),
+    ensures close_agrees(f, p, s, conn),
 {
-    let a = crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description: crate::spec::CLOSE_NOTIFY };
-    lemma_send_record(f, p, s, conn, crate::spec::CT_ALERT, crate::spec::write_alert(a));
-    assert(crate::transcription::alerts::write_alert(0) =~= crate::spec::write_alert(a));
+    if crate::connection::post_handshake_spec::can_write(s) {
+        let a = crate::spec::Alert { level: crate::spec::LEVEL_WARNING, description: crate::spec::CLOSE_NOTIFY };
+        lemma_send_record(f, p, s, conn, crate::spec::CT_ALERT, crate::spec::write_alert(a));
+        assert(crate::transcription::alerts::write_alert(0) =~= crate::spec::write_alert(a));
+    }
 }
 
 /// §7.1, §7.3: the crate's starting state agrees with the transcription's
@@ -661,16 +689,26 @@ pub proof fn lemma_other_type(hs: crate::transcription::state_machine::ClientHan
 // The handshake messages of one record.
 // ---------------------------------------------------------------------------
 
-/// What the crate sends when it fails with `alert`: while its write side is
-/// open, the transcription's `alert_record` of that description (§6.2: a
-/// fatal alert, under the current client key); after its close_notify,
-/// nothing (§6.1).
-pub open spec fn alert_wires(p: Primitives, s: State, c: Connection, alert: u8) -> Seq<Seq<u8>> {
-    if crate::connection::post_handshake_spec::can_write(s) {
-        seq![crate::transcription::connection::alert_record(p, c, alert as nat)]
-    } else {
+/// What the crate sends when it fails with `alert`: the transcription's
+/// `abort_records` of a failure with that alert ([`lemma_abort_records`]).
+/// While the write side is open, its `alert_record` of that description
+/// (§6.2: a fatal alert, under the current client key); after our
+/// close_notify (`write_closed`), nothing (§6.1; the transcription's
+/// modelling choice "Error alerts and closure").
+pub open spec fn alert_wires(p: Primitives, c: Connection, alert: u8) -> Seq<Seq<u8>> {
+    if c.write_closed {
         seq![]
+    } else {
+        seq![crate::transcription::connection::alert_record(p, c, alert as nat)]
     }
+}
+
+/// [`alert_wires`] of a failure's alert is the transcription's
+/// `abort_records` of that failure.
+pub proof fn lemma_abort_records(p: Primitives, c: Connection, e: ClientError, alert: u8)
+    requires crate::transcription::alerts::required_alert(e) == alert as nat,
+    ensures crate::transcription::connection::abort_records(p, c, e) == alert_wires(p, c, alert),
+{
 }
 
 /// [`post_agrees`] with the read side open, except perhaps for the bytes of
@@ -695,7 +733,7 @@ pub open spec fn messages_agree(p: Primitives, s: State, c: Connection,
             &&& s2 == crate::connection::post_handshake_spec::failed()
             &&& t is Abort
             &&& crate::transcription::alerts::required_alert(t->Abort_0) == a as nat
-            &&& o.wires == alert_wires(p, s, c, a)
+            &&& o.wires == alert_wires(p, c, a)
         },
         End::Continue => match t {
             crate::transcription::connection::Receive::Continue(progress) => {
@@ -721,7 +759,7 @@ pub proof fn lemma_fatal(f: crate::traffic::spec::Cipher, p: Primitives, s: Stat
         alert != 0 && alert != 90,
     ensures
         crate::connection::post_handshake_spec::fatal(f, s, alert)
-            == (crate::connection::post_handshake_spec::Out { wires: alert_wires(p, s, c, alert), delivered: seq![],
+            == (crate::connection::post_handshake_spec::Out { wires: alert_wires(p, c, alert), delivered: seq![],
                 end: End::Fail(alert) }, crate::connection::post_handshake_spec::failed()),
 {
     if s.phase == Phase::Open {
@@ -1215,7 +1253,7 @@ pub open spec fn outcome_agrees(p: Primitives, s: State, c: Connection, o: crate
         End::Fail(a) => {
             &&& s2 == crate::connection::post_handshake_spec::failed()
             &&& o.delivered.len() == 0
-            &&& o.wires == alert_wires(p, s, c, a)
+            &&& o.wires == alert_wires(p, c, a)
             &&& failed
         },
         End::PeerAlert(d) => {
@@ -1411,6 +1449,7 @@ pub proof fn lemma_receive_open_facts(s: State, conn: Connection)
         !s.receiver->Some_0.failed,
         conn.handshake.state == ClientState::Connected,
         !conn.read_closed,
+        conn.write_closed == !crate::connection::post_handshake_spec::can_write(s),
 {
     assert(Connection { handshake_fragments: s.reassembly.buf, ..conn } == conn);
 }
@@ -1500,7 +1539,7 @@ pub proof fn lemma_receive(c: crate::schedule::spec::Crypto, f: crate::traffic::
                         };
                         lemma_post_agrees_read(s, conn, s1, after);
                         lemma_content(c, f, p, s1, after, typ, content);
-                        assert forall|a: u8| #[trigger] alert_wires(p, s1, after, a) == alert_wires(p, s, conn, a) by {}
+                        assert forall|a: u8| #[trigger] alert_wires(p, after, a) == alert_wires(p, conn, a) by {}
                     },
                     crate::traffic::spec::Read::NeedMore => {},
                 }
@@ -1640,11 +1679,14 @@ pub proof fn lemma_stream_prefix(p: Primitives, conn: Connection, b: Seq<u8>, re
 // The local operations, and the theorem.
 // ---------------------------------------------------------------------------
 
-/// The crate's `send_application` of at most 2^14 octets and the
-/// transcription's `send_application_data` agree: the same records (with
-/// the owed KeyUpdate of §4.6.3 and §5.3's KeyUpdate before the last
-/// sequence number on both sides, one when both are due), nothing delivered,
-/// and agreeing states.
+/// The crate's `send_application` and the transcription's
+/// `send_application_data` agree: with the write side open (at most 2^14
+/// octets), the same records (with the owed KeyUpdate of §4.6.3 and §5.3's
+/// KeyUpdate before the last sequence number on both sides, one when both
+/// are due), nothing delivered, and agreeing states; after our close_notify
+/// (§6.1, "the sender will not send any more messages on this connection"),
+/// the transcription's `WriteClosed` and the crate's nothing, its state
+/// unchanged.
 pub open spec fn send_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, conn: Connection, data: Seq<u8>) -> bool
 {
@@ -1656,32 +1698,65 @@ pub open spec fn send_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic
             &&& o.end == End::Continue
             &&& post_agrees(s2, conn2)
         },
+        SendResult::WriteClosed => o == crate::connection::post_handshake_spec::quiet() && s2 == s,
         SendResult::NotConnected => false,
     }
 }
 
-/// The crate's `update_keys` and the transcription's `send_key_update` of
-/// the same request agree (an owed answer stays owed on both sides).
+/// **Stated difference, a KeyUpdate asked for while one is owed** (§4.6.3).
+/// The caller asks for a KeyUpdate with `update_not_requested` while the
+/// answer to the server's `update_requested` is owed. Both send the same
+/// record. The transcription's `request_key_update` counts it as the answer
+/// (the receiver "MUST send a KeyUpdate of its own with request_update set
+/// to "update_not_requested" prior to sending its next Application Data
+/// record", and this is one); the crate's `update_keys` keeps the answer
+/// owed (its item 9: "An owed answer stays owed") and sends one more
+/// KeyUpdate before its next application data. Both are allowed: the
+/// obligation is met by the first, and the second is one more KeyUpdate,
+/// which "can be sent by either peer after it has sent a Finished message".
+/// After it the states agree but for the owed flag.
+pub open spec fn update_keeps_owed(s: State, request_peer: bool) -> bool {
+    !request_peer && s.key_update_owed
+}
+
+/// The crate's `update_keys` and the transcription's `request_key_update`
+/// of the same request agree: with the write side open, the same record and
+/// agreeing states (an `update_requested` leaves an owed answer owed on
+/// both sides), but for [`update_keeps_owed`]; after our close_notify
+/// (§6.1), the transcription's `WriteClosed` and the crate's nothing, its
+/// state unchanged.
 pub open spec fn update_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, conn: Connection, request_peer: bool) -> bool
 {
     let (o, s2) = crate::connection::post_handshake_spec::update_keys(c, f, s, request_peer);
-    let (records, conn2) = crate::transcription::connection::send_key_update(p, conn,
+    match crate::transcription::connection::request_key_update(p, conn,
         if request_peer { crate::transcription::post_handshake::update_requested() }
-        else { crate::transcription::post_handshake::update_not_requested() });
-    &&& o.wires == records
-    &&& o.delivered.len() == 0
-    &&& o.end == End::Continue
-    &&& post_agrees(s2, conn2)
+        else { crate::transcription::post_handshake::update_not_requested() })
+    {
+        SendResult::Sent(records, conn2) => {
+            &&& o.wires == records
+            &&& o.delivered.len() == 0
+            &&& o.end == End::Continue
+            &&& post_agrees(s2, if update_keeps_owed(s, request_peer) { Connection { key_update_owed: true, ..conn2 } }
+                else { conn2 })
+        },
+        SendResult::WriteClosed => o == crate::connection::post_handshake_spec::quiet() && s2 == s,
+        SendResult::NotConnected => false,
+    }
 }
 
-/// The crate's `close` sends the transcription's `close_write` record, and
-/// the states still agree.
+/// The crate's `close` and the transcription's `close_write_side` agree
+/// (§6.1): the same records (the close_notify while the write side is open,
+/// nothing after it), nothing delivered, and agreeing states; the crate's
+/// connection ends (`Close`) exactly when the read side had already ended,
+/// that is, when the transcription has then closed both sides.
 pub open spec fn close_agrees(f: crate::traffic::spec::Cipher, p: Primitives, s: State, conn: Connection) -> bool {
     let (o, s2) = crate::connection::post_handshake_spec::close(f, s);
-    &&& o.wires == seq![crate::transcription::connection::close_write(p, conn)]
+    let (records, conn2) = crate::transcription::connection::close_write_side(p, conn);
+    &&& o.wires == records
     &&& o.delivered.len() == 0
-    &&& post_agrees(s2, conn)
+    &&& o.end == (if s.phase == Phase::ReadClosed { End::Close } else { End::Continue })
+    &&& post_agrees(s2, conn2)
 }
 
 /// A stated difference, §5.1 ("The record layer fragments information
@@ -1727,12 +1802,14 @@ pub proof fn lemma_oversized(c: crate::schedule::spec::Crypto, f: crate::traffic
 ///   error alert is `PeerError` on both sides; otherwise both deliver the same
 ///   application data, send nothing (an `update_requested` is owed an answer
 ///   on both sides) and reach agreeing states;
-/// - with the write side open, the crate's `send_application` of at most
-///   2^14 octets is the transcription's `send_application_data`
-///   ([`send_agrees`]), its `update_keys` the transcription's
-///   `send_key_update` ([`update_agrees`]), and its `close` sends the
-///   transcription's `close_write` ([`close_agrees`]); each leaves agreeing
-///   states;
+/// - from agreeing states, the crate's `send_application` (of at most 2^14
+///   octets while the write side is open) is the transcription's
+///   `send_application_data` ([`send_agrees`]), its `update_keys` the
+///   transcription's `request_key_update` ([`update_agrees`], but for
+///   [`update_keeps_owed`]), and its `close` the transcription's
+///   `close_write_side` ([`close_agrees`]); each leaves agreeing states.
+///   After our close_notify, none of them writes anything on either side
+///   (§6.1);
 /// - a stream is read one whole record at a time: the crate's `step` on a
 ///   wire starting with a whole record is its step on that record, and the
 ///   transcription's `receive_stream` of it is its handling of that record
@@ -1769,18 +1846,16 @@ pub proof fn theorem_post_handshake_equivalence(c: crate::schedule::spec::Crypto
             (#[trigger] crate::transcription::connection::receive_stream(p, conn, b + rest)).0
                 == joined(crate::transcription::connection::receive_stream(p, conn, b).0,
                     |c2: Connection| crate::transcription::connection::receive_stream(p, c2, rest).0),
-        // §5, §5.3: application data.
+        // §5, §5.3: application data; §6.1: none after our close_notify.
         forall|s: State, conn: Connection, data: Seq<u8>|
-            #[trigger] post_agrees(s, conn) && crate::connection::post_handshake_spec::can_write(s)
-                && #[trigger] data.len() <= crate::spec::MAX_PLAINTEXT ==> send_agrees(c, f, p, s, conn, data),
-        // §4.6.3: a KeyUpdate of the client's own.
+            #[trigger] post_agrees(s, conn)
+                && (crate::connection::post_handshake_spec::can_write(s) ==> data.len() <= crate::spec::MAX_PLAINTEXT)
+                ==> #[trigger] send_agrees(c, f, p, s, conn, data),
+        // §4.6.3: a KeyUpdate of the client's own; §6.1: none after our close_notify.
         forall|s: State, conn: Connection, request_peer: bool|
-            #[trigger] post_agrees(s, conn) && crate::connection::post_handshake_spec::can_write(s) ==>
-                #[trigger] update_agrees(c, f, p, s, conn, request_peer),
-        // §6.1: close_notify.
-        forall|s: State, conn: Connection|
-            #[trigger] post_agrees(s, conn) && crate::connection::post_handshake_spec::can_write(s) ==>
-                close_agrees(f, p, s, conn),
+            #[trigger] post_agrees(s, conn) ==> #[trigger] update_agrees(c, f, p, s, conn, request_peer),
+        // §6.1: close_notify, once.
+        forall|s: State, conn: Connection| #[trigger] post_agrees(s, conn) ==> close_agrees(f, p, s, conn),
 {
     assert forall|client_secret: Seq<u8>, server_secret: Seq<u8>, conn: Connection|
         client_secret.len() == 32 && server_secret.len() == 32
@@ -1819,18 +1894,20 @@ pub proof fn theorem_post_handshake_equivalence(c: crate::schedule::spec::Crypto
         lemma_stream_prefix(p, conn, b, rest);
     }
     assert forall|s: State, conn: Connection, data: Seq<u8>|
-        #[trigger] post_agrees(s, conn) && crate::connection::post_handshake_spec::can_write(s)
-            && #[trigger] data.len() <= crate::spec::MAX_PLAINTEXT implies send_agrees(c, f, p, s, conn, data) by {
-        lemma_send_application(c, f, p, s, conn, data);
+        #[trigger] post_agrees(s, conn)
+            && (crate::connection::post_handshake_spec::can_write(s) ==> data.len() <= crate::spec::MAX_PLAINTEXT)
+            implies #[trigger] send_agrees(c, f, p, s, conn, data) by {
+        if crate::connection::post_handshake_spec::can_write(s) {
+            lemma_send_application(c, f, p, s, conn, data);
+        } else {
+            lemma_send_closed(c, f, p, s, conn, data);
+        }
     }
     assert forall|s: State, conn: Connection, request_peer: bool|
-        #[trigger] post_agrees(s, conn) && crate::connection::post_handshake_spec::can_write(s) implies
-            #[trigger] update_agrees(c, f, p, s, conn, request_peer) by {
+        #[trigger] post_agrees(s, conn) implies #[trigger] update_agrees(c, f, p, s, conn, request_peer) by {
         lemma_update_keys(c, f, p, s, conn, request_peer);
     }
-    assert forall|s: State, conn: Connection|
-        #[trigger] post_agrees(s, conn) && crate::connection::post_handshake_spec::can_write(s) implies
-            close_agrees(f, p, s, conn) by {
+    assert forall|s: State, conn: Connection| #[trigger] post_agrees(s, conn) implies close_agrees(f, p, s, conn) by {
         lemma_close(f, p, s, conn);
     }
 }

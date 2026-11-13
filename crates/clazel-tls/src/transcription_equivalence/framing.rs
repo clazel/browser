@@ -1084,7 +1084,7 @@ pub proof fn lemma_client_lifted(p: Primitives, cl: crate::transcription::middle
 pub proof fn lemma_boot_agrees_facts(p: Primitives, s: crate::hello::bootstrap_spec::State,
     cl: crate::transcription::middlebox::ClientConnection)
     requires super::bootstrap::bootstrap_agrees(p, s, cl),
-    ensures mode_agrees(cl.connection, false), !cl.connection.read_closed,
+    ensures mode_agrees(cl.connection, false), !cl.connection.read_closed, !cl.connection.write_closed,
         s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello,
 {
 }
@@ -1619,6 +1619,7 @@ pub proof fn lemma_disp_agrees_facts(p: Primitives, v: crate::auth::spec::Verifi
     ensures
         mode_agrees(cl.connection, true),
         !cl.connection.read_closed,
+        !cl.connection.write_closed,
         s.mode == crate::connection::dispatcher_spec::Mode::Handshake,
         s.framing.len() == 0,
         super::dispatcher::sender_fresh(p, s, cl.connection),
@@ -2006,7 +2007,7 @@ pub open spec fn post_partial_agrees(c: crate::schedule::spec::Crypto, f: crate:
     } else {
         let a = r.0.end->Fail_0;
         &&& r.0.end is Fail
-        &&& r.0 == (crate::connection::post_handshake_spec::Out { wires: super::post_handshake::alert_wires(p, s, conn, a),
+        &&& r.0 == (crate::connection::post_handshake_spec::Out { wires: super::post_handshake::alert_wires(p, conn, a),
             delivered: seq![], end: crate::connection::post_handshake_spec::End::Fail(a) })
         &&& r.1 == crate::connection::post_handshake_spec::failed()
         &&& ((super::post_handshake::exhausted(s) && a == crate::spec::INTERNAL_ERROR && (tr == quiet_t || tr is Abort))

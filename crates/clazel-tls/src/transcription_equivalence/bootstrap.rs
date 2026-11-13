@@ -191,6 +191,7 @@ pub open spec fn agrees_but_buffer(p: Primitives, s: State, cl: ClientConnection
     &&& c.send == Protection::Unprotected
     &&& !c.read_closed
     &&& !c.key_update_owed
+    &&& !c.write_closed
     &&& cl.compatibility_mode == s.compatibility
     &&& cl.change_cipher_spec_sent == (s.hello->Some_0.transcript.retried && s.compatibility)
 }
@@ -513,7 +514,7 @@ pub proof fn lemma_process_one(p: Primitives, c: Connection, bf: Seq<u8>)
 
 /// The ClientHello2 record, as `apply_actions` writes it unprotected.
 pub proof fn lemma_send_flight(p: Primitives, c: Connection, flight: Seq<u8>, version: nat)
-    requires c.send == Protection::Unprotected, flight.len() <= 0x4000,
+    requires c.send == Protection::Unprotected, !c.write_closed, flight.len() <= 0x4000,
     ensures ({
         let actions = seq![crate::transcription::state_machine::Action::SendHandshake(flight, version)];
         let (after, sent) = crate::transcription::connection::apply_actions(p, c, actions);
@@ -854,7 +855,7 @@ pub proof fn lemma_start(p: Primitives, c: crate::hello::client_spec::Config,
             let first = super::client::ch_view(crate::hello::client_spec::client_hello(c, Seq::empty()));
             let hs = crate::transcription::state_machine::start_handshake(first, x25519_private_key, retry_private_key);
             let c0 = Connection { handshake: hs, receive: Protection::Unprotected, send: Protection::Unprotected,
-                handshake_fragments: seq![], read_closed: false, key_update_owed: false };
+                handshake_fragments: seq![], read_closed: false, key_update_owed: false, write_closed: false };
             lemma_send_flight(p, c0, flight, 0x0301);
             super::record::lemma_write_plaintext(22, 0x0301, flight);
             let r = crate::transcription::record::write_tls_plaintext(22, 0x0301, flight);
