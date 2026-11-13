@@ -3,8 +3,8 @@
 //! makes every operation of `driver_exec::Driver` a function of its state)
 //! against the clean-room transcription's client (`middlebox::start_client`
 //! and `client_receive_stream`, `connection::send_application_data`,
-//! `close_write` and `alert_record`), from the configuration to the end of
-//! the connection: [`theorem_driver_equivalence`].
+//! `close_write_side` and `abort_records`), from the configuration to the
+//! end of the connection: [`theorem_driver_equivalence`].
 //!
 //! **What is compared.** Both sides are driven by the same caller
 //! operations ([`Op`]): the next chunk of the server's stream, in any size
@@ -19,9 +19,9 @@
 //! chunk, as `connection::receive_stream` reads its first (so it waits
 //! exactly when that function waits, and reads the same records), through
 //! `middlebox::client_receive_stream`; on an abort it writes
-//! `connection::abort_record`; it sends with `send_application_data` and
-//! closes with `close_write`, and writes nothing after its close_notify
-//! (the transcription has no write-closed state of its own).
+//! `connection::abort_records`; it sends with `send_application_data` and
+//! closes with `close_write_side`. Whether our close_notify has gone out is
+//! the transcription's own `write_closed` (§6.1), which those three read.
 //!
 //! **The theorem** ([`theorem_driver_equivalence`]): from the start
 //! ([`start_agrees`]: the crate's first record is `start_client`'s, against
@@ -32,7 +32,8 @@
 //! across both handoffs (the bootstrap to the dispatcher at the ServerHello,
 //! [`lemma_handoff`]; the dispatcher to the transducer at the acknowledged
 //! client flight, `dispatcher::ack_agrees`); or both end alike
-//! ([`ends_alike`]); or the crate rejects a record and the record-level
+//! ([`ends_alike`]), or both close both directions ([`closes_alike`]); or
+//! the crate rejects a record and the record-level
 //! theorem of its stage relates the transcription's handling of it
 //! ([`rejects_record`]: the alerts equal, or the crate's that of some
 //! failure in the transcription's list, or a stated difference of that
@@ -42,8 +43,19 @@
 //! theorem's `bootstrap_agrees` with the bytes held and A.1's WAIT_SH fields
 //! ([`hello_agrees`], [`wait_sh_fields`]); the dispatcher theorem's
 //! `dispatcher_agrees` ([`flight_agrees`]); the post-handshake theorem's
-//! `post_agrees` with the read side open and the write side closed on both
-//! sides together ([`app_agrees`]); the status that of the stage.
+//! `post_agrees` with the read side open ([`app_agrees`]); the status that
+//! of the stage. In each, the crate's write side has ended exactly when the
+//! transcription's `write_closed` is set (never before the handshake
+//! completes: a close there ends the comparison, [`closes_in_handshake`]).
+//!
+//! **After our close_notify** (§6.1), the comparison goes on exactly: a send
+//! is the crate's nothing against the transcription's `WriteClosed`; a
+//! second close writes nothing on either side; a record is read as before
+//! (application data delivered, a KeyUpdate updating the read keys and,
+//! on `update_requested`, owed on both sides and never sent); an error is
+//! no alert on either side (`abort_records`); the server's error alert is
+//! `PeerError`; and the server's close_notify closes both directions on
+//! both sides with nothing written ([`closes_alike`]).
 //!
 //! **KeyUpdate.** Both sides owe the answer to `update_requested` (§4.6.3:
 //! "prior to sending its next Application Data record") and record it the
@@ -89,14 +101,17 @@
 //!   [`validators`]. No record is outside the comparison.
 //!
 //! **Stated differences** (each a definition): [`rejects_early`] (the
-//! framer's timing on a header), [`peer_closed`] (the server's close_notify:
-//! the crate answers with the transcription's `close_write` record and
-//! ends), [`retry_then_fails`] (ClientHello2 sent before a later message of
+//! framer's timing on a header), [`peer_closed`] (the server's close_notify
+//! while our write side is open, in any stage: the crate answers at once
+//! with the record of the transcription's `close_write_side` and ends; the
+//! transcription closes its read side only), [`retry_then_fails`]
+//! (ClientHello2 sent before a later message of
 //! its record fails), [`goes_on_coalesced`] (the client's flight in one
 //! record; the comparison goes on),
 //! [`exhausted_epoch`], [`oversized`] (application data above 2^14 octets)
-//! and [`closes_in_handshake`] (a close before the handshake completes ends
-//! the crate's connection).
+//! and [`closes_in_handshake`] (a close before the handshake completes:
+//! both write the close_notify and close their write side; the crate also
+//! stops reading, the transcription reads on).
 //!
 //! **Not covered:** transport end of file (`Driver::eof`: the crate ends
 //! with `Failed(internal_error, Truncated)` and sends nothing, whatever the
@@ -316,25 +331,21 @@ pub proof fn lemma_cstart(m: Models, config: crate::hello::client_spec::Config, 
 // ---------------------------------------------------------------------------
 
 /// The transcription's client as its caller holds it: the
-/// `middlebox::ClientConnection`, the bytes of the stream not yet read as a
-/// whole record, and whether the caller has closed the write side (the
-/// transcription itself has no write-closed state, see
-/// `post_handshake`'s "Not covered"; its caller does not write after
-/// `close_write`, §6.1).
+/// `middlebox::ClientConnection` and the bytes of the stream not yet read as
+/// a whole record. Whether our close_notify has gone out is the
+/// transcription's own `write_closed` (§6.1).
 pub struct TState {
     /// The client.
     pub client: ClientConnection,
     /// Bytes of the stream not yet read.
     pub buffer: Seq<u8>,
-    /// The caller wrote `close_write`'s record.
-    pub write_closed: bool,
 }
 
 /// How a call left the transcription's client.
 pub enum TEnd {
     /// It goes on.
     Running,
-    /// §6.2: it aborted with this error (its caller wrote `abort_record`).
+    /// §6.2: it aborted with this error (its caller wrote `abort_records`).
     Aborted(ClientError),
     /// §6: the peer's error alert.
     Peer(nat),
@@ -363,14 +374,13 @@ pub open spec fn flat(records: Seq<Seq<u8>>) -> Seq<u8> {
 /// reads its first (`record::read_record_header`, `record_length_failure`,
 /// five bytes and `length` more), with `middlebox::client_receive_stream` of
 /// that record (so D.4's dummy record included); otherwise it holds the
-/// bytes. On an abort it writes `connection::abort_record` of the error, at
-/// the connection it had when the record arrived, unless it has closed its
-/// write side (§6.1, as for application data).
+/// bytes. On an abort it writes `connection::abort_records` of the error, at
+/// the connection it had when the record arrived: the fatal alert, or
+/// nothing after our close_notify (§6.1).
 pub open spec fn tfeed(p: Primitives, ts: TState, chunk: Seq<u8>) -> TOut {
     let w = ts.buffer + chunk;
     let c = ts.client.connection;
-    let alert = |e: ClientError| if ts.write_closed { Seq::<u8>::empty() }
-        else { crate::transcription::connection::abort_record(p, c, e) };
+    let alert = |e: ClientError| abort_bytes(p, ts, e);
     let wait = TOut { send: seq![], deliver: seq![], after: TState { buffer: w, ..ts }, end: TEnd::Running };
     match crate::transcription::record::read_record_header(w) {
         None => wait,
@@ -394,38 +404,38 @@ pub open spec fn tfeed(p: Primitives, ts: TState, chunk: Seq<u8>) -> TOut {
     }
 }
 
-/// What the transcription's caller writes on an abort.
+/// What the transcription's caller writes on an abort: the record of
+/// `connection::abort_records`, which is one record (the fatal alert) or
+/// none (after our close_notify, §6.1).
 pub open spec fn abort_bytes(p: Primitives, ts: TState, e: ClientError) -> Seq<u8> {
-    if ts.write_closed { Seq::<u8>::empty() } else { crate::transcription::connection::abort_record(p, ts.client.connection, e) }
+    let records = crate::transcription::connection::abort_records(p, ts.client.connection, e);
+    if records.len() == 0 { Seq::<u8>::empty() } else { records[0] }
 }
 
 /// The transcription's caller sends application data
 /// (`connection::send_application_data`; after the handshake D.4 adds
-/// nothing, `middlebox`'s last modelling choice). Before CONNECTED nothing
-/// is sent; after its `close_write`, the caller sends nothing.
+/// nothing, `middlebox`'s last modelling choice). Before CONNECTED
+/// (`NotConnected`) and after our close_notify (`WriteClosed`, §6.1)
+/// nothing is sent.
 pub open spec fn tsend(p: Primitives, ts: TState, data: Seq<u8>) -> TOut {
     let quiet = TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Running };
-    if ts.write_closed {
-        quiet
-    } else {
-        match crate::transcription::connection::send_application_data(p, ts.client.connection, data) {
-            crate::transcription::connection::SendResult::NotConnected => quiet,
-            crate::transcription::connection::SendResult::Sent(records, c2) => TOut { send: flat(records),
-                deliver: seq![], after: TState { client: ClientConnection { connection: c2, ..ts.client }, ..ts },
-                end: TEnd::Running },
-        }
+    match crate::transcription::connection::send_application_data(p, ts.client.connection, data) {
+        crate::transcription::connection::SendResult::NotConnected => quiet,
+        crate::transcription::connection::SendResult::WriteClosed => quiet,
+        crate::transcription::connection::SendResult::Sent(records, c2) => TOut { send: flat(records),
+            deliver: seq![], after: TState { client: ClientConnection { connection: c2, ..ts.client }, ..ts },
+            end: TEnd::Running },
     }
 }
 
 /// The transcription's caller closes its write side (§6.1,
-/// `connection::close_write`), once.
+/// `connection::close_write_side`: the close_notify once, then nothing).
+/// After the handshake D.4 adds nothing; during it, the close_notify is not
+/// the client's second flight, so no dummy record goes before it.
 pub open spec fn tclose(p: Primitives, ts: TState) -> TOut {
-    if ts.write_closed {
-        TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Running }
-    } else {
-        TOut { send: crate::transcription::connection::close_write(p, ts.client.connection), deliver: seq![],
-            after: TState { write_closed: true, ..ts }, end: TEnd::Running }
-    }
+    let (records, c2) = crate::transcription::connection::close_write_side(p, ts.client.connection);
+    TOut { send: flat(records), deliver: seq![],
+        after: TState { client: ClientConnection { connection: c2, ..ts.client }, ..ts }, end: TEnd::Running }
 }
 
 /// One operation of the caller on the transcription's client.
@@ -446,7 +456,7 @@ pub open spec fn tstart(p: Primitives, config: crate::hello::client_spec::Config
 {
     let first = super::client::ch_view(crate::hello::client_spec::client_hello(config, Seq::empty()));
     let (cl, records) = crate::transcription::middlebox::start_client(p, tconfig, first, scalar, scalar);
-    (TState { client: cl, buffer: seq![], write_closed: false }, flat(records))
+    (TState { client: cl, buffer: seq![] }, flat(records))
 }
 
 // ---------------------------------------------------------------------------
@@ -664,7 +674,6 @@ pub open spec fn hello_agrees(p: Primitives, scalar: Seq<u8>,
     &&& ts.buffer == framing + held
     &&& crate::connection::framing_spec::wf_mode(framing, false)
     &&& crate::spec::read_record(framing, false) is NeedMore
-    &&& !ts.write_closed
     &&& wait_sh_fields(ts.client.connection.handshake, scalar)
 }
 
@@ -680,21 +689,20 @@ pub open spec fn flight_agrees(p: Primitives, v: crate::auth::spec::Verification
     &&& super::dispatcher::dispatcher_agrees(p, v, crate::connection::dispatcher_spec::State { framing: seq![], ..s },
         ts.client)
     &&& ts.buffer == s.framing + held
-    &&& !ts.write_closed
 }
 
 /// The application stage and the transcription's client agree: the
-/// post-handshake theorem's relation with the read side open (the driver
-/// closes as soon as the server's close_notify arrives, `driver_spec`
-/// choice 5), the bytes held, the write side closed on both sides together,
-/// and the status that of the phase.
+/// post-handshake theorem's relation (in which the crate's write side has
+/// ended exactly when the transcription's `write_closed` is set) with the
+/// read side open (the driver closes as soon as the server's close_notify
+/// arrives, `driver_spec` choice 5), the bytes held, and the status that of
+/// the phase.
 pub open spec fn app_agrees(s: crate::connection::post_handshake_spec::State, status: Status, held: Seq<u8>,
     ts: TState) -> bool
 {
     &&& super::post_handshake::post_agrees(s, ts.client.connection)
     &&& crate::connection::post_handshake_spec::can_read(s)
     &&& ts.buffer == held
-    &&& ts.write_closed == (s.phase == crate::connection::post_handshake_spec::Phase::WriteClosed)
     &&& status == (if s.phase == crate::connection::post_handshake_spec::Phase::WriteClosed { Status::Closing }
         else { Status::Open })
 }
@@ -726,7 +734,8 @@ pub open spec fn goes_on(m: Models, p: Primitives, scalar: Seq<u8>, cout: Step, 
 
 /// Both end the same way, with the same bytes: a failure of the client
 /// with the same alert (the crate's last record, if its write side is open,
-/// is the transcription's `abort_record`), or the server's error alert.
+/// is the transcription's `abort_records`: the fatal alert, or nothing after
+/// our close_notify), or the server's error alert.
 pub open spec fn ends_alike(cout: Step, tout: TOut) -> bool {
     &&& cout.stage is Ended
     &&& cout.send == tout.send
@@ -806,20 +815,50 @@ pub open spec fn rejects_early(cs: CState, ts: TState, chunk: Seq<u8>, cout: Ste
             && super::framing::too_long_agrees(super::framing::SplitEnd::TooLong(e), w, protected, cout.status->Failed_0)))
 }
 
-/// **Stated difference, the server's close_notify** (§6.1): the crate
-/// answers it with exactly the transcription's `close_write` record (if its
-/// write side is open) and ends the connection (`driver_spec` choice 5,
-/// and the dispatcher's and bootstrap's closing); the transcription stops
-/// reading (`read_closed`) and writes nothing.
-pub open spec fn peer_closed(p: Primitives, ts: TState, cout: Step, tout: TOut) -> bool {
+/// **Both directions closed** (§6.1), compared exactly: the server's
+/// close_notify after ours. Neither writes anything (ours has gone out), both
+/// deliver the same data, and both have closed both directions: the crate's
+/// connection is `Closed`, and the transcription's `read_closed` (its
+/// `end_of_data`) and `write_closed` are both set, so it neither reads
+/// ("Any data received after a closure alert has been received MUST be
+/// ignored") nor writes again.
+pub open spec fn closes_alike(cout: Step, tout: TOut) -> bool {
     &&& cout.stage is Ended
     &&& cout.status == Status::Closed
-    &&& cout.send == (if ts.write_closed { Seq::<u8>::empty() }
-        else { crate::transcription::connection::close_write(p, tout.after.client.connection) })
+    &&& cout.send == tout.send
+    &&& cout.deliver == tout.deliver
+    &&& tout.end is Running
+    &&& tout.after.client.connection.read_closed
+    &&& tout.after.client.connection.write_closed
+}
+
+/// **Stated difference, the server's close_notify while our write side is
+/// open** (§6.1), before or after the handshake completes. The crate answers
+/// it at once with its own close_notify and ends the connection
+/// (`driver_spec` choice 5, and the bootstrap's and dispatcher's closing):
+/// what it writes is exactly the record the transcription's
+/// `close_write_side` would write next, from the transcription's state after
+/// the record. The transcription only closes its read side (`read_closed`),
+/// writes nothing and keeps its write side open, leaving its own
+/// close_notify to its caller. Both are allowed: "Either party MAY initiate a
+/// close of its write side of the connection by sending a "close_notify"
+/// alert", and the immediate answer is no longer required, not forbidden:
+/// "Note that this is a change from versions of TLS prior to TLS 1.3 in which
+/// implementations were required to react to a "close_notify" by discarding
+/// pending writes and sending an immediate "close_notify" alert of their
+/// own." During the handshake the transcription's handshake can then never
+/// complete either (it ignores what the server sends next), so the two
+/// differ only in when our close_notify goes out.
+pub open spec fn peer_closed(p: Primitives, cout: Step, tout: TOut) -> bool {
+    let after = tout.after.client.connection;
+    &&& cout.stage is Ended
+    &&& cout.status == Status::Closed
+    &&& seq![cout.send] == crate::transcription::connection::close_write_side(p, after).0
     &&& cout.deliver == tout.deliver
     &&& tout.end is Running
     &&& tout.send.len() == 0
-    &&& tout.after.client.connection.read_closed
+    &&& after.read_closed
+    &&& !after.write_closed
 }
 
 /// **Stated difference, a failure after ClientHello2** (`bootstrap`'s
@@ -893,7 +932,8 @@ pub open spec fn feed_verdict(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     ||| ends_alike(cout, tout)
     ||| rejects_record(m, p, cs, ts, chunk, cout)
     ||| rejects_early(cs, ts, chunk, cout, tout)
-    ||| peer_closed(p, ts, cout, tout)
+    ||| closes_alike(cout, tout)
+    ||| peer_closed(p, cout, tout)
     ||| retry_then_fails(m, p, cs, ts, chunk, cout, tout)
     ||| goes_on_coalesced(m, p, scalar, ts, cout, cs2, tout)
     ||| exhausted_epoch(cs, cout, tout)
@@ -913,12 +953,25 @@ pub open spec fn oversized(cs: CState, data: Seq<u8>, cout: Step, tout: TOut) ->
     &&& tout.end is Running
 }
 
-/// **Stated difference, a close before the handshake completes** (§6.1):
-/// both write the same close_notify (in plaintext before the ServerHello,
-/// under the client handshake key in the server's flight, A.1's note), and
-/// the crate ends the connection; the transcription, which has no
-/// write-closed state, has only written the record (its caller writes
-/// nothing more).
+/// **Stated difference, a close before the handshake completes** (§6.1).
+/// Both write the same close_notify (`close_write_side`: in plaintext before
+/// the ServerHello, under the client handshake key in the server's flight,
+/// A.1's note) and both close their write side (`write_closed`). The crate
+/// then ends the connection: it reads nothing more. The transcription keeps
+/// reading, as its modelling choice "closing the write side during the
+/// handshake" says ("This does not have any effect on its read side of the
+/// connection"): A.1's state still moves on what the server sends, its own
+/// handshake sends are withheld, and once in CONNECTED it would deliver the
+/// server's application data. Both are allowed: §6.1 puts no time on
+/// "Either party MAY initiate a close of its write side", user_canceled
+/// ("canceling the handshake ... SHOULD be followed by a "close_notify"")
+/// presumes a close_notify that ends a handshake, and the crate's closing
+/// its read side at the same time is allowed too: "Both parties need not
+/// wait to receive a "close_notify" alert before closing their read side of
+/// the connection, though doing so would introduce the possibility of
+/// truncation" (what the server sends afterwards, application data after
+/// its Finished included, is not read by the crate; the transcription
+/// would deliver it).
 pub open spec fn closes_in_handshake(cout: Step, tout: TOut) -> bool {
     &&& cout.stage is Ended
     &&& cout.status == Status::Closed
@@ -926,7 +979,8 @@ pub open spec fn closes_in_handshake(cout: Step, tout: TOut) -> bool {
     &&& cout.deliver.len() == 0
     &&& tout.deliver.len() == 0
     &&& tout.end is Running
-    &&& tout.after.write_closed
+    &&& tout.after.client.connection.write_closed
+    &&& !tout.after.client.connection.read_closed
 }
 
 /// The outcomes of one operation compare.
@@ -1044,6 +1098,7 @@ pub proof fn lemma_hello_facts(p: Primitives, scalar: Seq<u8>, s: crate::hello::
         &&& c.send == Protection::Unprotected
         &&& c.receive == Protection::Unprotected
         &&& !c.read_closed
+        &&& !c.write_closed
         &&& c.handshake.state == crate::transcription::state_machine::ClientState::WaitSh
         &&& s.mode == crate::hello::bootstrap_spec::Mode::AwaitServerHello
         &&& tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 {
@@ -1084,6 +1139,7 @@ pub proof fn lemma_hello_fail(m: Models, p: Primitives, scalar: Seq<u8>, s: crat
     hide(goes_on);
     hide(rejects_early);
     hide(peer_closed);
+    hide(closes_alike);
     hide(retry_then_fails);
     hide(super::bootstrap::bootstrap_agrees);
     let w = ts.buffer + chunk;
@@ -1114,7 +1170,7 @@ pub proof fn lemma_hello_alert(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
 }
 
 /// The server's close_notify before the handshake keys: the crate answers
-/// with the transcription's `close_write` record and ends; the
+/// with the record of the transcription's `close_write_side` and ends; the
 /// transcription stops reading ([`peer_closed`]).
 pub proof fn lemma_hello_close(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::hello::bootstrap_spec::State,
     framing: Seq<u8>, held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
@@ -1126,9 +1182,15 @@ pub proof fn lemma_hello_close(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
     ensures hello_whole(m, p, scalar, s, framing, held, ts, chunk, cs2),
 {
     lemma_hello_facts(p, scalar, s, framing, held, ts, chunk);
-    lemma_alert_record_plain(p, ts.client.connection, 0);
     let w = ts.buffer + chunk;
     let b = front(w);
+    let after = Connection { read_closed: true, ..ts.client.connection };
+    assert(!ts.client.connection.write_closed) by {
+        super::framing::lemma_boot_agrees_facts(p, s, ts.client);
+    }
+    lemma_alert_record_plain(p, after, 0);
+    super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, after),
+        crate::transcription::connection::close_write(p, after));
     assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
 }
 
@@ -1201,13 +1263,14 @@ pub proof fn lemma_offered_schemes(c: crate::hello::client_spec::Config, cookie:
         by (compute_only);
 }
 
-/// A.1's actions never change the handshake state, the read side or the
+/// A.1's actions never change the handshake state, either closure or the
 /// bytes of an unfinished message.
 pub proof fn lemma_apply_keeps(p: Primitives, c: Connection, actions: Seq<crate::transcription::state_machine::Action>)
     ensures ({
         let after = crate::transcription::connection::apply_actions(p, c, actions).0;
         &&& after.handshake == c.handshake
         &&& after.read_closed == c.read_closed
+        &&& after.write_closed == c.write_closed
         &&& after.handshake_fragments == c.handshake_fragments
     }),
     decreases actions.len(),
@@ -1216,10 +1279,14 @@ pub proof fn lemma_apply_keeps(p: Primitives, c: Connection, actions: Seq<crate:
         let tail = actions.subrange(1, actions.len() as int);
         match actions[0] {
             crate::transcription::state_machine::Action::SendHandshake(message, version) => {
-                let (records, send) = crate::transcription::connection::send_blocks(p, c.send,
-                    crate::transcription::record::ct_handshake(), version,
-                    crate::transcription::record::fragment_blocks(message));
-                lemma_apply_keeps(p, Connection { send, ..c }, tail);
+                if c.write_closed {
+                    lemma_apply_keeps(p, c, tail);
+                } else {
+                    let (records, send) = crate::transcription::connection::send_blocks(p, c.send,
+                        crate::transcription::record::ct_handshake(), version,
+                        crate::transcription::record::fragment_blocks(message));
+                    lemma_apply_keeps(p, Connection { send, ..c }, tail);
+                }
             },
             crate::transcription::state_machine::Action::SetReceiveSecret(secret) =>
                 lemma_apply_keeps(p, Connection { receive: Protection::Protected(
@@ -1550,6 +1617,7 @@ pub proof fn lemma_hello_established(m: Models, p: Primitives, scalar: Seq<u8>, 
     hide(rejects_record);
     hide(rejects_early);
     hide(peer_closed);
+    hide(closes_alike);
     hide(retry_then_fails);
     let w = ts.buffer + chunk;
     let b = front(w);
@@ -1601,6 +1669,7 @@ pub proof fn lemma_hello_send(m: Models, p: Primitives, scalar: Seq<u8>, s: crat
     hide(rejects_record);
     hide(rejects_early);
     hide(peer_closed);
+    hide(closes_alike);
     hide(ends_alike);
     hide(crate::transcription::state_machine::receive_handshake_message);
     let w = ts.buffer + chunk;
@@ -1779,7 +1848,7 @@ pub proof fn lemma_flight_facts(m: Models, p: Primitives, s: crate::connection::
         &&& super::dispatcher::record_agrees(m.crypto, m.verification, ciphers(m), p, s0, ts.client, b)
         &&& super::dispatcher::in_flight(y.handshake.state)
         &&& !y.read_closed
-        &&& !ts.write_closed
+        &&& !y.write_closed
         &&& tfeed(p, ts, chunk) == match crate::transcription::middlebox::client_receive_stream(p, ts.client, b).0 {
             ClientReceive::Abort(e) => TOut { send: abort_bytes(p, ts, e), deliver: seq![], after: ts, end: TEnd::Aborted(e) },
             ClientReceive::PeerError(d) => TOut { send: seq![], deliver: seq![], after: ts, end: TEnd::Peer(d) },
@@ -1862,6 +1931,7 @@ pub proof fn lemma_flight_quiet(m: Models, p: Primitives, scalar: Seq<u8>, s: cr
     hide(exhausted_epoch);
     hide(goes_on_coalesced);
     hide(peer_closed);
+    hide(closes_alike);
     hide(ends_alike);
     let w = ts.buffer + chunk;
     let n = 5 + super::bootstrap::length(w);
@@ -1915,6 +1985,7 @@ pub proof fn lemma_flight_send(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
     hide(retry_then_fails);
     hide(exhausted_epoch);
     hide(peer_closed);
+    hide(closes_alike);
     hide(ends_alike);
     let c = m.crypto;
     let v = m.verification;
@@ -1986,6 +2057,7 @@ pub proof fn lemma_flight_fail(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
     hide(exhausted_epoch);
     hide(goes_on_coalesced);
     hide(peer_closed);
+    hide(closes_alike);
     hide(goes_on);
     let w = ts.buffer + chunk;
     let s0 = crate::connection::dispatcher_spec::State { framing: seq![], ..s };
@@ -1993,6 +2065,7 @@ pub proof fn lemma_flight_fail(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
     let u = crate::transcription::middlebox::client_receive_stream(p, ts.client, front(w)).0;
     let cout = crate::connection::driver_spec::flight_out(m.crypto, m.verification, ciphers(m), a, s2);
     let tout = tfeed(p, ts, chunk);
+    super::framing::lemma_disp_agrees_facts(p, m.verification, s0, ts.client);
     if let ClientReceive::Abort(e) = u {
         if let crate::connection::dispatcher_spec::Action::Fail(alert, _) = a {
             if crate::transcription::alerts::required_alert(e) == alert as nat {
@@ -2003,8 +2076,8 @@ pub proof fn lemma_flight_fail(m: Models, p: Primitives, scalar: Seq<u8>, s: cra
 }
 
 /// The flight's step on the server's close_notify: the crate answers with
-/// the transcription's `close_write` record and ends; the transcription
-/// stops reading ([`peer_closed`]).
+/// the record of the transcription's `close_write_side` and ends; the
+/// transcription stops reading ([`peer_closed`]).
 pub proof fn lemma_flight_close(m: Models, p: Primitives, scalar: Seq<u8>, s: crate::connection::dispatcher_spec::State,
     held: Seq<u8>, ts: TState, chunk: Seq<u8>, cs2: CState)
     requires
@@ -2046,8 +2119,10 @@ pub proof fn lemma_flight_close(m: Models, p: Primitives, scalar: Seq<u8>, s: cr
     assert(pr.application_data =~= Seq::<u8>::empty());
     assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
     super::dispatcher::lemma_alert_record_kept(p, y, pr.connection, 0);
+    super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, pr.connection),
+        crate::transcription::connection::close_write(p, pr.connection));
     let cout = crate::connection::driver_spec::flight_out(m.crypto, m.verification, ciphers(m), a, s2);
-    assert(peer_closed(p, ts, cout, tfeed(p, ts, chunk)));
+    assert(peer_closed(p, cout, tfeed(p, ts, chunk)));
 }
 
 /// The flight stage on a whole record.
@@ -2107,6 +2182,7 @@ pub proof fn lemma_flight_partial(m: Models, p: Primitives, scalar: Seq<u8>, cs:
     hide(exhausted_epoch);
     hide(goes_on_coalesced);
     hide(peer_closed);
+    hide(closes_alike);
     hide(ends_alike);
     let s = cs.stage->Flight_0;
     let c = m.crypto;
@@ -2437,6 +2513,7 @@ pub proof fn lemma_app_continue(m: Models, p: Primitives, scalar: Seq<u8>, cs: C
     hide(goes_on_coalesced);
     hide(exhausted_epoch);
     hide(peer_closed);
+    hide(closes_alike);
     hide(ends_alike);
     let s = cs.stage->App_0;
     let f = m.cipher;
@@ -2455,7 +2532,6 @@ pub proof fn lemma_app_continue(m: Models, p: Primitives, scalar: Seq<u8>, cs: C
     assert(pr.records_to_send =~= Seq::<Seq<u8>>::empty());
     assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
     lemma_concat_flat(r.0.wires);
-    assert(ts.write_closed == (s.phase == crate::connection::post_handshake_spec::Phase::WriteClosed));
     assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
     assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
     assert(goes_on(m, p, scalar, cout, cs2, tout));
@@ -2491,6 +2567,7 @@ pub proof fn lemma_app_fail(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
     hide(goes_on_coalesced);
     hide(exhausted_epoch);
     hide(peer_closed);
+    hide(closes_alike);
     hide(goes_on);
     let s = cs.stage->App_0;
     let f = m.cipher;
@@ -2505,15 +2582,17 @@ pub proof fn lemma_app_fail(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
     assert(cop(m, scalar, cs, Op::Feed(chunk)) == (cout, cs2));
     let tout = tfeed(p, ts, chunk);
     lemma_concat_flat(r.0.wires);
-    assert(ts.write_closed == !crate::connection::post_handshake_spec::can_write(s));
     match r.0.end {
         crate::connection::post_handshake_spec::End::Fail(a) => {
             if let Receive::Abort(e) = tb {
                 if crate::transcription::alerts::required_alert(e) == a as nat {
+                    super::post_handshake::lemma_abort_records(p, conn, e, a);
                     super::ccs::lemma_flatten(crate::transcription::connection::alert_record(p, conn, a as nat),
                         crate::transcription::connection::alert_record(p, conn, a as nat));
                     assert(Seq::<u8>::empty() + crate::transcription::connection::alert_record(p, conn, a as nat)
                         =~= crate::transcription::connection::alert_record(p, conn, a as nat));
+                    assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
+                    assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
                     assert(r.0.delivered =~= Seq::<u8>::empty());
                     assert(ends_alike(cout, tout));
                 }
@@ -2528,9 +2607,11 @@ pub proof fn lemma_app_fail(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
     }
 }
 
-/// The application stage on the server's close_notify: the crate answers
-/// with the transcription's `close_write` record if its write side is open,
-/// and ends; the transcription stops reading ([`peer_closed`]).
+/// The application stage on the server's close_notify: if our write side
+/// is open, the crate answers with the record of the transcription's
+/// `close_write_side` and ends, and the transcription stops reading
+/// ([`peer_closed`]); after our close_notify, both have closed both
+/// directions ([`closes_alike`]).
 #[verifier::rlimit(80)]
 pub proof fn lemma_app_closed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState, chunk: Seq<u8>)
     requires
@@ -2576,22 +2657,25 @@ pub proof fn lemma_app_closed(m: Models, p: Primitives, scalar: Seq<u8>, cs: CSt
     assert(flat(Seq::<Seq<u8>>::empty()) == Seq::<u8>::empty());
     lemma_concat_flat(r.0.wires);
     if r.0.end is PeerClosed {
+        // Our write side was open: the crate answers with the record the
+        // transcription's `close_write_side` would write next.
         assert(r.1.phase == crate::connection::post_handshake_spec::Phase::ReadClosed);
         super::post_handshake::lemma_close(f, p, r.1, conn2);
         let rc = crate::connection::post_handshake_spec::close(f, r.1);
         lemma_concat_flat(rc.0.wires);
-        super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, conn2),
-            crate::transcription::connection::close_write(p, conn2));
+        let x = crate::transcription::connection::close_write(p, conn2);
+        assert(!conn2.write_closed);
+        assert(rc.0.wires == seq![x]);
+        super::ccs::lemma_flatten(x, x);
         assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
-        assert(Seq::<u8>::empty() + crate::transcription::connection::close_write(p, conn2)
-            =~= crate::transcription::connection::close_write(p, conn2));
-        assert(ts.write_closed == false);
-        assert(peer_closed(p, ts, cout, tout));
+        assert(Seq::<u8>::empty() + x =~= x);
+        assert(peer_closed(p, cout, tout));
     } else {
+        // Our close_notify had gone out: both have closed both directions.
         assert(r.1.phase == crate::connection::post_handshake_spec::Phase::Closed);
         assert(r.0.wires =~= Seq::<Seq<u8>>::empty());
         assert(Seq::<u8>::empty() + Seq::<u8>::empty() =~= Seq::<u8>::empty());
-        assert(peer_closed(p, ts, cout, tout));
+        assert(closes_alike(cout, tout));
     }
 }
 
@@ -2709,7 +2793,8 @@ pub proof fn lemma_send_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState
     let conn = ts.client.connection;
     match cs.stage {
         Stage::Hello(s, _) => {
-            assert(conn.handshake.state == crate::transcription::state_machine::ClientState::WaitSh) by {
+            assert(conn.handshake.state == crate::transcription::state_machine::ClientState::WaitSh
+                && !conn.write_closed) by {
                 reveal(super::bootstrap::bootstrap_agrees);
             }
             assert(cs2 == cs);
@@ -2742,8 +2827,12 @@ pub proof fn lemma_send_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState
                     assert(oversized(cs, data, cout, tout));
                 }
             } else {
+                // After our close_notify: the transcription's `WriteClosed`.
+                super::post_handshake::lemma_send_closed(c, f, p, s, conn, data);
+                assert(conn.write_closed);
                 assert(cout.send =~= Seq::<u8>::empty());
                 assert(cs2 == cs);
+                assert(tout.after == ts);
             }
         },
         Stage::Ended => {},
@@ -2751,12 +2840,13 @@ pub proof fn lemma_send_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState
 }
 
 /// **Closing** agrees: before the handshake ends, both write the same
-/// close_notify (the plaintext one before the ServerHello, the one under
-/// the client handshake key in the flight), and the crate ends the
-/// connection (the stated difference [`closes_in_handshake`]); after it,
-/// the crate's `close` is the transcription's `close_write`
-/// (`post_handshake::close_agrees`) and both go on reading, or neither
-/// writes after its close_notify.
+/// close_notify (`close_write_side`: the plaintext one before the
+/// ServerHello, the one under the client handshake key in the flight) and
+/// close their write side, and the crate ends the connection (the stated
+/// difference [`closes_in_handshake`]); after it, the crate's `close` is the
+/// transcription's `close_write_side` (`post_handshake::close_agrees`):
+/// both write the close_notify and go on reading with their write sides
+/// closed, or, after our close_notify, neither writes anything.
 #[verifier::rlimit(80)]
 pub proof fn lemma_close_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CState, ts: TState)
     requires
@@ -2775,10 +2865,12 @@ pub proof fn lemma_close_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
     match cs.stage {
         Stage::Hello(s, _) => {
             assert(conn.handshake.state == crate::transcription::state_machine::ClientState::WaitSh
-                && conn.send == Protection::Unprotected) by {
+                && conn.send == Protection::Unprotected && !conn.write_closed && !conn.read_closed) by {
                 reveal(super::bootstrap::bootstrap_agrees);
             }
             lemma_alert_record_plain(p, conn, 0);
+            super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, conn),
+                crate::transcription::connection::close_write(p, conn));
             assert(closes_in_handshake(cout, tout));
         },
         Stage::Flight(s) => {
@@ -2792,25 +2884,27 @@ pub proof fn lemma_close_op(m: Models, p: Primitives, scalar: Seq<u8>, cs: CStat
                 == crate::connection::dispatcher_spec::close_wire(ciphers(m), s0)) by {
                 reveal(crate::connection::dispatcher_spec::close_wire);
             }
+            super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, conn),
+                crate::transcription::connection::close_write(p, conn));
             assert(closes_in_handshake(cout, tout));
         },
         Stage::App(s) => {
             super::post_handshake::lemma_receive_open_facts(s, conn);
             let f = m.cipher;
             let r = crate::connection::post_handshake_spec::close(f, s);
+            super::post_handshake::lemma_close(f, p, s, conn);
+            lemma_concat_flat(r.0.wires);
+            assert(Seq::<u8>::empty() + flat(r.0.wires) =~= flat(r.0.wires));
+            assert(r.0.delivered =~= Seq::<u8>::empty());
             if s.phase == crate::connection::post_handshake_spec::Phase::Open {
-                super::post_handshake::lemma_close(f, p, s, conn);
-                lemma_concat_flat(r.0.wires);
-                super::ccs::lemma_flatten(crate::transcription::connection::close_write(p, conn),
-                    crate::transcription::connection::close_write(p, conn));
-                assert(Seq::<u8>::empty() + crate::transcription::connection::close_write(p, conn)
-                    =~= crate::transcription::connection::close_write(p, conn));
-                assert(r.0.delivered =~= Seq::<u8>::empty());
                 assert(r.1.phase == crate::connection::post_handshake_spec::Phase::WriteClosed);
                 assert(goes_on(m, p, scalar, cout, cs2, tout));
             } else {
+                // After our close_notify: nothing on either side.
                 assert(cout.send =~= Seq::<u8>::empty());
                 assert(cs2 == cs);
+                assert(tout.after == ts);
+                assert(goes_on(m, p, scalar, cout, cs2, tout));
             }
         },
         Stage::Ended => {},
@@ -2919,7 +3013,7 @@ pub proof fn lemma_start(m: Models, p: Primitives, config: crate::hello::client_
             let first = super::client::ch_view(crate::hello::client_spec::client_hello(config, Seq::empty()));
             let hs = crate::transcription::state_machine::start_handshake(first, scalar, scalar);
             let c0 = Connection { handshake: hs, receive: Protection::Unprotected, send: Protection::Unprotected,
-                handshake_fragments: seq![], read_closed: false, key_update_owed: false };
+                handshake_fragments: seq![], read_closed: false, key_update_owed: false, write_closed: false };
             lemma_apply_keeps(p, c0, seq![crate::transcription::state_machine::Action::SendHandshake(
                 crate::transcription::key_exchange::write_client_hello(first),
                 crate::transcription::state_machine::initial_client_hello_record_version())]);
