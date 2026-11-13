@@ -85,6 +85,9 @@ const MACOS: &[&str] = &[
     "ptrace",
     // `clazel_sys::fill_random`. It only writes into a caller's buffer.
     "getentropy",
+    // `clazel_sys::macos::clear_close_on_exec` (items 5.18 and 5.23): only
+    // `F_SETFD` with 0, on a descriptor the caller borrows.
+    "fcntl",
 ];
 
 /// What `crates/clazel-sys/src/windows.rs` may declare and call. Each is
