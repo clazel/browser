@@ -478,29 +478,39 @@ fn key_update_requested_is_answered_under_the_old_keys_then_the_write_keys_move(
     }
     assert_eq!(h.client_seq, 3);
     let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
-    let actions = h.feed(&update);
-    assert_eq!(actions.len(), 1);
-    let reply = sends(&actions)
-        .first()
-        .map(|w| (*w).clone())
-        .ok_or("no reply")?;
-    // The reply is KeyUpdate(update_not_requested) under the OLD client keys, sequence 3.
+    // RFC 8446 §4.6.3: the answer is owed "prior to sending its next
+    // Application Data record"; receiving the request sends nothing.
+    assert_eq!(h.feed(&update), vec![], "no record on update_requested");
+    // The next data is preceded by the answer: KeyUpdate(update_not_requested)
+    // under the OLD client keys, sequence 3, then the data under the new keys.
+    let sent = h.client.send_application(b"fresh");
+    let wires = sends(&sent);
+    assert_eq!(sent.len(), 2, "the answer, then the data");
+    assert_eq!(wires.len(), 2);
+    let reply = wires.first().map(|w| (*w).clone()).ok_or("no reply")?;
     assert_eq!(
         h.server_reads(&reply),
         Some((CT_HANDSHAKE, key_update_message(0)))
     );
     h.client_rotated();
-    // The next client record is under the new keys at sequence 0.
-    let sent = h.client.send_application(b"fresh");
-    let wire = sends(&sent)
-        .first()
-        .map(|w| (*w).clone())
-        .ok_or("no send")?;
+    // The data is under the new keys at sequence 0.
+    let wire = wires.get(1).map(|w| (*w).clone()).ok_or("no data")?;
     assert_eq!(
         h.server_reads(&wire),
         Some((CT_APPLICATION_DATA, b"fresh".to_vec()))
     );
     assert_eq!(h.client_seq, 1);
+    // Answered once: the next data goes out alone.
+    let sent = h.client.send_application(b"again");
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"again".to_vec()))
+    );
     // The read side moved too, independently.
     h.server_rotates();
     let data = h.server_record(CT_APPLICATION_DATA, b"server fresh");
@@ -551,24 +561,83 @@ fn several_key_updates_in_a_row() -> Result<(), String> {
     let mut h = Harness::new()?;
     for round in 0..4u8 {
         let update = h.server_record(CT_HANDSHAKE, &key_update_message(round % 2));
-        let actions = h.feed(&update);
+        assert_eq!(h.feed(&update), vec![], "nothing is sent on receipt");
+        h.server_rotates();
+        let data = h.server_record(CT_APPLICATION_DATA, &[round]);
+        assert_eq!(h.feed(&data), vec![Action::Deliver(vec![round])]);
+        // Our data after an update_requested carries the answer first.
+        let sent = h.client.send_application(&[round]);
+        let wires = sends(&sent);
         if round % 2 == 1 {
-            let reply = sends(&actions)
-                .first()
-                .map(|w| (*w).clone())
-                .ok_or("no reply")?;
+            assert_eq!(wires.len(), 2);
+            let reply = wires.first().map(|w| (*w).clone()).ok_or("no reply")?;
             assert_eq!(
                 h.server_reads(&reply),
                 Some((CT_HANDSHAKE, key_update_message(0)))
             );
             h.client_rotated();
         } else {
-            assert_eq!(actions, vec![]);
+            assert_eq!(wires.len(), 1);
         }
-        h.server_rotates();
-        let data = h.server_record(CT_APPLICATION_DATA, &[round]);
-        assert_eq!(h.feed(&data), vec![Action::Deliver(vec![round])]);
+        let wire = wires.last().map(|w| (*w).clone()).ok_or("no data")?;
+        assert_eq!(
+            h.server_reads(&wire),
+            Some((CT_APPLICATION_DATA, vec![round]))
+        );
     }
+    Ok(())
+}
+
+/// RFC 8446 §4.6.3: "causes an implementation which receives multiple
+/// KeyUpdates while it is silent to respond with a single update".
+#[test]
+fn two_requests_while_silent_draw_one_answer() -> Result<(), String> {
+    let mut h = Harness::new()?;
+    for _ in 0..2 {
+        let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
+        assert_eq!(h.feed(&update), vec![], "no record on update_requested");
+        h.server_rotates();
+    }
+    // The server's data still reads under its twice-updated keys.
+    let data = h.server_record(CT_APPLICATION_DATA, b"in between");
+    assert_eq!(h.feed(&data), vec![Action::Deliver(b"in between".to_vec())]);
+    let sent = h.client.send_application(b"first");
+    let wires = sends(&sent);
+    assert_eq!(wires.len(), 2, "one answer, then the data");
+    let reply = wires.first().map(|w| (*w).clone()).ok_or("no reply")?;
+    assert_eq!(
+        h.server_reads(&reply),
+        Some((CT_HANDSHAKE, key_update_message(0)))
+    );
+    h.client_rotated();
+    let wire = wires.get(1).map(|w| (*w).clone()).ok_or("no data")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"first".to_vec()))
+    );
+    let sent = h.client.send_application(b"second");
+    let wires = sends(&sent);
+    assert_eq!(wires.len(), 1, "no second answer");
+    let wire = wires.first().map(|w| (*w).clone()).ok_or("no data")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"second".to_vec()))
+    );
+    Ok(())
+}
+
+/// RFC 8446 §4.6.3 asks for the answer before Application Data only: while
+/// it is owed, our close_notify goes out alone under the current keys.
+#[test]
+fn close_notify_while_an_answer_is_owed_goes_out_alone() -> Result<(), String> {
+    let mut h = Harness::new()?;
+    let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
+    assert_eq!(h.feed(&update), vec![]);
+    let sent = h.client.close();
+    let wires = sends(&sent);
+    assert_eq!(wires.len(), 1);
+    let wire = wires.first().map(|w| (*w).clone()).ok_or("no close")?;
+    assert_eq!(h.server_reads(&wire), Some((CT_ALERT, vec![1, 0])));
     Ok(())
 }
 
