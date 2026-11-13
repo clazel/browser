@@ -113,7 +113,7 @@ and compiles its fixed pipelines from our own shader source, never a page's.
 | OS | Policy | State |
 |----|--------|-------|
 | macOS | `seatbelt::GPU`: `(deny default)` and one rule, `mach-lookup` of `com.apple.MTLCompilerService` (item 5.23) | **measured** on one machine (below); entered by `clazel_gpu::sandbox::start_metal` |
-| Linux | `syscalls::GPU_EXTRA` added to the renderer's list, built by `seccomp::gpu_program` | **not measured**: written on a Mac, every entry says so |
+| Linux | `namespaces::GPU`, Landlock with no rule, and `syscalls::GPU_EXTRA` added to the renderer's list (`seccomp::gpu_program`); with a hardware device also `GPU_HARDWARE_EXTRA` (`seccomp::gpu_hardware_program`) | **measured** on lavapipe on aarch64 only (below); the hardware addition is **not measured**; entered by `clazel_gpu::sandbox::start_vulkan` |
 | Windows | `appcontainer::GPU_*`: the renderer's policy less `WIN32K`, plus `registryRead`, container `clazel.gpu` | decided by the plan's measurement (2026-11-04); data only, nothing starts a process with it yet |
 
 ### macOS, measured
@@ -186,34 +186,44 @@ opening.
 - a GPU process running for a long time, or under memory pressure;
 - the Mach port that brings the host's surfaces (item 5.18).
 
-### Linux, not measured
+### Linux, measured on lavapipe
 
-`GPU_EXTRA` adds nine calls to the renderer's list:
-- `ioctl`, for a hardware driver's commands;
-- `sendmsg` and `recvmsg`, for buffer descriptors to and from the host;
-- `clone` and `clone3`, for threads;
-- `set_robust_list`, `rseq` and `sched_getaffinity`, which a new thread and
-  lavapipe's thread pool need;
-- `getpid`.
+The GPU process unshares `namespaces::GPU` (user, mount, network, IPC) while it
+has one thread, makes its Vulkan device and draws a frame of its own, then
+enters Landlock with no rule and the seccomp list, installed on **every thread
+at once** (`SECCOMP_FILTER_FLAG_TSYNC`), because the driver's worker threads
+already exist. There is no PID namespace: after `unshare(CLONE_NEWPID)` the
+kernel refuses new threads, and the driver starts its workers later.
 
-There is still no `open`, `openat`, `socket` or `connect`, so the process has no
-new files, no X server and no network. Lavapipe's compiled shaders need
-executable memory, which `mmap` and `mprotect` already allow. Its compiled
-shaders are our fixed ones, never a page's.
+`GPU_EXTRA` adds five calls to the renderer's list, each one seen under
+`strace -f` after the filter was installed, over the 14 GPU processes of
+`clazel`'s `tests/browse_gpu.rs` (lavapipe, Mesa 25.2.8, glibc 2.39, aarch64
+Ubuntu 24.04 in a container):
+- `ftruncate`: lavapipe grows the memory file behind its device memory;
+- `clone3`, `set_robust_list`, `rseq` and `sched_getaffinity`: the GPU
+  process's own two reader threads, started after the filter.
+
+The plan's other candidates were not called and are not allowed: `getpid`,
+`clone`, and `sendmsg` and `recvmsg` (pixels leave as bytes on a pipe, so no
+descriptor is passed). No executable mapping was made after the filter: lavapipe
+compiles our shaders during the warm-up. There is still no `open`, `openat`,
+`socket` or `connect`.
+
+With a hardware device, `GPU_HARDWARE_EXTRA` adds `ioctl`. **That list is not
+measured**: no hardware Vulkan driver has run in this sandbox, and one that
+needs another call is killed.
 
 **How it is weaker than the renderer's:**
-- Those nine calls, with no argument filtering. `ioctl` reaches every ioctl of
-  every descriptor the process holds, which is the hardware driver's kernel
-  surface; per-driver `ioctl` filtering is absent.
-- `clone` can make a process as well as a thread; that process runs under the
-  same filter.
+- Those calls, with no argument filtering: `clone3` can make a process as well
+  as a thread (under the same filter), and with a hardware device `ioctl`
+  reaches every ioctl of every descriptor the process holds.
+- No PID namespace.
+- Landlock binds the calling thread and the threads it starts; the driver's
+  existing workers are held by the seccomp list alone.
+- The process keeps whatever the driver opened during the warm-up.
 
-**None of this has run.**
-- The list needs measuring on Linux, with lavapipe and with each real driver
-  (Intel, AMD, NVIDIA).
-- Landlock and namespaces for the GPU process are not decided here.
-- Nothing installs the filter yet: there is no Linux GPU backend (item 5.17b's
-  rest).
+**Not measured:** x86-64 (CI's architecture), another Mesa or C library, any
+hardware driver (Intel, AMD, NVIDIA), a long-running or memory-starved process.
 
 ### Windows, data only
 
@@ -234,15 +244,15 @@ polled every 5 s.
 
 | Harness | Covers | Result | Verification time | Peak |
 |---------|--------|--------|-------------------|------|
-| `gpu_other_arch_x86_64` | the GPU program (37 instructions), any syscall number, every other architecture value | passed, 451 checks | 220 s | 7.99 GB |
-| `gpu_other_arch_aarch64` | the same on aarch64 | passed, 451 checks | 222 s | 7.90 GB |
+| `gpu_other_arch_x86_64` | the GPU program for a software driver (33 instructions since the list was measured), any syscall number, every other architecture value | passed (run again 2026-11-13; its own check count and time were not kept) | not recorded | not recorded |
+| `gpu_other_arch_aarch64` | the same on aarch64 | passed, 451 checks (run again 2026-11-13) | 206 s | not recorded |
 | `gpu_allowlist_x86_64` | the GPU program allows exactly its list, every 32-bit number, right architecture | **capped at 8 GB** in symbolic execution, three tries; **removed** | — | > 8 GB |
 
 **Not proven by Kani:**
 - That the GPU program allows exactly its list for every 32-bit number.
   `tests/policies.rs` sweeps every number below 1024 on both architectures
   instead. Kani's generator theorem covers symbolic lists of up to three numbers
-  (`list_0` to `list_3`), not 31.
+  (`list_0` to `list_3`), not 27.
 - That the list is right. It is not measured.
 
 The two passing harnesses peak just under 8 GB, so a smaller machine may not run

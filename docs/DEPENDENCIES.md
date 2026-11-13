@@ -268,3 +268,20 @@ Changing a row is a reviewable act. Adding one means saying why below.
 The only `shipped` package is `libc`, and only `clazel-sys` depends on it
 (only on Linux). Everything else that runs in the browser is our own code. The
 `test` packages are compiled only into test binaries.
+
+## System libraries (not Cargo packages)
+
+The allowlist covers Cargo packages. `clazel-sys` also links system libraries,
+which the table cannot reach, so they are stated here:
+
+- **macOS**: `libobjc` and the Metal, IOSurface, CoreFoundation, Foundation,
+  CoreGraphics, AppKit and QuartzCore frameworks, all part of the OS.
+- **Linux**: `libvulkan`, the Khronos Vulkan loader (phase-5.md item 5.17b:
+  "`clazel-sys` linking only `libvulkan`"), for the GPU process. It is needed to
+  build (`libvulkan-dev` on Debian and Ubuntu) and, because every binary links
+  `clazel-sys`, the linker records it as needed by `clazel`, `clazel-renderer`
+  and `clazel-gpu` alike: all three load `libvulkan.so.1` at start, though only
+  the GPU process calls it. The loader in turn loads a driver. For software
+  drawing that is Mesa's lavapipe (`mesa-vulkan-drivers`), which is C and C++
+  and brings LLVM. Nothing is shipped with a release yet: both come from the
+  distribution, at its versions, and CI installs the runner image's.

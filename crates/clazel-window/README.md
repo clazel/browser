@@ -4,7 +4,7 @@ The host's window for Clazel's Phase 5 browser: open one, read its events and
 show pixels in it. Part of [Clazel](../../README.md), a web browser whose parsers
 of untrusted input carry machine-checked proofs.
 
-Two backends behind one `Window` (`open`, `size`, `next_event`, `draw`,
+Three backends behind one `Window` (`open`, `size`, `next_event`, `draw`,
 `set_title`, `dpi`) and one `Event`:
 
 - **Windows**, the first slice of [item 5.22a](../../docs/phases/phase-5.md). It
@@ -17,17 +17,25 @@ Two backends behind one `Window` (`open`, `size`, `next_event`, `draw`,
   or pixels (`show_page_pixels`) and clips to its rectangle, and the strip's
   above it, where `draw` puts the host's own pixels. It adds `show_page`,
   `show_page_pixels`, `hide_page`, `activate` and `close`.
+- **Linux**, [item 5.22](../../docs/phases/phase-5.md): an X11 client of our own
+  in safe Rust over the Unix socket `DISPLAY` names, with no dependency and no
+  foreign call. The top-level window holds the strip and a child window holds
+  the page, which the X server clips to it. It has `show_page_pixels`,
+  `hide_page`, `activate` (which does nothing: focus is the window manager's)
+  and `close`. A Wayland session is reached through XWayland.
 
-`clazel browse` uses it on macOS (item 5.23, `crates/clazel/cli/window.rs`): the
+`clazel browse` uses it on macOS and Linux (item 5.23,
+`crates/clazel/cli/window.rs`): the
 address bar in the strip, the GPU process's frames as the page. Until the GPU
 process's IOSurface can reach the host (a Mach port), frames arrive as pixels
 (`clazel_gpu::channel`), hence `show_page_pixels`.
 
-`Event::Key` says whether Command was held (`command`; always false on Windows
-until the backend reads Ctrl, which needs `GetKeyState` in `clazel-sys`), and
-[`src/keys.rs`](src/keys.rs) names the keys `browse` acts on from each platform's
-codes (`<HIToolbox/Events.h>` on macOS, `<WinUser.h>` on Windows), with their DOM
-`keyCode`s.
+`Event::Key` says whether the shortcut modifier was held (`command`: Command on
+macOS, Control on Linux; always false on Windows until the backend reads Ctrl,
+which needs `GetKeyState` in `clazel-sys`), and [`src/keys.rs`](src/keys.rs)
+names the keys `browse` acts on from each platform's codes
+(`<HIToolbox/Events.h>` on macOS, `<WinUser.h>` on Windows, the keysyms of
+`<X11/keysymdef.h>` on Linux), with their DOM `keyCode`s.
 
 See it run, on Windows or on an Apple silicon Mac:
 
@@ -56,8 +64,34 @@ The decisions are listed at the top of [`src/appkit.rs`](src/appkit.rs) and
 - A window opens without taking the keyboard and without a Dock icon;
   `activate` makes it an ordinary application in front.
 
+## How it decides, on Linux
+
+The decisions are listed at the top of [`src/x11.rs`](src/x11.rs) and
+[`src/x11proto.rs`](src/x11proto.rs). In short:
+
+- The core protocol only, little-endian, to a local display; authorization is
+  `MIT-MAGIC-COOKIE-1` from `$XAUTHORITY` or `~/.Xauthority`, whose format we
+  parse.
+- Pixels are `PutImage` requests in `ZPixmap` format, split to the server's
+  maximum request length, and only to a 24- or 32-bit TrueColor root visual
+  with 32 bits per pixel; another server is refused. MIT-SHM, DRI3 and
+  BIG-REQUESTS are not used.
+- The server's bytes are read on a thread of their own. What was drawn is kept
+  and sent again on `Expose`.
+- Keys are the keycode's first keysym; characters follow Shift and Lock. Legacy
+  keysyms outside Latin-1 (Appendix A's per-script ranges) type nothing.
+- The scale is always 1 (96 dpi).
+
 ## Tests
 
+- `src/x11proto/tests.rs`: every request's bytes and every event's fields
+  against Appendix B of the protocol document, the setup reply (and every cut of
+  it), the authority file, tiles, and keys. Hand-built, not recorded from a
+  server. They run on every target and under Miri.
+- `tests/smoke_x11.rs`: opens a window on the X server `DISPLAY` names, draws
+  the strip and a page, sets a title, sees `Expose`, closes and sees `Closed`.
+  Run against Xvfb (X.Org 21.1.12) in an aarch64 Ubuntu 24.04 container; without
+  `DISPLAY` it skips, saying so, which is what CI's Linux job does today.
 - `src/nsevent.rs`: what each event means, on recorded events (field values
   written from `<AppKit/NSEvent.h>` and the virtual key codes), and where layers
   go. They run on every target and under Miri.
@@ -84,5 +118,9 @@ The decisions are listed at the top of [`src/appkit.rs`](src/appkit.rs) and
 - **Modifiers** beyond Command on macOS are not reported, and on Windows none is,
   so Windows has no shortcuts yet.
 - **Intel Macs** are not supported, as in `clazel-gpu`.
+- **Linux on a real desktop.** The X11 window has only run on Xvfb with no
+  window manager: closing by `WM_DELETE_WINDOW`, focus, resizing by a window
+  manager, XWayland and HiDPI screens are untried. Displays over TCP, MIT-SHM,
+  DRI3 and a native Wayland client are not built.
 
 Tier 0: tests only. Every foreign call is in `clazel-sys`, which is audited.
