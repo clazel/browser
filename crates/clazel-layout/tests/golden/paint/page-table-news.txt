@@ -1,0 +1,27 @@
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 67,8 666x173 #fff6f6ef
+fill 67,8 666x22 #ffff6600
+text 77,-3 115x40 #ff828282 face=0 size=853 glyphs=12 first=5811,1511
+text 166,-3 136x40 #ff828282 face=0 size=853 glyphs=17 first=11447,1511
+text 53,21 40x40 #ff000000 face=0 size=853 glyphs=2 first=4275,3032
+fill 80,48 447x1 #ff0000ee
+text 66,21 474x40 #ff0000ee face=0 size=853 glyphs=68 first=5089,3032
+text 70,41 85x28 #ff000000 face=0 size=597 glyphs=13 first=5089,3787
+text 522,51 195x28 #ff828282 face=0 size=597 glyphs=36 first=33989,4482
+text 522,62 67x28 #ff828282 face=0 size=597 glyphs=8 first=33989,5177
+text 53,74 40x40 #ff000000 face=0 size=853 glyphs=2 first=4275,6430
+fill 80,101 81x1 #ff0000ee
+text 66,74 108x40 #ff0000ee face=0 size=853 glyphs=12 first=5089,6430
+text 266,96 187x36 #ff000000 face=0 size=768 glyphs=26 first=17790,7664
+text 429,96 81x36 #ff000000 face=0 size=768 glyphs=8 first=28235,7664
+text 486,96 66x36 #ff000000 face=0 size=768 glyphs=7 first=31896,7664
+fill 540,121 22x1 #ff0000ee
+text 528,96 46x36 #ff0000ee face=0 size=768 glyphs=4 first=34530,7664
+text 550,96 28x36 #ff000000 face=0 size=768 glyphs=1 first=35981,7664
+text 266,106 216x36 #ff000000 face=0 size=768 glyphs=32 first=17790,8302
+text 266,120 182x36 #ff000000 face=0 size=768 glyphs=26 first=17790,9196
+text 358,145 84x28 #ff828282 face=0 size=597 glyphs=14 first=23500,10476
+hit 80,35 447x16 node=43 http://example.com/dir/item?id=1
+hit 80,88 81x16 node=62 http://example.com/dir/item?id=2
+hit 540,109 22x14 node=80 http://example.com/dir/x

@@ -1,0 +1,318 @@
+#case 0
+#data "<!DOCTYPE html><svg></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "<!DOCTYPE html><svg></svg><![CDATA[a]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<!DOCTYPE html><body><svg></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!DOCTYPE html><body><select><svg></svg></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<!DOCTYPE html><body><select><option><svg></svg></option></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<!DOCTYPE html><body><table><svg></svg></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<!DOCTYPE html><body><table><svg><g>foo</g></svg></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 7
+#data "<!DOCTYPE html><body><table><svg><g>foo</g><g>bar</g></svg></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+
+#case 8
+#data "<!DOCTYPE html><body><table><tbody><svg><g>foo</g><g>bar</g></svg></tbody></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+
+#case 9
+#data "<!DOCTYPE html><body><table><tbody><tr><svg><g>foo</g><g>bar</g></svg></tr></tbody></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+
+#case 10
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg></td></tr></tbody></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 57x48 #ff000000 face=0 size=1024 glyphs=3 first=704,1655
+text 20,-6 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2316,1655
+
+#case 11
+#data "<!DOCTYPE html><body><table><tbody><tr><td><svg><g>foo</g><g>bar</g></svg><p>baz</td></tr></tbody></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 57x48 #ff000000 face=0 size=1024 glyphs=3 first=704,1655
+text 20,-6 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2316,1655
+text -5,29 60x48 #ff000000 face=0 size=1024 glyphs=3 first=704,3872
+
+#case 12
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g></svg><p>baz</caption></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+text 4,26 60x48 #ff000000 face=0 size=1024 glyphs=3 first=1293,3680
+
+#case 13
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+text 4,26 60x48 #ff000000 face=0 size=1024 glyphs=3 first=1293,3680
+text -8,76 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,6921
+
+#case 14
+#data "<!DOCTYPE html><body><table><caption><svg><g>foo</g><g>bar</g>baz</table><p>quux"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+text 45,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=3880,1463
+text -8,26 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,3680
+
+#case 15
+#data "<!DOCTYPE html><body><table><colgroup><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+text -8,26 60x48 #ff000000 face=0 size=1024 glyphs=3 first=512,3680
+text -8,76 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,6921
+
+#case 16
+#data "<!DOCTYPE html><body><table><tr><td><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -5,-6 57x48 #ff000000 face=0 size=1024 glyphs=3 first=704,1655
+text 20,-6 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2316,1655
+text -5,29 60x48 #ff000000 face=0 size=1024 glyphs=3 first=704,3872
+text -8,82 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,7305
+
+#case 17
+#data "<!DOCTYPE html><body><table><select><svg><g>foo</g><g>bar</g><p>baz</table><p>quux"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+text -8,26 60x48 #ff000000 face=0 size=1024 glyphs=3 first=512,3680
+text -8,76 72x48 #ff000000 face=0 size=1024 glyphs=4 first=512,6921
+
+#case 18
+#data "<!DOCTYPE html><body></body></html><svg><g>foo</g><g>bar</g><p>baz"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+text -8,26 60x48 #ff000000 face=0 size=1024 glyphs=3 first=512,3680
+
+#case 19
+#data "<!DOCTYPE html><body></body><svg><g>foo</g><g>bar</g><p>baz"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text 17,-9 60x48 #ff000000 face=0 size=1024 glyphs=3 first=2124,1463
+text -8,26 60x48 #ff000000 face=0 size=1024 glyphs=3 first=512,3680
+
+#case 20
+#data "<!DOCTYPE html><frameset><svg><g></g><g></g><p><span>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 21
+#data "<!DOCTYPE html><frameset></frameset><svg><g></g><g></g><p><span>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<!DOCTYPE html><body xlink:href=foo><svg xlink:href=foo></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo></g></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 24
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo /></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 25
+#data "<!DOCTYPE html><body xlink:href=foo xml:lang=en><svg><g xml:lang=en xlink:href=foo />bar</svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 59x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 26
+#data "<svg></path>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 27
+#data "<div><svg></div>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 28
+#data "<div><svg><path></div>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 29
+#data "<div><svg><path></svg><path>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<div><svg><path><foreignObject><math></div>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 31
+#data "<div><svg><path><foreignObject><p></div>a"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -8,-1 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 32
+#data "<!DOCTYPE html><svg><desc><div><svg><ul>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 32,-1 42x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,1975
+
+#case 33
+#data "<!DOCTYPE html><svg><desc><svg><ul>a"
+scale 1
+fill 0,0 800x600 #ffffffff
+text 32,-1 42x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,1975
+
+#case 34
+#data "<!DOCTYPE html><p><svg><desc><p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 35
+#data "<!DOCTYPE html><p><svg><title><p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 36
+#data "<div><svg><path><foreignObject><p></foreignObject><p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 37
+#data "<math><mi><div><object><div><span></span></div></object></div></mi><mi>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 38
+#data "<math><mi><svg><foreignObject><div><div></div></div></foreignObject></svg></mi><mi>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 39
+#data "<svg><script></script><path>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 40
+#data "<table><svg></svg><tr>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 41
+#data "<math><mi><mglyph>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 42
+#data "<math><mi><malignmark>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 43
+#data "<math><mo><mglyph>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 44
+#data "<math><mo><malignmark>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 45
+#data "<math><mn><mglyph>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 46
+#data "<math><mn><malignmark>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 47
+#data "<math><ms><mglyph>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 48
+#data "<math><ms><malignmark>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 49
+#data "<math><mtext><mglyph>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 50
+#data "<math><mtext><malignmark>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 51
+#data "<math><annotation-xml><svg></svg></annotation-xml><mi>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 52
+#data "<math><annotation-xml><svg><foreignObject><div><math><mi></mi></math><span></span></div></foreignObject><path></path></svg></annotation-xml><mi>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 53
+#data "<math><annotation-xml><svg><foreignObject><math><mi><svg></svg></mi><mo></mo></math><span></span></foreignObject><path></path></svg></annotation-xml><mi>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

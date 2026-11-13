@@ -149,5 +149,8 @@ pub mod geometry;
 pub mod order;
 pub mod state;
 
+#[cfg(test)]
+mod tests;
+
 pub use order::paint;
 pub use state::{DeviceRect, DisplayList, HitRegion, Item, PlacedGlyph, TextItem};
