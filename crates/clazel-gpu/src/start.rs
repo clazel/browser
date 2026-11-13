@@ -28,7 +28,7 @@
 //!   macOS there is no software Metal driver, so a refused or failing Metal device
 //!   goes to the notice.
 
-use crate::blocklist::Entry;
+use crate::blocklist::{Adapter, Entry};
 
 /// The mode the kernel started the GPU process in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,5 +96,24 @@ impl Refusal {
     /// without a message).
     pub fn is_gpu_refused(&self) -> bool {
         matches!(self, Refusal::Blocked(_) | Refusal::Unreadable(_))
+    }
+}
+
+/// Item 5.17c, the blocklist paragraph: the answer the GPU process gives for
+/// `adapter`, started by `launch`, with the blocklist `table` (the shipped one in the
+/// GPU process; tests pass others). It reads no list.
+pub fn admit(adapter: &Adapter, launch: Launch, table: &[u8]) -> Result<Ready, Refusal> {
+    match launch.mode {
+        Mode::Software if adapter.software => Ok(Ready { software: true }),
+        Mode::Software => Err(Refusal::NotSoftware),
+        Mode::Hardware if adapter.software => Ok(Ready { software: true }),
+        Mode::Hardware if launch.check == Check::Ignore => Ok(Ready { software: false }),
+        Mode::Hardware => {
+            let list = crate::blocklist::Blocklist::parse(table).map_err(Refusal::Unreadable)?;
+            match list.check(adapter) {
+                Some(entry) => Err(Refusal::Blocked(entry.clone())),
+                None => Ok(Ready { software: false }),
+            }
+        }
     }
 }

@@ -11,11 +11,13 @@ use clazel_displaylist::exec::{ExecItem, encode_list};
 use crate::reference::{self, Masks};
 use crate::scenes::{self, Scene};
 use crate::soft::SoftBackend;
+use crate::start::Launch;
 use crate::{Backend, Error, Gpu, Viewport};
 
 fn run(scene: &Scene) -> Result<(), String> {
     let viewport = Viewport::new(scene.width, scene.height).ok_or_else(|| "viewport".to_owned())?;
-    let mut gpu = Gpu::new(SoftBackend::new());
+    let (mut gpu, _) =
+        Gpu::start(SoftBackend::new(), Launch::SOFTWARE).map_err(|e| format!("{e:?}"))?;
     let mut masks = Masks::default();
     for (n, list) in scene.lists.iter().enumerate() {
         let bytes = encode_list(list).ok_or_else(|| format!("{}: encode", scene.name))?;
@@ -81,7 +83,8 @@ fn scene_atlas() -> Result<(), String> {
 #[test]
 fn bad_lists_are_refused_before_drawing() -> Result<(), Error> {
     let viewport = Viewport::new(4, 4).ok_or(Error::Range)?;
-    let mut gpu = Gpu::new(SoftBackend::new());
+    let (mut gpu, _) =
+        Gpu::start(SoftBackend::new(), Launch::SOFTWARE).map_err(|_| Error::Range)?;
     assert_eq!(gpu.draw(&[9], viewport), Err(Error::NotAList));
     let unbalanced = encode_list(&[ExecItem::PopClip]).ok_or(Error::Range)?;
     assert_eq!(gpu.draw(&unbalanced, viewport), Err(Error::Refused));

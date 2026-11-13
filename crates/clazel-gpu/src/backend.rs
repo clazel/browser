@@ -24,6 +24,7 @@
 //! - **Each frame starts from transparent black** (0, 0, 0, 0); the list paints the
 //!   canvas.
 
+use crate::blocklist::Adapter;
 use crate::geom::{Rect, Viewport};
 
 /// Words in a [`Quad`].
@@ -139,6 +140,10 @@ pub trait Backend {
 
     /// Copy the target's pixels out, RGBA8, rows from the top, packed.
     fn read_pixels(&mut self, out: &mut Vec<u8>) -> Result<(), BackendError>;
+
+    /// What the backend's adapter is, for the blocklist (item 5.17c). Read when the
+    /// GPU process starts, before any list.
+    fn adapter(&self) -> Adapter;
 }
 
 #[cfg(test)]

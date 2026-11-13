@@ -333,3 +333,222 @@ impl Policy {
             && self.tabs.iter().all(|t| t.invariant(&self.config))
     }
 }
+
+// `Shared::sites` keeps `SITES - 1` sites; written out, since it is an array length.
+const _: () = assert!(SITES == 3);
+
+impl Shared {
+    /// Rule 3: a hardware exit from `site` at `now`. Every tab goes to software if
+    /// the two other most recent sites both have exits within [`WINDOW_MS`] and there
+    /// is a fallback; either way `site` becomes the most recent.
+    pub fn note_exit(&mut self, site: SiteId, now: u64, config: &Config) {
+        let others = self
+            .sites
+            .iter()
+            .flatten()
+            .filter(|&&(s, t)| s != site && within(t, now))
+            .count();
+        if self.demoted.is_none() && config.fallback && others.saturating_add(1) >= SITES {
+            self.demoted = Some(Demotion::Sites);
+        }
+        let [first, second] = self.sites;
+        self.sites = match first {
+            Some((s, _)) if s == site => [Some((site, now)), second],
+            _ => [Some((site, now)), first],
+        };
+    }
+}
+
+impl Tab {
+    /// A new tab on `site`, before its first start.
+    pub fn new(id: TabId, site: SiteId) -> Tab {
+        Tab {
+            id,
+            site,
+            mode: Mode::Hardware,
+            phase: Phase::Starting,
+            exits: [None, None],
+        }
+    }
+
+    /// The mode the next start uses: software if asked for, if every tab is in
+    /// software, or if this tab is.
+    pub fn wanted(&self, shared: &Shared, config: &Config) -> Mode {
+        if config.software_only || shared.demoted.is_some() || self.mode == Mode::Software {
+            Mode::Software
+        } else {
+            Mode::Hardware
+        }
+    }
+
+    /// Start a process in the wanted mode (a new mode records no exits), or, for
+    /// software with no fallback, stop with the notice.
+    fn start(&mut self, shared: &Shared, config: &Config) -> Action {
+        let mode = self.wanted(shared, config);
+        if mode != self.mode {
+            self.mode = mode;
+            self.exits = [None, None];
+        }
+        if mode == Mode::Software && !config.fallback {
+            self.stop(Reason::NoSoftware)
+        } else {
+            self.phase = Phase::Starting;
+            Action::Start {
+                tab: self.id,
+                software: mode == Mode::Software,
+            }
+        }
+    }
+
+    fn stop(&mut self, reason: Reason) -> Action {
+        self.phase = Phase::Stopped(reason);
+        Action::Notice {
+            tab: self.id,
+            reason,
+        }
+    }
+
+    /// A process in hardware refused, or ended before `GpuReady`: every tab to
+    /// software if there is one, else this tab to the notice.
+    fn refused(&mut self, shared: &mut Shared, config: &Config) -> Action {
+        if config.fallback {
+            if shared.demoted.is_none() {
+                shared.demoted = Some(Demotion::Refused);
+            }
+            self.start(shared, config)
+        } else {
+            self.stop(Reason::Refused)
+        }
+    }
+
+    /// Item 5.17c's crash policy for one event naming this tab, at `now`. Reads and
+    /// writes this tab's record and `shared` and nothing else. `Opened` and `Closed`
+    /// are [`Policy::step`]'s and do nothing here.
+    pub fn step(
+        &mut self,
+        shared: &mut Shared,
+        config: &Config,
+        event: Event,
+        now: u64,
+    ) -> Option<Action> {
+        match event {
+            Event::Opened { .. } | Event::Closed { .. } => None,
+            Event::Ready { software, .. } => {
+                if self.phase != Phase::Starting {
+                    return None;
+                }
+                if software && self.mode == Mode::Hardware {
+                    // Only a software driver was found. Without a fallback this cannot
+                    // be an honest answer (no software driver exists): out of order.
+                    if !config.fallback {
+                        return None;
+                    }
+                    self.mode = Mode::Software;
+                    self.exits = [None, None];
+                } else if !software && self.mode == Mode::Software {
+                    return None;
+                }
+                self.phase = Phase::Running;
+                Some(Action::Drawing {
+                    tab: self.id,
+                    software: self.mode == Mode::Software,
+                })
+            }
+            Event::Refused { .. } => {
+                if self.phase == Phase::Starting && self.mode == Mode::Hardware {
+                    Some(self.refused(shared, config))
+                } else {
+                    None
+                }
+            }
+            Event::Exited { .. } => match self.phase {
+                Phase::Stopped(_) => None,
+                // Before `GpuReady`: a refusal (the plan: "a driver 5.21a's sandbox
+                // kills at startup counts as refused").
+                Phase::Starting => Some(match self.mode {
+                    Mode::Hardware => self.refused(shared, config),
+                    Mode::Software => self.stop(Reason::NoSoftware),
+                }),
+                Phase::Running => {
+                    if self.mode == Mode::Hardware {
+                        shared.note_exit(self.site, now, config);
+                    }
+                    let [a, b] = self.exits;
+                    let third = [a, b].iter().all(|e| e.is_some_and(|t| within(t, now)));
+                    if !third {
+                        // Rule 1.
+                        self.exits = [Some(now), a];
+                        Some(self.start(shared, config))
+                    } else if self.mode == Mode::Hardware && config.fallback {
+                        // Rule 2.
+                        self.mode = Mode::Software;
+                        self.exits = [None, None];
+                        Some(self.start(shared, config))
+                    } else {
+                        // Rule 4.
+                        Some(self.stop(Reason::Crashed))
+                    }
+                }
+            },
+            Event::Navigated { site, .. } => {
+                if site == self.site {
+                    return None;
+                }
+                self.site = site;
+                self.mode = Mode::Hardware;
+                self.exits = [None, None];
+                Some(self.start(shared, config))
+            }
+            Event::Reload { .. } => {
+                if !matches!(self.phase, Phase::Stopped(_)) {
+                    return None;
+                }
+                self.exits = [Some(now), Some(now)];
+                Some(self.start(shared, config))
+            }
+        }
+    }
+}
+
+impl Policy {
+    /// No tabs, nothing recorded.
+    pub fn new(config: Config) -> Policy {
+        Policy {
+            config,
+            shared: Shared::default(),
+            tabs: Vec::new(),
+        }
+    }
+
+    /// The record of `tab`, if it is open.
+    pub fn tab(&self, tab: TabId) -> Option<&Tab> {
+        self.tabs.iter().find(|t| t.id == tab)
+    }
+
+    /// Item 5.17c's crash policy: one event at `now`, and what the kernel does. Only
+    /// the event's tab's record and [`Policy::shared`] change, and the action is for
+    /// the event's tab. An event for a tab that is not open (or `Opened` for one that
+    /// is) changes nothing.
+    pub fn step(&mut self, event: Event, now: u64) -> Option<Action> {
+        match event {
+            Event::Opened { tab, site } => {
+                if self.tab(tab).is_some() {
+                    return None;
+                }
+                let mut record = Tab::new(tab, site);
+                let action = record.start(&self.shared, &self.config);
+                self.tabs.push(record);
+                Some(action)
+            }
+            Event::Closed { tab } => {
+                self.tabs.retain(|t| t.id != tab);
+                None
+            }
+            _ => {
+                let id = event.tab();
+                let record = self.tabs.iter_mut().find(|t| t.id == id)?;
+                record.step(&mut self.shared, &self.config, event, now)
+            }
+        }
+    }
+}

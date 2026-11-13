@@ -36,6 +36,7 @@ use std::sync::Once;
 use clazel_displaylist::exec::encode_list;
 use clazel_gpu::metal::MetalBackend;
 use clazel_gpu::reference::{self, Masks};
+use clazel_gpu::start::Launch;
 use clazel_gpu::{Backend, Gpu, Viewport, scenes};
 
 /// What the OS says the GPU is, for the log. Never fails: a missing tool prints
@@ -109,6 +110,16 @@ fn backend_or_skip() -> Result<Option<MetalBackend>, String> {
     }
 }
 
+/// Start drawing as the GPU process does, through the shipped blocklist (item
+/// 5.17c): a Metal adapter is never refused while the table is empty.
+fn start(backend: MetalBackend) -> Result<Gpu<MetalBackend>, String> {
+    let (gpu, ready) = Gpu::start(backend, Launch::HARDWARE).map_err(|e| format!("{e:?}"))?;
+    if ready.software {
+        return Err("a Metal adapter reported as software".to_owned());
+    }
+    Ok(gpu)
+}
+
 fn stored(name: &str, n: usize) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests/pixels")
@@ -122,12 +133,12 @@ fn every_scene_on_metal() -> Result<(), String> {
         return Ok(());
     };
     let bless = std::env::var_os("CLAZEL_GPU_BLESS").is_some();
-    let mut gpu = Gpu::new(backend);
+    let mut gpu = start(backend)?;
     let mut failures = Vec::new();
     for scene in scenes::all() {
         let viewport = Viewport::new(scene.width, scene.height).ok_or("viewport")?;
         // Each scene starts a fresh GPU process's masks.
-        gpu = Gpu::new(gpu.into_backend());
+        gpu = start(gpu.into_backend())?;
         let mut masks = Masks::default();
         for (n, list) in scene.lists.iter().enumerate() {
             let bytes = encode_list(list).ok_or("encode")?;
@@ -184,7 +195,7 @@ fn a_refused_list_reaches_no_gpu_call() -> Result<(), String> {
     let Some(backend) = backend_or_skip()? else {
         return Ok(());
     };
-    let mut gpu = Gpu::new(backend);
+    let mut gpu = start(backend)?;
     let viewport = Viewport::new(4, 4).ok_or("viewport")?;
     assert!(gpu.draw(&[3], viewport).is_err());
     assert!(gpu.backend().target().is_none());
