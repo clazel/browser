@@ -31,6 +31,9 @@
 
 use std::fmt;
 
+// The Direct3D 12 declarations: used on Windows, and tested on every target.
+#[cfg(any(windows, test))]
+mod d3d12_abi;
 #[cfg(target_os = "linux")]
 pub mod linux;
 #[cfg(target_os = "macos")]

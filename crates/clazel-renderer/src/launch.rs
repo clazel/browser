@@ -398,6 +398,7 @@ mod imp {
         let _one_at_a_time = SPAWN.lock().map_err(other)?;
         let confinement = Policy {
             container_name: policy::CONTAINER_NAME,
+            capabilities: policy::CAPABILITIES,
             mitigations: policy::mitigation_mask(),
             child_process_restricted: policy::CHILD_PROCESS_RESTRICTED,
             opt_out_all_application_packages: policy::OPT_OUT_ALL_APPLICATION_PACKAGES,
@@ -418,7 +419,13 @@ mod imp {
         // that keeps failing still surfaces after the last retry.
         let mut retries = 0u32;
         let process = loop {
-            match windows::spawn(&program, &line, &confinement, &env, &h_in, &h_out, &h_err) {
+            let handles = windows::Handles {
+                stdin: &h_in,
+                stdout: &h_out,
+                stderr: &h_err,
+                inherit: &[],
+            };
+            match windows::spawn(&program, &line, &confinement, &env, &handles) {
                 Ok(p) => break p,
                 Err(SpawnError::Call("CreateProcessW", Errno(2 | 31)))
                     if retries < 100 && program.exists() =>

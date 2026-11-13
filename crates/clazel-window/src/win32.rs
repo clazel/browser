@@ -148,7 +148,7 @@ impl Window {
         if !self.exists() {
             return Ok(());
         }
-        let drawn = sys::draw_bgra(self.handle, pixels, width, height);
+        let drawn = sys::draw_bgra(self.handle, pixels, width, height, (0, 0));
         ignore_if_gone(drawn, || self.exists()).map_err(Error::Os)
     }
 

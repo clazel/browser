@@ -191,6 +191,19 @@ const WINDOWS: &[&str] = &[
     "OpenProcess",
     "OpenProcessToken",
     "GetTokenInformation",
+    // A capability for the GPU process's AppContainer (phase-5.md item 5.21a):
+    // its SIDs by name, the copy of the returned arrays' pointers (`memcpy`, the
+    // one call that reads foreign memory; there is no pointer arithmetic) and
+    // their release.
+    "DeriveCapabilitySidsFromName",
+    "LocalFree",
+    "memcpy",
+    // `clazel_sys::windows::Inherited`: a pipe's end the process inherited, by
+    // its number. Safe Rust cannot adopt a handle, so it is duplicated and the
+    // duplicate read or written.
+    "DuplicateHandle",
+    "ReadFile",
+    "WriteFile",
     // `clazel_sys::fill_random`, with the system-preferred RNG. It only writes
     // into a caller's buffer.
     "BCryptGenRandom",
@@ -224,6 +237,19 @@ const WINDOW: &[&str] = &[
     "SetProcessDpiAwarenessContext",
     "SetDIBitsToDevice",
     "GetModuleHandleW",
+    // Whether Ctrl is held, for the shortcuts (item 5.23).
+    "GetKeyState",
+];
+
+/// What `crates/clazel-sys/src/windows/d3d12.rs` may declare and call: Direct3D
+/// 12 for the GPU process (phase-5.md item 5.17b). Three functions that DLLs
+/// export, and `memcpy` for the copy into and out of a mapped buffer; every
+/// other call is a COM method, through the vtables of [`D3D12_VTABLES`].
+const D3D12: &[&str] = &[
+    "CreateDXGIFactory2",
+    "D3D12CreateDevice",
+    "D3D12SerializeRootSignature",
+    "memcpy",
 ];
 
 /// What `crates/clazel-sys/src/macos/metal.rs` may declare and call: Metal
@@ -618,6 +644,7 @@ pub const FOREIGN_FUNCTIONS: &[(&str, &[&str])] = &[
     ("crates/clazel-sys/src/macos.rs", MACOS),
     ("crates/clazel-sys/src/windows.rs", WINDOWS),
     ("crates/clazel-sys/src/windows/window.rs", WINDOW),
+    ("crates/clazel-sys/src/windows/d3d12.rs", D3D12),
     ("crates/clazel-sys/src/macos/metal.rs", METAL),
     ("crates/clazel-sys/src/macos/window.rs", APPKIT),
 ];

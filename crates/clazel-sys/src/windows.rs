@@ -1,6 +1,7 @@
 //! Windows: start a process inside an AppContainer and a Job Object, the
 //! two checks and one escape attempt the sandbox tests make,
-//! `BCryptGenRandom`, and `GetAdaptersAddresses` (the DNS servers, as octets).
+//! `BCryptGenRandom`, `GetAdaptersAddresses` (the DNS servers, as octets), and
+//! reading and writing a handle the process inherited ([`Inherited`]).
 //!
 //! Windows cannot move a running process into an AppContainer, so unlike the
 //! Linux and macOS modules this one *spawns*: the host calls [`spawn`] with a
@@ -26,6 +27,7 @@ use std::path::Path;
 
 use crate::{Errno, RandomError};
 
+pub mod d3d12;
 pub mod window;
 
 type Handle = isize;
@@ -38,6 +40,13 @@ struct SecurityCapabilities {
     capabilities: *mut c_void,
     capability_count: Dword,
     reserved: Dword,
+}
+
+/// `SID_AND_ATTRIBUTES`: 16 bytes, the attributes at byte 8.
+#[repr(C)]
+struct SidAndAttributes {
+    sid: *mut c_void,
+    attributes: Dword,
 }
 
 #[repr(C)]
@@ -123,7 +132,11 @@ struct TokenIsAppContainer {
 // WaitForSingleObject, GetExitCodeProcess, TerminateProcess, OpenProcess
 // (kernel32, processthreadsapi.h, jobapi2.h, handleapi.h, synchapi.h);
 // docs OpenProcessToken, GetTokenInformation, GetLengthSid, CopySid, FreeSid
-// (advapi32, securitybaseapi.h, processthreadsapi.h). The declarations below
+// (advapi32, securitybaseapi.h, processthreadsapi.h); docs LocalFree,
+// DuplicateHandle (kernel32, winbase.h, handleapi.h); docs ReadFile, WriteFile
+// (kernel32, fileapi.h: `BOOL ReadFile(HANDLE, LPVOID, DWORD, LPDWORD,
+// LPOVERLAPPED)` and `BOOL WriteFile(HANDLE, LPCVOID, DWORD, LPDWORD,
+// LPOVERLAPPED)`). The declarations below
 // match those prototypes on 64-bit Windows: `BOOL` and `DWORD` are 32-bit,
 // `HRESULT` is `i32`, `HANDLE` and `SIZE_T` are pointer-sized (`isize`,
 // `usize`), `PSID` and the other pointers are `*mut c_void`, and `LPCWSTR` is
@@ -193,6 +206,59 @@ unsafe extern "system" {
         return_length: *mut Dword,
     ) -> Bool;
     fn BCryptGenRandom(algorithm: *mut c_void, buffer: *mut u8, length: u32, flags: u32) -> i32;
+    fn LocalFree(memory: *mut c_void) -> *mut c_void;
+    fn DuplicateHandle(
+        source_process: Handle,
+        source: Handle,
+        target_process: Handle,
+        target: *mut Handle,
+        access: Dword,
+        inherit: Bool,
+        options: Dword,
+    ) -> Bool;
+    fn ReadFile(
+        file: Handle,
+        buffer: *mut u8,
+        length: Dword,
+        read: *mut Dword,
+        overlapped: *mut c_void,
+    ) -> Bool;
+    fn WriteFile(
+        file: Handle,
+        buffer: *const u8,
+        length: Dword,
+        written: *mut Dword,
+        overlapped: *mut c_void,
+    ) -> Bool;
+}
+
+// `DeriveCapabilitySidsFromName` is exported by `KernelBase.dll` (Microsoft
+// Learn names that DLL) and Rust's `windows-sys` binds it to the API set
+// `api-ms-win-security-base-l1-2-2.dll`; whether `kernel32.lib` has an import
+// for it is not known here, so the import is made from the DLL's name
+// (`raw-dylib`), which needs no import library. Not linked or run yet.
+#[link(name = "kernelbase", kind = "raw-dylib")]
+// SAFETY: docs DeriveCapabilitySidsFromName (securitybaseapi.h: `BOOL
+// DeriveCapabilitySidsFromName(LPCWSTR CapName, PSID **CapabilityGroupSids,
+// DWORD *CapabilityGroupSidCount, PSID **CapabilitySids, DWORD
+// *CapabilitySidCount)`). `PSID` is `*mut c_void`, so `PSID **` is a pointer to
+// a pointer to the first of an array of them. Not `pub`, not `safe`.
+unsafe extern "system" {
+    fn DeriveCapabilitySidsFromName(
+        name: *const u16,
+        group_sids: *mut *mut *mut c_void,
+        group_sid_count: *mut Dword,
+        sids: *mut *mut *mut c_void,
+        sid_count: *mut Dword,
+    ) -> Bool;
+}
+
+// SAFETY: docs C runtime `memcpy` (Microsoft Learn, C runtime library
+// reference, "memcpy, wmemcpy": `void *memcpy(void *dest, const void *src,
+// size_t count)`), in the C runtime every Rust program on this target links.
+// `size_t` is `usize`; `C` is its calling convention. Not `pub`, not `safe`.
+unsafe extern "C" {
+    fn memcpy(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 }
 
 #[link(name = "iphlpapi")]
@@ -228,6 +294,14 @@ const DETACHED_PROCESS: Dword = 0x0000_0008;
 const CREATE_UNICODE_ENVIRONMENT: Dword = 0x0000_0400;
 const STARTF_USESTDHANDLES: Dword = 0x0000_0100;
 const HANDLE_FLAG_INHERIT: Dword = 1;
+/// `SE_GROUP_ENABLED`, the attribute of a capability in `SECURITY_CAPABILITIES`.
+const SE_GROUP_ENABLED: Dword = 0x0000_0004;
+/// `DUPLICATE_SAME_ACCESS`.
+const DUPLICATE_SAME_ACCESS: Dword = 0x0000_0002;
+/// `ERROR_BROKEN_PIPE`: the other end of a pipe is closed.
+const ERROR_BROKEN_PIPE: i32 = 109;
+/// The most SIDs one capability name is expected to give; more is an error.
+const MAX_CAPABILITY_SIDS: Dword = 16;
 const JOB_OBJECT_LIMIT_ACTIVE_PROCESS: Dword = 0x0000_0008;
 const JOB_OBJECT_LIMIT_PROCESS_MEMORY: Dword = 0x0000_0100;
 const JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: Dword = 0x0000_2000;
@@ -300,6 +374,9 @@ impl std::error::Error for SpawnError {}
 pub struct Policy<'a> {
     /// The AppContainer profile name; the SID is derived from it.
     pub container_name: &'a str,
+    /// The capabilities the token carries, by name (`registryRead`); their
+    /// SIDs are derived from the names.
+    pub capabilities: &'a [&'a str],
     /// The `PROCESS_CREATION_MITIGATION_POLICY_*` mask.
     pub mitigations: u64,
     /// Forbid creating child processes.
@@ -661,26 +738,150 @@ fn set_inherit(handle: &OwnedHandle, on: bool) -> Result<(), SpawnError> {
     Ok(())
 }
 
+/// The SIDs `DeriveCapabilitySidsFromName` allocated for some capability
+/// names: every SID and both arrays of each call, freed when dropped.
+struct CapabilitySids {
+    /// The capability SIDs (not the group SIDs), in the names' order.
+    capabilities: Vec<*mut c_void>,
+    /// Everything to give to `LocalFree`: each SID, then each array.
+    allocations: Vec<*mut c_void>,
+}
+
+impl Drop for CapabilitySids {
+    fn drop(&mut self) {
+        for memory in self.allocations.drain(..) {
+            // SAFETY: docs LocalFree: frees memory the system allocated with
+            // LocalAlloc. docs DeriveCapabilitySidsFromName says the caller
+            // frees each SID and each array it returned with LocalFree;
+            // `memory` is one of those, kept only in this list, freed once.
+            let _ = unsafe { LocalFree(memory) };
+        }
+    }
+}
+
+/// The `count` pointers of the array at `array`, copied out.
+fn copy_pointers(array: *mut *mut c_void, count: Dword) -> Vec<*mut c_void> {
+    let mut out: Vec<*mut c_void> = vec![std::ptr::null_mut(); count as usize];
+    if array.is_null() || out.is_empty() {
+        return Vec::new();
+    }
+    let dst: *mut c_void = out.as_mut_ptr().cast();
+    let src: *const c_void = array.cast_const().cast();
+    let len = size_of::<*mut c_void>().saturating_mul(out.len());
+    // SAFETY: docs C runtime `memcpy`: copies `count` bytes from `src` to
+    // `dest`, which must not overlap. `src` is an array of `count` PSIDs that
+    // DeriveCapabilitySidsFromName allocated and reported the length of (the
+    // callers pass exactly that pair), `dst` is the `Vec` just made with as
+    // many pointer-sized elements, and `len` is their size in bytes.
+    let _ = unsafe { memcpy(dst, src, len) };
+    out
+}
+
+/// The SIDs of the capabilities called `names`.
+fn capability_sids(names: &[&str]) -> Result<CapabilitySids, SpawnError> {
+    let mut all = CapabilitySids {
+        capabilities: Vec::new(),
+        allocations: Vec::new(),
+    };
+    for name in names {
+        let name_w = wide(name)?;
+        let name_ptr: *const u16 = name_w.as_ptr();
+        let mut group_array: *mut *mut c_void = std::ptr::null_mut();
+        let mut group_count: Dword = 0;
+        let mut sid_array: *mut *mut c_void = std::ptr::null_mut();
+        let mut sid_count: Dword = 0;
+        let group_slot: *mut *mut *mut c_void = &raw mut group_array;
+        let group_count_slot: *mut Dword = &raw mut group_count;
+        let sid_slot: *mut *mut *mut c_void = &raw mut sid_array;
+        let sid_count_slot: *mut Dword = &raw mut sid_count;
+        // SAFETY: docs DeriveCapabilitySidsFromName: `CapName` is a
+        // NUL-terminated wide string (`name_w`, live); the other four receive
+        // two arrays of SIDs and their lengths, which the caller frees. Each
+        // slot points to a live local.
+        let ok = unsafe {
+            DeriveCapabilitySidsFromName(
+                name_ptr,
+                group_slot,
+                group_count_slot,
+                sid_slot,
+                sid_count_slot,
+            )
+        };
+        if ok == 0 {
+            return Err(last("DeriveCapabilitySidsFromName"));
+        }
+        let groups = copy_pointers(group_array, group_count.min(MAX_CAPABILITY_SIDS));
+        let sids = copy_pointers(sid_array, sid_count.min(MAX_CAPABILITY_SIDS));
+        // Everything returned is owned by `all` from here, whatever follows.
+        all.allocations.extend(groups.iter().copied());
+        all.allocations.extend(sids.iter().copied());
+        all.allocations
+            .extend([group_array.cast::<c_void>(), sid_array.cast::<c_void>()]);
+        if group_count > MAX_CAPABILITY_SIDS || sid_count > MAX_CAPABILITY_SIDS || sids.is_empty() {
+            return Err(SpawnError::Call(
+                "DeriveCapabilitySidsFromName",
+                Errno::UNKNOWN,
+            ));
+        }
+        all.capabilities.extend(sids);
+    }
+    all.allocations.retain(|p| !p.is_null());
+    Ok(all)
+}
+
+/// The handles a started process is given: its three standard ones, and others
+/// it inherits by number.
+#[derive(Debug, Clone, Copy)]
+pub struct Handles<'a> {
+    /// Its standard input.
+    pub stdin: &'a OwnedHandle,
+    /// Its standard output.
+    pub stdout: &'a OwnedHandle,
+    /// Its standard error.
+    pub stderr: &'a OwnedHandle,
+    /// Handles it inherits besides: each has the same value in the child, which
+    /// its caller tells it (on the command line) and it opens with
+    /// [`Inherited::open`].
+    pub inherit: &'a [&'a OwnedHandle],
+}
+
 /// Start `program` with `command_line` (the whole line, program name first;
 /// see [`quote_arg`]) inside the AppContainer and job of `policy`, with the
-/// three handles as its standard input, output and error and nothing else
-/// inherited. The environment is exactly `environment`. The process runs from the start under
+/// handles of `handles` and nothing else inherited. The
+/// environment is exactly `environment`. The process runs from the start under
 /// its token: there is no moment when it is unconfined.
 pub fn spawn(
     program: &Path,
     command_line: &str,
     policy: &Policy<'_>,
     environment: &[(&str, &str)],
-    stdin: &OwnedHandle,
-    stdout: &OwnedHandle,
-    stderr: &OwnedHandle,
+    handles: &Handles<'_>,
 ) -> Result<Process, SpawnError> {
+    let Handles {
+        stdin,
+        stdout,
+        stderr,
+        inherit,
+    } = *handles;
     let sid = container_sid(policy.container_name)?;
     let mut sid_bytes = sid.bytes.clone();
+    let capability_sids = capability_sids(policy.capabilities)?;
+    let mut capabilities: Vec<SidAndAttributes> = capability_sids
+        .capabilities
+        .iter()
+        .map(|sid| SidAndAttributes {
+            sid: *sid,
+            attributes: SE_GROUP_ENABLED,
+        })
+        .collect();
     let caps = SecurityCapabilities {
         app_container_sid: sid_bytes.as_mut_ptr().cast(),
-        capabilities: std::ptr::null_mut(),
-        capability_count: 0,
+        capabilities: if capabilities.is_empty() {
+            std::ptr::null_mut()
+        } else {
+            capabilities.as_mut_ptr().cast()
+        },
+        capability_count: capabilities.len() as Dword,
         reserved: 0,
     };
     let mut mitigations: u64 = policy.mitigations;
@@ -688,11 +889,16 @@ pub fn spawn(
     let mut lpac: Dword = PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT;
     let job = job(policy)?;
     let mut job_handle: Handle = job.0;
-    let mut inherited: [Handle; 3] = [
+    let passed: Vec<&OwnedHandle> = [stdin, stdout, stderr]
+        .into_iter()
+        .chain(inherit.iter().copied())
+        .collect();
+    let mut inherited: Vec<Handle> = passed.iter().map(|h| h.as_raw_handle() as isize).collect();
+    let standard = (
         stdin.as_raw_handle() as isize,
         stdout.as_raw_handle() as isize,
         stderr.as_raw_handle() as isize,
-    ];
+    );
     let count = 4u32
         .saturating_add(u32::from(policy.child_process_restricted))
         .saturating_add(u32::from(policy.opt_out_all_application_packages));
@@ -715,7 +921,7 @@ pub fn spawn(
     list.set(
         PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
         inherited.as_mut_ptr().cast(),
-        size_of::<[Handle; 3]>(),
+        size_of::<Handle>().saturating_mul(inherited.len()),
     )?;
     if policy.opt_out_all_application_packages {
         list.set(
@@ -752,9 +958,9 @@ pub fn spawn(
             show_window: 0,
             cb_reserved2: 0,
             reserved2: std::ptr::null_mut(),
-            std_input: inherited[0],
-            std_output: inherited[1],
-            std_error: inherited[2],
+            std_input: standard.0,
+            std_output: standard.1,
+            std_error: standard.2,
         },
         attribute_list: list.ptr(),
     };
@@ -765,14 +971,12 @@ pub fn spawn(
         thread_id: 0,
     };
 
-    let inheritable = set_inherit(stdin, true)
-        .and_then(|()| set_inherit(stdout, true))
-        .and_then(|()| set_inherit(stderr, true));
+    let inheritable = passed.iter().try_for_each(|h| set_inherit(h, true));
     if let Err(e) = inheritable {
         // Put back whatever was already switched on.
-        let _ = set_inherit(stdin, false);
-        let _ = set_inherit(stdout, false);
-        let _ = set_inherit(stderr, false);
+        for h in &passed {
+            let _ = set_inherit(h, false);
+        }
         return Err(e);
     }
     let startup_ptr: *mut StartupInfoExW = &raw mut startup;
@@ -787,7 +991,11 @@ pub fn spawn(
     // (`program_w`) and `command_line` a writable NUL-terminated wide buffer
     // (`line_w`); both live to the end of the call. Process and thread
     // attributes are NULL. `inherit_handles` is TRUE, limited by the handle
-    // list attribute to the three handles. `flags` has
+    // list attribute to the handles of `inherited` (the three standard ones and
+    // the caller's extra ones, each made inheritable above). The security
+    // capabilities attribute points to `caps`, whose capability array is
+    // `capabilities` (`SID_AND_ATTRIBUTES`, one per SID that `capability_sids`
+    // still owns), all alive until the end of this function. `flags` has
     // EXTENDED_STARTUPINFO_PRESENT, so `startup_info` is a STARTUPINFOEXW
     // (`StartupInfoExW`, `cb` set to its size) whose `attribute_list` is the
     // initialised list, with every value it refers to still alive. With
@@ -815,9 +1023,9 @@ pub fn spawn(
     };
     // The handles go back to non-inheritable whether or not the spawn worked,
     // so a later spawn of another renderer cannot inherit this one's pipes.
-    let _ = set_inherit(stdin, false);
-    let _ = set_inherit(stdout, false);
-    let _ = set_inherit(stderr, false);
+    for h in &passed {
+        let _ = set_inherit(h, false);
+    }
     if let Some(e) = failure {
         return Err(e);
     }
@@ -826,11 +1034,126 @@ pub fn spawn(
     let job_raw = job.0;
     std::mem::forget(job);
     drop(list);
+    drop(capability_sids);
     Ok(Process {
         process: info.process,
         job: job_raw,
         pid: info.process_id,
     })
+}
+
+/// A handle this process inherited from the one that started it, given by its
+/// number (`--list-fd N` on the command line): the bytes of a pipe, read or
+/// written.
+///
+/// Safe Rust cannot adopt a handle from a number (`FromRawHandle` is `unsafe`:
+/// the number may be a handle something else owns). So this duplicates it
+/// (`DuplicateHandle`) and owns only the duplicate, which nothing else can
+/// know; the inherited handle itself is left open and never closed, as an
+/// inherited descriptor is on Unix after `/dev/fd/N` is opened. A number that
+/// is no handle fails here, or ends the process where the policy has
+/// `STRICT_HANDLE_CHECKS`, which is the GPU process's and the renderer's.
+#[derive(Debug)]
+pub struct Inherited(Handle);
+
+impl Inherited {
+    /// A duplicate of the handle whose value is `number`, with the same access.
+    pub fn open(number: u64) -> Result<Inherited, SpawnError> {
+        let source = isize::try_from(number)
+            .map_err(|_| SpawnError::Call("DuplicateHandle", Errno::UNKNOWN))?;
+        let mut duplicate: Handle = 0;
+        let slot: *mut Handle = &raw mut duplicate;
+        // SAFETY: docs DuplicateHandle: duplicates `source` of the source
+        // process into the target process and stores the new handle in
+        // `target`; both processes are this one (docs GetCurrentProcess: the
+        // pseudo-handle -1), the access is the source's
+        // (DUPLICATE_SAME_ACCESS), and the duplicate is not inheritable. A
+        // `source` that is not a handle is an error. `slot` points to the live
+        // local `duplicate`.
+        let ok = unsafe {
+            DuplicateHandle(
+                CURRENT_PROCESS,
+                source,
+                CURRENT_PROCESS,
+                slot,
+                0,
+                0,
+                DUPLICATE_SAME_ACCESS,
+            )
+        };
+        if ok == 0 || duplicate == 0 {
+            return Err(last("DuplicateHandle"));
+        }
+        Ok(Inherited(duplicate))
+    }
+}
+
+impl Drop for Inherited {
+    fn drop(&mut self) {
+        // SAFETY: docs CloseHandle: closes the duplicate this value owns, once.
+        unsafe { CloseHandle(self.0) };
+    }
+}
+
+/// The most bytes one `ReadFile` or `WriteFile` is asked for.
+const IO_CHUNK: usize = 1 << 20;
+
+impl std::io::Read for Inherited {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let len = buf.len().min(IO_CHUNK) as Dword;
+        let buffer: *mut u8 = buf.as_mut_ptr();
+        let mut read: Dword = 0;
+        let slot: *mut Dword = &raw mut read;
+        let synchronous: *mut c_void = std::ptr::null_mut();
+        // SAFETY: docs ReadFile: reads up to `nNumberOfBytesToRead` bytes from
+        // the handle into `lpBuffer` and stores how many in
+        // `lpNumberOfBytesRead`; `buffer` is the caller's slice, at least `len`
+        // bytes long, `slot` points to the live local `read`, and
+        // `lpOverlapped` is NULL: the handle is a duplicate of an anonymous
+        // pipe's end, which is synchronous. The handle is this value's own.
+        let ok = unsafe { ReadFile(self.0, buffer, len, slot, synchronous) };
+        if ok == 0 {
+            let error = std::io::Error::last_os_error();
+            // The writer closed its end: the end of the stream.
+            return if error.raw_os_error() == Some(ERROR_BROKEN_PIPE) {
+                Ok(0)
+            } else {
+                Err(error)
+            };
+        }
+        Ok(read as usize)
+    }
+}
+
+impl std::io::Write for Inherited {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if buf.is_empty() {
+            return Ok(0);
+        }
+        let len = buf.len().min(IO_CHUNK) as Dword;
+        let buffer: *const u8 = buf.as_ptr();
+        let mut written: Dword = 0;
+        let slot: *mut Dword = &raw mut written;
+        let synchronous: *mut c_void = std::ptr::null_mut();
+        // SAFETY: docs WriteFile: writes up to `nNumberOfBytesToWrite` bytes
+        // from `lpBuffer` to the handle and stores how many in
+        // `lpNumberOfBytesWritten`; `buffer` is the caller's slice, at least
+        // `len` bytes long, `slot` points to the live local `written`, and
+        // `lpOverlapped` is NULL, as in `read`. The handle is this value's own.
+        let ok = unsafe { WriteFile(self.0, buffer, len, slot, synchronous) };
+        if ok == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(written as usize)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        // A pipe has no buffer of ours to flush.
+        Ok(())
+    }
 }
 
 /// A `CreateProcessW` environment block: each `name=value` then a NUL, and a
