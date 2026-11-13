@@ -104,7 +104,7 @@ fn headless(kind: &str) {
     let url = format!("http://{}/", server.addr);
     let ran = gpu::output(
         Command::new(&f.clazel)
-            .args(["browse", "--headless"])
+            .args(["--headless"])
             .arg(&out)
             .args(["--size", "64x48", &url])
             .env("CLAZEL_RENDERER", &f.script)
@@ -312,7 +312,7 @@ fn headless_writes_a_real_pages_png() {
     let out = f.dir.join("page.png");
     let ran = gpu::output(
         Command::new(&f.clazel)
-            .args(["browse", "--headless"])
+            .args(["--headless"])
             .arg(&out)
             .args(["--size", "200x120", &format!("http://{}/", server.addr)])
             .env("CLAZEL_RENDERER", &f.renderer)

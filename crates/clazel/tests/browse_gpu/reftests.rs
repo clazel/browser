@@ -93,7 +93,7 @@ impl Render for Headless {
         let url = format!("http://{}/{path}", self.server.addr);
         let ran = crate::gpu::output(
             Command::new(&self.clazel)
-                .args(["browse", "--headless"])
+                .args(["--headless"])
                 .arg(&self.out)
                 .args(["--size", "800x600", &url])
                 .env("CLAZEL_RENDERER", &self.renderer)

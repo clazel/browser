@@ -279,7 +279,7 @@ fn lying(mode: &str) -> Option<(u32, u32)> {
     // `browse --headless` shows nothing and ends with its error, not a signal.
     let out = f.dir.join("out.png");
     let ran = Command::new(f.renderer.with_file_name("clazel"))
-        .args(["browse", "--headless"])
+        .args(["--headless"])
         .arg(&out)
         .args([
             "--size",

@@ -1,4 +1,4 @@
-//! The files `clazel browse --headless OUT URL` writes (phase-5.md item 5.23): a
+//! The files `clazel --headless OUT URL` writes (phase-5.md item 5.23): a
 //! PPM, or a PNG whose deflate stream is stored (uncompressed) blocks, both
 //! written here (CLAUDE.md rule 8: no image library).
 //!

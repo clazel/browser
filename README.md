@@ -27,7 +27,7 @@ Phase 2 theorems still hold with network events. The network shell
 handshake and the libcrux join are partly built at Tier 0; `clazel fetch`
 uses them for `https://`, but certificate chains with a P-384 issuer key
 are refused for now, so most sites fail, and they are not yet joined to the
-kernel, so `clazel browse` speaks only `http://`. What
+kernel, so `clazel URL` speaks only `http://`. What
 remains is listed in [docs/phases/phase-3.md](docs/phases/phase-3.md#status).
 
 Phase 4 (HTML and DOM) is built but not yet complete: every CI job but
@@ -119,15 +119,16 @@ with Mozilla's roots as the trust store; until P-384 issuer keys are
 supported, a chain that has one (most sites today) fails with `unknown_ca`.
 
 ```sh
-target/release/clazel browse --text http://info.cern.ch/  # text-mode browser: title, text, numbered links
+target/release/clazel --text http://info.cern.ch/  # text-mode browser: title, text, numbered links
 ```
 
-On macOS on Apple silicon, `clazel browse URL` opens a window instead (phase-5.md
+On macOS on Apple silicon, `clazel URL` opens a window instead, and `clazel` alone
+opens one with no page and the address bar ready to type in (phase-5.md
 item 5.23): an address bar drawn by the host and the page drawn by a sandboxed GPU
 process, one per tab (`cargo build --bin clazel-gpu` too), laid out by the renderer
 (item 5.20) in the system's TrueType fonts; linked style sheets wait for item 5.19.
-`clazel browse --headless OUT URL` writes the
-page as a PNG (or a PPM, for `OUT` ending in `.ppm`). Elsewhere, `browse URL` is the
+`clazel --headless OUT URL` writes the
+page as a PNG (or a PPM, for `OUT` ending in `.ppm`). Elsewhere, `clazel URL` is the
 text mode.
 
 In text mode, `browse` shows a page as text, with its links numbered: type a number to

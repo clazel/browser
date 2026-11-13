@@ -1,20 +1,25 @@
 //! The command line of the host shell (not part of the line-counted shell in
 //! `src/`: it only calls `Host`'s public functions).
 //!
+//! - `clazel [URL]`: the browser with a window of phase-5.md item 5.23
+//!   (`window.rs`), on macOS on Apple silicon in a window server session, at
+//!   URL, or with no page and the address bar focused. Elsewhere, or with
+//!   `--text`, the text-mode browser of phase-4.md item 4.15 (`browse.rs`),
+//!   which needs the URL. The host's log of frames goes to standard error.
+//! - `clazel --headless OUT [--size WxH] [--wait S] URL`: render one page to
+//!   `OUT`, a PNG or (`.ppm`) a PPM, without a window (item 5.23).
+//! - `--gpu=hardware` with either ignores the driver blocklist (item 5.17c),
+//!   with a warning.
 //! - `clazel URL SCRIPT`: open a tab at URL running SCRIPT (operations, one
 //!   per line, in `clazel-renderer`'s format) and print what the renderer and
 //!   the kernel say to each other.
 //! - `clazel demo`: the exit demo of phase-2.md item 2.16 (`demo.rs`).
 //! - `clazel fetch URL`: one `http://` GET, printing the response
 //!   (`fetch.rs`, Phase 3 item 3.8; no renderer involved).
-//! - `clazel browse URL`: the browser with a window of phase-5.md item 5.23
-//!   (`window.rs`), on macOS on Apple silicon in a window server session;
-//!   elsewhere, or with `--text`, the text-mode browser of phase-4.md item 4.15
-//!   (`browse.rs`). The host's log of frames goes to standard error.
-//! - `clazel browse --headless OUT URL [--size WxH] [--wait S]`: render one page to `OUT`, a
-//!   PNG or (`.ppm`) a PPM, without a window (item 5.23).
-//! - `--gpu=hardware` with `browse` ignores the driver blocklist (item 5.17c), with
-//!   a warning.
+//!
+//! Arguments that start with `--` are options; `--headless`, `--size` and
+//! `--wait` take the next argument. Of what is left, none or one is the
+//! browser, and two (with no option) are `URL SCRIPT`.
 //!
 //! The renderer is `$CLAZEL_RENDERER`, or `clazel-renderer` next to this
 //! binary, built with `cargo build -p clazel-renderer` if it is not there
@@ -25,12 +30,12 @@ mod browse;
 mod demo;
 mod fetch;
 mod picture;
+#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
 mod strip;
 #[cfg(test)]
 mod strip_tests;
 mod window;
 
-#[cfg(any(test, all(target_os = "macos", target_arch = "aarch64")))]
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 use std::time::Duration;
@@ -87,7 +92,7 @@ fn columns() -> usize {
         .unwrap_or(80)
 }
 
-/// `clazel browse URL` on standard input and output, `width` columns wide.
+/// `clazel --text URL` on standard input and output, `width` columns wide.
 fn browse_stdio(mut host: clazel::Host, url: &str, width: usize) -> ExitCode {
     let mut out = std::io::stdout().lock();
     match browse::browse(&mut host, url, std::io::stdin().lock(), &mut out, width) {
@@ -115,14 +120,18 @@ fn main() -> ExitCode {
     };
     // Renderers lay documents out at the terminal's width (item 4.13).
     let width = columns();
-    let mut host = text_host(renderer.clone(), width);
-    if args.get(1).map(String::as_str) == Some("browse") {
-        drop(host);
-        return browse_command(renderer, args.get(2..).unwrap_or_default(), width);
+    let rest = args.get(1..).unwrap_or_default();
+    let Some(places) = positionals(rest) else {
+        return usage();
+    };
+    let options = rest.iter().any(|a| a.starts_with("--"));
+    if places.len() <= 1 && (options || places.first().copied() != Some("demo")) {
+        return browse_command(renderer, rest, places.first().copied(), width);
     }
-    match (args.get(1).map(String::as_str), args.get(2)) {
+    let mut host = text_host(renderer.clone(), width);
+    match (places.first().copied(), places.get(1)) {
         (Some("demo"), None) => demo::run(host),
-        (Some(url), Some(script)) => {
+        (Some(url), Some(script)) if places.len() == 2 && !options => {
             host.open_tab(url, script);
             if host.live() > 0 && host.run(Duration::from_secs(30)) {
                 return ExitCode::SUCCESS;
@@ -136,10 +145,25 @@ fn main() -> ExitCode {
 
 fn usage() -> ExitCode {
     eprintln!(
-        "usage: clazel URL SCRIPT | clazel demo | clazel fetch URL | \
-         clazel browse [--text | --headless OUT [--size WxH] [--wait S]] [--gpu=hardware] URL"
+        "usage: clazel [--text | --headless OUT [--size WxH] [--wait S]] [--gpu=hardware] [URL] | \
+         clazel URL SCRIPT | clazel demo | clazel fetch URL"
     );
     ExitCode::from(2)
+}
+
+/// The arguments that are neither options (`--...`) nor an option's value
+/// (after `--headless`, `--size` or `--wait`); `None` if a value is missing.
+fn positionals(args: &[String]) -> Option<Vec<&str>> {
+    let mut places = Vec::new();
+    let mut rest = args.iter();
+    while let Some(a) = rest.next() {
+        if matches!(a.as_str(), "--headless" | "--size" | "--wait") {
+            rest.next()?;
+        } else if !a.starts_with("--") {
+            places.push(a.as_str());
+        }
+    }
+    Some(places)
 }
 
 /// `WxH`, each side 1 to 8192.
@@ -159,24 +183,32 @@ fn text_host(renderer: PathBuf, width: usize) -> clazel::Host {
     })
 }
 
-/// `clazel browse ...`.
-fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode {
+/// The browser: `args` are the options, `url` the page to start at if one was
+/// given (text mode and `--headless` need it).
+fn browse_command(renderer: PathBuf, args: &[String], url: Option<&str>, width: usize) -> ExitCode {
     let flag = |f: &str| args.iter().any(|a| a == f);
     let value = |f: &str| {
         let i = args.iter().position(|a| a == f)?;
         args.get(i.checked_add(1)?).cloned()
     };
-    let Some(url) = args.last().filter(|u| !u.starts_with("--")) else {
-        return usage();
-    };
     let headless = value("--headless");
-    if flag("--text") {
-        return browse_stdio(text_host(renderer, width), url, width);
-    }
-    if headless.is_none()
-        && let Err(why) = window_available()
-    {
-        eprintln!("clazel: {why}; browsing in text mode");
+    let text = if flag("--text") {
+        Some(None)
+    } else if headless.is_none() {
+        window_available().err().map(Some)
+    } else {
+        None
+    };
+    if let Some(why) = text {
+        let Some(url) = url else {
+            if let Some(why) = why {
+                eprintln!("clazel: {why}, and text mode needs a URL");
+            }
+            return usage();
+        };
+        if let Some(why) = why {
+            eprintln!("clazel: {why}; browsing in text mode");
+        }
         return browse_stdio(text_host(renderer, width), url, width);
     }
     let gpu = match sibling("CLAZEL_GPU", "clazel-gpu") {
@@ -217,6 +249,9 @@ fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode 
             Some(Ok(s)) => Duration::from_secs(s),
             Some(Err(_)) => return usage(),
         };
+        let Some(url) = url else {
+            return usage();
+        };
         return match window::headless(&mut host, std::path::Path::new(&out), url, dims, wait) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -241,7 +276,7 @@ fn window_available() -> Result<(), &'static str> {
 }
 
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-fn browse_window(mut host: clazel::Host, url: &str, _width: usize) -> ExitCode {
+fn browse_window(mut host: clazel::Host, url: Option<&str>, _width: usize) -> ExitCode {
     match window::mac::run(&mut host, url) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -252,6 +287,9 @@ fn browse_window(mut host: clazel::Host, url: &str, _width: usize) -> ExitCode {
 }
 
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
-fn browse_window(host: clazel::Host, url: &str, width: usize) -> ExitCode {
-    browse_stdio(host, url, width)
+fn browse_window(host: clazel::Host, url: Option<&str>, width: usize) -> ExitCode {
+    match url {
+        Some(url) => browse_stdio(host, url, width),
+        None => usage(),
+    }
 }
