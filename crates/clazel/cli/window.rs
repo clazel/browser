@@ -305,7 +305,7 @@ pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
 /// The scroll, in device pixels (positive down), that a key with DOM `keyCode`
 /// `code` asks for in a content area `page` pixels tall at `scale`.
 pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
-    let page = i64::from(page) / 8 * 7;
+    let page = (i64::from(page) / 8).saturating_mul(7);
     let line = 40i64.saturating_mul(i64::try_from(scale).unwrap_or(1));
     match code {
         32 | 34 => Some(page),

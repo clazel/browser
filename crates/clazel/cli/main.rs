@@ -160,11 +160,11 @@ fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode 
     if flag("--text") {
         return browse_stdio(text_host(renderer, width), url, width);
     }
-    if headless.is_none() {
-        if let Err(why) = window_available() {
-            eprintln!("clazel: {why}; browsing in text mode");
-            return browse_stdio(text_host(renderer, width), url, width);
-        }
+    if headless.is_none()
+        && let Err(why) = window_available()
+    {
+        eprintln!("clazel: {why}; browsing in text mode");
+        return browse_stdio(text_host(renderer, width), url, width);
     }
     let gpu = match sibling("CLAZEL_GPU", "clazel-gpu") {
         Ok(path) => path,
