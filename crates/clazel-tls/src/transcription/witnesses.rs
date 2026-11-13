@@ -1278,4 +1278,228 @@ proof fn alert_protection()
         == protect_record(toy_primitives(), conn_connected().send->Protected_0, ct_alert(), seq![1u8, 0])) by (compute);
 }
 
+// --------------------------------------------------------------------------
+// §6.1, closure of either side.
+// --------------------------------------------------------------------------
+
+/// CONNECTED, after our close_notify.
+pub open spec fn conn_write_closed() -> Connection {
+    close_write_side(toy_primitives(), conn_connected()).1
+}
+
+/// CONNECTED, after the server's close_notify.
+pub open spec fn conn_read_closed() -> Connection {
+    conn_after(stream_result(conn_connected(), server_ap_record(0, ct_alert(), seq![1u8, 0])))
+}
+
+/// WAIT_EE, after the server's close_notify under its handshake keys.
+pub open spec fn conn_wait_ee_read_closed() -> Connection {
+    conn_after(stream_result(conn_wait_ee(), server_hs_record(0, ct_alert(), seq![1u8, 0])))
+}
+
+/// WAIT_EE, after our close_notify.
+pub open spec fn conn_wait_ee_write_closed() -> Connection {
+    close_write_side(toy_primitives(), conn_wait_ee()).1
+}
+
+/// §6.1: our close_notify, and the state after it.
+proof fn write_side_closure()
+    ensures
+        // The close_notify record, under the application keys, and the state after it.
+        close_write_side(toy_primitives(), conn_connected()).0
+            == seq![protect_record(toy_primitives(), conn_connected().send->Protected_0, ct_alert(), seq![1u8, 0])],
+        conn_write_closed().write_closed,
+        !conn_write_closed().read_closed,
+        conn_write_closed().handshake.state == ClientState::Connected,
+        // A second close_notify writes nothing.
+        close_write_side(toy_primitives(), conn_write_closed()).0 == Seq::<Seq<u8>>::empty(),
+{
+    assert(close_write_side(toy_primitives(), conn_connected()).0
+        == seq![protect_record(toy_primitives(), conn_connected().send->Protected_0, ct_alert(), seq![1u8, 0])]) by (compute);
+    assert(conn_write_closed().write_closed) by (compute);
+    assert(!conn_write_closed().read_closed) by (compute);
+    assert(conn_write_closed().handshake.state == ClientState::Connected) by (compute);
+    assert(close_write_side(toy_primitives(), conn_write_closed()).0 == Seq::<Seq<u8>>::empty()) by (compute);
+}
+
+/// §6.1: after our close_notify, every later operation of ours writes nothing.
+proof fn nothing_sent_after_close()
+    ensures
+        // No application data.
+        send_application_data(toy_primitives(), conn_write_closed(), seq![9u8]) == SendResult::WriteClosed,
+        // No KeyUpdate, whether asked for or owed.
+        request_key_update(toy_primitives(), conn_write_closed(), update_requested()) == SendResult::WriteClosed,
+        (close_write_side(toy_primitives(), conn_updated()).1).key_update_owed,
+        send_application_data(toy_primitives(), close_write_side(toy_primitives(), conn_updated()).1, seq![9u8]) == SendResult::WriteClosed,
+        // An owed KeyUpdate is not sent before the close_notify either.
+        close_write_side(toy_primitives(), conn_updated()).0
+            == seq![protect_record(toy_primitives(), conn_updated().send->Protected_0, ct_alert(), seq![1u8, 0])],
+        // No error alert: before the close one record, after it none.
+        abort_records(toy_primitives(), conn_connected(), ClientError::Malformed)
+            == seq![abort_record(toy_primitives(), conn_connected(), ClientError::Malformed)],
+        abort_records(toy_primitives(), conn_write_closed(), ClientError::Malformed) == Seq::<Seq<u8>>::empty(),
+{
+    assert(send_application_data(toy_primitives(), conn_write_closed(), seq![9u8]) == SendResult::WriteClosed) by (compute);
+    assert(request_key_update(toy_primitives(), conn_write_closed(), update_requested()) == SendResult::WriteClosed) by (compute);
+    assert((close_write_side(toy_primitives(), conn_updated()).1).key_update_owed) by (compute);
+    assert(send_application_data(toy_primitives(), close_write_side(toy_primitives(), conn_updated()).1, seq![9u8]) == SendResult::WriteClosed) by (compute);
+    assert(close_write_side(toy_primitives(), conn_updated()).0
+        == seq![protect_record(toy_primitives(), conn_updated().send->Protected_0, ct_alert(), seq![1u8, 0])]) by (compute);
+    assert(abort_records(toy_primitives(), conn_connected(), ClientError::Malformed)
+        == seq![abort_record(toy_primitives(), conn_connected(), ClientError::Malformed)]) by (compute);
+    assert(abort_records(toy_primitives(), conn_write_closed(), ClientError::Malformed) == Seq::<Seq<u8>>::empty()) by (compute);
+}
+
+/// §6.1: "This does not have any effect on its read side of the connection."
+proof fn reading_after_write_closure()
+    ensures
+        // Data is still delivered.
+        (stream_result(conn_write_closed(), server_ap_record(0, ct_application_data(), seq![1u8, 2]))->Continue_0).application_data == seq![1u8, 2],
+        // A KeyUpdate asking for one back still updates the receive keys, and writes nothing.
+        (stream_result(conn_write_closed(), server_ap_record(0, ct_handshake(), write_key_update(update_requested())))->Continue_0).records_to_send
+            == Seq::<Seq<u8>>::empty(),
+        (conn_after(stream_result(conn_write_closed(), server_ap_record(0, ct_handshake(), write_key_update(update_requested())))).receive->Protected_0).secret
+            == next_application_traffic_secret(toy_primitives(), (conn_connected().receive->Protected_0).secret),
+        // An error alert from the peer still ends the connection.
+        stream_result(conn_write_closed(), server_ap_record(0, ct_alert(), seq![2u8, 40])) == Receive::PeerError(40),
+{
+    assert((stream_result(conn_write_closed(), server_ap_record(0, ct_application_data(), seq![1u8, 2]))->Continue_0).application_data == seq![1u8, 2]) by (compute);
+    assert((stream_result(conn_write_closed(), server_ap_record(0, ct_handshake(), write_key_update(update_requested())))->Continue_0).records_to_send
+        == Seq::<Seq<u8>>::empty()) by (compute);
+    assert((conn_after(stream_result(conn_write_closed(), server_ap_record(0, ct_handshake(), write_key_update(update_requested())))).receive->Protected_0).secret
+        == next_application_traffic_secret(toy_primitives(), (conn_connected().receive->Protected_0).secret)) by (compute);
+    assert(stream_result(conn_write_closed(), server_ap_record(0, ct_alert(), seq![2u8, 40])) == Receive::PeerError(40)) by (compute);
+}
+
+/// §4.6.3: a KeyUpdate the application asks for.
+proof fn requested_key_updates()
+    ensures
+        // Under the old key, then the next generation at number 0.
+        match request_key_update(toy_primitives(), conn_connected(), update_requested()) {
+            SendResult::Sent(records, after) => {
+                &&& records == seq![protect_record(toy_primitives(), conn_connected().send->Protected_0, ct_handshake(), write_key_update(update_requested()))]
+                &&& after.send == updated_traffic(toy_primitives(), Protection::Protected(TrafficState {
+                    sequence_number: 1, ..conn_connected().send->Protected_0 }))
+                &&& (after.send->Protected_0).sequence_number == 0
+            },
+            _ => false,
+        },
+        // "update_not_requested" pays an owed one; "update_requested" does not.
+        match request_key_update(toy_primitives(), conn_updated(), update_not_requested()) {
+            SendResult::Sent(_, after) => !after.key_update_owed,
+            _ => false,
+        },
+        match request_key_update(toy_primitives(), conn_updated(), update_requested()) {
+            SendResult::Sent(_, after) => after.key_update_owed,
+            _ => false,
+        },
+        // "after it has sent a Finished message".
+        request_key_update(toy_primitives(), conn_wait_ee(), update_not_requested()) == SendResult::NotConnected,
+{
+    assert(match request_key_update(toy_primitives(), conn_connected(), update_requested()) {
+        SendResult::Sent(records, after) => {
+            &&& records == seq![protect_record(toy_primitives(), conn_connected().send->Protected_0, ct_handshake(), write_key_update(update_requested()))]
+            &&& after.send == updated_traffic(toy_primitives(), Protection::Protected(TrafficState {
+                sequence_number: 1, ..conn_connected().send->Protected_0 }))
+            &&& (after.send->Protected_0).sequence_number == 0
+        },
+        _ => false,
+    }) by (compute);
+    assert(match request_key_update(toy_primitives(), conn_updated(), update_not_requested()) {
+        SendResult::Sent(_, after) => !after.key_update_owed,
+        _ => false,
+    }) by (compute);
+    assert(match request_key_update(toy_primitives(), conn_updated(), update_requested()) {
+        SendResult::Sent(_, after) => after.key_update_owed,
+        _ => false,
+    }) by (compute);
+    assert(request_key_update(toy_primitives(), conn_wait_ee(), update_not_requested()) == SendResult::NotConnected) by (compute);
+}
+
+/// §6.1: the server's close_notify, in CONNECTED and during the handshake.
+proof fn read_side_closure()
+    ensures
+        // CONNECTED: the read side closes, nothing is written, our write side stays open.
+        conn_read_closed().read_closed,
+        !conn_read_closed().write_closed,
+        conn_read_closed().handshake.state == ClientState::Connected,
+        end_of_data(conn_read_closed()),
+        !end_of_data(conn_connected()),
+        (stream_result(conn_connected(), server_ap_record(0, ct_alert(), seq![1u8, 0]))->Continue_0).records_to_send == Seq::<Seq<u8>>::empty(),
+        match send_application_data(toy_primitives(), conn_read_closed(), seq![9u8]) {
+            SendResult::Sent(records, _) => records.len() == 1,
+            _ => false,
+        },
+        // Then our own close_notify, and both sides are closed.
+        (close_write_side(toy_primitives(), conn_read_closed()).1).write_closed,
+        close_write_side(toy_primitives(), conn_read_closed()).0.len() == 1,
+        // What follows it is ignored, an error alert included.
+        stream_result(conn_read_closed(), server_ap_record(1, ct_alert(), seq![2u8, 40])) is Continue,
+        (stream_result(conn_read_closed(), server_ap_record(1, ct_application_data(), seq![1u8]))->Continue_0).application_data == no_bytes(),
+        // During the handshake: the read side closes, the A.1 state stays, nothing is written.
+        conn_wait_ee_read_closed().read_closed,
+        !conn_wait_ee_read_closed().write_closed,
+        conn_wait_ee_read_closed().handshake.state == ClientState::WaitEe,
+        (stream_result(conn_wait_ee(), server_hs_record(0, ct_alert(), seq![1u8, 0]))->Continue_0).records_to_send == Seq::<Seq<u8>>::empty(),
+        // The rest of the server's flight is ignored, so the handshake never completes.
+        conn_after(stream_result(conn_wait_ee_read_closed(), server_hs_record(1, ct_handshake(), toy_flight()))).handshake.state == ClientState::WaitEe,
+        // And in the clear, before ServerHello.
+        conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 0]))).handshake.state == ClientState::WaitSh,
+        (stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 0]))->Continue_0).records_to_send == Seq::<Seq<u8>>::empty(),
+{
+    assert(conn_read_closed().read_closed) by (compute);
+    assert(!conn_read_closed().write_closed) by (compute);
+    assert(conn_read_closed().handshake.state == ClientState::Connected) by (compute);
+    assert(end_of_data(conn_read_closed())) by (compute);
+    assert(!end_of_data(conn_connected())) by (compute);
+    assert((stream_result(conn_connected(), server_ap_record(0, ct_alert(), seq![1u8, 0]))->Continue_0).records_to_send == Seq::<Seq<u8>>::empty()) by (compute);
+    assert(match send_application_data(toy_primitives(), conn_read_closed(), seq![9u8]) {
+        SendResult::Sent(records, _) => records.len() == 1,
+        _ => false,
+    }) by (compute);
+    assert((close_write_side(toy_primitives(), conn_read_closed()).1).write_closed) by (compute);
+    assert(close_write_side(toy_primitives(), conn_read_closed()).0.len() == 1) by (compute);
+    assert(stream_result(conn_read_closed(), server_ap_record(1, ct_alert(), seq![2u8, 40])) is Continue) by (compute);
+    assert((stream_result(conn_read_closed(), server_ap_record(1, ct_application_data(), seq![1u8]))->Continue_0).application_data == no_bytes()) by (compute);
+    assert(conn_wait_ee_read_closed().read_closed) by (compute);
+    assert(!conn_wait_ee_read_closed().write_closed) by (compute);
+    assert(conn_wait_ee_read_closed().handshake.state == ClientState::WaitEe) by (compute);
+    assert((stream_result(conn_wait_ee(), server_hs_record(0, ct_alert(), seq![1u8, 0]))->Continue_0).records_to_send == Seq::<Seq<u8>>::empty()) by (compute);
+    assert(conn_after(stream_result(conn_wait_ee_read_closed(), server_hs_record(1, ct_handshake(), toy_flight()))).handshake.state == ClientState::WaitEe) by (compute);
+    assert(conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 0]))).handshake.state == ClientState::WaitSh) by (compute);
+    assert((stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 0]))->Continue_0).records_to_send == Seq::<Seq<u8>>::empty()) by (compute);
+}
+
+/// §6.1: our close_notify during the handshake.
+proof fn write_side_closure_in_handshake()
+    ensures
+        // A.1's note: under the client's handshake keys, at number 0.
+        close_write_side(toy_primitives(), conn_wait_ee()).0 == seq![protect_record(toy_primitives(),
+            traffic_state(toy_primitives(), conn_wait_ee().handshake.client_handshake_traffic_secret), ct_alert(), seq![1u8, 0])],
+        conn_wait_ee_write_closed().write_closed,
+        // The server's flight is still read, and the state moves on, but the client's
+        // Finished is not written.
+        conn_after(stream_result(conn_wait_ee_write_closed(), server_hs_record(0, ct_handshake(), toy_flight()))).handshake.state
+            == ClientState::Connected,
+        (stream_result(conn_wait_ee_write_closed(), server_hs_record(0, ct_handshake(), toy_flight()))->Continue_0).records_to_send
+            == Seq::<Seq<u8>>::empty(),
+        // Nothing can be sent in any state after it.
+        send_application_data(toy_primitives(), conn_wait_ee_write_closed(), seq![9u8]) == SendResult::WriteClosed,
+        send_application_data(toy_primitives(),
+            conn_after(stream_result(conn_wait_ee_write_closed(), server_hs_record(0, ct_handshake(), toy_flight()))), seq![9u8])
+            == SendResult::WriteClosed,
+{
+    assert(close_write_side(toy_primitives(), conn_wait_ee()).0 == seq![protect_record(toy_primitives(),
+        traffic_state(toy_primitives(), conn_wait_ee().handshake.client_handshake_traffic_secret), ct_alert(), seq![1u8, 0])]) by (compute);
+    assert(conn_wait_ee_write_closed().write_closed) by (compute);
+    assert(conn_after(stream_result(conn_wait_ee_write_closed(), server_hs_record(0, ct_handshake(), toy_flight()))).handshake.state
+        == ClientState::Connected) by (compute);
+    assert((stream_result(conn_wait_ee_write_closed(), server_hs_record(0, ct_handshake(), toy_flight()))->Continue_0).records_to_send
+        == Seq::<Seq<u8>>::empty()) by (compute);
+    assert(send_application_data(toy_primitives(), conn_wait_ee_write_closed(), seq![9u8]) == SendResult::WriteClosed) by (compute);
+    assert(send_application_data(toy_primitives(),
+        conn_after(stream_result(conn_wait_ee_write_closed(), server_hs_record(0, ct_handshake(), toy_flight()))), seq![9u8])
+        == SendResult::WriteClosed) by (compute);
+}
+
 } // verus!
