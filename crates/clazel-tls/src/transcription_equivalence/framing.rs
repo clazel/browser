@@ -67,6 +67,13 @@
 //!    on that record joined with its result on the rest
 //!    (`post_handshake::joined`), and the unconsumed bytes stay with the
 //!    caller: what comes next is the caller's (the driver theorem's).
+//! 5. **The end of the transport** (§6.1, [`eof_pending`]). When the
+//!    transport ends while the framer waits on an incomplete record, that
+//!    record is the transcription's incomplete last record too (the bytes
+//!    `receive_stream` returns), and both discard it: no layer's end of the
+//!    transport reads the crate's framer, and `receive_transport_end`
+//!    reports `Truncated` with nothing written, not `decode_error`. Compared
+//!    exactly; what each machine does then is its theorem's.
 //!
 //! Where the two sides decide differently on a partial record (each stated
 //! as a definition, none excluded from a domain):
@@ -636,6 +643,45 @@ pub proof fn lemma_early_reject(p: Primitives, c: Connection, w: Seq<u8>, protec
 }
 
 // ---------------------------------------------------------------------------
+// §6.1: the end of the transport with a record pending.
+// ---------------------------------------------------------------------------
+
+/// **The end of the transport while the framer waits** (§6.1), compared
+/// exactly: when the crate's framer waits on `w` (an incomplete record),
+/// the transcription's division of `w` is that same incomplete record
+/// (no whole record, `SplitEnd::Partial(w)`); its `receive_stream` writes,
+/// delivers and changes nothing and returns exactly `w` as the bytes left
+/// over; and its `receive_transport_end` then discards them, reporting
+/// `Truncated` with the connection unchanged (its modelling choice "bytes
+/// pending are discarded, and are not `decode_error`"). On the crate's
+/// side no layer's end of the transport reads the framer's bytes
+/// (`bootstrap_spec::eof` of the state alone, the dispatcher's `eof`
+/// contract, the transducer's `step` on `Input::Closed`, which consumes
+/// nothing), so both discard exactly the same bytes, and neither calls them
+/// a `decode_error`. What each layer does then is its theorem's
+/// (`bootstrap::eof_fails`, `dispatcher::truncation_fails`,
+/// `post_handshake::eof_agrees`).
+pub open spec fn eof_pending(p: Primitives, c: Connection, w: Seq<u8>) -> bool {
+    &&& split(c, w) == Split { records: seq![], end: SplitEnd::Partial(w) }
+    &&& crate::transcription::connection::receive_stream(p, c, w)
+        == (Receive::Continue(super::post_handshake::transport_end_progress(c)), w)
+    &&& crate::transcription::connection::receive_transport_end(c)
+        == crate::transcription::connection::TransportEnd::Truncated(super::post_handshake::transport_end_progress(c))
+}
+
+/// [`eof_pending`], for a connection in the framer's protection with the
+/// read side open.
+pub proof fn lemma_eof_pending(p: Primitives, c: Connection, w: Seq<u8>, protected: bool)
+    requires
+        mode_agrees(c, protected),
+        !c.read_closed,
+        first(w, protected).0 is Pending,
+    ensures eof_pending(p, c, w),
+{
+    lemma_framing_agrees(c, w, protected);
+}
+
+// ---------------------------------------------------------------------------
 // Item 1 and 2: the framer-level theorem.
 // ---------------------------------------------------------------------------
 
@@ -645,7 +691,9 @@ pub proof fn lemma_early_reject(p: Primitives, c: Connection, w: Seq<u8>, protec
 /// protection, [`frames`] agrees with the transcription's division of
 /// those bytes ([`framing_agrees`]). For every header the crate rejects
 /// before its body has arrived ([`early_reject`]), every completion of it is
-/// rejected by both ([`lemma_early_reject`]).
+/// rejected by both ([`lemma_early_reject`]). When the transport ends while
+/// the framer waits, both discard the same incomplete record
+/// ([`eof_pending`]).
 pub proof fn theorem_framing_equivalence(p: Primitives)
     ensures
         forall|chunk: Seq<u8>, chunks: Seq<Seq<u8>>, protected: bool|
@@ -660,6 +708,10 @@ pub proof fn theorem_framing_equivalence(p: Primitives)
                     && (crate::transcription::alerts::required_alert(e) == alert as nat
                         || header_two_faults(b, protected))
             },
+        // §6.1: the end of the transport while the framer waits.
+        forall|c: Connection, w: Seq<u8>, protected: bool|
+            #[trigger] mode_agrees(c, protected) && !c.read_closed && (#[trigger] first(w, protected)).0 is Pending
+                ==> eof_pending(p, c, w),
 {
     assert forall|chunk: Seq<u8>, chunks: Seq<Seq<u8>>, protected: bool|
         #[trigger] drive(seq![], chunk, chunks, protected) == frames(chunk + super::ccs::flatten(chunks), protected) by {
@@ -680,6 +732,11 @@ pub proof fn theorem_framing_equivalence(p: Primitives)
                     || header_two_faults(b, protected))
         } by {
         lemma_early_reject(p, c, w, protected, alert, b);
+    }
+    assert forall|c: Connection, w: Seq<u8>, protected: bool|
+        #[trigger] mode_agrees(c, protected) && !c.read_closed && (#[trigger] first(w, protected)).0 is Pending
+            implies eof_pending(p, c, w) by {
+        lemma_eof_pending(p, c, w, protected);
     }
 }
 
