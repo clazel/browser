@@ -6,6 +6,9 @@
 //!   Command-L is the key where L is on a US layout.
 //! - Windows: the virtual-key codes of `<WinUser.h>` (`VK_RETURN` 0x0D, `'L'`
 //!   0x4C, `VK_OEM_4` 0xDB for `[`), which follow the layout.
+//! - Linux (X11): the keysym in the first column of the key's keycode
+//!   (`<X11/keysymdef.h>`: `XK_Return` 0xFF0D, `XK_l` 0x6C, `XK_bracketleft`
+//!   0x5B), which follows the layout and ignores Shift.
 //!
 //! A code outside the table names nothing; its typed characters still arrive as
 //! [`crate::Event::Char`].
@@ -75,6 +78,24 @@ pub const WINDOWS: [(u32, Named); 13] = [
     (0xDB, Named::LeftBracket),
 ];
 
+/// X11's keysyms for [`Named`], from `<X11/keysymdef.h>`: the unshifted keysym
+/// of the key.
+pub const X11: [(u32, Named); 13] = [
+    (0xFF0D, Named::Return),
+    (0xFF1B, Named::Escape),
+    (0xFF08, Named::Backspace),
+    (0x0020, Named::Space),
+    (0xFF55, Named::PageUp),
+    (0xFF56, Named::PageDown),
+    (0xFF51, Named::Left),
+    (0xFF53, Named::Right),
+    (0xFF52, Named::Up),
+    (0xFF54, Named::Down),
+    (0x006C, Named::L),
+    (0x0072, Named::R),
+    (0x005B, Named::LeftBracket),
+];
+
 /// The key `code` names in `table`.
 pub fn named_in(table: &[(u32, Named)], code: u32) -> Option<Named> {
     table.iter().find(|(c, _)| *c == code).map(|(_, n)| *n)
@@ -86,6 +107,8 @@ pub fn named(code: u32) -> Option<Named> {
         named_in(&MACOS, code)
     } else if cfg!(windows) {
         named_in(&WINDOWS, code)
+    } else if cfg!(target_os = "linux") {
+        named_in(&X11, code)
     } else {
         None
     }
@@ -116,11 +139,11 @@ impl Named {
 
 #[cfg(test)]
 mod tests {
-    use super::{MACOS, Named, WINDOWS, named_in};
+    use super::{MACOS, Named, WINDOWS, X11, named_in};
 
     #[test]
     fn each_table_names_every_key_once() {
-        for table in [MACOS, WINDOWS] {
+        for table in [MACOS, WINDOWS, X11] {
             for (i, (code, name)) in table.iter().enumerate() {
                 assert_eq!(named_in(&table, *code), Some(*name));
                 let same_name = table.iter().filter(|(_, n)| n == name).count();
@@ -136,6 +159,9 @@ mod tests {
         assert_eq!(named_in(&MACOS, 0x21), Some(Named::LeftBracket));
         assert_eq!(named_in(&MACOS, 0x00), None);
         assert_eq!(named_in(&WINDOWS, 0xDB), Some(Named::LeftBracket));
+        assert_eq!(named_in(&X11, 0x6C), Some(Named::L));
+        assert_eq!(named_in(&X11, 0xFF56), Some(Named::PageDown));
+        assert_eq!(named_in(&X11, 0x4C), None);
         assert_eq!(Named::Down.dom_key_code(), 40);
     }
 }
