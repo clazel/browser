@@ -39,6 +39,8 @@ pub open spec fn ml_state_one() -> State {
         conns: Seq::empty(),
         next_conn: 0,
         now: 0,
+        viewports: Seq::empty(),
+        titles: Seq::empty(),
     }
 }
 
@@ -102,7 +104,7 @@ pub proof fn ml_navigate_commit(urls: UrlFns, s: State, tab: nat, url: Seq<u32>,
         lock_of_url(urls, url, s.next_id) == Some(l),
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
-        navigate_tab(urls, s, tab, url, script).1[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(url, script) }),
+        navigate_tab(urls, s, tab, url, script).1.last() == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(url, script) }),
 {
 }
 
@@ -353,7 +355,7 @@ pub proof fn ml_carry_out_done(
         lock_of_url(urls, clazel_url::url::spec::url_serializer(url, false), s.next_id) == Some(l),
         !(l is Tuple && l == s.renderers[i].lock),
     ensures
-        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1[2] == (Output::ToRenderer {
+        carry_out(urls, s, tab, partition, cur, seq![clazel_fetch::transducer::spec::Action::Done { url, response }]).1.last() == (Output::ToRenderer {
             id: s.next_id,
             bytes: commit_frames(
                 clazel_url::url::spec::url_serializer(url, false),
@@ -486,7 +488,7 @@ pub proof fn ml_open_tab_uncommitted(rules: Seq<clazel_psl::spec::Rule>, urls: U
     let (s0, closes) = close_tab_conns(sp, 0);
     crate::net_theorems::lemma_closes_of_tab(sp.conns, 0);
     let error = reply(rn, clazel_ipc::message::spec::Message::Error { code: error_bad_url() });
-    assert(out =~= seq![Output::Spawn { id: 0, policy: Policy::Renderer }] + (closes + error));
+    assert(out =~= seq![Output::Spawn { id: 0, policy: Policy::Gpu }, Output::Spawn { id: 0, policy: Policy::Renderer }] + (closes + error));
     assert(s1.renderers =~= seq![Renderer { pending: None, ..rn }]);
     if s1.renderers[0].committed {
         let r = s1.renderers[0];
@@ -495,10 +497,91 @@ pub proof fn ml_open_tab_uncommitted(rules: Seq<clazel_psl::spec::Rule>, urls: U
             #![trigger out[k], commit_frames(r.url, doc)]
             0 <= k < out.len() && out[k] == Output::ToRenderer { id: r.id, bytes: commit_frames(r.url, doc) };
         crate::commit_theorems::lemma_error_is_not_a_commit(error_bad_url(), r.url, doc);
-        if 1 <= k < 1 + closes.len() {
-            assert(out[k] == closes[k - 1]);
+        if 2 <= k < 2 + closes.len() {
+            assert(out[k] == closes[k - 2]);
         }
     }
+}
+
+// ---------------------------------------------------------------------
+// Item 5.18: surfaces, viewports and input. The certified mutations of the
+// paint and input decisions; each lemma below is a fact the proofs rest on,
+// at a state small enough for a certificate to evaluate.
+// ---------------------------------------------------------------------
+
+/// Renderer 1 of tab 0, committed or not.
+pub open spec fn ml_gpu_renderer(committed: bool) -> Renderer {
+    Renderer { committed, id: 1, tab: 0, url: seq![0x61u32], lock: clazel_origin::spec::Origin::Opaque(1nat), pending: None }
+}
+
+/// A state with [`ml_gpu_renderer`] alone, and tab 0 sized 10 by 10 or not
+/// sized.
+pub open spec fn ml_gpu_state(committed: bool, sized: bool) -> State {
+    State {
+        renderers: seq![ml_gpu_renderer(committed)],
+        jar: Seq::empty(),
+        storage: Map::empty(),
+        next_id: 2,
+        conns: Seq::empty(),
+        next_conn: 0,
+        now: 0,
+        viewports: if sized {
+            seq![TabViewport { tab: 0, viewport: Viewport { width: 10, height: 10, scale: 1 } }]
+        } else {
+            Seq::empty()
+        },
+        titles: Seq::empty(),
+    }
+}
+
+/// The frame of `FrameReady { buffer, 1, 1 }` (`buffer` below 24).
+pub open spec fn ml_frame_ready(buffer: u8) -> Seq<u8> {
+    seq![0x00u8, 0x00, 0x00, 0x05, 0x84, 0x0F, buffer, 0x01, 0x01]
+}
+
+/// A click at (1, 1).
+pub open spec fn ml_click() -> UserInput {
+    UserInput { kind: 0, x: 1, y: 1, negative: false, delta: 0, key: 0 }
+}
+
+/// A `Paint` of a GPU process's frame is for its renderer's tab, of a
+/// committed renderer, of a buffer of the ring, and fits the tab's viewport:
+/// what `theorem_paint_only_own_tab`, `theorem_address_bar_integrity` and
+/// `theorem_paint_fits_viewport` rest on.
+pub proof fn ml_gpu_paint(s: State, id: nat, bytes: Seq<u8>)
+    ensures
+        (from_gpu(s, id, bytes).1.len() == 1 && from_gpu(s, id, bytes).1[0] is Paint && find_by_id(s.renderers, id, 0) == Some(0int) && s.renderers.len() > 0)
+            ==> {
+            let p = from_gpu(s, id, bytes).1[0];
+            &&& p->Paint_tab == s.renderers[0].tab
+            &&& s.renderers[0].committed
+            &&& p->Paint_buffer < ring_size()
+            &&& fits(viewport_of(s, s.renderers[0].tab), p->Paint_width, p->Paint_height)
+        },
+{
+    crate::surface_rel::lemma_from_gpu_shape(s, id, bytes);
+}
+
+/// The user's input goes to its tab's renderer: what
+/// `theorem_input_only_to_own_tab` states.
+pub proof fn ml_user_input(s: State, tab: nat, input: UserInput)
+    ensures
+        find_by_tab(s.renderers, tab, 0) matches Some(i) ==> user_input(s, tab, input).1 == seq![
+            Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) },
+        ],
+{
+}
+
+/// The host's viewport goes to its tab's renderer and that renderer's GPU
+/// process: what `theorem_viewport_only_to_own_tab` and
+/// `theorem_channel_only_own_tab` state of a `Resize`.
+pub proof fn ml_resize(s: State, tab: nat, v: Viewport)
+    ensures
+        find_by_tab(s.renderers, tab, 0) matches Some(i) ==> resize(s, tab, v).1 == seq![
+            Output::ToRenderer { id: s.renderers[i].id, bytes: viewport_frame(v) },
+            Output::ToGpu { id: s.renderers[i].id, bytes: gpu_viewport_frame(v) },
+        ],
+{
 }
 
 } // verus!

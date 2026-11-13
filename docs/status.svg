@@ -17,8 +17,8 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="182" y="68" font-size="10.5" class="mut">Verus proof obligations</text>
 <text x="340" y="50" font-size="24" class="b">2237<tspan font-size="14" class="mut">/2250</tspan></text>
 <text x="340" y="68" font-size="10.5" class="mut">broken specs caught</text>
-<text x="24" y="114" font-size="24" class="b">3.71M<tspan font-size="14" class="mut"></tspan></text>
-<text x="24" y="132" font-size="10.5" class="mut">conformance cases, 139 suites</text>
+<text x="24" y="114" font-size="24" class="b">3.75M<tspan font-size="14" class="mut"></tspan></text>
+<text x="24" y="132" font-size="10.5" class="mut">conformance cases, 141 suites</text>
 <text x="182" y="114" font-size="24" class="b">62<tspan font-size="14" class="mut"></tspan></text>
 <text x="182" y="132" font-size="10.5" class="mut">unsafe blocks, all in clazel-sys</text>
 <text x="340" y="114" font-size="24" class="b">21<tspan font-size="14" class="mut"></tspan></text>
