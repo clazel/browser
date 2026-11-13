@@ -192,9 +192,11 @@ what is proven today is stated below, not implied by the tier.
   says how many bytes it consumed. `application_data` is delivered as plaintext
   in order; NewSessionTicket is parsed and then ignored (**no resumption** in
   this phase: no PSK is derived or cached); KeyUpdate updates the server secret
-  and read keys for the next record and, when `update_requested`, sends
-  KeyUpdate(`update_not_requested`) under the old write keys and then updates
-  the write keys; `update_keys` is the client-initiated update. A KeyUpdate has
+  and read keys for the next record and, when `update_requested`, owes one
+  answer (a flag: several requests while silent draw one answer, §4.6.3),
+  sent before the next application data record: KeyUpdate(`update_not_requested`)
+  under the old write keys, then the write keys are updated and the data goes
+  out under them; `update_keys` is the client-initiated update. A KeyUpdate has
   to be the last message of its record and leave no unfinished message (§5.1).
   Any other handshake message after the handshake, an unprotected or protected
   `change_cipher_spec`, and a handshake message interleaved with another record

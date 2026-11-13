@@ -142,38 +142,125 @@ pub proof fn lemma_key_update_rotates_read_keys()
     assert(msg(ku(0), true).0 == super::post_handshake_spec::quiet()) by (compute_only);
 }
 
-/// §4.6.3: on KeyUpdate(`update_requested`) the client sends one record and
-/// then updates its own write keys: the client secret is the next
-/// generation and the new send epoch is at sequence number 0. The read keys
-/// are updated as well.
+/// The ready connection after KeyUpdate(`update_requested`).
+pub open spec fn owing() -> super::post_handshake_spec::State { msg(ku(1), true).1 }
+
+/// One octet of application data sent from [`owing`].
+pub open spec fn answered() -> (super::post_handshake_spec::Out, super::post_handshake_spec::State) {
+    super::post_handshake_spec::send_application(crypto(), cipher(), owing(), seq![5u8])
+}
+
+/// A second KeyUpdate(`update_requested`), in its own record, while the
+/// answer to the first is owed.
+pub open spec fn twice() -> (super::post_handshake_spec::Out, super::post_handshake_spec::State) {
+    super::post_handshake_spec::message(crypto(), cipher(), owing(), ku(1), true)
+}
+
+/// §4.6.3: on KeyUpdate(`update_requested`) the client sends nothing in that
+/// step: its answer is owed "prior to sending its next Application Data
+/// record". The read keys are updated; the write keys are not, yet.
+pub proof fn lemma_key_update_requested_is_owed()
+    ensures
+        msg(ku(1), true).0 == super::post_handshake_spec::quiet(),
+        msg(ku(1), true).0.wires.len() == 0,
+        owing().key_update_owed,
+        owing().client_secret == ready().client_secret,
+        owing().sender == ready().sender,
+        owing().server_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret),
+        !ready().key_update_owed,
+{
+    assert(msg(ku(1), true).0 == super::post_handshake_spec::quiet()) by (compute_only);
+    assert(msg(ku(1), true).0.wires.len() == 0) by (compute_only);
+    assert(owing().key_update_owed) by (compute_only);
+    assert(owing().client_secret == ready().client_secret) by (compute_only);
+    assert(owing().sender == ready().sender) by (compute_only);
+    assert(owing().server_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret))
+        by (compute_only);
+    assert(!ready().key_update_owed) by (compute_only);
+}
+
+/// §4.6.3: the owed answer goes out before the next application data: two
+/// records, the KeyUpdate first (its record's sixth octet is the handshake
+/// type 24) and then the data (its sixth octet is the 5 sent). The client
+/// write keys then move on: the client secret is the next generation and
+/// the data went out under the new epoch at sequence number 0, so it is at
+/// 1. Nothing is owed after it, and the next data goes out alone.
 pub proof fn lemma_key_update_requested_is_answered()
     ensures
-        msg(ku(1), true).0.wires.len() == 1,
-        msg(ku(1), true).0.end == super::post_handshake_spec::End::Continue,
-        msg(ku(1), true).1.client_secret
-            == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret),
-        msg(ku(1), true).1.client_secret != ready().client_secret,
-        msg(ku(1), true).1.sender.unwrap().next == Some(0u64),
-        msg(ku(1), true).1.server_secret
-            == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret),
+        answered().0.wires.len() == 2,
+        answered().0.wires[0][5] == 24u8,
+        answered().0.wires[1][5] == 5u8,
+        answered().0.end == super::post_handshake_spec::End::Continue,
+        answered().1.client_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret),
+        answered().1.client_secret != ready().client_secret,
+        answered().1.sender.unwrap().next == Some(1u64),
+        !answered().1.key_update_owed,
+        super::post_handshake_spec::send_application(crypto(), cipher(), answered().1, seq![5u8]).0.wires.len() == 1,
 {
-    assert(msg(ku(1), true).0.wires.len() == 1) by (compute_only);
-    assert(msg(ku(1), true).0.end == super::post_handshake_spec::End::Continue) by (compute_only);
-    assert(msg(ku(1), true).1.client_secret
-        == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret)) by (compute_only);
-    assert(msg(ku(1), true).1.client_secret != ready().client_secret) by (compute_only);
-    assert(msg(ku(1), true).1.sender.unwrap().next == Some(0u64)) by (compute_only);
-    assert(msg(ku(1), true).1.server_secret
-        == crate::schedule::spec::next_traffic_secret(crypto(), ready().server_secret)) by (compute_only);
+    assert(answered().0.wires.len() == 2) by (compute_only);
+    assert(answered().0.wires[0][5] == 24u8) by (compute_only);
+    assert(answered().0.wires[1][5] == 5u8) by (compute_only);
+    assert(answered().0.end == super::post_handshake_spec::End::Continue) by (compute_only);
+    assert(answered().1.client_secret == crate::schedule::spec::next_traffic_secret(crypto(), ready().client_secret))
+        by (compute_only);
+    assert(answered().1.client_secret != ready().client_secret) by (compute_only);
+    assert(answered().1.sender.unwrap().next == Some(1u64)) by (compute_only);
+    assert(!answered().1.key_update_owed) by (compute_only);
+    assert(super::post_handshake_spec::send_application(crypto(), cipher(), answered().1, seq![5u8]).0.wires.len() == 1)
+        by (compute_only);
 }
 
 /// §4.6.3: the answer is KeyUpdate(`update_not_requested`): "the
-/// request_update field" of the reply, the ninth octet of the sent record
-/// (five header octets, then the 24, the length, the value), is 0.
+/// request_update field" of the first record sent, its ninth octet (five
+/// header octets, then the 24, the length, the value), is 0.
 pub proof fn lemma_key_update_answer_does_not_ask_again()
-    ensures msg(ku(1), true).0.wires[0][9] == 0u8,
+    ensures answered().0.wires[0][9] == 0u8,
 {
-    assert(msg(ku(1), true).0.wires[0][9] == 0u8) by (compute_only);
+    assert(answered().0.wires[0][9] == 0u8) by (compute_only);
+}
+
+/// §4.6.3: "causes an implementation which receives multiple KeyUpdates
+/// while it is silent to respond with a single update". A second
+/// `update_requested` while the first is owed sends nothing and leaves one
+/// answer owed: the next data is preceded by one KeyUpdate, and the data
+/// after it by none.
+pub proof fn lemma_two_requests_one_answer()
+    ensures
+        twice().0 == super::post_handshake_spec::quiet(),
+        twice().1.key_update_owed,
+        super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).0.wires.len() == 2,
+        super::post_handshake_spec::send_application(crypto(), cipher(),
+            super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).1,
+            seq![5u8]).0.wires.len() == 1,
+{
+    assert(twice().0 == super::post_handshake_spec::quiet()) by (compute_only);
+    assert(twice().1.key_update_owed) by (compute_only);
+    assert(super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).0.wires.len() == 2)
+        by (compute_only);
+    assert(super::post_handshake_spec::send_application(crypto(), cipher(),
+        super::post_handshake_spec::send_application(crypto(), cipher(), twice().1, seq![5u8]).1,
+        seq![5u8]).0.wires.len() == 1) by (compute_only);
+}
+
+/// §4.6.3 asks for the answer only before Application Data: while it is owed,
+/// our `close_notify` goes out alone (one record, an alert: its sixth and
+/// seventh octets are the warning level 1 and `close_notify` 0), and a
+/// client-initiated KeyUpdate leaves the answer owed.
+pub proof fn lemma_owed_answer_only_before_data()
+    ensures
+        super::post_handshake_spec::close(cipher(), owing()).0.wires.len() == 1,
+        super::post_handshake_spec::close(cipher(), owing()).0.wires[0][5] == 1u8,
+        super::post_handshake_spec::close(cipher(), owing()).0.wires[0][6] == 0u8,
+        super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).0.wires.len() == 1,
+        super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).1.key_update_owed,
+{
+    assert(super::post_handshake_spec::close(cipher(), owing()).0.wires.len() == 1) by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), owing()).0.wires[0][5] == 1u8) by (compute_only);
+    assert(super::post_handshake_spec::close(cipher(), owing()).0.wires[0][6] == 0u8) by (compute_only);
+    assert(super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).0.wires.len() == 1)
+        by (compute_only);
+    assert(super::post_handshake_spec::update_keys(crypto(), cipher(), owing(), false).1.key_update_owed)
+        by (compute_only);
 }
 
 /// §4.6.3 and the client-initiated update: asking the peer to update sends

@@ -306,6 +306,7 @@ pub struct PostHandshake<C: Crypto, F: Factory> {
     client_secret: Vec<u8>,
     server_secret: Vec<u8>,
     reassembler: Reassembler,
+    key_update_owed: bool,
 }
 impl<C: Crypto, F: Factory> View for PostHandshake<C, F> {
     type V = spec::State;
@@ -317,6 +318,7 @@ impl<C: Crypto, F: Factory> View for PostHandshake<C, F> {
             client_secret: self.client_secret@,
             server_secret: self.server_secret@,
             reassembly: self.reassembler@,
+            key_update_owed: self.key_update_owed,
         }
     }
 }
@@ -378,6 +380,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             client_secret: vstd::slice::slice_to_vec(client_secret),
             server_secret: vstd::slice::slice_to_vec(server_secret),
             reassembler: Reassembler::new(),
+            key_update_owed: false,
         };
         proof {
             assert(out@ =~= (spec::State {
@@ -387,6 +390,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
                 client_secret: client_secret@,
                 server_secret: server_secret@,
                 reassembly: crate::spec::reasm_new(),
+                key_update_owed: false,
             }));
         }
         Ok(out)
@@ -420,6 +424,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         self.client_secret.clear();
         self.server_secret.clear();
         self.reassembler = Reassembler::new();
+        self.key_update_owed = false;
         proof {
             if phase == Phase::Failed {
                 assert(self@ =~= spec::failed());
@@ -465,6 +470,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             final(self)@.client_secret == old(self)@.client_secret,
             final(self)@.server_secret == old(self)@.server_secret,
             final(self)@.reassembly == old(self)@.reassembly,
+            final(self)@.key_update_owed == old(self)@.key_update_owed,
             match old(self)@.sender {
                 Some(tx) => {
                     let r = spec::send_record(old(self).cipher_functions(), tx, typ, content@);
@@ -498,6 +504,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             final(self)@.client_secret == old(self)@.client_secret,
             final(self)@.server_secret == old(self)@.server_secret,
             final(self)@.reassembly == old(self)@.reassembly,
+            final(self)@.key_update_owed == old(self)@.key_update_owed,
             match old(self)@.receiver {
                 Some(rx) => {
                     let r = crate::traffic::spec::receive(spec::open_of(old(self).cipher_functions(), rx), rx, wire@);
@@ -737,8 +744,7 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
         }
     }
 
-    /// §5, §5.3: one application data record, behind a KeyUpdate when the
-    /// send epoch is on its last sequence number.
+    /// §5, §5.3: one application data record under the current client key.
     fn send_data_record(&mut self, data: &[u8]) -> (out: Out)
         requires old(self).wf(), !spec::needs_rekey(old(self)@),
         ensures
@@ -774,7 +780,11 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
             },
             None => false,
         };
-        if rekey {
+        // §4.6.3: an owed answer goes first; §5.3: so does a rekey. One
+        // KeyUpdate serves both, and nothing is owed after it.
+        if self.key_update_owed || rekey {
+            self.key_update_owed = false;
+            proof { assert(self@ =~= (spec::State { key_update_owed: false, ..old(self)@ })); }
             let first = self.send_key_update(crate::spec::UPDATE_NOT_REQUESTED);
             if !matches!(self.phase, Phase::Open | Phase::ReadClosed) { return first; }
             proof {
@@ -844,7 +854,8 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
     }
 
     /// §4.6.3, §5.1: a valid KeyUpdate that must end its record at a message
-    /// boundary; the read keys move on and a requested reply goes out.
+    /// boundary; the read keys move on, and on `update_requested` one answer
+    /// is owed until the next application data (nothing is sent here).
     fn key_update_received(&mut self, request: u8, last: bool) -> (out: Out)
         requires old(self).wf(), spec::can_read(old(self)@),
         ensures
@@ -866,7 +877,10 @@ impl<C: Crypto, F: Factory> PostHandshake<C, F> {
                     proof {
                         lemma_start_fresh(self.crypto_functions(), self@.server_secret);
                     }
-                    self.send_key_update(crate::spec::UPDATE_NOT_REQUESTED)
+                    let ghost rotated = self@;
+                    self.key_update_owed = true;
+                    proof { assert(self@ =~= (spec::State { key_update_owed: true, ..rotated })); }
+                    Out::quiet()
                 } else {
                     Out::quiet()
                 }
