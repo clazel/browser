@@ -13,6 +13,12 @@ clazel-sys = { path = "../clazel-sys" }
 [target.'cfg(target_os = "macos")'.dependencies]
 clazel-sys = { path = "../clazel-sys" }
 
+# AppKit may only be used on the main thread, and the test harness runs each test
+# on a thread of its own, so the macOS smoke test is its own `main`.
+[[test]]
+name = "smoke_macos"
+harness = false
+
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The policy's
 # tier for UI is 0; the window runs outside the sandbox, and reads no
 # page-derived byte beyond pixels it copies.
