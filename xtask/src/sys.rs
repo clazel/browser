@@ -40,9 +40,10 @@
 //!    in the listed order, each either `usize` (never called) or an `unsafe
 //!    extern "system" fn(..)`; the list holds every slot of the interface, so a
 //!    slot's place in it is its number. The call is written exactly
-//!    `unsafe { ((**this).Method)(this, ..) }`: the receiver is one identifier,
-//!    dereferenced twice and passed again as the first argument, and `Method`
-//!    is a listed slot. It counts as the block's one call. Those two
+//!    `unsafe { ((**this).method)(this, ..) }`: the receiver is one identifier,
+//!    dereferenced twice and passed again as the first argument, and `method`
+//!    is a listed slot's field, the header's name in snake case
+//!    ([`slot_field`]: `CreateFence` is `create_fence`). It counts as the block's one call. Those two
 //!    dereferences are the only ones allowed in an `unsafe` block; every other
 //!    call through an expression, and a function pointer type anywhere else
 //!    but a dispatcher cast, is rejected. What the checker cannot see, and the
@@ -964,15 +965,43 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
     }
 }
 
+/// A header's method name as the Rust field that holds its slot: an underscore
+/// before each capital that follows a lower-case letter or a digit, or that ends
+/// a run of capitals (`GetCPUDescriptorHandleForHeapStart` is
+/// `get_cpu_descriptor_handle_for_heap_start`), then lower case. Rust's
+/// `non_snake_case` lint, which no crate may switch off, rejects the header's
+/// spelling for a field, so the lists keep the header's names, which is what an
+/// auditor compares, and the source uses this one spelling of each.
+pub fn slot_field(method: &str) -> String {
+    let chars: Vec<char> = method.chars().collect();
+    let mut out = String::new();
+    for (i, c) in chars.iter().enumerate() {
+        let before = i.checked_sub(1).and_then(|j| chars.get(j));
+        let after = chars.get(i.saturating_add(1));
+        let starts_word = c.is_ascii_uppercase()
+            && before.is_some_and(|b| {
+                b.is_ascii_lowercase()
+                    || b.is_ascii_digit()
+                    || (b.is_ascii_uppercase() && after.is_some_and(char::is_ascii_lowercase))
+            });
+        if starts_word {
+            out.push('_');
+        }
+        out.push(c.to_ascii_lowercase());
+    }
+    out
+}
+
 /// The ABI of every vtable slot: COM methods are `STDMETHODCALLTYPE`, which on
 /// 64-bit Windows is the one calling convention, Rust's `"system"`.
 const VTABLE_ABI: &str = "\"system\"";
 
-/// `((**this).Method)(this, ..)` inside an `unsafe` block: `callee` is the first
+/// `((**this).method)(this, ..)` inside an `unsafe` block: `callee` is the first
 /// group and `args` the second. True, and counted as the block's call, if it is
 /// exactly that form: the receiver one identifier, dereferenced twice (the
-/// interface pointer, then its vtable pointer), `Method` a slot of a vtable this
-/// file may use, and the receiver again as the first argument. Anything else is
+/// interface pointer, then its vtable pointer), `method` the field
+/// ([`slot_field`]) of a slot of a vtable this file may use, and the receiver
+/// again as the first argument. Anything else is
 /// flagged and false.
 fn vtable_call(
     callee: &Group,
@@ -1004,7 +1033,7 @@ fn vtable_call(
         flag(
             file,
             line,
-            "a call through an expression must be exactly `((**this).Method)(this, ..)`, a \
+            "a call through an expression must be exactly `((**this).method)(this, ..)`, a \
              listed vtable's slot (see xtask/src/sys.rs)",
         );
         return false;
@@ -1012,7 +1041,7 @@ fn vtable_call(
     if !file
         .vtables
         .iter()
-        .any(|(_, slots)| slots.contains(&method.as_str()))
+        .any(|(_, slots)| slots.iter().any(|s| slot_field(s) == method))
     {
         flag(
             file,
@@ -1042,7 +1071,8 @@ fn vtable_call(
 }
 
 /// `#[repr(C)] struct NAME { .. }` at `k` (the `struct`), NAME a listed vtable
-/// with `slots`: its fields must be exactly the slots, in order, each either
+/// with `slots`: its fields must be exactly the slots ([`slot_field`] of each
+/// listed name), in order, each either
 /// `usize` (a slot that is never called: a pointer's size and nothing callable)
 /// or an `unsafe extern "system" fn(..)` pointer. Returns the index after the
 /// body.
@@ -1115,12 +1145,13 @@ fn vtable_decl(tokens: &[TokenTree], k: usize, slots: &[&str], file: &mut File) 
         }
         found.push(slot.to_string());
     }
-    if found != slots {
+    let want: Vec<String> = slots.iter().map(|s| slot_field(s)).collect();
+    if found != want {
         let at = found
             .iter()
-            .zip(slots)
+            .zip(&want)
             .position(|(a, b)| a != b)
-            .unwrap_or(found.len().min(slots.len()));
+            .unwrap_or(found.len().min(want.len()));
         flag(
             file,
             line,
@@ -1128,7 +1159,7 @@ fn vtable_decl(tokens: &[TokenTree], k: usize, slots: &[&str], file: &mut File) 
                 "vtable `{name}` must have exactly the listed slots in order (see xtask/src/sys.rs): \
                  slot {at} is {:?}, the list has {:?}",
                 found.get(at),
-                slots.get(at)
+                want.get(at)
             ),
         );
     }
@@ -2110,9 +2141,9 @@ mod tests {
         Ok(())
     }
 
-    const UNKNOWN: &str = "#[repr(C)]\nstruct IUnknownVtbl {\n    QueryInterface: usize,\n    \
-        AddRef: usize,\n    /// Drop one reference.\n    \
-        Release: unsafe extern \"system\" fn(*mut IUnknown) -> u32,\n}\n\
+    const UNKNOWN: &str = "#[repr(C)]\nstruct IUnknownVtbl {\n    query_interface: usize,\n    \
+        add_ref: usize,\n    /// Drop one reference.\n    \
+        release: unsafe extern \"system\" fn(*mut IUnknown) -> u32,\n}\n\
         type IUnknown = *const IUnknownVtbl;\n";
 
     fn com_call(body: &str) -> String {
@@ -2124,15 +2155,15 @@ mod tests {
 
     #[test]
     fn accepts_a_listed_vtable_and_a_call_through_it() -> Result<(), String> {
-        let (v, calls) = vtable_violations(&com_call("((**this).Release)(this)"))?;
+        let (v, calls) = vtable_violations(&com_call("((**this).release)(this)"))?;
         assert_eq!(v, Vec::<String>::new());
         assert_eq!(calls, 1);
         // With arguments after the receiver, nested groups included.
-        let make = "#[repr(C)]\nstruct IThingVtbl {\n    QueryInterface: usize,\n    AddRef: usize,\n    \
-            Release: usize,\n    Make: unsafe extern \"system\" fn(*mut IThing, u32, *mut *mut u8) -> i32,\n}\n\
+        let make = "#[repr(C)]\nstruct IThingVtbl {\n    query_interface: usize,\n    add_ref: usize,\n    \
+            release: usize,\n    make: unsafe extern \"system\" fn(*mut IThing, u32, *mut *mut u8) -> i32,\n}\n\
             type IThing = *const IThingVtbl;\n\
             fn f(thing: *mut IThing, out: *mut *mut u8) -> i32 {\n    // SAFETY: docs IThing::Make.\n    \
-            unsafe { ((**thing).Make)(thing, (1u32), out) }\n}\n";
+            unsafe { ((**thing).make)(thing, (1u32), out) }\n}\n";
         let (v, calls) = vtable_violations(make)?;
         assert_eq!(v, Vec::<String>::new());
         assert_eq!(calls, 1);
@@ -2142,7 +2173,7 @@ mod tests {
     /// The same source where no vtable is listed (every file but Direct3D's).
     #[test]
     fn a_vtable_call_needs_the_files_list() -> Result<(), String> {
-        let v = violations_in(LINUX_FILE, &com_call("((**this).Release)(this)"))?;
+        let v = violations_in(LINUX_FILE, &com_call("((**this).release)(this)"))?;
         assert!(
             v.iter().any(|m| m.contains("function pointer type")),
             "{v:?}"
@@ -2156,15 +2187,15 @@ mod tests {
 
     #[test]
     fn rejects_every_other_call_through_an_expression() -> Result<(), String> {
-        let form = "must be exactly `((**this).Method)(this, ..)`";
+        let form = "must be exactly `((**this).method)(this, ..)`";
         for body in [
             // One dereference, three, a field between them, a method call as the
             // receiver, a slot read first, an index.
-            "((*this).Release)(this)",
-            "((***this).Release)(this)",
-            "((*(*this).vtbl).Release)(this)",
-            "((**this.get()).Release)(this)",
-            "(this.Release)(this)",
+            "((*this).release)(this)",
+            "((***this).release)(this)",
+            "((*(*this).vtbl).release)(this)",
+            "((**this.get()).release)(this)",
+            "(this.release)(this)",
             "((**this)[2])(this)",
             "(f)(this)",
         ] {
@@ -2172,15 +2203,15 @@ mod tests {
         }
         // A slot that is on no list, and one of another crate's naming.
         vtable_rejected(
-            &com_call("((**this).Destroy)(this)"),
-            "`Destroy` is not a slot",
+            &com_call("((**this).destroy)(this)"),
+            "`destroy` is not a slot",
         )?;
         // The receiver must be the first argument, alone.
         for body in [
-            "((**this).Release)()",
-            "((**this).Release)(other)",
-            "((**this).Release)(this.cast())",
-            "((**this).Release)(other, this)",
+            "((**this).release)()",
+            "((**this).release)(other)",
+            "((**this).release)(this.cast())",
+            "((**this).release)(other, this)",
         ] {
             vtable_rejected(&com_call(body), "first argument must be its receiver")?;
         }
@@ -2190,21 +2221,21 @@ mod tests {
     #[test]
     fn a_vtable_call_is_the_blocks_one_call_and_needs_its_comment() -> Result<(), String> {
         vtable_rejected(
-            &com_call("((**this).Release)(this); ((**this).Release)(this)"),
+            &com_call("((**this).release)(this); ((**this).release)(this)"),
             "exactly one foreign call, found 2",
         )?;
         vtable_rejected(
-            &com_call("((**this).Release)(this); CloseHandle(0)"),
+            &com_call("((**this).release)(this); CloseHandle(0)"),
             "exactly one foreign call, found 2",
         )?;
         // A dereference in an argument is still a dereference.
         let deref = format!(
             "{UNKNOWN}fn f(this: *mut IUnknown, p: *mut u32) -> u32 {{\n    // SAFETY: docs IUnknown::Release.\n    \
-             unsafe {{ ((**this).Release)(this, *p) }}\n}}\n"
+             unsafe {{ ((**this).release)(this, *p) }}\n}}\n"
         );
         vtable_rejected(&deref, "dereference or multiplication")?;
         let bare = format!(
-            "{UNKNOWN}fn f(this: *mut IUnknown) -> u32 {{\n    unsafe {{ ((**this).Release)(this) }}\n}}\n"
+            "{UNKNOWN}fn f(this: *mut IUnknown) -> u32 {{\n    unsafe {{ ((**this).release)(this) }}\n}}\n"
         );
         vtable_rejected(&bare, "without a `// SAFETY:` comment")?;
         // Outside an `unsafe` block it does not compile, and is not this check's.
@@ -2214,10 +2245,10 @@ mod tests {
     #[test]
     fn rejects_a_vtable_that_differs_from_its_list() -> Result<(), String> {
         let decl = |attr: &str, fields: &str| format!("{attr}struct IUnknownVtbl {{ {fields} }}\n");
-        let release = "Release: unsafe extern \"system\" fn(*mut u8) -> u32";
+        let release = "release: unsafe extern \"system\" fn(*mut u8) -> u32";
         let good = decl(
             "#[repr(C)]\n",
-            &format!("QueryInterface: usize, AddRef: usize, {release},"),
+            &format!("query_interface: usize, add_ref: usize, {release},"),
         );
         assert_eq!(vtable_violations(&good)?.0, Vec::<String>::new());
         let cases = [
@@ -2225,40 +2256,43 @@ mod tests {
             (
                 decl(
                     "",
-                    &format!("QueryInterface: usize, AddRef: usize, {release}"),
+                    &format!("query_interface: usize, add_ref: usize, {release}"),
                 ),
                 "directly under `#[repr(C)]`",
             ),
             (
                 decl(
                     "#[repr(packed)]\n",
-                    &format!("QueryInterface: usize, AddRef: usize, {release}"),
+                    &format!("query_interface: usize, add_ref: usize, {release}"),
                 ),
                 "directly under `#[repr(C)]`",
             ),
             // A slot missing, two swapped, one added, one renamed.
             (
-                decl("#[repr(C)]\n", &format!("QueryInterface: usize, {release}")),
-                "exactly the listed slots in order",
-            ),
-            (
                 decl(
                     "#[repr(C)]\n",
-                    &format!("AddRef: usize, QueryInterface: usize, {release}"),
+                    &format!("query_interface: usize, {release}"),
                 ),
                 "exactly the listed slots in order",
             ),
             (
                 decl(
                     "#[repr(C)]\n",
-                    &format!("QueryInterface: usize, AddRef: usize, {release}, More: usize"),
+                    &format!("add_ref: usize, query_interface: usize, {release}"),
                 ),
                 "exactly the listed slots in order",
             ),
             (
                 decl(
                     "#[repr(C)]\n",
-                    "QueryInterface: usize, AddRef: usize, Free: usize",
+                    &format!("query_interface: usize, add_ref: usize, {release}, more: usize"),
+                ),
+                "exactly the listed slots in order",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    "query_interface: usize, add_ref: usize, free: usize",
                 ),
                 "exactly the listed slots in order",
             ),
@@ -2267,30 +2301,30 @@ mod tests {
             (
                 decl(
                     "#[repr(C)]\n",
-                    "QueryInterface: u32, AddRef: usize, Release: usize",
+                    "query_interface: u32, add_ref: usize, release: usize",
                 ),
-                "slot `QueryInterface` must be `usize`",
+                "slot `query_interface` must be `usize`",
             ),
             (
                 decl(
                     "#[repr(C)]\n",
-                    "QueryInterface: *const u8, AddRef: usize, Release: usize",
+                    "query_interface: *const u8, add_ref: usize, release: usize",
                 ),
-                "slot `QueryInterface` must be `usize`",
+                "slot `query_interface` must be `usize`",
             ),
             (
                 decl(
                     "#[repr(C)]\n",
-                    "QueryInterface: usize, AddRef: usize, Release: extern \"system\" fn(*mut u8) -> u32",
+                    "query_interface: usize, add_ref: usize, release: extern \"system\" fn(*mut u8) -> u32",
                 ),
-                "slot `Release` must be `usize`",
+                "slot `release` must be `usize`",
             ),
             (
                 decl(
                     "#[repr(C)]\n",
-                    "QueryInterface: usize, AddRef: usize, Release: unsafe extern \"C\" fn(*mut u8) -> u32",
+                    "query_interface: usize, add_ref: usize, release: unsafe extern \"C\" fn(*mut u8) -> u32",
                 ),
-                "slot `Release` must be `usize`",
+                "slot `release` must be `usize`",
             ),
             // A tuple struct.
             (
@@ -2316,6 +2350,27 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn a_slots_field_is_its_name_in_snake_case() {
+        for (method, field) in [
+            ("Release", "release"),
+            ("QueryInterface", "query_interface"),
+            ("EnumAdapters1", "enum_adapters1"),
+            ("IASetPrimitiveTopology", "ia_set_primitive_topology"),
+            (
+                "SetGraphicsRoot32BitConstants",
+                "set_graphics_root32_bit_constants",
+            ),
+            (
+                "GetCPUDescriptorHandleForHeapStart",
+                "get_cpu_descriptor_handle_for_heap_start",
+            ),
+            ("GetGPUVirtualAddress", "get_gpu_virtual_address"),
+        ] {
+            assert_eq!(super::slot_field(method), field);
+        }
+    }
+
     /// Every listed vtable begins with `IUnknown`'s three slots, and no slot is
     /// listed twice in one: a slot's place in the list is its number.
     #[test]
@@ -2329,7 +2384,14 @@ mod tests {
                 );
                 let mut seen = std::collections::BTreeSet::new();
                 for s in *slots {
-                    assert!(seen.insert(s), "{file}: {name} lists {s} twice");
+                    let field = super::slot_field(s);
+                    assert!(
+                        field
+                            .chars()
+                            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                        "{file}: {name}: {field}"
+                    );
+                    assert!(seen.insert(field), "{file}: {name} lists {s} twice");
                 }
                 assert!(name.ends_with("Vtbl"), "{file}: {name}");
             }
