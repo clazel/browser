@@ -54,7 +54,19 @@ fn sibling(var: &str, name: &str) -> Result<PathBuf, String> {
     if !path.exists() {
         eprintln!("clazel: building {name} ...");
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-        let built = Command::new(cargo).args(["build", "-p", name]).status();
+        // Build into the directory this binary is in: a release `clazel`
+        // looks beside itself in `target/release`, where a plain `cargo
+        // build` (the dev profile) puts nothing.
+        let release = exe
+            .parent()
+            .and_then(|dir| dir.file_name())
+            .is_some_and(|dir| dir == "release");
+        let mut build = Command::new(cargo);
+        build.args(["build", "-p", name]);
+        if release {
+            build.arg("--release");
+        }
+        let built = build.status();
         if !built.is_ok_and(|s| s.success()) || !path.exists() {
             return Err(format!(
                 "{} does not exist and could not be built",
