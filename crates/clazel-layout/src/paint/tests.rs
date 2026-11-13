@@ -533,3 +533,12 @@ fn deep_trees_paint_without_recursion() {
     assert_eq!(list.items.len(), 1);
     let _ = (quirks(""), rect(0, 0, 0, 0));
 }
+
+/// A hidden link gives no hit region (nor does its hidden block form).
+#[test]
+fn hidden_links_have_no_hit_regions() {
+    let l = std(
+        "<a href='a' style='visibility:hidden'>ab</a><div><a href='b' style='display:block;visibility:hidden'>c</a></div>",
+    );
+    assert!(l.list.hits.is_empty(), "{}", l.dump());
+}

@@ -292,8 +292,8 @@ impl<F: TextFns> Walk<'_, F> {
                 {
                     self.fill(r, c);
                 }
+                self.hit(b, f.border_box);
             }
-            self.hit(b, f.border_box);
         }
     }
 
@@ -443,10 +443,10 @@ impl<F: TextFns> Walk<'_, F> {
             left: if p.start_edge { bd.left } else { 0 },
         };
         let border_box = pad.outset(&edges);
-        self.hit(p.inline, border_box);
         if !self.visible(p.inline) {
             return;
         }
+        self.hit(p.inline, border_box);
         let Some(s) = self.style(p.inline) else {
             return;
         };

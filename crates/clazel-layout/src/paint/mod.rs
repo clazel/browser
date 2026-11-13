@@ -130,7 +130,8 @@
 //! - **Hit regions**: every box inside a link (the nearest `a` or `area`
 //!   ancestor-or-self with an `href`), laid out as a box, gives its border
 //!   box, and every inline box piece its background rectangle, in paint
-//!   order. The URL is the `href` parsed by the basic URL parser against the
+//!   order; a box whose `visibility` is not `visible` gives none. The URL
+//!   is the `href` parsed by the basic URL parser against the
 //!   document's base URL, which the caller gives (item 5.20 knows the
 //!   document's URL and `base` element), and serialized; HTML's
 //!   "encoding-parsing" uses the document's encoding for the query, which is
@@ -149,6 +150,8 @@ pub mod geometry;
 pub mod order;
 pub mod state;
 
+#[cfg(kani)]
+mod proofs;
 #[cfg(test)]
 mod tests;
 
