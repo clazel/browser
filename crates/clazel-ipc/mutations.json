@@ -744,8 +744,8 @@
     {
       "id": "dir-error-from-renderer",
       "file": "src/message/spec.rs",
-      "find": "        _ => false,\n    }\n}\n\n/// The kind of each field",
-      "replace": "        _ => true,\n    }\n}\n\n/// The kind of each field",
+      "find": "        | Message::Title { .. } => true,\n        _ => false,",
+      "replace": "        | Message::Title { .. } => true,\n        _ => true,",
       "expect": "killed",
       "reason": "Every message counts as renderer-to-kernel: the kernel accepts Error from a renderer, so lemma_reject_wrong_direction is false.",
       "certificate": {
