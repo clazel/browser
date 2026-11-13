@@ -87,14 +87,14 @@
     {
       "id": "spawned-renderer-inherits-sender-url",
       "file": "src/spec.rs",
-      "find": "Output::Spawn { id, policy: Policy::Renderer },\n                        Output::ToRenderer { id, bytes: commit_frames(url, doc) },",
-      "replace": "Output::Spawn { id, policy: Policy::Renderer },\n                        Output::ToRenderer { id, bytes: commit_frames(url, Document { body: doc.body + clazel_cookie::matching::spec::narrow(old.url), ..doc }) },",
+      "find": "replace_outputs(old.id, id, find_viewport(s.viewports, tab, 0), commit_frames(url, doc)),",
+      "replace": "replace_outputs(old.id, id, find_viewport(s.viewports, tab, 0), commit_frames(url, Document { body: doc.body + clazel_cookie::matching::spec::narrow(old.url), ..doc })),",
       "expect": "killed",
       "reason": "The renderer spawned by a navigation is committed with the navigating renderer's URL appended to its body, i.e. it inherits something besides the resolved URL: ml_navigate_commit (what lemma_declassified_is_navigate_tab and the declassification of theorem_cookie_noninterference rest on) is false.",
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_navigate_commit(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty()), 0, clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).1[2]->ToRenderer_bytes != commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))"
+        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 1) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && navigate_tab(crate::counterexamples::ce_urls(), ml_state_one(), 0, Seq::<u32>::empty(), script_document(Seq::<u8>::empty())).1.last()->ToRenderer_bytes != commit_frames(Seq::<u32>::empty(), script_document(Seq::<u8>::empty()))"
       },
       "module": "mutation_lemmas"
     },
@@ -487,7 +487,7 @@
       "certificate": {
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_carry_out_done(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), None, ml_url0(), ml_response(seq![1u8]), 0, clazel_origin::spec::Origin::Opaque(1nat))",
-        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && scalar_url(clazel_url::url::spec::url_serializer(ml_url0(), false)) && lock_of_url(crate::counterexamples::ce_urls(), clazel_url::url::spec::url_serializer(ml_url0(), false), ml_state_one().next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && carry_out(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), None, seq![clazel_fetch::transducer::spec::Action::Done { url: ml_url0(), response: ml_response(seq![1u8]) }]).1[2]->ToRenderer_bytes != commit_frames(clazel_url::url::spec::url_serializer(ml_url0(), false), Document { content_type: Seq::<u8>::empty(), kind: 0, body: seq![1u8] })"
+        "witness": "find_by_tab(ml_state_one().renderers, 0, 0) == Some(0int) && scalar_url(clazel_url::url::spec::url_serializer(ml_url0(), false)) && lock_of_url(crate::counterexamples::ce_urls(), clazel_url::url::spec::url_serializer(ml_url0(), false), ml_state_one().next_id) == Some(clazel_origin::spec::Origin::Opaque(1nat)) && !(clazel_origin::spec::Origin::Opaque(1nat) is Tuple) && carry_out(crate::counterexamples::ce_urls(), ml_state_one(), 0, crate::domain::Domain::Opaque(0nat), None, seq![clazel_fetch::transducer::spec::Action::Done { url: ml_url0(), response: ml_response(seq![1u8]) }]).1.last()->ToRenderer_bytes != commit_frames(clazel_url::url::spec::url_serializer(ml_url0(), false), Document { content_type: Seq::<u8>::empty(), kind: 0, body: seq![1u8] })"
       },
       "module": "mutation_lemmas"
     },
@@ -629,7 +629,7 @@
     {
       "id": "display-before-commit",
       "file": "src/spec.rs",
-      "find": "Some(m) => if m is Display && !r.committed { None } else { Some(m) },",
+      "find": "Some(m) => if (m is Display || m is Title) && !r.committed { None } else { Some(m) },",
       "replace": "Some(m) => Some(m),",
       "expect": "killed",
       "module": "mutation_lemmas",
@@ -694,6 +694,121 @@
         "file": "src/mutation_lemmas.rs",
         "lemma": "ml_open_tab_uncommitted(Seq::<clazel_psl::spec::Rule>::empty(), crate::counterexamples::ce_urls(), ml_fetch_unparsed(), Seq::<u32>::empty())",
         "witness": "lock_of_url(crate::counterexamples::ce_urls(), Seq::<u32>::empty(), 0) is Some && (ml_fetch_unparsed().parse)(Seq::<u32>::empty()) is None"
+      }
+    },
+    {
+      "id": "paint-tab-is-renderer-id",
+      "file": "src/spec.rs",
+      "find": "(s, seq![Output::Paint { tab: r.tab, url: r.url,",
+      "replace": "(s, seq![Output::Paint { tab: r.id, url: r.url,",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A Paint names the renderer's id as its tab: another tab's content area would show it. ml_gpu_paint (what theorem_paint_only_own_tab and theorem_address_bar_integrity rest on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_paint(ml_gpu_state(true, true), 1, ml_frame_ready(0))",
+        "witness": "from_gpu(ml_gpu_state(true, true), 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(ml_gpu_state(true, true), 1, ml_frame_ready(0)).1[0] is Paint && find_by_id(ml_gpu_state(true, true).renderers, 1, 0) == Some(0int) && ml_gpu_state(true, true).renderers.len() > 0 && from_gpu(ml_gpu_state(true, true), 1, ml_frame_ready(0)).1[0]->Paint_tab != ml_gpu_state(true, true).renderers[0].tab"
+      }
+    },
+    {
+      "id": "paint-ignores-viewport",
+      "file": "src/spec.rs",
+      "find": "} else if fits(viewport_of(s, r.tab), width, height) {",
+      "replace": "} else if true {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A frame is painted whatever its size: a 1 by 1 frame is shown in a tab the host never sized. ml_gpu_paint (what theorem_paint_fits_viewport rests on) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_paint(ml_gpu_state(true, false), 1, ml_frame_ready(0))",
+        "witness": "from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(ml_gpu_state(true, false), 1, ml_frame_ready(0)).1[0] is Paint && find_by_id(ml_gpu_state(true, false).renderers, 1, 0) == Some(0int) && ml_gpu_state(true, false).renderers.len() > 0 && !fits(viewport_of(ml_gpu_state(true, false), 0), 1, 1)"
+      }
+    },
+    {
+      "id": "paint-before-commit",
+      "file": "src/spec.rs",
+      "find": "if !r.committed || buffer >= ring_size() {",
+      "replace": "if buffer >= ring_size() {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A frame is painted before the renderer's first commit, under the URL its tab was opened at, which no commit sent. ml_gpu_paint (the committed URL of theorem_address_bar_integrity) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_paint(ml_gpu_state(false, true), 1, ml_frame_ready(0))",
+        "witness": "from_gpu(ml_gpu_state(false, true), 1, ml_frame_ready(0)).1.len() == 1 && from_gpu(ml_gpu_state(false, true), 1, ml_frame_ready(0)).1[0] is Paint && find_by_id(ml_gpu_state(false, true).renderers, 1, 0) == Some(0int) && ml_gpu_state(false, true).renderers.len() > 0 && !ml_gpu_state(false, true).renderers[0].committed"
+      }
+    },
+    {
+      "id": "paint-buffer-outside-ring",
+      "file": "src/spec.rs",
+      "find": "if !r.committed || buffer >= ring_size() {",
+      "replace": "if !r.committed || buffer > ring_size() {",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "Buffer 3, one past the ring, is painted: the host would be asked to show a buffer it never allocated. ml_gpu_paint (theorem_paint_fits_viewport's ring) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_gpu_paint(ml_gpu_state(true, true), 1, ml_frame_ready(3))",
+        "witness": "from_gpu(ml_gpu_state(true, true), 1, ml_frame_ready(3)).1.len() == 1 && from_gpu(ml_gpu_state(true, true), 1, ml_frame_ready(3)).1[0] is Paint && find_by_id(ml_gpu_state(true, true).renderers, 1, 0) == Some(0int) && ml_gpu_state(true, true).renderers.len() > 0 && !(from_gpu(ml_gpu_state(true, true), 1, ml_frame_ready(3)).1[0]->Paint_buffer < ring_size())"
+      }
+    },
+    {
+      "id": "input-to-next-renderer",
+      "file": "src/spec.rs",
+      "find": "Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id, bytes: input_frame(input) }]),",
+      "replace": "Some(i) => (s, seq![Output::ToRenderer { id: s.renderers[i].id + 1, bytes: input_frame(input) }]),",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "The user's input on a tab goes to the renderer of the next id: ml_user_input (theorem_input_only_to_own_tab) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_user_input(ml_gpu_state(true, true), 0, ml_click())",
+        "witness": "find_by_tab(ml_gpu_state(true, true).renderers, 0, 0) == Some(0int) && user_input(ml_gpu_state(true, true), 0, ml_click()).1.len() == 1 && user_input(ml_gpu_state(true, true), 0, ml_click()).1[0]->ToRenderer_id != ml_gpu_state(true, true).renderers[0].id"
+      }
+    },
+    {
+      "id": "resize-to-next-gpu",
+      "file": "src/spec.rs",
+      "find": "Output::ToGpu { id: s.renderers[i].id, bytes: gpu_viewport_frame(v) },",
+      "replace": "Output::ToGpu { id: s.renderers[i].id + 1, bytes: gpu_viewport_frame(v) },",
+      "expect": "killed",
+      "module": "mutation_lemmas",
+      "reason": "A tab's viewport is sent to the GPU process of the next id, another tab's: ml_resize (theorem_viewport_only_to_own_tab, and the Resize case of theorem_channel_only_own_tab) is false.",
+      "certificate": {
+        "file": "src/mutation_lemmas.rs",
+        "lemma": "ml_resize(ml_gpu_state(true, true), 0, Viewport { width: 5, height: 5, scale: 1 })",
+        "witness": "find_by_tab(ml_gpu_state(true, true).renderers, 0, 0) == Some(0int) && resize(ml_gpu_state(true, true), 0, Viewport { width: 5, height: 5, scale: 1 }).1.len() == 2 && resize(ml_gpu_state(true, true), 0, Viewport { width: 5, height: 5, scale: 1 }).1[1]->ToGpu_id != ml_gpu_state(true, true).renderers[0].id"
+      }
+    },
+    {
+      "id": "replace-without-gpu",
+      "file": "src/spec.rs",
+      "find": "        None => seq![\n            Output::Kill { id: old },\n            Output::Spawn { id, policy: Policy::Gpu },\n",
+      "replace": "        None => seq![\n            Output::Kill { id: old },\n",
+      "expect": "killed",
+      "module": "surface_theorems",
+      "reason": "A cross-origin navigation starts the new renderer without its GPU process: the renderer's list socket would be joined to nothing the kernel named. lemma_replace_outputs_pairs (what theorem_channel_only_own_tab rests on) is false.",
+      "certificate": {
+        "file": "src/surface_theorems.rs",
+        "lemma": "lemma_replace_outputs_pairs(0, 1, None, Seq::<u8>::empty())",
+        "witness": "replace_outputs(0, 1, None, Seq::<u8>::empty()) == seq![Output::Kill { id: 0 }, Output::Spawn { id: 1, policy: Policy::Renderer }, Output::ToRenderer { id: 1, bytes: Seq::<u8>::empty() }]"
+      }
+    },
+    {
+      "id": "title-read-without-lock",
+      "file": "src/spec.rs",
+      "find": "} else if ts[0].id == r.id && ts[0].lock == r.lock {",
+      "replace": "} else if ts[0].id == r.id {",
+      "expect": "killed",
+      "module": "surface_rel",
+      "reason": "A title is read by id alone: a renderer would be shown a title stored under another lock, i.e. another domain's. lemma_title_of_domain (that a domain's renderer reads only its domain's titles, which noninterference over Title and Paint rests on) is false.",
+      "certificate": {
+        "file": "src/surface_rel.rs",
+        "lemma": "lemma_title_of_domain(Seq::<clazel_psl::spec::Rule>::empty(), seq![Titled { id: 0, lock: clazel_origin::spec::Origin::Opaque(5nat), title: seq![0x78u8] }], crate::mutation_lemmas::ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)), crate::domain::Domain::Opaque(0nat))",
+        "witness": "title_of(seq![Titled { id: 0, lock: clazel_origin::spec::Origin::Opaque(5nat), title: seq![0x78u8] }], crate::mutation_lemmas::ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat))) != title_of(crate::domain::titles_of_domain(Seq::<clazel_psl::spec::Rule>::empty(), seq![Titled { id: 0, lock: clazel_origin::spec::Origin::Opaque(5nat), title: seq![0x78u8] }], crate::domain::Domain::Opaque(0nat)), crate::mutation_lemmas::ml_renderer(0, clazel_origin::spec::Origin::Opaque(0nat)))",
+        "reveal": [
+          "Seq::filter"
+        ]
       }
     }
   ]

@@ -153,6 +153,11 @@ impl Host {
                 }
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
                 show @ OutputRecord::Show { .. } => self.shown.push(show),
+                // Item 5.18: this host runs in text mode and starts no GPU
+                // process (the window is items 5.20 to 5.23), so there is
+                // none to start or write to, and no frame arrives to paint.
+                OutputRecord::SpawnGpu { .. } | OutputRecord::ToGpu { .. } => {}
+                paint @ OutputRecord::Paint { .. } => self.shown.push(paint),
             }
         }
         for (id, why) in dead {

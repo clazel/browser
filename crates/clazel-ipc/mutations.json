@@ -731,8 +731,8 @@
     {
       "id": "dir-navigate-not-renderer",
       "file": "src/message/spec.rs",
-      "find": "| Message::StorageLength\n        | Message::Navigate { .. }\n        | Message::Display { .. } => true,",
-      "replace": "| Message::StorageLength\n        | Message::Display { .. } => true,",
+      "find": "| Message::StorageLength\n        | Message::Navigate { .. }\n        | Message::Display { .. }\n        | Message::Title { .. } => true,",
+      "replace": "| Message::StorageLength\n        | Message::Display { .. }\n        | Message::Title { .. } => true,",
       "expect": "killed",
       "reason": "Navigate is not counted as a renderer message: the kernel rejects it, so lemma_example_renderer_navigate is false.",
       "certificate": {
@@ -978,8 +978,8 @@
     {
       "id": "msg-display-direction",
       "file": "src/message/spec.rs",
-      "find": "        | Message::Navigate { .. }\n        | Message::Display { .. } => true,",
-      "replace": "        | Message::Navigate { .. } => true,",
+      "find": "        | Message::Navigate { .. }\n        | Message::Display { .. }\n        | Message::Title { .. } => true,",
+      "replace": "        | Message::Navigate { .. }\n        | Message::Title { .. } => true,",
       "expect": "killed",
       "reason": "Display is not counted as a renderer message: the kernel rejects it, so lemma_example_display is false.",
       "certificate": {
@@ -991,8 +991,8 @@
     {
       "id": "msg-body-end-direction",
       "file": "src/message/spec.rs",
-      "find": "        | Message::Display { .. } => true,",
-      "replace": "        | Message::Display { .. }\n        | Message::BodyEnd => true,",
+      "find": "        | Message::Title { .. } => true,\n        _ => false,",
+      "replace": "        | Message::Title { .. }\n        | Message::BodyEnd => true,\n        _ => false,",
       "expect": "killed",
       "reason": "A renderer may send BodyEnd: the kernel accepts a kernel-to-renderer message, so lemma_reject_document_from_renderer is false.",
       "certificate": {

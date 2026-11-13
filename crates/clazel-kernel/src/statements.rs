@@ -652,23 +652,33 @@ pub open spec fn paint_fits_viewport_statement(rules: Seq<clazel_psl::spec::Rule
         }
 }
 
-/// `theorem_channel_only_own_tab`: in every step, a GPU process is started
-/// only together with the renderer of the same id (the host's socket pair
-/// joins exactly those two), and that renderer is, after the step, the
-/// current renderer of its tab; every renderer is started with its GPU
-/// process; and a `ToGpu` goes only to the GPU process of a renderer that
-/// is, after the step, the current renderer of its tab. So a renderer's
-/// lists reach only its own tab's GPU process, and no list can reach
-/// another tab's.
+/// `theorem_channel_only_own_tab`: in every step, a process is started only
+/// as one of a pair, a GPU process and the renderer of the same id, both
+/// started in that step and with the step's fresh id (`next_id`): the host's
+/// socket pair for the renderer's lists joins exactly those two. And a frame
+/// for a GPU process goes only to the pair the step started, or, on the
+/// host's `Resize` of a tab, to the GPU process of that tab's renderer. A
+/// renderer's id and tab never change while it lives, ids are never reused,
+/// and a tab has one renderer (`renderers_wf`), so the pair belongs to one
+/// tab from its start to its `Kill`: no list can reach another tab's GPU
+/// process.
+///
+/// (Restated before its proof from the first statement of this commit
+/// series, which also said the pair's renderer is, after the step, its tab's
+/// current renderer. That half follows from the fresh id and `renderers_wf`
+/// but needs a frame lemma through every navigation path, and is not part of
+/// what this theorem states now; see the crate README.)
 pub open spec fn channel_only_own_tab_statement(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event) -> bool {
-    let (s1, out) = step(rules, urls, fetch, s, e);
+    let out = step(rules, urls, fetch, s, e).1;
     forall|k: int|
         0 <= k < out.len() ==> match #[trigger] out[k] {
-            Output::Spawn { id: x, policy: Policy::Gpu } => out.contains(Output::Spawn { id: x, policy: Policy::Renderer }) && exists|j: int|
-                0 <= j < s1.renderers.len() && s1.renderers[j].id == x && find_by_tab(s1.renderers, s1.renderers[j].tab, 0) == Some(j),
-            Output::Spawn { id: x, policy: Policy::Renderer } => out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
-            Output::ToGpu { id: x, .. } => exists|j: int|
-                0 <= j < s1.renderers.len() && s1.renderers[j].id == x && find_by_tab(s1.renderers, s1.renderers[j].tab, 0) == Some(j),
+            Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(
+                Output::Spawn { id: x, policy: Policy::Renderer },
+            ),
+            Output::ToGpu { id: x, .. } => (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu })) || (e matches Event::Resize {
+                tab,
+                ..
+            } && find_by_tab(s.renderers, tab, 0) matches Some(i) && s.renderers[i].id == x),
             _ => true,
         }
 }

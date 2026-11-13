@@ -151,7 +151,18 @@ proof fn lemma_navigate_tab_sent(urls: UrlFns, s: State, o: Seq<Output>, tab: na
                     } else {
                         let id = s.next_id;
                         let r = Renderer { committed: true, id, tab, url, lock, pending: None };
-                        let before = o + seq![Output::Kill { id: old.id }, Output::Spawn { id, policy: Policy::Renderer }];
+                        // Item 5.18: the new pair's spawns, and the tab's viewport
+                        // if it has one, come before the commit.
+                        let before = match find_viewport(s.viewports, tab, 0) {
+                            None => o + seq![Output::Kill { id: old.id }, Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }],
+                            Some(v) => o + seq![
+                                Output::Kill { id: old.id },
+                                Output::Spawn { id, policy: Policy::Gpu },
+                                Output::Spawn { id, policy: Policy::Renderer },
+                                Output::ToRenderer { id, bytes: viewport_frame(v) },
+                                Output::ToGpu { id, bytes: gpu_viewport_frame(v) },
+                            ],
+                        };
                         assert(o + out =~= before.push(Output::ToRenderer { id, bytes: commit_frames(url, doc) }));
                         lemma_all_prefix(s.renderers, o, out);
                         lemma_sent_last(before, id, url, doc);
@@ -362,14 +373,14 @@ proof fn lemma_open_tab_sent(
         Some(lock) => match script {
             Some(script) => {
                 let doc = script_document(script);
-                let before = o + seq![Output::Spawn { id, policy: Policy::Renderer }];
+                let before = o + seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }];
                 assert(o + out =~= before.push(Output::ToRenderer { id, bytes: commit_frames(url, doc) }));
                 lemma_all_prefix(s.renderers, o, out);
                 lemma_sent_last(before, id, url, doc);
                 lemma_all_push(s.renderers, o + out, Renderer { committed: true, id, tab: id, url, lock, pending: None });
             },
             None => {
-                let spawn = seq![Output::Spawn { id, policy: Policy::Renderer }];
+                let spawn = seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }];
                 let s1 = State { renderers: s.renderers.push(Renderer { committed: false, id, tab: id, url, lock, pending: None }), next_id: id + 1, ..s };
                 lemma_all_prefix(s.renderers, o, spawn);
                 lemma_all_push(s.renderers, o + spawn, Renderer { committed: false, id, tab: id, url, lock, pending: None });
@@ -496,6 +507,18 @@ proof fn lemma_step_sent(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch
             }
         },
         Event::Tick { time } => {
+            lemma_all_prefix(s.renderers, o, out);
+        },
+        // Item 5.18: a GPU process's frame keeps the table or kills its
+        // renderer; a resize and an input keep the table.
+        Event::FromGpu { id, bytes } => {
+            crate::invariant::lemma_find_by_id(s.renderers, id, 0);
+            lemma_all_prefix(s.renderers, o, out);
+            if let Some(i) = find_by_id(s.renderers, id, 0) {
+                lemma_all_remove(s.renderers, o + out, i);
+            }
+        },
+        Event::Resize { .. } | Event::Input { .. } => {
             lemma_all_prefix(s.renderers, o, out);
         },
     }

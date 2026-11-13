@@ -649,12 +649,40 @@ fn toks5(a: Tok, b: Tok, c: Tok, d: Tok, e: Tok) -> (t: Vec<Tok>)
     t
 }
 
-fn toks8(a: Tok, b: Tok, c: Tok, d: Tok, e: Tok, f: Tok, g: Tok, h: Tok) -> (t: Vec<Tok>)
+/// The tokens of `Input`: the array, the tag 109 and the six fields.
+fn input_tokens(kind: u64, x: u64, y: u64, negative: bool, delta: u64, key: u64) -> (t: Vec<Tok>)
     ensures
-        views(t@) =~= seq![a@, b@, c@, d@, e@, f@, g@, h@],
+        views(t@) =~= seq![
+            crate::cbor::spec::Token::Array(7),
+            crate::cbor::spec::Token::Uint(109),
+            crate::cbor::spec::Token::Uint(kind),
+            crate::cbor::spec::Token::Uint(x),
+            crate::cbor::spec::Token::Uint(y),
+            crate::cbor::spec::Token::Bool(negative),
+            crate::cbor::spec::Token::Uint(delta),
+            crate::cbor::spec::Token::Uint(key),
+        ],
 {
-    let t = vec![a, b, c, d, e, f, g, h];
-    assert(views(t@) =~= seq![a@, b@, c@, d@, e@, f@, g@, h@]);
+    let t = vec![
+        Tok::Array(7),
+        Tok::Uint(109),
+        Tok::Uint(kind),
+        Tok::Uint(x),
+        Tok::Uint(y),
+        Tok::Bool(negative),
+        Tok::Uint(delta),
+        Tok::Uint(key),
+    ];
+    assert(views(t@) =~= seq![
+        crate::cbor::spec::Token::Array(7),
+        crate::cbor::spec::Token::Uint(109),
+        crate::cbor::spec::Token::Uint(kind),
+        crate::cbor::spec::Token::Uint(x),
+        crate::cbor::spec::Token::Uint(y),
+        crate::cbor::spec::Token::Bool(negative),
+        crate::cbor::spec::Token::Uint(delta),
+        crate::cbor::spec::Token::Uint(key),
+    ]);
     t
 }
 
@@ -733,16 +761,7 @@ fn message_tokens(m: &Msg) -> (t: Vec<Tok>)
         Msg::GpuReady { software } => toks3(Tok::Array(2), Tok::Uint(18), Tok::Bool(*software)),
         Msg::GpuRefused => toks2(Tok::Array(1), Tok::Uint(19)),
         Msg::Viewport { width, height, scale } => toks5(Tok::Array(4), Tok::Uint(108), Tok::Uint(*width), Tok::Uint(*height), Tok::Uint(*scale)),
-        Msg::Input { kind, x, y, negative, delta, key } => toks8(
-            Tok::Array(7),
-            Tok::Uint(109),
-            Tok::Uint(*kind),
-            Tok::Uint(*x),
-            Tok::Uint(*y),
-            Tok::Bool(*negative),
-            Tok::Uint(*delta),
-            Tok::Uint(*key),
-        ),
+        Msg::Input { kind, x, y, negative, delta, key } => input_tokens(*kind, *x, *y, *negative, *delta, *key),
         Msg::GpuViewport { width, height, scale } => toks5(Tok::Array(4), Tok::Uint(114), Tok::Uint(*width), Tok::Uint(*height), Tok::Uint(*scale)),
     }
 }
