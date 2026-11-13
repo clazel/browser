@@ -101,6 +101,17 @@ pub enum Out {
     ToGpu(u64, Msg),
     /// A frame to a GPU process that does not decode (a kernel bug).
     GarbledGpu(u64),
+    /// Several frames to a renderer in one write that are not a commit: a
+    /// fetched style sheet's `StyleResponse`, `StyleBody`s and `StyleEnd`
+    /// (item 5.19).
+    Frames(u64, Vec<Msg>),
+    /// A sub-fetch connection asked for (item 5.19): renderer, serial, hop,
+    /// host, port, TLS.
+    SubConnect(u64, u64, u64, Vec<u8>, u64, bool),
+    /// Octets written to a sub-fetch connection.
+    SubSend(u64, u64, u64, Vec<u8>),
+    /// A sub-fetch connection closed.
+    SubClose(u64, u64, u64),
     /// What the user is shown of a tab (item 5.18): the tab, the address
     /// bar (the kernel's URL), the title, and the buffer and its size.
     Paint(u64, Vec<u32>, Vec<u8>, u64, u64, u64),
@@ -131,6 +142,9 @@ impl Kernel {
             .into_iter()
             .map(|o| match o {
                 OutputRecord::ToRenderer { id, bytes } => match split_frames(&bytes) {
+                    Some(msgs) if matches!(msgs.first(), Some(Msg::StyleResponse { .. })) => {
+                        Out::Frames(id, msgs)
+                    }
                     Some(msgs)
                         if msgs.len() == 1 && !matches!(msgs.first(), Some(Msg::Commit { .. })) =>
                     {
@@ -170,6 +184,25 @@ impl Kernel {
                     width,
                     height,
                 } => Out::Paint(tab, url, title, buffer, width, height),
+                OutputRecord::SubConnect {
+                    renderer,
+                    serial,
+                    hop,
+                    host,
+                    port,
+                    tls,
+                } => Out::SubConnect(renderer, serial, hop, host, port, tls),
+                OutputRecord::SubSend {
+                    renderer,
+                    serial,
+                    hop,
+                    bytes,
+                } => Out::SubSend(renderer, serial, hop, bytes),
+                OutputRecord::SubClose {
+                    renderer,
+                    serial,
+                    hop,
+                } => Out::SubClose(renderer, serial, hop),
             })
             .collect()
     }

@@ -757,6 +757,11 @@ pub proof fn lemma_step_preserves_wf(rules: Seq<clazel_psl::spec::Rule>, urls: U
             }
         },
         Event::Resize { .. } | Event::Input { .. } => {},
+        // Item 5.19: a sub-fetch's jar operations, applied only when its
+        // request is credentialed.
+        Event::SubNet { renderer, serial, hop, input } => {
+            crate::subfetch_rel::lemma_sub_net_wf(rules, urls, fetch, s, renderer, serial, hop, input);
+        },
         Event::Net { conn, input } => {
             crate::net_wf::lemma_net_wf(rules, urls, fetch, s, conn, input);
         },

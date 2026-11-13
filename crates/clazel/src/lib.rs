@@ -141,6 +141,11 @@ impl Host {
                 }
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
                 show @ OutputRecord::Show { .. } => self.shown.push(show),
+                // Item 5.19: no renderer sends `FetchStyle` before item 5.20,
+                // so no sub-fetch connection is asked for yet.
+                OutputRecord::SubConnect { .. }
+                | OutputRecord::SubSend { .. }
+                | OutputRecord::SubClose { .. } => {}
                 paint @ OutputRecord::Paint { .. } => self.shown.push(paint),
             }
         }

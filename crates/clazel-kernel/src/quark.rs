@@ -138,7 +138,24 @@ pub open spec fn quark_cookie_integrity_statement(rules: Seq<clazel_psl::spec::R
         find_by_id(s.renderers, e->FromRenderer_id, 0) matches Some(i) && decode_renderer_frame(e->FromRenderer_bytes) matches Some(
             clazel_ipc::message::spec::Message::CookieSet { .. },
         ) && lock_host(s.renderers[i].lock) is Some && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, lock_host(s.renderers[i].lock)->Some_0)))
-            || net_stored_root(rules, fetch, s, e, c))
+            || net_stored_root(rules, fetch, s, e, c) || sub_stored_root(rules, fetch, s, e, c))
+}
+
+/// Item 5.19 (`quark_cookie_integrity` restated over sub-fetches): a `SubNet`
+/// about the current connection of a live sub-fetch whose request carries
+/// credentials, whose transducer step stores a `Set-Cookie` line that may be
+/// stored and has the cookie root of `c`. (A credentialed request's host is
+/// its renderer's lock's, so that is the lock's root.)
+pub open spec fn sub_stored_root(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, e: Event, c: clazel_cookie::storage::spec::Cookie) -> bool {
+    e is SubNet && match subnet_target(s, e->SubNet_renderer, e->SubNet_serial) {
+        Some(f) => subfetch_live(s, f) && e->SubNet_hop != 0 && f.hop == e->SubNet_hop && credentialed(fetch, f.lock, f.fetch.url) && {
+            let ops = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, e->SubNet_input, s.jar, s.now).2;
+            exists|k: int|
+                0 <= k < ops.len() && ((#[trigger] ops[k]) matches clazel_fetch::transducer::spec::JarOp::Stored { url, .. } && store_allowed(rules, url)
+                    && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, url.host->Some_0))
+        },
+        None => false,
+    }
 }
 
 /// A `Net` event about an open connection, whose transducer step stores a
@@ -153,6 +170,31 @@ pub open spec fn net_stored_root(rules: Seq<clazel_psl::spec::Rule>, fetch: Fetc
         },
         None => false,
     })
+}
+
+/// [`quark_cookie_integrity`] for a `SubNet` (item 5.19).
+proof fn lemma_sub_net_elements(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, renderer: nat, serial: nat, hop: nat, input: NetInput, c: clazel_cookie::storage::spec::Cookie)
+    requires
+        sub_net(rules, fetch, s, renderer, serial, hop, input).0.jar.contains(c),
+    ensures
+        s.jar.contains(c) || (exists|c0: clazel_cookie::storage::spec::Cookie| s.jar.contains(c0) && c == clazel_cookie::storage::spec::with_last_access_time(c0, s.now))
+            || sub_stored_root(rules, fetch, s, Event::SubNet { renderer, serial, hop, input }, c),
+{
+    if let Some(f) = subnet_target(s, renderer, serial) {
+        if subfetch_live(s, f) && hop != 0 && f.hop == hop && credentialed(fetch, f.lock, f.fetch.url) {
+            let ops = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, s.jar, s.now).2;
+            clazel_fetch::transducer::theorems::theorem_ops_name_request(fetch.http, fetch.urls, f.fetch, input, s.jar, s.now);
+            assert(clazel_fetch::transducer::contract::ops_at(ops, s.now)) by {
+                assert forall|k: int| 0 <= k < ops.len() implies clazel_fetch::transducer::contract::op_now(#[trigger] ops[k]) == s.now by {
+                    match ops[k] {
+                        clazel_fetch::transducer::spec::JarOp::Retrieved { now, .. } => {},
+                        clazel_fetch::transducer::spec::JarOp::Stored { now, .. } => {},
+                    }
+                }
+            }
+            lemma_apply_net_ops_elements(rules, s.jar, ops, s.now, c);
+        }
+    }
 }
 
 /// A cookie of the jar after a retrieval was there before, or is one of
@@ -274,6 +316,8 @@ pub proof fn lemma_apply_net_ops_elements(
 }
 
 /// **Quark's cookie integrity follows from `theorem_cookie_integrity`.**
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, e: Event)
     requires
         reachable(rules, urls, fetch, s),
@@ -288,7 +332,7 @@ pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
         || (e is FromRenderer && (find_by_id(s.renderers, e->FromRenderer_id, 0) matches Some(i) && decode_renderer_frame(e->FromRenderer_bytes) matches Some(
         clazel_ipc::message::spec::Message::CookieSet { .. },
     ) && lock_host(s.renderers[i].lock) is Some && clazel_cookie::storage::spec::cookie_root_of(rules, c) == clazel_cookie::storage::spec::cookie_root(rules, lock_host(s.renderers[i].lock)->Some_0)))
-        || net_stored_root(rules, fetch, s, e, c)) by {
+        || net_stored_root(rules, fetch, s, e, c) || sub_stored_root(rules, fetch, s, e, c)) by {
         match e {
             Event::Net { conn, input } => {
                 crate::unwind_base::lemma_net_frame(rules, urls, fetch, s, conn, input);
@@ -308,7 +352,11 @@ pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
             },
             Event::Tick { time } => {
                 let now = if time > s.now { time } else { s.now };
+                crate::subfetch_rel::lemma_tick_all_shape(s, time);
                 clazel_cookie::storage::isolation::lemma_evict_expired_props(rules, s.jar, now, any_root);
+            },
+            Event::SubNet { renderer, serial, hop, input } => {
+                lemma_sub_net_elements(rules, fetch, s, renderer, serial, hop, input, c);
             },
             Event::FromRenderer { id, bytes } => {
                 crate::invariant::lemma_find_by_id(s.renderers, id, 0);
@@ -340,6 +388,11 @@ pub proof fn quark_cookie_integrity(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                                         assert(c == live[k]);
                                     }
                                 }
+                            }
+                        },
+                        Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) => {
+                            if r.committed {
+                                crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
                             }
                         },
                         _ => {},

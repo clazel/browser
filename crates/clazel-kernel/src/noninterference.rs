@@ -66,7 +66,7 @@ pub open spec fn user_tabs_open(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns
 /// renderer. A `Show` (item 4.12) is in the observation of the domain of the
 /// renderer of its tab: what the user sees of a tab is that domain's.
 pub open spec fn addressed_to(rules: Seq<clazel_psl::spec::Rule>, d: crate::domain::Domain, s: State, s1: State, o: Output) -> bool {
-    !(o is Connect || o is Send || o is Close) && exists|r: Renderer|
+    !(o is Connect || o is Send || o is Close || o is SubConnect || o is SubSend || o is SubClose) && exists|r: Renderer|
         (s.renderers.contains(r) || s1.renderers.contains(r)) && (if o is Show || o is Paint {
             r.tab == crate::domain::output_id(o)
         } else {
@@ -130,7 +130,8 @@ pub open spec fn rel_conn(s1: State, s2: State) -> bool {
 /// they are given step the same fetches. Item 5.18: the same viewports (only
 /// the user's `Resize` sets them, and it is kept by every purge), and the
 /// same titles of `d`'s locks (another domain's `Title`, dropped by the
-/// purge, changes only an entry under its own lock).
+/// purge, changes only an entry under its own lock). Item 5.19: the same
+/// sub-fetches and counts under the observer's locks.
 pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, s2: State) -> bool {
     &&& crate::invariant::kernel_wf(rules, urls, s1)
     &&& crate::invariant::kernel_wf(rules, urls, s2)
@@ -147,6 +148,8 @@ pub open spec fn rel(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate:
     &&& forall|o: clazel_origin::spec::Origin| o is Tuple && crate::domain::domain_of_lock(rules, o) == d ==> storage_of(s1, o) == storage_of(s2, o)
     &&& s1.viewports == s2.viewports
     &&& crate::domain::titles_of_domain(rules, s1.titles, d) == crate::domain::titles_of_domain(rules, s2.titles, d)
+    &&& crate::domain::subfetches_of_domain(rules, s1.subfetches, d) == crate::domain::subfetches_of_domain(rules, s2.subfetches, d)
+    &&& crate::domain::subcounts_of_domain(rules, s1.subcounts, d) == crate::domain::subcounts_of_domain(rules, s2.subcounts, d)
 }
 
 // ---------------------------------------------------------------------
@@ -181,7 +184,7 @@ pub open spec fn step_consistency_statement(rules: Seq<clazel_psl::spec::Rule>, 
 /// that does not is answered with an error to the sender and changes nothing,
 /// like a message that is not a `Navigate`).
 pub open spec fn other_domain_local(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, d: crate::domain::Domain, s1: State, e: Event) -> bool {
-    &&& (e is FromRenderer || e is FromGpu)
+    &&& (e is FromRenderer || e is FromGpu || e is SubNet)
     &&& crate::domain::event_domain(rules, s1, e) matches Some(d2) && d2 != d
     &&& crate::domain::declassified(urls, s1, e) is None
 }

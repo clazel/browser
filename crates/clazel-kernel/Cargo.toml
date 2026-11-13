@@ -125,6 +125,16 @@ theorems = [
     "theorem_channel_only_own_tab",
     "theorem_input_only_to_own_tab",
     "theorem_viewport_only_to_own_tab",
+    # Phase 5 item 5.19: style sheet fetches. The statements are in
+    # `statements.rs`; the proofs in `subfetch_theorems.rs` (and the second
+    # half of `theorem_connection_ownership`, which the theorem above now
+    # also ensures), the noninterference over `SubNet` and `FetchStyle` in
+    # `subfetch_rel.rs`.
+    "theorem_subfetch_only_to_requester",
+    "theorem_subfetch_credentials",
+    "theorem_subfetch_ownership",
+    "theorem_subfetch_limits",
+    "theorem_commit_ends_subfetches",
 ]
 
 [package.metadata.verus]

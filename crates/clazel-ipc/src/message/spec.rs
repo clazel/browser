@@ -21,6 +21,7 @@
 //! | 9 | renderer to kernel | `Navigate` | url (text) |
 //! | 10 | renderer to kernel | `Display` | title (text), text (text), links (array of text) |
 //! | 11 | renderer to kernel | `Title` | title (text) |
+//! | 14 | renderer to kernel | `FetchStyle` | request (unsigned), url (text) |
 //! | 15 | GPU process to kernel | `FrameReady` | buffer (unsigned), width (unsigned), height (unsigned) |
 //! | 18 | GPU process to kernel | `GpuReady` | software (bool) |
 //! | 19 | GPU process to kernel | `GpuRefused` | |
@@ -33,6 +34,10 @@
 //! | 107 | kernel to renderer | `BodyEnd` | |
 //! | 108 | kernel to renderer | `Viewport` | width (unsigned), height (unsigned), scale (unsigned) |
 //! | 109 | kernel to renderer | `Input` | kind (unsigned), x (unsigned), y (unsigned), negative (bool), delta (unsigned), key (unsigned) |
+//! | 110 | kernel to renderer | `StyleResponse` | request (unsigned), content type (bytes) |
+//! | 111 | kernel to renderer | `StyleBody` | request (unsigned), bytes (bytes, at most [`max_style_chunk`]) |
+//! | 112 | kernel to renderer | `StyleEnd` | request (unsigned) |
+//! | 113 | kernel to renderer | `StyleFailed` | request (unsigned) |
 //! | 114 | kernel to GPU process | `GpuViewport` | width (unsigned), height (unsigned), scale (unsigned) |
 //!
 //! `StorageLengthValue` is not in the plan's list, which has no reply for
@@ -64,6 +69,14 @@
 //! its kind (0 a click, 1 a scroll, 2 a key), its position, a scroll delta
 //! as a sign and a magnitude (the profile has no negative integers), and a
 //! key code.
+//!
+//! Phase 5 item 5.19 added the style sheet fetch: a committed renderer's
+//! `FetchStyle` asks the kernel to fetch `url` (resolved against its
+//! committed URL) under `request`, an id the renderer chose; the kernel
+//! answers with `StyleResponse` (the response's combined `Content-Type`
+//! field value, or empty), zero or more `StyleBody` and `StyleEnd`, or with
+//! `StyleFailed`, each naming that `request`. The request id is the
+//! renderer's own number for its fetch, not an identity: it names nobody.
 //!
 //! Two rules are part of the schema's spec ([`message_fields`], and
 //! `lemmas::lemma_no_identity_fields`):
@@ -198,6 +211,37 @@ pub enum Message {
     },
     /// GPU process to kernel: the driver is refused (item 5.17c).
     GpuRefused,
+    /// Renderer to kernel: fetch a style sheet (item 5.19).
+    FetchStyle {
+        /// The renderer's id for this fetch.
+        request: u64,
+        /// The sheet's URL, as the document wrote it.
+        url: Seq<u8>,
+    },
+    /// Kernel to renderer: the sheet's response arrived (item 5.19).
+    StyleResponse {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The response's combined `Content-Type` field value, or empty.
+        content_type: Seq<u8>,
+    },
+    /// Kernel to renderer: the next part of the sheet's body.
+    StyleBody {
+        /// The renderer's id for the fetch.
+        request: u64,
+        /// The octets.
+        bytes: Seq<u8>,
+    },
+    /// Kernel to renderer: the sheet's body is complete.
+    StyleEnd {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
+    /// Kernel to renderer: the fetch failed (or was refused).
+    StyleFailed {
+        /// The renderer's id for the fetch.
+        request: u64,
+    },
     /// Kernel to renderer: a document is committed; its body follows in
     /// `Body` frames, then `BodyEnd`.
     Commit {
@@ -279,6 +323,15 @@ pub open spec fn max_body_chunk() -> nat {
     (crate::frame::spec::MAX_FRAME - 8) as nat
 }
 
+/// The most octets one `StyleBody` carries: `MAX_FRAME` minus the rest of
+/// its payload, which is the array's head (1 octet), the tag 111 (2
+/// octets), the request id (at most 9 octets) and the byte string's head
+/// (at most 5 octets below 2^32), so that every `StyleBody` of at most this
+/// many octets fits one frame (item 5.19).
+pub open spec fn max_style_chunk() -> nat {
+    (crate::frame::spec::MAX_FRAME - 17) as nat
+}
+
 /// Whether `m` is sent by a renderer to the kernel.
 pub open spec fn is_from_renderer(m: Message) -> bool {
     match m {
@@ -292,7 +345,8 @@ pub open spec fn is_from_renderer(m: Message) -> bool {
         | Message::StorageLength
         | Message::Navigate { .. }
         | Message::Display { .. }
-        | Message::Title { .. } => true,
+        | Message::Title { .. }
+        | Message::FetchStyle { .. } => true,
         _ => false,
     }
 }
@@ -357,6 +411,8 @@ pub enum Field {
     Delta,
     /// A key code.
     KeyCode,
+    /// The renderer's own id for a style sheet fetch (item 5.19).
+    Request,
     /// A claimed origin. No message has one.
     Origin,
     /// A renderer id. No message has one.
@@ -398,6 +454,11 @@ pub open spec fn message_fields(m: Message) -> Seq<Field> {
         Message::Viewport { .. } => seq![Field::Width, Field::Height, Field::Scale],
         Message::Input { .. } => seq![Field::InputKind, Field::X, Field::Y, Field::Negative, Field::Delta, Field::KeyCode],
         Message::GpuViewport { .. } => seq![Field::Width, Field::Height, Field::Scale],
+        Message::FetchStyle { .. } => seq![Field::Request, Field::Url],
+        Message::StyleResponse { .. } => seq![Field::Request, Field::ContentType],
+        Message::StyleBody { .. } => seq![Field::Request, Field::BodyBytes],
+        Message::StyleEnd { .. } => seq![Field::Request],
+        Message::StyleFailed { .. } => seq![Field::Request],
     }
 }
 
@@ -468,6 +529,11 @@ pub open spec fn message_tokens(m: Message) -> Seq<Token> {
             Token::Uint(key),
         ],
         Message::GpuViewport { width, height, scale } => seq![Token::Array(4), Token::Uint(114), Token::Uint(width), Token::Uint(height), Token::Uint(scale)],
+        Message::FetchStyle { request, url } => seq![Token::Array(3), Token::Uint(14), Token::Uint(request), Token::Text(url)],
+        Message::StyleResponse { request, content_type } => seq![Token::Array(3), Token::Uint(110), Token::Uint(request), Token::Bytes(content_type)],
+        Message::StyleBody { request, bytes } => seq![Token::Array(3), Token::Uint(111), Token::Uint(request), Token::Bytes(bytes)],
+        Message::StyleEnd { request } => seq![Token::Array(2), Token::Uint(112), Token::Uint(request)],
+        Message::StyleFailed { request } => seq![Token::Array(2), Token::Uint(113), Token::Uint(request)],
     }
 }
 
@@ -503,6 +569,13 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
         if f.len() == 1 { match f[0] { Token::Text(s) => Some(Message::Navigate { url: s }), _ => None } } else { None }
     } else if tag == 11 {
         if f.len() == 1 { match f[0] { Token::Text(s) => Some(Message::Title { title: s }), _ => None } } else { None }
+    } else if tag == 14 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Text(u)) => Some(Message::FetchStyle { request: r, url: u }),
+                _ => None,
+            }
+        } else { None }
     } else if tag == 15 {
         if f.len() == 3 {
             match (f[0], f[1], f[2]) {
@@ -556,6 +629,24 @@ pub open spec fn parse_fields(tag: u64, f: Seq<Token>) -> Option<Message> {
                 _ => None,
             }
         } else { None }
+    } else if tag == 110 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Bytes(c)) => Some(Message::StyleResponse { request: r, content_type: c }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 111 {
+        if f.len() == 2 {
+            match (f[0], f[1]) {
+                (Token::Uint(r), Token::Bytes(b)) => Some(Message::StyleBody { request: r, bytes: b }),
+                _ => None,
+            }
+        } else { None }
+    } else if tag == 112 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleEnd { request: r }), _ => None } } else { None }
+    } else if tag == 113 {
+        if f.len() == 1 { match f[0] { Token::Uint(r) => Some(Message::StyleFailed { request: r }), _ => None } } else { None }
     } else if tag == 114 {
         if f.len() == 3 {
             match (f[0], f[1], f[2]) {

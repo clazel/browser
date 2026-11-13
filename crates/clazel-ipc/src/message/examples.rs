@@ -335,4 +335,27 @@ pub proof fn lemma_reject_frames()
     assert(decode_framed(seq![0x00u8, 0x00, 0x00]) is None) by (compute_only);
 }
 
+/// `FetchStyle(1, "s.css")` is `[14, 1, "s.css"]`, from a renderer only;
+/// `StyleResponse(1, h'74')` is `[110, 1, h'74']`, `StyleBody(1, h'61')`
+/// `[111, 1, h'61']`, `StyleEnd(1)` `[112, 1]` and `StyleFailed(1)`
+/// `[113, 1]` (item 5.19).
+pub proof fn lemma_example_style()
+    ensures
+        decode_renderer_message(seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73]) == Some(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] }),
+        encode_message(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] }) == seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73],
+        decode_message(seq![0x83u8, 0x18, 0x6E, 0x01, 0x41, 0x74]) == Some(Message::StyleResponse { request: 1, content_type: seq![0x74u8] }),
+        decode_message(seq![0x83u8, 0x18, 0x6F, 0x01, 0x41, 0x61]) == Some(Message::StyleBody { request: 1, bytes: seq![0x61u8] }),
+        decode_message(seq![0x82u8, 0x18, 0x70, 0x01]) == Some(Message::StyleEnd { request: 1 }),
+        decode_message(seq![0x82u8, 0x18, 0x71, 0x01]) == Some(Message::StyleFailed { request: 1 }),
+        decode_renderer_message(seq![0x82u8, 0x18, 0x70, 0x01]) is None,
+{
+    assert(decode_renderer_message(seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73]) == Some(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] })) by (compute_only);
+    assert(encode_message(Message::FetchStyle { request: 1, url: seq![0x73u8, 0x2E, 0x63, 0x73, 0x73] }) == seq![0x83u8, 0x0E, 0x01, 0x65, 0x73, 0x2E, 0x63, 0x73, 0x73]) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x6E, 0x01, 0x41, 0x74]) == Some(Message::StyleResponse { request: 1, content_type: seq![0x74u8] })) by (compute_only);
+    assert(decode_message(seq![0x83u8, 0x18, 0x6F, 0x01, 0x41, 0x61]) == Some(Message::StyleBody { request: 1, bytes: seq![0x61u8] })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x70, 0x01]) == Some(Message::StyleEnd { request: 1 })) by (compute_only);
+    assert(decode_message(seq![0x82u8, 0x18, 0x71, 0x01]) == Some(Message::StyleFailed { request: 1 })) by (compute_only);
+    assert(decode_renderer_message(seq![0x82u8, 0x18, 0x70, 0x01]) is None) by (compute_only);
+}
+
 } // verus!

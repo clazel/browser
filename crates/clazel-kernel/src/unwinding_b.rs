@@ -56,6 +56,9 @@ pub proof fn lemma_local_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                 }
             }
         }
+        if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        }
     } else {
         crate::net_theorems::lemma_closes_of_tab(s.conns, r.tab);
         let closes = closes_of_tab(s.conns, r.tab);
@@ -104,12 +107,16 @@ pub proof fn lemma_local_respect(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
 {
     if e is FromGpu {
         crate::surface_rel::lemma_local_respect_gpu(rules, urls, fetch, d, s1, s2, e);
+    } else if e is SubNet {
+        crate::subfetch_rel::lemma_local_respect_subnet(rules, urls, fetch, d, s1, s2, e);
     } else {
         lemma_local_respect_renderer(rules, urls, fetch, d, s1, s2, e);
     }
 }
 
 /// [`lemma_local_respect`] for a renderer's frame.
+#[verifier::spinoff_prover]
+#[verifier::rlimit(60)]
 pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, d: crate::domain::Domain, s1: State, s2: State, e: Event)
     requires
         crate::noninterference::rel(rules, urls, d, s1, s2),
@@ -224,6 +231,12 @@ pub proof fn lemma_local_respect_renderer(rules: Seq<clazel_psl::spec::Rule>, ur
         // another domain.
         if let Some(clazel_ipc::message::spec::Message::Title { title }) = accepted_message(r, bytes) {
             crate::surface_rel::lemma_titles_set_other(rules, s1.titles, r.id, r.lock, title, d);
+        }
+        // Item 5.19: a `FetchStyle` changes only its sender's sub-fetches and
+        // counts, of another domain.
+        if let Some(clazel_ipc::message::spec::Message::FetchStyle { request, url }) = accepted_message(r, bytes) {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s1, r, request, url);
+            crate::subfetch_rel::lemma_fetch_style_other(rules, urls, fetch, d, s1, r, request, url);
         }
         crate::unwinding_d::lemma_rel_same_table(rules, urls, d, s1, s2, s1b, s2);
     }

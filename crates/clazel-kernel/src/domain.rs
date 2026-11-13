@@ -37,6 +37,11 @@
 //!   cookies, and not the id counter or the other domains' storage. Item
 //!   5.18 adds the tabs' viewports (the host's, so every domain's) and the
 //!   titles of the domain's renderers ([`titles_of_domain`]).
+//! - **Item 5.19.** A `SubNet` event belongs to the domain of the renderer
+//!   whose sub-fetch it reports on, and has no declassified part: the
+//!   sub-fetch exists only because that renderer asked. Sub-fetch connection
+//!   outputs are addressed to the network shell. The observation gains the
+//!   domain's sub-fetches and counts.
 //! - **Item 5.18.** A `FromGpu(id, _)` event belongs to the domain of
 //!   renderer `id`, like that renderer's own frames, and has no declassified
 //!   part; `Resize` and `Input` are the user's and are kept for every
@@ -121,6 +126,16 @@ pub struct Observation {
     pub titles: Seq<Titled>,
 }
 
+/// The sub-fetches of `fs` whose lock is in domain `d` (item 5.19).
+pub open spec fn subfetches_of_domain(rules: Seq<clazel_psl::spec::Rule>, fs: Seq<SubFetch>, d: Domain) -> Seq<SubFetch> {
+    fs.filter(|x: SubFetch| domain_of_lock(rules, x.lock) == d)
+}
+
+/// The sub-fetch counts of `cs` whose lock is in domain `d` (item 5.19).
+pub open spec fn subcounts_of_domain(rules: Seq<clazel_psl::spec::Rule>, cs: Seq<SubCount>, d: Domain) -> Seq<SubCount> {
+    cs.filter(|x: SubCount| domain_of_lock(rules, x.lock) == d)
+}
+
 /// The titles of `ts` whose lock is in domain `d` (item 5.18), in order.
 pub open spec fn titles_of_domain(rules: Seq<clazel_psl::spec::Rule>, ts: Seq<Titled>, d: Domain) -> Seq<Titled> {
     ts.filter(|x: Titled| domain_of_lock(rules, x.lock) == d)
@@ -155,6 +170,11 @@ pub open spec fn event_domain(rules: Seq<clazel_psl::spec::Rule>, s: State, e: E
             None => None,
         },
         Event::FromGpu { id, .. } => match find_by_id(s.renderers, id, 0) {
+            Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
+            None => None,
+        },
+        // Item 5.19: a sub-fetch's connection is its renderer's.
+        Event::SubNet { renderer, .. } => match find_by_id(s.renderers, renderer, 0) {
             Some(i) => Some(domain_of_renderer(rules, s.renderers[i])),
             None => None,
         },
@@ -213,7 +233,7 @@ pub open spec fn ipurge_event(
     e: Event,
 ) -> Option<Event> {
     match e {
-        Event::FromRenderer { .. } | Event::FromGpu { .. } => match event_domain(rules, s, e) {
+        Event::FromRenderer { .. } | Event::FromGpu { .. } | Event::SubNet { .. } => match event_domain(rules, s, e) {
             Some(d2) => if d2 == d { Some(e) } else { declassified(urls, s, e) },
             None => None,
         },
@@ -261,6 +281,9 @@ pub open spec fn output_id(o: Output) -> nat {
         Output::Close { conn } => conn,
         Output::Show { tab, .. } => tab,
         Output::ToGpu { id, .. } => id,
+        Output::SubConnect { renderer, .. } => renderer,
+        Output::SubSend { renderer, .. } => renderer,
+        Output::SubClose { renderer, .. } => renderer,
         Output::Paint { tab, .. } => tab,
     }
 }
