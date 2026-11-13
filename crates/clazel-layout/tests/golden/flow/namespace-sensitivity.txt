@@ -6,18 +6,16 @@ root (anonymous) 0,0 800x600
       block (anonymous) 8,8 784x18.640625
         line 8,8 784x18.640625 base=22.859375
           text "Foo" x=8 base=22.859375 w=29.5
-      table-wrapper <table> 8,26.640625 4x6 m=0,780,0,0
-        table <table> 8,26.640625 4x6
-          row-group <tbody> 8,26.640625 4x6
-            row <tr> 8,26.640625 4x6
-              cell <td> 8,26.640625 4x6 p=1,1,1,1
-                line 9,27.640625 2x4 base=31.640625
-                  inline <svg> 9,16.78125 2x18.640625 start end
+      table-wrapper <table> 8,26.640625 12x12 m=0,772,0,0
+        table <table> 8,26.640625 12x12
+          row-group <tbody> 10,28.640625 8x8
+            row <tr> 10,28.640625 8x8
+              cell <td> 10,28.640625 8x8 p=1,1,1,1
+                line 11,29.640625 6x6 base=32.640625
+                  inline <svg> 11,17.78125 6x18.640625 start end
                   atomic (anonymous)
-                  table-wrapper (anonymous) 9,27.640625 2x4
-                    line 9,29.640625 2x2 base=31.640625
-                      atomic (anonymous)
-                    table (anonymous) 9,29.640625 2x2
-                      row (anonymous) 9,29.640625 2x2
-                        cell <td> 9,29.640625 2x2 p=1,1,1,1
+                  table-wrapper (anonymous) 11,29.640625 6x6
+                    table (anonymous) 11,29.640625 6x6
+                      row (anonymous) 13,31.640625 2x2
+                        cell <td> 13,31.640625 2x2 p=1,1,1,1
 

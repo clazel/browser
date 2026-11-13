@@ -725,14 +725,14 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 11.5625x20.640625 m=0,772.4375,0,0
+      table-wrapper <table> 8,8 11.5625x24.640625 m=0,772.4375,0,0
         caption <caption> 8,8 11.5625x18.640625
           line 8,8 11.5625x18.640625 base=22.859375
             text "A" x=8 base=22.859375 w=11.5625
-        table <table> 8,26.640625 11.5625x2
-          row-group <tbody> 8,26.640625 11.5625x2
-            row <tr> 8,26.640625 11.5625x2
-              cell <td> 8,26.640625 11.5625x2 p=1,1,1,1
+        table <table> 8,26.640625 11.5625x6
+          row-group <tbody> 10,28.640625 7.5625x2
+            row <tr> 10,28.640625 7.5625x2
+              cell <td> 10,28.640625 7.5625x2 p=1,1,1,1
 
 #case 109
 #data "<body></body><template>"

@@ -215,6 +215,9 @@ pub mod measure;
 pub mod rows;
 pub mod state;
 
+#[cfg(test)]
+mod tests;
+
 use clazel_style::cascade::computed::{ComputedStyle, Size};
 
 use crate::boxes::{BoxId, BoxTree};
