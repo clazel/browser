@@ -169,14 +169,20 @@ name = "clazel"
 version = "0.0.0"
 dependencies = [
  "clazel-cookie",
+ "clazel-displaylist",
  "clazel-dom",
  "clazel-fetch",
+ "clazel-font",
+ "clazel-glyph-mask",
+ "clazel-gpu",
  "clazel-ipc",
  "clazel-kernel",
+ "clazel-layout",
  "clazel-net",
  "clazel-origin",
  "clazel-renderer",
  "clazel-url",
+ "clazel-window",
  "rustls",
 ]
 
@@ -309,6 +315,7 @@ name = "clazel-gpu"
 version = "0.0.0"
 dependencies = [
  "clazel-displaylist",
+ "clazel-ipc",
  "clazel-sandbox",
  "clazel-sys",
 ]
@@ -458,6 +465,7 @@ version = "0.0.0"
 dependencies = [
  "clazel-dom",
  "clazel-encoding",
+ "clazel-gpu",
  "clazel-html",
  "clazel-ipc",
  "clazel-mime",
