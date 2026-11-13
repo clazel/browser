@@ -7,16 +7,28 @@
 //! - `clazel demo`: the exit demo of phase-2.md item 2.16 (`demo.rs`).
 //! - `clazel fetch URL`: one `http://` GET, printing the response
 //!   (`fetch.rs`, Phase 3 item 3.8; no renderer involved).
-//! - `clazel browse URL`: the text-mode browser of phase-4.md item 4.15
+//! - `clazel browse URL`: the browser with a window of phase-5.md item 5.23
+//!   (`window.rs`), on macOS on Apple silicon in a window server session;
+//!   elsewhere, or with `--text`, the text-mode browser of phase-4.md item 4.15
 //!   (`browse.rs`). The host's log of frames goes to standard error.
+//! - `clazel browse --headless OUT URL [--size WxH]`: render one page to `OUT`, a
+//!   PNG or (`.ppm`) a PPM, without a window (item 5.23).
+//! - `--gpu=hardware` with `browse` ignores the driver blocklist (item 5.17c), with
+//!   a warning.
 //!
 //! The renderer is `$CLAZEL_RENDERER`, or `clazel-renderer` next to this
 //! binary, built with `cargo build -p clazel-renderer` if it is not there
-//! (`cargo run -p clazel` builds only this package).
+//! (`cargo run -p clazel` builds only this package). The GPU process is
+//! `$CLAZEL_GPU`, or `clazel-gpu` beside it, built the same way.
 
 mod browse;
 mod demo;
 mod fetch;
+mod picture;
+mod strip;
+#[cfg(test)]
+mod strip_tests;
+mod window;
 
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
@@ -24,7 +36,13 @@ use std::time::Duration;
 
 /// Where the renderer binary is; builds it if it is missing.
 fn renderer() -> Result<PathBuf, String> {
-    if let Some(path) = std::env::var_os("CLAZEL_RENDERER") {
+    sibling("CLAZEL_RENDERER", "clazel-renderer")
+}
+
+/// Where binary `name` is: `$var`, else beside this one, built with `cargo build
+/// -p name` if it is missing.
+fn sibling(var: &str, name: &str) -> Result<PathBuf, String> {
+    if let Some(path) = std::env::var_os(var) {
         return Ok(path.into());
     }
     // Resolve symlinks: an install links `bin/clazel` to the binary next to
@@ -32,13 +50,11 @@ fn renderer() -> Result<PathBuf, String> {
     let exe = std::env::current_exe()
         .and_then(std::fs::canonicalize)
         .map_err(|e| e.to_string())?;
-    let path = exe.with_file_name(format!("clazel-renderer{}", std::env::consts::EXE_SUFFIX));
+    let path = exe.with_file_name(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     if !path.exists() {
-        eprintln!("clazel: building clazel-renderer ...");
+        eprintln!("clazel: building {name} ...");
         let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-        let built = Command::new(cargo)
-            .args(["build", "-p", "clazel-renderer"])
-            .status();
+        let built = Command::new(cargo).args(["build", "-p", name]).status();
         if !built.is_ok_and(|s| s.success()) || !path.exists() {
             return Err(format!(
                 "{} does not exist and could not be built",
@@ -91,9 +107,11 @@ fn main() -> ExitCode {
         c.args(["--width", &width.to_string()]);
         c
     });
+    if args.get(1).map(String::as_str) == Some("browse") {
+        return browse_command(host, args.get(2..).unwrap_or_default(), width);
+    }
     match (args.get(1).map(String::as_str), args.get(2)) {
         (Some("demo"), None) => demo::run(host),
-        (Some("browse"), Some(url)) => browse_stdio(host, url, width),
         (Some(url), Some(script)) => {
             host.open_tab(url, script);
             if host.live() > 0 && host.run(Duration::from_secs(30)) {
@@ -102,11 +120,88 @@ fn main() -> ExitCode {
             eprintln!("clazel: no renderer started for {url}, or one is still running after 30 s");
             ExitCode::FAILURE
         }
-        _ => {
-            eprintln!(
-                "usage: clazel URL SCRIPT | clazel demo | clazel fetch URL | clazel browse URL"
-            );
-            ExitCode::from(2)
+        _ => usage(),
+    }
+}
+
+fn usage() -> ExitCode {
+    eprintln!(
+        "usage: clazel URL SCRIPT | clazel demo | clazel fetch URL | \
+         clazel browse [--text | --headless OUT [--size WxH]] [--gpu=hardware] URL"
+    );
+    ExitCode::from(2)
+}
+
+/// `WxH`, each side 1 to 8192.
+fn size(s: &str) -> Option<(u32, u32)> {
+    let (w, h) = s.split_once(['x', 'X', '×'])?;
+    let side = |v: &str| v.parse::<u32>().ok().filter(|v| (1..=8192).contains(v));
+    Some((side(w)?, side(h)?))
+}
+
+/// `clazel browse ...`.
+fn browse_command(host: clazel::Host, args: &[String], width: usize) -> ExitCode {
+    let flag = |f: &str| args.iter().any(|a| a == f);
+    let value = |f: &str| {
+        let i = args.iter().position(|a| a == f)?;
+        args.get(i.checked_add(1)?).cloned()
+    };
+    let Some(url) = args.last().filter(|u| !u.starts_with("--")) else {
+        return usage();
+    };
+    if flag("--text") {
+        return browse_stdio(host, url, width);
+    }
+    let gpu = match sibling("CLAZEL_GPU", "clazel-gpu") {
+        Ok(path) => path,
+        Err(e) => {
+            eprintln!("clazel: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let ignore = flag("--gpu=hardware");
+    if ignore {
+        eprintln!("clazel: --gpu=hardware: the driver blocklist is ignored");
+    }
+    let mut host = host.with_gpu(move |_| {
+        let mut c = Command::new(&gpu);
+        if ignore {
+            c.arg("--ignore-blocklist");
+        }
+        c
+    });
+    if let Some(out) = value("--headless") {
+        let Some(dims) = value("--size").map_or(Some((1024, 768)), |s| size(&s)) else {
+            return usage();
+        };
+        return match window::headless(&mut host, std::path::Path::new(&out), url, dims) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("clazel: browse --headless: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    browse_window(host, url, width)
+}
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn browse_window(mut host: clazel::Host, url: &str, width: usize) -> ExitCode {
+    if !clazel_window::has_window_server() {
+        eprintln!("clazel: no window server session; browsing in text mode");
+        return browse_stdio(host, url, width);
+    }
+    match window::mac::run(&mut host, url) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("clazel: browse: {e}");
+            ExitCode::FAILURE
         }
     }
+}
+
+#[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
+fn browse_window(host: clazel::Host, url: &str, width: usize) -> ExitCode {
+    eprintln!("clazel: no window on this platform yet (phase-5.md items 5.22, 5.22a); text mode");
+    browse_stdio(host, url, width)
 }
