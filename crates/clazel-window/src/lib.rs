@@ -23,6 +23,7 @@
 //!   decisions.
 
 pub mod event;
+pub mod keys;
 pub mod messages;
 pub mod nsevent;
 pub mod pattern;

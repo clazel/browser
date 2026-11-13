@@ -30,8 +30,12 @@ pub enum Event {
     },
     /// A key went down.
     Key {
-        /// The platform's key code.
+        /// The platform's key code ([`crate::keys`] names the ones the browser uses).
         code: u32,
+        /// Whether the shortcut modifier was held: Command on macOS. On Windows it
+        /// is always false until the backend reads Ctrl (`GetKeyState`, not yet in
+        /// `clazel-sys`), so Windows has no shortcuts yet.
+        command: bool,
     },
     /// A UTF-16 code unit was typed. A character outside the BMP arrives as two.
     Char {
