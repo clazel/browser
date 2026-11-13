@@ -28,7 +28,7 @@
 //!   which masks are live, under which ids, and how many coverage bytes
 //!   they hold, so that every list keeps item 5.17a's limits (ids below
 //!   `MAX_MASKS`, at most `MAX_MASK_BYTES` live). Steps:
-//!   - `Masks::admit(self, bytes) -> Option<(Masks, id)>`: a new mask of
+//!   - `Masks::allocate(self, bytes) -> Option<(Masks, id)>`: a new mask of
 //!     `bytes` coverage bytes. Contract: `None` when it would pass either
 //!     limit; otherwise the id is below `MAX_MASKS` and not live, and the
 //!     counts grow by one mask and `bytes`.

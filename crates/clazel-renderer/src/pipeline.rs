@@ -161,11 +161,11 @@ pub fn encoding_name(e: Encoding) -> String {
     String::from_utf8_lossy(&name(e)).into_owned()
 }
 
-fn code_points(s: &[u8]) -> Vec<u32> {
+pub(crate) fn code_points(s: &[u8]) -> Vec<u32> {
     String::from_utf8_lossy(s).chars().map(u32::from).collect()
 }
 
-fn string_of(cps: &[u32]) -> Option<String> {
+pub(crate) fn string_of(cps: &[u32]) -> Option<String> {
     cps.iter().map(|c| char::from_u32(*c)).collect()
 }
 
@@ -338,7 +338,7 @@ fn notice(text: String) -> Shown {
 }
 
 /// The supplied and computed MIME types of a document.
-fn computed_type(content_type: &[u8], body: &[u8]) -> (Option<MimeType>, MimeType) {
+pub(crate) fn computed_type(content_type: &[u8], body: &[u8]) -> (Option<MimeType>, MimeType) {
     let supplied = if content_type.is_empty() {
         None
     } else {
@@ -363,7 +363,7 @@ fn copy(m: &MimeType) -> MimeType {
     }
 }
 
-fn is_essence(m: &MimeType, t: &str, s: &str) -> bool {
+pub(crate) fn is_essence(m: &MimeType, t: &str, s: &str) -> bool {
     m.type_.iter().copied().eq(t.chars().map(u32::from))
         && m.subtype.iter().copied().eq(s.chars().map(u32::from))
 }
