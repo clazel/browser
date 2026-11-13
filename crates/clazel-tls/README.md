@@ -12,10 +12,11 @@ profile. Protected traffic-key epochs, the handshake record-key handoff, and
 an initial byte-stream connection dispatcher are built, and so is a
 post-handshake transducer (not yet through Verus; see below). **Socket I/O, entropy
 sourcing and the production cryptography provider (items 3.5e and 3.5f) remain**,
-as do X.509 certificate interpretation and path validation (3.5b). The crate stays at
-`tier = 0` with `target-tier = 2` until they are, and until CI's full run
-has checked every proof, mutation and conformance test on a pull request;
-what is proven today is stated below, not implied by the tier.
+as do X.509 certificate interpretation and path validation (3.5b). The crate is at
+`tier = 2`: CI's full run checks every proof, mutation and conformance
+test, and the clean-room transcription of RFC 8446 is proven equivalent to
+the specs, each difference stated in `src/transcription_equivalence/`.
+What is proven is stated below, not implied by the tier.
 
 ## What it is
 
@@ -223,7 +224,7 @@ no network I/O is included.
 
 ## Verification
 
-Tier 0, target tier 2. The current numbers are in the
+Tier 2, target tier 2. The current numbers are in the
 [status table](../../README.md#verification-status).
 
 - **Proven (Verus, `cargo verus verify`: 814 verified, 0 errors):** the
