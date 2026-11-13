@@ -1,0 +1,299 @@
+#case 0
+#data "<!doctype html></head> <head>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 1
+#data "<!doctype html><form><div></form><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+      block <form> 8,8 784x0
+        block <div> 8,8 784x0
+          block <div> 8,8 784x0
+
+#case 2
+#data "<!doctype html><title>&amp;</title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 3
+#data "<!doctype html><title><!--&amp;--></title>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 4
+#data "<!doctype>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 5
+#data "<!---x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 7
+#data "<frameset></frameset>\nfoo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 8
+#data "<frameset></frameset>\n<noframes>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 9
+#data "<frameset></frameset>\n<div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 10
+#data "<frameset></frameset>\n</html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 11
+#data "<frameset></frameset>\n</div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 12
+#data "<form><form>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <form> 8,16 784x0 m=0,0,16,0
+
+#case 13
+#data "<button><button>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x0 base=8
+        atomic <button>
+        atomic <button>
+      inline-block <button> 8,8 0x0
+      inline-block <button> 8,8 0x0
+
+#case 14
+#data "<table><tr><td></th>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+
+#case 15
+#data "<table><caption><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        caption <caption> 8,8 6x0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+
+#case 16
+#data "<table><caption><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        caption <caption> 8,8 0x0
+          block <div> 8,8 0x0
+        table <table> 8,8 0x0
+
+#case 18
+#data "<table><caption><div></caption>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        caption <caption> 8,8 0x0
+          block <div> 8,8 0x0
+        table <table> 8,8 0x0
+
+#case 19
+#data "<table><caption></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        caption <caption> 8,8 0x0
+        table <table> 8,8 0x0
+
+#case 21
+#data "<table><caption></body></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        caption <caption> 8,8 0x0
+        table <table> 8,8 0x0
+
+#case 22
+#data "<table><caption><div></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        caption <caption> 8,8 0x0
+          block <div> 8,8 0x0
+        table <table> 8,8 0x0
+
+#case 23
+#data "<table><tr><td></body></caption></col></colgroup></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+
+#case 25
+#data "<table><colgroup>foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "foo" x=8 base=22.859375 w=25.1875
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+          column-group <colgroup> 8,26.640625 0x0
+
+#case 27
+#data "<table><colgroup></col>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          column-group <colgroup> 8,8 0x0
+
+#case 28
+#data "<frameset><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 30
+#data "<frameset></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 32
+#data "<table><tr><div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+            row <tr> 8,8 0x0
+
+#case 35
+#data "<table><tr><div><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+
+#case 37
+#data "<table><tbody></thead>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+
+#case 39
+#data "<table><tbody></body></caption></col></colgroup></html></td></th></tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+
+#case 40
+#data "<table><tbody></div>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+
+#case 41
+#data "<table><table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 42
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 45
+#data "<html><frameset></frameset></html> "
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 46
+#data "<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01//EN\"><html></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x8
+    block <body> 8,8 784x0 m=8,8,8,8
+
+#case 47
+#data "<param><frameset></frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 48
+#data "<source><frameset></frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 49
+#data "<track><frameset></frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 50
+#data "</html><frameset></frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 51
+#data "</body><frameset></frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+

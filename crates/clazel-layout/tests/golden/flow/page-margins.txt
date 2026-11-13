@@ -1,0 +1,48 @@
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x432.609375
+    block <body> 8,21.4375 784x395.171875 m=8,8,8,8
+      block <h1> 8,21.4375 784x37.25 m=21.4375,0,21.4375,0
+        line 8,21.4375 784x37.25 base=51.140625
+          text "Heading" x=8 base=51.140625 w=137.734375
+      block <p> 8,80.125 784x37.28125 m=16,0,16,0
+        line 8,80.125 784x18.640625 base=94.984375
+          text "A paragraph whose top margin collapses with the heading's bottom margin, and which wraps" x=8 base=94.984375 w=760.796875
+        line 8,98.765625 784x18.640625 base=113.625
+          text "over several lines in a narrow viewport." x=8 base=113.625 w=322.8125
+      block <div> 8,147.40625 784x0 m=20,0,20,0
+        block <div> 8,147.40625 784x0 m=30,0,30,0
+      block <div> 199,147.40625 402x28.640625 m=0,191,0,191 b=1,1,1,1 p=4,4,4,4
+        line 204,152.40625 392x18.640625 base=167.265625
+          inline <span> 444.828125,152.40625 112.34375x18.640625 start end
+          text "Centred, half the width, with " x=204 base=167.265625 w=239.828125
+          text "an inline box" x=448.828125 base=167.265625 w=104.34375
+          text "." x=558.171875 base=167.265625 w=5.09375
+      block <div> 8,186.046875 784x48.640625 m=10,0,0,0
+        block <p> 8,201.046875 784x18.640625 m=15,0,15,0
+          line 8,201.046875 784x18.640625 base=215.90625
+            text "Inside a block formatting context." x=8 base=215.90625 w=274.96875
+      block <ul> 8,250.6875 784x48.640625 m=16,0,16,0 p=0,0,0,40
+        block <li> 48,250.6875 744x18.640625
+          line 48,250.6875 744x18.640625 base=265.546875
+            text "One" x=48 base=265.546875 w=32.890625
+          marker <li> 33.46875,250.6875 14.53125x18.640625
+            line 33.46875,250.6875 14.53125x18.640625 base=265.546875
+              text "• " x=33.46875 base=265.546875 w=14.53125
+        block <li> 48,269.328125 744x30
+          line 48,269.328125 744x30 base=288.328125
+            text "Two " x=48 base=288.328125 w=38.515625
+            atomic <span>
+          marker <li> 33.46875,273.46875 14.53125x18.640625
+            line 33.46875,273.46875 14.53125x18.640625 base=288.328125
+              text "• " x=33.46875 base=288.328125 w=14.53125
+          inline-block <span> 86.515625,269.328125 40x30
+      block <p> 8,315.328125 784x48 m=16,0,16,0
+        line 8,315.328125 784x24 base=332.859375
+          text "Centred text with an indent" x=303.609375 base=332.859375 w=224.765625
+        line 8,339.328125 784x24 base=356.859375
+          text "and a forced break." x=320.78125 base=356.859375 w=158.4375
+      block <pre> 8,379.328125 784x37.28125 m=16,0,16,0
+        line 8,379.328125 784x18.640625 base=394.1875
+          text "  preformattedtext" x=8 base=394.1875 w=149.359375
+        line 8,397.96875 784x18.640625 base=412.828125
+          text "with a tab" x=8 base=412.828125 w=81.46875

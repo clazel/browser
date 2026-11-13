@@ -1,0 +1,233 @@
+#case 0
+#data "<table><th>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <th> 10,10 2x2 p=1,1,1,1
+
+#case 1
+#data "<table><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+
+#case 2
+#data "<table><col foo='bar'>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+          column-group <colgroup> 8,8 0x0
+            column <col> 8,8 0x0
+
+#case 3
+#data "<table><colgroup></html>foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "foo" x=8 base=22.859375 w=25.1875
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+          column-group <colgroup> 8,26.640625 0x0
+
+#case 4
+#data "<table></table><p>foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+      block <p> 8,24 784x18.640625 m=16,0,16,0
+        line 8,24 784x18.640625 base=38.859375
+          text "foo" x=8 base=38.859375 w=25.1875
+
+#case 5
+#data "<table></body></caption></col></colgroup></html></tbody></td></tfoot></th></thead></tr><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+
+#case 6
+#data "<table><select><option>3</select></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <select> 8,8 10.1875x18.640625 start end
+          inline <option> 8,8 10.1875x18.640625 start end
+          text "3" x=8 base=22.859375 w=10.1875
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 7
+#data "<table><select><table></table></select></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 8
+#data "<table><select></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 9
+#data "<table><select><option>A<tr><td>B</td></tr></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <select> 8,8 11.5625x18.640625 start end
+          inline <option> 8,8 11.5625x18.640625 start end
+          text "A" x=8 base=22.859375 w=11.5625
+      table-wrapper <table> 8,26.640625 17.765625x24.640625 m=0,766.234375,0,0
+        table <table> 8,26.640625 17.765625x24.640625
+          row-group <tbody> 10,28.640625 13.765625x20.640625
+            row <tr> 10,28.640625 13.765625x20.640625
+              cell <td> 10,28.640625 13.765625x20.640625 p=1,1,1,1
+                line 11,29.640625 11.765625x18.640625 base=44.5
+                  text "B" x=11 base=44.5 w=11.765625
+
+#case 10
+#data "<table><td></body></caption></col></colgroup></html>foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 31.1875x24.640625 m=0,752.8125,0,0
+        table <table> 8,8 31.1875x24.640625
+          row-group <tbody> 10,10 27.1875x20.640625
+            row <tr> 10,10 27.1875x20.640625
+              cell <td> 10,10 27.1875x20.640625 p=1,1,1,1
+                line 11,11 25.1875x18.640625 base=25.859375
+                  text "foo" x=11 base=25.859375 w=25.1875
+
+#case 11
+#data "<table><td>A</table>B"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 17.5625x24.640625 m=0,766.4375,0,0
+        table <table> 8,8 17.5625x24.640625
+          row-group <tbody> 10,10 13.5625x20.640625
+            row <tr> 10,10 13.5625x20.640625
+              cell <td> 10,10 13.5625x20.640625 p=1,1,1,1
+                line 11,11 11.5625x18.640625 base=25.859375
+                  text "A" x=11 base=25.859375 w=11.5625
+      block (anonymous) 8,32.640625 784x18.640625
+        line 8,32.640625 784x18.640625 base=47.5
+          text "B" x=8 base=47.5 w=11.765625
+
+#case 12
+#data "<table><tr><caption>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        caption <caption> 8,8 0x0
+        table <table> 8,8 0x0
+          row-group <tbody> 8,8 0x0
+            row <tr> 8,8 0x0
+
+#case 13
+#data "<table><tr></body></caption></col></colgroup></html></td></th><td>foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 31.1875x24.640625 m=0,752.8125,0,0
+        table <table> 8,8 31.1875x24.640625
+          row-group <tbody> 10,10 27.1875x20.640625
+            row <tr> 10,10 27.1875x20.640625
+              cell <td> 10,10 27.1875x20.640625 p=1,1,1,1
+                line 11,11 25.1875x18.640625 base=25.859375
+                  text "foo" x=11 base=25.859375 w=25.1875
+
+#case 14
+#data "<table><td><tr>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 6x8 m=0,778,0,0
+        table <table> 8,8 6x8
+          row-group <tbody> 10,10 2x4
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+            row <tr> 10,14 2x0
+
+#case 15
+#data "<table><td><button><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 10x6 m=0,774,0,0
+        table <table> 8,8 10x6
+          row-group <tbody> 10,10 6x2
+            row <tr> 10,10 6x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+                line 11,11 0x0 base=11
+                  atomic <button>
+                inline-block <button> 11,11 0x0
+              cell <td> 14,10 2x2 p=1,1,1,1
+
+#case 16
+#data "<table><tr><td><svg><desc><td>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 10x6 m=0,774,0,0
+        table <table> 8,8 10x6
+          row-group <tbody> 10,10 6x2
+            row <tr> 10,10 6x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+              cell <td> 14,10 2x2 p=1,1,1,1
+
+#case 17
+#data "<div><table><svg><foreignObject><select><table><s>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+        block (anonymous) 8,8 784x0
+        table-wrapper <table> 8,8 0x0 m=0,784,0,0
+          table <table> 8,8 0x0
+        block (anonymous) 8,8 784x0
+        table-wrapper <table> 8,8 0x0 m=0,784,0,0
+          table <table> 8,8 0x0
+
+#case 18
+#data "<table>a<!doctype html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "a" x=8 base=22.859375 w=9.546875
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+

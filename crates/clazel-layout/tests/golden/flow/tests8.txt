@@ -1,0 +1,137 @@
+#case 0
+#data "<div>\n<div></div>\n</span>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x18.640625
+        block <div> 8,8 784x0
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            text "x" x=8 base=22.859375 w=9.015625
+
+#case 1
+#data "<div>x<div></div>\n</span>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x37.28125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            text "x" x=8 base=22.859375 w=9.03125
+        block <div> 8,26.640625 784x0
+        block (anonymous) 8,26.640625 784x18.640625
+          line 8,26.640625 784x18.640625 base=41.5
+            text "x" x=8 base=41.5 w=9.015625
+
+#case 2
+#data "<div>x<div></div>x</span>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x37.28125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            text "x" x=8 base=22.859375 w=9.03125
+        block <div> 8,26.640625 784x0
+        block (anonymous) 8,26.640625 784x18.640625
+          line 8,26.640625 784x18.640625 base=41.5
+            text "xx" x=8 base=41.5 w=18.046875
+
+#case 3
+#data "<div>x<div></div>y</span>z"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x37.28125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            text "x" x=8 base=22.859375 w=9.03125
+        block <div> 8,26.640625 784x0
+        block (anonymous) 8,26.640625 784x18.640625
+          line 8,26.640625 784x18.640625 base=41.5
+            text "yz" x=8 base=41.5 w=17.46875
+
+#case 4
+#data "<table><div>x<div></div>x</span>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x37.28125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            text "x" x=8 base=22.859375 w=9.03125
+        block <div> 8,26.640625 784x0
+        block (anonymous) 8,26.640625 784x18.640625
+          line 8,26.640625 784x18.640625 base=41.5
+            text "xx" x=8 base=41.5 w=18.046875
+      table-wrapper <table> 8,45.28125 0x0 m=0,784,0,0
+        table <table> 8,45.28125 0x0
+
+#case 5
+#data "<table><li><li></table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <li> 8,8 784x0
+        marker <li> -6.53125,8 14.53125x18.640625
+          line -6.53125,8 14.53125x18.640625 base=22.859375
+            text "• " x=-6.53125 base=22.859375 w=14.53125
+      block <li> 8,8 784x0
+        marker <li> -6.53125,8 14.53125x18.640625
+          line -6.53125,8 14.53125x18.640625 base=22.859375
+            text "• " x=-6.53125 base=22.859375 w=14.53125
+      table-wrapper <table> 8,8 0x0 m=0,784,0,0
+        table <table> 8,8 0x0
+
+#case 6
+#data "x<table>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "xx" x=8 base=22.859375 w=18.046875
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+
+#case 7
+#data "x<table><table>x"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          text "x" x=8 base=22.859375 w=9.03125
+      table-wrapper <table> 8,26.640625 0x0 m=0,784,0,0
+        table <table> 8,26.640625 0x0
+      block (anonymous) 8,26.640625 784x18.640625
+        line 8,26.640625 784x18.640625 base=41.5
+          text "x" x=8 base=41.5 w=9.03125
+      table-wrapper <table> 8,45.28125 0x0 m=0,784,0,0
+        table <table> 8,45.28125 0x0
+
+#case 8
+#data "<b>a<div></div><div></b>y"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <b> 8,8 9.546875x18.640625 start
+          text "a" x=8 base=22.859375 w=9.546875
+      block <div> 8,26.640625 784x0
+      block (anonymous) 8,26.640625 784x0
+      block <div> 8,26.640625 784x18.640625
+        line 8,26.640625 784x18.640625 base=41.5
+          text "y" x=8 base=41.5 w=9.046875
+
+#case 9
+#data "<a><div><p></a>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,16 784x584 m=8,8,8,8
+      block (anonymous) 8,16 784x0
+      block <div> 8,16 784x0
+        block (anonymous) 8,16 784x0
+        block <p> 8,16 784x0 m=16,0,16,0
+

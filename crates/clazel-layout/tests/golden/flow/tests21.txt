@@ -1,0 +1,199 @@
+#case 0
+#data "<svg><![CDATA[foo]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 25.1875x18.640625 start end
+        text "foo" x=8 base=22.859375 w=25.1875
+
+#case 1
+#data "<math><![CDATA[foo]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <math> 8,8 25.1875x18.640625 start end
+        text "foo" x=8 base=22.859375 w=25.1875
+
+#case 2
+#data "<div><![CDATA[foo]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <div> 8,8 784x0
+
+#case 3
+#data "<svg><![CDATA[foo"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 25.1875x18.640625 start end
+        text "foo" x=8 base=22.859375 w=25.1875
+
+#case 4
+#data "<svg><![CDATA["
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 5
+#data "<svg><![CDATA[]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+
+#case 6
+#data "<svg><![CDATA[]] >]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 30.984375x18.640625 start end
+        text "]] >" x=8 base=22.859375 w=30.984375
+
+#case 7
+#data "<svg><![CDATA[]]"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 12.484375x18.640625 start end
+        text "]]" x=8 base=22.859375 w=12.484375
+
+#case 8
+#data "<svg><![CDATA[]"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 6.25x18.640625 start end
+        text "]" x=8 base=22.859375 w=6.25
+
+#case 9
+#data "<svg><![CDATA[]>a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 29.1875x18.640625 start end
+        text "]>a" x=8 base=22.859375 w=29.1875
+
+#case 10
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 31.4375x18.640625 start end
+        text "foo]" x=8 base=22.859375 w=31.4375
+
+#case 11
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 37.671875x18.640625 start end
+        text "foo]]" x=8 base=22.859375 w=37.671875
+
+#case 12
+#data "<!DOCTYPE html><svg><![CDATA[foo]]]]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x34.640625
+    block <body> 8,8 784x18.640625 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 43.921875x18.640625 start end
+        text "foo]]]" x=8 base=22.859375 w=43.921875
+
+#case 13
+#data "<svg><foreignObject><div><![CDATA[foo]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x0
+      block (anonymous) 8,8 784x0
+
+#case 14
+#data "<svg><![CDATA[<svg>]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 54.3125x18.640625 start end
+        text "<svg>" x=8 base=22.859375 w=54.3125
+
+#case 15
+#data "<svg><![CDATA[</svg>a]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 69.234375x18.640625 start end
+        text "</svg>a" x=8 base=22.859375 w=69.234375
+
+#case 16
+#data "<svg><![CDATA[<svg>a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 63.84375x18.640625 start end
+        text "<svg>a" x=8 base=22.859375 w=63.84375
+
+#case 17
+#data "<svg><![CDATA[</svg>a"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 69.234375x18.640625 start end
+        text "</svg>a" x=8 base=22.859375 w=69.234375
+
+#case 18
+#data "<svg><![CDATA[<svg>]]><path>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 54.3125x18.640625 start end
+        text "<svg>" x=8 base=22.859375 w=54.3125
+
+#case 19
+#data "<svg><![CDATA[<svg>]]></path>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 54.3125x18.640625 start end
+        text "<svg>" x=8 base=22.859375 w=54.3125
+
+#case 20
+#data "<svg><![CDATA[<svg>]]><!--path-->"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 54.3125x18.640625 start end
+        text "<svg>" x=8 base=22.859375 w=54.3125
+
+#case 21
+#data "<svg><![CDATA[<svg>]]>path"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 90.828125x18.640625 start end
+        text "<svg>path" x=8 base=22.859375 w=90.828125
+
+#case 22
+#data "<svg><![CDATA[<!--svg-->]]>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      line 8,8 784x18.640625 base=22.859375
+        inline <svg> 8,8 82.359375x18.640625 start end
+        text "<!--svg-->" x=8 base=22.859375 w=82.359375
+

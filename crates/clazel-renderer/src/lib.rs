@@ -26,6 +26,7 @@
 pub mod escape;
 pub mod hostile;
 pub mod launch;
+pub mod page;
 pub mod pipeline;
 pub mod sandbox;
 pub mod script;
@@ -170,6 +171,147 @@ pub fn run_with_width<R: Read, W: Write>(
                 send(w, &pipeline::fit(shown))?;
             }
             _ => return Err(RunError::Protocol("unknown document kind")),
+        }
+    }
+}
+
+/// The body of a committed document: its `Body` frames up to `BodyEnd`.
+fn read_body<R: Read>(r: &mut R) -> Result<Vec<u8>, RunError> {
+    let mut body = Vec::new();
+    loop {
+        match read_message(r)? {
+            Msg::Body { bytes } => {
+                if body.len().saturating_add(bytes.len()) > MAX_BODY {
+                    return Err(RunError::Protocol("body over 64 MiB"));
+                }
+                body.extend_from_slice(&bytes);
+            }
+            Msg::BodyEnd => return Ok(body),
+            _ => return Err(RunError::Protocol("expected Body or BodyEnd")),
+        }
+    }
+}
+
+/// Write one list to the GPU process's socket (`page::frame::frame_bytes`).
+fn send_list<L: Write>(
+    list: &mut L,
+    page: &page::Page,
+    view: page::View,
+    fonts: &page::fonts::Fonts,
+    cache: &mut page::frame::MaskCache,
+) -> Result<(), RunError> {
+    let Some(dl) = page.list() else {
+        return Ok(());
+    };
+    let items = page::frame::frame(dl, view.width, view.height, page.scroll, fonts, cache);
+    let bytes = page::frame::frame_bytes(&items)
+        .ok_or(RunError::Protocol("display list over its limits"))?;
+    list.write_all(&bytes)?;
+    list.flush()?;
+    Ok(())
+}
+
+/// The graphical renderer (phase-5.md item 5.20, `page`): take committed
+/// documents and the kernel's `Viewport` and `Input`; for a document, send
+/// `Title` to the kernel (`w`) when the title changes and write a display
+/// list to the GPU process (`list`) for every viewport, scroll and
+/// document; for a click on a link, send `Navigate`. A script (kind 1) runs
+/// as in [`run`]. Returns the number of script operations run.
+pub fn run_graphics<R: Read, W: Write, L: Write>(
+    r: &mut R,
+    w: &mut W,
+    list: &mut L,
+    fonts: &page::fonts::Fonts,
+) -> Result<usize, RunError> {
+    let mut current: Option<page::Page> = None;
+    let mut view: Option<page::View> = None;
+    let mut cache = page::frame::MaskCache::default();
+    let mut shown_title: Option<String> = None;
+    loop {
+        let m = match read_message(r) {
+            Ok(m) => m,
+            Err(RunError::Io(e)) if e.kind() == io::ErrorKind::UnexpectedEof => return Ok(0),
+            Err(e) => return Err(e),
+        };
+        match m {
+            Msg::Commit {
+                url,
+                content_type,
+                kind,
+            } => {
+                let body = read_body(r)?;
+                match kind {
+                    1 => return run_script(r, w, &body),
+                    0 => {}
+                    _ => return Err(RunError::Protocol("unknown document kind")),
+                }
+                // The previous page and its lists are gone first.
+                drop(current.take());
+                let mut p = page::Page::load(&url, &content_type, &body);
+                drop(body);
+                if shown_title.as_deref() != Some(p.title.as_str()) {
+                    send(
+                        w,
+                        &Msg::Title {
+                            title: p.title.clone().into_bytes(),
+                        },
+                    )?;
+                    shown_title = Some(p.title.clone());
+                }
+                if let Some(v) = view {
+                    p.lay_out(v, fonts);
+                    send_list(list, &p, v, fonts, &mut cache)?;
+                }
+                current = Some(p);
+            }
+            Msg::Error { .. } => {}
+            Msg::Viewport {
+                width,
+                height,
+                scale,
+            } => {
+                view = page::View::new(width, height, scale);
+                if let (Some(p), Some(v)) = (current.as_mut(), view) {
+                    p.lay_out(v, fonts);
+                    send_list(list, p, v, fonts, &mut cache)?;
+                }
+            }
+            Msg::Input {
+                kind,
+                x,
+                y,
+                negative,
+                delta,
+                ..
+            } => {
+                let (Some(p), Some(v)) = (current.as_mut(), view) else {
+                    continue;
+                };
+                match kind {
+                    // A click: hit-test, and follow a link.
+                    0 => {
+                        if let Some(url) = p.click(x, y) {
+                            send(
+                                w,
+                                &Msg::Navigate {
+                                    url: url.into_bytes(),
+                                },
+                            )?;
+                        }
+                    }
+                    // A scroll: move and paint again.
+                    1 => {
+                        let before = p.scroll;
+                        p.scroll_by(negative, delta);
+                        if p.scroll != before {
+                            send_list(list, p, v, fonts, &mut cache)?;
+                        }
+                    }
+                    // A key: nothing in this phase.
+                    _ => {}
+                }
+            }
+            _ => return Err(RunError::Protocol("unexpected message")),
         }
     }
 }

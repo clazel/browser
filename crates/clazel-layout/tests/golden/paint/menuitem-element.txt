@@ -1,0 +1,118 @@
+#case 0
+#data "<menuitem>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 1
+#data "</menuitem>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 2
+#data "<!DOCTYPE html><body><menuitem>A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 3
+#data "<!DOCTYPE html><body><menuitem>A<menuitem>B"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 4,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=1252,1463
+
+#case 4
+#data "<!DOCTYPE html><body><menuitem>A<menu>B</menu>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 32,26 44x48 #ff000000 face=0 size=1024 glyphs=1 first=3072,3680
+
+#case 5
+#data "<!DOCTYPE html><body><menuitem>A<hr>B"
+scale 1
+fill 0,0 800x600 #ffffffff
+fill 8,35 784x1 #ff808080
+fill 8,36 784x1 #ff808080
+push-clip 9,36 782x0
+pop-clip
+text -8,-9 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+push-clip 9,36 782x0
+pop-clip
+text -8,28 44x48 #ff000000 face=0 size=1024 glyphs=1 first=512,3808
+
+#case 6
+#data "<!DOCTYPE html><li><menuitem><li>"
+scale 1
+fill -7,0 807x600 #ffffffff
+text -23,-9 47x48 #ff000000 face=0 size=1024 glyphs=2 first=-418,1463
+text -23,-9 47x48 #ff000000 face=0 size=1024 glyphs=2 first=-418,1463
+
+#case 7
+#data "<!DOCTYPE html><menuitem><p></menuitem>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 8
+#data "<!DOCTYPE html><p><b></p><menuitem>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<!DOCTYPE html><menuitem><asdf></menuitem>x"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 10
+#data "<!DOCTYPE html></menuitem>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<!DOCTYPE html><html></menuitem>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<!DOCTYPE html><head></menuitem>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<!DOCTYPE html><select><menuitem></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<!DOCTYPE html><option><menuitem>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<!DOCTYPE html><menuitem><option>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<!DOCTYPE html><menuitem></body>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<!DOCTYPE html><menuitem></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<!DOCTYPE html><menuitem><p>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<!DOCTYPE html><menuitem><li>"
+scale 1
+fill -7,0 807x600 #ffffffff
+text -23,-9 47x48 #ff000000 face=0 size=1024 glyphs=2 first=-418,1463
+

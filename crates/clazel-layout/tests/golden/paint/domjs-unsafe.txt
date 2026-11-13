@@ -1,0 +1,249 @@
+#case 0
+#data "<svg><![CDATA[foo\nbar]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 90x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 1
+#data "<svg><![CDATA[foo\rbar]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 90x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 2
+#data "<svg><![CDATA[foo\r\nbar]]>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 90x48 #ff000000 face=0 size=1024 glyphs=7 first=512,1463
+
+#case 3
+#data "<script>a='\0'</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<script type=\"data\"><!--\0</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<script type=\"data\"><!--foo\0</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<script type=\"data\"><!-- foo-\0</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 7
+#data "<script type=\"data\"><!-- foo--\0</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 8
+#data "<script type=\"data\"><!-- foo-"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 9
+#data "<script type=\"data\"><!-- foo-<</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 10
+#data "<script type=\"data\"><!-- foo-<S"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 11
+#data "<script type=\"data\"><!-- foo-</SCRIPT>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 12
+#data "<script type=\"data\"><!--<p></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<script type=\"data\"><!--<script></script></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 14
+#data "<script type=\"data\"><!--<script>\0</script></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 15
+#data "<script type=\"data\"><!--<script>-\0</script></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 16
+#data "<script type=\"data\"><!--<script>--\0</script></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 17
+#data "<script type=\"data\"><!--<script>---</script></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 18
+#data "<script type=\"data\"><!--<script></scrip></SCRIPT></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 19
+#data "<script type=\"data\"><!--<script></scrip </SCRIPT></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 20
+#data "<script type=\"data\"><!--<script></scrip/</SCRIPT></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 21
+#data "<script type=\"data\"></scrip/></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 22
+#data "<script type=\"data\"></scrip ></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 23
+#data "<script type=\"data\"><!--</scrip></script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 24
+#data "<script type=\"data\"><!--</scrip </script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 25
+#data "<script type=\"data\"><!--</scrip/</script>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 26
+#data "<!DOCTYPE html><!DOCTYPE html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 27
+#data "<html><!DOCTYPE html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 28
+#data "<html><head><!DOCTYPE html></head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 29
+#data "<html><head></head><!DOCTYPE html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 30
+#data "<body></body><!DOCTYPE html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 31
+#data "<table><!DOCTYPE html></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 32
+#data "<select><!DOCTYPE html></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 33
+#data "<table><colgroup><!DOCTYPE html></colgroup></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 34
+#data "<table><colgroup><!--test--></colgroup></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 35
+#data "<table><colgroup><html></colgroup></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 36
+#data "<table><colgroup> foo</colgroup></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 37
+#data "<select><!--test--></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 38
+#data "<select><html></select>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 39
+#data "<frameset><html></frameset>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 40
+#data "<frameset></frameset><html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 41
+#data "<frameset></frameset><!DOCTYPE html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 42
+#data "<html><body></body></html><!DOCTYPE html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 43
+#data "<svg><!DOCTYPE html></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 44
+#data "<svg><font></font></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 45
+#data "<svg><font id=foo></font></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 46
+#data "<svg><font size=4></font></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 47
+#data "<svg><font color=red></font></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 48
+#data "<svg><font font=sans></font></svg>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

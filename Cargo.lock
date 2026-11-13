@@ -383,6 +383,7 @@ dependencies = [
  "clazel-font",
  "clazel-style",
  "clazel-treebuilder",
+ "clazel-url",
  "rustybuzz",
 ]
 
@@ -463,13 +464,18 @@ dependencies = [
 name = "clazel-renderer"
 version = "0.0.0"
 dependencies = [
+ "clazel-displaylist",
  "clazel-dom",
  "clazel-encoding",
+ "clazel-font",
+ "clazel-glyph-mask",
  "clazel-gpu",
  "clazel-html",
  "clazel-ipc",
+ "clazel-layout",
  "clazel-mime",
  "clazel-sandbox",
+ "clazel-style",
  "clazel-sys",
  "clazel-text",
  "clazel-treebuilder",

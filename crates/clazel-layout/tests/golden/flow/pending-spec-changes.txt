@@ -1,0 +1,32 @@
+#case 0
+#data "<input type=\"hidden\"><frameset>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+
+#case 1
+#data "<!DOCTYPE html><table><caption><svg>foo</table>bar"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x53.28125
+    block <body> 8,8 784x37.28125 m=8,8,8,8
+      table-wrapper <table> 8,8 25.1875x18.640625 m=0,758.8125,0,0
+        caption <caption> 8,8 25.1875x18.640625
+          line 8,8 25.1875x18.640625 base=22.859375
+            inline <svg> 8,8 25.1875x18.640625 start end
+            text "foo" x=8 base=22.859375 w=25.1875
+        table <table> 8,26.640625 25.1875x0
+      block (anonymous) 8,26.640625 784x18.640625
+        line 8,26.640625 784x18.640625 base=41.5
+          text "bar" x=8 base=41.5 w=27.4375
+
+#case 2
+#data "<table><tr><td><svg><desc><td></desc><circle>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      table-wrapper <table> 8,8 10x6 m=0,774,0,0
+        table <table> 8,8 10x6
+          row-group <tbody> 10,10 6x2
+            row <tr> 10,10 6x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+              cell <td> 14,10 2x2 p=1,1,1,1
+

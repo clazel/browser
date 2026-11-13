@@ -642,3 +642,88 @@ it evidently means. Each entry records what we specified instead.
 - **We specify:** the query is kept as parsed and evaluates to false
   (`crates/clazel-style/src/sources/media.rs`, its modelling choices).
 - **Reported upstream:** not yet.
+
+## CSS 2.1 §8.3.1: the definition of adjoining margins and its bullets disagree
+
+- **Spec:** Cascading Style Sheets Level 2 Revision 1, W3C Recommendation of
+  7 June 2011, <https://www.w3.org/TR/2011/REC-CSS2-20110607/box.html#collapsing-margins>
+- **Text:** the definition lists, among the pairs of adjoining margins,
+  "bottom margin of a last in-flow child and bottom margin of its parent if
+  the parent has 'auto' computed height" and "top and bottom margins of a box
+  that does not establish a new block formatting context and that has zero
+  computed 'min-height', zero or 'auto' computed 'height', and no in-flow
+  children". The bullets that follow say "The bottom margin of an in-flow
+  block box with a 'height' of 'auto' and a 'min-height' of zero collapses
+  with its last in-flow block-level child's bottom margin …" and "A box's own
+  margins collapse if … it does not contain a line box, and all of its
+  in-flow children's margins (if any) collapse."
+- **Problem:** read literally the two disagree. The first pair lets a parent
+  whose `min-height` is not zero take its last child's bottom margin, so the
+  margin would end up below a box that `min-height` made taller than its
+  content; the second pair stops a box with an empty child (`<div><div></div></div>`)
+  from collapsing through, though its child's margins collapse through the
+  child and adjoin both of its edges. The bullets, which restate the
+  definition, are the evident intent, and engines follow them.
+- **We specify:** the bullets' conditions: `min-height` zero for the parent's
+  bottom, and "all of its in-flow children's margins (if any) collapse"
+  (with "does not contain a line box", where an empty line box, CSS 2.1
+  §9.4.2, does not count). See `BlockFacts::bottom_adjoins` and
+  `BlockFacts::may_collapse_through` in
+  `crates/clazel-layout/src/flow/margins.rs`.
+- **Reported upstream:** not yet.
+
+## CSS Tables 3 §3.9.1: GRIDMIN, GRIDMAX and the assignable width leave out the table's borders and padding
+
+- **Spec:** CSS Table Module Level 3, Editor's Draft, `css-tables-3/Overview.bs`
+  at w3c/csswg-drafts commit `e13fe879106ad83dd89faecab5edad868c7efbfa`,
+  <https://drafts.csswg.org/css-tables-3/#computing-the-table-width>
+- **Text:** "The row/column-grid width minimum (GRIDMIN) width is the sum of
+  the min-content width of all the columns plus cell spacing or borders. The
+  row/column-grid width maximum (GRIDMAX) width is the sum of the max-content
+  width of all the columns plus cell spacing or borders." "The used min-width
+  of a table is the greater of the resolved 'min-width', CAPMIN, and GRIDMIN."
+  "If the table-root's 'width' property has a computed value … other than auto,
+  the used width is the greater of resolved-table-width, and the used min-width
+  of the table." "The assignable table width is the used width of the table
+  minus the total horizontal border spacing (if any)."
+- **Problem:** a table's `width` is its border box's (HTML's user agent sheet
+  has `table { box-sizing: border-box }`, and CSS 2.1 §17.6.1 says so for
+  HTML), but GRIDMIN and GRIDMAX, read literally, are the columns and the
+  spacing only. Compared with a border-box width, a table with borders or
+  padding could then be made narrower than its columns need, and the
+  assignable width would count the table's borders and padding as room for
+  columns. §3.8.2 defines the "table intrinsic offsets" ("the parts of the
+  padding and border of a table that are relevant to intrinsic width
+  calculation") for exactly this use, and nothing else in the draft uses them.
+- **We specify:** GRIDMIN and GRIDMAX include the table intrinsic offsets (its
+  horizontal borders and padding), and the assignable width is the used width
+  less them and the total horizontal border spacing (the table box's content
+  width less the spacing). See `table_width` and `enter_table` in
+  `crates/clazel-layout/src/flow/block.rs` and `crates/clazel-layout/src/table/mod.rs`.
+- **Reported upstream:** not yet.
+
+## CSS Tables 3 §3.8.3: a spanning cell's contribution divides by a baseline max-content width that can be zero
+
+- **Spec:** CSS Table Module Level 3, Editor's Draft, `css-tables-3/Overview.bs`
+  at w3c/csswg-drafts commit `e13fe879106ad83dd89faecab5edad868c7efbfa`,
+  <https://drafts.csswg.org/css-tables-3/#computing-column-measures>
+- **Text:** in "min-content width of a column based on cells of span up to N
+  (N > 1)": "the product of: the ratio of the max-content width based on cells
+  of span up to N-1 of the column to the baseline max-content width [and] the
+  outer min-content width of the cell minus the baseline max-content width and
+  baseline border spacing, or 0 if this is negative"; the max-content
+  contribution has the same ratio.
+- **Problem:** the baseline max-content width is the sum of the spanned
+  columns' max-content widths, which is zero whenever every spanned column is
+  empty so far, for example a table whose only cell is `<td colspan=2>`. The
+  ratio is then undefined and the cell contributes nothing defined, though its
+  width must go somewhere. The first product of the same contribution says "or
+  zero if this ratio is undefined", but zero here would leave the cell's width
+  unaccounted for. The percentage contribution handles its own zero
+  denominator with "1 divided by the number of columns spanned", and §3.9.3.2
+  increases columns with no max-content width "by equal amounts".
+- **We specify:** when the baseline max-content width is zero, the cell's
+  excess min-content and max-content widths are shared equally among the
+  columns it spans (`span_contribution` in
+  `crates/clazel-layout/src/table/measure.rs`).
+- **Reported upstream:** not yet.

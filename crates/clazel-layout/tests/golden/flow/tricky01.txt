@@ -1,0 +1,195 @@
+#case 0
+#data "<b><p>Bold </b> Not bold</p>\nAlso not bold."
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,16 784x584 m=8,8,8,8
+      block (anonymous) 8,16 784x0
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          inline <b> 8,16 41.84375x18.640625 start end
+          text "Bold " x=8 base=30.859375 w=41.84375
+          text "Not bold" x=49.84375 base=30.859375 w=70.390625
+      block (anonymous) 8,50.640625 784x18.640625
+        line 8,50.640625 784x18.640625 base=65.5
+          text "Also not bold." x=8 base=65.5 w=111.375
+
+#case 1
+#data "<html>\n<font color=red><i>Italic and Red<p>Italic and Red </font> Just italic.</p> Italic only.</i> Plain\n<p>I should not be red. <font color=red>Red. <i>Italic and red.</p>\n<p>Italic and red. </i> Red.</font> I should not be red.</p>\n<b>Bold <i>Bold and italic</b> Only Italic </i> Plain"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <font> 8,8 113.5x18.640625 start end
+          inline <i> 8,8 113.5x18.640625 start end
+          text "Italic and Red" x=8 base=22.859375 w=113.5
+      block <p> 8,42.640625 784x18.640625 m=16,0,16,0
+        line 8,42.640625 784x18.640625 base=57.5
+          inline <font> 8,42.640625 118.59375x18.640625 start end
+          text "Italic and Red " x=8 base=57.5 w=118.59375
+          text "Just italic." x=126.59375 base=57.5 w=81.8125
+      block (anonymous) 8,77.28125 784x18.640625
+        line 8,77.28125 784x18.640625 base=92.140625
+          inline <i> 8,77.28125 83.625x18.640625 end
+          text "Italic only." x=8 base=92.140625 w=83.625
+          text " Plain" x=91.625 base=92.140625 w=45.9375
+      block <p> 8,111.921875 784x18.640625 m=16,0,16,0
+        line 8,111.921875 784x18.640625 base=126.78125
+          inline <font> 172.09375,111.921875 156.125x18.640625 start end
+          inline <i> 214.03125,111.921875 114.1875x18.640625 start end
+          text "I should not be red. " x=8 base=126.78125 w=164.09375
+          text "Red. " x=172.09375 base=126.78125 w=41.9375
+          text "Italic and red." x=214.03125 base=126.78125 w=114.1875
+      block (anonymous) 8,146.5625 784x0
+      block <p> 8,146.5625 784x18.640625 m=16,0,16,0
+        line 8,146.5625 784x18.640625 base=161.421875
+          inline <font> 8,146.5625 156.125x18.640625 start end
+          inline <i> 8,146.5625 119.28125x18.640625 start end
+          text "Italic and red. " x=8 base=161.421875 w=119.28125
+          text "Red." x=127.28125 base=161.421875 w=36.84375
+          text " I should not be red." x=164.125 base=161.421875 w=164.09375
+      block (anonymous) 8,181.203125 784x18.640625
+        line 8,181.203125 784x18.640625 base=196.0625
+          inline <b> 8,181.203125 159.140625x18.640625 start end
+          inline <i> 49.84375,181.203125 117.296875x18.640625 start end
+          inline <i> 167.140625,181.203125 94.328125x18.640625 start end
+          text "Bold " x=8 base=196.0625 w=41.84375
+          text "Bold and italic" x=49.84375 base=196.0625 w=117.296875
+          text " Only Italic " x=167.140625 base=196.0625 w=94.328125
+          text "Plain" x=261.46875 base=196.0625 w=40.84375
+
+#case 2
+#data "<html><body>\n<p><font size=\"7\">First paragraph.</p>\n<p>Second paragraph.</p></font>\n<b><p><i>Bold and Italic</b> Italic</p>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <p> 8,8 784x55.890625 m=0,0,16,0
+        line 8,8 784x55.890625 base=52.5625
+          inline <font> 8,8 400.875x55.890625 start end
+          text "First paragraph." x=8 base=52.5625 w=400.875
+      block (anonymous) 8,79.890625 784x0
+      block <p> 8,111.890625 784x55.890625 m=48,0,48,0
+        line 8,111.890625 784x55.890625 base=156.453125
+          text "Second paragraph." x=8 base=156.453125 w=464.0625
+      block (anonymous) 8,215.78125 784x0
+      block <p> 8,215.78125 784x18.640625 m=16,0,16,0
+        line 8,215.78125 784x18.640625 base=230.640625
+          inline <b> 8,215.78125 118.5x18.640625 start end
+          inline <i> 8,215.78125 118.5x18.640625 start end
+          inline <i> 126.5,215.78125 46.578125x18.640625 start end
+          text "Bold and Italic" x=8 base=230.640625 w=118.5
+          text " Italic" x=126.5 base=230.640625 w=46.578125
+
+#case 3
+#data "<html>\n<dl>\n<dt><b>Boo\n<dd>Goo?\n</dl>\n</html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <dl> 8,8 784x37.28125 m=0,0,16,0
+        block <dt> 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            inline <b> 8,8 31.03125x18.640625 start
+            text "Boo" x=8 base=22.859375 w=31.03125
+        block <dd> 48,26.640625 744x18.640625 m=0,0,0,40
+          line 48,26.640625 744x18.640625 base=41.5
+            inline <b> 48,26.640625 40.625x18.640625 start
+            text "Goo?" x=48 base=41.5 w=40.625
+      block (anonymous) 8,61.28125 784x0
+
+#case 4
+#data "<html><body>\n<label><a><div>Hello<div>World</div></a></label>  \n</body></html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x37.28125
+        block (anonymous) 8,8 784x18.640625
+          line 8,8 784x18.640625 base=22.859375
+            inline <a> 8,8 43.296875x18.640625 start
+            text "Hello" x=8 base=22.859375 w=43.296875
+        block <div> 8,26.640625 784x18.640625
+          line 8,26.640625 784x18.640625 base=41.5
+            text "World" x=8 base=41.5 w=48
+        block (anonymous) 8,45.28125 784x0
+      block (anonymous) 8,45.28125 784x0
+
+#case 5
+#data "<table><center> <font>a</center> <img> <tr><td> </td> </tr> </table>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <center> 8,8 784x18.640625
+        line 8,8 784x18.640625 base=22.859375
+          inline <font> 395.21875,8 9.546875x18.640625 start end
+          text "a" x=395.21875 base=22.859375 w=9.546875
+      block (anonymous) 8,26.640625 784x0
+        line 8,26.640625 784x0 base=26.640625
+          inline <font> 8,11.78125 0x18.640625 start
+          atomic <img>
+          replaced <img> 8,26.640625 0x0
+      table-wrapper <table> 8,26.640625 6x6 m=0,778,0,0
+        table <table> 8,26.640625 6x6
+          row-group <tbody> 10,28.640625 2x2
+            row <tr> 10,28.640625 2x2
+              cell <td> 10,28.640625 2x2 p=1,1,1,1
+
+#case 6
+#data "<table><tr><p><a><p>You should see this text."
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,16 784x584 m=8,8,8,8
+      block <p> 8,16 784x0 m=0,0,16,0
+      block <p> 8,16 784x18.640625 m=16,0,16,0
+        line 8,16 784x18.640625 base=30.859375
+          inline <a> 8,16 196.921875x18.640625 start end
+          text "You should see this text." x=8 base=30.859375 w=196.921875
+      table-wrapper <table> 8,50.640625 0x0 m=0,784,0,0
+        table <table> 8,50.640625 0x0
+          row-group <tbody> 8,50.640625 0x0
+            row <tr> 8,50.640625 0x0
+
+#case 7
+#data "<TABLE>\n<TR>\n<CENTER><CENTER><TD></TD></TR><TR>\n<FONT>\n<TABLE><tr></tr></TABLE>\n</P>\n<a></font><font></a>\nThis page contains an insanely badly-nested tag sequence."
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x600
+    block <body> 8,8 784x584 m=8,8,8,8
+      block <center> 8,8 784x0
+        block <center> 8,8 784x0
+      block (anonymous) 8,8 784x0
+      table-wrapper <table> 8,8 6x8 m=0,778,0,0
+        table <table> 8,8 6x8
+          row-group <tbody> 10,10 2x4
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
+            row <tr> 10,14 2x0
+      table-wrapper <table> 8,16 0x0 m=0,784,0,0
+        table <table> 8,16 0x0
+          row-group <tbody> 8,16 0x0
+            row <tr> 8,16 0x0
+      block (anonymous) 8,16 784x0
+      block <p> 8,32 784x0 m=16,0,16,0
+      block (anonymous) 8,32 784x18.640625
+        line 8,32 784x18.640625 base=46.859375
+          inline <font> 8,32 476.28125x18.640625 start end
+          text "This page contains an insanely badly-nested tag sequence." x=8 base=46.859375 w=476.28125
+
+#case 8
+#data "<html>\n<body>\n<b><nobr><div>This text is in a div inside a nobr</nobr>More text that should not be in the nobr, i.e., the\nnobr should have closed the div inside it implicitly. </b><pre>A pre tag outside everything else.</pre>\n</body>\n</html>"
+root (anonymous) 0,0 800x600
+  block <html> 0,0 800x608
+    block <body> 8,8 784x584 m=8,8,8,8
+      block (anonymous) 8,8 784x0
+      block <div> 8,8 784x71.921875
+        block (anonymous) 8,8 784x37.28125
+          line 8,8 784x18.640625 base=22.859375
+            inline <b> 8,8 763.4375x18.640625 start
+            inline <nobr> 8,8 264.859375x18.640625 start end
+            text "This text is in a div inside a nobr" x=8 base=22.859375 w=264.859375
+            text "More text that should not be in the nobr, i.e., the nobr should" x=272.859375 base=22.859375 w=498.578125
+          line 8,26.640625 784x18.640625 base=41.5
+            inline <b> 8,26.640625 309.5x18.640625
+            text "have closed the div inside it implicitly." x=8 base=41.5 w=309.5
+        block <pre> 8,61.28125 784x18.640625 m=16,0,16,0
+          line 8,61.28125 784x18.640625 base=76.140625
+            text "A pre tag outside everything else." x=8 base=76.140625 w=274.375
+
