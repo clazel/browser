@@ -10,6 +10,23 @@ and is sent back as one `Display`.
 Tier 0: tests only. The pipeline is glue; every step that reads the page's
 bytes is a function of the crate that proves it, at that crate's own tier.
 
+## The GPU process's list socket (item 5.23), for item 5.20
+
+The host starts a renderer paired with a GPU process (`launch::Gpus`,
+`launch::spawn_with_list`) with `--list-fd N`: a socket inherited by number
+(its close-on-exec flag cleared for that one start, through `clazel-sys`). Item
+5.20's renderer is to open it again through `/dev/fd/N` **before** entering its
+sandbox, and write each display list with `clazel_gpu::channel::write_list` (4
+bytes of length, little-endian, then the list as `clazel_displaylist` encodes it,
+at most 256 MiB). The kernel's `Viewport` gives the size to lay out at; the GPU
+process draws every list in order at the size its `GpuViewport` gives. In text
+mode (no GPU process) no `--list-fd` is passed. Only macOS has this so far.
+
+`launch` also holds the host's side of the GPU processes (`Gpus`: start, reader
+threads, the ring of pixels, ending with the renderer) and the log's rendering of a
+frame (`describe`), so that the host shell (`crates/clazel/src`) only routes and
+stays under its 300 lines.
+
 ## The document pipeline (`src/pipeline.rs`)
 
 | Step | Function | Crate, item |

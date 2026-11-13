@@ -385,6 +385,64 @@ CI; under Miri it does nothing.
 Linux and Windows have no GPU backend yet, so nothing in this crate enters their
 policies.
 
+## Item 5.23: the GPU process
+
+`src/main.rs` is the `clazel-gpu` binary, which the host starts when the kernel says
+`SpawnGpu` (`clazel_renderer::launch::Gpus`); `src/process.rs` is its loop, over any
+backend; `src/channel.rs` frames its two sockets besides the kernel's.
+
+1. Standard input and output are the kernel's channel, as a renderer's.
+2. `--list-fd N` and `--surface-fd M` are the list socket (from the paired renderer)
+   and the surface socket (to the host), inherited by number: the host clears their
+   close-on-exec flags for this one start (`clazel_sys::macos::clear_close_on_exec`).
+   They are opened again through `/dev/fd`, with no `unsafe`, **before** the sandbox.
+3. Then 5.21a's order: Metal, the sandbox, the blocklist, `GpuReady` or `GpuRefused`.
+4. The loop: `GpuViewport` sets the size; every list is drawn, in order (before a
+   viewport, on a 1 by 1 target with no frame sent, so the masks stay the
+   renderer's); each drawn list's pixels go on the surface socket in the next ring
+   slot (0, 1, 2, 0, …), then `FrameReady { buffer: slot, width, height }` to the
+   kernel. A `GpuViewport` alone draws nothing: the renderer sends a new list.
+5. It ends on any error or when either input closes, and says why on stderr.
+
+### How buffers pass on macOS (a decision, until the Mach-port route)
+
+The plan moves an IOSurface to the host with a Mach port (5.21, 5.21a), which needs
+new `clazel-sys` calls and a prototype nobody has built, and on Linux names a
+`memfd`, which macOS lacks. Until then, **the ring is the host's**: three slots per
+GPU process, each a copy of a frame's RGBA8 pixels that the GPU process sends on the
+surface socket (12 bytes of slot, width and height, then the pixels; slots and sides
+checked before anything is allocated, so at most 256 MiB a frame) and then names in
+`FrameReady`. The kernel still decides which slot is shown under which URL; the host
+shows only a slot a `Paint` names, and only pixels of the `Paint`'s size. The cost is
+a copy of each frame through a socket and into the host's memory (and the host
+composites it over white into a `CGImage`), which the plan's route avoids; the host
+reads the bytes as pixels and nothing else. A compromised GPU process can show its
+own tab stale or wrong pixels, which its renderer could already draw, and can make
+the host allocate up to 256 MiB a frame.
+
+### Evidence
+
+- `channel.rs`: lists and frames round-trip, a cut or oversized list is an error, a
+  frame header naming slot 3, a side of 0 or 2^31 is refused before allocating.
+- `process.rs`: a list before a viewport sends nothing and the ring turns 0, 1, 2, 0;
+  anything but `GpuViewport` from the kernel, a viewport over 8192 and a list that
+  does not decode end the process; and the whole loop on sockets with the fake
+  backend draws every scene's lists equal to the reference, each followed by its
+  `FrameReady`.
+- Through real processes (`crates/clazel/tests/browse_gpu.rs` and
+  `browse_window.rs`, macOS): the real `clazel-gpu`, sandboxed on Metal, draws a
+  hand-built list sent by a stand-in renderer; the kernel's `Paint` names slot 0
+  under the kernel's URL; its pixels equal the reference within one level; the
+  window shows them; `browse --headless` writes them as a PNG and a PPM.
+
+### Not done
+
+- The Mach-port route (no copy), and Linux's `memfd`.
+- `--software`: macOS has no software Metal driver (5.17c), so the process is only
+  started for hardware.
+- The kernel does not yet act on `GpuReady`, `GpuRefused` or the process's exit
+  (5.17c's crash policy in the kernel), so the host only logs an exit.
+
 ## How Metal is reached: dispatcher casts
 
 The plan reached Metal through several `#[link_name = "objc_msgSend"]` declarations,

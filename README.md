@@ -119,10 +119,17 @@ with Mozilla's roots as the trust store; until P-384 issuer keys are
 supported, a chain that has one (most sites today) fails with `unknown_ca`.
 
 ```sh
-target/release/clazel browse http://info.cern.ch/         # text-mode browser: title, text, numbered links
+target/release/clazel browse --text http://info.cern.ch/  # text-mode browser: title, text, numbered links
 ```
 
-`browse` shows a page as text, with its links numbered: type a number to
+On macOS on Apple silicon, `clazel browse URL` opens a window instead (phase-5.md
+item 5.23): an address bar drawn by the host and the page drawn by a sandboxed GPU
+process, one per tab (`cargo build --bin clazel-gpu` too). Until the renderer draws
+(item 5.20) the page area stays empty. `clazel browse --headless OUT URL` writes the
+page as a PNG (or a PPM, for `OUT` ending in `.ppm`). Elsewhere, `browse URL` is the
+text mode.
+
+In text mode, `browse` shows a page as text, with its links numbered: type a number to
 follow a link, `g URL` to go elsewhere, `b` to go back, `q` to quit. The
 kernel fetches every page and the page is parsed in a sandboxed renderer,
 one per origin; the address line is the kernel's, whatever the page says.
