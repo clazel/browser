@@ -705,10 +705,15 @@ fn server_flight_delivered_one_octet_at_a_time() -> TestResult {
 }
 
 /// RFC 8446 §6.1: a transport that ends before close_notify is a truncation.
-/// Nothing goes on the wire.
+/// It ends the connection, so our close_notify goes out first: one record,
+/// in plaintext before the handshake keys (warning, close_notify), and
+/// protected afterwards (an application_data record of 2 octets of alert,
+/// 1 of content type and the 16-octet tag). No alert is sent.
 fn truncated_is_refused(client: &mut Client) -> TestResult {
     let out = client.driver.receive_eof();
-    assert!(out.send.is_empty(), "sent {:?}", out.send);
+    let plaintext = [21u8, 3, 3, 0, 2, 1, 0];
+    let protected = out.send.len() == 24 && out.send.get(..5) == Some(&[23u8, 3, 3, 0, 19][..]);
+    assert!(out.send == plaintext || protected, "sent {:?}", out.send);
     assert_eq!(
         out.state,
         State::Failed(Failure {

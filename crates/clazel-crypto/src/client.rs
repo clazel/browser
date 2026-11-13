@@ -56,9 +56,14 @@
 //! - A fatal alert from the server is never answered ([`Origin::Peer`]):
 //!   `Bootstrap` reports it as `Alert`, `Connection` and the transducer as
 //!   `PeerAlert`.
-//! - The transport ending before close_notify is [`Origin::Truncated`]
-//!   (alert 80, `internal_error`, as the machines report it); nothing is
-//!   sent.
+//! - The end of the server's direction of the transport before its
+//!   close_notify is [`Origin::Truncated`] (alert 80, `internal_error`, as
+//!   the machines report it, never sent), and never `Closed`: §6.1, "the
+//!   TLS implementation MUST receive a "close_notify" alert before
+//!   indicating end-of-data to the application layer". It ends the
+//!   connection, so while our write side is open our close_notify goes out
+//!   first, the record [`Client::close`] would send then; after our
+//!   close_notify or an error alert nothing is sent.
 //! - A close_notify from the server is answered with ours once the
 //!   handshake has completed (§6.1: "Each party MUST send a "close_notify"
 //!   alert before closing its write side of the connection, unless it has
@@ -169,7 +174,10 @@ impl<'r> Client<'r> {
         out
     }
 
-    /// The server closed the transport (end of stream).
+    /// The server's direction of the transport ended (end of stream), which
+    /// is not its close_notify. Before that alert it is a truncation: our
+    /// close_notify goes out if our write side is open, and the connection
+    /// fails as [`Origin::Truncated`].
     pub fn receive_eof(&mut self) -> Output {
         self.driver.eof()
     }
@@ -295,7 +303,9 @@ mod tests {
                 origin: Origin::Truncated
             })
         );
-        assert!(out.send.is_empty());
+        // RFC 8446 §6.1: our close_notify, in plaintext before the handshake keys.
+        assert_eq!(out.send, plaintext_alert(LEVEL_WARNING, CLOSE_NOTIFY));
+        assert!(client.receive_eof().send.is_empty());
     }
 
     #[test]

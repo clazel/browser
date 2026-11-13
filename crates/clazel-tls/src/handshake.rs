@@ -69,7 +69,7 @@ pub fn read_server_hello<'a>(body: &'a [u8]) -> (r: Option<ServerHello<'a>>)
     let sid = c.vec(0, 32)?;
     let suite = c.u16()?;
     let comp = c.u8()?;
-    let exts = read_exts(&mut c, 0, 65535)?;
+    let exts = read_exts(&mut c, 6, 65535)?;
     if !c.is_empty() {
         return None;
     }
@@ -470,6 +470,11 @@ fn parse_new_session_ticket<'a>(body: &'a [u8], _hash_len: usize) -> (r: Result<
         None => return Err(ErrKind::Decode),
         Some(n) => n,
     };
+    // §4.6.1: "Servers MUST NOT use any value greater than 604800 seconds"
+    // ([`super::spec::parse_handshake_body`]).
+    if n.ticket_lifetime > 604800 {
+        return Err(ErrKind::TicketLifetimeTooLong);
+    }
     match check_extensions(n.extensions.as_slice(), MsgKind::Nst) {
         Some(k) => Err(k),
         None => Ok(HsMsg::NewSessionTicket(n)),

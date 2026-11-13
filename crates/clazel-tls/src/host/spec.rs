@@ -31,9 +31,25 @@
 //!   sixteen octets of its eight pieces, each most significant octet first.
 //!   A bracketed IPv6 literal is never a `Dns` name.
 //! - **Bounds** (`host_ok`): a DNS name is 1 to 253 octets (RFC 1035 §2.3.4
-//!   with the dots, as the previous untyped host was) and does not end in a
-//!   dot; an address is 4 or 16 octets. Anything else is the caller's error
-//!   and refuses the configuration (internal_error), never reaching the wire.
+//!   with the dots, as the previous untyped host was), read label by label
+//!   (`dns_labels_ok`); an address is 4 or 16 octets. Anything else is the
+//!   caller's error and refuses the configuration (internal_error), never
+//!   reaching the wire.
+//! - **What a DNS name is** (`dns_labels_ok`). RFC 6066 §3 names no hostname
+//!   grammar, and RFC 2181 §11 says a DNS name is not limited to letters,
+//!   digits and hyphens: "any binary string whatever can be used as the
+//!   label of any resource record". Browsers send the names a URL gives
+//!   (such as `a_b.example`), so this one does too. What the RFCs do say is
+//!   kept: every label is "between 1 and 63 octets" (RFC 2181 §11), so there
+//!   is no empty label and no trailing dot; the name is "a byte string using
+//!   ASCII encoding" (RFC 6066 §3), so every octet is below 0x80; and
+//!   "Literal IPv4 and IPv6 addresses are not permitted" (RFC 6066 §3), so a
+//!   name holding `:` (every IPv6 literal does, RFC 4291 §2.2) or whose last
+//!   label is all digits (every IPv4 literal's is, RFC 1123 §2.1: "at least
+//!   the highest-level component label will be alphabetic") is not a `Dns`
+//!   name. The URL host parser never gives one of those as a domain (a `:`
+//!   is a forbidden domain code point, and a domain that ends in a number is
+//!   parsed as IPv4), so for a URL host this refuses nothing.
 //! - **No SNI for an address** (`sni_host_name`): RFC 6066 §3's sentence
 //!   above. The ClientHello then has no server_name extension at all
 //!   (`hello::client_spec::extensions`), so the server cannot answer one in
@@ -52,10 +68,33 @@ pub enum Host {
     Ip(Seq<u8>),
 }
 
+/// A DNS name's octets from some point on (header, "What a DNS name is"):
+/// `rest` follows the first `run` octets of the current label, and `digits`
+/// says whether those octets are all digits. Read one octet at a time.
+pub open spec fn dns_labels_ok(rest: Seq<u8>, run: nat, digits: bool) -> bool
+    decreases rest.len(),
+{
+    if rest.len() == 0 {
+        // The last label: not empty (RFC 2181 §11), not all digits (no IPv4
+        // literal, RFC 6066 §3).
+        1 <= run && !digits
+    } else if rest[0] == 0x2eu8 {
+        // A dot ends a label, which must not be empty (RFC 2181 §11).
+        1 <= run && dns_labels_ok(rest.subrange(1, rest.len() as int), 0, true)
+    } else {
+        // An ASCII octet (RFC 6066 §3) other than `:` (no IPv6 literal), in a
+        // label of at most 63 octets (RFC 2181 §11).
+        &&& rest[0] < 0x80u8
+        &&& rest[0] != 0x3au8
+        &&& run + 1 <= 63
+        &&& dns_labels_ok(rest.subrange(1, rest.len() as int), run + 1, digits && 0x30u8 <= rest[0] && rest[0] <= 0x39u8)
+    }
+}
+
 /// The bounds a host must meet (header, "Bounds").
 pub open spec fn host_ok(host: Host) -> bool {
     match host {
-        Host::Dns(name) => 1 <= name.len() <= 253 && name.last() != 0x2eu8,
+        Host::Dns(name) => 1 <= name.len() <= 253 && dns_labels_ok(name, 0, true),
         Host::Ip(address) => address.len() == 4 || address.len() == 16,
     }
 }

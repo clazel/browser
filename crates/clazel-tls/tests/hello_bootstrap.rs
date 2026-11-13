@@ -11,7 +11,8 @@ use clazel_tls::{encode, record};
 use sha2::{Digest, Sha256};
 
 const HOST: &[u8] = b"bootstrap.example.test";
-const SESSION: &[u8] = b"middlebox-id";
+// §4.1.2: compatibility mode's session ID is a 32-byte value.
+const SESSION: &[u8] = &[0x6d; 32];
 const RANDOM: [u8; 32] = [0x35; 32];
 const CLIENT_KEY: [u8; 32] = [0x48; 32];
 const SERVER_KEY: [u8; 32] = [0x5a; 32];
@@ -124,6 +125,24 @@ fn ack_initial(bootstrap: &mut Bootstrap<TestCrypto>, wire: &[u8]) -> Result<(),
     Ok(())
 }
 
+/// RFC 8446 §5.1: "a record containing an initial ClientHello SHOULD have
+/// version 0x0301 ... and a record containing a second ClientHello or a
+/// ServerHello MUST have version 0x0303".
+#[test]
+fn initial_client_hello_record_is_version_0x0301() -> Result<(), String> {
+    for session in [SESSION, &[][..]] {
+        let (_, client_wire) = started(session)?;
+        assert_eq!(client_wire.get(..3), Some(&[22u8, 3, 1][..]));
+        let length = match client_wire.get(3..5) {
+            Some(&[high, low]) => usize::from(u16::from_be_bytes([high, low])),
+            _ => return Err("no record header".to_owned()),
+        };
+        assert_eq!(client_wire.len(), length.checked_add(5).ok_or("length")?);
+        assert_eq!(client_wire.get(5), Some(&1u8));
+    }
+    Ok(())
+}
+
 #[test]
 fn exact_send_ack_gates_peer_input_and_wrong_ack_is_terminal() -> Result<(), String> {
     let (mut bootstrap, client_wire) = started(SESSION)?;
@@ -208,6 +227,38 @@ fn retry_flight_orders_compatibility_ccs_and_requires_exact_ack() -> Result<(), 
     let (consumed, action) = bootstrap.feed(&server);
     assert_eq!(consumed, server.len());
     assert!(matches!(action, Action::Established(_)));
+    Ok(())
+}
+
+/// RFC 8446 §5.1: handshake messages "MAY be coalesced into a single
+/// TLSPlaintext record", and only messages before a key change must end a
+/// record. A ServerHello in the HelloRetryRequest's record is kept and read
+/// once ClientHello2 is acknowledged; bytes after a ServerHello are
+/// `unexpected_message`.
+#[test]
+fn messages_after_a_hello_retry_request_in_its_record_are_kept() -> Result<(), String> {
+    let (mut bootstrap, client_wire) = started(SESSION)?;
+    ack_initial(&mut bootstrap, &client_wire)?;
+    let mut both = handshake(2, &server_hello(SESSION, true));
+    both.extend_from_slice(&handshake(2, &server_hello(SESSION, false)));
+    let record = plaintext(22, &both);
+    let (consumed, action) = bootstrap.feed(&record);
+    assert_eq!(consumed, record.len());
+    let retry_wire = match action {
+        Action::Send(wire) => wire,
+        _ => return Err("HRR followed by a ServerHello did not produce ClientHello2".to_owned()),
+    };
+    assert!(matches!(
+        bootstrap.acknowledge_send(&retry_wire),
+        Action::Established(_)
+    ));
+
+    let (mut bootstrap, client_wire) = started(SESSION)?;
+    ack_initial(&mut bootstrap, &client_wire)?;
+    let mut trailing = handshake(2, &server_hello(SESSION, false));
+    trailing.push(8);
+    let (_, action) = bootstrap.feed(&plaintext(22, &trailing));
+    assert!(matches!(action, Action::Fail(10)));
     Ok(())
 }
 

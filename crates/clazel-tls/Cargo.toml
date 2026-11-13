@@ -19,12 +19,15 @@ sha2 = { version = "=0.10.9", default-features = false }
 rustls = { version = "=0.23.46", default-features = false }
 
 # Verification tier (docs/VERIFICATION.md). `tier` is what is proven about
-# the shipped code today; `target-tier` is what the policy requires. This
-# crate stays at tier 0 until the key schedule and handshake state machine
-# (phase-3.md items 3.5e and 3.5f) are in and CI's full run has checked
-# every proof, mutation and conformance test.
+# the shipped code today; `target-tier` is what the policy requires. Tier 2:
+# the specs are proven through Verus, every mutation is a certified kill, the
+# conformance suites (RFC 8448 vectors, the rustls differential) pass, and the
+# clean-room transcription of RFC 8446 (`src/transcription/`) is proven
+# equivalent to the specs end to end (`src/transcription_equivalence/`), each
+# difference stated. CI's full verification on the raising pull request is
+# the evidence.
 [package.metadata.clazel]
-tier = 0
+tier = 2
 target-tier = 2
 
 [package.metadata.verus]
