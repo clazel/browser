@@ -1,6 +1,7 @@
 //! Open a real window on macOS, draw in it, read its events and close it
 //! (phase-5.md item 5.21). A small window appears for under a second, behind the
-//! active application, without a Dock icon and without taking the keyboard.
+//! active application, without a Dock icon and without taking the keyboard, unless
+//! `CLAZEL_WINDOW_TAKE_FOCUS=1` asks it to also test `Window::activate`.
 //!
 //! This is its own `main` (`harness = false` in Cargo.toml) because AppKit may only
 //! be used on the main thread, and the test harness runs tests on others.
@@ -111,6 +112,25 @@ mod mac {
 
         let dpi = window.dpi();
         assert!(dpi.is_some_and(|d| d >= 96), "dpi {dpi:?}");
+
+        // Taking focus is opt-in, so that a default run never takes the keyboard
+        // from someone working: CLAZEL_WINDOW_TAKE_FOCUS=1 makes the application an
+        // ordinary one in front with this window key, then checks that the window
+        // keeps working. The display may be asleep; nothing here waits on it.
+        if std::env::var_os("CLAZEL_WINDOW_TAKE_FOCUS").is_some_and(|v| v == "1") {
+            window.activate();
+            let activated = Instant::now();
+            while activated.elapsed() < Duration::from_millis(300) {
+                let event = window.next_event(Duration::from_millis(50));
+                assert_ne!(event, Some(Event::Closed), "closed by activating");
+            }
+            assert!(window.draw(&pixels, width, height).is_ok());
+            eprintln!("clazel-window smoke_macos: took focus (CLAZEL_WINDOW_TAKE_FOCUS=1)");
+        } else {
+            eprintln!(
+                "clazel-window smoke_macos: did not take focus (set CLAZEL_WINDOW_TAKE_FOCUS=1 to)"
+            );
+        }
 
         // A page surface twice the content area, shown in its lower half: the
         // layer is cut to that rectangle (the clip is not read back from the
