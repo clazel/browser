@@ -35,6 +35,21 @@ pub const RENDERER: [Namespace; 5] = [
     Namespace::Ipc,
 ];
 
+/// The GPU process's namespaces on Linux (phase-5.md item 5.21a), in the order
+/// they are unshared: the renderer's without the PID namespace. A process that
+/// has unshared its PID namespace can create no more threads (the kernel
+/// refuses `clone` with `CLONE_THREAD` once `pid_ns_for_children` differs from
+/// the caller's own, `kernel/fork.c`, `copy_process`), and a Vulkan driver
+/// starts its worker threads after this point. What the PID namespace gave the
+/// renderer (no other process's id means anything) is covered for the GPU
+/// process by its seccomp list having no call that takes a process id.
+pub const GPU: [Namespace; 4] = [
+    Namespace::User,
+    Namespace::Mount,
+    Namespace::Net,
+    Namespace::Ipc,
+];
+
 /// `CLONE_NEWNS`.
 pub const CLONE_NEWNS: u32 = 0x0002_0000;
 /// `CLONE_NEWIPC`.
@@ -57,6 +72,11 @@ impl Namespace {
             Namespace::Ipc => CLONE_NEWIPC,
         }
     }
+}
+
+/// All the flags of [`GPU`], for a single `unshare` call.
+pub fn gpu_unshare_flags() -> u32 {
+    GPU.iter().fold(0, |acc, n| acc | n.clone_flag())
 }
 
 /// All the flags of [`RENDERER`], for a single `unshare` call.
