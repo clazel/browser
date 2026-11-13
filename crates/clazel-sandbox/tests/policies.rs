@@ -375,3 +375,22 @@ fn gpu_appcontainer_policy_is_the_renderers_less_win32k() {
         assert!(ac::MITIGATIONS.iter().any(|m| m.name == *name), "{name}");
     }
 }
+
+/// The array the Kani harnesses build for the GPU list (`proofs.rs`'s
+/// `gpu_nums`: the renderer's list, then `GPU_EXTRA`) is `gpu_numbers`, and
+/// `is_gpu_allowed` holds exactly for its entries.
+#[test]
+fn gpu_numbers_are_the_two_lists_in_order() {
+    for arch in Arch::ALL {
+        let want: Vec<u32> = syscalls::ALLOWLIST
+            .iter()
+            .chain(syscalls::GPU_EXTRA)
+            .map(|s| s.number(arch))
+            .collect();
+        assert_eq!(syscalls::gpu_numbers(arch), want);
+        assert_eq!(want.len(), 31);
+        for nr in (0..1024u32).step_by(miri_step()) {
+            assert_eq!(syscalls::is_gpu_allowed(arch, nr), want.contains(&nr));
+        }
+    }
+}
