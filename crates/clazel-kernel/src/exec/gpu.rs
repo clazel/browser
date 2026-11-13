@@ -1,7 +1,6 @@
 //! The GPU crash policy (phase-5.md item 5.17c) over the exec records: each
 //! function's `ensures` says it equals its spec on the views.
 
-#[allow(unused_imports)]
 use super::locks::*;
 use super::records::*;
 #[allow(unused_imports)]
