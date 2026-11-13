@@ -102,6 +102,8 @@ pub struct Fixture {
     pub gpu: PathBuf,
     /// `clazel`.
     pub clazel: PathBuf,
+    /// The real `clazel-renderer`.
+    pub renderer: PathBuf,
     /// The stand-in renderer.
     pub script: PathBuf,
     /// The framed list it writes.
@@ -118,10 +120,19 @@ impl Drop for Fixture {
 pub fn fixture(tag: &str) -> Result<Fixture, String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let built = Command::new(cargo)
-        .args(["build", "--quiet", "-p", "clazel-gpu", "-p", "clazel"])
+        .args([
+            "build",
+            "--quiet",
+            "-p",
+            "clazel-gpu",
+            "-p",
+            "clazel",
+            "-p",
+            "clazel-renderer",
+        ])
         .status();
     if !built.is_ok_and(|s| s.success()) {
-        return Err("cannot build clazel-gpu and clazel".to_owned());
+        return Err("cannot build clazel-gpu, clazel and clazel-renderer".to_owned());
     }
     let bin = std::env::current_exe()
         .ok()
@@ -145,6 +156,7 @@ pub fn fixture(tag: &str) -> Result<Fixture, String> {
         dir,
         gpu: bin.join("clazel-gpu"),
         clazel: bin.join("clazel"),
+        renderer: bin.join("clazel-renderer"),
         script,
         list,
     })

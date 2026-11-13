@@ -102,13 +102,10 @@ fn main() -> ExitCode {
     };
     // Renderers lay documents out at the terminal's width (item 4.13).
     let width = columns();
-    let mut host = clazel::Host::new(move |_| {
-        let mut c = Command::new(&renderer);
-        c.args(["--width", &width.to_string()]);
-        c
-    });
+    let mut host = text_host(renderer.clone(), width);
     if args.get(1).map(String::as_str) == Some("browse") {
-        return browse_command(host, args.get(2..).unwrap_or_default(), width);
+        drop(host);
+        return browse_command(renderer, args.get(2..).unwrap_or_default(), width);
     }
     match (args.get(1).map(String::as_str), args.get(2)) {
         (Some("demo"), None) => demo::run(host),
@@ -139,8 +136,18 @@ fn size(s: &str) -> Option<(u32, u32)> {
     Some((side(w)?, side(h)?))
 }
 
+/// A host in text mode: renderers lay documents out `width` columns wide (item
+/// 4.13) and send `Display`.
+fn text_host(renderer: PathBuf, width: usize) -> clazel::Host {
+    clazel::Host::new(move |_| {
+        let mut c = Command::new(&renderer);
+        c.args(["--width", &width.to_string()]);
+        c
+    })
+}
+
 /// `clazel browse ...`.
-fn browse_command(host: clazel::Host, args: &[String], width: usize) -> ExitCode {
+fn browse_command(renderer: PathBuf, args: &[String], width: usize) -> ExitCode {
     let flag = |f: &str| args.iter().any(|a| a == f);
     let value = |f: &str| {
         let i = args.iter().position(|a| a == f)?;
@@ -149,8 +156,15 @@ fn browse_command(host: clazel::Host, args: &[String], width: usize) -> ExitCode
     let Some(url) = args.last().filter(|u| !u.starts_with("--")) else {
         return usage();
     };
+    let headless = value("--headless");
     if flag("--text") {
-        return browse_stdio(host, url, width);
+        return browse_stdio(text_host(renderer, width), url, width);
+    }
+    if headless.is_none() {
+        if let Err(why) = window_available() {
+            eprintln!("clazel: {why}; browsing in text mode");
+            return browse_stdio(text_host(renderer, width), url, width);
+        }
     }
     let gpu = match sibling("CLAZEL_GPU", "clazel-gpu") {
         Ok(path) => path,
@@ -163,14 +177,25 @@ fn browse_command(host: clazel::Host, args: &[String], width: usize) -> ExitCode
     if ignore {
         eprintln!("clazel: --gpu=hardware: the driver blocklist is ignored");
     }
-    let mut host = host.with_gpu(move |_| {
+    // Item 5.23: renderers paired with a GPU process get its list socket
+    // (`--list-fd`, added by the host) and the fonts to lay out in.
+    let fonts = window::renderer_fonts();
+    let mut host = clazel::Host::new(move |_| {
+        let mut c = Command::new(&renderer);
+        c.args(["--width", &width.to_string()]);
+        for f in &fonts {
+            c.arg("--font").arg(f);
+        }
+        c
+    })
+    .with_gpu(move |_| {
         let mut c = Command::new(&gpu);
         if ignore {
             c.arg("--ignore-blocklist");
         }
         c
     });
-    if let Some(out) = value("--headless") {
+    if let Some(out) = headless {
         let Some(dims) = value("--size").map_or(Some((1024, 768)), |s| size(&s)) else {
             return usage();
         };
@@ -185,12 +210,20 @@ fn browse_command(host: clazel::Host, args: &[String], width: usize) -> ExitCode
     browse_window(host, url, width)
 }
 
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-fn browse_window(mut host: clazel::Host, url: &str, width: usize) -> ExitCode {
-    if !clazel_window::has_window_server() {
-        eprintln!("clazel: no window server session; browsing in text mode");
-        return browse_stdio(host, url, width);
+/// Whether `browse` can open a window here, or why not.
+fn window_available() -> Result<(), &'static str> {
+    if !cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return Err("no window on this platform yet (phase-5.md items 5.22, 5.22a)");
     }
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    if !clazel_window::has_window_server() {
+        return Err("no window server session");
+    }
+    Ok(())
+}
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+fn browse_window(mut host: clazel::Host, url: &str, _width: usize) -> ExitCode {
     match window::mac::run(&mut host, url) {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -202,6 +235,5 @@ fn browse_window(mut host: clazel::Host, url: &str, width: usize) -> ExitCode {
 
 #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
 fn browse_window(host: clazel::Host, url: &str, width: usize) -> ExitCode {
-    eprintln!("clazel: no window on this platform yet (phase-5.md items 5.22, 5.22a); text mode");
     browse_stdio(host, url, width)
 }

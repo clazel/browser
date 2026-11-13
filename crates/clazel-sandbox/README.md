@@ -112,7 +112,7 @@ and compiles its fixed pipelines from our own shader source, never a page's.
 
 | OS | Policy | State |
 |----|--------|-------|
-| macOS | `seatbelt::GPU`: `(deny default)` and no rule | **measured** on one machine (below); entered by `clazel_gpu::sandbox::start_metal` |
+| macOS | `seatbelt::GPU`: `(deny default)` and one rule, `mach-lookup` of `com.apple.MTLCompilerService` (item 5.23) | **measured** on one machine (below); entered by `clazel_gpu::sandbox::start_metal` |
 | Linux | `syscalls::GPU_EXTRA` added to the renderer's list, built by `seccomp::gpu_program` | **not measured**: written on a Mac, every entry says so |
 | Windows | `appcontainer::GPU_*`: the renderer's policy less `WIN32K`, plus `registryRead`, container `clazel.gpu` | decided by the plan's measurement (2026-11-04); data only, nothing starts a process with it yet |
 
@@ -139,6 +139,19 @@ rules, and without any one of them Metal fails or the process crashes:
 
 Making a device also looks up `com.apple.windowserver.active`. Denying it
 changed nothing, and the profile denies it.
+
+**Item 5.23 added one rule.** Drawing real pages (5.20's lists, a second page's
+glyph uploads) made the sandboxed process abort inside Apple's driver while it
+compiled a blit program variant on Metal's compiler queue; the system log showed
+the lookup of `com.apple.MTLCompilerService` denied. The driver compiles such
+variants when first needed, so a warm-up cannot promise to reach them (drawing
+every scene and every upload offset before entering did not prevent it). With
+`(allow mach-lookup (global-name "com.apple.MTLCompilerService"))` the page flow
+passes, the escape attempts below are still denied, and the only denial logged is
+`com.apple.analyticsd` (the driver's telemetry), without effect. The cost: a
+compromised GPU process can send requests to Metal's compiler service, an XPC
+service sandboxed by Apple; Chromium's GPU sandbox allows the same. The plan's
+5.21a text names "the IOKit and Mach services Metal needs".
 
 `clazel-gpu`'s `tests/sandbox_macos.rs` repeats the measurement in child
 processes. It attempts each of the following from inside the sandbox, after an

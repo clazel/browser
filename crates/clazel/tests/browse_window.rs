@@ -10,6 +10,12 @@
 //! server session, and without a Metal device (a failure under CI). The window is
 //! small, takes no focus and closes within a second; the host ends both processes
 //! when it is dropped, and a watchdog ends the test after 120 s.
+//!
+//! With `CLAZEL_WINDOW_TAKE_FOCUS=1` it also runs the real thing once: `clazel
+//! browse URL` (which activates its window, so it takes focus, hence opt-in)
+//! against a page served here, with the real renderer and GPU process, until it
+//! logs that the window shows the page's `Paint`; then it ends `clazel`, whose
+//! renderer and GPU process end with their sockets.
 
 use std::process::ExitCode;
 
@@ -72,7 +78,88 @@ mod mac {
         let started = Instant::now();
         a_paint_is_shown_in_the_window();
         eprintln!("clazel browse_window: ran in {:?}", started.elapsed());
+        if std::env::var_os("CLAZEL_WINDOW_TAKE_FOCUS").is_some_and(|v| v == "1") {
+            let started = Instant::now();
+            browse_shows_a_real_page();
+            eprintln!(
+                "clazel browse_window: clazel browse showed a page in {:?}",
+                started.elapsed()
+            );
+        } else {
+            eprintln!(
+                "clazel browse_window: clazel browse not run: it takes focus \
+                 (set CLAZEL_WINDOW_TAKE_FOCUS=1 to)"
+            );
+        }
         ExitCode::SUCCESS
+    }
+
+    /// Serve `page` to every request on a loopback port; its address.
+    fn serve(page: &'static str) -> Option<std::net::SocketAddr> {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").ok()?;
+        let addr = listener.local_addr().ok()?;
+        std::thread::spawn(move || {
+            for mut s in listener.incoming().flatten() {
+                let mut head = [0u8; 4096];
+                let _ = s.read(&mut head);
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\n\
+                     Connection: close\r\n\r\n{page}",
+                    page.len()
+                );
+                let _ = s.write_all(reply.as_bytes());
+            }
+        });
+        Some(addr)
+    }
+
+    fn browse_shows_a_real_page() {
+        use std::io::{BufRead, BufReader};
+        use std::process::{Command, Stdio};
+        let f = fixture("browse-window-real");
+        assert!(f.is_ok(), "{:?}", f.as_ref().err());
+        let Ok(f) = f else { return };
+        let addr = serve(
+            "<!doctype html><title>Real</title><body style='background:#2050c0'>\
+             <p style='color:#ffffff'>Hello from the pipeline</p></body>",
+        );
+        assert!(addr.is_some());
+        let Some(addr) = addr else { return };
+        let child = Command::new(&f.clazel)
+            .args(["browse", &format!("http://{addr}/")])
+            .env("CLAZEL_RENDERER", &f.renderer)
+            .env("CLAZEL_GPU", &f.gpu)
+            .stderr(Stdio::piped())
+            .spawn();
+        assert!(child.is_ok(), "{child:?}");
+        let Ok(mut child) = child else { return };
+        let (tx, rx) = std::sync::mpsc::channel();
+        if let Some(err) = child.stderr.take() {
+            std::thread::spawn(move || {
+                for line in BufReader::new(err).lines().map_while(Result::ok) {
+                    if tx.send(line).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        let end = Instant::now().checked_add(Duration::from_secs(30));
+        let mut log = Vec::new();
+        let mut shown = false;
+        while !shown && end.is_some_and(|e| Instant::now() < e) {
+            if let Ok(line) = rx.recv_timeout(Duration::from_millis(100)) {
+                shown = line.starts_with("clazel: showing http://");
+                log.push(line);
+            }
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(
+            shown,
+            "clazel browse never showed the page:\n{}",
+            log.join("\n")
+        );
     }
 
     fn a_paint_is_shown_in_the_window() {
@@ -90,7 +177,7 @@ mod mac {
         let Some(p) = got else { return };
         drop(host);
         assert_eq!((p.buffer, p.size), (0, (80, 60)));
-        assert!(f.clazel.exists());
+        assert!(f.clazel.exists() && f.renderer.exists());
         assert!(
             reference(80, 60)
                 .as_deref()

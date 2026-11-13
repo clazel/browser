@@ -24,9 +24,11 @@
 //! - **Input**: a click in the content area is `Input` kind 0 at its position
 //!   relative to the content area; a wheel turn is kind 1 with the delta in
 //!   device pixels, positive down, 48 CSS pixels a notch (3 lines of 16);
-//!   Space, Page Up, Page Down and the arrows are kind 2 with the key's DOM
-//!   `keyCode` (`clazel_window::keys`), for the renderer to scroll by its own
-//!   viewport. A click in the strip focuses the address bar.
+//!   Space and Page Down scroll down by 7/8 of the content area, Page Up up
+//!   by as much, and Up and Down by 40 CSS pixels, each sent as a scroll (kind
+//!   1), since the renderer (5.20) scrolls on scrolls and ignores keys; Left
+//!   and Right do nothing (scrolling is vertical, 5.20). A click in the strip
+//!   focuses the address bar.
 //! - **The address bar**: Command-L focuses it with its URL selected (typing
 //!   replaces it); typing edits it (Backspace deletes the last character);
 //!   Return navigates (`navigate_tab`) to what was typed, Escape cancels. A
@@ -45,6 +47,28 @@ use clazel_kernel::exec::records::{EventRecord, OutputRecord};
 use clazel_window::keys::Named;
 
 use crate::picture;
+
+/// The font files a renderer is given (`--font`, item 5.20), those of these
+/// that exist: TrueType faces only (5.0(c)), sans-serif, serif and monospace.
+pub const RENDERER_FONTS: &[&str] = &[
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "/System/Library/Fonts/Supplemental/Times New Roman.ttf",
+    "/System/Library/Fonts/Supplemental/Courier New.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+    "C:\\Windows\\Fonts\\arial.ttf",
+];
+
+/// The [`RENDERER_FONTS`] that exist here.
+pub fn renderer_fonts() -> Vec<std::path::PathBuf> {
+    RENDERER_FONTS
+        .iter()
+        .map(std::path::PathBuf::from)
+        .filter(|p| p.is_file())
+        .collect()
+}
 
 /// How long `--headless` waits for a frame.
 pub const HEADLESS_WAIT: Duration = Duration::from_secs(30);
@@ -278,6 +302,20 @@ pub fn wheel_pixels(delta: i16, scale: u64) -> i64 {
     i64::from(delta).saturating_mul(-48).saturating_mul(scale) / 120
 }
 
+/// The scroll, in device pixels (positive down), that a key with DOM `keyCode`
+/// `code` asks for in a content area `page` pixels tall at `scale`.
+pub fn key_scroll(code: u32, page: u32, scale: u64) -> Option<i64> {
+    let page = i64::from(page) / 8 * 7;
+    let line = 40i64.saturating_mul(i64::try_from(scale).unwrap_or(1));
+    match code {
+        32 | 34 => Some(page),
+        33 => Some(page.saturating_neg()),
+        38 => Some(line.saturating_neg()),
+        40 => Some(line),
+        _ => None,
+    }
+}
+
 /// RGBA8 premultiplied pixels as the window's `0x00RRGGBB`, over white.
 pub fn window_pixels(rgba: &[u8]) -> Vec<u32> {
     picture::rgb_over_white(rgba)
@@ -367,8 +405,8 @@ pub mod mac {
     use clazel_window::{Event, Window, keys};
 
     use super::{
-        Action, Bar, History, input, pixels_for, renderer_of, take_paint, title_bar, wheel_pixels,
-        window_pixels,
+        Action, Bar, History, input, key_scroll, pixels_for, renderer_of, take_paint, title_bar,
+        wheel_pixels, window_pixels,
     };
     use crate::strip::{self, Contents, STRIP_POINTS};
 
@@ -434,7 +472,10 @@ pub mod mac {
                     true
                 }
                 Action::Key(code) => {
-                    input(host, self.tab, 2, (0, 0), 0, code.into());
+                    let page = self.content().1;
+                    if let Some(d) = key_scroll(code, page, self.scale) {
+                        input(host, self.tab, 1, (0, 0), d, 0);
+                    }
                     false
                 }
             }
@@ -577,7 +618,7 @@ pub mod mac {
 mod tests {
     use clazel_window::keys::Named;
 
-    use super::{Action, Bar, History, clean, title_bar, wheel_pixels, window_pixels};
+    use super::{Action, Bar, History, clean, key_scroll, title_bar, wheel_pixels, window_pixels};
 
     fn bar() -> Bar {
         Bar {
@@ -651,6 +692,17 @@ mod tests {
         // An empty address navigates nowhere.
         assert_eq!(b.key(Some(Named::Backspace), false), Action::Redraw);
         assert_eq!(b.key(Some(Named::Return), false), Action::Redraw);
+    }
+
+    #[test]
+    fn scrolling_keys_scroll_by_the_page_or_a_line() {
+        assert_eq!(key_scroll(32, 800, 1), Some(700));
+        assert_eq!(key_scroll(34, 800, 2), Some(700));
+        assert_eq!(key_scroll(33, 800, 1), Some(-700));
+        assert_eq!(key_scroll(40, 800, 2), Some(80));
+        assert_eq!(key_scroll(38, 800, 1), Some(-40));
+        assert_eq!(key_scroll(37, 800, 1), None);
+        assert_eq!(key_scroll(39, 800, 1), None);
     }
 
     #[test]

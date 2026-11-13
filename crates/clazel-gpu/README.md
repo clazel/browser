@@ -358,7 +358,9 @@ order the macOS GPU process enters it in, `sandbox::start_metal`:
 1. make the Metal backend: the device, its queue and the one fixed pipeline,
    compiled from `shaders/quad.metal`;
 2. enter `clazel_sandbox::seatbelt::gpu_profile()`, which is `(deny default)`
-   and nothing else, through `clazel_sys::macos::sandbox_init_profile`;
+   and, since item 5.23, one `mach-lookup` of Metal's compiler service (the
+   driver compiles blit variants when first needed; `clazel-sandbox`'s README has
+   the measurement), through `clazel_sys::macos::sandbox_init_profile`;
 3. only then `Gpu::start` (the blocklist) and the first message.
 
 No byte from a page reaches the process before step 2. An error in either step ends
@@ -434,6 +436,14 @@ the host allocate up to 256 MiB a frame.
   hand-built list sent by a stand-in renderer; the kernel's `Paint` names slot 0
   under the kernel's URL; its pixels equal the reference within one level; the
   window shows them; `browse --headless` writes them as a PNG and a PPM.
+- With the real renderer (5.20, same tests): a styled page is painted at its
+  viewport, painted again for a new viewport and for scrolls down and back, and a
+  click on its link navigates and paints the next page; `browse --headless` writes a
+  real page's PNG (its size, its background, its text's ink); and, opt-in because it
+  takes focus, `clazel browse URL` shows a real page in its window.
+- The renderer's list framing and this reader are one definition (`channel.rs`), and
+  `clazel-renderer`'s `the_gpu_process_reads_what_the_renderer_writes` runs its
+  bytes through `process::Server`.
 
 ### Not done
 
