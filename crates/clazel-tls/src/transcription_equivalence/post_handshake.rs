@@ -8,8 +8,10 @@
 //! The two states are tied by [`post_agrees`]: the transcription is in
 //! CONNECTED; while the crate's write side is open, its client epoch and
 //! `client_application_traffic_secret_N` are the transcription's `send`
-//! (key, IV, sequence number and secret: [`direction_agrees`]) and no
-//! KeyUpdate is owed; while its read side is open, its server epoch and
+//! (key, IV, sequence number and secret: [`direction_agrees`]) and a
+//! KeyUpdate is owed on one side exactly when it is on the other (§4.6.3:
+//! both record the answer to `update_requested` and send it before the next
+//! application data); while its read side is open, its server epoch and
 //! secret are the transcription's `receive`, its reassembly buffer is the
 //! transcription's `handshake_fragments`, and `read_closed` is false; once
 //! the read side has ended, `read_closed` is true. [`lemma_start`] ties the
@@ -26,7 +28,9 @@
 //!   and the handshake messages of the record ([`lemma_messages`]):
 //!   NewSessionTicket (§4.6.1, with its block rules and early_data body:
 //!   [`lemma_nst`], [`lemma_nst_bodies`]), KeyUpdate (§4.6.3, §7.2, and
-//!   §5.1's alignment: [`lemma_ku`], [`lemma_msgs_ku`]), and every other
+//!   §5.1's alignment: [`lemma_ku`], [`lemma_msgs_ku`]; on
+//!   `update_requested` both owe one answer and send nothing, however many
+//!   requests came), and every other
 //!   type, `unexpected_message` on both sides ([`lemma_other_type`]). After
 //!   the read side has ended both ignore the record (§6.1).
 //! - **Rejections.** The crate rejects exactly when the transcription aborts.
@@ -41,7 +45,8 @@
 //!   rest ([`lemma_stream_prefix`]).
 //! - **The local operations** with the write side open: `send_application`
 //!   of at most 2^14 octets against `send_application_data`, including
-//!   §5.3's KeyUpdate before the last sequence number ([`send_agrees`]);
+//!   the owed KeyUpdate (§4.6.3) and §5.3's KeyUpdate before the last
+//!   sequence number, one KeyUpdate when both are due ([`send_agrees`]);
 //!   `update_keys` against `send_key_update` ([`update_agrees`]); `close`
 //!   against `close_write` ([`close_agrees`]).
 //!
@@ -54,18 +59,6 @@
 //! side.
 //!
 //! Where the two differ, each stated precisely:
-//! - **The answer to `update_requested`** ([`settle`]). §4.6.3: the receiver
-//!   "MUST send a KeyUpdate of its own with request_update set to
-//!   "update_not_requested" prior to sending its next Application Data
-//!   record". The crate sends it in the step that receives the request; the
-//!   transcription records it as owed and sends it first in its next
-//!   `send_application_data`. The record is the same: the crate's output is
-//!   the transcription's records followed by `settle`'s, and its state is
-//!   the transcription's after them. A consequence: two `update_requested`
-//!   KeyUpdates in separate records with no Application Data sent between
-//!   them draw two KeyUpdates from the crate and one from the transcription.
-//!   After the crate's close_notify it sends no answer (§6.1), and nothing
-//!   is said of the transcription's owed flag.
 //! - **Two faults in one record** ([`two_faults`]): a record of a type other
 //!   than application_data or change_cipher_spec longer than 2^14 is
 //!   `unexpected_message` on the crate's side (type first) and
@@ -89,7 +82,7 @@
 //!   `send_application`, `update_keys`, `close` and fatal alerts send
 //!   nothing (§6.1). The transcription has no write-closed state
 //!   (`close_write` only gives the record), so there is nothing to compare;
-//!   [`post_agrees`] says nothing of its `send` then.
+//!   [`post_agrees`] says nothing of its `send` or owed KeyUpdate then.
 //! - Transport end of file (the crate's `Input::Closed`): `connection.rs`
 //!   leaves transport closure out of scope.
 //! - In this file (covered in [`super::framing`] instead): the timing on a
@@ -163,11 +156,12 @@ pub open spec fn direction_agrees(ep: Option<crate::traffic::spec::State>, secre
 
 /// The write side: the client's epoch and secret are the transcription's
 /// `send`, the epoch has a next sequence number (the crate's item 10), and
-/// no KeyUpdate is owed (the crate answers at once; see [`settle`]).
+/// the crate owes a KeyUpdate (§4.6.3, its item 9) exactly when the
+/// transcription does.
 pub open spec fn sender_agrees(s: State, c: Connection) -> bool {
     &&& direction_agrees(s.sender, s.client_secret, c.send)
     &&& s.sender->Some_0.next is Some
-    &&& !c.key_update_owed
+    &&& s.key_update_owed == c.key_update_owed
 }
 
 /// The read side: the server's epoch and secret are the transcription's
@@ -367,10 +361,10 @@ pub proof fn lemma_send_data(f: crate::traffic::spec::Cipher, p: Primitives, s: 
     assert(crate::transcription::record::fragment_blocks(data) == seq![data]);
 }
 
-/// §5, §5.3: the crate's `send_application` is the transcription's
+/// §5, §5.3, §4.6.3: the crate's `send_application` is the transcription's
 /// `send_application_data`, for a record of at most 2^14 octets: the
-/// KeyUpdate before the last sequence number, the same records and agreeing
-/// states.
+/// KeyUpdate that is owed or due before the last sequence number (one if
+/// both), the same records and agreeing states.
 pub proof fn lemma_send_application(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, conn: Connection, data: Seq<u8>)
     requires
@@ -395,17 +389,20 @@ pub proof fn lemma_send_application(c: crate::schedule::spec::Crypto, f: crate::
     let tx = s.sender->Some_0;
     let ts = conn.send->Protected_0;
     assert(crate::transcription::record::fragment_blocks(data) == seq![data]);
-    assert(Connection { key_update_owed: false, ..conn } == conn);
-    if crate::connection::post_handshake_spec::needs_rekey(s) {
-        lemma_send_key_update(c, f, p, s, conn, crate::spec::UPDATE_NOT_REQUESTED);
-        let (o1, s1) = crate::connection::post_handshake_spec::send_key_update(c, f, s, crate::spec::UPDATE_NOT_REQUESTED);
-        let (r1, conn1) = crate::transcription::connection::send_key_update(p, conn, 0);
+    if s.key_update_owed || crate::connection::post_handshake_spec::needs_rekey(s) {
+        // One KeyUpdate, from the states with nothing owed.
+        let s0 = State { key_update_owed: false, ..s };
+        let conn0 = Connection { key_update_owed: false, ..conn };
+        assert(post_agrees(s0, conn0));
+        lemma_send_key_update(c, f, p, s0, conn0, crate::spec::UPDATE_NOT_REQUESTED);
+        let (o1, s1) = crate::connection::post_handshake_spec::send_key_update(c, f, s0, crate::spec::UPDATE_NOT_REQUESTED);
+        let (r1, conn1) = crate::transcription::connection::send_key_update(p, conn0, 0);
         lemma_next_epoch(c, p, s.client_secret);
         lemma_send_data(f, p, s1, conn1, data);
         let (o2, s2) = crate::connection::post_handshake_spec::send_data_record(f, s1, data);
         let (r2, send) = crate::transcription::connection::send_blocks(p, conn1.send, 23, 0x0303, seq![data]);
-        assert(conn1 == Connection { key_update_owed: false, ..conn1 });
     } else {
+        assert(Connection { key_update_owed: false, ..conn } == conn);
         lemma_send_data(f, p, s, conn, data);
         assert(Seq::<Seq<u8>>::empty() + crate::transcription::connection::send_blocks(p, conn.send, 23, 0x0303,
             seq![data]).0 =~= crate::transcription::connection::send_blocks(p, conn.send, 23, 0x0303, seq![data]).0);
@@ -664,25 +661,6 @@ pub proof fn lemma_other_type(hs: crate::transcription::state_machine::ClientHan
 // The handshake messages of one record.
 // ---------------------------------------------------------------------------
 
-/// §4.6.3, the one difference in what is sent: "If the request_update field
-/// is set to "update_requested", then the receiver MUST send a KeyUpdate of
-/// its own with request_update set to "update_not_requested" prior to sending
-/// its next Application Data record." The crate sends it at once, in the
-/// step that receives the request (its item 9); the transcription records it
-/// as owed (`key_update_owed`) and sends it first in its next
-/// `send_application_data`. `settle` is that send of the owed KeyUpdate
-/// (exactly what `send_application_data` does first), while the crate's
-/// write side is open: the crate's records are the transcription's followed
-/// by these, and its state is the transcription's after them.
-pub open spec fn settle(p: Primitives, s: State, c: Connection) -> (Seq<Seq<u8>>, Connection) {
-    if s.phase == Phase::Open && c.key_update_owed {
-        crate::transcription::connection::send_key_update(p, Connection { key_update_owed: false, ..c },
-            crate::transcription::post_handshake::update_not_requested())
-    } else {
-        (seq![], c)
-    }
-}
-
 /// What the crate sends when it fails with `alert`: while its write side is
 /// open, the transcription's `alert_record` of that description (§6.2: a
 /// fatal alert, under the current client key); after its close_notify,
@@ -706,8 +684,7 @@ pub open spec fn agrees_but_buffer(s: State, c: Connection) -> bool {
 /// The crate's processing of a record's messages (`messages`) and the
 /// transcription's (`process_handshake_bytes`) agree: both fail, with the
 /// same alert and the crate sending the transcription's alert record; or both
-/// go on, delivering and (but for [`settle`]) sending nothing, in agreeing
-/// states.
+/// go on, delivering and sending nothing, in agreeing states.
 pub open spec fn messages_agree(p: Primitives, s: State, c: Connection,
     r: (crate::connection::post_handshake_spec::Out, State), t: crate::transcription::connection::Receive) -> bool
 {
@@ -725,8 +702,8 @@ pub open spec fn messages_agree(p: Primitives, s: State, c: Connection,
                 &&& progress.application_data.len() == 0
                 &&& progress.records_to_send.len() == 0
                 &&& s2.phase == s.phase
-                &&& o.wires == settle(p, s2, progress.connection).0
-                &&& post_agrees(s2, settle(p, s2, progress.connection).1)
+                &&& o.wires.len() == 0
+                &&& post_agrees(s2, progress.connection)
             },
             _ => false,
         },
@@ -943,9 +920,9 @@ pub proof fn lemma_msgs_nst(c: crate::schedule::spec::Crypto, f: crate::traffic:
 }
 
 /// §4.6.3, §5.1, §7.2: a valid KeyUpdate that ends its record at a message
-/// boundary. Both sides move the read side to the next generation; on
-/// `update_requested` the crate sends its KeyUpdate at once and the
-/// transcription owes it ([`settle`]).
+/// boundary. Both sides move the read side to the next generation and send
+/// nothing; on `update_requested` both owe one answer (a flag on both
+/// sides, so a request while one is owed leaves one owed).
 pub proof fn lemma_msgs_ku(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, y: Connection, ms: Seq<Seq<u8>>, req: u8)
     requires
@@ -983,38 +960,18 @@ pub proof fn lemma_msgs_ku(c: crate::schedule::spec::Crypto, f: crate::traffic::
     let after = Connection { receive: updated, key_update_owed: y.key_update_owed || requested, ..y };
     let after0 = Connection { handshake_fragments: Seq::empty(), ..after };
     assert(ms.skip(1) =~= Seq::<Seq<u8>>::empty());
-    assert(crate::connection::post_handshake_spec::key_update_received(c, f, s, req, true) == if requested {
-        crate::connection::post_handshake_spec::send_key_update(c, f, s1r, crate::spec::UPDATE_NOT_REQUESTED)
-    } else {
-        (crate::connection::post_handshake_spec::quiet(), s1r)
-    });
+    let s2 = if requested { State { key_update_owed: true, ..s1r } } else { s1r };
+    assert(crate::connection::post_handshake_spec::key_update_received(c, f, s, req, true)
+        == (crate::connection::post_handshake_spec::quiet(), s2));
+    assert(s2.key_update_owed == (s.key_update_owed || requested));
     if s.phase == Phase::Open {
         assert(sender_agrees(s, yb));
-        if requested {
-            let y1 = Connection { key_update_owed: false, ..after0 };
-            assert(sender_agrees(s1r, y1));
-            assert(receiver_agrees(s1r, y1));
-            assert(post_agrees(s1r, y1));
-            lemma_send_key_update(c, f, p, s1r, y1, crate::spec::UPDATE_NOT_REQUESTED);
-            let (o2, s2) = crate::connection::post_handshake_spec::send_key_update(c, f, s1r,
-                crate::spec::UPDATE_NOT_REQUESTED);
-            assert(o2.wires + Seq::<Seq<u8>>::empty() =~= o2.wires);
-            lemma_messages_last(c, f, s, ms, o2, s2);
-            assert(settle(p, s2, after0) == crate::transcription::connection::send_key_update(p, y1, 0));
-        } else {
-            assert(sender_agrees(s1r, after0));
-            assert(receiver_agrees(s1r, after0));
-            assert(post_agrees(s1r, after0));
-            lemma_messages_last(c, f, s, ms, crate::connection::post_handshake_spec::quiet(), s1r);
-        }
-    } else {
-        assert(receiver_agrees(s1r, after0));
-        assert(post_agrees(s1r, after0));
-        if requested {
-            assert(!crate::connection::post_handshake_spec::can_write(s1r));
-        }
-        lemma_messages_last(c, f, s, ms, crate::connection::post_handshake_spec::quiet(), s1r);
+        assert(sender_agrees(s2, after0));
     }
+    assert(receiver_agrees(s2, after0));
+    assert(post_agrees(s2, after0));
+    lemma_messages_last(c, f, s, ms, crate::connection::post_handshake_spec::quiet(), s2);
+    assert(Seq::<Seq<u8>>::empty() + Seq::<Seq<u8>>::empty() =~= Seq::<Seq<u8>>::empty());
 }
 
 /// The crate's `messages` on a last message that leaves the read side open.
@@ -1104,7 +1061,6 @@ pub proof fn lemma_msgs_first(c: crate::schedule::spec::Crypto, f: crate::traffi
     hide(messages_agree);
     hide(post_agrees);
     hide(agrees_but_buffer);
-    hide(settle);
     let (ms, r) = crate::spec::extract_messages(bf)->Ok_0;
     super::bootstrap::lemma_extract(bf);
     lemma_extract_more(bf);
@@ -1251,8 +1207,7 @@ pub open spec fn fail_agrees(f: crate::traffic::spec::Cipher, s: State, b: Seq<u
 /// abort (`failed`: the alert matches, or a stated difference holds), with
 /// the transcription's alert record for the crate's alert; the peer's error
 /// alert is `PeerError` on both sides; otherwise both go on, deliver the
-/// same application data and, but for [`settle`], send nothing, in agreeing
-/// states.
+/// same application data and send nothing, in agreeing states.
 pub open spec fn outcome_agrees(p: Primitives, s: State, c: Connection, o: crate::connection::post_handshake_spec::Out,
     s2: State, t: crate::transcription::connection::Receive, failed: bool) -> bool
 {
@@ -1273,8 +1228,8 @@ pub open spec fn outcome_agrees(p: Primitives, s: State, c: Connection, o: crate
             crate::transcription::connection::Receive::Continue(progress) => {
                 &&& o.delivered == progress.application_data
                 &&& progress.records_to_send.len() == 0
-                &&& o.wires == settle(p, s2, progress.connection).0
-                &&& post_agrees(s2, settle(p, s2, progress.connection).1)
+                &&& o.wires.len() == 0
+                &&& post_agrees(s2, progress.connection)
             },
             _ => false,
         },
@@ -1498,7 +1453,6 @@ pub proof fn lemma_receive(c: crate::schedule::spec::Crypto, f: crate::traffic::
     hide(crate::transcription::connection::receive_protected_content);
     hide(crate::transcription::connection::receive_stream);
     hide(post_agrees);
-    hide(settle);
     lemma_receive_open_facts(s, conn);
     super::bootstrap::lemma_stream_one(p, conn, b);
     let rx = s.receiver->Some_0;
@@ -1688,8 +1642,9 @@ pub proof fn lemma_stream_prefix(p: Primitives, conn: Connection, b: Seq<u8>, re
 
 /// The crate's `send_application` of at most 2^14 octets and the
 /// transcription's `send_application_data` agree: the same records (with
-/// §5.3's KeyUpdate before the last sequence number on both sides), nothing
-/// delivered, and agreeing states.
+/// the owed KeyUpdate of §4.6.3 and §5.3's KeyUpdate before the last
+/// sequence number on both sides, one when both are due), nothing delivered,
+/// and agreeing states.
 pub open spec fn send_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, conn: Connection, data: Seq<u8>) -> bool
 {
@@ -1706,7 +1661,7 @@ pub open spec fn send_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic
 }
 
 /// The crate's `update_keys` and the transcription's `send_key_update` of
-/// the same request agree.
+/// the same request agree (an owed answer stays owed on both sides).
 pub open spec fn update_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, conn: Connection, request_peer: bool) -> bool
 {
@@ -1733,8 +1688,9 @@ pub open spec fn close_agrees(f: crate::traffic::spec::Cipher, p: Primitives, s:
 /// blocks into TLSPlaintext records carrying data in chunks of 2^14 bytes or
 /// less"): the crate's `send_application` takes one record's worth (its item
 /// 11: the caller fragments) and refuses more as a local `record_overflow`,
-/// after the KeyUpdate it owes on the last sequence number if any; the
-/// transcription's `send_application_data` fragments any length itself.
+/// after the KeyUpdate that is owed or due on the last sequence number, if
+/// any; the transcription's `send_application_data` fragments any length
+/// itself.
 pub proof fn lemma_oversized(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: State, conn: Connection, data: Seq<u8>)
     requires
@@ -1746,8 +1702,11 @@ pub proof fn lemma_oversized(c: crate::schedule::spec::Crypto, f: crate::traffic
         crate::connection::post_handshake_spec::send_application(c, f, s, data).0.end == End::Fail(crate::spec::RECORD_OVERFLOW),
         crate::transcription::connection::send_application_data(p, conn, data) is Sent,
 {
-    if crate::connection::post_handshake_spec::needs_rekey(s) {
-        lemma_send_key_update(c, f, p, s, conn, crate::spec::UPDATE_NOT_REQUESTED);
+    if s.key_update_owed || crate::connection::post_handshake_spec::needs_rekey(s) {
+        let s0 = State { key_update_owed: false, ..s };
+        let conn0 = Connection { key_update_owed: false, ..conn };
+        assert(post_agrees(s0, conn0));
+        lemma_send_key_update(c, f, p, s0, conn0, crate::spec::UPDATE_NOT_REQUESTED);
     }
 }
 
@@ -1766,8 +1725,8 @@ pub proof fn lemma_oversized(c: crate::schedule::spec::Crypto, f: crate::traffic
 ///   `alert_record` of it, except in the stated differences of
 ///   [`fail_agrees`] ([`two_faults`], [`exhausted`], [`cap`]); the peer's
 ///   error alert is `PeerError` on both sides; otherwise both deliver the same
-///   application data and reach agreeing states, the crate having also sent
-///   the KeyUpdate the transcription owes ([`settle`]);
+///   application data, send nothing (an `update_requested` is owed an answer
+///   on both sides) and reach agreeing states;
 /// - with the write side open, the crate's `send_application` of at most
 ///   2^14 octets is the transcription's `send_application_data`
 ///   ([`send_agrees`]), its `update_keys` the transcription's

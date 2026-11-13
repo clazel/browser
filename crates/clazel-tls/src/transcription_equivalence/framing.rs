@@ -58,10 +58,8 @@
 //!      [`post_steps`] (`step` on what is held, the caller resubmitting the
 //!      rest), and [`post_stream_agrees`] carries
 //!      `post_handshake::record_agrees` against `connection::receive_stream`,
-//!      up to the first record after which the transcription owes a
-//!      KeyUpdate (the existing `settle` difference: the crate has sent its
-//!      answer and the transcription has not, so the two connections differ
-//!      by that KeyUpdate from then on).
+//!      at every record (a KeyUpdate included: both sides owe the answer to
+//!      `update_requested` and send nothing while reading).
 //!
 //!    When a machine stops on a record (an action for its caller: a flight to
 //!    send and acknowledge, the handover to the next machine, a failure, a
@@ -1959,10 +1957,8 @@ pub proof fn lemma_post_drive(c: crate::schedule::spec::Crypto, f: crate::traffi
 /// the whole-record theorem (`post_handshake::record_agrees`) holds of `b`,
 /// and the transcription reads `w` as `b`, then the rest
 /// (`post_handshake::joined`); if the crate goes on, it consumed exactly
-/// `b` and the transcription went on too, and, unless the transcription now
-/// owes a KeyUpdate (the `settle` difference: the crate sent its answer in
-/// that step), the crate sent nothing and the states agree again
-/// (`post_agrees`).
+/// `b` and the transcription went on too, the crate sent nothing and the
+/// states agree again (`post_agrees`).
 pub open spec fn post_whole_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>) -> bool
 {
@@ -1982,10 +1978,8 @@ pub open spec fn post_whole_agrees(c: crate::schedule::spec::Crypto, f: crate::t
     &&& post_goes_on(r) ==> {
         &&& r.2 == n
         &&& tb is Continue
-        &&& !tb->Continue_0.connection.key_update_owed ==> {
-            &&& r.0.wires.len() == 0
-            &&& super::post_handshake::post_agrees(r.1, tb->Continue_0.connection)
-        }
+        &&& r.0.wires.len() == 0
+        &&& super::post_handshake::post_agrees(r.1, tb->Continue_0.connection)
     }
 }
 
@@ -2023,9 +2017,8 @@ pub open spec fn post_partial_agrees(c: crate::schedule::spec::Crypto, f: crate:
 
 /// The transducer and the transcription's `receive_stream` agree on the
 /// stream `w`, along [`post_steps`]: [`post_whole_agrees`] when a whole
-/// record is at its front, and then, when the crate goes on and the
-/// transcription owes no KeyUpdate, again on the rest from the agreeing
-/// states; [`post_partial_agrees`] when none is.
+/// record is at its front, and then, when the crate goes on, again on the
+/// rest from the agreeing states; [`post_partial_agrees`] when none is.
 pub open spec fn post_stream_agrees(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, p: Primitives,
     s: crate::connection::post_handshake_spec::State, conn: Connection, w: Seq<u8>) -> bool
     decreases w.len(),
@@ -2036,7 +2029,7 @@ pub open spec fn post_stream_agrees(c: crate::schedule::spec::Crypto, f: crate::
             crate::connection::post_handshake_spec::Input::Bytes(w));
         let tb = crate::transcription::connection::receive_stream(p, conn, w.take(n as int)).0;
         &&& post_whole_agrees(c, f, p, s, conn, w)
-        &&& (post_goes_on(r) && !tb->Continue_0.connection.key_update_owed) ==>
+        &&& post_goes_on(r) ==>
             post_stream_agrees(c, f, p, r.1, tb->Continue_0.connection, w.skip(n as int))
     } else {
         post_partial_agrees(c, f, p, s, conn, w)
@@ -2133,8 +2126,7 @@ pub proof fn lemma_post_whole(c: crate::schedule::spec::Crypto, f: crate::traffi
 }
 
 /// When the transducer goes on after a record, the transcription went on
-/// too; unless it owes a KeyUpdate, the crate sent nothing and the states
-/// agree.
+/// too, the crate sent nothing and the states agree.
 pub proof fn lemma_post_quiet(p: Primitives, s: crate::connection::post_handshake_spec::State, conn: Connection,
     o: crate::connection::post_handshake_spec::Out, s2: crate::connection::post_handshake_spec::State, t: Receive)
     requires
@@ -2142,10 +2134,8 @@ pub proof fn lemma_post_quiet(p: Primitives, s: crate::connection::post_handshak
         o.end is Continue,
     ensures
         t is Continue,
-        !t->Continue_0.connection.key_update_owed ==> {
-            &&& o.wires.len() == 0
-            &&& super::post_handshake::post_agrees(s2, t->Continue_0.connection)
-        },
+        o.wires.len() == 0,
+        super::post_handshake::post_agrees(s2, t->Continue_0.connection),
 {
     hide(super::post_handshake::post_agrees);
 }
@@ -2174,7 +2164,7 @@ pub proof fn lemma_post_stream(c: crate::schedule::spec::Crypto, f: crate::traff
         let r = crate::connection::post_handshake_spec::step(c, f, s,
             crate::connection::post_handshake_spec::Input::Bytes(w));
         let tb = crate::transcription::connection::receive_stream(p, conn, w.take(n as int)).0;
-        if post_goes_on(r) && !tb->Continue_0.connection.key_update_owed {
+        if post_goes_on(r) {
             assert(super::post_handshake::post_agrees(r.1, tb->Continue_0.connection)) by {
                 reveal(post_whole_agrees);
             }
