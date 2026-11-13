@@ -1070,7 +1070,15 @@ fn vtable_call(
     true
 }
 
-/// `#[repr(C)] struct NAME { .. }` at `k` (the `struct`), NAME a listed vtable
+/// `pub(crate)`: the two tokens.
+fn is_crate_visibility(first: Option<&TokenTree>, second: Option<&TokenTree>) -> bool {
+    ident_is(first, "pub")
+        && matches!(second, Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis
+            && g.stream().to_string() == "crate")
+}
+
+/// `#[repr(C)]`, then optionally `pub(crate)`, then `struct NAME { .. }` at `k` (the
+/// `struct`), NAME a listed vtable
 /// with `slots`: its fields must be exactly the slots ([`slot_field`] of each
 /// listed name), in order, each either
 /// `usize` (a slot that is never called: a pointer's size and nothing callable)
@@ -1082,10 +1090,25 @@ fn vtable_decl(tokens: &[TokenTree], k: usize, slots: &[&str], file: &mut File) 
         Some(TokenTree::Ident(n)) => n.to_string(),
         _ => String::new(),
     };
-    let repr_c = k
+    // `pub(crate)` may stand between the attribute and `struct`; `pub` may not.
+    let back = |n: usize| k.checked_sub(n).and_then(|j| tokens.get(j));
+    let visible = if is_crate_visibility(back(2), back(1)) {
+        2
+    } else {
+        if ident_is(back(1), "pub") {
+            flag(
+                file,
+                line,
+                format!("vtable `{name}` may be private or `pub(crate)`, not `pub`"),
+            );
+        }
+        0usize
+    };
+    let k_attr = k.saturating_sub(visible);
+    let repr_c = k_attr
         .checked_sub(2)
         .is_some_and(|j| is_punct(tokens.get(j), '#'))
-        && matches!(k.checked_sub(1).and_then(|j| tokens.get(j)),
+        && matches!(k_attr.checked_sub(1).and_then(|j| tokens.get(j)),
             Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Bracket
                 && g.stream().to_string().replace(' ', "") == "repr(C)");
     if !repr_c {
@@ -1119,6 +1142,11 @@ fn vtable_decl(tokens: &[TokenTree], k: usize, slots: &[&str], file: &mut File) 
         while let [TokenTree::Punct(p), TokenTree::Group(g), rest @ ..] = field
             && p.as_char() == '#'
             && matches!(g.stream().into_iter().next(), Some(TokenTree::Ident(i)) if i == "doc")
+        {
+            field = rest;
+        }
+        if let [vis, scope, rest @ ..] = field
+            && is_crate_visibility(Some(vis), Some(scope))
         {
             field = rest;
         }
@@ -2251,6 +2279,12 @@ mod tests {
             &format!("query_interface: usize, add_ref: usize, {release},"),
         );
         assert_eq!(vtable_violations(&good)?.0, Vec::<String>::new());
+        // Visible in the crate, as a declarations module needs.
+        let shared = format!(
+            "#[repr(C)]\npub(crate) struct IUnknownVtbl {{ pub(crate) query_interface: usize, \
+             pub(crate) add_ref: usize, pub(crate) {release} }}\n"
+        );
+        assert_eq!(vtable_violations(&shared)?.0, Vec::<String>::new());
         let cases = [
             // No `repr(C)`, or another representation.
             (
@@ -2325,6 +2359,20 @@ mod tests {
                     "query_interface: usize, add_ref: usize, release: unsafe extern \"C\" fn(*mut u8) -> u32",
                 ),
                 "slot `release` must be `usize`",
+            ),
+            // Exported.
+            (
+                format!(
+                    "#[repr(C)]\npub struct IUnknownVtbl {{ query_interface: usize, add_ref: usize, {release} }}\n"
+                ),
+                "not `pub`",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    &format!("query_interface: usize, pub add_ref: usize, {release}"),
+                ),
+                "a field must be `Slot: type`",
             ),
             // A tuple struct.
             (
