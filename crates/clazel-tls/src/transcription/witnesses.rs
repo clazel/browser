@@ -1502,4 +1502,136 @@ proof fn write_side_closure_in_handshake()
         == SendResult::WriteClosed) by (compute);
 }
 
+// --------------------------------------------------------------------------
+// §6.1, the end of the transport as received.
+// --------------------------------------------------------------------------
+
+/// What a transport end carries.
+pub open spec fn end_progress(t: TransportEnd) -> Progress {
+    match t {
+        TransportEnd::EndOfData(progress) => progress,
+        TransportEnd::Truncated(progress) => progress,
+    }
+}
+
+/// The end of the transport on `connection`: truncation, nothing delivered, nothing
+/// written, no end-of-data, and the connection as it was.
+pub open spec fn truncated_quietly(connection: Connection) -> bool {
+    let t = receive_transport_end(connection);
+    &&& t is Truncated
+    &&& end_progress(t).connection == connection
+    &&& end_progress(t).application_data == no_bytes()
+    &&& end_progress(t).records_to_send == Seq::<Seq<u8>>::empty()
+    &&& !end_of_data(end_progress(t).connection)
+}
+
+/// The end of the transport on `connection`: the orderly end, nothing delivered, nothing
+/// written, end-of-data, and the connection as it was.
+pub open spec fn ended_in_order(connection: Connection) -> bool {
+    let t = receive_transport_end(connection);
+    &&& t is EndOfData
+    &&& end_progress(t).connection == connection
+    &&& end_progress(t).application_data == no_bytes()
+    &&& end_progress(t).records_to_send == Seq::<Seq<u8>>::empty()
+    &&& end_of_data(end_progress(t).connection)
+}
+
+/// WAIT_SH with the first 7 bytes of the ServerHello record pending.
+pub open spec fn sh_partial_record() -> (Receive, Seq<u8>) {
+    receive_stream(toy_primitives(), conn_wait_sh(), toy_sh_record().subrange(0, 7))
+}
+
+/// WAIT_SH with the start of a handshake message buffered.
+pub open spec fn conn_wait_sh_fragment() -> Connection {
+    conn_after(stream_result(conn_wait_sh(), plain(ct_handshake(), seq![2u8, 0])))
+}
+
+/// WAIT_EE with the first 6 bytes of a protected record pending.
+pub open spec fn ee_partial_record() -> (Receive, Seq<u8>) {
+    receive_stream(toy_primitives(), conn_wait_ee(), server_hs_record(0, ct_handshake(), toy_ee()).subrange(0, 6))
+}
+
+/// After EncryptedExtensions, with the start of the Certificate buffered.
+pub open spec fn conn_wait_cert_cr_fragment() -> Connection {
+    conn_after(stream_result(conn_wait_ee(), server_hs_record(0, ct_handshake(), toy_flight().subrange(0, 10))))
+}
+
+/// CONNECTED with the first 8 bytes of an application data record pending.
+pub open spec fn ap_partial_record() -> (Receive, Seq<u8>) {
+    receive_stream(toy_primitives(), conn_connected(), server_ap_record(0, ct_application_data(), seq![1u8, 2]).subrange(0, 8))
+}
+
+/// CONNECTED after the server's close_notify, with 4 bytes of a later record pending.
+pub open spec fn read_closed_partial_record() -> (Receive, Seq<u8>) {
+    receive_stream(toy_primitives(), conn_connected(),
+        server_ap_record(0, ct_alert(), seq![1u8, 0]) + server_ap_record(1, ct_application_data(), seq![1u8]).subrange(0, 4))
+}
+
+/// §6.1: the end of the transport during the handshake, before any close_notify.
+proof fn transport_end_in_handshake()
+{
+    // Before the first ServerHello, with nothing pending: truncation, no alert, WAIT_SH.
+    assert(truncated_quietly(conn_wait_sh())) by (compute);
+    assert((end_progress(receive_transport_end(conn_wait_sh()))).connection.handshake.state == ClientState::WaitSh) by (compute);
+    // With an incomplete record pending: the same, and its bytes are discarded.
+    assert(sh_partial_record().1.len() == 7) by (compute);
+    assert(truncated_quietly(conn_after(sh_partial_record().0))) by (compute);
+    // With an incomplete handshake message buffered: the same, not decode_error.
+    assert(conn_wait_sh_fragment().handshake_fragments == seq![2u8, 0]) by (compute);
+    assert(truncated_quietly(conn_wait_sh_fragment())) by (compute);
+    assert(conn_wait_sh_fragment().handshake.state == ClientState::WaitSh) by (compute);
+    // After ServerHello, with nothing pending and with an incomplete protected record.
+    assert(truncated_quietly(conn_wait_ee())) by (compute);
+    assert(ee_partial_record().1.len() == 6) by (compute);
+    assert(truncated_quietly(conn_after(ee_partial_record().0))) by (compute);
+    // Further in, with part of the Certificate buffered: the A.1 state stays where it was.
+    assert(conn_wait_cert_cr_fragment().handshake.state == ClientState::WaitCertCr) by (compute);
+    assert(conn_wait_cert_cr_fragment().handshake_fragments.len() == 4) by (compute);
+    assert(truncated_quietly(conn_wait_cert_cr_fragment())) by (compute);
+    // After our own close_notify during the handshake: still truncation, nothing written.
+    assert(truncated_quietly(conn_wait_ee_write_closed())) by (compute);
+    // The application may still close its write side: a close_notify under the client's
+    // handshake keys (A.1's note), which is its choice, not done for it.
+    assert(close_write_side(toy_primitives(), end_progress(receive_transport_end(conn_wait_ee())).connection).0
+        == seq![protect_record(toy_primitives(),
+            traffic_state(toy_primitives(), conn_wait_ee().handshake.client_handshake_traffic_secret), ct_alert(), seq![1u8, 0])]) by (compute);
+}
+
+/// §6.1: the end of the transport in CONNECTED, before any close_notify of the peer's.
+proof fn transport_end_connected()
+{
+    // Nothing pending: truncation, not end-of-data, no alert.
+    assert(truncated_quietly(conn_connected())) by (compute);
+    // An incomplete application data record pending: nothing of it is delivered.
+    assert(ap_partial_record().1.len() == 8) by (compute);
+    assert((ap_partial_record().0->Continue_0).application_data == no_bytes()) by (compute);
+    assert(truncated_quietly(conn_after(ap_partial_record().0))) by (compute);
+    // The write side is untouched: data can still be sent, and the close_notify comes
+    // only when the application closes its write side.
+    assert(match send_application_data(toy_primitives(), end_progress(receive_transport_end(conn_connected())).connection, seq![9u8]) {
+        SendResult::Sent(records, _) => records.len() == 1,
+        _ => false,
+    }) by (compute);
+    assert(close_write_side(toy_primitives(), end_progress(receive_transport_end(conn_connected())).connection).0
+        == seq![protect_record(toy_primitives(), conn_connected().send->Protected_0, ct_alert(), seq![1u8, 0])]) by (compute);
+    // After our own close_notify only: still truncation, and nothing written.
+    assert(truncated_quietly(conn_write_closed())) by (compute);
+}
+
+/// §6.1: the end of the transport after the peer's close_notify.
+proof fn transport_end_after_close_notify()
+{
+    // CONNECTED: the orderly end, end-of-data, nothing written.
+    assert(ended_in_order(conn_read_closed())) by (compute);
+    // With bytes of a later record pending: ignored.
+    assert(read_closed_partial_record().1.len() == 4) by (compute);
+    assert(ended_in_order(conn_after(read_closed_partial_record().0))) by (compute);
+    // After both close_notifys.
+    assert(ended_in_order(close_write_side(toy_primitives(), conn_read_closed()).1)) by (compute);
+    // During the handshake: the same, and the A.1 state stays.
+    assert(ended_in_order(conn_wait_ee_read_closed())) by (compute);
+    assert(conn_wait_ee_read_closed().handshake.state == ClientState::WaitEe) by (compute);
+    assert(ended_in_order(conn_after(stream_result(conn_wait_sh(), plain(ct_alert(), seq![1u8, 0]))))) by (compute);
+}
+
 } // verus!
