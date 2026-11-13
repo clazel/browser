@@ -380,6 +380,66 @@
 //!   the child window bound the first (items 5.21 to 5.23); the second only
 //!   ever concerns one tab's own drawing.
 
+//!
+//! # Style sheet fetches (phase-5.md item 5.19)
+//!
+//! - **A committed renderer's `FetchStyle { request, url }`** is resolved
+//!   against its committed URL (the URL parser with a base, as `Navigate`)
+//!   and parsed (`FetchFns::parse`), and runs as a fetch of item 3.6's
+//!   transducer, the one navigations use ([`fetch_style`]). Fetch's request
+//!   for a `<link rel=stylesheet>` without `crossorigin` (destination
+//!   "style", mode "no-cors") differs from a navigation's in what the
+//!   transducer does not model (destination, `Sec-Fetch-*`, CORS, which
+//!   "no-cors" does not check) and in its credentials (below); the
+//!   transducer's request and redirect rules are used as they are, and its
+//!   cookie request context stays a navigation's (listed: for a
+//!   credentialed request, which is same-origin with the document, it is
+//!   same-site either way). A `FetchStyle` before the renderer's first commit
+//!   is a disallowed frame (killed), as `Display` and `Title` are.
+//! - **The answer**: `StyleResponse { request, content type }`, `StyleBody`
+//!   frames and `StyleEnd` as one write, or `StyleFailed { request }`, to the
+//!   renderer that asked, under the renderer's own `request` id. A
+//!   `FetchStyle` is refused with `StyleFailed` (nothing started) when the
+//!   renderer has [`max_subfetches_at_once`] (8) in flight, has started
+//!   [`max_subfetches_per_document`] (64) since its last commit, or has used
+//!   [`max_subfetch_serial`] serial numbers; or when the URL does not decode,
+//!   resolve or parse. The renderer's `request` ids are its own: the kernel
+//!   does not require them to be distinct, and answers each fetch under the
+//!   id it was asked with.
+//! - **Credentials per 5.0(h), per hop** ([`credentialed`]): a request whose
+//!   URL is same-origin with the renderer's lock (its origin is the lock, and
+//!   its cookie host the lock's host) is given the kernel's jar, so it
+//!   carries the jar's cookies, and its jar operations (retrieval's update,
+//!   `Set-Cookie` storage) are applied; any other request is given an empty
+//!   jar, so it carries no `Cookie` field, and its operations are dropped.
+//!   Fetch's "no-cors" with credentials "include" would send cookies
+//!   cross-origin too; 5.0(h) chose not to (listed). Each hop of a redirect
+//!   decides for itself, from the transducer's current URL.
+//! - **Sub-fetch state is per renderer and lock-tagged**
+//!   ([`State::subfetches`], [`State::subcounts`]), as 5.18's titles are:
+//!   entries carry the renderer's id and lock, so noninterference compares
+//!   only the observer's entries. A sub-fetch records its tab and its
+//!   partition key (the renderer's domain): its connections are its tab's,
+//!   keyed by its domain, and every connection is new (`Connection: close`
+//!   is one request per connection).
+//! - **Sub-fetch connections are named `(renderer, serial, hop)`**, not by
+//!   [`State::next_conn`]: the outputs are `SubConnect`, `SubSend` and
+//!   `SubClose`, and the shell reports with [`Event::SubNet`]. The serial is
+//!   the renderer's own count of sub-fetches and the hop counts its
+//!   `Connect`s, so no number is shared between domains (a counter shared by
+//!   all renderers would let one domain's sub-fetches change another's
+//!   connection ids, a channel the noninterference theorem would not allow).
+//!   A report on anything but the current connection of a live sub-fetch is
+//!   ignored in full.
+//! - **A navigation ends the old document's sub-fetches.** A commit to the
+//!   same renderer marks its sub-fetches ended and starts a new per-document
+//!   count; a renderer replaced, killed or exited is not live. An ended or
+//!   dead sub-fetch changes nothing and sends nothing from then on; the next
+//!   `Tick` closes its connection and drops it ([`sweep`]). The host gives
+//!   the kernel a `Tick` before every event, so that is at once.
+//! - **A `Tick` fails a sub-fetch** that started [`subfetch_timeout`] (60)
+//!   seconds ago or more: `StyleFailed`, its connection closed.
+
 #[allow(unused_imports)]
 use vstd::prelude::*;
 
@@ -533,6 +593,42 @@ pub struct UserInput {
     pub key: u64,
 }
 
+/// A style sheet fetch in flight (item 5.19).
+pub struct SubFetch {
+    /// The renderer that asked.
+    pub renderer: nat,
+    /// Its lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// The renderer's serial number for it.
+    pub serial: nat,
+    /// The renderer's own id for it, which every answer carries.
+    pub request: u64,
+    /// The renderer's tab, which owns its connections.
+    pub tab: nat,
+    /// The transducer's state.
+    pub fetch: FetchState,
+    /// The connection the transducer last asked for (1 the first; 0 none).
+    pub hop: nat,
+    /// When it started.
+    pub started: int,
+    /// The partition key of its connections: the renderer's domain.
+    pub partition: crate::domain::Domain,
+    /// Whether the renderer's document has since been replaced by a commit.
+    pub ended: bool,
+}
+
+/// A renderer's count of sub-fetches (item 5.19).
+pub struct SubCount {
+    /// The renderer.
+    pub renderer: nat,
+    /// Its lock.
+    pub lock: clazel_origin::spec::Origin,
+    /// Sub-fetches it has started (the next serial number).
+    pub serial: nat,
+    /// Sub-fetches it has started since its last commit.
+    pub in_document: nat,
+}
+
 /// A navigation in flight: the fetch of the URL the tab is navigating to.
 pub struct Navigation {
     /// The URL the tab is navigating to (absolute; what `begin_navigation`
@@ -596,6 +692,10 @@ pub struct State {
     pub viewports: Seq<TabViewport>,
     /// The renderers' titles (item 5.18), at most one per renderer.
     pub titles: Seq<Titled>,
+    /// The style sheet fetches in flight (item 5.19).
+    pub subfetches: Seq<SubFetch>,
+    /// The renderers' counts of style sheet fetches (item 5.19).
+    pub subcounts: Seq<SubCount>,
 }
 
 /// What can happen to the kernel.
@@ -661,6 +761,18 @@ pub enum Event {
         height: u64,
         /// Device pixels per CSS pixel (1 or 2).
         scale: u64,
+    },
+    /// The network shell reports on connection `hop` of sub-fetch `serial`
+    /// of renderer `renderer` (item 5.19).
+    SubNet {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch's serial number.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+        /// What happened to it.
+        input: NetInput,
     },
     /// The user clicked, scrolled or typed on the content area of `tab`
     /// (item 5.18).
@@ -745,6 +857,42 @@ pub enum Output {
         /// The links it displays.
         links: Seq<Seq<u8>>,
     },
+    /// Ask the network shell to open connection `hop` of sub-fetch `serial`
+    /// of renderer `renderer` (item 5.19).
+    SubConnect {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+        /// The host.
+        host: Seq<u8>,
+        /// The port.
+        port: nat,
+        /// Whether to speak TLS on it.
+        tls: bool,
+    },
+    /// Write these octets to that sub-fetch connection (item 5.19).
+    SubSend {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+        /// The octets.
+        bytes: Seq<u8>,
+    },
+    /// Close that sub-fetch connection (item 5.19; harmless if closed).
+    SubClose {
+        /// The renderer.
+        renderer: nat,
+        /// The sub-fetch.
+        serial: nat,
+        /// The connection.
+        hop: nat,
+    },
     /// Send a whole frame to the GPU process paired with renderer `id`
     /// (item 5.18).
     ToGpu {
@@ -787,7 +935,7 @@ pub struct Document {
 
 /// The kernel before anything happens.
 pub open spec fn init_state() -> State {
-    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![] }
+    State { renderers: seq![], jar: seq![], storage: Map::empty(), next_id: 0, conns: seq![], next_conn: 0, now: 0, viewports: seq![], titles: seq![], subfetches: seq![], subcounts: seq![] }
 }
 
 // ---------------------------------------------------------------------
@@ -1180,7 +1328,13 @@ pub open spec fn navigate_tab(urls: UrlFns, s: State, tab: nat, url: Seq<u32>, d
                 Some(lock) => if lock is Tuple && lock == old.lock {
                     // The same origin: the renderer stays and commits again.
                     let r = Renderer { url, pending: None, committed: true, ..old };
-                    (State { renderers: s.renderers.update(i, r), ..s }, seq![
+                    // Item 5.19: the old document's sub-fetches end.
+                    (State {
+                        renderers: s.renderers.update(i, r),
+                        subfetches: end_subfetches(s.subfetches, old.id, old.lock),
+                        subcounts: new_document_counts(s.subcounts, old.id, old.lock),
+                        ..s
+                    }, seq![
                         Output::ToRenderer { id: old.id, bytes: commit_frames(url, doc) },
                     ])
                 } else {
@@ -1771,6 +1925,283 @@ pub open spec fn from_gpu(s: State, id: nat, bytes: Seq<u8>) -> (State, Seq<Outp
     }
 }
 
+// ---------------------------------------------------------------------
+// Style sheet fetches (phase-5.md item 5.19).
+// ---------------------------------------------------------------------
+
+/// The most sub-fetches one renderer has in flight at once.
+pub open spec fn max_subfetches_at_once() -> nat {
+    8
+}
+
+/// The most sub-fetches one document starts (a commit starts a new count).
+pub open spec fn max_subfetches_per_document() -> nat {
+    64
+}
+
+/// The most sub-fetches one renderer starts in its life (its serial numbers
+/// are below this; the exec kernel's are `u64`s).
+pub open spec fn max_subfetch_serial() -> nat {
+    0xFFFF_FFFF_FFFF_FFFFnat
+}
+
+/// A sub-fetch fails at the first `Tick` at least this many seconds after it
+/// started.
+pub open spec fn subfetch_timeout() -> int {
+    60
+}
+
+/// The renderer's count of sub-fetches: `serial` started in its life (the
+/// next one's serial number) and `in_document` started since its last
+/// commit.
+pub open spec fn subcount_of(cs: Seq<SubCount>, id: nat, lock: clazel_origin::spec::Origin) -> (nat, nat)
+    decreases cs.len(),
+{
+    if cs.len() == 0 {
+        (0, 0)
+    } else if cs[0].renderer == id && cs[0].lock == lock {
+        (cs[0].serial, cs[0].in_document)
+    } else {
+        subcount_of(cs.drop_first(), id, lock)
+    }
+}
+
+/// `cs` with the counts of renderer `id` locked to `lock` set.
+pub open spec fn set_subcount(cs: Seq<SubCount>, id: nat, lock: clazel_origin::spec::Origin, serial: nat, in_document: nat) -> Seq<SubCount> {
+    cs.filter(|c: SubCount| !(c.renderer == id && c.lock == lock)).push(SubCount { renderer: id, lock, serial, in_document })
+}
+
+/// `cs` with the document count of renderer `id` locked to `lock` back to
+/// zero: a commit starts a new document.
+pub open spec fn new_document_counts(cs: Seq<SubCount>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<SubCount> {
+    cs.map_values(|c: SubCount| if c.renderer == id && c.lock == lock { SubCount { in_document: 0, ..c } } else { c })
+}
+
+/// `fs` with the sub-fetches of renderer `id` locked to `lock` ended: a
+/// commit ends the old document's sub-fetches. An ended one changes nothing
+/// and sends nothing; the next `Tick` closes its connection and drops it.
+pub open spec fn end_subfetches(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin) -> Seq<SubFetch> {
+    fs.map_values(|f: SubFetch| if f.renderer == id && f.lock == lock { SubFetch { ended: true, ..f } } else { f })
+}
+
+/// The number of sub-fetches of renderer `id` locked to `lock` in flight
+/// (not ended).
+pub open spec fn live_subfetches(fs: Seq<SubFetch>, id: nat, lock: clazel_origin::spec::Origin) -> nat
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        0
+    } else {
+        (if fs[0].renderer == id && fs[0].lock == lock && !fs[0].ended { 1nat } else { 0nat }) + live_subfetches(fs.drop_first(), id, lock)
+    }
+}
+
+/// The index of the sub-fetch of renderer `id` with serial `serial`, from
+/// `i`.
+pub open spec fn find_subfetch(fs: Seq<SubFetch>, id: nat, serial: nat, i: nat) -> Option<int>
+    decreases fs.len() - i,
+{
+    if i >= fs.len() {
+        None
+    } else if fs[i as int].renderer == id && fs[i as int].serial == serial {
+        Some(i as int)
+    } else {
+        find_subfetch(fs, id, serial, i + 1)
+    }
+}
+
+/// Whether a request to `url` by a document locked to `lock` carries
+/// credentials (5.0(h)): its URL's origin is the lock, and its cookie host is
+/// the lock's host (the second holds of every same-origin URL in the shipped
+/// instantiation; it is stated so that the cookies a sub-fetch reads and
+/// writes are visibly the lock's, for every `FetchFns`).
+pub open spec fn credentialed(fetch: FetchFns, lock: clazel_origin::spec::Origin, url: clazel_url::url::spec::Url) -> bool {
+    (fetch.urls.origin)(url) == lock && ((fetch.urls.request_url)(url)).host == lock_host(lock)
+}
+
+/// The jar a sub-fetch's step is given: the kernel's if its current request
+/// carries credentials, none otherwise.
+pub open spec fn subfetch_jar(fetch: FetchFns, s: State, f: SubFetch) -> Seq<clazel_cookie::storage::spec::Cookie> {
+    if credentialed(fetch, f.lock, f.fetch.url) {
+        s.jar
+    } else {
+        seq![]
+    }
+}
+
+/// The `StyleBody` frames of `body`, in order: consecutive pieces of at most
+/// `max_style_chunk` octets, none for an empty body.
+pub open spec fn style_body_frames(request: u64, body: Seq<u8>) -> Seq<u8>
+    decreases body.len(),
+{
+    if body.len() == 0 {
+        seq![]
+    } else if body.len() <= clazel_ipc::message::spec::max_style_chunk() {
+        reply_frame(clazel_ipc::message::spec::Message::StyleBody { request, bytes: body })
+    } else {
+        reply_frame(clazel_ipc::message::spec::Message::StyleBody { request, bytes: body.take(clazel_ipc::message::spec::max_style_chunk() as int) })
+            + style_body_frames(request, body.skip(clazel_ipc::message::spec::max_style_chunk() as int))
+    }
+}
+
+/// The frames of a fetched sheet: `StyleResponse`, the `StyleBody` frames and
+/// `StyleEnd`, as one write.
+pub open spec fn style_frames(request: u64, doc: Document) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::StyleResponse { request, content_type: doc.content_type }) + style_body_frames(request, doc.body)
+        + reply_frame(clazel_ipc::message::spec::Message::StyleEnd { request })
+}
+
+/// The frame of `StyleFailed`.
+pub open spec fn style_failed_frame(request: u64) -> Seq<u8> {
+    reply_frame(clazel_ipc::message::spec::Message::StyleFailed { request })
+}
+
+/// The outputs of a sub-fetch's transducer actions, on connection `hop` of
+/// sub-fetch `serial` of renderer `id`: the connection the last `Connect`
+/// gave, the outputs, and the frames to the renderer if the fetch ended
+/// (`Done` or `Fail`; nothing after it is read).
+pub open spec fn sub_actions(id: nat, serial: nat, request: u64, hop: nat, actions: Seq<NetAction>) -> (nat, Seq<Output>, Option<Seq<u8>>)
+    decreases actions.len(),
+{
+    if actions.len() == 0 {
+        (hop, seq![], None)
+    } else {
+        let rest = actions.drop_first();
+        match actions[0] {
+            clazel_fetch::transducer::spec::Action::Connect { host, port, tls } => {
+                let (h, out, end) = sub_actions(id, serial, request, hop + 1, rest);
+                (h, seq![Output::SubConnect { renderer: id, serial, hop: hop + 1, host, port, tls }] + out, end)
+            },
+            clazel_fetch::transducer::spec::Action::Send(bytes) => {
+                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                (h, seq![Output::SubSend { renderer: id, serial, hop, bytes }] + out, end)
+            },
+            clazel_fetch::transducer::spec::Action::Close => {
+                let (h, out, end) = sub_actions(id, serial, request, hop, rest);
+                (h, seq![Output::SubClose { renderer: id, serial, hop }] + out, end)
+            },
+            clazel_fetch::transducer::spec::Action::Done { url, response } => (hop, seq![], Some(style_frames(request, response_document(response)))),
+            clazel_fetch::transducer::spec::Action::Fail(_) => (hop, seq![], Some(style_failed_frame(request))),
+        }
+    }
+}
+
+/// `fs` with the entry at `k` replaced by `f`, or removed if the fetch
+/// ended; and the outputs, the frames to the renderer last.
+pub open spec fn sub_finish(fs: Seq<SubFetch>, k: int, f: SubFetch, out: Seq<Output>, end: Option<Seq<u8>>) -> (Seq<SubFetch>, Seq<Output>) {
+    match end {
+        None => (fs.update(k, f), out),
+        Some(frames) => (fs.remove(k), out + seq![Output::ToRenderer { id: f.renderer, bytes: frames }]),
+    }
+}
+
+/// A committed renderer's `FetchStyle { request, url }` (item 5.19): refused
+/// with `StyleFailed` past a limit or for a URL that does not decode,
+/// resolve or parse; otherwise a sub-fetch is started by the transducer
+/// navigations use, in the renderer's table, on connections of its tab
+/// whose partition key is its domain.
+pub open spec fn fetch_style(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, r: Renderer, request: u64, url: Seq<u8>) -> (State, Seq<Output>) {
+    let (serial, in_document) = subcount_of(s.subcounts, r.id, r.lock);
+    let refused = (s, reply(r, clazel_ipc::message::spec::Message::StyleFailed { request }));
+    if live_subfetches(s.subfetches, r.id, r.lock) >= max_subfetches_at_once() || in_document >= max_subfetches_per_document() || serial
+        >= max_subfetch_serial() {
+        refused
+    } else {
+        match clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
+            None => refused,
+            Some(relative) => match (urls.resolve)(r.url, relative) {
+                None => refused,
+                Some(resolved) => match (fetch.parse)(resolved) {
+                    None => refused,
+                    Some(parsed) => {
+                        let (fs, actions) = clazel_fetch::transducer::spec::start(parsed);
+                        let f = SubFetch {
+                            renderer: r.id,
+                            lock: r.lock,
+                            serial,
+                            request,
+                            tab: r.tab,
+                            fetch: fs,
+                            hop: 0,
+                            started: s.now,
+                            partition: crate::domain::domain_of_renderer(rules, r),
+                            ended: false,
+                        };
+                        let (hop, out, end) = sub_actions(r.id, serial, request, 0, actions);
+                        let counts = set_subcount(s.subcounts, r.id, r.lock, serial + 1, in_document + 1);
+                        let (table, outs) = sub_finish(s.subfetches.push(f), s.subfetches.len() as int, SubFetch { hop, ..f }, out, end);
+                        (State { subfetches: table, subcounts: counts, ..s }, outs)
+                    },
+                },
+            },
+        }
+    }
+}
+
+/// Sub-fetch `f`'s renderer is live, committed and locked to its lock, and
+/// `f` has not ended: `f` belongs to the renderer's current document.
+pub open spec fn subfetch_live(s: State, f: SubFetch) -> bool {
+    !f.ended && match find_by_id(s.renderers, f.renderer, 0) {
+        Some(i) => s.renderers[i].lock == f.lock && s.renderers[i].committed,
+        None => false,
+    }
+}
+
+/// `SubNet { renderer, serial, hop, input }` (item 5.19): the network shell
+/// reports on connection `hop` of a sub-fetch. Anything but the current
+/// connection of a live sub-fetch is ignored in full. Otherwise the
+/// transducer steps with the kernel's jar if the current request carries
+/// credentials and with no jar if not; its jar operations are applied only
+/// in the first case.
+pub open spec fn sub_net(rules: Seq<clazel_psl::spec::Rule>, fetch: FetchFns, s: State, renderer: nat, serial: nat, hop: nat, input: NetInput) -> (State, Seq<Output>) {
+    match find_subfetch(s.subfetches, renderer, serial, 0) {
+        None => (s, seq![]),
+        Some(k) => {
+            let f = s.subfetches[k];
+            if !subfetch_live(s, f) || hop == 0 || f.hop != hop {
+                (s, seq![])
+            } else {
+                let cred = credentialed(fetch, f.lock, f.fetch.url);
+                let (fs, actions, ops) = clazel_fetch::transducer::spec::step(fetch.http, fetch.urls, f.fetch, input, subfetch_jar(fetch, s, f), s.now);
+                let jar = if cred { apply_net_ops(rules, s.jar, ops) } else { s.jar };
+                let (h, out, end) = sub_actions(renderer, serial, f.request, hop, actions);
+                let (table, outs) = sub_finish(s.subfetches, k, SubFetch { fetch: fs, hop: h, ..f }, out, end);
+                (State { subfetches: table, jar, ..s }, outs)
+            }
+        },
+    }
+}
+
+/// What a `Tick` does to the sub-fetches (item 5.19): one that is no longer
+/// live has its connection closed and is dropped; one that started
+/// [`subfetch_timeout`] seconds ago or more fails (its connection closed,
+/// `StyleFailed` to its renderer) and is dropped; the others stay.
+pub open spec fn sweep(s: State, fs: Seq<SubFetch>) -> (Seq<SubFetch>, Seq<Output>)
+    decreases fs.len(),
+{
+    if fs.len() == 0 {
+        (seq![], seq![])
+    } else {
+        let f = fs[0];
+        let (rest, out) = sweep(s, fs.drop_first());
+        let close = if f.hop > 0 { seq![Output::SubClose { renderer: f.renderer, serial: f.serial, hop: f.hop }] } else { seq![] };
+        if !subfetch_live(s, f) {
+            (rest, close + out)
+        } else if s.now >= f.started + subfetch_timeout() {
+            (rest, close + seq![Output::ToRenderer { id: f.renderer, bytes: style_failed_frame(f.request) }] + out)
+        } else {
+            (seq![f] + rest, out)
+        }
+    }
+}
+
+/// `Tick(time)`: [`tick`], then [`sweep`] at the new time.
+pub open spec fn tick_all(s: State, time: int) -> (State, Seq<Output>) {
+    let s1 = tick(s, time).0;
+    let (table, out) = sweep(s1, s1.subfetches);
+    (State { subfetches: table, ..s1 }, out)
+}
+
 /// The message in a frame a renderer sent: it must decode, and be one a
 /// renderer may send.
 pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
@@ -1785,7 +2216,7 @@ pub open spec fn decode_renderer_frame(bytes: Seq<u8>) -> Option<clazel_ipc::mes
 /// is committed.
 pub open spec fn accepted_message(r: Renderer, bytes: Seq<u8>) -> Option<clazel_ipc::message::spec::Message> {
     match decode_renderer_frame(bytes) {
-        Some(m) => if (m is Display || m is Title) && !r.committed { None } else { Some(m) },
+        Some(m) => if (m is Display || m is Title || m is FetchStyle) && !r.committed { None } else { Some(m) },
         None => None,
     }
 }
@@ -1855,6 +2286,8 @@ pub open spec fn handle_message(
         clazel_ipc::message::spec::Message::Display { title, text, links } => (s, seq![Output::Show { tab: r.tab, url: r.url, title, text, links }]),
         // Item 5.18: the renderer's title, kept for its `Paint`s.
         clazel_ipc::message::spec::Message::Title { title } => (State { titles: set_title(s.titles, r.id, r.lock, title), ..s }, seq![]),
+        // Item 5.19.
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => fetch_style(rules, urls, fetch, s, r, request, url),
         // A message a renderer may not send: unreachable, see
         // `decode_renderer_frame`.
         _ => (s, seq![]),
@@ -1890,7 +2323,8 @@ pub open spec fn step(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: F
         Event::NavigateTab { tab, url } => begin_navigation(rules, urls, fetch, s, tab, url),
         Event::Net { conn, input } => net(rules, urls, fetch, s, conn, input),
         Event::RendererExited { id } => renderer_exited(s, id),
-        Event::Tick { time } => tick(s, time),
+        Event::Tick { time } => tick_all(s, time),
+        Event::SubNet { renderer, serial, hop, input } => sub_net(rules, fetch, s, renderer, serial, hop, input),
         Event::FromGpu { id, bytes } => from_gpu(s, id, bytes),
         Event::Resize { tab, width, height, scale } => resize(s, tab, Viewport { width, height, scale }),
         Event::Input { tab, input } => user_input(s, tab, input),
