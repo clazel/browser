@@ -339,14 +339,51 @@ starting through `Gpu::start`, and were not run again under Miri here.
   `driverVersion` decoding) and DXGI's adapter description and driver version, with
   those backends. Metal's driver version (the OS version) would need a new audited
   `clazel-sys` call.
-- **The GPU process's sandbox** (item 5.21a), whose kill at start counts as a
-  refusal; lavapipe's profile without device access.
+- **The GPU process's sandbox**: macOS is below (item 5.21a); a sandbox's kill at
+  start counting as a refusal, and lavapipe's profile without device access, wait
+  for the GPU process and the Linux backend.
 - **The host's side**: `browse --gpu=software|hardware` and the warning, the
   software indicator in the address bar strip, and the notice in the content area
   (items 5.18 and 5.23).
 - **The test through real processes** (a GPU process killed mid-frame): it needs the
   GPU process's binary and the kernel's side (5.18, 5.21a, 5.26).
 - **Counts across runs**: until item 3.10's store exists.
+
+## Item 5.21a: the GPU process's sandbox
+
+The policies are data in `clazel-sandbox` (its README has every OS, the measurement
+and how this sandbox is weaker than the renderer's). What this crate adds is the
+order the macOS GPU process enters it in, `sandbox::start_metal`:
+
+1. make the Metal backend: the device, its queue and the one fixed pipeline,
+   compiled from `shaders/quad.metal`;
+2. enter `clazel_sandbox::seatbelt::gpu_profile()`, which is `(deny default)`
+   and nothing else, through `clazel_sys::macos::sandbox_init_profile`;
+3. only then `Gpu::start` (the blocklist) and the first message.
+
+No byte from a page reaches the process before step 2. An error in either step ends
+the GPU process before `GpuReady`, which the crash policy counts as a refusal.
+
+**Measured** (Apple M1 Pro, macOS 26.7.2, 2026-11-13). `tests/sandbox_macos.rs`
+is `harness = false` and runs itself again as a child for each check. It shows:
+- every scene drawn after step 2 equals the unsandboxed control and the reference,
+  with no denial in the system log;
+- entering before step 1 leaves Metal no device;
+- reading or creating a file, listing the home directory, a TCP connection, a UDP
+  bind, a Unix-socket connection, reaching the WindowServer, `fork` and starting a
+  program are each allowed unsandboxed and denied inside.
+
+It opens no window and takes no focus. It waits for every child, with a two-minute
+limit, and leaves nothing running. A missing Metal device is a skip, except under
+CI; under Miri it does nothing.
+
+**Not measured:**
+- other Macs and macOS versions;
+- a long-running or memory-starved GPU process;
+- the Mach port that will bring the host's surfaces (item 5.18).
+
+Linux and Windows have no GPU backend yet, so nothing in this crate enters their
+policies.
 
 ## How Metal is reached: dispatcher casts
 
