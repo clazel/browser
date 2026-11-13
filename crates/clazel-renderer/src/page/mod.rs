@@ -340,6 +340,34 @@ impl Page {
         self.scroll = clamp_scroll(self.scroll, height, i64::from(view.height));
     }
 
+    /// The client rectangles of every element and text node (item 5.25's
+    /// geometry comparison, `clazel_layout::rects`), laid out for `view` in
+    /// `fonts` exactly as [`Page::lay_out`] lays out; empty while sheets are
+    /// awaited.
+    pub fn client_rects(&self, view: View, fonts: &Fonts) -> Vec<clazel_layout::rects::ClientRect> {
+        if !self.ready() {
+            return Vec::new();
+        }
+        let (cw, ch) = view.css();
+        let device = Device::screen(cw, ch);
+        let sheets = ua::sheets().for_document(&self.arena);
+        let table = cascade_with(&sheets, &self.arena, &self.wait.sources, device);
+        let tree = build(&self.arena, &table);
+        let text = Text::of(fonts, &table.families);
+        let px64 = |v: u32| i32::try_from(i64::from(v).saturating_mul(64)).unwrap_or(i32::MAX);
+        let frags = layout(
+            &tree,
+            &self.arena,
+            &table,
+            &text,
+            CssViewport {
+                width: px64(cw),
+                height: px64(ch),
+            },
+        );
+        clazel_layout::rects::client_rects(&frags, &tree, &self.arena, &table, &text)
+    }
+
     /// The page's display list, once laid out.
     pub fn list(&self) -> Option<&DisplayList> {
         self.laid.as_ref().map(|l| &l.list)

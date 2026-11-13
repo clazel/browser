@@ -15,7 +15,9 @@
 //! table layout (item 5.15, [`table`]): the grid, column widths, row
 //! heights and cell alignment of tables (CSS 2.1 §17, CSS Tables 3); and
 //! paint (item 5.16, [`paint`]): the fragment tree to a display list in
-//! CSS 2.1 Appendix E.2's order, with the hit regions of links.
+//! CSS 2.1 Appendix E.2's order, with the hit regions of links; and the
+//! client rectangles of every element and text node as JSON ([`rects`],
+//! item 5.25's geometry comparison).
 //!
 //! Tier: see `[package.metadata.clazel]` in `Cargo.toml` and
 //! `docs/VERIFICATION.md`.
@@ -24,6 +26,7 @@ pub mod boxes;
 pub mod flow;
 pub mod fonts;
 pub mod paint;
+pub mod rects;
 pub mod shape;
 pub mod table;
 pub mod text;

@@ -361,3 +361,57 @@ fn the_sheet_wait() {
     fetch.answer(0, None, Encoding::Utf8);
     assert!(fetch.ready() && fetch.invariant());
 }
+
+/// The HN-shaped fixture (`crates/clazel/tests/fixtures/hn/`) through the
+/// pipeline's layout at 800 by 600 to client rectangles (item 5.25's
+/// geometry dump): its outer table is 85% of the body's content width or
+/// its min-content width, whichever is larger; the dump reads back from its JSON, and compared with
+/// itself every rectangle is within the tolerance. (Its sheet is linked, so
+/// it waits for item 5.19; the page is laid out without it.)
+#[test]
+fn the_fixture_to_client_rects() {
+    use clazel_layout::rects::{Meta, RectKind, compare, from_json, to_json};
+    let html = include_str!("../../../clazel/tests/fixtures/hn/index.html");
+    let page = super::Page::load(b"http://fixture.test/", b"text/html", html.as_bytes());
+    let Some(view) = super::View::new(800, 600, 1) else {
+        return;
+    };
+    let rects = page.client_rects(view, &fonts());
+    assert!(rects.len() > 100, "{}", rects.len());
+    let frame = rects
+        .iter()
+        .find(|r| r.kind == RectKind::Element && r.name == "table");
+    // §3.9.1: the larger of 85% of the body's 784px (666.40625px) and the
+    // table's min-content width. With no sheet the remark form's
+    // `textarea cols=80` is wider than 85%, and the outer table has no
+    // spacing, padding or border, so it is exactly the textarea's width.
+    let textarea = rects
+        .iter()
+        .find(|r| r.kind == RectKind::Element && r.name == "textarea")
+        .map_or(0, |r| r.rect.width);
+    assert!(textarea > 42_650);
+    assert_eq!(frame.map(|r| r.rect.width), Some(textarea.max(42_650)));
+    let texts = rects.iter().filter(|r| r.kind == RectKind::Text).count();
+    assert!(texts > 50, "{texts}");
+    let meta = Meta {
+        name: "clazel".to_owned(),
+        version: "0.0.0".to_owned(),
+        date: "2026-11-13".to_owned(),
+        viewport: (800, 600, 1),
+    };
+    let json = to_json(&rects, &meta);
+    let read = from_json(&json);
+    assert!(read.is_some(), "the dump does not read back");
+    let Some((_, back)) = read else { return };
+    assert_eq!(back, rects);
+    let report = compare(&rects, &back);
+    assert_eq!(
+        (
+            report.compared,
+            report.outside,
+            report.missing,
+            report.extra
+        ),
+        (rects.len(), 0, 0, 0)
+    );
+}
