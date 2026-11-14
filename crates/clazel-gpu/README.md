@@ -11,7 +11,7 @@ The list comes from a renderer the GPU process must assume is compromised.
 decoder and validator (item 5.17a) before anything here reads them, and
 `theorem_validated_bounds` is all this crate relies on. Every step is still checked
 and fails with an `Error` rather than a panic; any error ends the GPU process, and
-what happens next is item 5.17c's.
+what happens next is the crash policy's (item 5.17c, below).
 
 ## What is built
 
@@ -38,6 +38,9 @@ what happens next is item 5.17c's.
   from what the GLSL compiles to. The MSL was compiled once by Metal on this machine
   (Apple M1 Pro) with a throwaway script; nothing in the repository runs it yet.
 - **Kani harnesses** (`src/proofs.rs`), listed below.
+- **Item 5.17c** (its own section below): the driver blocklist (`data/blocklist`,
+  `src/blocklist.rs`), the start that checks it before any list (`src/start.rs`,
+  `Gpu::start`), and the crash policy for the kernel (`src/policy.rs`).
 
 ## Decisions
 
@@ -181,6 +184,206 @@ information, not noise.
 - **Intel Macs** are not supported by the Metal backend (shared-storage textures and
   `BOOL` as `bool` are Apple silicon's).
 - **The shared buffers and the process boundary** are items 5.18 and 5.21a.
+- **`Gpu::new` is gone** (item 5.17c): `Gpu::start` checks the blocklist first.
+
+## Item 5.17c: software fallback, driver blocklist, crash policy
+
+A machine with a missing, blocked or crashing driver must still show pages. What is
+built here, and what waits for other items:
+
+- **The blocklist** (`data/blocklist`, `src/blocklist.rs`): the table ships embedded
+  in the GPU process and starts empty; an entry is added only when a real failure is
+  recorded, with a link to the evidence. It is never updated remotely, and nothing is
+  reported to any server. The format and its parser are ours (rule 8).
+- **The checked start** (`src/start.rs`, `Gpu::start`): the only way to make a
+  `Gpu`. It reads the backend's adapter (`Backend::adapter`) and checks it against
+  the table before any list is read, and answers `Ready { software }` (item 5.18's
+  `GpuReady`) or a `Refusal` (`GpuRefused`, or an exit for a wrong start).
+- **The crash policy** (`src/policy.rs`): the item's four rules as a pure state
+  machine over the kernel's events, with its numbers stated once (`WINDOW_MS` five
+  minutes, `EXITS` and `SITES` three). The plan puts it in the kernel, proven; the
+  kernel has no GPU process until item 5.18, so it is built here with no dependency,
+  for 5.18 to take over (below).
+- **The software path is the same code on a software driver** (5.0(d): no second
+  drawing backend): lavapipe on Linux, WARP on Windows. `SoftBackend` stays a test
+  double and is never a fallback. Neither software driver can be reached yet: the
+  Vulkan and Direct3D 12 backends are item 5.17b's rest.
+
+### Decisions
+
+Taken from the plan (item 5.17c, 5.0(d), 5.21a) where it was silent; each is also
+written at the top of the file that makes it.
+
+- **The table's format** (`src/blocklist.rs`): one entry per line, `<api> <vendor>
+  <device> <drivers> <evidence> <reason>`, printable ASCII and LF only; `api` is
+  `vulkan`, `d3d12` or `metal`; ids are `0x` and 1 to 8 hex digits, the device may
+  be `*`; `drivers` is `*`, one version or `first-last`; `evidence` starts
+  `https://`; the reason is the rest of the line. At most 64 KiB, 1,024 bytes a
+  line and 1,024 entries. Every error names its line.
+- **Versions are four 16-bit parts**, compared in order: Direct3D's driver version
+  exactly. Parts left out are 0 in `first` and 65,535 in `last`, so `470-470.57`
+  covers every 470.57.x. Vulkan's `driverVersion` is encoded per vendor, and its
+  backend will decode it into parts.
+- **An unknown driver version matches only `*`**: an entry with a range is for
+  measured versions, and refusing a device whose version cannot be read would block
+  it on a guess.
+- **Software adapters are never checked**: the software driver is the fallback, and
+  the one CI tests.
+- **An unreadable table refuses the device** (fails closed, as `GpuRefused`); a unit
+  test parses the shipped table, so no shipped build reaches it.
+- **Metal is described as Apple's vendor id, no device id, no driver version.**
+  Apple silicon has no PCI device id, and the `clazel-sys` wrappers read neither the
+  device's name nor the OS version without new foreign calls, which this item does
+  not add (`clazel-sys` is unchanged). A Metal entry can only use `*` for device and
+  drivers; with no fallback on macOS, a refused Metal device shows the notice.
+- **The kernel chooses the mode.** A process started for hardware that finds only a
+  software adapter draws with it and says `software: true`, so the indicator shows;
+  one started for software that finds hardware exits (a wrong start).
+- **`--gpu=hardware` skips the blocklist and nothing else**: the crash policy still
+  applies. `--gpu=software` starts every tab in software, or on macOS shows every tab
+  the notice.
+- **The crash policy lives here until 5.18.** It is a pure module with no
+  dependency, its rules tested row by row and its step checked by Kani; 5.18 states
+  it in the kernel's spec and proves the plan's three theorems there, with certified
+  mutations.
+- **Time is the host's monotonic clock in milliseconds**, given with each event; a
+  time earlier than one recorded counts as no time passed.
+- **A refusal is the machine's**: `GpuRefused`, or an exit before `GpuReady` in
+  hardware, puts every tab in software. No page has reached a process before
+  `GpuReady`, so a page cannot cause it, and these exits are not counted by site. A
+  `GpuRefused` at any other time is ignored (the kernel ends that process, and its
+  exit counts normally).
+- **Every-tab demotion takes effect at each tab's next start**: no running process is
+  ended for it, so an exit changes no other tab's state or output.
+- **Only hardware exits are counted by site**, keeping the two most recent distinct
+  sites; before demotion no three sites have exits in one window, so with a
+  monotonic clock that is enough.
+- **The window counts each tab's last two exits in its current mode**; the third
+  within five minutes moves it on, and a change of mode starts the count afresh.
+  "Software also fails three times" is read the same way, within five minutes.
+- **A reload of a stopped tab** starts it with two exits recorded at the reload, so
+  one more exit within five minutes moves it on again; a same-site navigation does
+  not restart a stopped tab, another site does.
+- **Exits of a replaced process are the kernel's to drop**: `Exited` is for the
+  tab's current process; 5.18 gives processes ids and restates the paint theorems
+  over restarts.
+
+### Evidence
+
+Unit tests: the blocklist (the shipped table parses and is empty; every field;
+hostile text: tabs, CR, non-ASCII, NUL, DEL, every malformed field, empty ranges,
+the three limits; matching at both ends of a range, wildcards, unknown versions,
+software adapters, first match; pseudo-random bytes and every one-byte change of a
+good line never panic and yield only well-formed entries), the start (every answer),
+the crash policy (every transition, as rows: open, ready, refused, exits before and
+after `GpuReady`, rules 1 to 4 with and without a fallback, sites in and out of the
+window, software exits, a clock going back, navigation, reload, close, unknown tabs;
+an hour of crashes giving exactly five restarts; 20,000 pseudo-random events per
+platform checking containment, the invariants and the site rule at every step), and
+the plan's test "a fake adapter matching a blocklist entry falls to software": a fake
+device the table lists is refused before any list, the policy starts the tab in
+software, and every scene drawn there equals the reference. `tests/metal.rs` now
+starts through the shipped blocklist.
+
+Kani (`src/proofs.rs`), each harness alone with the caps above:
+
+| Harness | Covers | Result | Verification time | Wall time | Peak memory |
+|---------|--------|--------|-------------------|-----------|-------------|
+| `matches_any` | every entry and adapter | passed, 254 checks | 0.70 s | 5 s | < 0.01 GB |
+| `note_exit_any` | one exit from any shared state meeting the invariant | passed, 255 checks | 0.72 s | 5 s | < 0.01 GB |
+| `tab_step_any` | any event, any tab and shared state meeting the invariants, any time | passed, 728 checks | 1.97 s | 5 s | < 0.01 GB |
+| `version_parse_any` | any input up to 8 bytes | passed, 236 checks | 30.6 s | 36 s | 1.38 GB |
+| `hex_any` | any input up to 10 bytes | passed, 193 checks | 10.8 s | 15 s | 0.26 GB |
+| `drivers_parse_any` | any input up to 7 bytes | passed, 384 checks | 70.7 s | 75 s | 2.77 GB |
+| `policy_contained_any` | any event, two tabs in any state meeting the invariant | passed, 1,428 checks | 52.2 s | 55 s | 4.62 GB |
+
+None reached a cap, and none was removed.
+
+Proved for every size: the matcher (`Entry::matches`, any entry and adapter), the
+site rule (`Shared::note_exit`) and one tab's step (`Tab::step`), both from any state
+meeting the invariants, so for any number of tabs and any history before the step.
+Bounded: `Version::parse` (inputs up to 8 bytes), `parse_hex` (10), `Drivers::parse`
+(7); the policy's containment over two tabs (its step only finds the event's tab and
+steps it, which `tab_step_any` covers for every state). Not proved by Kani: a whole
+table's parse (covered by the tests above).
+
+Miri, each test alone with a 10-minute cap:
+
+| Test | Time |
+|------|------|
+| `blocklist::tests::limits_are_kept` | 63.5 s |
+| `tests::a_listed_fake_adapter_falls_to_software` | 42.0 s (the first scene only under Miri; every scene runs there on its own) |
+| `tests::bad_lists_are_refused_before_drawing` (now through `Gpu::start`) | 14.5 s |
+| `policy::tests::every_step_is_contained` | 8.5 s (300 events a platform under Miri, 20,000 otherwise) |
+| `blocklist::tests::arbitrary_bytes_never_panic` | 4.4 s (40 random inputs and every ninth byte under Miri, 4,000 and every byte otherwise) |
+| `policy::tests::a_tab_crashing_forever_restarts_five_times` | 2.2 s |
+| `blocklist::tests::hostile_text_is_refused_with_its_line` | 0.78 s |
+| `blocklist::tests::the_shipped_table_parses_and_is_empty` | 0.54 s |
+| the other 28 new tests | under 0.2 s each |
+
+Times are Miri's clock (`--report-time`). The other scene tests changed only in
+starting through `Gpu::start`, and were not run again under Miri here.
+
+### Not done, and what each waits for
+
+- **The kernel's policy and its theorems** (`theorem_gpu_exit_contained`,
+  `theorem_gpu_restart_bounded`, `theorem_site_cannot_demote_others`, with certified
+  mutations): item 5.18, which adds the GPU process, `GpuExited`, `GpuReady` and
+  `GpuRefused` to the kernel. `src/policy.rs` is the machine to state there.
+- **The software drivers**: lavapipe through the Vulkan backend, WARP through the
+  Direct3D 12 backend (item 5.17b's rest). Shipping lavapipe at CI's pinned version,
+  selecting it through the loader's driver-file setting, its measured size, its
+  licences, and its rows in `docs/VERIFICATION.md`'s TCB and `docs/DEPENDENCIES.md`
+  come with the release; nothing is shipped yet, so none is written.
+- **Device descriptions**: Vulkan's `VkPhysicalDeviceProperties` (and the per-vendor
+  `driverVersion` decoding) and DXGI's adapter description and driver version, with
+  those backends. Metal's driver version (the OS version) would need a new audited
+  `clazel-sys` call.
+- **The GPU process's sandbox**: macOS is below (item 5.21a); a sandbox's kill at
+  start counting as a refusal, and lavapipe's profile without device access, wait
+  for the GPU process and the Linux backend.
+- **The host's side**: `browse --gpu=software|hardware` and the warning, the
+  software indicator in the address bar strip, and the notice in the content area
+  (items 5.18 and 5.23).
+- **The test through real processes** (a GPU process killed mid-frame): it needs the
+  GPU process's binary and the kernel's side (5.18, 5.21a, 5.26).
+- **Counts across runs**: until item 3.10's store exists.
+
+## Item 5.21a: the GPU process's sandbox
+
+The policies are data in `clazel-sandbox` (its README has every OS, the measurement
+and how this sandbox is weaker than the renderer's). What this crate adds is the
+order the macOS GPU process enters it in, `sandbox::start_metal`:
+
+1. make the Metal backend: the device, its queue and the one fixed pipeline,
+   compiled from `shaders/quad.metal`;
+2. enter `clazel_sandbox::seatbelt::gpu_profile()`, which is `(deny default)`
+   and nothing else, through `clazel_sys::macos::sandbox_init_profile`;
+3. only then `Gpu::start` (the blocklist) and the first message.
+
+No byte from a page reaches the process before step 2. An error in either step ends
+the GPU process before `GpuReady`, which the crash policy counts as a refusal.
+
+**Measured** (Apple M1 Pro, macOS 26.7.2, 2026-11-13). `tests/sandbox_macos.rs`
+is `harness = false` and runs itself again as a child for each check. It shows:
+- every scene drawn after step 2 equals the unsandboxed control and the reference,
+  with no denial in the system log;
+- entering before step 1 leaves Metal no device;
+- reading or creating a file, listing the home directory, a TCP connection, a UDP
+  bind, a Unix-socket connection, reaching the WindowServer, `fork` and starting a
+  program are each allowed unsandboxed and denied inside.
+
+It opens no window and takes no focus. It waits for every child, with a two-minute
+limit, and leaves nothing running. A missing Metal device is a skip, except under
+CI; under Miri it does nothing.
+
+**Not measured:**
+- other Macs and macOS versions;
+- a long-running or memory-starved GPU process;
+- the Mach port that will bring the host's surfaces (item 5.18).
+
+Linux and Windows have no GPU backend yet, so nothing in this crate enters their
+policies.
 
 ## How Metal is reached: dispatcher casts
 

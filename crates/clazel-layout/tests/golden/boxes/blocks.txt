@@ -1,0 +1,579 @@
+#case 0
+#data "<!doctype html><p>foo<address>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <address>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 1
+#data "<!doctype html><address><p>foo</address>bar"
+root
+  block <html>
+    block <body>
+      block <address>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 2
+#data "<!doctype html><p>foo<article>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <article>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 3
+#data "<!doctype html><article><p>foo</article>bar"
+root
+  block <html>
+    block <body>
+      block <article>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 4
+#data "<!doctype html><p>foo<aside>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <aside>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 5
+#data "<!doctype html><aside><p>foo</aside>bar"
+root
+  block <html>
+    block <body>
+      block <aside>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 6
+#data "<!doctype html><p>foo<blockquote>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <blockquote>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 7
+#data "<!doctype html><blockquote><p>foo</blockquote>bar"
+root
+  block <html>
+    block <body>
+      block <blockquote>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 8
+#data "<!doctype html><p>foo<center>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <center>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 9
+#data "<!doctype html><center><p>foo</center>bar"
+root
+  block <html>
+    block <body>
+      block <center>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 10
+#data "<!doctype html><p>foo<details>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block (anonymous)
+        inline <details> first
+          text "bar"
+      block <p>
+        text "baz"
+      block (anonymous)
+        inline <details> last
+
+#case 11
+#data "<!doctype html><details><p>foo</details>bar"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <details> first
+      block <p>
+        text "foo"
+      block (anonymous)
+        inline <details> last
+        text "bar"
+
+#case 12
+#data "<!doctype html><p>foo<dialog>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+
+#case 13
+#data "<!doctype html><dialog><p>foo</dialog>bar"
+root
+  block <html>
+    block <body>
+      text "bar"
+
+#case 14
+#data "<!doctype html><p>foo<dir>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <dir>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 15
+#data "<!doctype html><dir><p>foo</dir>bar"
+root
+  block <html>
+    block <body>
+      block <dir>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 16
+#data "<!doctype html><p>foo<div>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <div>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 17
+#data "<!doctype html><div><p>foo</div>bar"
+root
+  block <html>
+    block <body>
+      block <div>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 18
+#data "<!doctype html><p>foo<dl>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <dl>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 19
+#data "<!doctype html><dl><p>foo</dl>bar"
+root
+  block <html>
+    block <body>
+      block <dl>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 20
+#data "<!doctype html><p>foo<fieldset>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block (anonymous)
+        inline <fieldset> first
+          text "bar"
+      block <p>
+        text "baz"
+      block (anonymous)
+        inline <fieldset> last
+
+#case 21
+#data "<!doctype html><fieldset><p>foo</fieldset>bar"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <fieldset> first
+      block <p>
+        text "foo"
+      block (anonymous)
+        inline <fieldset> last
+        text "bar"
+
+#case 22
+#data "<!doctype html><p>foo<figcaption>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <figcaption>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 23
+#data "<!doctype html><figcaption><p>foo</figcaption>bar"
+root
+  block <html>
+    block <body>
+      block <figcaption>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 24
+#data "<!doctype html><p>foo<figure>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <figure>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 25
+#data "<!doctype html><figure><p>foo</figure>bar"
+root
+  block <html>
+    block <body>
+      block <figure>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 26
+#data "<!doctype html><p>foo<footer>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <footer>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 27
+#data "<!doctype html><footer><p>foo</footer>bar"
+root
+  block <html>
+    block <body>
+      block <footer>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 28
+#data "<!doctype html><p>foo<header>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <header>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 29
+#data "<!doctype html><header><p>foo</header>bar"
+root
+  block <html>
+    block <body>
+      block <header>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 30
+#data "<!doctype html><p>foo<hgroup>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <hgroup>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 31
+#data "<!doctype html><hgroup><p>foo</hgroup>bar"
+root
+  block <html>
+    block <body>
+      block <hgroup>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 32
+#data "<!doctype html><p>foo<listing>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <listing>
+        block (anonymous)
+          text "bar" white-space=Pre
+        block <p>
+          text "baz" white-space=Pre
+
+#case 33
+#data "<!doctype html><listing><p>foo</listing>bar"
+root
+  block <html>
+    block <body>
+      block <listing>
+        block <p>
+          text "foo" white-space=Pre
+      block (anonymous)
+        text "bar"
+
+#case 34
+#data "<!doctype html><p>foo<menu>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <menu>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 35
+#data "<!doctype html><menu><p>foo</menu>bar"
+root
+  block <html>
+    block <body>
+      block <menu>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 36
+#data "<!doctype html><p>foo<nav>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <nav>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 37
+#data "<!doctype html><nav><p>foo</nav>bar"
+root
+  block <html>
+    block <body>
+      block <nav>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 38
+#data "<!doctype html><p>foo<ol>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <ol>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 39
+#data "<!doctype html><ol><p>foo</ol>bar"
+root
+  block <html>
+    block <body>
+      block <ol>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 40
+#data "<!doctype html><p>foo<pre>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <pre>
+        block (anonymous)
+          text "bar" white-space=Pre
+        block <p>
+          text "baz" white-space=Pre
+
+#case 41
+#data "<!doctype html><pre><p>foo</pre>bar"
+root
+  block <html>
+    block <body>
+      block <pre>
+        block <p>
+          text "foo" white-space=Pre
+      block (anonymous)
+        text "bar"
+
+#case 42
+#data "<!doctype html><p>foo<section>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <section>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 43
+#data "<!doctype html><section><p>foo</section>bar"
+root
+  block <html>
+    block <body>
+      block <section>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+
+#case 44
+#data "<!doctype html><p>foo<summary>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block (anonymous)
+        inline <summary> first
+          text "bar"
+      block <p>
+        text "baz"
+      block (anonymous)
+        inline <summary> last
+
+#case 45
+#data "<!doctype html><summary><p>foo</summary>bar"
+root
+  block <html>
+    block <body>
+      block (anonymous)
+        inline <summary> first
+      block <p>
+        text "foo"
+      block (anonymous)
+        inline <summary> last
+        text "bar"
+
+#case 46
+#data "<!doctype html><p>foo<ul>bar<p>baz"
+root
+  block <html>
+    block <body>
+      block <p>
+        text "foo"
+      block <ul>
+        block (anonymous)
+          text "bar"
+        block <p>
+          text "baz"
+
+#case 47
+#data "<!doctype html><ul><p>foo</ul>bar"
+root
+  block <html>
+    block <body>
+      block <ul>
+        block <p>
+          text "foo"
+      block (anonymous)
+        text "bar"
+

@@ -1,0 +1,526 @@
+#case 0
+#data "FOO&gt;BAR"
+root
+  block <html>
+    block <body>
+      text "FOO>BAR"
+
+#case 1
+#data "FOO&gtBAR"
+root
+  block <html>
+    block <body>
+      text "FOO>BAR"
+
+#case 2
+#data "FOO&gt BAR"
+root
+  block <html>
+    block <body>
+      text "FOO> BAR"
+
+#case 3
+#data "FOO&gt;;;BAR"
+root
+  block <html>
+    block <body>
+      text "FOO>;;BAR"
+
+#case 4
+#data "I'm &notit; I tell you"
+root
+  block <html>
+    block <body>
+      text "I'm ¬it; I tell you"
+
+#case 5
+#data "I'm &notin; I tell you"
+root
+  block <html>
+    block <body>
+      text "I'm ∉ I tell you"
+
+#case 6
+#data "&ammmp;"
+root
+  block <html>
+    block <body>
+      text "&ammmp;"
+
+#case 7
+#data "&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;"
+root
+  block <html>
+    block <body>
+      text "&ammmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmp;"
+
+#case 8
+#data "FOO& BAR"
+root
+  block <html>
+    block <body>
+      text "FOO& BAR"
+
+#case 9
+#data "FOO&<BAR>"
+root
+  block <html>
+    block <body>
+      text "FOO&"
+      inline <bar>
+
+#case 10
+#data "FOO&&&&gt;BAR"
+root
+  block <html>
+    block <body>
+      text "FOO&&&>BAR"
+
+#case 11
+#data "FOO&#41;BAR"
+root
+  block <html>
+    block <body>
+      text "FOO)BAR"
+
+#case 12
+#data "FOO&#x41;BAR"
+root
+  block <html>
+    block <body>
+      text "FOOABAR"
+
+#case 13
+#data "FOO&#X41;BAR"
+root
+  block <html>
+    block <body>
+      text "FOOABAR"
+
+#case 14
+#data "FOO&#BAR"
+root
+  block <html>
+    block <body>
+      text "FOO&#BAR"
+
+#case 15
+#data "FOO&#ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO&#ZOO"
+
+#case 16
+#data "FOO&#xBAR"
+root
+  block <html>
+    block <body>
+      text "FOOºR"
+
+#case 17
+#data "FOO&#xZOO"
+root
+  block <html>
+    block <body>
+      text "FOO&#xZOO"
+
+#case 18
+#data "FOO&#XZOO"
+root
+  block <html>
+    block <body>
+      text "FOO&#XZOO"
+
+#case 19
+#data "FOO&#41BAR"
+root
+  block <html>
+    block <body>
+      text "FOO)BAR"
+
+#case 20
+#data "FOO&#x41BAR"
+root
+  block <html>
+    block <body>
+      text "FOO䆺R"
+
+#case 21
+#data "FOO&#x41ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOAZOO"
+
+#case 22
+#data "FOO&#x0000;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 23
+#data "FOO&#x0078;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOxZOO"
+
+#case 24
+#data "FOO&#x0079;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOyZOO"
+
+#case 25
+#data "FOO&#x0080;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO€ZOO"
+
+#case 26
+#data "FOO&#x0081;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{81}ZOO"
+
+#case 27
+#data "FOO&#x0082;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO‚ZOO"
+
+#case 28
+#data "FOO&#x0083;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOƒZOO"
+
+#case 29
+#data "FOO&#x0084;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO„ZOO"
+
+#case 30
+#data "FOO&#x0085;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO…ZOO"
+
+#case 31
+#data "FOO&#x0086;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO†ZOO"
+
+#case 32
+#data "FOO&#x0087;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO‡ZOO"
+
+#case 33
+#data "FOO&#x0088;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOˆZOO"
+
+#case 34
+#data "FOO&#x0089;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO‰ZOO"
+
+#case 35
+#data "FOO&#x008A;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOŠZOO"
+
+#case 36
+#data "FOO&#x008B;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO‹ZOO"
+
+#case 37
+#data "FOO&#x008C;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOŒZOO"
+
+#case 38
+#data "FOO&#x008D;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{8d}ZOO"
+
+#case 39
+#data "FOO&#x008E;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOŽZOO"
+
+#case 40
+#data "FOO&#x008F;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{8f}ZOO"
+
+#case 41
+#data "FOO&#x0090;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{90}ZOO"
+
+#case 42
+#data "FOO&#x0091;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO‘ZOO"
+
+#case 43
+#data "FOO&#x0092;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO’ZOO"
+
+#case 44
+#data "FOO&#x0093;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO“ZOO"
+
+#case 45
+#data "FOO&#x0094;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO”ZOO"
+
+#case 46
+#data "FOO&#x0095;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO•ZOO"
+
+#case 47
+#data "FOO&#x0096;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO–ZOO"
+
+#case 48
+#data "FOO&#x0097;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO—ZOO"
+
+#case 49
+#data "FOO&#x0098;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO˜ZOO"
+
+#case 50
+#data "FOO&#x0099;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO™ZOO"
+
+#case 51
+#data "FOO&#x009A;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOšZOO"
+
+#case 52
+#data "FOO&#x009B;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO›ZOO"
+
+#case 53
+#data "FOO&#x009C;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOœZOO"
+
+#case 54
+#data "FOO&#x009D;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{9d}ZOO"
+
+#case 55
+#data "FOO&#x009E;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOžZOO"
+
+#case 56
+#data "FOO&#x009F;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOOŸZOO"
+
+#case 57
+#data "FOO&#x00A0;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{a0}ZOO"
+
+#case 58
+#data "FOO&#xD7FF;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{d7ff}ZOO"
+
+#case 59
+#data "FOO&#xD800;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 60
+#data "FOO&#xD801;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 61
+#data "FOO&#xDFFE;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 62
+#data "FOO&#xDFFF;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 63
+#data "FOO&#xE000;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{e000}ZOO"
+
+#case 64
+#data "FOO&#x10FFFE;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{10fffe}ZOO"
+
+#case 65
+#data "FOO&#x1087D4;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{1087d4}ZOO"
+
+#case 66
+#data "FOO&#x10FFFF;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO\u{10ffff}ZOO"
+
+#case 67
+#data "FOO&#x110000;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 68
+#data "FOO&#xFFFFFF;ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 69
+#data "FOO&#11111111111"
+root
+  block <html>
+    block <body>
+      text "FOO�"
+
+#case 70
+#data "FOO&#1111111111"
+root
+  block <html>
+    block <body>
+      text "FOO�"
+
+#case 71
+#data "FOO&#111111111111"
+root
+  block <html>
+    block <body>
+      text "FOO�"
+
+#case 72
+#data "FOO&#11111111111ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 73
+#data "FOO&#1111111111ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+
+#case 74
+#data "FOO&#111111111111ZOO"
+root
+  block <html>
+    block <body>
+      text "FOO�ZOO"
+

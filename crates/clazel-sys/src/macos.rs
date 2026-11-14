@@ -1,6 +1,6 @@
 //! macOS: the Seatbelt sandbox (`sandbox_init`), the two escape attempts
-//! the sandbox tests make (`fork`, `ptrace`), `getentropy`, and Metal drawing
-//! for the GPU process ([`metal`]).
+//! the sandbox tests make (`fork`, `ptrace`), `getentropy`, Metal drawing
+//! for the GPU process ([`metal`]) and the host's window ([`window`]).
 //!
 //! `sandbox_init` is deprecated, but it is what Chromium and Firefox still
 //! use, and no replacement exists for a process that is not an App Sandbox
@@ -11,6 +11,9 @@ use std::ffi::{CString, c_char, c_int, c_void};
 /// Metal drawing for the GPU process (phase-5.md item 5.17b), on Apple silicon.
 #[cfg(target_arch = "aarch64")]
 pub mod metal;
+/// The host's window (phase-5.md item 5.21), on Apple silicon.
+#[cfg(target_arch = "aarch64")]
+pub mod window;
 use std::fmt;
 
 use crate::{Errno, RandomError};

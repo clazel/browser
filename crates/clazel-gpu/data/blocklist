@@ -1,0 +1,22 @@
+# The GPU driver blocklist (docs/phases/phase-5.md item 5.17c).
+#
+# It ships with the release, embedded in the GPU process at build time. It is
+# never updated remotely, and nothing is reported to any server. It starts empty:
+# an entry is added only when a real failure is recorded, with a link to the
+# evidence. The format is in crates/clazel-gpu/src/blocklist.rs; in short, one
+# entry per line, fields separated by spaces, the reason last:
+#
+#   <api> <vendor> <device> <drivers> <evidence> <reason>
+#
+#   api       vulkan, d3d12 or metal
+#   vendor    the PCI vendor id, 0x and 1 to 8 hex digits
+#   device    the PCI device id, the same, or * for every device of the vendor
+#   drivers   * for every version, or first-last, or one version; a version is 1
+#             to 4 decimal parts of 0 to 65535 separated by dots; missing parts
+#             of the first version are 0 and of the last 65535, so 470-470.57
+#             covers 470.0.0.0 to 470.57.65535.65535
+#   evidence  an https:// link to the recorded failure
+#   reason    the rest of the line: what goes wrong
+#
+# For example (not an entry):
+#   vulkan 0x10de 0x2204 470-470.57 https://example.org/issue hangs on the first frame

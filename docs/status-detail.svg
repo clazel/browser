@@ -182,8 +182,8 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="756" y="890" font-size="12" class="m b">layout</text>
 <text x="756" y="919" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe</text>
 <rect x="756" y="899" width="108" height="6" rx="3" fill="none" stroke="var(--line)" stroke-dasharray="3 2"/>
-<text x="756" y="932" font-size="10" class="mut">222k cases</text>
-<text x="756" y="943" font-size="10" class="mut">8 Kani harnesses</text>
+<text x="756" y="932" font-size="10" class="mut">261k cases</text>
+<text x="756" y="943" font-size="10" class="mut">26 Kani harnesses</text>
 <rect x="748" y="956" width="124" height="76" rx="6" fill="var(--t0s)" stroke="var(--gap)" stroke-dasharray="4 3"/>
 <text x="756" y="974" font-size="12" class="m b">glyph-mask</text>
 <text x="756" y="1003" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → panic-free</tspan></text>

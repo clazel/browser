@@ -18,6 +18,7 @@
 
 use crate::atlas::texel_index;
 use crate::backend::{Backend, BackendError, Frame, Op};
+use crate::blocklist::{Adapter, Api};
 use crate::geom::Viewport;
 
 /// One channel of premultiplied source-over: colour channel `c`, colour alpha `a`,
@@ -50,12 +51,32 @@ pub struct SoftBackend {
     atlas: Vec<u8>,
     /// How many frames it drew, for tests.
     pub frames: usize,
+    /// The adapter it reports, if not [`SOFT_ADAPTER`].
+    adapter: Option<Adapter>,
 }
+
+/// The adapter the fake backend reports by default: a software driver, which the
+/// blocklist never checks.
+pub const SOFT_ADAPTER: Adapter = Adapter {
+    api: Api::Vulkan,
+    vendor: 0,
+    device: 0,
+    driver: None,
+    software: true,
+};
 
 impl SoftBackend {
     /// A backend with no target yet.
     pub fn new() -> SoftBackend {
         SoftBackend::default()
+    }
+
+    /// A backend reporting `adapter`: a fake device for the blocklist's tests.
+    pub fn with_adapter(adapter: Adapter) -> SoftBackend {
+        SoftBackend {
+            adapter: Some(adapter),
+            ..SoftBackend::default()
+        }
     }
 }
 
@@ -142,6 +163,10 @@ impl Backend for SoftBackend {
         out.clear();
         out.extend_from_slice(&self.target);
         Ok(())
+    }
+
+    fn adapter(&self) -> Adapter {
+        self.adapter.unwrap_or(SOFT_ADAPTER)
     }
 }
 

@@ -4,16 +4,23 @@ version = "0.0.0"
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "Layout (Phase 5): so far font matching (item 5.10), CSS Fonts 3 §5.2 and §5.4 over the font table of decision 5.0(c), and shaping (item 5.11): characters to glyphs through cmap, hmtx advances and pair kerning, positioned in 26.6 fixed point."
+description = "Layout (Phase 5): so far font matching (item 5.10), CSS Fonts 3 §5.2 and §5.4 over the font table of decision 5.0(c); shaping (item 5.11): characters to glyphs through cmap, hmtx advances and pair kerning, positioned in 26.6 fixed point; white space and line breaking (item 5.12): CSS Text 3 §3 to §5 over UAX #14; and the box tree (item 5.13): CSS 2.1 §9.2 and §17.2.1 from the DOM and computed style."
 
 [dependencies]
+# The document the box tree is built from (Phase 5 item 5.13), through the arena's readers.
+clazel-dom = { path = "../clazel-dom" }
 # Faces, their names, OS/2 classes and cmap (Phase 5 item 5.9).
 clazel-font = { path = "../clazel-font" }
+# The computed `white-space`, `word-break` and `overflow-wrap` that white space
+# processing and line breaking read (Phase 5 items 5.7 and 5.12).
+clazel-style = { path = "../clazel-style" }
 
 # The reference shaper of the shaping differential (tests/conformance_shaping.rs,
 # phase-5.md item 5.11), never compiled into the browser.
 [dev-dependencies]
 rustybuzz = { version = "=0.20.1", default-features = false, features = ["std"] }
+# The golden box tree dumps parse their documents with the HTML tree builder (item 5.13).
+clazel-treebuilder = { path = "../clazel-treebuilder", version = "=0.0.0" }
 
 # Verification tier (docs/VERIFICATION.md). Tier 0: tests only. The policy's
 # tier for layout is 0 (phase-5.md, "Crates").

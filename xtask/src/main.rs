@@ -21,7 +21,8 @@
 //!   vendored conformance suites (`tests/generated/*.rs`). `check` and
 //!   `verify` fail if a committed table is stale.
 //! - `cargo xtask tables`: regenerate the Unicode tables generated from
-//!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs`), the
+//!   vendored Unicode data (`crates/clazel-idna/src/uts46/data.rs` and
+//!   `crates/clazel-layout/src/text/data.rs`), the
 //!   Public Suffix List, and the root certificate table from NSS's
 //!   `certdata.txt` (`crates/clazel-x509/src/roots/data.rs`), and the
 //!   user agent style sheet from HTML §15 (`crates/clazel-style/data/*.css`).
@@ -38,6 +39,7 @@ mod conformance;
 mod deps;
 mod encoding_indexes;
 mod entities;
+mod linebreak;
 mod mutate;
 mod parts;
 mod pins;
@@ -365,6 +367,8 @@ fn static_checks(r: &mut Runner, crates: &[Crate], pins: &Pins) {
     r.step("generated test data", outcome(problems, notes));
     let (problems, notes) = unicode::run(false);
     r.step("generated Unicode tables", outcome(problems, notes));
+    let (problems, notes) = linebreak::run(false);
+    r.step("generated line breaking tables", outcome(problems, notes));
     let (problems, notes) = psl::run(false);
     r.step(
         "generated Public Suffix List tables",
@@ -1022,6 +1026,8 @@ fn generate_tables() -> ExitCode {
     }
     let (problems, notes) = unicode::run(true);
     r.step("generate Unicode tables", outcome(problems, notes));
+    let (problems, notes) = linebreak::run(true);
+    r.step("generate line breaking tables", outcome(problems, notes));
     let (problems, notes) = psl::run(true);
     r.step(
         "generate Public Suffix List tables",
