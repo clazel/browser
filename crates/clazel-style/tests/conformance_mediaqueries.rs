@@ -533,10 +533,14 @@ fn value_loop() -> Vec<LoopCall> {
     };
     let em: i64 = 16;
     for (f, v) in [("width", 117i64), ("height", 76i64)] {
-        let (up, down) = (v + 1, v - 1);
+        let (up, down) = (v.saturating_add(1), v.saturating_sub(1));
         // JavaScript's Math.ceil and Math.floor of value / em_size.
-        let ceil = (v + em - 1) / em;
-        let floor = v / em;
+        let ceil = v
+            .saturating_add(em)
+            .saturating_sub(1)
+            .checked_div(em)
+            .unwrap_or(0);
+        let floor = v.checked_div(em).unwrap_or(0);
         push(214, yes, format!("all and ({f}: {v}px)"));
         push(215, yes, format!("all and ({f} = {v}px)"));
         push(216, no, format!("all and ({f}: {up}px)"));
@@ -549,10 +553,26 @@ fn value_loop() -> Vec<LoopCall> {
         push(224, yes, format!("all and (max-{f}: {v}px)"));
         push(225, yes, format!("all and (max-{f}: {up}px)"));
         push(226, no, format!("all and (max-{f}: {down}px)"));
-        push(227, no, format!("all and (min-{f}: {}em)", ceil + 1));
-        push(228, yes, format!("all and (min-{f}: {}em)", floor - 1));
-        push(229, yes, format!("all and (max-{f}: {}em)", ceil + 1));
-        push(230, no, format!("all and (max-{f}: {}em)", floor - 1));
+        push(
+            227,
+            no,
+            format!("all and (min-{f}: {}em)", ceil.saturating_add(1)),
+        );
+        push(
+            228,
+            yes,
+            format!("all and (min-{f}: {}em)", floor.saturating_sub(1)),
+        );
+        push(
+            229,
+            yes,
+            format!("all and (max-{f}: {}em)", ceil.saturating_add(1)),
+        );
+        push(
+            230,
+            no,
+            format!("all and (max-{f}: {}em)", floor.saturating_sub(1)),
+        );
         push(232, yes, format!("({f} <= {v}px)"));
         push(233, yes, format!("({f} >= {v}px)"));
         push(235, yes, format!("(0px < {f} <= {v}px)"));

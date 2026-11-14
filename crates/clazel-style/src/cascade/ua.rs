@@ -479,11 +479,12 @@ mod tests {
             if super::super::rules::Selectors::parse(&r.selectors).is_none() {
                 refused.push(text(&r.selectors));
             }
-            total += r.declarations.len();
+            total = total.saturating_add(r.declarations.len());
             for d in &r.declarations {
                 let read = super::super::rules::read_declarations(std::slice::from_ref(d), false);
                 if read.is_empty() {
-                    *dropped.entry(text(&d.name)).or_default() += 1;
+                    let c = dropped.entry(text(&d.name)).or_default();
+                    *c = c.saturating_add(1);
                 }
             }
         }
