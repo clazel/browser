@@ -129,18 +129,115 @@ pub proof fn lemma_hello_alerts()
     assert(super::driver_spec::hello_closed().status == super::driver_spec::Status::Closed) by (compute_only);
 }
 
-/// §6.1, §6: truncation and the peer's alert send nothing.
+/// §6.1, §6: truncation sends only the record it is given (our close_notify,
+/// or nothing) and is reported as truncation; the peer's alert sends nothing.
 pub proof fn lemma_nothing_sent()
     ensures
-        super::driver_spec::truncated(80).send.len() == 0,
-        super::driver_spec::truncated(80).status
+        super::driver_spec::truncated(seq![], 80).send.len() == 0,
+        super::driver_spec::truncated(seq![9u8], 80).send == seq![9u8],
+        super::driver_spec::truncated(seq![], 80).status
             == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated),
         super::driver_spec::peer_failed(40).send.len() == 0,
 {
-    assert(super::driver_spec::truncated(80).send.len() == 0) by (compute_only);
-    assert(super::driver_spec::truncated(80).status
+    assert(super::driver_spec::truncated(seq![], 80).send.len() == 0) by (compute_only);
+    assert(super::driver_spec::truncated(seq![9u8], 80).send == seq![9u8]) by (compute_only);
+    assert(super::driver_spec::truncated(seq![], 80).status
         == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated)) by (compute_only);
     assert(super::driver_spec::peer_failed(40).send.len() == 0) by (compute_only);
+}
+
+/// The bootstrap waiting for the server's Hello (the fields `eof` does not
+/// read are left empty).
+pub open spec fn hello_waiting() -> crate::hello::bootstrap_spec::State {
+    crate::hello::bootstrap_spec::State {
+        mode: crate::hello::bootstrap_spec::Mode::AwaitServerHello,
+        hello: None,
+        pending_flight: seq![],
+        compatibility: false,
+        reassembly: crate::spec::reasm_new(),
+        retained: seq![],
+    }
+}
+
+/// The joined client's end of the transport over the transducer's fixtures.
+pub open spec fn eof_at(stage: super::driver_spec::Stage, status: super::driver_spec::Status)
+    -> super::driver_spec::Step
+{
+    super::driver_spec::eof(super::post_handshake_examples::crypto(), super::post_handshake_examples::cipher(),
+        stage, status)
+}
+
+/// §6.1 and choice 7: the end of the transport while a machine runs is a
+/// truncation, `Failed(internal_error, Truncated)`, never `Closed`: during
+/// the Hello exchange, the server's flight and application traffic, and
+/// after our close_notify.
+pub proof fn lemma_eof_truncates()
+    ensures
+        eof_at(super::driver_spec::Stage::Hello(hello_waiting(), seq![]), super::driver_spec::Status::Handshaking).status
+            == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated),
+        eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).status
+            == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated),
+        eof_at(super::driver_spec::Stage::App(write_closed()), super::driver_spec::Status::Closing).status
+            == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated),
+        super::driver_spec::flight_eof(super::dispatcher_certificates::alert_ciphers(),
+            super::dispatcher_certificates::sample_flight_state()).status
+            == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated),
+{
+    assert(eof_at(super::driver_spec::Stage::Hello(hello_waiting(), seq![]), super::driver_spec::Status::Handshaking).status
+        == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated)) by (compute_only);
+    assert(eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).status
+        == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated)) by (compute_only);
+    assert(eof_at(super::driver_spec::Stage::App(write_closed()), super::driver_spec::Status::Closing).status
+        == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated)) by (compute_only);
+    assert(super::driver_spec::flight_eof(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_flight_state()).status
+        == super::driver_spec::Status::Failed(80u8, super::driver_spec::Origin::Truncated)) by (compute_only);
+}
+
+/// §6.1 and choice 7: while our write side is open the end of the transport
+/// sends our close_notify: in plaintext (warning, close_notify) during the
+/// Hello exchange, sealed under the client handshake epoch at sequence number
+/// 0 during the server's flight, and after the handshake the record a close
+/// sends.
+pub proof fn lemma_eof_sends_close_notify()
+    ensures
+        eof_at(super::driver_spec::Stage::Hello(hello_waiting(), seq![]), super::driver_spec::Status::Handshaking).send
+            == seq![21u8, 3, 3, 0, 2, 1, 0],
+        super::driver_spec::flight_eof(super::dispatcher_certificates::alert_ciphers(),
+            super::dispatcher_certificates::sample_flight_state()).send
+            == seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21],
+        eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).send
+            == carried(super::post_handshake_spec::close(super::post_handshake_examples::cipher(),
+                super::post_handshake_examples::ready()).0, write_closed()).send,
+        eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).send.len() > 0,
+{
+    assert(eof_at(super::driver_spec::Stage::Hello(hello_waiting(), seq![]), super::driver_spec::Status::Handshaking).send
+        == seq![21u8, 3, 3, 0, 2, 1, 0]) by (compute_only);
+    assert(super::driver_spec::flight_eof(super::dispatcher_certificates::alert_ciphers(),
+        super::dispatcher_certificates::sample_flight_state()).send
+        == seq![23u8, 3, 3, 0, 19, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 21]) by (compute_only);
+    assert(eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).send
+        == carried(super::post_handshake_spec::close(super::post_handshake_examples::cipher(),
+            super::post_handshake_examples::ready()).0, write_closed()).send) by (compute_only);
+    assert(eof_at(super::driver_spec::Stage::App(super::post_handshake_examples::ready()), super::driver_spec::Status::Open).send.len() > 0)
+        by (compute_only);
+}
+
+/// §6.1 and choice 7: after our close_notify the end of the transport sends
+/// nothing, and once the connection has ended nothing changes: one that
+/// ended as `Closed` stays `Closed` and sends nothing.
+pub proof fn lemma_eof_after_close()
+    ensures
+        eof_at(super::driver_spec::Stage::App(write_closed()), super::driver_spec::Status::Closing).send.len() == 0,
+        eof_at(super::driver_spec::Stage::Ended, super::driver_spec::Status::Closed).send.len() == 0,
+        eof_at(super::driver_spec::Stage::Ended, super::driver_spec::Status::Closed).status
+            == super::driver_spec::Status::Closed,
+{
+    assert(eof_at(super::driver_spec::Stage::App(write_closed()), super::driver_spec::Status::Closing).send.len() == 0)
+        by (compute_only);
+    assert(eof_at(super::driver_spec::Stage::Ended, super::driver_spec::Status::Closed).send.len() == 0) by (compute_only);
+    assert(eof_at(super::driver_spec::Stage::Ended, super::driver_spec::Status::Closed).status
+        == super::driver_spec::Status::Closed) by (compute_only);
 }
 
 /// The dispatcher's step over its fixtures, carried through the join.

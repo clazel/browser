@@ -375,6 +375,30 @@ fn the_end_of_stream_without_close_notify_is_truncation() -> TestResult {
             origin: Origin::Truncated
         })
     );
+    // RFC 8446 §6.1: our close_notify goes out as the connection ends;
+    // rustls reads it as the end of the stream.
+    feed(&mut server, &out.send)?;
+    assert_eq!(read_plaintext(&mut server)?, b"");
+    Ok(())
+}
+
+#[test]
+fn the_end_of_stream_after_our_close_sends_nothing() -> TestResult {
+    let mut server = server(LEAF_ECDSA, KEY_ECDSA)?;
+    let (mut client, hello) = connect(anchors());
+    let (out, _) = handshake(&mut client, &mut server, hello.send)?;
+    assert_eq!(out.state, State::Open);
+    let out = client.close();
+    assert_eq!(out.state, State::Closing);
+    feed(&mut server, &out.send)?;
+    let out = client.receive_eof();
     assert!(out.send.is_empty());
+    assert_eq!(
+        out.state,
+        State::Failed(Failure {
+            alert: 80,
+            origin: Origin::Truncated
+        })
+    );
     Ok(())
 }

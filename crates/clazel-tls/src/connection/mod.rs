@@ -8,6 +8,7 @@ pub mod driver_certificates;
 pub mod driver_contract;
 pub mod driver_examples;
 pub mod driver_exec;
+pub mod driver_lemmas;
 pub mod driver_spec;
 pub mod exec;
 pub mod framing;

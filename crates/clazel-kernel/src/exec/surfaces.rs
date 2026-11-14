@@ -441,6 +441,12 @@ pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> 
                 };
                 if !committed || buffer >= 3 {
                     kill_renderer_exec::<F>(s, i, id)
+                } else if !{
+                    // Item 5.17c: only a running process's frame paints.
+                    let k = super::gpu::key_at(&s, i);
+                    super::gpu::gpu_of_exec(&s, &k, Ghost(s@.renderers[i as int])).running
+                } {
+                    (s, no_outputs())
                 } else {
                     let (vw, vh, _vs) = viewport_of_exec(s.viewports.as_slice(), tab);
                     if width <= vw && height <= vh {
@@ -454,6 +460,12 @@ pub fn from_gpu_exec<F: FetchFnsExec>(s: StateRecord, id: u64, bytes: &[u8]) -> 
                         (s, no_outputs())
                     }
                 }
+            },
+            Some(Msg::GpuReady { software }) => {
+                // Item 5.17c: the start answer.
+                let k = super::gpu::key_at(&s, i);
+                let ghost r = s@.renderers[i as int];
+                (super::gpu::gpu_ready_exec(s, &k, Ghost(r), software), no_outputs())
             },
             Some(_) => (s, no_outputs()),
         },

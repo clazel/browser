@@ -9,6 +9,9 @@ use std::rc::Rc;
 
 use clazel_tls::auth::spec::CertificateError;
 use clazel_tls::auth::verify::Verifier;
+use clazel_tls::connection::driver_exec::{
+    Driver, Failure, Origin, Output as DriverOutput, State as DriverState,
+};
 use clazel_tls::connection::exec::{Action, Connection, Mode};
 use clazel_tls::connection::post_handshake_exec::{Action as AppAction, Input};
 use clazel_tls::encode;
@@ -826,10 +829,14 @@ fn user_canceled_is_nonfatal_and_eof_without_close_notify_is_truncation() -> Res
         );
         assert_eq!(fixture.connection.mode(), Mode::Handshake);
     }
-    // §6.1 truncation: the peer has closed, so nothing is sent.
+    // §6.1 truncation: the server's direction of the transport ended before
+    // its close_notify; our close_notify goes out, then internal_error.
     assert_eq!(
         fixture.connection.eof(),
-        Action::Fail(clazel_tls::spec::INTERNAL_ERROR, None)
+        Action::Fail(
+            clazel_tls::spec::INTERNAL_ERROR,
+            Some(client_close_notify(&fixture.client_secret, 0)?)
+        )
     );
     assert_eq!(fixture.connection.mode(), Mode::Failed);
     Ok(())
@@ -920,5 +927,270 @@ fn no_alert_before_the_application_keys() -> Result<(), String> {
             .acknowledge_client_flight(b"not the flight"),
         Action::Fail(clazel_tls::spec::INTERNAL_ERROR, None)
     );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// RFC 8446 §6.1: the end of the transport. It is not the server's
+// close_notify: before that alert it is a truncation, never end-of-data, and
+// as it ends the connection our write side is closed with our own
+// close_notify (the record a close would send), unless it has already been
+// closed or an error alert has gone.
+// ---------------------------------------------------------------------------
+
+/// Our close_notify as the client seals it under `secret` at sequence number
+/// `seq` of that epoch.
+fn client_close_notify(secret: &[u8], seq: u64) -> Result<Vec<u8>, String> {
+    let mut sealer = Encryptor::new(&TestCrypto, &ToyFactory::new(), secret)
+        .map_err(|e| format!("client epoch alert {e}"))?;
+    for _ in 0..seq {
+        sealer
+            .seal(23, b"earlier record", 0)
+            .map_err(|e| format!("earlier record alert {e}"))?;
+    }
+    sealer
+        .seal(21, &[1, 0], 0)
+        .map_err(|e| format!("close_notify seal alert {e}"))
+}
+
+/// §6.1: during the server's flight the end of the transport sends our
+/// close_notify, sealed under the client handshake epoch exactly as a close
+/// would seal it, then fails with internal_error (which is not sent).
+#[test]
+fn eof_in_the_flight_sends_close_notify_and_is_truncation() -> Result<(), String> {
+    let mut twin = fixture()?;
+    let mut fixture = fixture()?;
+    let closed = twin.connection.close_write();
+    let expected = client_close_notify(&fixture.client_secret, 0)?;
+    assert_eq!(closed, Action::Close(Some(expected.clone())));
+    assert_eq!(
+        fixture.connection.eof(),
+        Action::Fail(clazel_tls::spec::INTERNAL_ERROR, Some(expected))
+    );
+    assert_eq!(fixture.connection.mode(), Mode::Failed);
+    // Once failed, the end of the transport does nothing.
+    assert_eq!(fixture.connection.eof(), Action::None);
+    Ok(())
+}
+
+/// §6.1: after our close_notify (the write side closed) and after an error
+/// alert, the end of the transport sends nothing.
+#[test]
+fn eof_after_close_or_failure_sends_nothing() -> Result<(), String> {
+    let mut closed = fixture()?;
+    assert!(matches!(
+        closed.connection.close_write(),
+        Action::Close(Some(_))
+    ));
+    assert_eq!(closed.connection.eof(), Action::None);
+    assert_eq!(closed.connection.mode(), Mode::Closed);
+
+    let mut failed = fixture()?;
+    let garbage = [
+        23u8, 3, 3, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    assert!(matches!(
+        failed.connection.feed(&garbage).1,
+        Action::Fail(_, _)
+    ));
+    assert_eq!(failed.connection.eof(), Action::None);
+    assert_eq!(failed.connection.mode(), Mode::Failed);
+    Ok(())
+}
+
+/// The ServerHello as a plaintext record.
+fn server_hello_record() -> Vec<u8> {
+    let message = handshake(2, &server_hello());
+    let mut record = vec![22u8, 3, 3];
+    record.extend_from_slice(
+        &u16::try_from(message.len())
+            .unwrap_or(u16::MAX)
+            .to_be_bytes(),
+    );
+    record.extend_from_slice(&message);
+    record
+}
+
+type TestDriver = Driver<TestCrypto, MockExchange, ToyFactory, MockVerifier>;
+
+/// A driver that has sent its ClientHello.
+fn new_driver() -> TestDriver {
+    let (driver, out) = Driver::connect(
+        config(),
+        PRIVATE.to_vec(),
+        TestCrypto,
+        TestCrypto,
+        MockExchange,
+        ToyFactory::new(),
+        MockVerifier,
+    );
+    assert_eq!(out.state, DriverState::Handshaking);
+    driver
+}
+
+/// Feed `records` one by one, each consumed whole.
+fn feed_driver(driver: &mut TestDriver, records: &[Vec<u8>]) -> DriverOutput {
+    let mut last = DriverOutput {
+        send: Vec::new(),
+        deliver: Vec::new(),
+        state: driver.state(),
+    };
+    for record in records {
+        let (consumed, out) = driver.step(record);
+        assert_eq!(consumed, record.len());
+        last = out;
+    }
+    last
+}
+
+/// A driver in the server's flight.
+fn driver_in_flight() -> TestDriver {
+    let mut driver = new_driver();
+    let out = feed_driver(&mut driver, &[server_hello_record()]);
+    assert_eq!(out.state, DriverState::Handshaking);
+    assert!(out.send.is_empty());
+    driver
+}
+
+/// A driver whose handshake has completed.
+fn driver_open() -> Result<TestDriver, String> {
+    let fixture = fixture()?;
+    let mut driver = driver_in_flight();
+    let out = feed_driver(&mut driver, &fixture.server_records);
+    assert_eq!(out.state, DriverState::Open);
+    assert!(!out.send.is_empty());
+    Ok(driver)
+}
+
+fn truncated() -> DriverState {
+    DriverState::Failed(Failure {
+        alert: clazel_tls::spec::INTERNAL_ERROR,
+        origin: Origin::Truncated,
+    })
+}
+
+/// §6.1 and `driver_spec` choice 7, before the ServerHello: exactly one
+/// plaintext close_notify, the record a close sends, and truncation.
+#[test]
+fn driver_eof_before_the_server_hello_sends_plaintext_close_notify() {
+    let mut twin = new_driver();
+    let closing = twin.close();
+    assert_eq!(closing.state, DriverState::Closed);
+    let mut driver = new_driver();
+    let out = driver.eof();
+    assert_eq!(out.send, vec![21, 3, 3, 0, 2, 1, 0]);
+    assert_eq!(out.send, closing.send);
+    assert!(out.deliver.is_empty());
+    assert_eq!(out.state, truncated());
+    assert_eq!(driver.state(), truncated());
+    // Once ended, nothing changes.
+    let again = driver.eof();
+    assert!(again.send.is_empty());
+    assert_eq!(again.state, truncated());
+}
+
+/// In the server's flight: exactly one close_notify, sealed under the client
+/// handshake epoch as a close seals it, and truncation.
+#[test]
+fn driver_eof_in_the_flight_sends_sealed_close_notify() -> Result<(), String> {
+    let fixture = fixture()?;
+    let mut twin = driver_in_flight();
+    let closing = twin.close();
+    assert_eq!(closing.state, DriverState::Closed);
+    let mut driver = driver_in_flight();
+    let out = driver.eof();
+    assert_eq!(out.send, client_close_notify(&fixture.client_secret, 0)?);
+    assert_eq!(out.send, closing.send);
+    assert!(out.deliver.is_empty());
+    assert_eq!(out.state, truncated());
+    Ok(())
+}
+
+/// After the handshake: exactly one close_notify under the client
+/// application key, the record a close sends, and truncation, not `Closed`.
+#[test]
+fn driver_eof_when_open_sends_close_notify() -> Result<(), String> {
+    let fixture = fixture()?;
+    let (client_app, _) = application_secrets(&fixture);
+    let mut twin = driver_open()?;
+    let closing = twin.close();
+    assert_eq!(closing.state, DriverState::Closing);
+    let mut driver = driver_open()?;
+    let out = driver.eof();
+    assert_eq!(out.send, client_close_notify(&client_app, 0)?);
+    assert_eq!(out.send, closing.send);
+    assert!(out.deliver.is_empty());
+    assert_eq!(out.state, truncated());
+    let again = driver.eof();
+    assert!(again.send.is_empty());
+    assert_eq!(again.state, truncated());
+    Ok(())
+}
+
+/// §6.1: after our own close_notify the end of the transport sends nothing;
+/// it is still a truncation while the server's close_notify has not come.
+#[test]
+fn driver_eof_after_our_close_sends_nothing() -> Result<(), String> {
+    let mut driver = driver_open()?;
+    let closing = driver.close();
+    assert_eq!(closing.state, DriverState::Closing);
+    assert!(!closing.send.is_empty());
+    let out = driver.eof();
+    assert!(out.send.is_empty());
+    assert_eq!(out.state, truncated());
+
+    // A close during the handshake ends the connection; the end of the
+    // transport then changes nothing.
+    let mut early = new_driver();
+    assert_eq!(early.close().state, DriverState::Closed);
+    let out = early.eof();
+    assert!(out.send.is_empty());
+    assert_eq!(out.state, DriverState::Closed);
+
+    let mut in_flight = driver_in_flight();
+    assert_eq!(in_flight.close().state, DriverState::Closed);
+    let out = in_flight.eof();
+    assert!(out.send.is_empty());
+    assert_eq!(out.state, DriverState::Closed);
+    Ok(())
+}
+
+/// §6.1: after the server's close_notify (answered with ours at once) the
+/// connection is `Closed`, end-of-data; the end of the transport then sends
+/// nothing and leaves it `Closed`. After an error alert it sends nothing.
+#[test]
+fn driver_eof_after_the_server_close_notify_changes_nothing() -> Result<(), String> {
+    let fixture = fixture()?;
+    let (_, server_app) = application_secrets(&fixture);
+    let mut sealer = Encryptor::new(&TestCrypto, &ToyFactory::new(), &server_app)
+        .map_err(|e| format!("server epoch alert {e}"))?;
+    let close_notify = sealer
+        .seal(21, &[1, 0], 0)
+        .map_err(|e| format!("close_notify seal alert {e}"))?;
+    let mut driver = driver_open()?;
+    let (consumed, out) = driver.step(&close_notify);
+    assert_eq!(consumed, close_notify.len());
+    assert_eq!(out.state, DriverState::Closed);
+    assert!(!out.send.is_empty());
+    let out = driver.eof();
+    assert!(out.send.is_empty());
+    assert!(out.deliver.is_empty());
+    assert_eq!(out.state, DriverState::Closed);
+
+    // Before the ServerHello, too.
+    let mut early = new_driver();
+    let (_, out) = early.step(&[21, 3, 3, 0, 2, 1, 0]);
+    assert_eq!(out.state, DriverState::Closed);
+    let out = early.eof();
+    assert!(out.send.is_empty());
+    assert_eq!(out.state, DriverState::Closed);
+
+    // After an error alert of ours.
+    let mut failed = new_driver();
+    let (_, out) = failed.step(&[23, 3, 3, 0, 1, 0]);
+    assert!(matches!(out.state, DriverState::Failed(f) if f.origin == Origin::Sent));
+    let out = failed.eof();
+    assert!(out.send.is_empty());
+    assert!(matches!(out.state, DriverState::Failed(f) if f.origin == Origin::Sent));
     Ok(())
 }

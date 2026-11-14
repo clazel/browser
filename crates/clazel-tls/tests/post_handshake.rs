@@ -389,6 +389,32 @@ fn malformed_new_session_ticket_is_a_decode_error() -> Result<(), String> {
     check_fatal_alert(&mut h, &actions, DECODE_ERROR)
 }
 
+/// RFC 8446 §4.2.10: a NewSessionTicket's early_data extension is a
+/// `uint32 max_early_data_size`; any other length is `decode_error`.
+#[test]
+fn new_session_ticket_early_data_is_a_uint32() -> Result<(), String> {
+    let ticket = |data: &[u8]| {
+        let mut ext = vec![0, 42, 0, data.len() as u8];
+        ext.extend_from_slice(data);
+        let mut body = vec![0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 7, 0, ext.len() as u8];
+        body.extend_from_slice(&ext);
+        let mut m = vec![4, 0, 0, body.len() as u8];
+        m.extend_from_slice(&body);
+        m
+    };
+    let mut h = Harness::new()?;
+    let record = h.server_record(CT_HANDSHAKE, &ticket(&[0, 0, 0x40, 0]));
+    assert_eq!(h.feed(&record), vec![]);
+    assert!(h.client.is_open());
+    for bad in [&[][..], &[0, 1][..], &[0, 0, 0, 0, 1][..]] {
+        let mut h = Harness::new()?;
+        let record = h.server_record(CT_HANDSHAKE, &ticket(bad));
+        let actions = h.feed(&record);
+        check_fatal_alert(&mut h, &actions, DECODE_ERROR)?;
+    }
+    Ok(())
+}
+
 /// The failure sent a protected fatal alert the server can read, then `Fail`.
 fn check_fatal_alert(h: &mut Harness, actions: &[Action], alert: u8) -> Result<(), String> {
     assert_eq!(actions.last(), Some(&Action::Fail(alert)));
@@ -452,29 +478,39 @@ fn key_update_requested_is_answered_under_the_old_keys_then_the_write_keys_move(
     }
     assert_eq!(h.client_seq, 3);
     let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
-    let actions = h.feed(&update);
-    assert_eq!(actions.len(), 1);
-    let reply = sends(&actions)
-        .first()
-        .map(|w| (*w).clone())
-        .ok_or("no reply")?;
-    // The reply is KeyUpdate(update_not_requested) under the OLD client keys, sequence 3.
+    // RFC 8446 §4.6.3: the answer is owed "prior to sending its next
+    // Application Data record"; receiving the request sends nothing.
+    assert_eq!(h.feed(&update), vec![], "no record on update_requested");
+    // The next data is preceded by the answer: KeyUpdate(update_not_requested)
+    // under the OLD client keys, sequence 3, then the data under the new keys.
+    let sent = h.client.send_application(b"fresh");
+    let wires = sends(&sent);
+    assert_eq!(sent.len(), 2, "the answer, then the data");
+    assert_eq!(wires.len(), 2);
+    let reply = wires.first().map(|w| (*w).clone()).ok_or("no reply")?;
     assert_eq!(
         h.server_reads(&reply),
         Some((CT_HANDSHAKE, key_update_message(0)))
     );
     h.client_rotated();
-    // The next client record is under the new keys at sequence 0.
-    let sent = h.client.send_application(b"fresh");
-    let wire = sends(&sent)
-        .first()
-        .map(|w| (*w).clone())
-        .ok_or("no send")?;
+    // The data is under the new keys at sequence 0.
+    let wire = wires.get(1).map(|w| (*w).clone()).ok_or("no data")?;
     assert_eq!(
         h.server_reads(&wire),
         Some((CT_APPLICATION_DATA, b"fresh".to_vec()))
     );
     assert_eq!(h.client_seq, 1);
+    // Answered once: the next data goes out alone.
+    let sent = h.client.send_application(b"again");
+    let wire = sends(&sent)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no send")?;
+    assert_eq!(sent.len(), 1);
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"again".to_vec()))
+    );
     // The read side moved too, independently.
     h.server_rotates();
     let data = h.server_record(CT_APPLICATION_DATA, b"server fresh");
@@ -525,24 +561,83 @@ fn several_key_updates_in_a_row() -> Result<(), String> {
     let mut h = Harness::new()?;
     for round in 0..4u8 {
         let update = h.server_record(CT_HANDSHAKE, &key_update_message(round % 2));
-        let actions = h.feed(&update);
+        assert_eq!(h.feed(&update), vec![], "nothing is sent on receipt");
+        h.server_rotates();
+        let data = h.server_record(CT_APPLICATION_DATA, &[round]);
+        assert_eq!(h.feed(&data), vec![Action::Deliver(vec![round])]);
+        // Our data after an update_requested carries the answer first.
+        let sent = h.client.send_application(&[round]);
+        let wires = sends(&sent);
         if round % 2 == 1 {
-            let reply = sends(&actions)
-                .first()
-                .map(|w| (*w).clone())
-                .ok_or("no reply")?;
+            assert_eq!(wires.len(), 2);
+            let reply = wires.first().map(|w| (*w).clone()).ok_or("no reply")?;
             assert_eq!(
                 h.server_reads(&reply),
                 Some((CT_HANDSHAKE, key_update_message(0)))
             );
             h.client_rotated();
         } else {
-            assert_eq!(actions, vec![]);
+            assert_eq!(wires.len(), 1);
         }
-        h.server_rotates();
-        let data = h.server_record(CT_APPLICATION_DATA, &[round]);
-        assert_eq!(h.feed(&data), vec![Action::Deliver(vec![round])]);
+        let wire = wires.last().map(|w| (*w).clone()).ok_or("no data")?;
+        assert_eq!(
+            h.server_reads(&wire),
+            Some((CT_APPLICATION_DATA, vec![round]))
+        );
     }
+    Ok(())
+}
+
+/// RFC 8446 §4.6.3: "causes an implementation which receives multiple
+/// KeyUpdates while it is silent to respond with a single update".
+#[test]
+fn two_requests_while_silent_draw_one_answer() -> Result<(), String> {
+    let mut h = Harness::new()?;
+    for _ in 0..2 {
+        let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
+        assert_eq!(h.feed(&update), vec![], "no record on update_requested");
+        h.server_rotates();
+    }
+    // The server's data still reads under its twice-updated keys.
+    let data = h.server_record(CT_APPLICATION_DATA, b"in between");
+    assert_eq!(h.feed(&data), vec![Action::Deliver(b"in between".to_vec())]);
+    let sent = h.client.send_application(b"first");
+    let wires = sends(&sent);
+    assert_eq!(wires.len(), 2, "one answer, then the data");
+    let reply = wires.first().map(|w| (*w).clone()).ok_or("no reply")?;
+    assert_eq!(
+        h.server_reads(&reply),
+        Some((CT_HANDSHAKE, key_update_message(0)))
+    );
+    h.client_rotated();
+    let wire = wires.get(1).map(|w| (*w).clone()).ok_or("no data")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"first".to_vec()))
+    );
+    let sent = h.client.send_application(b"second");
+    let wires = sends(&sent);
+    assert_eq!(wires.len(), 1, "no second answer");
+    let wire = wires.first().map(|w| (*w).clone()).ok_or("no data")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_APPLICATION_DATA, b"second".to_vec()))
+    );
+    Ok(())
+}
+
+/// RFC 8446 §4.6.3 asks for the answer before Application Data only: while
+/// it is owed, our close_notify goes out alone under the current keys.
+#[test]
+fn close_notify_while_an_answer_is_owed_goes_out_alone() -> Result<(), String> {
+    let mut h = Harness::new()?;
+    let update = h.server_record(CT_HANDSHAKE, &key_update_message(1));
+    assert_eq!(h.feed(&update), vec![]);
+    let sent = h.client.close();
+    let wires = sends(&sent);
+    assert_eq!(wires.len(), 1);
+    let wire = wires.first().map(|w| (*w).clone()).ok_or("no close")?;
+    assert_eq!(h.server_reads(&wire), Some((CT_ALERT, vec![1, 0])));
     Ok(())
 }
 
@@ -662,6 +757,9 @@ fn close_notify_ends_delivery_and_leaves_the_write_side_open() -> Result<(), Str
     // Data after the closure alert is ignored (§6.1): consumed, nothing delivered.
     let (consumed, actions) = h.client.step(Input::Bytes(&late));
     assert_eq!((consumed, actions), (late.len(), vec![]));
+    // §6.1: the end of the transport after the closure alert is the orderly
+    // end: nothing is sent or reported, and the write side stays open.
+    assert_eq!(h.client.step(Input::Closed), (0, vec![]));
     // §6.1: the write side is still open; the client ends it when it chooses.
     let sent = h.client.send_application(b"more");
     let wire = sends(&sent)
@@ -786,10 +884,13 @@ fn oversized_and_malformed_records_fail_before_decryption() -> Result<(), String
     let (consumed, actions) = h.client.step(Input::Bytes(&[23, 3, 3, 0x41, 0x01]));
     assert_eq!(consumed, 5);
     check_fatal_alert(&mut h, &actions, RECORD_OVERFLOW)?;
-    // A wrong legacy_record_version.
+    // A legacy_record_version other than 0x0303 is ignored (RFC 8446 section
+    // 5.1) but is part of the additional data (5.2): decryption fails.
     let mut h = Harness::new()?;
-    let (_, actions) = h.client.step(Input::Bytes(&[23, 3, 1, 0, 20]));
-    check_fatal_alert(&mut h, &actions, DECODE_ERROR)?;
+    let mut wire = vec![23u8, 3, 1, 0, 20];
+    wire.extend_from_slice(&[0u8; 20]);
+    let (_, actions) = h.client.step(Input::Bytes(&wire));
+    check_fatal_alert(&mut h, &actions, BAD_RECORD_MAC)?;
     // An unexpected outer type once protected (a plaintext alert).
     let mut h = Harness::new()?;
     let (_, actions) = h.client.step(Input::Bytes(&[21, 3, 3, 0, 2, 1, 0]));
@@ -808,12 +909,44 @@ fn a_record_of_only_zeros_is_unexpected_message() -> Result<(), String> {
     check_fatal_alert(&mut h, &actions, UNEXPECTED_MESSAGE)
 }
 
+/// §6.1: the end of the transport before the server's close_notify is a
+/// truncation, never end-of-data. It ends the connection, so while the write
+/// side is open our close_notify goes out first: exactly the one record a
+/// close would send, under the current key at the next sequence number.
 #[test]
-fn the_transport_closing_before_close_notify_is_a_failure_with_no_alert() -> Result<(), String> {
+fn the_end_of_the_transport_before_close_notify_sends_ours_and_is_a_truncation()
+-> Result<(), String> {
+    let mut twin = Harness::new()?;
     let mut h = Harness::new()?;
+    for harness in [&mut twin, &mut h] {
+        let sent = harness.client.send_application(b"request");
+        let wire = sends(&sent)
+            .first()
+            .map(|w| (*w).clone())
+            .ok_or("no send")?;
+        assert_eq!(
+            harness.server_reads(&wire),
+            Some((CT_APPLICATION_DATA, b"request".to_vec()))
+        );
+    }
+    let closing = twin.client.close();
     let (consumed, actions) = h.client.step(Input::Closed);
-    assert_eq!((consumed, actions), (0, vec![Action::Fail(INTERNAL_ERROR)]));
+    assert_eq!(consumed, 0);
+    assert_eq!(actions.len(), 2);
+    assert_eq!(sends(&actions), sends(&closing));
+    assert_eq!(actions.last(), Some(&Action::Fail(INTERNAL_ERROR)));
+    let wire = sends(&actions)
+        .first()
+        .map(|w| (*w).clone())
+        .ok_or("no close_notify")?;
+    assert_eq!(
+        h.server_reads(&wire),
+        Some((CT_ALERT, vec![1, CLOSE_NOTIFY]))
+    );
     assert!(!h.client.is_open());
+    // The connection has ended: nothing more is sent.
+    assert_eq!(h.client.step(Input::Closed), (0, vec![]));
+    assert_eq!(h.client.close(), vec![]);
     Ok(())
 }
 

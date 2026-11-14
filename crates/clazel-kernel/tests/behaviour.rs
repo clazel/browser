@@ -374,6 +374,17 @@ fn a_frame_is_painted_in_its_tab_under_the_kernels_url_and_title() {
             )
             .is_empty()
     );
+    // Item 5.17c: no frame paints before the GPU process's `GpuReady`.
+    assert!(
+        kernel
+            .event(&gpu_frame(id, &frame_ready(1, 800, 600)))
+            .is_empty()
+    );
+    assert!(
+        kernel
+            .event(&gpu_frame(id, &Msg::GpuReady { software: false }))
+            .is_empty()
+    );
     let out = kernel.event(&gpu_frame(id, &frame_ready(1, 800, 600)));
     assert_eq!(
         out,
@@ -392,7 +403,7 @@ fn a_frame_is_painted_in_its_tab_under_the_kernels_url_and_title() {
             .event(&gpu_frame(id, &frame_ready(0, 801, 600)))
             .is_empty()
     );
-    // GpuReady changes nothing before item 5.17c.
+    // A second `GpuReady` changes nothing.
     assert!(
         kernel
             .event(&gpu_frame(id, &Msg::GpuReady { software: false }))

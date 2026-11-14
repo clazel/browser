@@ -50,13 +50,15 @@ pub proof fn lemma_receive_retry_flight_bound(hash: spec_fn(Seq<u8>) -> Seq<u8>,
 /// A terminal (or failed) bootstrap state: no live Hello, no pending flight.
 pub open spec fn terminal(s: super::bootstrap_spec::State, mode: super::bootstrap_spec::Mode,
     reassembly: crate::spec::Reasm) -> super::bootstrap_spec::State {
-    super::bootstrap_spec::State { mode, hello: None, pending_flight: seq![],
+    super::bootstrap_spec::State { mode, hello: None, pending_flight: seq![], retained: seq![],
         compatibility: s.compatibility, reassembly }
 }
 
-/// The Hello controller's response to the one ServerHello body.
+/// The Hello controller's response to the ServerHello body of the first
+/// message of a record, with `rest` the complete messages after it
+/// (`bootstrap_spec::receive_messages` past its type check).
 pub open spec fn hello_step(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: super::bootstrap_spec::State,
-    body: Seq<u8>) -> (super::bootstrap_spec::State, super::bootstrap_spec::Action) {
+    body: Seq<u8>, rest: Seq<Seq<u8>>) -> (super::bootstrap_spec::State, super::bootstrap_spec::Action) {
     use super::bootstrap_spec::{Action, Mode};
     let reassembly = s.reassembly;
     match s.hello {
@@ -64,39 +66,68 @@ pub open spec fn hello_step(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: super::bootstr
         Some(hello) => match super::client_spec::receive(hash, hello, body) {
             Err(alert) => (terminal(s, Mode::Failed, reassembly), Action::Fail(alert)),
             Ok(super::client_spec::Outcome::Established(config, transcript, peer_key)) =>
-                (terminal(s, Mode::Established, reassembly),
-                    Action::Established(config, transcript, peer_key)),
+                if rest.len() != 0 || reassembly.buf.len() != 0 {
+                    (terminal(s, Mode::Failed, reassembly), Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
+                } else {
+                    (terminal(s, Mode::Established, reassembly),
+                        Action::Established(config, transcript, peer_key))
+                },
             Ok(super::client_spec::Outcome::Retry(next, flight)) => {
                 let hrr = if s.compatibility {
                     super::bootstrap_spec::compatibility_ccs()
                         + super::bootstrap_spec::handshake_record(flight)
                 } else { super::bootstrap_spec::handshake_record(flight) };
                 (super::bootstrap_spec::State { mode: Mode::AwaitClientHello2Send,
-                    hello: Some(next), pending_flight: hrr, compatibility: s.compatibility,
+                    hello: Some(next), pending_flight: hrr, retained: rest, compatibility: s.compatibility,
                     reassembly }, Action::Send(hrr))
             },
         },
     }
 }
 
+/// `receive_messages` on a non-empty list whose first message is a
+/// ServerHello is [`hello_step`] on its body and the rest.
+pub proof fn lemma_receive_messages(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: super::bootstrap_spec::State,
+    messages: Seq<Seq<u8>>)
+    requires messages.len() > 0, messages[0].len() >= crate::spec::HANDSHAKE_HEADER,
+        messages[0][0] == crate::spec::HS_SERVER_HELLO,
+    ensures super::bootstrap_spec::receive_messages(hash, s, messages)
+        == hello_step(hash, s, messages[0].skip(crate::spec::HANDSHAKE_HEADER as int), messages.skip(1)),
+{
+    assert((messages.len() != 1) == (messages.skip(1).len() != 0));
+}
 
-/// What `bootstrap_spec::receive` does with the messages a handshake record
-/// completed. `s` already carries the reassembly state after that record.
-pub open spec fn after_messages(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: super::bootstrap_spec::State,
-    messages: Seq<Seq<u8>>) -> (super::bootstrap_spec::State, super::bootstrap_spec::Action) {
-    use super::bootstrap_spec::{Action, Mode};
-    let reassembly = s.reassembly;
-    if messages.len() == 0 {
-        (s, Action::None)
-    } else if messages.len() != 1 || reassembly.buf.len() != 0 {
-        (terminal(s, Mode::Failed, reassembly), Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
-    } else {
-        let message = messages[0];
-        if message.len() < crate::spec::HANDSHAKE_HEADER || message[0] != crate::spec::HS_SERVER_HELLO {
-            (terminal(s, Mode::Failed, reassembly), Action::Fail(crate::spec::UNEXPECTED_MESSAGE))
-        } else {
-            let body = message.skip(crate::spec::HANDSHAKE_HEADER as int);
-            hello_step(hash, s, body)
+/// What an acknowledgement can lead to (`bootstrap_contract::acknowledge_ensures`).
+pub proof fn lemma_acknowledge_outcome(hash: spec_fn(Seq<u8>) -> Seq<u8>, before: super::bootstrap_spec::State,
+    sent: Seq<u8>)
+    requires super::bootstrap_spec::wf(before),
+    ensures ({
+        let out = super::bootstrap_spec::acknowledge(hash, before, sent);
+        match out.1 {
+            super::bootstrap_spec::Action::None =>
+                out.0.mode == super::bootstrap_spec::Mode::AwaitServerHello
+                    && out.0.pending_flight.len() == 0,
+            super::bootstrap_spec::Action::Fail(_) =>
+                out.0.mode == super::bootstrap_spec::Mode::Failed
+                    && out.0.pending_flight.len() == 0,
+            super::bootstrap_spec::Action::Established(_, _, _) =>
+                out.0.mode == super::bootstrap_spec::Mode::Established
+                    && before.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send,
+            super::bootstrap_spec::Action::Send(wire) =>
+                out.0.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send
+                    && out.0.pending_flight == wire
+                    && before.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send,
+            _ => false,
+        }
+    }),
+{
+    if before.mode == super::bootstrap_spec::Mode::AwaitClientHello2Send && sent == before.pending_flight {
+        let s1 = super::bootstrap_spec::State { mode: super::bootstrap_spec::Mode::AwaitServerHello,
+            hello: before.hello, pending_flight: seq![], retained: seq![],
+            compatibility: before.compatibility, reassembly: before.reassembly };
+        let ms = before.retained;
+        if ms.len() > 0 && ms[0].len() >= crate::spec::HANDSHAKE_HEADER && ms[0][0] == crate::spec::HS_SERVER_HELLO {
+            lemma_receive_messages(hash, s1, ms);
         }
     }
 }
@@ -110,7 +141,7 @@ pub open spec fn fragment_step(hash: spec_fn(Seq<u8>) -> Seq<u8>, s: super::boot
         crate::spec::Res::Err(error) => (terminal(s, Mode::Failed, s.reassembly),
             Action::Fail(crate::spec::alert_of(error))),
         crate::spec::Res::Ok((crate::spec::Event::Messages(messages), reassembly)) =>
-            after_messages(hash, super::bootstrap_spec::State { reassembly, ..s }, messages),
+            super::bootstrap_spec::receive_messages(hash, super::bootstrap_spec::State { reassembly, ..s }, messages),
         crate::spec::Res::Ok((_, reassembly)) => (terminal(s, Mode::Failed, reassembly),
             Action::Fail(crate::spec::UNEXPECTED_MESSAGE)),
     }
@@ -127,6 +158,8 @@ pub open spec fn alert_step(s: super::bootstrap_spec::State, level: u8, descript
         crate::spec::Res::Ok((_, reassembly)) => {
             if description == crate::spec::CLOSE_NOTIFY {
                 (terminal(s, Mode::Closed, reassembly), Action::Close)
+            } else if description == crate::spec::USER_CANCELED {
+                (super::bootstrap_spec::State { reassembly, ..s }, Action::None)
             } else {
                 (terminal(s, Mode::Failed, reassembly), Action::Alert(description))
             }

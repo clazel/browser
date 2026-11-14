@@ -169,6 +169,21 @@ step per node):
   all have one): §21.3 matches the rightmost compound first, and a type selector there
   matches only that local name. Skipping gives what matching would (the golden table is the
   same with and without it) and cuts matching about sevenfold.
+- **The rule index** (`cascade/index.rs`): matching every rule against every element is
+  5.5's work bound, rules × elements × depth × compounds, and 5.26's CSS bomb (10,000
+  rules `.cN span` over 100,000 `div`s each holding a `span`) is 10^9 matches: 647 s in
+  release. Each complex selector of each rule is now filed under a subject key (the first
+  ID, else class, else type directly in its last compound) and an ancestor key (likewise,
+  from a compound with a descendant or child combinator to its right), ASCII-lowercased;
+  an element tries only the rules filed under none or one of its own keys and none or one
+  of its ancestors' keys, which the walk keeps as a multiset as it enters and leaves
+  elements. The same rules are then matched exactly as before, in the same order. The
+  invariant, every rule that matches an element is filed where that element looks, is
+  argued in `index.rs` from Selectors 4 §21.3, §16 and the ID, class and type selectors'
+  definitions, not proven, and tested: the result is compared with `cascade_unindexed`,
+  the old path, kept as the oracle. The bomb now cascades in
+  1.1 s. The subject key alone would not have helped it: every one of those rules has
+  `span` as its subject.
 - **Sorting** (§6.1): origin and importance (user agent normal, presentational hints, author
   normal, author important, user agent important), then `style` attributes above any
   selector, then specificity, then order of appearance.
@@ -380,6 +395,28 @@ verification of the harnesses is green.
 - **Unit tests**: per module (sort and rollback, the microsyntaxes, the logical mapping,
   rule preparation and specificity of lists, hints, prose rules, computed values and
   defaulting) and end to end on parsed documents, including a Hacker News-shaped page.
+- **The rule index**: **no Kani harness**. Each one tried stopped at a local cap and was
+  removed: the lookup on three sorted entries over three keys with two element and two
+  ancestor keys (20 minutes; 5.5 GB with a `BTreeMap`, 2.9 GB with a sorted vector), on
+  two entries over two keys with one of each (over 8 GB in 1,091 s); the ancestor
+  multiset's push and pop of one key (over 8 GB in 158 s) and of two (20 minutes, 7.2 GB).
+  The index's invariant, that every matching rule is filed where the element looks, is
+  argued, not proven, and tested:
+  the golden test (1,761 documents) and the WPT test (7 pages) require the indexed table
+  to equal `cascade_unindexed`'s, and `tests/cascade_index.rs` does so on 300 random rule
+  sets (type, universal, ID, class, attribute, `:is()`, `:where()`, `:not()`,
+  `:first-child`, all four combinators; mixed case, quirks and no-quirks, SVG's
+  `foreignObject`). That test fails on each of four wrong indexes tried by hand (a sibling
+  combinator read as an ancestor link, rules without an ancestor key dropped, class keys
+  not lowercased, type keys not lowercased). `tests/cascade_scale.rs` measures the bomb
+  (ignored; run by hand in release):
+
+  | Rules × `div`s | Before (main; the last row through `cascade_unindexed`) | With the index |
+  |---|--:|--:|
+  | 1,000 × 10,000 | 6.3 s | 0.13 s |
+  | 10,000 × 1,000 | 6.6 s | 0.03 s |
+  | 10,000 × 100,000 | 647 s | 1.1 s |
+
 - **The cut user agent sheets**: `ua::Sheets::for_document` drops the rules whose subject
   names no element of a document; `cascade_with` cascades with such sheets. The golden and
   WPT tests cascade every document both ways natively and require equal tables (1,761 and 7

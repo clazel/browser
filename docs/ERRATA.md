@@ -221,7 +221,23 @@ it evidently means. Each entry records what we specified instead.
   `receive` in `crates/clazel-tls/src/hello/bootstrap_spec.rs` (plaintext
   ServerHello/HRR) and `compatibility_ccs_dropped` in
   `crates/clazel-tls/src/connection/dispatcher_spec.rs` (protected
-  handshake).
+  handshake), and `receive_record` in
+  `crates/clazel-tls/src/transcription/connection.rs` (the clean-room
+  transcription, both phases).
+- **The other reading, and why not.** The clean-room transcription first read
+  it the other way, in an entry of its own written without reading this one:
+  drop the record and keep the fragments, because §5's sentence is a
+  receiver's rule explicit about time and §5.1's binds the sender with no
+  receiver action. The equivalence proof between the two found the
+  disagreement and kept this reading, for three reasons. The transcription
+  itself already reads the same §5.1 sentence as a receiver's rule for an
+  interleaved alert or application data record (`unexpected_message`), and a
+  CCS is "other record types" just as they are. A stream with a CCS inside a
+  message breaks a MUST NOT of §5.1, while one that drops it at a boundary
+  breaks nothing, so refusing loses no conforming peer. And BoringSSL and NSS
+  refuse it, which `crates/clazel-crypto/tests/conformance_tls.rs` pins. The
+  transcription's entry was removed and its `receive_record` changed, with
+  this reasoning at the spot.
 - **Reported upstream:** not yet.
 
 ## FIPS 186-5 §6.4.2 step 3 numbers its two sub-steps "a." and "a."
@@ -463,7 +479,9 @@ it evidently means. Each entry records what we specified instead.
 - **We specify:** `illegal_parameter`, §4.2's MUST, in the clean-room transcription
   (`recognized_but_not_specified` and `response_block_failures` in
   `crates/clazel-tls/src/transcription/extensions.rs`). `unsupported_extension`
-  stays for an extension the client did not offer.
+  stays for an extension the client did not offer. The crate's spec reads it the
+  same way (`ErrKind::ExtensionNotAllowed`, `illegal_parameter`, in
+  `check_extensions` of `crates/clazel-tls/src/spec.rs`).
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §4.1.3's ServerHello cannot hold the older hello it must check
@@ -480,7 +498,13 @@ it evidently means. Each entry records what we specified instead.
 - **We specify:** the version is detected with the extensions optional and no floor;
   §4.1.3's structure applies once the message is known to be TLS 1.3 or a
   HelloRetryRequest (`read_server_hello_any_version` and `receive_server_hello` in
-  `crates/clazel-tls/src/transcription/`).
+  `crates/clazel-tls/src/transcription/`). The crate's spec does the same
+  (`legacy_server_hello_without_supported_versions` in
+  `crates/clazel-tls/src/spec.rs`, `validate` and `below_tls13` in
+  `crates/clazel-tls/src/hello/spec.rs`). That the two agree is proven by
+  `theorem_hello_equivalence` in
+  `crates/clazel-tls/src/transcription_equivalence/hello.rs` (with
+  `lemma_preflight` for the version detection), for every body.
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §4.1.4, §4.2.1 and Appendix D.5 disagree on ServerHello.legacy_version
@@ -499,25 +523,11 @@ it evidently means. Each entry records what we specified instead.
   0x0300 always aborts with `protocol_version`; a HelloRetryRequest's other values
   must be 0x0303, or `illegal_parameter` by §6's note; with supported_versions, a
   ServerHello's is otherwise ignored.
-- **Reported upstream:** not yet.
-
-## RFC 8446 §5 and §5.1: dropping change_cipher_spec "at any time" against no interleaving
-
-- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
-- **Text:** §5: "An implementation may receive an unencrypted record of type
-  change_cipher_spec consisting of the single byte value 0x01 at any time after the
-  first ClientHello ... and MUST simply drop it without further processing." §5.1:
-  "if a handshake message is split over two or more records, there MUST NOT be any
-  other records between them."
-- **Problem:** a change_cipher_spec between two fragments of one handshake message
-  meets the first sentence and breaks the second.
-- **We specify:** in the clean-room transcription, the record is dropped and the
-  fragments kept (`receive_record` in
-  `crates/clazel-tls/src/transcription/connection.rs`), because §5's sentence is a
-  receiver's rule explicit about time, and §5.1's binds the sender and gives the
-  receiver no action. This entry was written without reading the earlier entry above
-  on the same subject, only its heading, so that the two readings stay independent;
-  the later equivalence proof decides if they differ.
+- **The crate's spec follows it too** (`parsed` in
+  `crates/clazel-tls/src/hello/spec.rs`). It used to ignore the field in both
+  messages, §4.2.1's reading; the equivalence proof found the difference, and
+  the crate was changed to this entry's reading. The HelloRetryRequest check
+  rests on §4.1.4's sentence quoted above, which names the field explicitly.
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §5.3: "each record" has no sequence number before a key
@@ -530,7 +540,9 @@ it evidently means. Each entry records what we specified instead.
   nonce would then be wrong. §5's "without further processing" contradicts that.
 - **We specify:** the number counts records protected under the key, in the clean-room
   transcription (`receive_ciphertext` and `send_one` in
-  `crates/clazel-tls/src/transcription/connection.rs`).
+  `crates/clazel-tls/src/transcription/connection.rs`). The crate's spec does the
+  same: a compatibility CCS never reaches a `traffic::spec` epoch, so it uses no
+  nonce (`crates/clazel-tls/src/traffic/spec.rs`, `connection/dispatcher_spec.rs`).
 - **Reported upstream:** not yet.
 
 ## RFC 8446 §4.4.3's "unless" gives a client nothing to verify with
@@ -545,7 +557,150 @@ it evidently means. Each entry records what we specified instead.
   willing to verify".
 - **We specify:** a client refuses a CertificateVerify whose algorithm it did not offer,
   always, with `illegal_parameter` by §6's note (`certificate_verify_failures` in
-  `crates/clazel-tls/src/transcription/authentication.rs`).
+  `crates/clazel-tls/src/transcription/authentication.rs`). The crate's spec does
+  the same (`on_verify` in `crates/clazel-tls/src/auth/spec.rs`), and the two are
+  proven equal there (`transcription_equivalence::auth`).
+- **Reported upstream:** not yet.
+
+## RFC 8446 §4.1.3: which ServerHello "indicates TLS 1.2 or below"
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** §4.1.3: "TLS 1.3 clients receiving a ServerHello indicating TLS 1.2 or
+  below MUST check that the last 8 bytes are not equal to either of these values."
+  §4.2.1: "If this extension is not present, servers which are compliant with this
+  specification and which also support TLS 1.2 MUST negotiate TLS 1.2 or prior as
+  specified in [RFC5246]".
+- **Problem:** a ServerHello with no supported_versions and a legacy_version above
+  0x0303 indicates neither TLS 1.3 (which needs supported_versions, §4.1.3) nor,
+  read narrowly by its legacy_version, TLS 1.2 or below. Whether its random must be
+  checked is not said.
+- **We specify:** it does indicate TLS 1.2 or below, and the sentinel is checked
+  (`illegal_parameter`, by §6's note). TLS 1.3 is negotiated only through
+  supported_versions, and no version above 0x0303 is negotiated through
+  legacy_version, so a ServerHello without the extension can only mean an older
+  version; and the sentinel exists to catch a downgrade, so the reading that checks
+  it more often is the safer one (maintainer's decision on #139). The crate's spec
+  reads it so (`parameters` and `below_tls13` in
+  `crates/clazel-tls/src/hello/spec.rs`, which check the sentinel whatever the
+  legacy_version). The clean-room transcription first checked it only for a
+  legacy_version of at most 0x0303; the equivalence proof found the difference, and
+  `older_server_hello_failures` in
+  `crates/clazel-tls/src/transcription/key_exchange.rs` now lists the sentinel's
+  failure in that case too, quoting §4.1.3 and §4.2.1 at the spot.
+- **Reported upstream:** not yet.
+
+## RFC 8446 Appendix D.4: where the client's dummy change_cipher_spec goes after a HelloRetryRequest
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>
+- **Text:** Appendix D.4: "If not offering early data, the client sends a dummy
+  change_cipher_spec record (see the third paragraph of Section 5) immediately
+  before its second flight. This may either be before its second ClientHello or
+  before its encrypted handshake flight."
+- **Problem:** "This may either be ... or ..." can be read as a free choice in every
+  handshake, which would let a client that received a HelloRetryRequest send the
+  record only before its encrypted flight, though that is then its third flight,
+  not its second.
+- **We specify:** "its second flight" is the first flight after the first
+  ClientHello, and the sentence names the two cases (with and without a
+  HelloRetryRequest). So exactly one record, before the second ClientHello if there
+  is one, and otherwise before the encrypted flight. In the clean-room
+  transcription: `before_second_flight` and `start_client` in
+  `crates/clazel-tls/src/transcription/middlebox.rs` (#140).
+- **The crate's spec agrees:** the record precedes ClientHello2 after a
+  HelloRetryRequest (`receive`'s `Outcome::Retry` in
+  `crates/clazel-tls/src/hello/bootstrap_spec.rs`), and otherwise the encrypted
+  flight, once (`needs_ccs` in `crates/clazel-tls/src/traffic/handshake_spec.rs`,
+  false after a retry, and `ccs_pending` in
+  `crates/clazel-tls/src/connection/dispatcher_spec.rs`).
+- **Reported upstream:** not yet.
+
+## RFC 5764 §4.1.3: "invalid_parameter" is not a TLS alert
+
+- **Spec:** RFC 5764, May 2010, <https://www.rfc-editor.org/rfc/rfc5764>
+- **Text:** §4.1.3: "If the client detects a nonzero-length MKI in the server's
+  response that is different than the one the client offered, then the client MUST
+  abort the handshake and SHOULD send an invalid_parameter alert."
+- **Problem:** TLS has no `invalid_parameter` alert.
+- **We specify:** `illegal_parameter(47)`, the alert for a semantically invalid
+  parameter, which is evidently meant (`use_srtp_response_valid` in
+  `crates/clazel-tls/src/transcription/extension_bodies.rs`, #140).
+- **The crate's spec:** not applicable. It never offers use_srtp (`extensions` in
+  `crates/clazel-tls/src/hello/client_spec.rs`), so a use_srtp response is refused
+  as not offered (`unsupported_extension`, RFC 8446 §4.2) on both sides.
+- **Reported upstream:** not yet.
+
+## RFC 8446 §4.2: signed_certificate_timestamp in CertificateRequest has no defined body
+
+- **Spec:** RFC 8446, August 2018, <https://www.rfc-editor.org/rfc/rfc8446>, and
+  RFC 6962, June 2013, <https://www.rfc-editor.org/rfc/rfc6962>
+- **Text:** RFC 8446 §4.2's table: "signed_certificate_timestamp [RFC6962] | CH, CR,
+  CT". RFC 6962 §3.3.1: a client requests SCTs with an extension of type
+  "signed_certificate_timestamp" and empty "extension_data".
+- **Problem:** RFC 8446 §4.4.2.1 defines the CertificateRequest form of
+  status_request ("an empty 'status_request' extension") and the Certificate forms
+  of both, but says nothing of signed_certificate_timestamp in a
+  CertificateRequest, and RFC 6962 predates TLS 1.3.
+- **We specify:** in a CertificateRequest it is a request, and RFC 6962's request
+  has empty extension_data, so the body must be empty; anything else is
+  `decode_error`. In the clean-room transcription:
+  `signed_certificate_timestamp_request_well_formed` in
+  `crates/clazel-tls/src/transcription/extension_bodies.rs` (#140).
+- **The crate's spec** read the body as opaque and accepted any. The equivalence
+  proof found the difference, and the crate now follows this reading (`ext_body_ok`
+  in `crates/clazel-tls/src/spec.rs`).
+- **Reported upstream:** not yet.
+
+## RFC 6066 §3: no rule for a host that is not a DNS hostname, and no hostname grammar
+
+- **Spec:** RFC 6066, January 2011, <https://www.rfc-editor.org/rfc/rfc6066>
+- **Text:** §3: ""HostName" contains the fully qualified DNS hostname of the
+  server, as understood by the client. ... Literal IPv4 and IPv6 addresses are not
+  permitted in "HostName". It is RECOMMENDED that clients include an extension of
+  type "server_name" in the client hello whenever they locate a server by a
+  supported name type."
+- **Problem:** the text forbids IP literals but does not say what a client
+  connecting to one sends, or how it tells a literal from a name. Nor does it
+  give a hostname grammar: "fully qualified DNS hostname" points at the DNS,
+  whose labels are not limited to letters, digits and hyphens (RFC 2181 §11:
+  "any binary string whatever can be used as the label of any resource
+  record"), and browsers send the names a URL gives, such as `a_b.example`.
+- **We specify:** the client sends the extension exactly when the host is a
+  DNS hostname, read with RFC 2181 §11: labels of "between 1 and 63 octets",
+  each octet ASCII (RFC 6066 §3: "a byte string using ASCII encoding"), at most
+  253 octets of text (RFC 1035 §2.3.4's 255 in wire form), and not an IP
+  literal: no `:` (every IPv6 literal has one) and a last label that is not
+  all digits (RFC 1123 §2.1: "a valid host name can never have the
+  dotted-decimal form #.#.#.#, since at least the highest-level component
+  label will be alphabetic"); otherwise it sends no server_name extension.
+  Refusing names outside RFC 5890's LDH grammar would lose interoperability
+  with no gain in security.
+- **History:** the clean-room transcription (`host_name_for` in
+  `crates/clazel-tls/src/transcription/server_name.rs`, #140) first required
+  RFC 5890 §2.3.1's LDH labels, and the crate's spec
+  (`crates/clazel-tls/src/host/spec.rs`) sent any `Dns` name of 1 to 253
+  octets without a trailing dot. The equivalence proof (#139) found both
+  differences. The maintainer chose to send non-LDH names, so the
+  transcription now reads labels by RFC 2181 §11; and the crate, which sent
+  names with empty or 64-octet labels, non-ASCII octets or the form of an IP
+  literal, now refuses those hosts as the caller's error (`dns_labels_ok`).
+  `host::theorem_host_equivalence` proves the two agree on every host.
+- **Reported upstream:** not yet.
+## RFC 7301 §3.2: no client action for a protocol it did not advertise
+
+- **Spec:** RFC 7301, July 2014, <https://www.rfc-editor.org/rfc/rfc7301>
+- **Text:** §3.2: "It is expected that a server will have a list of protocols that
+  it supports, in preference order, and will only select a protocol if the client
+  supports it."
+- **Problem:** the sentence is not normative and no client check follows. §3.1's
+  "MUST contain exactly one 'ProtocolName'" names no receiver action either.
+- **We specify:** a selected protocol the client did not advertise, or a list of
+  other than one name, makes the EncryptedExtensions "syntactically correct but
+  semantically invalid" (RFC 8446 §6), so the client aborts with
+  `illegal_parameter` (`alpn_response_valid` in
+  `crates/clazel-tls/src/transcription/extension_bodies.rs`, #140).
+- **The crate's spec:** not applicable. It never offers ALPN
+  (`crates/clazel-tls/src/hello/client_spec.rs`), so an ALPN response is refused as
+  not offered (`unsupported_extension`) on both sides.
 - **Reported upstream:** not yet.
 
 ## OpenType 1.9 `otff`: the checksum sample declares `Endptr` and tests `EndPtr`

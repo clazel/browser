@@ -14,11 +14,12 @@
 //!   processing"; §5.1 says "if a handshake message is split over two or more records,
 //!   there MUST NOT be any other records between them". The first is a receiver's
 //!   rule, explicit about time; the second binds the sender and states no receiver
-//!   action. So this model drops the record and keeps the fragments. See
-//!   `docs/ERRATA.md`. **This choice was made after this file's author saw only the
-//!   heading of an existing `docs/ERRATA.md` entry on the same subject** and without
-//!   reading its body. An equivalence that fails here is worth a look rather than
-//!   assumed to be this file's bug or the crate's.
+//!   action. This file's author dropped the record and kept the fragments, after
+//!   seeing only the heading of an existing `docs/ERRATA.md` entry on the same subject.
+//!   **The equivalence author changed that** (see `receive_record`): the record is
+//!   fatal with `unexpected_message` inside a fragmented message, as the crate and
+//!   the one `docs/ERRATA.md` entry now say, because this file already treats §5.1 as
+//!   a receiver's rule for every other interleaved record type.
 //! - An interleaved alert or application data record is `unexpected_message` (§5.1's
 //!   rule, with no conflict) even if the alert is a closure or error one: the check
 //!   comes before the alert is read.
@@ -38,8 +39,9 @@
 //!   reading, by the reader: ServerHello, the server's Finished and KeyUpdate. A
 //!   HelloRetryRequest does not "immediately precede a key change", so the check does
 //!   not cover it. The message's own failures are looked at first.
-//! - Reads after a closure alert are skipped: "Any data received after a closure alert
-//!   has been received MUST be ignored." Writing is still possible: "This does not have
+//! - Reads after a close_notify are skipped: "Any data received after a closure alert
+//!   has been received MUST be ignored." A user_canceled changes nothing (changed by the
+//!   equivalence author; see `receive_alert_content`). Writing is still possible: "This does not have
 //!   any effect on its read side" is the same rule mirrored.
 //! - A fatal alert from the peer ends the run with `PeerError`. Its forgetting of
 //!   secrets (§6 "MUST forget") is not modelled, as a pure function has no memory.
@@ -51,7 +53,132 @@
 //!   coalescing, no dummy change_cipher_spec) are in `record`, and are what makes this
 //!   file a function: any other choice would be equally conformant.
 //! - §6.1 "Each party MUST send a 'close_notify' alert before closing its write side"
-//!   is [`close_write`]. Transport closure itself is out of scope.
+//!   is [`close_write`]. Closing the transport ourselves is out of scope; its end as
+//!   received is [`receive_transport_end`] (below).
+//!
+//! §6.1, the closure of the write side. [`close_write`] is the record alone;
+//! [`close_write_side`] is the operation, which sends it and sets `write_closed`.
+//! - **What is required.** close_notify "notifies the recipient that the sender will not
+//!   send any more messages on this connection". Read as a promise binding the sender:
+//!   once `write_closed`, no operation of ours writes a record. This covers application
+//!   data ([`send_application_data`], [`SendResult::WriteClosed`]), a KeyUpdate
+//!   ([`request_key_update`]), a second close_notify ([`close_write_side`] writes nothing)
+//!   and the handshake messages A.1 would send ([`apply_actions`]).
+//! - **Receiving the peer's close_notify** closes our read side in every state, CONNECTED
+//!   or during the handshake: "Any data received after a closure alert has been received
+//!   MUST be ignored" (unchanged from before; see `receive_record`). It writes nothing and
+//!   leaves our write side open: "Note that this is a change from versions of TLS prior to
+//!   TLS 1.3 in which implementations were required to react to a 'close_notify' by
+//!   discarding pending writes and sending an immediate 'close_notify' alert of their
+//!   own." Our own close_notify then is the application's choice, by [`close_write_side`]:
+//!   "Either party MAY initiate a close of its write side of the connection".
+//! - **Choice: close_notify during the handshake.** The RFC says nothing particular of a
+//!   close_notify received before CONNECTED. It is handled as in CONNECTED: the read side
+//!   closes, the A.1 state stays where it was, nothing is sent and no error is reported.
+//!   The handshake can then never complete, since what the server sends next is ignored;
+//!   the RFC gives no alert for this (close_notify is not among §6.2's error conditions),
+//!   and "Either party MAY initiate a close of its write side" leaves our close_notify to
+//!   the application.
+//! - **Choice: end-of-data.** [`end_of_data`] is `read_closed`: §6 "Upon receiving such an
+//!   alert, the TLS implementation SHOULD indicate end-of-data to the application" is
+//!   followed, and §6.1 "MUST receive a 'close_notify' alert before indicating
+//!   end-of-data" holds by construction, since nothing else sets it. A transport-level
+//!   close is not end-of-data unless a close_notify came first: "the receiver cannot know
+//!   that all the data that was sent has been received" ([`receive_transport_end`], below).
+//! - **Choice: closing the write side during the handshake** is allowed, since §6.1 puts
+//!   no time on "Either party MAY initiate a close of its write side", and user_canceled
+//!   ("canceling the handshake ... SHOULD be followed by a 'close_notify'") presumes a
+//!   close_notify before the handshake ends. The record goes under [`protection_for_alert`].
+//!   Afterwards A.1's "Send" arrows write nothing (a second ClientHello, an empty
+//!   Certificate, the Finished), but the state still moves as A.1 draws it on what is
+//!   received, because "This does not have any effect on its read side of the connection".
+//!   So after such a close, the A.1 state names how far reading got, not what was sent.
+//! - **Choice: the send state after close_notify** is left where it was (`send` is not
+//!   advanced past the close_notify record), since no record is protected under it again.
+//! - **An owed KeyUpdate after closure is never sent.** §4.6.3 owes it "prior to sending
+//!   its next Application Data record"; after close_notify there is no next Application
+//!   Data record, so the obligation never falls due. Nor is it sent before the close_notify:
+//!   close_notify is not an Application Data record. A KeyUpdate received after our close
+//!   still updates the receive keys ("Upon receiving a KeyUpdate, the receiver MUST update
+//!   its receiving keys") and still sets `key_update_owed`, which then has no effect.
+//! - A KeyUpdate the application asks for ([`request_key_update`]) with
+//!   "update_not_requested" pays the owed one, since it is "a KeyUpdate of its own with
+//!   request_update set to 'update_not_requested'"; one with "update_requested" does not.
+//! - **Error alerts and closure.** "unless it has already sent some error alert": an
+//!   error we detect is `Receive::Abort`, which carries no connection, and §6.2 "MUST close
+//!   the connection without sending or receiving any additional data" ends the run there,
+//!   so no close_notify follows an error alert of ours. Likewise a received error alert
+//!   (`Receive::PeerError`), after which §6 "MUST NOT allow any further data to be sent".
+//!   The other order is a choice: an error detected while reading after our close_notify
+//!   sends no alert ([`abort_records`]). §6.2's "SHOULD send an appropriate fatal alert"
+//!   is a SHOULD, and sending it would break the close_notify's "will not send any more
+//!   messages on this connection". [`abort_record`] still gives the record such an alert
+//!   would be, unchanged.
+//! - **Choice: which refusal first.** A send that is both premature and after closure is
+//!   [`SendResult::WriteClosed`]: closure is permanent, CONNECTED may yet come.
+//!
+//! §6.1, the end of the transport as received. [`receive_transport_end`] is the event
+//! that the underlying transport will deliver no more bytes (TCP's end of stream). §1:
+//! "the only requirement from the underlying transport is a reliable, in-order data
+//! stream", so the bytes before it are all that the peer's TLS wrote and that will ever
+//! arrive. The RFC's text on it is §6.1's: "If a transport-level close is received prior
+//! to a 'close_notify', the receiver cannot know that all the data that was sent has been
+//! received", and "If the application protocol using TLS provides that any data may be
+//! carried over the underlying transport after the TLS connection is closed, the TLS
+//! implementation MUST receive a 'close_notify' alert before indicating end-of-data to
+//! the application layer. No part of this standard should be taken to dictate the manner
+//! in which a usage profile for TLS manages its data transport, including when
+//! connections are opened or closed."
+//! - **What is required.** After the peer's close_notify (`read_closed`), the end of the
+//!   transport is the orderly end ([`TransportEnd::EndOfData`]); end-of-data was already
+//!   indicated by the close_notify ([`end_of_data`]). Before it, end-of-data is not
+//!   indicated ([`TransportEnd::Truncated`]): [`end_of_data`] stays false, which meets the
+//!   MUST.
+//! - **Choice: the MUST is applied whatever the application protocol.** Its condition ("If
+//!   the application protocol ... provides that any data may be carried over the
+//!   underlying transport after the TLS connection is closed") is about the application,
+//!   which this transcription does not know; and the only text that lets a TLS
+//!   implementation indicate end-of-data at all is §6's "Upon receiving such an alert",
+//!   that is a close_notify. So a transport-level close alone never indicates end-of-data.
+//! - **Choice: truncation is not a [`ClientError`] and sends no alert.** §6.2's
+//!   "Whenever an implementation encounters a fatal error condition, it SHOULD send an
+//!   appropriate fatal alert" covers the conditions of the RFC's text, each with its alert;
+//!   none of them, nor any alert of §6.2's list, describes a transport that ended, and §6.1
+//!   gives the receiver no action beyond knowing it "cannot know that all the data that
+//!   was sent has been received". So it is reported to the application as
+//!   [`TransportEnd::Truncated`], a third outcome next to end-of-data and an error, and
+//!   [`Progress::records_to_send`] is empty. This holds in every A.1 state, CONNECTED and
+//!   during the handshake alike, and whether or not our own close_notify has gone:
+//!   "Both parties need not wait to receive a 'close_notify' alert before closing their
+//!   read side of the connection, though doing so would introduce the possibility of
+//!   truncation".
+//! - **Choice: during the handshake**, from WAIT_SH (and before the first ServerHello) to
+//!   WAIT_FINISHED, the end of the transport is the same [`TransportEnd::Truncated`]: the
+//!   A.1 state stays where it was and the handshake can never complete, since no message
+//!   will come. The RFC names no alert for it (A.1 has no arrow for it, and §6.2's
+//!   "abort the handshake" is said only of the conditions it names), so none is sent. The
+//!   application learns that the handshake did not complete from the A.1 state of the
+//!   connection returned.
+//! - **Choice: bytes pending are discarded, and are not `decode_error`.** The bytes of an
+//!   incomplete record (what [`receive_stream`] returns in the second place of its pair)
+//!   and an incomplete handshake message (`handshake_fragments`) can never be completed.
+//!   §6's note ("a message which cannot be parsed according to the syntax (e.g., have a
+//!   length extending beyond the message boundary ...) MUST terminate the connection with a
+//!   'decode_error' alert") is read as about a message received whole, whose fields
+//!   disagree with its own length; a record cut by the end of the transport has not been
+//!   received, which is §6.1's "cannot know that all the data that was sent has been
+//!   received". So they are truncation like a cut between records. Nothing of an incomplete
+//!   record is delivered ([`Progress::application_data`] is empty): §5.2 deprotects a
+//!   whole record only. After a close_notify they are ignored in any case: "Any data
+//!   received after a closure alert has been received MUST be ignored."
+//! - **Choice: the connection afterwards** is returned as it was. No more bytes will
+//!   arrive, so its read state (`receive`, `handshake_fragments`) is never used again. Its
+//!   write side is not touched: the end of the peer's transport is not our close_notify
+//!   ("No part of this standard should be taken to dictate ... when connections are opened
+//!   or closed"), so in CONNECTED the application may still send data, and it may close
+//!   its write side by [`close_write_side`], which sends the close_notify that §6.1
+//!   requires "before closing its write side of the connection". Nothing is sent on the
+//!   application's behalf.
 
 #[allow(unused_imports)]
 use vstd::prelude::*;
@@ -105,6 +232,9 @@ pub struct Connection {
     /// §4.6.3: a KeyUpdate of ours is owed "prior to sending its next Application
     /// Data record".
     pub key_update_owed: bool,
+    /// §6.1: our close_notify has been sent, which "notifies the recipient that the sender
+    /// will not send any more messages on this connection".
+    pub write_closed: bool,
 }
 
 /// What a record or a stream leaves behind.
@@ -175,11 +305,16 @@ pub open spec fn apply_actions(p: Primitives, connection: Connection, actions: S
     } else {
         let tail = actions.subrange(1, actions.len() as int);
         match actions[0] {
-            Action::SendHandshake(message, legacy_record_version) => {
-                let (records, send) = send_blocks(p, connection.send, ct_handshake(), legacy_record_version, fragment_blocks(message));
-                let (last, more) = apply_actions(p, Connection { send, ..connection }, tail);
-                (last, records + more)
-            },
+            Action::SendHandshake(message, legacy_record_version) =>
+                if connection.write_closed {
+                    // §6.1: after our close_notify, "the sender will not send any more
+                    // messages on this connection". The message is not written.
+                    apply_actions(p, connection, tail)
+                } else {
+                    let (records, send) = send_blocks(p, connection.send, ct_handshake(), legacy_record_version, fragment_blocks(message));
+                    let (last, more) = apply_actions(p, Connection { send, ..connection }, tail);
+                    (last, records + more)
+                },
             Action::SetReceiveSecret(secret) =>
                 apply_actions(p, Connection { receive: Protection::Protected(traffic_state(p, secret)), ..connection }, tail),
             Action::SetSendSecret(secret) =>
@@ -202,6 +337,7 @@ pub open spec fn start_connection(p: Primitives, hello: ClientHello, x25519_priv
         handshake_fragments: seq![],
         read_closed: false,
         key_update_owed: false,
+        write_closed: false,
     };
     apply_actions(p, connection, seq![Action::SendHandshake(write_client_hello(hello), initial_client_hello_record_version())])
 }
@@ -274,13 +410,22 @@ pub open spec fn receive_alert_content(connection: Connection, content: Seq<u8>)
             // §5.1, §6.
             None => Receive::Abort(ClientError::Malformed),
             Some((_level, description)) =>
-                if is_closure_alert(description) {
+                if description == ad_close_notify() {
                     // §6.1.
                     Receive::Continue(Progress {
                         connection: Connection { read_closed: true, ..connection },
                         application_data: seq![],
                         records_to_send: seq![],
                     })
+                } else if description == ad_user_canceled() {
+                    // Changed by the equivalence author (transcription_equivalence): this
+                    // file closed the read side on user_canceled too. §6.1: user_canceled
+                    // "notifies the recipient that the sender is canceling the handshake for
+                    // some reason unrelated to a protocol failure" and "This alert SHOULD be
+                    // followed by a 'close_notify'", which would be ignored if user_canceled
+                    // had already ended the read side; "Any data received after a closure
+                    // alert" is read as after the close_notify. So it changes nothing.
+                    Receive::Continue(Progress { connection, application_data: seq![], records_to_send: seq![] })
                 } else {
                     // §6: "Upon receiving an error alert, the TLS implementation SHOULD
                     // indicate an error to the application and MUST NOT allow any further
@@ -396,6 +541,18 @@ pub open spec fn receive_record(p: Primitives, connection: Connection, header: R
             Receive::Abort(ClientError::UnexpectedRecordType)
         } else if fragment != seq![0x01u8] {
             Receive::Abort(ClientError::ChangeCipherSpecBadValue)
+        } else if connection.handshake_fragments.len() != 0 {
+            // Changed by the equivalence author (transcription_equivalence), resolving
+            // docs/ERRATA.md "RFC 8446 §5 and §5.1: a compatibility CCS inside a
+            // fragmented handshake message". §5.1: "Handshake messages MUST NOT be
+            // interleaved with other record types. That is, if a handshake message is
+            // split over two or more records, there MUST NOT be any other records
+            // between them." This file already reads that sentence as a receiver's rule
+            // for alert and application data records (`InterleavedRecord`); a
+            // change_cipher_spec record is another record type, and Appendix D.4 puts the
+            // server's at a message boundary ("immediately after its first handshake
+            // message"), so §5's drop is read as applying at a boundary only.
+            Receive::Abort(ClientError::InterleavedRecord)
         } else {
             Receive::Continue(Progress { connection, application_data: seq![], records_to_send: seq![] })
         }
@@ -489,12 +646,46 @@ pub open spec fn close_write(p: Primitives, connection: Connection) -> Seq<u8> {
     alert_record(p, connection, ad_close_notify())
 }
 
+/// §6.1: "Either party MAY initiate a close of its write side of the connection by sending
+/// a 'close_notify' alert." The records to write and the connection after them. A second
+/// close writes nothing: the first said "the sender will not send any more messages on
+/// this connection".
+pub open spec fn close_write_side(p: Primitives, connection: Connection) -> (Seq<Seq<u8>>, Connection) {
+    if connection.write_closed {
+        (seq![], connection)
+    } else {
+        (seq![close_write(p, connection)], Connection { write_closed: true, ..connection })
+    }
+}
+
+/// §6.2: on detecting `error`, "it SHOULD send an appropriate fatal alert", unless our
+/// close_notify has already said "the sender will not send any more messages on this
+/// connection" (a modelling choice; see the top of this file).
+pub open spec fn abort_records(p: Primitives, connection: Connection, error: ClientError) -> Seq<Seq<u8>> {
+    if connection.write_closed {
+        seq![]
+    } else {
+        seq![abort_record(p, connection, error)]
+    }
+}
+
+/// §6: on receiving close_notify, "the TLS implementation SHOULD indicate end-of-data to
+/// the application"; §6.1: "the TLS implementation MUST receive a 'close_notify' alert
+/// before indicating end-of-data to the application layer".
+pub open spec fn end_of_data(connection: Connection) -> bool {
+    connection.read_closed
+}
+
 /// The outcome of a send.
 pub enum SendResult {
-    /// "premature Application Data": not in CONNECTED.
+    /// "premature Application Data": not in CONNECTED. For a KeyUpdate, §4.6.3: "This
+    /// message can be sent by either peer after it has sent a Finished message".
     NotConnected,
     /// The records to write, and the connection after them.
     Sent(Seq<Seq<u8>>, Connection),
+    /// §6.1: our close_notify has been sent, and with it the notice that "the sender will
+    /// not send any more messages on this connection". Nothing is written.
+    WriteClosed,
 }
 
 /// §4.6.3: send a KeyUpdate. "Both sender and receiver MUST encrypt their KeyUpdate
@@ -508,9 +699,11 @@ pub open spec fn send_key_update(p: Primitives, connection: Connection, request_
 
 /// A.1, "Can send app data after here"; §4.6.3's owed KeyUpdate first ("prior to sending
 /// its next Application Data record"); §5.3's "MUST either rekey" when the write sequence
-/// number would run out.
+/// number would run out. §6.1: nothing after our close_notify, the owed KeyUpdate included.
 pub open spec fn send_application_data(p: Primitives, connection: Connection, data: Seq<u8>) -> SendResult {
-    if connection.handshake.state != ClientState::Connected {
+    if connection.write_closed {
+        SendResult::WriteClosed
+    } else if connection.handshake.state != ClientState::Connected {
         SendResult::NotConnected
     } else {
         // One record early, so that the KeyUpdate itself still has a number.
@@ -525,6 +718,57 @@ pub open spec fn send_application_data(p: Primitives, connection: Connection, da
         };
         let (records, send) = send_blocks(p, after_update.send, ct_application_data(), other_record_version(), fragment_blocks(data));
         SendResult::Sent(update_records + records, Connection { send, ..after_update })
+    }
+}
+
+/// §4.6.3: a KeyUpdate the application asks for. "This message can be sent by either peer
+/// after it has sent a Finished message"; for a client, A.1's CONNECTED. One with
+/// "update_not_requested" is also the KeyUpdate owed, if one is. §6.1: nothing after our
+/// close_notify. `request_update` is expected to be one of §4.6.3's two values.
+pub open spec fn request_key_update(p: Primitives, connection: Connection, request_update: nat) -> SendResult {
+    if connection.write_closed {
+        SendResult::WriteClosed
+    } else if connection.handshake.state != ClientState::Connected {
+        SendResult::NotConnected
+    } else {
+        let (records, after) = send_key_update(p, connection, request_update);
+        if request_update == update_not_requested() {
+            SendResult::Sent(records, Connection { key_update_owed: false, ..after })
+        } else {
+            SendResult::Sent(records, after)
+        }
+    }
+}
+
+/// §6.1: what the end of the underlying transport means, by whether a close_notify came
+/// first. Each carries the connection afterwards, no Application Data and no records to
+/// write (see the top of this file).
+pub enum TransportEnd {
+    /// The peer's close_notify had been received: the orderly end. §6: "Upon receiving
+    /// such an alert, the TLS implementation SHOULD indicate end-of-data to the
+    /// application", which [`end_of_data`] already did.
+    EndOfData(Progress),
+    /// No close_notify had been received: "If a transport-level close is received prior to
+    /// a 'close_notify', the receiver cannot know that all the data that was sent has been
+    /// received." Not end-of-data, not an error alert: §6.1 "the TLS implementation MUST
+    /// receive a 'close_notify' alert before indicating end-of-data to the application
+    /// layer".
+    Truncated(Progress),
+}
+
+/// §6.1: the underlying transport delivers no more bytes. Whatever is pending (an
+/// incomplete record, an incomplete handshake message) is discarded; nothing is written;
+/// the connection is returned as it was, its write side included.
+pub open spec fn receive_transport_end(connection: Connection) -> TransportEnd {
+    let progress = Progress { connection, application_data: seq![], records_to_send: seq![] };
+    if connection.read_closed {
+        // §6.1: "Any data received after a closure alert has been received MUST be
+        // ignored", the bytes pending included.
+        TransportEnd::EndOfData(progress)
+    } else {
+        // §6.1: "the receiver cannot know that all the data that was sent has been
+        // received".
+        TransportEnd::Truncated(progress)
     }
 }
 

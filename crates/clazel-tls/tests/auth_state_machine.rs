@@ -595,6 +595,47 @@ fn malformed_and_incorrect_server_finished_fail_with_distinct_alerts() -> Result
 }
 
 #[test]
+fn certificate_request_bodies_are_checked() -> Result<(), String> {
+    let crypto = TestCrypto;
+    let verifier = MockVerifier::accepts_chain();
+    let algorithms = Extension {
+        etype: 13,
+        data: &[0x00, 0x02, 0x08, 0x04],
+    };
+    // (extension type, body, expected step): RFC 8446 §4.4.2.1, RFC 6962
+    // §3.3.1 (docs/ERRATA.md), §4.2.4 and §4.2.5.
+    let cases: [(u16, &[u8], Action); 9] = [
+        (5, &[], Action::None),
+        (5, &[1], Action::Fail(DECODE_ERROR)),
+        (18, &[], Action::None),
+        (18, &[1], Action::Fail(DECODE_ERROR)),
+        (47, &[0, 3, 0, 1, 7], Action::None),
+        (47, &[0, 3, 0, 2, 7], Action::Fail(DECODE_ERROR)),
+        (48, &[0, 8, 1, 5, 0, 0, 1, 6, 0, 0], Action::None),
+        (48, &[0, 3, 0, 1, 5], Action::Fail(DECODE_ERROR)),
+        (
+            48,
+            &[0, 8, 1, 5, 0, 0, 1, 5, 0, 0],
+            Action::Fail(ILLEGAL_PARAMETER),
+        ),
+    ];
+    for (etype, data, expected) in cases {
+        let mut auth = start(&crypto)?;
+        assert_eq!(
+            receive(&mut auth, &crypto, &verifier, 8, &encrypted_extensions(&[])),
+            Action::None
+        );
+        let request = certificate_request_body(&[], &[algorithms, Extension { etype, data }]);
+        assert_eq!(
+            receive(&mut auth, &crypto, &verifier, 13, &request),
+            expected,
+            "extension {etype} body {data:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn malformed_requests_unoffered_extensions_and_signature_schemes_are_rejected() -> Result<(), String>
 {
     let crypto = TestCrypto;
@@ -635,7 +676,7 @@ fn malformed_requests_unoffered_extensions_and_signature_schemes_are_rejected() 
         &[],
         &[Extension {
             etype: 47,
-            data: &[0, 0],
+            data: &[0, 3, 0, 1, 7],
         }],
     );
     assert_eq!(

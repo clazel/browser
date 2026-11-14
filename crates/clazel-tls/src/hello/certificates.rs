@@ -133,7 +133,7 @@ pub open spec fn empty_hash(_messages: Seq<u8>) -> Seq<u8> { seq![] }
 /// A bootstrap state awaiting ServerHello with `buf` already reassembled.
 pub open spec fn awaiting_with_buffer(buf: Seq<u8>) -> super::bootstrap_spec::State {
     super::bootstrap_spec::State { mode: super::bootstrap_spec::Mode::AwaitServerHello,
-        hello: None, pending_flight: seq![], compatibility: true,
+        hello: None, pending_flight: seq![], retained: seq![], compatibility: true,
         reassembly: crate::spec::Reasm { buf } }
 }
 
@@ -148,5 +148,55 @@ pub proof fn lemma_ccs_fatal_mid_message()
             super::bootstrap_spec::PeerEvent::Ccs)
             == (awaiting_with_buffer(seq![]), super::bootstrap_spec::Action::None),
 {
+}
+
+/// A bootstrap state that has sent ClientHello2 (the flight `[1]`, a
+/// fixture) with one message retained from the HelloRetryRequest's record:
+/// `[1, 0, 0, 0]`, an empty ClientHello, which the server cannot send.
+pub open spec fn retry_sent_with_retained() -> super::bootstrap_spec::State {
+    super::bootstrap_spec::State { mode: super::bootstrap_spec::Mode::AwaitClientHello2Send,
+        hello: Some(super::client_spec::State { config: super::client_examples::config(),
+            transcript: crate::transcript::spec::State { messages: seq![],
+                phase: crate::transcript::spec::Phase::SecondServerHello, retried: true } }),
+        pending_flight: seq![1u8], retained: seq![seq![1u8, 0u8, 0u8, 0u8]], compatibility: true,
+        reassembly: crate::spec::Reasm { buf: seq![] } }
+}
+
+/// RFC 8446 §5.1: the messages kept after a HelloRetryRequest are processed
+/// when ClientHello2 is acknowledged; a ClientHello among them is
+/// `unexpected_message` then.
+pub proof fn lemma_retained_processed_on_acknowledge()
+    ensures
+        super::bootstrap_spec::acknowledge(|m: Seq<u8>| empty_hash(m), retry_sent_with_retained(), seq![1u8]).1
+            == super::bootstrap_spec::Action::Fail(crate::spec::UNEXPECTED_MESSAGE),
+{
+    assert(super::bootstrap_spec::acknowledge(|m: Seq<u8>| empty_hash(m), retry_sent_with_retained(), seq![1u8]).1
+        == super::bootstrap_spec::Action::Fail(crate::spec::UNEXPECTED_MESSAGE)) by (compute_only);
+}
+
+/// RFC 8446 §5.1: the server's Hello is processed before anything after it
+/// in its record is looked at, so its own failure (here: no Hello controller,
+/// `internal_error`) is the one reported, not the following message.
+pub proof fn lemma_first_message_first()
+    ensures
+        super::bootstrap_spec::receive_messages(|m: Seq<u8>| empty_hash(m), awaiting_with_buffer(seq![]),
+            seq![seq![2u8, 0u8, 0u8, 0u8], seq![2u8, 0u8, 0u8, 0u8]]).1
+            == super::bootstrap_spec::Action::Fail(crate::spec::INTERNAL_ERROR),
+{
+    assert(super::bootstrap_spec::receive_messages(|m: Seq<u8>| empty_hash(m), awaiting_with_buffer(seq![]),
+        seq![seq![2u8, 0u8, 0u8, 0u8], seq![2u8, 0u8, 0u8, 0u8]]).1
+        == super::bootstrap_spec::Action::Fail(crate::spec::INTERNAL_ERROR)) by (compute_only);
+}
+
+/// RFC 8446 §5.1: the initial ClientHello's record has version 0x0301 ("a
+/// record containing an initial ClientHello SHOULD have version 0x0301"),
+/// and the second ClientHello's has 0x0303 ("MUST have version 0x0303").
+pub proof fn lemma_record_versions()
+    ensures
+        super::bootstrap_spec::initial_record(seq![1u8]) == seq![22u8, 3u8, 1u8, 0u8, 1u8, 1u8],
+        super::bootstrap_spec::handshake_record(seq![1u8]) == seq![22u8, 3u8, 3u8, 0u8, 1u8, 1u8],
+{
+    assert(super::bootstrap_spec::initial_record(seq![1u8]) =~= seq![22u8, 3u8, 1u8, 0u8, 1u8, 1u8]) by (compute_only);
+    assert(super::bootstrap_spec::handshake_record(seq![1u8]) =~= seq![22u8, 3u8, 3u8, 0u8, 1u8, 1u8]) by (compute_only);
 }
 }

@@ -150,6 +150,13 @@ impl Host {
                 }
                 OutputRecord::Close { conn } => self.net_op(conn, Op::Close, &mut failed),
                 show @ OutputRecord::Show { .. } => self.shown.push(show),
+                // Item 5.17c: the kernel answers only `GpuExited`,
+                // `GpuSoftware` and `GpuSiteExit` with these, and this host
+                // sends none of them yet (no software mode, no exit watch),
+                // so none arrives; the host's part of 5.17c carries them out.
+                OutputRecord::SpawnGpuSoftware { .. }
+                | OutputRecord::GpuStopped { .. }
+                | OutputRecord::GpuAllSoftware => {}
                 OutputRecord::SubConnect { .. }
                 | OutputRecord::SubSend { .. }
                 | OutputRecord::SubClose { .. } => {} // carried out above

@@ -135,6 +135,14 @@ theorems = [
     "theorem_subfetch_ownership",
     "theorem_subfetch_limits",
     "theorem_commit_ends_subfetches",
+    # Phase 5 item 5.17c: the GPU crash policy. The statements are in
+    # `statements.rs`; the proofs in `gpu_theorems.rs`, the noninterference
+    # over `GpuExited` and its declassified parts in `gpu_rel.rs`.
+    "theorem_gpu_exit_contained",
+    "theorem_gpu_restart_bounded",
+    "theorem_site_cannot_demote_others",
+    "theorem_gpu_sites_wf_kept",
+    "theorem_paint_after_restart",
 ]
 
 [package.metadata.verus]

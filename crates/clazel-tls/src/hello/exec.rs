@@ -112,7 +112,9 @@ fn parameters(sh: &ServerHello<'_>, session_id: &[u8]) -> (out: Option<u8>)
     ensures out == super::spec::parameters(sh@, session_id@),
 {
     match extension(sh.extensions.as_slice(), 43) {
-        None => Some(below_tls13(sh.random)),
+        // §4.1.4 and §6.2 (`super::spec::parameters`).
+        None => if crate::handshake::is_hello_retry_request(sh) { Some(crate::spec::MISSING_EXTENSION) }
+            else { Some(below_tls13(sh.random)) },
         Some(data) => match crate::extension::supported_versions_sh(data) {
             None => Some(50),
             Some(version) => {
@@ -155,8 +157,11 @@ fn share<'a>(sh: &ServerHello<'a>) -> (out: Result<Selection<'a>, u8>)
 fn parsed<'a>(sh: ServerHello<'a>, session_id: &[u8], retried: bool) -> (out: Result<Selection<'a>, u8>)
     ensures result_view(out) == super::spec::parsed(sh@, session_id@, retried),
 {
-    if let Some(alert) = parameters(&sh, session_id) { return Err(alert); }
     let is_retry = crate::handshake::is_hello_retry_request(&sh);
+    // Appendix D.5 and §4.1.4 (`super::spec::parsed`).
+    if sh.legacy_version == 0x0300 { return Err(crate::spec::PROTOCOL_VERSION); }
+    if is_retry && sh.legacy_version != 0x0303 { return Err(crate::spec::ILLEGAL_PARAMETER); }
+    if let Some(alert) = parameters(&sh, session_id) { return Err(alert); }
     if !offered(sh.extensions.as_slice(), is_retry) { Err(110) }
     else if is_retry { retry(&sh, retried) }
     else { share(&sh) }
@@ -172,11 +177,17 @@ pub fn validate<'a>(session_id: &[u8], retried: bool, body: &'a [u8]) -> (out: R
     if crate::handshake::legacy_server_hello_without_supported_versions(body) {
         // RFC 8446 §4.1.3: this ServerHello indicates TLS 1.2 or below, so its
         // Random (body bytes 2..34) is checked for the downgrade sentinels
-        // before the missing version is reported. The preflight accepts only
-        // complete bodies, so the short branch matches the spec's empty
-        // server_random and is never taken.
+        // before the missing version is reported, unless that Random is the
+        // HelloRetryRequest value, which §4.1.3 examines first. The preflight
+        // accepts only complete bodies, so the short branch matches the spec's
+        // empty server_random (never the HelloRetryRequest value) and is never
+        // taken.
         if body.len() < 34 { return Err(crate::spec::PROTOCOL_VERSION); }
-        return Err(below_tls13(vstd::slice::slice_subrange(body, 2, 34)));
+        let random = vstd::slice::slice_subrange(body, 2, 34);
+        let marker = crate::handshake::hrr_random();
+        if !crate::handshake::bytes_eq(random, marker.as_slice()) {
+            return Err(below_tls13(random));
+        }
     }
     match crate::handshake::parse_handshake_body(2, body, 32) {
         Err(error) => Err(crate::encode::alert_for(error).description),

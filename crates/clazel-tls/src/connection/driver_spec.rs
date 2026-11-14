@@ -29,7 +29,28 @@
 //! 6. **A `Fail` after a `Send`** is reported as [`Origin::Sent`]. The one
 //!    other record that can precede a `Fail` is a KeyUpdate whose next epoch
 //!    could not start, which cannot happen for a 32-octet secret.
-//! 7. RFC prose has no numbered algorithm steps; the comments cite sections.
+//! 7. **The end of the transport** ([`eof`]) means only that the server's
+//!    direction of the transport ended (no more bytes will arrive), not that
+//!    the server closed the connection. While a machine runs it is a
+//!    truncation, reported as `Failed(alert, Origin::Truncated)` with the
+//!    alert the machine reports (`internal_error`, never written), and never
+//!    as `Closed`, this machine's end-of-data: §6.1, "If a transport-level
+//!    close is received prior to a "close_notify", the receiver cannot know
+//!    that all the data that was sent has been received", and "the TLS
+//!    implementation MUST receive a "close_notify" alert before indicating
+//!    end-of-data to the application layer". The connection ends, so while our
+//!    write side is open our close_notify goes out first, exactly the record
+//!    a close (`driver_contract::close_ensures`) would send at that point:
+//!    in plaintext during the Hello exchange (choice 4, [`hello_closed`]),
+//!    sealed under the client handshake key during the
+//!    server's flight (`dispatcher_spec::close_wire`), and under the client
+//!    application key afterwards (`post_handshake_spec::truncated`). §6.1:
+//!    "Each party MUST send a "close_notify" alert before closing its write
+//!    side of the connection, unless it has already sent some error alert".
+//!    After our close_notify (`Closing`) nothing more is sent, and once the
+//!    connection has ended (`Closed` or `Failed`, after either side's
+//!    close_notify or an error alert) nothing changes.
+//! 8. RFC prose has no numbered algorithm steps; the comments cite sections.
 #[allow(unused_imports)]
 use vstd::prelude::*;
 verus! {
@@ -43,7 +64,9 @@ pub enum Origin {
     NotSent,
     /// The server sent this fatal alert. It is not answered.
     Peer,
-    /// The transport closed before a close_notify (§6.1); nothing was sent.
+    /// The server's direction of the transport ended before its close_notify
+    /// (§6.1, choice 7): a truncation, not end-of-data. Our close_notify, if
+    /// our write side was open, is the last record sent; no alert is.
     Truncated,
 }
 
@@ -217,10 +240,58 @@ pub open spec fn hello_closed() -> Step {
         stage: Stage::Ended, status: Status::Closed }
 }
 
-/// §6.1: truncation, whichever machine reports it.
-pub open spec fn truncated(description: u8) -> Step {
-    Step { send: seq![], deliver: seq![], stage: Stage::Ended,
+/// §6.1: truncation, whichever machine reports it (choice 7): `record`, our
+/// close_notify or nothing, goes out, and the connection fails as truncated.
+pub open spec fn truncated(record: Seq<u8>, description: u8) -> Step {
+    Step { send: record, deliver: seq![], stage: Stage::Ended,
         status: Status::Failed(description, Origin::Truncated) }
+}
+
+/// §6.1, choice 7: the end of the transport during the Hello exchange. While
+/// the bootstrap waits it fails (`bootstrap_spec::eof`), and our close_notify
+/// goes out in plaintext (choice 4), the record of [`hello_closed`].
+pub open spec fn hello_eof(boot: crate::hello::bootstrap_spec::State) -> Step {
+    match crate::hello::bootstrap_spec::eof(boot).1 {
+        crate::hello::bootstrap_spec::Action::Fail(alert) =>
+            truncated(plaintext_alert(crate::spec::LEVEL_WARNING, crate::spec::CLOSE_NOTIFY), alert),
+        _ => truncated(seq![], crate::spec::INTERNAL_ERROR),
+    }
+}
+
+/// §6.1, choice 7: the end of the transport during the server's flight: the
+/// dispatcher's `eof`, whose record, if any, is our sealed close_notify.
+pub open spec fn flight_eof(ciphers: super::dispatcher_spec::Ciphers, s: super::dispatcher_spec::State) -> Step {
+    match super::dispatcher_spec::eof(ciphers, s).0 {
+        super::dispatcher_spec::Action::Fail(alert, Some(record)) => truncated(record, alert),
+        super::dispatcher_spec::Action::Fail(alert, None) => truncated(seq![], alert),
+        _ => truncated(seq![], crate::spec::INTERNAL_ERROR),
+    }
+}
+
+/// §6.1, choice 7: the end of the transport during application traffic: the
+/// transducer's `step` on `Input::Closed`, whose record, if any, is our
+/// close_notify (`post_handshake_spec::truncated`).
+pub open spec fn app_eof(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher,
+    s: super::post_handshake_spec::State) -> Step
+{
+    let o = super::post_handshake_spec::step(c, f, s, super::post_handshake_spec::Input::Closed).0;
+    truncated(concat(o.wires), match o.end {
+        super::post_handshake_spec::End::Fail(alert) => alert,
+        _ => crate::spec::INTERNAL_ERROR,
+    })
+}
+
+/// §6.1, choice 7: the end of the transport, whichever machine runs. Once the
+/// connection has ended (`status` is where it was), nothing changes.
+pub open spec fn eof(c: crate::schedule::spec::Crypto, f: crate::traffic::spec::Cipher, stage: Stage,
+    status: Status) -> Step
+{
+    match stage {
+        Stage::Hello(boot, _) => hello_eof(boot),
+        Stage::Flight(s) => flight_eof(super::dispatcher_spec::Ciphers { seal: f.seal, open: f.open }, s),
+        Stage::App(s) => app_eof(c, f, s),
+        Stage::Ended => Step { send: seq![], deliver: seq![], stage: Stage::Ended, status },
+    }
 }
 
 /// The server's fatal alert, whichever machine reports it (§6: not answered).

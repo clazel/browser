@@ -98,13 +98,14 @@ pub open spec fn peer_alert_ensures(ciphers: super::dispatcher_spec::Ciphers,
     }
 }
 
-/// RFC 8446 §6.1: the end of the transport before the peer's close_notify is
-/// a truncation; it fails the connection and sends nothing.
-pub open spec fn truncation_ensures(before: super::dispatcher_spec::State,
+/// RFC 8446 §6.1: the end of the transport is [`super::dispatcher_spec::eof`],
+/// exactly. Before the peer's close_notify it is a truncation: our close_notify
+/// goes out, if it can be sealed, and the connection fails with
+/// `internal_error`; in `Failed` and `Closed` nothing happens and the state
+/// is unchanged.
+pub open spec fn truncation_ensures(ciphers: super::dispatcher_spec::Ciphers, before: super::dispatcher_spec::State,
     action: super::dispatcher_spec::Action, after: super::dispatcher_spec::State) -> bool {
-    (before.mode != super::dispatcher_spec::Mode::Failed
-        && before.mode != super::dispatcher_spec::Mode::Closed)
-        ==> (action, after) == super::dispatcher_spec::die(crate::spec::INTERNAL_ERROR)
+    (action, after) == super::dispatcher_spec::eof(ciphers, before)
 }
 
 /// A user_canceled alert is nonfatal in TLS 1.3: report cancellation without
