@@ -98,6 +98,11 @@ const SCOREBOARD_ROWS: &[(&str, &[Place])] = &[
     ("Shells and OS", &[Place::Shell, Place::Os]),
 ];
 
+/// The most squares on one line of a scoreboard row: as many as fit between
+/// the component's name and its count. A component with more wraps onto
+/// further lines, and the image grows taller.
+const SCOREBOARD_PER_LINE: usize = 9;
+
 /// Each tier's name, by what it guarantees, and the short form used after
 /// an arrow to a crate's target tier.
 const TIER: [&str; 3] = ["Memory safe", "Panic-free", "Proven correct"];
@@ -411,7 +416,17 @@ fn ranked<'a>(rows: &'a [Row], places: &[Place]) -> Vec<&'a Row> {
 /// The README scoreboard: headline numbers, and one square per crate in
 /// each component's row.
 fn scoreboard(rows: &[Row]) -> String {
-    let (w, h) = (880.0, 186.0);
+    // Every line of squares past a component's first adds its pitch.
+    let wrapped: usize = SCOREBOARD_ROWS
+        .iter()
+        .map(|(_, places)| {
+            ranked(rows, places)
+                .chunks(SCOREBOARD_PER_LINE)
+                .count()
+                .saturating_sub(1)
+        })
+        .sum();
+    let (w, h) = (880.0, 186.0 + f(wrapped) * 20.0);
     let t = totals(rows);
     let mut b = String::new();
     let stats = [
@@ -475,21 +490,26 @@ fn scoreboard(rows: &[Row]) -> String {
             "<text x=\"516\" y=\"{}\" font-size=\"11\" class=\"mut\">{label}</text>\n",
             y + 12.0
         ));
-        for (i, r) in crates.iter().enumerate() {
-            let x = 600.0 + f(i) * 20.0;
-            if r.target > r.tier {
-                b.push_str(&format!(
+        let mut lines = 0.0;
+        for (line, chunk) in crates.chunks(SCOREBOARD_PER_LINE).enumerate() {
+            lines = f(line) + 1.0;
+            let y = y + f(line) * 20.0;
+            for (i, r) in chunk.iter().enumerate() {
+                let x = 600.0 + f(i) * 20.0;
+                if r.target > r.tier {
+                    b.push_str(&format!(
                     "<rect x=\"{x}\" y=\"{y}\" width=\"16\" height=\"16\" rx=\"4\" fill=\"none\" stroke=\"var(--gap)\" stroke-width=\"1.5\" stroke-dasharray=\"3 2\"/>\
                      <rect x=\"{}\" y=\"{}\" width=\"8\" height=\"8\" rx=\"2\" fill=\"{}\"/>\n",
                     x + 4.0,
                     y + 4.0,
                     colour(r.tier)
                 ));
-            } else {
-                b.push_str(&format!(
+                } else {
+                    b.push_str(&format!(
                     "<rect x=\"{x}\" y=\"{y}\" width=\"16\" height=\"16\" rx=\"4\" fill=\"{}\"/>\n",
                     colour(r.tier)
                 ));
+                }
             }
         }
         let correct = crates.iter().filter(|r| r.tier == 2).count();
@@ -498,7 +518,7 @@ fn scoreboard(rows: &[Row]) -> String {
             y + 12.0,
             crates.len()
         ));
-        y += 25.0;
+        y += 5.0 + f64::max(lines, 1.0) * 20.0;
     }
     y += 4.0;
     let mut x = 516.0;
@@ -951,7 +971,9 @@ pub fn render(
 
 #[cfg(test)]
 mod tests {
-    use super::{PLACES, Rows, numbers, placement_problems, render, short_count};
+    use super::{
+        PLACES, Place, Rows, SCOREBOARD_PER_LINE, numbers, placement_problems, render, short_count,
+    };
 
     fn row(cells: &[&str]) -> Vec<String> {
         cells.iter().map(|c| (*c).to_owned()).collect()
@@ -1037,6 +1059,21 @@ mod tests {
         assert!(detail.contains(
             "Memory safe<tspan font-weight=\"400\" style=\"fill:var(--gap)\"> → correct</tspan>"
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn a_long_scoreboard_row_wraps() -> Result<(), String> {
+        // The renderer has more crates than fit on one line: its tenth
+        // square starts a second line instead of running into the count,
+        // and the image is taller by that line.
+        let renderer = PLACES.iter().filter(|(_, p)| *p == Place::Renderer);
+        assert!(renderer.count() > SCOREBOARD_PER_LINE);
+        let (board, _) = render(&table(), &|_| None)?;
+        assert!(board.contains("<rect x=\"760\" y=\"72\""));
+        assert!(board.contains("<rect x=\"600\" y=\"92\""));
+        assert!(!board.contains("<rect x=\"780\""));
+        assert!(!board.contains("height=\"186\""));
         Ok(())
     }
 
