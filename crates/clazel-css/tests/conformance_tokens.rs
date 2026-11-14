@@ -218,24 +218,47 @@ fn same_list(actual: &[Value], expected: &Json) -> bool {
         && actual.iter().zip(e.iter()).all(|(a, e)| same(a, e)))
 }
 
-/// Cases that differ from the pinned text, as (file, index, why). `css-parsing-tests`
-/// was written for an older draft.
-const EXPECTED_FAILURES: &[(&str, usize, &str)] = &[
+/// A result as compact JSON-like text, to pin what the tokenizer gives. A number is its
+/// value (`0` for either zero) and `_` stands for a field that is not compared.
+fn render(value: &Value) -> String {
+    match value {
+        Value::AnyText => "_".to_owned(),
+        Value::Text(s) => format!("{s:?}"),
+        Value::Number(n) if *n == 0.0 => "0".to_owned(),
+        Value::Number(n) => n.to_string(),
+        Value::List(list) => render_list(list),
+    }
+}
+
+fn render_list(list: &[Value]) -> String {
+    let inner: Vec<String> = list.iter().map(render).collect();
+    format!("[{}]", inner.join(","))
+}
+
+/// Cases that differ from the pinned text, as (file, index, why, what the tokenizer gives
+/// as `render` shows it). `css-parsing-tests` was written for an older draft. What is
+/// given is written by hand from the pinned text: §4.2 "non-ASCII ident code point" lists
+/// ranges from U+00B7, so U+0080 and U+0081 are delim tokens; and there are no match
+/// tokens, so `~=` is the delims `~` and `=`.
+const EXPECTED_FAILURES: &[(&str, usize, &str, &str)] = &[
     (
         "component_value_list.json",
         6,
         "U+0080 and U+0081 are not non-ASCII ident code points in the pinned text, which \
          lists ranges from U+00B7; the suite's draft took every non-ASCII code point",
+        r#"[["ident","-"]," ",["ident","red0"]," ",["ident","-red"]," ",["ident","--red"]," ",["ident","--red blue"]," ",["dimension",_,0,"integer","red"]," ",["dimension",_,0,"integer","red"]," ",["ident","��red"]," ",["ident","_Red"]," ",".",["ident","red"]," ",["ident","rêd"]," ",["ident","rêd"]," ","\u{7f}","\u{80}","\u{81}"]"#,
     ),
     (
         "component_value_list.json",
         38,
         "the pinned text has no match tokens, so \"~=\" is two delim tokens",
+        r#"["~","=","|","=","^","=","$","=","*","=","|","|","<!--",["ident","----"],">"," ","|","|"," ","~","="]"#,
     ),
     (
         "component_value_list.json",
         39,
         "the pinned text has no match tokens, so \"^=\" is two delim tokens",
+        r#"[["ident","a"],":",["function","not",["[]",["ident","href"],"^","=",["ident","http:"]],","," ",["[]",["ident","href"]," ","^","="," ",["string","https:"]," "]]," ",["{}"," ",["ident","color"],":"," ",["function","rgba",["percentage",_,0,"integer"],","," ",["percentage",_,100,"integer"],","," ",["percentage",_,50,"integer"]],";"," "]]"#,
     ),
 ];
 
@@ -253,13 +276,15 @@ fn run(file: &str, suite: &str, check: impl Fn(&str, &Json) -> bool) {
             fail = fail.saturating_add(1);
             continue;
         };
-        let expected_failure = EXPECTED_FAILURES
+        let pinned = EXPECTED_FAILURES
             .iter()
-            .any(|(f, i, why)| *f == file && *i == case.index && !why.is_empty());
+            .find(|(f, i, why, _)| *f == file && *i == case.index && !why.is_empty());
         if check(input, &case.expected) {
-            assert!(!expected_failure, "{file} {} now passes", case.index);
+            assert!(pinned.is_none(), "{file} {} now passes", case.index);
             pass = pass.saturating_add(1);
-        } else if expected_failure {
+        } else if let Some((_, _, _, ours)) = pinned
+            && render_list(&component_values(input)) == *ours
+        {
             xfail = xfail.saturating_add(1);
         } else {
             println!("FAILED {file} {}: {input:?}", case.index);
