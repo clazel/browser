@@ -342,6 +342,12 @@ verification of the harnesses is green.
     media feature outside the subset and pass only because the unknown feature evaluates
     false, so they are not counted as passes of the supported subset); 159 calls are not run (in loops, conditions or functions, or
     with computed strings) and are listed by line with the reason.
+  - The loops of that page (lines 139 to 192 and 213 to 266), which the converter cannot
+    read, written out by hand for `width` and `height` (`wpt_test_media_queries_loops`: 272
+    known/unknown calls and 88 value calls on the 117 by 76 iframe, **360 pass**, none
+    fail). The page writes the second loop's queries with `${value}` in ordinary quotes, so
+    it sends the literal text; the test runs the number substituted, as meant. The
+    `device-width` and `device-height` iterations are outside the subset and not written out.
   - `match-media-parsing.html`: **21 pass**, none fail; the 13 calls inside
     `test_resolution_parsing()` are not run.
   - "`@media` block activation (green/red proxy)": nothing is rendered; the 22 reftest pages'
