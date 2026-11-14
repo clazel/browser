@@ -144,12 +144,18 @@ jobs:
           key: clazel-tools-${{ runner.os }}-${{ hashFiles('scripts/toolchains.env', 'scripts/checksums.txt') }}
       - name: Install pinned toolchain
         run: scripts/setup.sh
+      # `clazel-sys` links libvulkan (the GPU process's Vulkan backend,
+      # phase-5.md item 5.17b), so every Linux binary needs it to link, and the
+      # GPU tests draw on lavapipe, Mesa's software Vulkan driver. The versions
+      # are the runner image's Ubuntu packages, not pinned.
+      - name: Install the Vulkan loader and lavapipe
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvulkan-dev mesa-vulkan-drivers
       # Ubuntu restricts unprivileged user namespaces through AppArmor; the
-      # renderer's sandbox needs one and fails closed without it. Grant
-      # `userns` to the programs that enter the sandbox in the tests, with
-      # the same script the release installer uses.
+      # renderer's and the GPU process's sandboxes need one and fail closed
+      # without it. Grant `userns` to the programs that enter a sandbox in the
+      # tests, with the same script the release installer uses.
       - name: Allow the sandbox's user namespace
-        run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-adversary,deps/sandbox-*}"
+        run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-gpu,clazel-adversary,deps/sandbox-*}"
       - name: Verify (base)
         run: cargo xtask verify --part base
 
@@ -262,12 +268,18 @@ jobs:
           key: clazel-tools-${{ runner.os }}-${{ hashFiles('scripts/toolchains.env', 'scripts/checksums.txt') }}
       - name: Install pinned toolchain
         run: scripts/setup.sh
+      # `clazel-sys` links libvulkan (the GPU process's Vulkan backend,
+      # phase-5.md item 5.17b), so every Linux binary needs it to link, and the
+      # GPU tests draw on lavapipe, Mesa's software Vulkan driver. The versions
+      # are the runner image's Ubuntu packages, not pinned.
+      - name: Install the Vulkan loader and lavapipe
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvulkan-dev mesa-vulkan-drivers
       # Ubuntu restricts unprivileged user namespaces through AppArmor; the
-      # renderer's sandbox needs one and fails closed without it. Grant
-      # `userns` to the programs that enter the sandbox in the tests, with
-      # the same script the release installer uses.
+      # renderer's and the GPU process's sandboxes need one and fail closed
+      # without it. Grant `userns` to the programs that enter a sandbox in the
+      # tests, with the same script the release installer uses.
       - name: Allow the sandbox's user namespace
-        run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-adversary,deps/sandbox-*}"
+        run: sudo packaging/apparmor/allow-userns.sh clazel-test "$GITHUB_WORKSPACE/target/{debug,release}/{clazel-renderer,clazel-gpu,clazel-adversary,deps/sandbox-*}"
       - name: Verify ${{ matrix.crate }}
         run: cargo xtask verify --part crate "${{ matrix.crate }}" --metrics parts
       # One `<crate>.json` per crate of the job, all under parts/.
@@ -384,6 +396,9 @@ jobs:
           persist-credentials: false
       - name: Install Rust
         run: rustup toolchain install
+      # `clazel-sys` links libvulkan (phase-5.md item 5.17b).
+      - name: Install the Vulkan loader's development files
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libvulkan-dev
       - name: cargo build --release
         run: cargo build --release --locked --bin clazel --bin clazel-renderer
       - name: Package

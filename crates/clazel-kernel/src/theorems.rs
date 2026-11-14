@@ -59,9 +59,12 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
                 0 <= k < out.len() ==> match #[trigger] out[k] {
                     Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x)
                         || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
-                    Output::Spawn { id: x, .. } => x == s.next_id,
+                    Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                     Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
                     Output::Show { .. } => false,
+                    Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+                    Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Connect { .. } | Output::Send { .. } | Output::Close { .. } => false,
                 }
         }),
@@ -75,11 +78,19 @@ pub proof fn lemma_navigate_tab_outputs(urls: UrlFns, s: State, tab: nat, url: S
                 assert(out[0] == (Output::ToRenderer { id: old.id, bytes: commit_frames(url, script) }));
                 assert(out.len() == 1);
             } else {
-                assert(out.len() == 3);
                 assert(out[0] == (Output::Kill { id: old.id }));
-                assert(out[1] == (Output::Spawn { id: s.next_id, policy: Policy::Renderer }));
-                assert(out[2] == (Output::ToRenderer { id: s.next_id, bytes: commit_frames(url, script) }));
+                assert(out[1] == (Output::Spawn { id: s.next_id, policy: Policy::Gpu }));
+                assert(out[2] == (Output::Spawn { id: s.next_id, policy: Policy::Renderer }));
                 assert(out.contains(out[1]));
+                assert(out.contains(out[2]));
+                match find_viewport(s.viewports, tab, 0) {
+                    None => {
+                        assert(out.len() == 4);
+                    },
+                    Some(v) => {
+                        assert(out.len() == 6);
+                    },
+                }
             }
         }
     }
@@ -104,11 +115,14 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                 assert(out == seq![Output::Kill { id }] + closes);
                 assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
                     Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
-                    Output::Spawn { id: x, .. } => x == s.next_id,
+                    Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                     Output::Kill { id: x } => x == id,
                     Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
                     Output::Send { .. } => false,
                     Output::Show { .. } => false,
+                    Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+                    Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Close { conn: x } => exists|i2: int, j: int|
                         0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
                 } by {
@@ -126,6 +140,10 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
             Some(m) => {
                 if let clazel_ipc::message::spec::Message::Display { title, text, links } = m {
                     lemma_reply_display(rules, urls, fetch, s, id, bytes, i);
+                } else if let clazel_ipc::message::spec::Message::FetchStyle { request, url } = m {
+                    // Item 5.19: a `FetchStyle` answers its sender and asks for
+                    // its sender's sub-fetch connections only.
+                    crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
                 } else if let clazel_ipc::message::spec::Message::Navigate { url } = m {
                     if let Some(relative) = clazel_encoding::utf8::spec::utf8_decode_without_bom_or_fail(url) {
                         if let Some(resolved) = (urls.resolve)(r.url, relative) {
@@ -133,11 +151,14 @@ pub proof fn theorem_reply_only_to_sender(rules: Seq<clazel_psl::spec::Rule>, ur
                                 crate::net_theorems::lemma_begin_outputs(rules, urls, fetch, s, r.tab, resolved);
                                 assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
                                     Output::ToRenderer { id: x, .. } => x == id || (x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Renderer })),
-                                    Output::Spawn { id: x, .. } => x == s.next_id,
+                                    Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                                     Output::Kill { id: x } => x == id,
                                     Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
                                     Output::Send { .. } => false,
                                     Output::Show { .. } => false,
+                                    Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+                                    Output::Paint { .. } => false,
+                                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                                     Output::Close { conn: x } => exists|i2: int, j: int|
                                         0 <= i2 < s.renderers.len() && 0 <= j < s.conns.len() && s.renderers[i2].id == id && s.conns[j].id == x && s.conns[j].tab == s.renderers[i2].tab,
                                 } by {

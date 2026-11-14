@@ -1,5 +1,6 @@
 //! Linux: `prctl`, `seccomp`, Landlock and `unshare`, the two escape
-//! attempts the sandbox tests make (`fork`, `ptrace`), and `getrandom`.
+//! attempts the sandbox tests make (`fork`, `ptrace`), `getrandom`, clearing a
+//! descriptor's close-on-exec flag, and Vulkan for the GPU process ([`vulkan`]).
 //!
 //! None of these takes a decision: each hands a value to the kernel. The
 //! kernel's rules (a filter needs `no_new_privs` or `CAP_SYS_ADMIN`; Landlock
@@ -7,8 +8,11 @@
 //! [`Errno`], and the caller fails closed.
 
 use std::fmt;
+use std::os::fd::{AsRawFd, BorrowedFd};
 
 use crate::{Errno, RandomError};
+
+pub mod vulkan;
 
 /// One classic BPF instruction: `struct sock_filter` of `<linux/filter.h>`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,11 +48,27 @@ pub fn set_no_new_privs() -> Result<(), Errno> {
 }
 
 /// `seccomp(SECCOMP_SET_MODE_FILTER, 0, program)`: install a BPF filter that
-/// the kernel runs on every system call from now on, from every thread
-/// created afterwards. `program` must have 1 to [`MAX_BPF_INSNS`]
-/// instructions; the kernel validates it further. Call
+/// the kernel runs on every system call from now on, from the calling thread
+/// and every thread created afterwards. Threads that already exist are not
+/// filtered: see [`seccomp_set_mode_filter_all_threads`]. `program` must have
+/// 1 to [`MAX_BPF_INSNS`] instructions; the kernel validates it further. Call
 /// [`set_no_new_privs`] first, or the kernel refuses with `EACCES`.
 pub fn seccomp_set_mode_filter(program: &[SockFilter]) -> Result<(), Errno> {
+    seccomp_filter(program, 0)
+}
+
+/// [`seccomp_set_mode_filter`] with `SECCOMP_FILTER_FLAG_TSYNC`: the filter is
+/// installed on every thread of the process at once, or on none (the kernel
+/// then fails with the id of a thread it could not synchronise, reported here
+/// as `EINVAL`). For a process that already has threads when it enters its
+/// sandbox, as the GPU process has once its driver has started its workers.
+pub fn seccomp_set_mode_filter_all_threads(program: &[SockFilter]) -> Result<(), Errno> {
+    seccomp_filter(program, libc::SECCOMP_FILTER_FLAG_TSYNC)
+}
+
+/// `seccomp(SECCOMP_SET_MODE_FILTER, flags, program)`, `flags` being 0 or
+/// `SECCOMP_FILTER_FLAG_TSYNC`.
+fn seccomp_filter(program: &[SockFilter], flags: libc::c_ulong) -> Result<(), Errno> {
     let invalid = Errno(libc::EINVAL);
     if program.is_empty() || program.len() > MAX_BPF_INSNS {
         return Err(invalid);
@@ -70,17 +90,23 @@ pub fn seccomp_set_mode_filter(program: &[SockFilter]) -> Result<(), Errno> {
     let prog_ptr: *const libc::sock_fprog = &raw const prog;
     // `syscall` is variadic and reads each argument as an `unsigned long`.
     let operation = libc::c_ulong::from(libc::SECCOMP_SET_MODE_FILTER);
-    let flags: libc::c_ulong = 0;
     // SAFETY: man 2 seccomp: with SECCOMP_SET_MODE_FILTER, `args` points to a
     // `struct sock_fprog` (the `libc::sock_fprog` declaration: a u16 length
-    // and a pointer to that many `sock_filter`s) and `flags` may be 0. `prog`
-    // is a live local, so `prog_ptr` is valid and aligned; `prog.filter`
+    // and a pointer to that many `sock_filter`s) and `flags` may be 0 or
+    // SECCOMP_FILTER_FLAG_TSYNC, the only two values the callers above pass.
+    // `prog` is a live local, so `prog_ptr` is valid and aligned; `prog.filter`
     // points to the `len` initialised elements of `insns`, which is not
     // dropped before the end of this function; the kernel only reads them and
     // copies the program before returning. The syscall number is
-    // `libc::SYS_seccomp` for this target, and the call returns 0 or -1.
+    // `libc::SYS_seccomp` for this target. The call returns 0, or -1 and sets
+    // errno, or with TSYNC the positive id of a thread that could not be
+    // synchronised, in which case no thread got the filter.
     let rc = unsafe { libc::syscall(libc::SYS_seccomp, operation, flags, prog_ptr) };
-    if rc == 0 { Ok(()) } else { Err(Errno::last()) }
+    match rc {
+        0 => Ok(()),
+        -1 => Err(Errno::last()),
+        _ => Err(invalid),
+    }
 }
 
 /// `landlock_create_ruleset` with `handled_access_fs` as the set of
@@ -232,6 +258,27 @@ pub fn attempt_ptrace_attach(pid: i32) -> Result<(), Errno> {
     // `libc::SYS_ptrace`, and the call returns 0 or -1.
     let rc = unsafe { libc::syscall(libc::SYS_ptrace, request, target, zero, zero) };
     if rc == 0 { Ok(()) } else { Err(Errno::last()) }
+}
+
+/// `fcntl(fd, F_SETFD, 0)`: clear `fd`'s close-on-exec flag, so that a program
+/// this process starts inherits the descriptor under the same number (the GPU
+/// process's and the renderer's list and surface pipes, phase-5.md items 5.18 and
+/// 5.23). The flag is per descriptor, and every program started while it is
+/// clear inherits the descriptor, so the caller clears it just before the one
+/// start it is for and closes its own copy straight after. The number is the
+/// caller's to pass to the child; this makes no other change.
+pub fn clear_close_on_exec(fd: BorrowedFd<'_>) -> Result<(), Errno> {
+    let raw: libc::c_int = fd.as_raw_fd();
+    let flags: libc::c_int = 0;
+    // SAFETY: man 2 fcntl: `fcntl(fd, F_SETFD, arg)` sets the file descriptor
+    // flags of `fd` to `arg` (only `FD_CLOEXEC` is defined, so 0 clears it) and
+    // returns 0, or -1 and sets errno (`EBADF` for a descriptor that is not
+    // open). The variadic `libc::fcntl(c_int, c_int, ...) -> c_int` declaration
+    // matches: `raw` is the number of a descriptor `fd` borrows, so it is open
+    // for this call, `libc::F_SETFD` is the command, and the one variadic
+    // argument is a `c_int`, the type `F_SETFD` reads. No pointer is passed.
+    let rc = unsafe { libc::fcntl(raw, libc::F_SETFD, flags) };
+    if rc == -1 { Err(Errno::last()) } else { Ok(()) }
 }
 
 /// The most `getrandom` returns from one call with flags 0 (man 2 getrandom:

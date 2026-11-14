@@ -32,7 +32,24 @@
 //!    one it is a defined unwind or abort (`items.fn.extern.unwind.behavior`).
 //!    The three places must agree: `D as T` coerces the function item only to a
 //!    pointer of its declared ABI, and the cast's type is the one called;
-//! 8. the latest row of `docs/SYS-AUDITS.md` carries the SHA-256 of the
+//! 8. a **vtable call** is the one call through a pointer read from foreign
+//!    memory, which is how a COM method is called (Microsoft Learn, "The COM
+//!    Library" and each interface's page: an interface pointer points to a
+//!    pointer to a table of function pointers). A vtable is a `#[repr(C)] struct`
+//!    on its file's [`VTABLES`] list, whose fields are exactly the listed slots
+//!    in the listed order, each either `usize` (never called) or an `unsafe
+//!    extern "system" fn(..)`; the list holds every slot of the interface, so a
+//!    slot's place in it is its number. The call is written exactly
+//!    `unsafe { ((**this).method)(this, ..) }`: the receiver is one identifier,
+//!    dereferenced twice and passed again as the first argument, and `method`
+//!    is a listed slot's field, the header's name in snake case
+//!    ([`slot_field`]: `CreateFence` is `create_fence`). It counts as the block's one call. Those two
+//!    dereferences are the only ones allowed in an `unsafe` block; every other
+//!    call through an expression, and a function pointer type anywhere else
+//!    but a dispatcher cast, is rejected. What the checker cannot see, and the
+//!    audit must: that each slot's type is the header's, and that the receiver
+//!    is a live interface pointer of that vtable's interface;
+//! 9. the latest row of `docs/SYS-AUDITS.md` carries the SHA-256 of the
 //!    crate's source ([`source_hash`]), so every change is audited.
 //!
 //! And the README's memory-safety sentence states the measured `unsafe` count
@@ -72,6 +89,66 @@ const LINUX: &[&str] = &[
     // (`clazel_sys::fill_random`): the `libc` wrapper with flags 0, not
     // `syscall`. It only writes into a caller's buffer.
     "getrandom",
+    // `clazel_sys::linux::clear_close_on_exec` (items 5.18 and 5.23), as on
+    // macOS: only `F_SETFD` with 0, on a descriptor the caller borrows.
+    "fcntl",
+];
+
+/// What `crates/clazel-sys/src/linux/vulkan.rs` may declare and call: Vulkan
+/// core functions for the GPU process's drawing on Linux (phase-5.md item 5.17b),
+/// as `libvulkan` exports them (every one in Vulkan 1.0), cited by their
+/// reference pages (`man 3 vk…`), and `memcpy` for the one copy into and the one
+/// copy out of mapped device memory (the plan: "the checker forbids pointer
+/// arithmetic, so that is one audited call that copies"). No extension function,
+/// so nothing is looked up.
+const VULKAN: &[&str] = &[
+    "vkCreateInstance",
+    "vkEnumeratePhysicalDevices",
+    "vkGetPhysicalDeviceProperties",
+    "vkGetPhysicalDeviceQueueFamilyProperties",
+    "vkGetPhysicalDeviceMemoryProperties",
+    "vkCreateDevice",
+    "vkGetDeviceQueue",
+    "vkCreateCommandPool",
+    "vkAllocateCommandBuffers",
+    "vkCreateShaderModule",
+    "vkCreateRenderPass",
+    "vkCreateDescriptorSetLayout",
+    "vkCreatePipelineLayout",
+    "vkCreateGraphicsPipelines",
+    "vkCreateDescriptorPool",
+    "vkAllocateDescriptorSets",
+    "vkUpdateDescriptorSets",
+    "vkCreateImage",
+    "vkDestroyImage",
+    "vkGetImageMemoryRequirements",
+    "vkAllocateMemory",
+    "vkFreeMemory",
+    "vkBindImageMemory",
+    "vkCreateImageView",
+    "vkDestroyImageView",
+    "vkCreateFramebuffer",
+    "vkDestroyFramebuffer",
+    "vkCreateBuffer",
+    "vkDestroyBuffer",
+    "vkGetBufferMemoryRequirements",
+    "vkBindBufferMemory",
+    "vkMapMemory",
+    "vkUnmapMemory",
+    "vkBeginCommandBuffer",
+    "vkEndCommandBuffer",
+    "vkCmdBeginRenderPass",
+    "vkCmdEndRenderPass",
+    "vkCmdBindPipeline",
+    "vkCmdBindDescriptorSets",
+    "vkCmdPushConstants",
+    "vkCmdSetViewport",
+    "vkCmdSetScissor",
+    "vkCmdDraw",
+    "vkCmdCopyImageToBuffer",
+    "vkQueueSubmit",
+    "vkQueueWaitIdle",
+    "memcpy",
 ];
 
 /// What `crates/clazel-sys/src/macos.rs` may declare and call.
@@ -85,6 +162,9 @@ const MACOS: &[&str] = &[
     "ptrace",
     // `clazel_sys::fill_random`. It only writes into a caller's buffer.
     "getentropy",
+    // `clazel_sys::macos::clear_close_on_exec` (items 5.18 and 5.23): only
+    // `F_SETFD` with 0, on a descriptor the caller borrows.
+    "fcntl",
 ];
 
 /// What `crates/clazel-sys/src/windows.rs` may declare and call. Each is
@@ -111,6 +191,24 @@ const WINDOWS: &[&str] = &[
     "OpenProcess",
     "OpenProcessToken",
     "GetTokenInformation",
+    // A capability for the GPU process's AppContainer (phase-5.md item 5.21a):
+    // its SIDs by name, the copy of the returned arrays' pointers (`memcpy`, the
+    // one call that reads foreign memory; there is no pointer arithmetic) and
+    // their release.
+    "DeriveCapabilitySidsFromName",
+    "LocalFree",
+    "memcpy",
+    // `clazel_sys::windows::Inherited`: a pipe's end the process inherited, by
+    // its number. Safe Rust cannot adopt a handle, so it is duplicated and the
+    // duplicate read or written. Each read or write passes an `OVERLAPPED`
+    // with the value's own event (`CreateEventW`) and waits for it to finish
+    // (`GetOverlappedResult`), so a handle opened for overlapped I/O cannot
+    // write into a buffer after the call returns.
+    "DuplicateHandle",
+    "ReadFile",
+    "WriteFile",
+    "CreateEventW",
+    "GetOverlappedResult",
     // `clazel_sys::fill_random`, with the system-preferred RNG. It only writes
     // into a caller's buffer.
     "BCryptGenRandom",
@@ -144,6 +242,19 @@ const WINDOW: &[&str] = &[
     "SetProcessDpiAwarenessContext",
     "SetDIBitsToDevice",
     "GetModuleHandleW",
+    // Whether Ctrl is held, for the shortcuts (item 5.23).
+    "GetKeyState",
+];
+
+/// What `crates/clazel-sys/src/windows/d3d12.rs` may declare and call: Direct3D
+/// 12 for the GPU process (phase-5.md item 5.17b). Three functions that DLLs
+/// export, and `memcpy` for the copy into and out of a mapped buffer; every
+/// other call is a COM method, through the vtables of [`D3D12_VTABLES`].
+const D3D12: &[&str] = &[
+    "CreateDXGIFactory2",
+    "D3D12CreateDevice",
+    "D3D12SerializeRootSignature",
+    "memcpy",
 ];
 
 /// What `crates/clazel-sys/src/macos/metal.rs` may declare and call: Metal
@@ -156,6 +267,27 @@ const METAL: &[&str] = &[
     "MTLCreateSystemDefaultDevice",
     "IOSurfaceCreate",
     "CFRelease",
+];
+
+/// What `crates/clazel-sys/src/macos/window.rs` may declare and call: the host's
+/// window on macOS (phase-5.md item 5.21), AppKit and Core Animation through the
+/// Objective-C runtime, a CPU image through Core Graphics, and two questions about
+/// the process (is this the main thread, is there a window server). `objc_msgSend`
+/// is a dispatcher ([`DISPATCHERS`]): it is only cast, in the consts of
+/// [`APPKIT_CASTS`]. The file declares its own `objc_msgSend`, `objc_getClass`,
+/// `sel_registerName` and `CFRelease` with the same types as `metal.rs`, so that
+/// each file's casts and calls stay in that file.
+const APPKIT: &[&str] = &[
+    "objc_msgSend",
+    "objc_getClass",
+    "sel_registerName",
+    "pthread_main_np",
+    "CGSessionCopyCurrentDictionary",
+    "CFRelease",
+    "CFDataCreate",
+    "CGDataProviderCreateWithCFData",
+    "CGColorSpaceCreateDeviceRGB",
+    "CGImageCreate",
 ];
 
 /// Foreign functions that must be called through a function pointer of the
@@ -191,9 +323,321 @@ const METAL_CASTS: &[&str] = &[
     "MSG_VOID_OUT_USIZE_REGION_USIZE",
 ];
 
+/// The typed casts of `crates/clazel-sys/src/macos/window.rs`'s dispatcher, one
+/// per message signature, named for it. A name may repeat one of [`METAL_CASTS`]:
+/// each list belongs to its own file, which defines its own consts.
+const APPKIT_CASTS: &[&str] = &[
+    "MSG_ID",
+    "MSG_VOID",
+    "MSG_USIZE",
+    "MSG_BOOL",
+    "MSG_F64",
+    "MSG_U16",
+    "MSG_POINT",
+    "MSG_RECT",
+    "MSG_VOID_ID",
+    "MSG_VOID_BOOL",
+    "MSG_VOID_F64",
+    "MSG_VOID_U32",
+    "MSG_VOID_RECT",
+    "MSG_BOOL_ISIZE",
+    "MSG_U16_USIZE",
+    "MSG_ID_F64",
+    "MSG_ID_PTR_USIZE_USIZE",
+    "MSG_ID_USIZE_ID_ID_BOOL",
+    "MSG_ID_RECT_USIZE_USIZE_BOOL",
+];
+
 /// Consts that may each hold one cast of a dispatcher, by file (repo-relative).
-pub const DISPATCH_CASTS: &[(&str, &[&str])] =
-    &[("crates/clazel-sys/src/macos/metal.rs", METAL_CASTS)];
+pub const DISPATCH_CASTS: &[(&str, &[&str])] = &[
+    ("crates/clazel-sys/src/macos/metal.rs", METAL_CASTS),
+    ("crates/clazel-sys/src/macos/window.rs", APPKIT_CASTS),
+];
+
+/// One COM vtable: its `struct`'s name, and its slots in the header's order.
+pub type Vtable = (&'static str, &'static [&'static str]);
+
+/// The COM vtables of Direct3D 12 and DXGI that `clazel-sys` declares (phase-5.md
+/// item 5.17b), each with **every** slot in the order of its interface and the
+/// interfaces it inherits, since a slot's number is its place. From Microsoft's
+/// `d3d12.h` and `d3dcommon.h` (the DirectX-Headers release 1.619.5) and, for
+/// DXGI, mingw-w64's `dxgi.h` and `dxgi1_4.h`; where both have an interface they
+/// agree. `IUnknownVtbl` is what every interface begins with, so `Release` is
+/// called through it for all of them.
+const D3D12_VTABLES: &[Vtable] = &[
+    ("IUnknownVtbl", &["QueryInterface", "AddRef", "Release"]),
+    (
+        "ID3D12DeviceVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetPrivateData",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "SetName",
+            "GetNodeCount",
+            "CreateCommandQueue",
+            "CreateCommandAllocator",
+            "CreateGraphicsPipelineState",
+            "CreateComputePipelineState",
+            "CreateCommandList",
+            "CheckFeatureSupport",
+            "CreateDescriptorHeap",
+            "GetDescriptorHandleIncrementSize",
+            "CreateRootSignature",
+            "CreateConstantBufferView",
+            "CreateShaderResourceView",
+            "CreateUnorderedAccessView",
+            "CreateRenderTargetView",
+            "CreateDepthStencilView",
+            "CreateSampler",
+            "CopyDescriptors",
+            "CopyDescriptorsSimple",
+            "GetResourceAllocationInfo",
+            "GetCustomHeapProperties",
+            "CreateCommittedResource",
+            "CreateHeap",
+            "CreatePlacedResource",
+            "CreateReservedResource",
+            "CreateSharedHandle",
+            "OpenSharedHandle",
+            "OpenSharedHandleByName",
+            "MakeResident",
+            "Evict",
+            "CreateFence",
+            "GetDeviceRemovedReason",
+            "GetCopyableFootprints",
+            "CreateQueryHeap",
+            "SetStablePowerState",
+            "CreateCommandSignature",
+            "GetResourceTiling",
+            "GetAdapterLuid",
+        ],
+    ),
+    (
+        "ID3D12CommandQueueVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetPrivateData",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "SetName",
+            "GetDevice",
+            "UpdateTileMappings",
+            "CopyTileMappings",
+            "ExecuteCommandLists",
+            "SetMarker",
+            "BeginEvent",
+            "EndEvent",
+            "Signal",
+            "Wait",
+            "GetTimestampFrequency",
+            "GetClockCalibration",
+            "GetDesc",
+        ],
+    ),
+    (
+        "ID3D12CommandAllocatorVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetPrivateData",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "SetName",
+            "GetDevice",
+            "Reset",
+        ],
+    ),
+    (
+        "ID3D12GraphicsCommandListVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetPrivateData",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "SetName",
+            "GetDevice",
+            "GetType",
+            "Close",
+            "Reset",
+            "ClearState",
+            "DrawInstanced",
+            "DrawIndexedInstanced",
+            "Dispatch",
+            "CopyBufferRegion",
+            "CopyTextureRegion",
+            "CopyResource",
+            "CopyTiles",
+            "ResolveSubresource",
+            "IASetPrimitiveTopology",
+            "RSSetViewports",
+            "RSSetScissorRects",
+            "OMSetBlendFactor",
+            "OMSetStencilRef",
+            "SetPipelineState",
+            "ResourceBarrier",
+            "ExecuteBundle",
+            "SetDescriptorHeaps",
+            "SetComputeRootSignature",
+            "SetGraphicsRootSignature",
+            "SetComputeRootDescriptorTable",
+            "SetGraphicsRootDescriptorTable",
+            "SetComputeRoot32BitConstant",
+            "SetGraphicsRoot32BitConstant",
+            "SetComputeRoot32BitConstants",
+            "SetGraphicsRoot32BitConstants",
+            "SetComputeRootConstantBufferView",
+            "SetGraphicsRootConstantBufferView",
+            "SetComputeRootShaderResourceView",
+            "SetGraphicsRootShaderResourceView",
+            "SetComputeRootUnorderedAccessView",
+            "SetGraphicsRootUnorderedAccessView",
+            "IASetIndexBuffer",
+            "IASetVertexBuffers",
+            "SOSetTargets",
+            "OMSetRenderTargets",
+            "ClearDepthStencilView",
+            "ClearRenderTargetView",
+            "ClearUnorderedAccessViewUint",
+            "ClearUnorderedAccessViewFloat",
+            "DiscardResource",
+            "BeginQuery",
+            "EndQuery",
+            "ResolveQueryData",
+            "SetPredication",
+            "SetMarker",
+            "BeginEvent",
+            "EndEvent",
+            "ExecuteIndirect",
+        ],
+    ),
+    (
+        "ID3D12ResourceVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetPrivateData",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "SetName",
+            "GetDevice",
+            "Map",
+            "Unmap",
+            "GetDesc",
+            "GetGPUVirtualAddress",
+            "WriteToSubresource",
+            "ReadFromSubresource",
+            "GetHeapProperties",
+        ],
+    ),
+    (
+        "ID3D12FenceVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetPrivateData",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "SetName",
+            "GetDevice",
+            "GetCompletedValue",
+            "SetEventOnCompletion",
+            "Signal",
+        ],
+    ),
+    (
+        "ID3D12DescriptorHeapVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetPrivateData",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "SetName",
+            "GetDevice",
+            "GetDesc",
+            "GetCPUDescriptorHandleForHeapStart",
+            "GetGPUDescriptorHandleForHeapStart",
+        ],
+    ),
+    (
+        "ID3D10BlobVtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "GetBufferPointer",
+            "GetBufferSize",
+        ],
+    ),
+    (
+        "IDXGIFactory4Vtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "GetPrivateData",
+            "GetParent",
+            "EnumAdapters",
+            "MakeWindowAssociation",
+            "GetWindowAssociation",
+            "CreateSwapChain",
+            "CreateSoftwareAdapter",
+            "EnumAdapters1",
+            "IsCurrent",
+            "IsWindowedStereoEnabled",
+            "CreateSwapChainForHwnd",
+            "CreateSwapChainForCoreWindow",
+            "GetSharedResourceAdapterLuid",
+            "RegisterStereoStatusWindow",
+            "RegisterStereoStatusEvent",
+            "UnregisterStereoStatus",
+            "RegisterOcclusionStatusWindow",
+            "RegisterOcclusionStatusEvent",
+            "UnregisterOcclusionStatus",
+            "CreateSwapChainForComposition",
+            "GetCreationFlags",
+            "EnumAdapterByLuid",
+            "EnumWarpAdapter",
+        ],
+    ),
+    (
+        "IDXGIAdapter1Vtbl",
+        &[
+            "QueryInterface",
+            "AddRef",
+            "Release",
+            "SetPrivateData",
+            "SetPrivateDataInterface",
+            "GetPrivateData",
+            "GetParent",
+            "EnumOutputs",
+            "GetDesc",
+            "CheckInterfaceSupport",
+            "GetDesc1",
+        ],
+    ),
+];
+
+/// The vtables a file may declare and call through, by file (repo-relative).
+/// `d3d12_abi.rs` declares them (and makes no call: it has no foreign function),
+/// `windows/d3d12.rs` calls through them.
+pub const VTABLES: &[(&str, &[Vtable])] = &[
+    ("crates/clazel-sys/src/d3d12_abi.rs", D3D12_VTABLES),
+    ("crates/clazel-sys/src/windows/d3d12.rs", D3D12_VTABLES),
+];
 
 /// Foreign functions `clazel-sys` may declare or call, by the file that may do so
 /// (repo-relative). A file not named here may use none, so that an API's calls stay
@@ -201,10 +645,13 @@ pub const DISPATCH_CASTS: &[(&str, &[&str])] =
 /// `std::io::Error::last_os_error`, which is safe, so it needs no entry.
 pub const FOREIGN_FUNCTIONS: &[(&str, &[&str])] = &[
     ("crates/clazel-sys/src/linux.rs", LINUX),
+    ("crates/clazel-sys/src/linux/vulkan.rs", VULKAN),
     ("crates/clazel-sys/src/macos.rs", MACOS),
     ("crates/clazel-sys/src/windows.rs", WINDOWS),
     ("crates/clazel-sys/src/windows/window.rs", WINDOW),
+    ("crates/clazel-sys/src/windows/d3d12.rs", D3D12),
     ("crates/clazel-sys/src/macos/metal.rs", METAL),
+    ("crates/clazel-sys/src/macos/window.rs", APPKIT),
 ];
 
 /// The foreign functions `path` may use.
@@ -213,6 +660,14 @@ fn permitted_in(path: &str) -> &'static [&'static str] {
         .iter()
         .find(|(file, _)| *file == path)
         .map_or(&[], |(_, names)| *names)
+}
+
+/// The vtables `path` may declare and call through.
+fn vtables_in(path: &str) -> &'static [Vtable] {
+    VTABLES
+        .iter()
+        .find(|(file, _)| *file == path)
+        .map_or(&[], |(_, tables)| *tables)
 }
 
 /// The dispatcher casts `path` may define and call through.
@@ -266,16 +721,26 @@ pub struct File {
     pub violations: Vec<(usize, String)>,
     /// Dispatcher casts defined (each also an `unsafe` block).
     pub dispatcher_casts: usize,
+    /// Calls through a listed vtable (each in its own `unsafe` block).
+    pub vtable_calls: usize,
     /// The foreign functions this file may use.
     permitted: &'static [&'static str],
     /// The dispatcher casts this file may define and call through.
     casts: &'static [&'static str],
+    /// The vtables this file may declare and call through.
+    vtables: &'static [Vtable],
 }
 
 /// Check one source file of `clazel-sys`, at the repo-relative `path`, against
 /// rules 3 to 6.
 pub fn check_source(path: &str, source: &str) -> Result<File, String> {
-    check_with(path, source, permitted_in(path), casts_in(path))
+    check_with(
+        path,
+        source,
+        permitted_in(path),
+        casts_in(path),
+        vtables_in(path),
+    )
 }
 
 /// [`check_source`] with the file's lists given.
@@ -284,6 +749,7 @@ fn check_with(
     source: &str,
     permitted: &'static [&'static str],
     casts: &'static [&'static str],
+    vtables: &'static [Vtable],
 ) -> Result<File, String> {
     let stream: TokenStream = source
         .parse()
@@ -293,6 +759,7 @@ fn check_with(
     let mut file = File {
         permitted,
         casts,
+        vtables,
         ..File::default()
     };
     walk(&tokens, None, &lines, &mut file);
@@ -336,6 +803,13 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                     && file.casts.contains(&c.to_string().as_str())
                 {
                     k = dispatcher_cast(tokens, k, lines, file);
+                    continue;
+                }
+                if name == "struct"
+                    && let Some(TokenTree::Ident(n)) = next
+                    && let Some((_, slots)) = file.vtables.iter().find(|(v, _)| *n == *v).copied()
+                {
+                    k = vtable_decl(tokens, k, slots, file);
                     continue;
                 }
                 if name == "transmute" || name == "transmute_copy" {
@@ -396,9 +870,16 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                         && ident_is(tokens.get(k.saturating_add(3)), "fn")
                         && !matches!(tokens.get(k.saturating_add(4)), Some(TokenTree::Ident(_)))
                     {
-                        // `unsafe extern "C-unwind" fn(..)`: a function pointer type. Only a
-                        // listed dispatcher cast can give one a value that is
-                        // called (rule 7), so the type itself is not checked here.
+                        // `unsafe extern ".." fn(..)`: a function pointer type. The
+                        // two places one may be written, a listed dispatcher cast
+                        // (rule 7) and a listed vtable's slot (rule 8), are checked
+                        // whole and never reach this line.
+                        flag(
+                            file,
+                            line,
+                            "a function pointer type is only allowed in a listed dispatcher \
+                             cast or a listed vtable's slot (see xtask/src/sys.rs)",
+                        );
                         k = k.saturating_add(4);
                         continue;
                     } else if ident_is(next, "extern")
@@ -487,6 +968,23 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
                 }
             }
             TokenTree::Punct(_) | TokenTree::Literal(_) => {}
+            TokenTree::Group(callee)
+                if callee.delimiter() == Delimiter::Parenthesis
+                    && block.is_some()
+                    && matches!(next, Some(TokenTree::Group(a)) if a.delimiter() == Delimiter::Parenthesis) =>
+            {
+                // `(expr)(args)` in an `unsafe` block: a call through a pointer.
+                // The one accepted form is a vtable call (rule 8).
+                if let Some(TokenTree::Group(args)) = next
+                    && let Some(b) = block.as_deref_mut()
+                    && vtable_call(callee, args, line, b, file)
+                {
+                    let body: Vec<TokenTree> = args.stream().into_iter().collect();
+                    walk(&body, block.as_deref_mut(), lines, file);
+                    k = k.saturating_add(2);
+                    continue;
+                }
+            }
             TokenTree::Group(_) => {}
         }
         // Everything inside a group, a call's arguments included, is walked
@@ -497,6 +995,235 @@ fn walk(tokens: &[TokenTree], mut block: Option<&mut Block>, lines: &[&str], fil
         }
         k = k.saturating_add(1);
     }
+}
+
+/// A header's method name as the Rust field that holds its slot: an underscore
+/// before each capital that follows a lower-case letter or a digit, or that ends
+/// a run of capitals (`GetCPUDescriptorHandleForHeapStart` is
+/// `get_cpu_descriptor_handle_for_heap_start`), then lower case. Rust's
+/// `non_snake_case` lint, which no crate may switch off, rejects the header's
+/// spelling for a field, so the lists keep the header's names, which is what an
+/// auditor compares, and the source uses this one spelling of each.
+pub fn slot_field(method: &str) -> String {
+    let chars: Vec<char> = method.chars().collect();
+    let mut out = String::new();
+    for (i, c) in chars.iter().enumerate() {
+        let before = i.checked_sub(1).and_then(|j| chars.get(j));
+        let after = chars.get(i.saturating_add(1));
+        let starts_word = c.is_ascii_uppercase()
+            && before.is_some_and(|b| {
+                b.is_ascii_lowercase()
+                    || b.is_ascii_digit()
+                    || (b.is_ascii_uppercase() && after.is_some_and(char::is_ascii_lowercase))
+            });
+        if starts_word {
+            out.push('_');
+        }
+        out.push(c.to_ascii_lowercase());
+    }
+    out
+}
+
+/// The ABI of every vtable slot: COM methods are `STDMETHODCALLTYPE`, which on
+/// 64-bit Windows is the one calling convention, Rust's `"system"`.
+const VTABLE_ABI: &str = "\"system\"";
+
+/// `((**this).method)(this, ..)` inside an `unsafe` block: `callee` is the first
+/// group and `args` the second. True, and counted as the block's call, if it is
+/// exactly that form: the receiver one identifier, dereferenced twice (the
+/// interface pointer, then its vtable pointer), `method` the field
+/// ([`slot_field`]) of a slot of a vtable this file may use, and the receiver
+/// again as the first argument. Anything else is
+/// flagged and false.
+fn vtable_call(
+    callee: &Group,
+    args: &Group,
+    line: usize,
+    block: &mut Block,
+    file: &mut File,
+) -> bool {
+    let inner: Vec<TokenTree> = callee.stream().into_iter().collect();
+    let (receiver, method) = match inner.as_slice() {
+        [
+            TokenTree::Group(r),
+            TokenTree::Punct(dot),
+            TokenTree::Ident(m),
+        ] if r.delimiter() == Delimiter::Parenthesis && dot.as_char() == '.' => {
+            let r: Vec<TokenTree> = r.stream().into_iter().collect();
+            match r.as_slice() {
+                [
+                    TokenTree::Punct(a),
+                    TokenTree::Punct(b),
+                    TokenTree::Ident(this),
+                ] if a.as_char() == '*' && b.as_char() == '*' => (this.to_string(), m.to_string()),
+                _ => (String::new(), String::new()),
+            }
+        }
+        _ => (String::new(), String::new()),
+    };
+    if receiver.is_empty() {
+        flag(
+            file,
+            line,
+            "a call through an expression must be exactly `((**this).method)(this, ..)`, a \
+             listed vtable's slot (see xtask/src/sys.rs)",
+        );
+        return false;
+    }
+    if !file
+        .vtables
+        .iter()
+        .any(|(_, slots)| slots.iter().any(|s| slot_field(s) == method))
+    {
+        flag(
+            file,
+            line,
+            format!(
+                "`{method}` is not a slot of a vtable this file may call through (see xtask/src/sys.rs)"
+            ),
+        );
+        return false;
+    }
+    let args: Vec<TokenTree> = args.stream().into_iter().collect();
+    let first_is_receiver =
+        ident_is(args.first(), &receiver) && (args.len() == 1 || is_punct(args.get(1), ','));
+    if !first_is_receiver {
+        flag(
+            file,
+            line,
+            format!(
+                "a vtable call's first argument must be its receiver: `((**{receiver}).{method})({receiver}, ..)`"
+            ),
+        );
+        return false;
+    }
+    block.calls.push(method);
+    file.vtable_calls = file.vtable_calls.saturating_add(1);
+    true
+}
+
+/// `pub(crate)`: the two tokens.
+fn is_crate_visibility(first: Option<&TokenTree>, second: Option<&TokenTree>) -> bool {
+    ident_is(first, "pub")
+        && matches!(second, Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Parenthesis
+            && g.stream().to_string() == "crate")
+}
+
+/// `#[repr(C)]`, then optionally `pub(crate)`, then `struct NAME { .. }` at `k` (the
+/// `struct`), NAME a listed vtable
+/// with `slots`: its fields must be exactly the slots ([`slot_field`] of each
+/// listed name), in order, each either
+/// `usize` (a slot that is never called: a pointer's size and nothing callable)
+/// or an `unsafe extern "system" fn(..)` pointer. Returns the index after the
+/// body.
+fn vtable_decl(tokens: &[TokenTree], k: usize, slots: &[&str], file: &mut File) -> usize {
+    let line = tokens.get(k).map_or(0, line_of);
+    let name = match tokens.get(k.saturating_add(1)) {
+        Some(TokenTree::Ident(n)) => n.to_string(),
+        _ => String::new(),
+    };
+    // `pub(crate)` may stand between the attribute and `struct`; `pub` may not.
+    let back = |n: usize| k.checked_sub(n).and_then(|j| tokens.get(j));
+    let visible = if is_crate_visibility(back(2), back(1)) {
+        2
+    } else {
+        if ident_is(back(1), "pub") {
+            flag(
+                file,
+                line,
+                format!("vtable `{name}` may be private or `pub(crate)`, not `pub`"),
+            );
+        }
+        0usize
+    };
+    let k_attr = k.saturating_sub(visible);
+    let repr_c = k_attr
+        .checked_sub(2)
+        .is_some_and(|j| is_punct(tokens.get(j), '#'))
+        && matches!(k_attr.checked_sub(1).and_then(|j| tokens.get(j)),
+            Some(TokenTree::Group(g)) if g.delimiter() == Delimiter::Bracket
+                && g.stream().to_string().replace(' ', "") == "repr(C)");
+    if !repr_c {
+        flag(
+            file,
+            line,
+            format!("vtable `{name}` must be declared directly under `#[repr(C)]`"),
+        );
+    }
+    let Some(TokenTree::Group(body)) = tokens.get(k.saturating_add(2)) else {
+        flag(
+            file,
+            line,
+            format!("vtable `{name}` must be a `struct` with named fields"),
+        );
+        return k.saturating_add(2);
+    };
+    if body.delimiter() != Delimiter::Brace {
+        flag(
+            file,
+            line,
+            format!("vtable `{name}` must be a `struct` with named fields"),
+        );
+        return k.saturating_add(3);
+    }
+    let body: Vec<TokenTree> = body.stream().into_iter().collect();
+    let mut found = Vec::new();
+    for field in body.split(|t| is_punct(Some(t), ',')) {
+        // Doc comments are `#[doc = ".."]` here.
+        let mut field = field;
+        while let [TokenTree::Punct(p), TokenTree::Group(g), rest @ ..] = field
+            && p.as_char() == '#'
+            && matches!(g.stream().into_iter().next(), Some(TokenTree::Ident(i)) if i == "doc")
+        {
+            field = rest;
+        }
+        if let [vis, scope, rest @ ..] = field
+            && is_crate_visibility(Some(vis), Some(scope))
+        {
+            field = rest;
+        }
+        let [TokenTree::Ident(slot), TokenTree::Punct(colon), ty @ ..] = field else {
+            if !field.is_empty() {
+                let at = field.first().map_or(line, line_of);
+                flag(
+                    file,
+                    at,
+                    format!("vtable `{name}`: a field must be `Slot: type`"),
+                );
+            }
+            continue;
+        };
+        let unused = matches!(ty, [TokenTree::Ident(u)] if *u == "usize");
+        if colon.as_char() != ':' || !(unused || is_fn_pointer(ty, VTABLE_ABI)) {
+            flag(
+                file,
+                field.first().map_or(line, line_of),
+                format!(
+                    "vtable `{name}`: slot `{slot}` must be `usize` or an `unsafe extern \"system\" fn(..)`"
+                ),
+            );
+        }
+        found.push(slot.to_string());
+    }
+    let want: Vec<String> = slots.iter().map(|s| slot_field(s)).collect();
+    if found != want {
+        let at = found
+            .iter()
+            .zip(&want)
+            .position(|(a, b)| a != b)
+            .unwrap_or(found.len().min(want.len()));
+        flag(
+            file,
+            line,
+            format!(
+                "vtable `{name}` must have exactly the listed slots in order (see xtask/src/sys.rs): \
+                 slot {at} is {:?}, the list has {:?}",
+                found.get(at),
+                want.get(at)
+            ),
+        );
+    }
+    k.saturating_add(3)
 }
 
 /// `const NAME: unsafe extern "C-unwind" fn(..) -> .. = unsafe {
@@ -548,9 +1275,15 @@ const DISPATCH_ABI: &str = "\"C-unwind\"";
 
 /// `unsafe extern "C-unwind" fn (..)`, optionally `-> T`, and nothing else.
 fn is_c_unwind_fn_pointer(ty: &[TokenTree]) -> bool {
+    is_fn_pointer(ty, DISPATCH_ABI)
+}
+
+/// `unsafe extern ABI fn (..)`, optionally `-> T`, and nothing else; `want` is
+/// the ABI string, quoted.
+fn is_fn_pointer(ty: &[TokenTree], want: &str) -> bool {
     matches!(ty,
         [TokenTree::Ident(u), TokenTree::Ident(e), TokenTree::Literal(abi), TokenTree::Ident(f), TokenTree::Group(params), rest @ ..]
-            if *u == "unsafe" && *e == "extern" && abi.to_string() == DISPATCH_ABI && *f == "fn"
+            if *u == "unsafe" && *e == "extern" && abi.to_string() == want && *f == "fn"
                 && params.delimiter() == Delimiter::Parenthesis
                 && (rest.is_empty() || (is_punct(rest.first(), '-') && is_punct(rest.get(1), '>') && rest.len() > 2)))
 }
@@ -1441,13 +2174,317 @@ mod tests {
         assert!(!readme_problems(garbled, 7, 31).is_empty());
     }
 
+    // ----------------------------------------------------------- vtable calls
+
+    const VTABLES: &[super::Vtable] = &[
+        ("IUnknownVtbl", &["QueryInterface", "AddRef", "Release"]),
+        (
+            "IThingVtbl",
+            &["QueryInterface", "AddRef", "Release", "Make"],
+        ),
+    ];
+
+    fn vtable_violations(src: &str) -> Result<(Vec<String>, usize), String> {
+        let f = super::check_with("d3d12.rs", src, &["CloseHandle"], &[], VTABLES)?;
+        Ok((
+            f.violations
+                .into_iter()
+                .map(|(line, what)| format!("{line}: {what}"))
+                .collect(),
+            f.vtable_calls,
+        ))
+    }
+
+    fn vtable_rejected(src: &str, why: &str) -> Result<(), String> {
+        let (v, _) = vtable_violations(src)?;
+        assert!(v.iter().any(|m| m.contains(why)), "{why}: {v:?}\n{src}");
+        Ok(())
+    }
+
+    const UNKNOWN: &str = "#[repr(C)]\nstruct IUnknownVtbl {\n    query_interface: usize,\n    \
+        add_ref: usize,\n    /// Drop one reference.\n    \
+        release: unsafe extern \"system\" fn(*mut IUnknown) -> u32,\n}\n\
+        type IUnknown = *const IUnknownVtbl;\n";
+
+    fn com_call(body: &str) -> String {
+        format!(
+            "{UNKNOWN}fn f(this: *mut IUnknown) -> u32 {{\n    // SAFETY: docs IUnknown::Release.\n    \
+             unsafe {{ {body} }}\n}}\n"
+        )
+    }
+
+    #[test]
+    fn accepts_a_listed_vtable_and_a_call_through_it() -> Result<(), String> {
+        let (v, calls) = vtable_violations(&com_call("((**this).release)(this)"))?;
+        assert_eq!(v, Vec::<String>::new());
+        assert_eq!(calls, 1);
+        // With arguments after the receiver, nested groups included.
+        let make = "#[repr(C)]\nstruct IThingVtbl {\n    query_interface: usize,\n    add_ref: usize,\n    \
+            release: usize,\n    make: unsafe extern \"system\" fn(*mut IThing, u32, *mut *mut u8) -> i32,\n}\n\
+            type IThing = *const IThingVtbl;\n\
+            fn f(thing: *mut IThing, out: *mut *mut u8) -> i32 {\n    // SAFETY: docs IThing::Make.\n    \
+            unsafe { ((**thing).make)(thing, (1u32), out) }\n}\n";
+        let (v, calls) = vtable_violations(make)?;
+        assert_eq!(v, Vec::<String>::new());
+        assert_eq!(calls, 1);
+        Ok(())
+    }
+
+    /// The same source where no vtable is listed (every file but Direct3D's).
+    #[test]
+    fn a_vtable_call_needs_the_files_list() -> Result<(), String> {
+        let v = violations_in(LINUX_FILE, &com_call("((**this).release)(this)"))?;
+        assert!(
+            v.iter().any(|m| m.contains("function pointer type")),
+            "{v:?}"
+        );
+        assert!(
+            v.iter().any(|m| m.contains("not a slot of a vtable")),
+            "{v:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_every_other_call_through_an_expression() -> Result<(), String> {
+        let form = "must be exactly `((**this).method)(this, ..)`";
+        for body in [
+            // One dereference, three, a field between them, a method call as the
+            // receiver, a slot read first, an index.
+            "((*this).release)(this)",
+            "((***this).release)(this)",
+            "((*(*this).vtbl).release)(this)",
+            "((**this.get()).release)(this)",
+            "(this.release)(this)",
+            "((**this)[2])(this)",
+            "(f)(this)",
+        ] {
+            vtable_rejected(&com_call(body), form)?;
+        }
+        // A slot that is on no list, and one of another crate's naming.
+        vtable_rejected(
+            &com_call("((**this).destroy)(this)"),
+            "`destroy` is not a slot",
+        )?;
+        // The receiver must be the first argument, alone.
+        for body in [
+            "((**this).release)()",
+            "((**this).release)(other)",
+            "((**this).release)(this.cast())",
+            "((**this).release)(other, this)",
+        ] {
+            vtable_rejected(&com_call(body), "first argument must be its receiver")?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_vtable_call_is_the_blocks_one_call_and_needs_its_comment() -> Result<(), String> {
+        vtable_rejected(
+            &com_call("((**this).release)(this); ((**this).release)(this)"),
+            "exactly one foreign call, found 2",
+        )?;
+        vtable_rejected(
+            &com_call("((**this).release)(this); CloseHandle(0)"),
+            "exactly one foreign call, found 2",
+        )?;
+        // A dereference in an argument is still a dereference.
+        let deref = format!(
+            "{UNKNOWN}fn f(this: *mut IUnknown, p: *mut u32) -> u32 {{\n    // SAFETY: docs IUnknown::Release.\n    \
+             unsafe {{ ((**this).release)(this, *p) }}\n}}\n"
+        );
+        vtable_rejected(&deref, "dereference or multiplication")?;
+        let bare = format!(
+            "{UNKNOWN}fn f(this: *mut IUnknown) -> u32 {{\n    unsafe {{ ((**this).release)(this) }}\n}}\n"
+        );
+        vtable_rejected(&bare, "without a `// SAFETY:` comment")?;
+        // Outside an `unsafe` block it does not compile, and is not this check's.
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_a_vtable_that_differs_from_its_list() -> Result<(), String> {
+        let decl = |attr: &str, fields: &str| format!("{attr}struct IUnknownVtbl {{ {fields} }}\n");
+        let release = "release: unsafe extern \"system\" fn(*mut u8) -> u32";
+        let good = decl(
+            "#[repr(C)]\n",
+            &format!("query_interface: usize, add_ref: usize, {release},"),
+        );
+        assert_eq!(vtable_violations(&good)?.0, Vec::<String>::new());
+        // Visible in the crate, as a declarations module needs.
+        let shared = format!(
+            "#[repr(C)]\npub(crate) struct IUnknownVtbl {{ pub(crate) query_interface: usize, \
+             pub(crate) add_ref: usize, pub(crate) {release} }}\n"
+        );
+        assert_eq!(vtable_violations(&shared)?.0, Vec::<String>::new());
+        let cases = [
+            // No `repr(C)`, or another representation.
+            (
+                decl(
+                    "",
+                    &format!("query_interface: usize, add_ref: usize, {release}"),
+                ),
+                "directly under `#[repr(C)]`",
+            ),
+            (
+                decl(
+                    "#[repr(packed)]\n",
+                    &format!("query_interface: usize, add_ref: usize, {release}"),
+                ),
+                "directly under `#[repr(C)]`",
+            ),
+            // A slot missing, two swapped, one added, one renamed.
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    &format!("query_interface: usize, {release}"),
+                ),
+                "exactly the listed slots in order",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    &format!("add_ref: usize, query_interface: usize, {release}"),
+                ),
+                "exactly the listed slots in order",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    &format!("query_interface: usize, add_ref: usize, {release}, more: usize"),
+                ),
+                "exactly the listed slots in order",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    "query_interface: usize, add_ref: usize, free: usize",
+                ),
+                "exactly the listed slots in order",
+            ),
+            // A slot of another type: a narrower integer, a data pointer, a
+            // safe function, another ABI.
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    "query_interface: u32, add_ref: usize, release: usize",
+                ),
+                "slot `query_interface` must be `usize`",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    "query_interface: *const u8, add_ref: usize, release: usize",
+                ),
+                "slot `query_interface` must be `usize`",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    "query_interface: usize, add_ref: usize, release: extern \"system\" fn(*mut u8) -> u32",
+                ),
+                "slot `release` must be `usize`",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    "query_interface: usize, add_ref: usize, release: unsafe extern \"C\" fn(*mut u8) -> u32",
+                ),
+                "slot `release` must be `usize`",
+            ),
+            // Exported.
+            (
+                format!(
+                    "#[repr(C)]\npub struct IUnknownVtbl {{ query_interface: usize, add_ref: usize, {release} }}\n"
+                ),
+                "not `pub`",
+            ),
+            (
+                decl(
+                    "#[repr(C)]\n",
+                    &format!("query_interface: usize, pub add_ref: usize, {release}"),
+                ),
+                "a field must be `Slot: type`",
+            ),
+            // A tuple struct.
+            (
+                "#[repr(C)]\nstruct IUnknownVtbl(usize, usize, usize);\n".to_owned(),
+                "must be a `struct` with named fields",
+            ),
+        ];
+        for (src, why) in cases {
+            vtable_rejected(&src, why)?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_a_function_pointer_type_anywhere_else() -> Result<(), String> {
+        for src in [
+            "struct NotListed { f: unsafe extern \"system\" fn() }\n",
+            "fn f(g: unsafe extern \"system\" fn()) {}\n",
+            "type G = unsafe extern \"C\" fn(u32) -> u32;\n",
+        ] {
+            vtable_rejected(src, "function pointer type is only allowed")?;
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn a_slots_field_is_its_name_in_snake_case() {
+        for (method, field) in [
+            ("Release", "release"),
+            ("QueryInterface", "query_interface"),
+            ("EnumAdapters1", "enum_adapters1"),
+            ("IASetPrimitiveTopology", "ia_set_primitive_topology"),
+            (
+                "SetGraphicsRoot32BitConstants",
+                "set_graphics_root32_bit_constants",
+            ),
+            (
+                "GetCPUDescriptorHandleForHeapStart",
+                "get_cpu_descriptor_handle_for_heap_start",
+            ),
+            ("GetGPUVirtualAddress", "get_gpu_virtual_address"),
+        ] {
+            assert_eq!(super::slot_field(method), field);
+        }
+    }
+
+    /// Every listed vtable begins with `IUnknown`'s three slots, and no slot is
+    /// listed twice in one: a slot's place in the list is its number.
+    #[test]
+    fn the_listed_vtables_are_well_formed() {
+        for (file, tables) in super::VTABLES {
+            for (name, slots) in *tables {
+                assert_eq!(
+                    slots.get(..3),
+                    Some(&["QueryInterface", "AddRef", "Release"][..]),
+                    "{file}: {name}"
+                );
+                let mut seen = std::collections::BTreeSet::new();
+                for s in *slots {
+                    let field = super::slot_field(s);
+                    assert!(
+                        field
+                            .chars()
+                            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'),
+                        "{file}: {name}: {field}"
+                    );
+                    assert!(seen.insert(field), "{file}: {name} lists {s} twice");
+                }
+                assert!(name.ends_with("Vtbl"), "{file}: {name}");
+            }
+        }
+    }
+
     // ------------------------------------------------------- dispatcher casts
 
     const DISPATCH_FOREIGN: &[&str] = &["objc_msgSend", "objc_getClass"];
     const DISPATCH_CASTS: &[&str] = &["MSG_ID"];
 
     fn cast_violations(src: &str) -> Result<(Vec<String>, usize), String> {
-        let f = super::check_with("metal.rs", src, DISPATCH_FOREIGN, DISPATCH_CASTS)?;
+        let f = super::check_with("metal.rs", src, DISPATCH_FOREIGN, DISPATCH_CASTS, &[])?;
         Ok((
             f.violations
                 .into_iter()
@@ -1475,6 +2512,44 @@ mod tests {
     fn rejected(src: &str, why: &str) -> Result<(), String> {
         let (v, _) = cast_violations(src)?;
         assert!(v.iter().any(|m| m.contains(why)), "{why}: {v:?}\n{src}");
+        Ok(())
+    }
+
+    /// The macOS window's file has its own lists: its casts and calls pass there,
+    /// and the same source in `metal.rs` (whose lists lack `MSG_POINT` and
+    /// `CGImageCreate`) or in `macos.rs` (which may use no dispatcher) is rejected.
+    #[test]
+    fn the_window_file_has_its_own_lists() -> Result<(), String> {
+        const WINDOW_FILE: &str = "crates/clazel-sys/src/macos/window.rs";
+        const METAL_FILE: &str = "crates/clazel-sys/src/macos/metal.rs";
+        let point = "// SAFETY: docs ObjectiveC/objc_msgSend; the cast Apple prescribes.\n\
+            const MSG_POINT: unsafe extern \"C-unwind\" fn(*mut u8, *mut u8) -> [f64; 2] =\n\
+            unsafe { std::mem::transmute(objc_msgSend as unsafe extern \"C-unwind\" fn()) };\n\
+            fn f(r: *mut u8, s: *mut u8) -> [f64; 2] {\n\
+            // SAFETY: docs AppKit/NSEvent/locationInWindow.\n    unsafe { MSG_POINT(r, s) }\n}\n";
+        let image = "// SAFETY: docs CoreGraphics/CGImageCreate.\n\
+            unsafe extern \"C\" { fn CGImageCreate(w: usize) -> *mut u8; }\n";
+        let source = format!("{DECL}{point}{image}");
+        assert_eq!(violations_in(WINDOW_FILE, &source)?, Vec::<String>::new());
+        let in_window = check_source(WINDOW_FILE, &source)?;
+        assert_eq!(in_window.dispatcher_casts, 1);
+        let in_metal = violations_in(METAL_FILE, &source)?;
+        assert!(
+            in_metal
+                .iter()
+                .any(|m| m.contains("`transmute` is only allowed"))
+        );
+        assert!(
+            in_metal
+                .iter()
+                .any(|m| m.contains("`CGImageCreate` is not a permitted"))
+        );
+        let in_macos = violations_in(MACOS_FILE, &source)?;
+        assert!(
+            in_macos
+                .iter()
+                .any(|m| m.contains("`objc_msgSend` is not a permitted"))
+        );
         Ok(())
     }
 

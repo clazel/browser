@@ -237,6 +237,7 @@ fn a_script_is_committed_as_its_bytes() {
     assert_eq!(
         out,
         vec![
+            Out::SpawnGpu(0),
             Out::Spawn(0),
             Out::Commit(
                 0,
@@ -278,8 +279,8 @@ fn a_relative_navigate_is_resolved_by_the_real_parser() {
     let out = settled(&mut kernel, out);
     assert!(matches!(
         out.as_slice(),
-        [Out::Kill(old), Out::Spawn(new), Out::Commit(to, _)]
-            if *old == id && new == to && *new != id
+        [Out::Kill(old), Out::SpawnGpu(gpu), Out::Spawn(new), Out::Commit(to, _)]
+            if *old == id && new == to && gpu == new && *new != id
     ));
 }
 
@@ -308,4 +309,143 @@ fn the_cookie_path_is_the_path_of_the_parsed_committed_url() {
     let elsewhere = open(&mut kernel, "https://example.test/else/where");
     let out = kernel.send(elsewhere, &Msg::CookieGet);
     assert_eq!(cookie_string(&out, elsewhere), Some(&b""[..]));
+}
+
+// ---------------------------------------------------------------------
+// Item 5.18: surfaces, viewports and input.
+// ---------------------------------------------------------------------
+
+fn gpu_frame(id: u64, m: &Msg) -> clazel_kernel::exec::records::EventRecord {
+    clazel_kernel::exec::records::EventRecord::FromGpu {
+        id,
+        bytes: clazel_ipc::message::codec::encode_framed(m).unwrap_or_default(),
+    }
+}
+
+fn frame_ready(buffer: u64, width: u64, height: u64) -> Msg {
+    Msg::FrameReady {
+        buffer,
+        width,
+        height,
+    }
+}
+
+#[test]
+fn a_frame_is_painted_in_its_tab_under_the_kernels_url_and_title() {
+    let mut kernel = Kernel::new();
+    let (id, _) = kernel.open_tab("https://example.test/", "");
+    let id = id.unwrap_or(u64::MAX);
+    // The host sizes the tab: its renderer and its GPU process are told.
+    let out = kernel.event(&clazel_kernel::exec::records::EventRecord::Resize {
+        tab: id,
+        width: 800,
+        height: 600,
+        scale: 2,
+    });
+    assert_eq!(
+        out,
+        vec![
+            Out::To(
+                id,
+                Msg::Viewport {
+                    width: 800,
+                    height: 600,
+                    scale: 2
+                }
+            ),
+            Out::ToGpu(
+                id,
+                Msg::GpuViewport {
+                    width: 800,
+                    height: 600,
+                    scale: 2
+                }
+            ),
+        ]
+    );
+    // The renderer names its document; the title is the kernel's to show.
+    assert!(
+        kernel
+            .send(
+                id,
+                &Msg::Title {
+                    title: b"T".to_vec()
+                }
+            )
+            .is_empty()
+    );
+    let out = kernel.event(&gpu_frame(id, &frame_ready(1, 800, 600)));
+    assert_eq!(
+        out,
+        vec![Out::Paint(
+            id,
+            support::code_points("https://example.test/"),
+            b"T".to_vec(),
+            1,
+            800,
+            600
+        )]
+    );
+    // A frame drawn for a larger viewport is dropped, not painted.
+    assert!(
+        kernel
+            .event(&gpu_frame(id, &frame_ready(0, 801, 600)))
+            .is_empty()
+    );
+    // GpuReady changes nothing before item 5.17c.
+    assert!(
+        kernel
+            .event(&gpu_frame(id, &Msg::GpuReady { software: false }))
+            .is_empty()
+    );
+    // The user's input goes to the tab's renderer, as one frame.
+    let input = Msg::Input {
+        kind: 1,
+        x: 3,
+        y: 4,
+        negative: true,
+        delta: 5,
+        key: 0,
+    };
+    let out = kernel.event(&clazel_kernel::exec::records::EventRecord::Input {
+        tab: id,
+        kind: 1,
+        x: 3,
+        y: 4,
+        negative: true,
+        delta: 5,
+        key: 0,
+    });
+    assert_eq!(out, vec![Out::To(id, input)]);
+}
+
+#[test]
+fn a_gpu_process_that_breaks_the_rules_is_killed_with_its_renderer() {
+    // A buffer outside the ring of 3.
+    let mut kernel = Kernel::new();
+    let (id, _) = kernel.open_tab("https://example.test/", "");
+    let id = id.unwrap_or(u64::MAX);
+    let out = kernel.event(&gpu_frame(id, &frame_ready(3, 0, 0)));
+    assert_eq!(out, vec![Out::Kill(id)]);
+    // A renderer's message on a GPU socket.
+    let mut kernel = Kernel::new();
+    let (id, _) = kernel.open_tab("https://example.test/", "");
+    let id = id.unwrap_or(u64::MAX);
+    let out = kernel.event(&gpu_frame(id, &Msg::Title { title: Vec::new() }));
+    assert_eq!(out, vec![Out::Kill(id)]);
+    // A frame of a GPU process the kernel does not know is dropped.
+    assert!(
+        kernel
+            .event(&gpu_frame(id + 7, &frame_ready(0, 0, 0)))
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_renderer_cannot_send_a_gpu_message() {
+    let mut kernel = Kernel::new();
+    let (id, _) = kernel.open_tab("https://example.test/", "");
+    let id = id.unwrap_or(u64::MAX);
+    let out = kernel.send(id, &frame_ready(0, 0, 0));
+    assert_eq!(out, vec![Out::Kill(id)]);
 }

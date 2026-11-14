@@ -3,7 +3,7 @@
 A web browser built from the bottom up by AI, using formal verification
 instead of trust.
 
-- **Memory safe:** 100% safe Rust except `clazel-sys`: 138 `unsafe` blocks (338 lines) that enter the OS sandbox, machine-checked and audited. Of those, 21 are `"C-unwind"` casts of `objc_msgSend` to a typed function pointer, one per Objective-C message signature that Metal drawing uses. Shipped dependencies are `libc` and libcrux.
+- **Memory safe:** 100% safe Rust except `clazel-sys`: 343 `unsafe` blocks (929 lines) that enter the OS sandbox, machine-checked and audited. Of those, 40 are `"C-unwind"` casts of `objc_msgSend` to a typed function pointer, one per Objective-C message signature that Metal drawing (21) and the macOS window (19) use. Vulkan drawing on Linux adds 55 (51 direct calls and 4 blocks of declarations); its audit is outstanding. Direct3D 12 drawing and the GPU process's start on Windows add 56, of which 40 are COM method calls through hand-written vtables; they were written without a Windows machine, have never run, and their audit is outstanding. Shipped dependencies are `libc` and libcrux.
 - **Verified where it matters:** the kernel's security policy and every parser
   of untrusted input carry machine-checked proofs (Verus, Kani).
 - **Honest about it:** each crate declares its verification tier, and the
@@ -119,10 +119,20 @@ with Mozilla's roots as the trust store; until P-384 issuer keys are
 supported, a chain that has one (most sites today) fails with `unknown_ca`.
 
 ```sh
-target/release/clazel browse http://info.cern.ch/         # text-mode browser: title, text, numbered links
+target/release/clazel browse --text http://info.cern.ch/  # text-mode browser: title, text, numbered links
 ```
 
-`browse` shows a page as text, with its links numbered: type a number to
+On macOS on Apple silicon, `clazel browse URL` opens a window instead (phase-5.md
+item 5.23): an address bar drawn by the host and the page drawn by a sandboxed GPU
+process, one per tab (`cargo build --bin clazel-gpu` too), laid out by the renderer
+(item 5.20) in the system's TrueType fonts; linked style sheets wait for item 5.19.
+`clazel browse --headless OUT URL` writes the
+page as a PNG (or a PPM, for `OUT` ending in `.ppm`). Elsewhere, `browse URL` is the
+text mode. On Windows the window, a Direct3D 12 GPU process and its AppContainer
+start are written and compile, but **have never been run**: no Windows machine
+was at hand (`crates/clazel-gpu/README.md`, "The Direct3D 12 backend").
+
+In text mode, `browse` shows a page as text, with its links numbered: type a number to
 follow a link, `g URL` to go elsewhere, `b` to go back, `q` to quit. The
 kernel fetches every page and the page is parsed in a sandboxed renderer,
 one per origin; the address line is the kernel's, whatever the page says.
@@ -170,9 +180,9 @@ and much of it is work only a person can do.
 - **Run it where we have not.** The Phase 2 and 4 process tests (the sandbox,
   the hostile renderer, the hostile pages) run in CI on `ubuntu-24.04` and
   macOS arm64 only. Other Linux distributions and kernels are untested.
-- **Read `clazel-sys`.** It is the only crate with `unsafe`: 62 blocks that
-  enter the OS sandbox, read the OS random source, or list the DNS servers and
-  open the host's window (Windows). Every change is audited
+- **Read `clazel-sys`.** It is the only crate with `unsafe`: 228 blocks that
+  enter the OS sandbox, read the OS random source, list the DNS servers, open
+  the host's window (Windows and macOS) and draw with Metal. Every change is audited
   by a second model ([docs/SYS-AUDITS.md](docs/SYS-AUDITS.md)); a person
   reading it too is welcome.
 - **Build the next phases.** The plan is in [docs/ROADMAP.md](docs/ROADMAP.md)

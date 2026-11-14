@@ -104,9 +104,11 @@
 //!   (`block.rs`): `role(class) -> Role`. Contract: a block-level box (item
 //!   5.13 leaves every one in a block container) is in its parent's flow, an
 //!   atomic inline is laid out on its own, inline boxes and text runs only
-//!   inside their inline formatting context, a marker beside its list item,
-//!   columns as empty boxes, and table-internal boxes (the placeholder of
-//!   `mod.rs`) in their parent's flow.
+//!   inside their inline formatting context, a marker beside its list item;
+//!   a table box and captions in their wrapper's flow, a table cell laid
+//!   out on its own at the width its table's columns give it, and rows, row
+//!   groups, columns and column groups placed by their table (item 5.15,
+//!   `table/state.rs`).
 //!
 //! White space, line break opportunities and choosing lines are item 5.12's
 //! (`text::lines::fit_step`, proved there); the steps here are the ones
@@ -354,8 +356,8 @@ pub fn line_align(t: TextAlign) -> Align {
 pub enum Role {
     /// The root box: the initial containing block.
     Root,
-    /// A block-level box (or a table-internal box, in the placeholder) in
-    /// its parent's block flow.
+    /// A block-level box in its parent's block flow (a table box and a
+    /// caption are in their wrapper's).
     Flow,
     /// An atomic inline: laid out as a box of its own before its inline
     /// formatting context's lines are made.
@@ -365,6 +367,11 @@ pub enum Role {
     Inline,
     /// A list item's marker: placed beside its list item's first line.
     Marker,
-    /// A table column or column group: an empty box (the placeholder).
+    /// A table cell: a block formatting context root laid out at the width
+    /// its table's columns give it, then placed in its rows by its table.
+    Cell,
+    /// A table row or row group: placed by its table.
+    Track,
+    /// A table column or column group: placed by its table.
     Column,
 }

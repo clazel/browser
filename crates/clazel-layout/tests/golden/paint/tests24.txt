@@ -1,0 +1,48 @@
+#case 0
+#data "<!DOCTYPE html>&NotEqualTilde;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 45x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 1
+#data "<!DOCTYPE html>&NotEqualTilde;A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 2
+#data "<!DOCTYPE html>&ThickSpace;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 37x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 3
+#data "<!DOCTYPE html>&ThickSpace;A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 49x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 4
+#data "<!DOCTYPE html>&NotSubset;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 45x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+
+#case 5
+#data "<!DOCTYPE html>&NotSubset;A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+
+#case 6
+#data "<!DOCTYPE html>&Gopf;"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 46x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 7
+#data "<!DOCTYPE html>&Gopf;A"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=2 first=512,1463
+

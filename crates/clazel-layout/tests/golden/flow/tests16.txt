@@ -1271,13 +1271,13 @@ root (anonymous) 0,0 800x600
 #case 195
 #data "<!doctype html><table><td><span><font></span><span>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x18
-    block <body> 8,8 784x2 m=8,8,8,8
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+  block <html> 0,0 800x22
+    block <body> 8,8 784x6 m=8,8,8,8
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 196
 #data "<!doctype html><form><table></form><form></table></form>"

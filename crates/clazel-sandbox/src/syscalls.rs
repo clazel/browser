@@ -237,3 +237,127 @@ pub fn numbers(arch: Arch) -> Vec<u32> {
 pub fn is_allowed(arch: Arch, nr: u32) -> bool {
     ALLOWLIST.iter().any(|s| s.number(arch) == nr)
 }
+
+/// Item 5.21a: the GPU process's additions to [`ALLOWLIST`] on Linux, for a
+/// software driver (lavapipe), which has no device.
+///
+/// **Measured on one configuration**: `clazel-gpu` on lavapipe (Mesa 25.2.8, LLVM
+/// 20.1.2) with glibc 2.39 on aarch64 Linux (Ubuntu 24.04 in a container), under
+/// `strace -f`, over the 14 GPU processes that `clazel`'s `tests/browse_gpu.rs`
+/// starts (hand-built lists, real pages at several viewports, scrolls, a
+/// navigation). The calls made after the filter was installed were exactly
+/// `futex`, `mmap`, `write`, `mprotect`, `rt_sigprocmask`, `read`, `munmap`,
+/// `sigaltstack`, `brk`, `gettid` (all the renderer's) and the five below; each
+/// `reason` says who made it. The list was narrowed to those: the plan's other
+/// candidates (`getpid`, `sendmsg`, `recvmsg`, `clone`) were not called and are
+/// not allowed. **Not measured**: x86-64, another Mesa or C library, a process
+/// running for long or under memory pressure.
+///
+/// Modelling choices:
+/// - **Warm up, then enter.** The GPU process loads the Vulkan loader and driver,
+///   makes its device and its fixed pipeline, and draws one frame of its own
+///   *before* installing the filter (`clazel_gpu::sandbox`), as the plan says
+///   ("the device paths opened before entering it") and as the macOS GPU process
+///   does. So lavapipe has started its worker threads and compiled our shaders
+///   by then: no executable mapping was made after the filter in the
+///   measurement. There is no `open`, `openat`, `socket` or `connect`: no new
+///   file, no X server, no network.
+/// - **Every thread at once.** The driver's workers exist when the filter is
+///   installed, so it is installed with `SECCOMP_FILTER_FLAG_TSYNC`
+///   (`clazel_sys::linux::seccomp_set_mode_filter_all_threads`); a filter on the
+///   calling thread alone would leave them unfiltered.
+/// - **No descriptor passing.** Pixels leave the GPU process as bytes on a pipe
+///   (`clazel_gpu::channel`), so `sendmsg` and `recvmsg`, which the plan lists
+///   for passing buffer descriptors, are not needed and not allowed. They return
+///   with the `memfd` route.
+/// - **No argument filtering**, as for the renderer: the generator selects by
+///   number only. So `clone3` can make a process as well as a thread, which then
+///   runs under the same filter, and `mmap` and `mprotect` (the renderer's) can
+///   make executable memory.
+/// - **Weaker than the renderer's**, by exactly these additions; the crate README
+///   says so.
+pub const GPU_EXTRA: &[Syscall] = &[
+    Syscall {
+        name: "ftruncate",
+        x86_64: 77,
+        aarch64: 46,
+        reason: "measured: lavapipe grows the memory file behind its device memory \
+                 when a target or buffer is allocated (a descriptor it already holds)",
+    },
+    Syscall {
+        name: "sched_getaffinity",
+        x86_64: 204,
+        aarch64: 123,
+        reason: "measured: called once on each new thread of the GPU process's own \
+                 (its two readers), by the C library's thread start",
+    },
+    Syscall {
+        name: "set_robust_list",
+        x86_64: 273,
+        aarch64: 99,
+        reason: "measured: the C library registers each new thread's robust futexes",
+    },
+    Syscall {
+        name: "rseq",
+        x86_64: 334,
+        aarch64: 293,
+        reason: "measured: the C library registers each new thread's restartable \
+                 sequences",
+    },
+    Syscall {
+        name: "clone3",
+        x86_64: 435,
+        aarch64: 435,
+        reason: "measured: the GPU process's two reader threads (`clazel_gpu::process`), \
+                 started after the filter; no argument filtering",
+    },
+];
+
+/// Item 5.21a: what a hardware driver's GPU process is allowed on top of
+/// [`GPU_EXTRA`].
+///
+/// **Not measured.** No hardware Vulkan driver has run in this sandbox; the one
+/// entry is reasoned from what a DRM driver is known to do, and its `reason`
+/// starts "not measured", which `tests/vendored.rs` checks. A driver that needs
+/// another call is killed, and the crash policy (item 5.17c) counts that as a
+/// refusal; the list is never widened at run time.
+pub const GPU_HARDWARE_EXTRA: &[Syscall] = &[Syscall {
+    name: "ioctl",
+    x86_64: 16,
+    aarch64: 29,
+    reason: "not measured: a hardware driver's commands on its device node (DRM); \
+             no argument filtering, so every ioctl of every descriptor the process holds",
+}];
+
+/// The GPU process's allowlisted numbers for `arch` on a software driver:
+/// [`ALLOWLIST`] then [`GPU_EXTRA`], in table order.
+pub fn gpu_numbers(arch: Arch) -> Vec<u32> {
+    ALLOWLIST
+        .iter()
+        .chain(GPU_EXTRA)
+        .map(|s| s.number(arch))
+        .collect()
+}
+
+/// The GPU process's allowlisted numbers for `arch` on a hardware driver:
+/// [`gpu_numbers`] then [`GPU_HARDWARE_EXTRA`].
+pub fn gpu_hardware_numbers(arch: Arch) -> Vec<u32> {
+    ALLOWLIST
+        .iter()
+        .chain(GPU_EXTRA)
+        .chain(GPU_HARDWARE_EXTRA)
+        .map(|s| s.number(arch))
+        .collect()
+}
+
+/// Whether syscall number `nr` is on the GPU process's allowlist for `arch` on a
+/// software driver.
+pub fn is_gpu_allowed(arch: Arch, nr: u32) -> bool {
+    is_allowed(arch, nr) || GPU_EXTRA.iter().any(|s| s.number(arch) == nr)
+}
+
+/// Whether syscall number `nr` is on the GPU process's allowlist for `arch` on a
+/// hardware driver.
+pub fn is_gpu_hardware_allowed(arch: Arch, nr: u32) -> bool {
+    is_gpu_allowed(arch, nr) || GPU_HARDWARE_EXTRA.iter().any(|s| s.number(arch) == nr)
+}

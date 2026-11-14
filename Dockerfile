@@ -11,9 +11,12 @@
 # Debian 13 (trixie), pinned by digest.
 FROM debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
 
-# setup.sh needs curl, unzip and tar; cargo needs a C toolchain to link.
+# setup.sh needs curl, unzip and tar; cargo needs a C toolchain to link, and
+# libvulkan, which `clazel-sys` links (phase-5.md item 5.17b). The GPU tests draw
+# on lavapipe (mesa-vulkan-drivers), Mesa's software Vulkan driver.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl unzip gcc libc6-dev \
+      libvulkan-dev mesa-vulkan-drivers \
  && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home builder

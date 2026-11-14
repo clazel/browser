@@ -1,0 +1,79 @@
+#case 0
+#data "<!DOCTYPE html><p><b><i><u></p> <p>X"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-1 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 1
+#data "<p><b><i><u></p>\n<p>X"
+scale 1
+fill 0,0 800x616 #ffffffff
+text -8,-1 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1975
+
+#case 2
+#data "<!doctype html></html> <head>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 3
+#data "<!doctype html></body><meta>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 4
+#data "<html></html><!-- foo -->"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 5
+#data "<!doctype html></body><title>X</title>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 6
+#data "<!doctype html><table> X<meta></table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 7
+#data "<!doctype html><table> x</table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 8
+#data "<!doctype html><table> x </table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 9
+#data "<!doctype html><table><tr> x</table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 10
+#data "<!doctype html><table>X<style> <tr>x </style> </table>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 43x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 11
+#data "<!doctype html><div><table><a>foo</a> <tr><td>bar</td> </tr></table></div>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 57x48 #ff000000 face=0 size=1024 glyphs=3 first=512,1463
+text -5,13 59x48 #ff000000 face=0 size=1024 glyphs=3 first=704,2848
+
+#case 12
+#data "<frame></frame></frame><frameset><frame><frameset><frame></frameset><noframes></frameset><noframes>"
+scale 1
+fill 0,0 800x600 #ffffffff
+
+#case 13
+#data "<!DOCTYPE html><object></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+

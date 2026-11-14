@@ -1,0 +1,144 @@
+#case 0
+#data "<html><ruby>a<rb>b<rb></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 1
+#data "<html><ruby>a<rb>b<rt></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 2
+#data "<html><ruby>a<rb>b<rtc></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 3
+#data "<html><ruby>a<rb>b<rp></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 4
+#data "<html><ruby>a<rb>b<span></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 5
+#data "<html><ruby>a<rt>b<rb></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 6
+#data "<html><ruby>a<rt>b<rt></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 7
+#data "<html><ruby>a<rt>b<rtc></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 8
+#data "<html><ruby>a<rt>b<rp></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 9
+#data "<html><ruby>a<rt>b<span></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 10
+#data "<html><ruby>a<rtc>b<rb></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 11
+#data "<html><ruby>a<rtc>b<rt>c<rt>d</ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+text 12,-9 41x48 #ff000000 face=0 size=1024 glyphs=1 first=1779,1463
+text 21,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=2353,1463
+
+#case 12
+#data "<html><ruby>a<rtc>b<rtc></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 13
+#data "<html><ruby>a<rtc>b<rp></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 14
+#data "<html><ruby>a<rtc>b<span></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+
+#case 15
+#data "<html><ruby>a<rp>b<rb></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 16
+#data "<html><ruby>a<rp>b<rt></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 17
+#data "<html><ruby>a<rp>b<rtc></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 18
+#data "<html><ruby>a<rp>b<rp></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 19
+#data "<html><ruby>a<rp>b<span></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+
+#case 20
+#data "<html><ruby><rtc><ruby>a<rb>b<rt></ruby></ruby></html>"
+scale 1
+fill 0,0 800x600 #ffffffff
+text -8,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=512,1463
+text 2,-9 42x48 #ff000000 face=0 size=1024 glyphs=1 first=1123,1463
+

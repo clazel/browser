@@ -309,9 +309,12 @@ pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, 
                     Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x) || (x == s.next_id && out.contains(
                         Output::Spawn { id: x, policy: Policy::Renderer },
                     )),
-                    Output::Spawn { id: x, .. } => x == s.next_id,
+                    Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                     Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
                     Output::Show { .. } => false,
+                    Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+                    Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     _ => true,
                 }
         }),
@@ -330,14 +333,19 @@ pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, 
                     Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x) || (x == s.next_id && out.contains(
                         Output::Spawn { id: x, policy: Policy::Renderer },
                     )),
-                    Output::Spawn { id: x, .. } => x == s.next_id,
+                    Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                     Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
+                    Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                     _ => true,
                 } by {
                     if k >= out_a.len() {
                         assert(out[k] == out2[k - out_a.len()]);
                         if out2.contains(Output::Spawn { id: s.next_id, policy: Policy::Renderer }) {
                             let m = choose|m: int| 0 <= m < out2.len() && out2[m] == (Output::Spawn { id: s.next_id, policy: Policy::Renderer });
+                            assert(out[m + out_a.len()] == out2[m]);
+                        }
+                        if out2.contains(Output::Spawn { id: s.next_id, policy: Policy::Gpu }) {
+                            let m = choose|m: int| 0 <= m < out2.len() && out2[m] == (Output::Spawn { id: s.next_id, policy: Policy::Gpu });
                             assert(out[m + out_a.len()] == out2[m]);
                         }
                     }
@@ -353,14 +361,19 @@ pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, 
                             Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x) || (x == s.next_id && out.contains(
                                 Output::Spawn { id: x, policy: Policy::Renderer },
                             )),
-                            Output::Spawn { id: x, .. } => x == s.next_id,
+                            Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                             Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
+                            Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                             _ => true,
                         } by {
                             if k > 0 {
                                 assert(out[k] == out2[k - 1]);
                                 if out2.contains(Output::Spawn { id: s.next_id, policy: Policy::Renderer }) {
                                     let m = choose|m: int| 0 <= m < out2.len() && out2[m] == (Output::Spawn { id: s.next_id, policy: Policy::Renderer });
+                                    assert(out[m + 1] == out2[m]);
+                                }
+                                if out2.contains(Output::Spawn { id: s.next_id, policy: Policy::Gpu }) {
+                                    let m = choose|m: int| 0 <= m < out2.len() && out2[m] == (Output::Spawn { id: s.next_id, policy: Policy::Gpu });
                                     assert(out[m + 1] == out2[m]);
                                 }
                             }
@@ -379,14 +392,19 @@ pub proof fn lemma_carry_out_renderer_outputs(urls: UrlFns, s: State, tab: nat, 
                         Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x) || (x == s.next_id && out.contains(
                             Output::Spawn { id: x, policy: Policy::Renderer },
                         )),
-                        Output::Spawn { id: x, .. } => x == s.next_id,
+                        Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                         Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
+                        Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                         _ => true,
                     } by {
                         if k > 0 {
                             assert(out[k] == out2[k - 1]);
                             if out2.contains(Output::Spawn { id: s.next_id, policy: Policy::Renderer }) {
                                 let m = choose|m: int| 0 <= m < out2.len() && out2[m] == (Output::Spawn { id: s.next_id, policy: Policy::Renderer });
+                                assert(out[m + 1] == out2[m]);
+                            }
+                            if out2.contains(Output::Spawn { id: s.next_id, policy: Policy::Gpu }) {
+                                let m = choose|m: int| 0 <= m < out2.len() && out2[m] == (Output::Spawn { id: s.next_id, policy: Policy::Gpu });
                                 assert(out[m + 1] == out2[m]);
                             }
                         }
@@ -418,9 +436,12 @@ pub proof fn lemma_commit_renderer_outputs(urls: UrlFns, s: State, tab: nat, hre
                     Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x) || (x == s.next_id && out.contains(
                         Output::Spawn { id: x, policy: Policy::Renderer },
                     )),
-                    Output::Spawn { id: x, .. } => x == s.next_id,
+                    Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                     Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
                     Output::Show { .. } => false,
+                    Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+                    Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     _ => true,
                 }
         }),
@@ -439,14 +460,19 @@ pub proof fn lemma_commit_renderer_outputs(urls: UrlFns, s: State, tab: nat, hre
                 Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x) || (x == s.next_id && all.contains(
                     Output::Spawn { id: x, policy: Policy::Renderer },
                 )),
-                Output::Spawn { id: x, .. } => x == s.next_id,
+                Output::Spawn { id: x, .. } => x == s.next_id && all.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && all.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                 Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
+                Output::ToGpu { id: x, .. } => x == s.next_id && all.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                 _ => true,
             } by {
                 if k >= closes.len() {
                     assert(all[k] == out[k - closes.len()]);
                     if out.contains(Output::Spawn { id: s.next_id, policy: Policy::Renderer }) {
                         let m = choose|m: int| 0 <= m < out.len() && out[m] == (Output::Spawn { id: s.next_id, policy: Policy::Renderer });
+                        assert(all[m + closes.len()] == out[m]);
+                    }
+                    if out.contains(Output::Spawn { id: s.next_id, policy: Policy::Gpu }) {
+                        let m = choose|m: int| 0 <= m < out.len() && out[m] == (Output::Spawn { id: s.next_id, policy: Policy::Gpu });
                         assert(all[m + closes.len()] == out[m]);
                     }
                 } else {
@@ -458,8 +484,9 @@ pub proof fn lemma_commit_renderer_outputs(urls: UrlFns, s: State, tab: nat, hre
             assert(all == closes + out);
             assert forall|k: int| 0 <= k < all.len() implies match #[trigger] all[k] {
                 Output::ToRenderer { id: x, .. } => (exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x),
-                Output::Spawn { id: x, .. } => x == s.next_id,
+                Output::Spawn { id: x, .. } => x == s.next_id && all.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && all.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
                 Output::Kill { id: x } => exists|i: int| 0 <= i < s.renderers.len() && s.renderers[i].tab == tab && s.renderers[i].id == x,
+                Output::ToGpu { id: x, .. } => x == s.next_id && all.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
                 _ => true,
             } by {
                 if k >= closes.len() {
@@ -485,6 +512,9 @@ pub proof fn lemma_abort_renderer_outputs(urls: UrlFns, s: State, tab: nat, code
                     Output::Spawn { .. } => false,
                     Output::Kill { .. } => false,
                     Output::Show { .. } => false,
+                    Output::ToGpu { .. } => false,
+                    Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     _ => true,
                 }
         }),
@@ -692,6 +722,9 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                     Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
                     Output::Send { .. } => false,
                     Output::Show { .. } => false,
+                    Output::ToGpu { .. } => false,
+                    Output::Paint { .. } => false,
+                    Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                     Output::Close { conn: x } => owned_in(s.conns, tab, x),
                 }
             &&& s1.next_id == s.next_id
@@ -725,6 +758,9 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                         Output::Connect { .. } => false,
                         Output::Send { .. } => false,
                         Output::Show { .. } => false,
+                        Output::ToGpu { .. } => false,
+                        Output::Paint { .. } => false,
+                        Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                         Output::Close { conn: x } => owned_in(s.conns, tab, x),
                     } by {
                         if k >= closes.len() {
@@ -756,6 +792,9 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                             Output::Connect { .. } => false,
                             Output::Send { .. } => false,
                             Output::Show { .. } => false,
+                            Output::ToGpu { .. } => false,
+                            Output::Paint { .. } => false,
+                            Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                             Output::Close { conn: x } => owned_in(s.conns, tab, x),
                         } by {
                             if k >= closes.len() {
@@ -792,6 +831,9 @@ pub proof fn lemma_begin_outputs(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFn
                             Output::Connect { conn: x, .. } => s.next_conn <= x < s2.next_conn,
                             Output::Send { .. } => false,
                             Output::Show { .. } => false,
+                            Output::ToGpu { .. } => false,
+                            Output::Paint { .. } => false,
+                            Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
                             Output::Close { conn: x } => owned_in(s.conns, tab, x),
                         } by {
                             if k >= closes.len() {
@@ -984,11 +1026,14 @@ pub proof fn theorem_net_only_to_tab(rules: Seq<clazel_psl::spec::Rule>, urls: U
             Output::ToRenderer { id: x, .. } => (exists|i2: int| 0 <= i2 < s.renderers.len() && s.renderers[i2].tab == c.tab && s.renderers[i2].id == x) || (x == s.next_id && out.contains(
                 Output::Spawn { id: x, policy: Policy::Renderer },
             )),
-            Output::Spawn { id: x, .. } => x == s.next_id,
+            Output::Spawn { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }) && out.contains(Output::Spawn { id: x, policy: Policy::Renderer }),
             Output::Kill { id: x } => exists|i2: int| 0 <= i2 < s.renderers.len() && s.renderers[i2].tab == c.tab && s.renderers[i2].id == x,
             Output::Connect { .. } => true,
             Output::Send { .. } => true,
             Output::Show { .. } => false,
+            Output::ToGpu { id: x, .. } => x == s.next_id && out.contains(Output::Spawn { id: x, policy: Policy::Gpu }),
+            Output::Paint { .. } => false,
+            Output::SubConnect { .. } | Output::SubSend { .. } | Output::SubClose { .. } => false,
             Output::Close { .. } => true,
         } by {
             match out[k] {
@@ -1230,6 +1275,9 @@ pub proof fn lemma_handle_message_conns(rules: Seq<clazel_psl::spec::Rule>, urls
         },
         clazel_ipc::message::spec::Message::CookieGet => {},
         clazel_ipc::message::spec::Message::CookieSet { cookie_string } => {},
+        clazel_ipc::message::spec::Message::FetchStyle { request, url } => {
+            crate::subfetch_rel::lemma_fetch_style_shape(rules, urls, fetch, s, r, request, url);
+        },
         _ => {
             crate::lock::lemma_storage_call_frame(s, r, m);
         },
@@ -1652,6 +1700,40 @@ pub proof fn lemma_own_all_exited(rules: Seq<clazel_psl::spec::Rule>, urls: UrlF
     }
 }
 
+/// A GPU process's frame (item 5.18): nothing about connections, or its
+/// renderer killed and its tab's connections closed.
+pub proof fn lemma_own_all_from_gpu(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, id: nat, bytes: Seq<u8>)
+    requires
+        crate::invariant::kernel_wf(rules, urls, s),
+    ensures
+        ({
+            let e = Event::FromGpu { id, bytes };
+            let (s1, out) = step(rules, urls, fetch, s, e);
+            own_all(s, s1, out, crate::statements::event_tab(s, e))
+        }),
+{
+    assert(kernel_wf_conns(s));
+    crate::invariant::lemma_find_by_id(s.renderers, id, 0);
+    let e = Event::FromGpu { id, bytes };
+    let (s1, out) = step(rules, urls, fetch, s, e);
+    let t = crate::statements::event_tab(s, e);
+    if let Some(i) = find_by_id(s.renderers, id, 0) {
+        let r = s.renderers[i];
+        let killed = match decode_gpu_frame(bytes) {
+            None => true,
+            Some(clazel_ipc::message::spec::Message::FrameReady { buffer, .. }) => !r.committed || buffer >= ring_size(),
+            Some(_) => false,
+        };
+        if killed {
+            lemma_own_close(s, s1, out, seq![Output::Kill { id }], r.tab);
+        } else {
+            lemma_own_all_unchanged(s, s1, out, t);
+        }
+    } else {
+        lemma_own_all_unchanged(s, s1, out, t);
+    }
+}
+
 /// A network event.
 pub proof fn lemma_own_all_net(rules: Seq<clazel_psl::spec::Rule>, urls: UrlFns, fetch: FetchFns, s: State, conn: nat, input: NetInput)
     requires
@@ -1704,7 +1786,7 @@ pub proof fn lemma_own_all_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                 crate::invariant::lemma_open_tab_push_wf(rules, urls, s, url, lock, false);
                 lemma_own_begin(rules, urls, fetch, sp, id, url);
                 let ob = begin_navigation(rules, urls, fetch, sp, id, url).1;
-                assert(out == seq![Output::Spawn { id, policy: Policy::Renderer }] + ob);
+                assert(out == seq![Output::Spawn { id, policy: Policy::Gpu }, Output::Spawn { id, policy: Policy::Renderer }] + ob);
                 assert forall|k: int| 0 <= k < out.len() implies match #[trigger] out[k] {
                     Output::Connect { conn: x, .. } => s.next_conn <= x < s1.next_conn,
                     Output::Send { conn: x, .. } => (exists|j: int| 0 <= j < s.conns.len() && s.conns[j].id == x && s.conns[j].tab == id) || (s.next_conn <= x
@@ -1713,8 +1795,8 @@ pub proof fn lemma_own_all_open_tab(rules: Seq<clazel_psl::spec::Rule>, urls: Ur
                         < s1.next_conn),
                     _ => true,
                 } by {
-                    if k > 0 {
-                        assert(out[k] == ob[k - 1]);
+                    if k > 1 {
+                        assert(out[k] == ob[k - 2]);
                     }
                 }
             }
@@ -1728,12 +1810,15 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
         reachable(rules, urls, fetch, s),
     ensures
         crate::statements::connection_ownership_statement(rules, urls, fetch, s, e),
+        crate::statements::subfetch_ownership_statement(rules, urls, fetch, s, e),
 {
+    crate::subfetch_theorems::theorem_subfetch_ownership(rules, urls, fetch, s, e);
     crate::invariant::lemma_reachable_wf(rules, urls, fetch, s);
     assert(kernel_wf_conns(s));
     match e {
         Event::Tick { time } => {
             let (s1, out) = step(rules, urls, fetch, s, e);
+            crate::subfetch_rel::lemma_subfetch_events_own_none(rules, urls, fetch, s, e);
             lemma_own_all_unchanged(s, s1, out, crate::statements::event_tab(s, e));
         },
         Event::OpenTab { url, script } => {
@@ -1750,6 +1835,14 @@ pub proof fn theorem_connection_ownership(rules: Seq<clazel_psl::spec::Rule>, ur
         },
         Event::FromRenderer { id, bytes } => {
             lemma_own_all_from_renderer(rules, urls, fetch, s, id, bytes);
+        },
+        Event::FromGpu { id, bytes } => {
+            lemma_own_all_from_gpu(rules, urls, fetch, s, id, bytes);
+        },
+        Event::Resize { .. } | Event::Input { .. } | Event::SubNet { .. } => {
+            let (s1, out) = step(rules, urls, fetch, s, e);
+            crate::subfetch_rel::lemma_subfetch_events_own_none(rules, urls, fetch, s, e);
+            lemma_own_all_unchanged(s, s1, out, crate::statements::event_tab(s, e));
         },
     }
     lemma_own_bridge(rules, urls, fetch, s, e);

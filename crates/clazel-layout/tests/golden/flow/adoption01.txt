@@ -147,13 +147,13 @@ root (anonymous) 0,0 800x600
           inline <a> 18.1875,8 10.1875x18.640625 start end
           text "1" x=8 base=22.859375 w=10.1875
           text "3" x=18.1875 base=22.859375 w=10.1875
-      table-wrapper <table> 8,26.640625 12.1875x20.640625 m=0,771.8125,0,0
-        table <table> 8,26.640625 12.1875x20.640625
-          row-group <tbody> 8,26.640625 12.1875x20.640625
-            row <tr> 8,26.640625 12.1875x20.640625
-              cell <td> 8,26.640625 12.1875x20.640625 p=1,1,1,1
-                line 9,27.640625 10.1875x18.640625 base=42.5
-                  text "2" x=9 base=42.5 w=10.1875
+      table-wrapper <table> 8,26.640625 16.1875x24.640625 m=0,767.8125,0,0
+        table <table> 8,26.640625 16.1875x24.640625
+          row-group <tbody> 10,28.640625 12.1875x20.640625
+            row <tr> 10,28.640625 12.1875x20.640625
+              cell <td> 10,28.640625 12.1875x20.640625 p=1,1,1,1
+                line 11,29.640625 10.1875x18.640625 base=44.5
+                  text "2" x=11 base=44.5 w=10.1875
 
 #case 11
 #data "<table>A<td>B</td>C</table>"
@@ -163,13 +163,13 @@ root (anonymous) 0,0 800x600
       block (anonymous) 8,8 784x18.640625
         line 8,8 784x18.640625 base=22.859375
           text "AC" x=8 base=22.859375 w=23.796875
-      table-wrapper <table> 8,26.640625 13.765625x20.640625 m=0,770.234375,0,0
-        table <table> 8,26.640625 13.765625x20.640625
-          row-group <tbody> 8,26.640625 13.765625x20.640625
-            row <tr> 8,26.640625 13.765625x20.640625
-              cell <td> 8,26.640625 13.765625x20.640625 p=1,1,1,1
-                line 9,27.640625 11.765625x18.640625 base=42.5
-                  text "B" x=9 base=42.5 w=11.765625
+      table-wrapper <table> 8,26.640625 17.765625x24.640625 m=0,766.234375,0,0
+        table <table> 8,26.640625 17.765625x24.640625
+          row-group <tbody> 10,28.640625 13.765625x20.640625
+            row <tr> 10,28.640625 13.765625x20.640625
+              cell <td> 10,28.640625 13.765625x20.640625 p=1,1,1,1
+                line 11,29.640625 11.765625x18.640625 base=44.5
+                  text "B" x=11 base=44.5 w=11.765625
 
 #case 12
 #data "<a><svg><tr><input></a>"
@@ -181,8 +181,6 @@ root (anonymous) 0,0 800x600
         inline <svg> 8,-6.859375 0x18.640625 start end
         atomic (anonymous)
           table-wrapper (anonymous) 8,8 0x0
-            line 8,8 0x0 base=8
-              atomic (anonymous)
             table (anonymous) 8,8 0x0
               row <tr> 8,8 0x0
                 cell (anonymous) 8,8 0x0

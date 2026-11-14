@@ -20,24 +20,24 @@ root (anonymous) 0,0 800x600
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 2x2 m=0,782,0,0
-        table <table> 8,8 2x2
-          row-group <tbody> 8,8 2x2
-            row <tr> 8,8 2x2
-              cell <td> 8,8 2x2 p=1,1,1,1
+      table-wrapper <table> 8,8 6x6 m=0,778,0,0
+        table <table> 8,8 6x6
+          row-group <tbody> 10,10 2x2
+            row <tr> 10,10 2x2
+              cell <td> 10,10 2x2 p=1,1,1,1
 
 #case 3
 #data "<table><td>test</tbody></table>"
 root (anonymous) 0,0 800x600
   block <html> 0,0 800x600
     block <body> 8,8 784x584 m=8,8,8,8
-      table-wrapper <table> 8,8 32.546875x20.640625 m=0,751.453125,0,0
-        table <table> 8,8 32.546875x20.640625
-          row-group <tbody> 8,8 32.546875x20.640625
-            row <tr> 8,8 32.546875x20.640625
-              cell <td> 8,8 32.546875x20.640625 p=1,1,1,1
-                line 9,9 30.546875x18.640625 base=23.859375
-                  text "test" x=9 base=23.859375 w=30.546875
+      table-wrapper <table> 8,8 36.546875x24.640625 m=0,747.453125,0,0
+        table <table> 8,8 36.546875x24.640625
+          row-group <tbody> 10,10 32.546875x20.640625
+            row <tr> 10,10 32.546875x20.640625
+              cell <td> 10,10 32.546875x20.640625 p=1,1,1,1
+                line 11,11 30.546875x18.640625 base=25.859375
+                  text "test" x=11 base=25.859375 w=30.546875
 
 #case 4
 #data "<frame>test"
@@ -285,18 +285,20 @@ root (anonymous) 0,0 800x600
 #case 35
 #data "<!DOCTYPE html><table><caption>test TEST</caption><td>test"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x55.28125
-    block <body> 8,8 784x39.28125 m=8,8,8,8
-      table-wrapper <table> 8,8 79.609375x39.28125 m=0,704.390625,0,0
-        caption <caption> 8,8 79.609375x18.640625
-          line 8,8 79.609375x18.640625 base=22.859375
-            text "test TEST" x=8 base=22.859375 w=79.609375
-        table <table> 8,26.640625 79.609375x20.640625
-          row-group <tbody> 8,26.640625 79.609375x20.640625
-            row <tr> 8,26.640625 79.609375x20.640625
-              cell <td> 8,26.640625 79.609375x20.640625 p=1,1,1,1
-                line 9,27.640625 77.609375x18.640625 base=42.5
-                  text "test" x=9 base=42.5 w=30.546875
+  block <html> 0,0 800x77.921875
+    block <body> 8,8 784x61.921875 m=8,8,8,8
+      table-wrapper <table> 8,8 43.984375x61.921875 m=0,740.015625,0,0
+        caption <caption> 8,8 43.984375x37.28125
+          line 8,8 43.984375x18.640625 base=22.859375
+            text "test" x=14.71875 base=22.859375 w=30.546875
+          line 8,26.640625 43.984375x18.640625 base=41.5
+            text "TEST" x=8 base=41.5 w=43.984375
+        table <table> 8,45.28125 43.984375x24.640625
+          row-group <tbody> 10,47.28125 39.984375x20.640625
+            row <tr> 10,47.28125 39.984375x20.640625
+              cell <td> 10,47.28125 39.984375x20.640625 p=1,1,1,1
+                line 11,48.28125 37.984375x18.640625 base=63.140625
+                  text "test" x=11 base=63.140625 w=30.546875
 
 #case 36
 #data "<!DOCTYPE html><select><option><optgroup>"
@@ -471,14 +473,14 @@ root (anonymous) 0,0 800x600
 #case 60
 #data "<!DOCTYPE html><table><tr><td></p></table>"
 root (anonymous) 0,0 800x600
-  block <html> 0,0 800x34
-    block <body> 8,8 784x18 m=8,8,8,8
-      table-wrapper <table> 8,8 2x18 m=0,782,0,0
-        table <table> 8,8 2x18
-          row-group <tbody> 8,8 2x18
-            row <tr> 8,8 2x18
-              cell <td> 8,8 2x18 p=1,1,1,1
-                block <p> 9,25 0x0 m=16,0,16,0
+  block <html> 0,0 800x38
+    block <body> 8,8 784x22 m=8,8,8,8
+      table-wrapper <table> 8,8 6x22 m=0,778,0,0
+        table <table> 8,8 6x22
+          row-group <tbody> 10,10 2x18
+            row <tr> 10,10 2x18
+              cell <td> 10,10 2x18 p=1,1,1,1
+                block <p> 11,27 0x0 m=16,0,16,0
 
 #case 61
 #data "<!DOCTYPE <!DOCTYPE HTML>><!--<!--x-->-->"
