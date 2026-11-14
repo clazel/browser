@@ -324,4 +324,209 @@ pub proof fn lemma_example_unicode_ranges()
     assert(consume_a_token(seq![0x55u32, 0x2B, 0x67], 0, true).0 == (Token::Ident { value: seq![0x55u32] })) by (compute_only);
 }
 
+/// `url(a` and the code point `c`.
+pub open spec fn url_with(c: u32) -> Seq<u32> {
+    seq![0x75u32, 0x72, 0x6C, 0x28, 0x61, c]
+}
+
+/// §4.2 non-printable code point: "between U+0000 NULL and U+0008 BACKSPACE inclusive, or
+/// U+000B LINE TABULATION, or a code point between U+000E SHIFT OUT and U+001F INFORMATION
+/// SEPARATOR ONE inclusive, or U+007F DELETE". In an unquoted url (§4.3.6) one is "a parse
+/// error": remnants, and a bad url. The code points at the edges of those ranges that are
+/// not in them are ordinary: U+000C and U+000D, and U+0080 above them, and U+0020, which
+/// is whitespace, and ends the url.
+pub proof fn lemma_example_non_printable()
+    ensures
+        first(url_with(0x08)) == Token::BadUrl,
+        first(url_with(0x0B)) == Token::BadUrl,
+        first(url_with(0x0E)) == Token::BadUrl,
+        first(url_with(0x1F)) == Token::BadUrl,
+        first(url_with(0x7F)) == Token::BadUrl,
+        first(url_with(0x0C)) == (Token::Url { value: seq![0x61u32, 0x0C] }),
+        first(url_with(0x0D)) == (Token::Url { value: seq![0x61u32, 0x0D] }),
+        first(url_with(0x80)) == (Token::Url { value: seq![0x61u32, 0x80] }),
+        first(url_with(0x20)) == (Token::Url { value: seq![0x61u32] }),
+{
+    assert(first(url_with(0x08)) == Token::BadUrl) by (compute_only);
+    assert(first(url_with(0x0B)) == Token::BadUrl) by (compute_only);
+    assert(first(url_with(0x0E)) == Token::BadUrl) by (compute_only);
+    assert(first(url_with(0x1F)) == Token::BadUrl) by (compute_only);
+    assert(first(url_with(0x7F)) == Token::BadUrl) by (compute_only);
+    assert(first(url_with(0x0C)) == (Token::Url { value: seq![0x61u32, 0x0C] })) by (compute_only);
+    assert(first(url_with(0x0D)) == (Token::Url { value: seq![0x61u32, 0x0D] })) by (compute_only);
+    assert(first(url_with(0x80)) == (Token::Url { value: seq![0x61u32, 0x80] })) by (compute_only);
+    assert(first(url_with(0x20)) == (Token::Url { value: seq![0x61u32] })) by (compute_only);
+}
+
+/// §4.3.2: a comment ends at the first `*` followed by `/`, and what follows is not part
+/// of it: `/*a*/b` is five code points, and in `/*a/b*/c` the first `/` is inside.
+pub proof fn lemma_example_comment_ends()
+    ensures
+        consume_comments(seq![0x2Fu32, 0x2A, 0x61, 0x2A, 0x2F, 0x62], 0) == 5,
+        consume_comments(seq![0x2Fu32, 0x2A, 0x61, 0x2F, 0x62, 0x2A, 0x2F, 0x63], 0) == 7,
+{
+    assert(consume_comments(seq![0x2Fu32, 0x2A, 0x61, 0x2A, 0x2F, 0x62], 0) == 5)
+        by (compute_only);
+    assert(consume_comments(seq![0x2Fu32, 0x2A, 0x61, 0x2F, 0x62, 0x2A, 0x2F, 0x63], 0) == 7)
+        by (compute_only);
+}
+
+/// §4.3.7: the value of a hex digit is its digit value, `a` to `f` in either case ten to
+/// fifteen, and the digits are read in base 16: `\9` is U+0009, `\a` and `\A` are U+000A,
+/// `\f` and `\F` are U+000F, `\10` is U+0010 and `\100` is U+0100.
+pub proof fn lemma_example_hex_values()
+    ensures
+        consume_escaped_code_point(seq![0x39u32], 0).0 == 0x09u32,
+        consume_escaped_code_point(seq![0x61u32], 0).0 == 0x0Au32,
+        consume_escaped_code_point(seq![0x41u32], 0).0 == 0x0Au32,
+        consume_escaped_code_point(seq![0x66u32], 0).0 == 0x0Fu32,
+        consume_escaped_code_point(seq![0x46u32], 0).0 == 0x0Fu32,
+        consume_escaped_code_point(seq![0x31u32, 0x30], 0).0 == 0x10u32,
+        consume_escaped_code_point(seq![0x31u32, 0x30, 0x30], 0).0 == 0x100u32,
+{
+    assert(consume_escaped_code_point(seq![0x39u32], 0).0 == 0x09u32) by (compute_only);
+    assert(consume_escaped_code_point(seq![0x61u32], 0).0 == 0x0Au32) by (compute_only);
+    assert(consume_escaped_code_point(seq![0x41u32], 0).0 == 0x0Au32) by (compute_only);
+    assert(consume_escaped_code_point(seq![0x66u32], 0).0 == 0x0Fu32) by (compute_only);
+    assert(consume_escaped_code_point(seq![0x46u32], 0).0 == 0x0Fu32) by (compute_only);
+    assert(consume_escaped_code_point(seq![0x31u32, 0x30], 0).0 == 0x10u32) by (compute_only);
+    assert(consume_escaped_code_point(seq![0x31u32, 0x30, 0x30], 0).0 == 0x100u32)
+        by (compute_only);
+}
+
+/// §4.3.11: digits and hyphens continue an ident (`a1`, `a-`), an escape does too and
+/// appends what it stands for (`a\g` is `ag`, `a\62 c` is `abc`), and a backslash and a
+/// newline are not an escape, so the ident stops before them.
+pub proof fn lemma_example_ident_sequence()
+    ensures
+        first(seq![0x61u32, 0x31]) == (Token::Ident { value: seq![0x61u32, 0x31] }),
+        first(seq![0x61u32, 0x2D]) == (Token::Ident { value: seq![0x61u32, 0x2D] }),
+        first(seq![0x61u32, 0x5C, 0x67]) == (Token::Ident { value: seq![0x61u32, 0x67] }),
+        first(seq![0x61u32, 0x5C, 0x36, 0x32, 0x20, 0x63]) == (Token::Ident {
+            value: seq![0x61u32, 0x62, 0x63],
+        }),
+        first(seq![0x61u32, 0x5C, 0x0A]) == (Token::Ident { value: seq![0x61u32] }),
+        after(seq![0x61u32, 0x5C, 0x0A]) == 1,
+{
+    assert(first(seq![0x61u32, 0x31]) == (Token::Ident { value: seq![0x61u32, 0x31] }))
+        by (compute_only);
+    assert(first(seq![0x61u32, 0x2D]) == (Token::Ident { value: seq![0x61u32, 0x2D] }))
+        by (compute_only);
+    assert(first(seq![0x61u32, 0x5C, 0x67]) == (Token::Ident { value: seq![0x61u32, 0x67] }))
+        by (compute_only);
+    assert(first(seq![0x61u32, 0x5C, 0x36, 0x32, 0x20, 0x63]) == (Token::Ident {
+        value: seq![0x61u32, 0x62, 0x63],
+    })) by (compute_only);
+    assert(first(seq![0x61u32, 0x5C, 0x0A]) == (Token::Ident { value: seq![0x61u32] }))
+        by (compute_only);
+    assert(after(seq![0x61u32, 0x5C, 0x0A]) == 1) by (compute_only);
+}
+
+/// §4.2 "non-ASCII ident code point", on both sides of each of its 15 ranges: an ident
+/// code point alone is an ident (it is an ident-start code point too), any other
+/// non-ASCII code point a delim. The ranges are inclusive: U+00B7; U+00C0 to U+00D6;
+/// U+00D8 to U+00F6; U+00F8 to U+037D; U+037F to U+1FFF; U+200C; U+200D; U+203F; U+2040;
+/// U+2070 to U+218F; U+2C00 to U+2FEF; U+3001 to U+D7FF; U+F900 to U+FDCF; U+FDF0 to
+/// U+FFFD; and U+10000 up (here to U+10FFFF).
+pub proof fn lemma_example_non_ascii_boundaries()
+    ensures
+        first(seq![0xB6u32]) == (Token::Delim { value: 0xB6u32 }),
+        first(seq![0xB7u32]) == (Token::Ident { value: seq![0xB7u32] }),
+        first(seq![0xB8u32]) == (Token::Delim { value: 0xB8u32 }),
+        first(seq![0xBFu32]) == (Token::Delim { value: 0xBFu32 }),
+        first(seq![0xC0u32]) == (Token::Ident { value: seq![0xC0u32] }),
+        first(seq![0xD6u32]) == (Token::Ident { value: seq![0xD6u32] }),
+        first(seq![0xD7u32]) == (Token::Delim { value: 0xD7u32 }),
+        first(seq![0xD8u32]) == (Token::Ident { value: seq![0xD8u32] }),
+        first(seq![0xF6u32]) == (Token::Ident { value: seq![0xF6u32] }),
+        first(seq![0xF7u32]) == (Token::Delim { value: 0xF7u32 }),
+        first(seq![0xF8u32]) == (Token::Ident { value: seq![0xF8u32] }),
+        first(seq![0x37Du32]) == (Token::Ident { value: seq![0x37Du32] }),
+        first(seq![0x37Eu32]) == (Token::Delim { value: 0x37Eu32 }),
+        first(seq![0x37Fu32]) == (Token::Ident { value: seq![0x37Fu32] }),
+        first(seq![0x1FFFu32]) == (Token::Ident { value: seq![0x1FFFu32] }),
+        first(seq![0x2000u32]) == (Token::Delim { value: 0x2000u32 }),
+        first(seq![0x200Bu32]) == (Token::Delim { value: 0x200Bu32 }),
+        first(seq![0x200Cu32]) == (Token::Ident { value: seq![0x200Cu32] }),
+        first(seq![0x200Du32]) == (Token::Ident { value: seq![0x200Du32] }),
+        first(seq![0x200Eu32]) == (Token::Delim { value: 0x200Eu32 }),
+        first(seq![0x203Eu32]) == (Token::Delim { value: 0x203Eu32 }),
+        first(seq![0x203Fu32]) == (Token::Ident { value: seq![0x203Fu32] }),
+        first(seq![0x2040u32]) == (Token::Ident { value: seq![0x2040u32] }),
+        first(seq![0x2041u32]) == (Token::Delim { value: 0x2041u32 }),
+        first(seq![0x206Fu32]) == (Token::Delim { value: 0x206Fu32 }),
+        first(seq![0x2070u32]) == (Token::Ident { value: seq![0x2070u32] }),
+        first(seq![0x218Fu32]) == (Token::Ident { value: seq![0x218Fu32] }),
+        first(seq![0x2190u32]) == (Token::Delim { value: 0x2190u32 }),
+        first(seq![0x2BFFu32]) == (Token::Delim { value: 0x2BFFu32 }),
+        first(seq![0x2C00u32]) == (Token::Ident { value: seq![0x2C00u32] }),
+        first(seq![0x2FEFu32]) == (Token::Ident { value: seq![0x2FEFu32] }),
+        first(seq![0x2FF0u32]) == (Token::Delim { value: 0x2FF0u32 }),
+        first(seq![0x3000u32]) == (Token::Delim { value: 0x3000u32 }),
+        first(seq![0x3001u32]) == (Token::Ident { value: seq![0x3001u32] }),
+        first(seq![0xD7FFu32]) == (Token::Ident { value: seq![0xD7FFu32] }),
+        first(seq![0xD800u32]) == (Token::Delim { value: 0xD800u32 }),
+        first(seq![0xF8FFu32]) == (Token::Delim { value: 0xF8FFu32 }),
+        first(seq![0xF900u32]) == (Token::Ident { value: seq![0xF900u32] }),
+        first(seq![0xFDCFu32]) == (Token::Ident { value: seq![0xFDCFu32] }),
+        first(seq![0xFDD0u32]) == (Token::Delim { value: 0xFDD0u32 }),
+        first(seq![0xFDEFu32]) == (Token::Delim { value: 0xFDEFu32 }),
+        first(seq![0xFDF0u32]) == (Token::Ident { value: seq![0xFDF0u32] }),
+        first(seq![0xFFFDu32]) == (Token::Ident { value: seq![0xFFFDu32] }),
+        first(seq![0xFFFEu32]) == (Token::Delim { value: 0xFFFEu32 }),
+        first(seq![0xFFFFu32]) == (Token::Delim { value: 0xFFFFu32 }),
+        first(seq![0x1_0000u32]) == (Token::Ident { value: seq![0x1_0000u32] }),
+        first(seq![0x10_FFFFu32]) == (Token::Ident { value: seq![0x10_FFFFu32] }),
+{
+    assert(first(seq![0xB6u32]) == (Token::Delim { value: 0xB6u32 })) by (compute_only);
+    assert(first(seq![0xB7u32]) == (Token::Ident { value: seq![0xB7u32] })) by (compute_only);
+    assert(first(seq![0xB8u32]) == (Token::Delim { value: 0xB8u32 })) by (compute_only);
+    assert(first(seq![0xBFu32]) == (Token::Delim { value: 0xBFu32 })) by (compute_only);
+    assert(first(seq![0xC0u32]) == (Token::Ident { value: seq![0xC0u32] })) by (compute_only);
+    assert(first(seq![0xD6u32]) == (Token::Ident { value: seq![0xD6u32] })) by (compute_only);
+    assert(first(seq![0xD7u32]) == (Token::Delim { value: 0xD7u32 })) by (compute_only);
+    assert(first(seq![0xD8u32]) == (Token::Ident { value: seq![0xD8u32] })) by (compute_only);
+    assert(first(seq![0xF6u32]) == (Token::Ident { value: seq![0xF6u32] })) by (compute_only);
+    assert(first(seq![0xF7u32]) == (Token::Delim { value: 0xF7u32 })) by (compute_only);
+    assert(first(seq![0xF8u32]) == (Token::Ident { value: seq![0xF8u32] })) by (compute_only);
+    assert(first(seq![0x37Du32]) == (Token::Ident { value: seq![0x37Du32] })) by (compute_only);
+    assert(first(seq![0x37Eu32]) == (Token::Delim { value: 0x37Eu32 })) by (compute_only);
+    assert(first(seq![0x37Fu32]) == (Token::Ident { value: seq![0x37Fu32] })) by (compute_only);
+    assert(first(seq![0x1FFFu32]) == (Token::Ident { value: seq![0x1FFFu32] })) by (compute_only);
+    assert(first(seq![0x2000u32]) == (Token::Delim { value: 0x2000u32 })) by (compute_only);
+    assert(first(seq![0x200Bu32]) == (Token::Delim { value: 0x200Bu32 })) by (compute_only);
+    assert(first(seq![0x200Cu32]) == (Token::Ident { value: seq![0x200Cu32] })) by (compute_only);
+    assert(first(seq![0x200Du32]) == (Token::Ident { value: seq![0x200Du32] })) by (compute_only);
+    assert(first(seq![0x200Eu32]) == (Token::Delim { value: 0x200Eu32 })) by (compute_only);
+    assert(first(seq![0x203Eu32]) == (Token::Delim { value: 0x203Eu32 })) by (compute_only);
+    assert(first(seq![0x203Fu32]) == (Token::Ident { value: seq![0x203Fu32] })) by (compute_only);
+    assert(first(seq![0x2040u32]) == (Token::Ident { value: seq![0x2040u32] })) by (compute_only);
+    assert(first(seq![0x2041u32]) == (Token::Delim { value: 0x2041u32 })) by (compute_only);
+    assert(first(seq![0x206Fu32]) == (Token::Delim { value: 0x206Fu32 })) by (compute_only);
+    assert(first(seq![0x2070u32]) == (Token::Ident { value: seq![0x2070u32] })) by (compute_only);
+    assert(first(seq![0x218Fu32]) == (Token::Ident { value: seq![0x218Fu32] })) by (compute_only);
+    assert(first(seq![0x2190u32]) == (Token::Delim { value: 0x2190u32 })) by (compute_only);
+    assert(first(seq![0x2BFFu32]) == (Token::Delim { value: 0x2BFFu32 })) by (compute_only);
+    assert(first(seq![0x2C00u32]) == (Token::Ident { value: seq![0x2C00u32] })) by (compute_only);
+    assert(first(seq![0x2FEFu32]) == (Token::Ident { value: seq![0x2FEFu32] })) by (compute_only);
+    assert(first(seq![0x2FF0u32]) == (Token::Delim { value: 0x2FF0u32 })) by (compute_only);
+    assert(first(seq![0x3000u32]) == (Token::Delim { value: 0x3000u32 })) by (compute_only);
+    assert(first(seq![0x3001u32]) == (Token::Ident { value: seq![0x3001u32] })) by (compute_only);
+    assert(first(seq![0xD7FFu32]) == (Token::Ident { value: seq![0xD7FFu32] })) by (compute_only);
+    assert(first(seq![0xD800u32]) == (Token::Delim { value: 0xD800u32 })) by (compute_only);
+    assert(first(seq![0xF8FFu32]) == (Token::Delim { value: 0xF8FFu32 })) by (compute_only);
+    assert(first(seq![0xF900u32]) == (Token::Ident { value: seq![0xF900u32] })) by (compute_only);
+    assert(first(seq![0xFDCFu32]) == (Token::Ident { value: seq![0xFDCFu32] })) by (compute_only);
+    assert(first(seq![0xFDD0u32]) == (Token::Delim { value: 0xFDD0u32 })) by (compute_only);
+    assert(first(seq![0xFDEFu32]) == (Token::Delim { value: 0xFDEFu32 })) by (compute_only);
+    assert(first(seq![0xFDF0u32]) == (Token::Ident { value: seq![0xFDF0u32] })) by (compute_only);
+    assert(first(seq![0xFFFDu32]) == (Token::Ident { value: seq![0xFFFDu32] })) by (compute_only);
+    assert(first(seq![0xFFFEu32]) == (Token::Delim { value: 0xFFFEu32 })) by (compute_only);
+    assert(first(seq![0xFFFFu32]) == (Token::Delim { value: 0xFFFFu32 })) by (compute_only);
+    assert(first(seq![0x1_0000u32]) == (Token::Ident { value: seq![0x1_0000u32] }))
+        by (compute_only);
+    assert(first(seq![0x10_FFFFu32]) == (Token::Ident { value: seq![0x10_FFFFu32] }))
+        by (compute_only);
+}
+
 } // verus!

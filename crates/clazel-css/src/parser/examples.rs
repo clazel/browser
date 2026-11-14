@@ -365,4 +365,242 @@ pub proof fn lemma_example_serialize_a_n_plus_b()
     assert(serialize_a_n_plus_b(0, 5) == seq![0x35u32]) by (compute_only);
 }
 
+/// §5.5.6 steps 1 to 4. `1:x;a:b`: step 1 needs an ident, so the number starts "the remnants
+/// of a bad declaration", which end at the `;` and give no declaration, and the next one is
+/// read. `a :b`: step 2 discards the whitespace before the colon. `a b;c:d`: step 3 needs a
+/// colon, so `b;` is the remnants. `a: b`: step 4 discards the whitespace after the colon,
+/// so the value is the ident alone.
+pub proof fn lemma_example_declaration_steps()
+    ensures
+        parse_a_list_of_declarations(
+            Input::String { string: seq![0x31u32, 0x3A, 0x78, 0x3B, 0x61, 0x3A, 0x62] },
+        ) == seq![declaration(0x61, seq![ident(0x62)])],
+        parse_a_list_of_declarations(
+            Input::String { string: seq![0x61u32, 0x20, 0x3A, 0x62] },
+        ) == seq![declaration(0x61, seq![ident(0x62)])],
+        parse_a_list_of_declarations(
+            Input::String { string: seq![0x61u32, 0x20, 0x62, 0x3B, 0x63, 0x3A, 0x64] },
+        ) == seq![declaration(0x63, seq![ident(0x64)])],
+        parse_a_declaration(Input::String { string: seq![0x61u32, 0x3A, 0x20, 0x62] }) == Some(
+            declaration(0x61, seq![ident(0x62)]),
+        ),
+{
+    assert(parse_a_list_of_declarations(
+        Input::String { string: seq![0x31u32, 0x3A, 0x78, 0x3B, 0x61, 0x3A, 0x62] },
+    ) == seq![declaration(0x61, seq![ident(0x62)])]) by (compute_only);
+    assert(parse_a_list_of_declarations(
+        Input::String { string: seq![0x61u32, 0x20, 0x3A, 0x62] },
+    ) == seq![declaration(0x61, seq![ident(0x62)])]) by (compute_only);
+    assert(parse_a_list_of_declarations(
+        Input::String { string: seq![0x61u32, 0x20, 0x62, 0x3B, 0x63, 0x3A, 0x64] },
+    ) == seq![declaration(0x63, seq![ident(0x64)])]) by (compute_only);
+    assert(parse_a_declaration(Input::String { string: seq![0x61u32, 0x3A, 0x20, 0x62] }) == Some(
+        declaration(0x61, seq![ident(0x62)]),
+    )) by (compute_only);
+}
+
+/// §5.4.7 "parse a declaration": step 2 discards whitespace before it (` a:b ` is `a:b`),
+/// step 6 returns a syntax error if input is not empty (`a:b;c`), and §5.5.6 step 8's
+/// "custom property name string" is a name that starts with two dashes: `--x:y` has an
+/// original text, `-x:y` has none.
+pub proof fn lemma_example_parse_a_declaration()
+    ensures
+        parse_a_declaration(
+            Input::String { string: seq![0x20u32, 0x20, 0x61, 0x3A, 0x62, 0x20, 0x20] },
+        ) == Some(declaration(0x61, seq![ident(0x62)])),
+        parse_a_declaration(
+            Input::String { string: seq![0x61u32, 0x3A, 0x62, 0x3B, 0x63] },
+        ) == None::<Declaration>,
+        parse_a_declaration(Input::String { string: seq![0x2Du32, 0x78, 0x3A, 0x79] }) == Some(
+            Declaration {
+                name: seq![0x2Du32, 0x78],
+                value: seq![ident(0x79)],
+                important: false,
+                original_text: None,
+            },
+        ),
+        parse_a_declaration(
+            Input::String { string: seq![0x2Du32, 0x2D, 0x78, 0x3A, 0x79] },
+        ) == Some(
+            Declaration {
+                name: seq![0x2Du32, 0x2D, 0x78],
+                value: seq![ident(0x79)],
+                important: false,
+                original_text: Some(seq![0x79u32]),
+            },
+        ),
+{
+    assert(parse_a_declaration(
+        Input::String { string: seq![0x20u32, 0x20, 0x61, 0x3A, 0x62, 0x20, 0x20] },
+    ) == Some(declaration(0x61, seq![ident(0x62)]))) by (compute_only);
+    assert(parse_a_declaration(
+        Input::String { string: seq![0x61u32, 0x3A, 0x62, 0x3B, 0x63] },
+    ) == None::<Declaration>) by (compute_only);
+    assert(parse_a_declaration(Input::String { string: seq![0x2Du32, 0x78, 0x3A, 0x79] }) == Some(
+        Declaration {
+            name: seq![0x2Du32, 0x78],
+            value: seq![ident(0x79)],
+            important: false,
+            original_text: None,
+        },
+    )) by (compute_only);
+    assert(parse_a_declaration(
+        Input::String { string: seq![0x2Du32, 0x2D, 0x78, 0x3A, 0x79] },
+    ) == Some(
+        Declaration {
+            name: seq![0x2Du32, 0x2D, 0x78],
+            value: seq![ident(0x79)],
+            important: false,
+            original_text: Some(seq![0x79u32]),
+        },
+    )) by (compute_only);
+}
+
+/// §5.4.6 "parse a rule": ` a{} ` is the rule `a{}`, with the whitespace on both sides
+/// discarded (steps 2 and 4); `a{}b` is a syntax error, since input is not empty after it
+/// (step 5); and `@a;` is an at-rule (step 3's at-keyword branch).
+pub proof fn lemma_example_parse_a_rule()
+    ensures
+        parse_a_rule(Input::String { string: seq![0x20u32, 0x61, 0x7B, 0x7D, 0x20] }) == Some(
+            style_rule(0x61, Seq::empty(), Seq::empty()),
+        ),
+        parse_a_rule(Input::String { string: seq![0x61u32, 0x7B, 0x7D, 0x62] }) == None::<Rule>,
+        parse_a_rule(Input::String { string: seq![0x40u32, 0x61, 0x3B] }) == Some(
+            Rule::AtRule { name: seq![0x61u32], prelude: Seq::empty(), child_rules: None },
+        ),
+{
+    assert(parse_a_rule(Input::String { string: seq![0x20u32, 0x61, 0x7B, 0x7D, 0x20] }) == Some(
+        style_rule(0x61, Seq::empty(), Seq::empty()),
+    )) by (compute_only);
+    assert(parse_a_rule(Input::String { string: seq![0x61u32, 0x7B, 0x7D, 0x62] })
+        == None::<Rule>) by (compute_only);
+    assert(parse_a_rule(Input::String { string: seq![0x40u32, 0x61, 0x3B] }) == Some(
+        Rule::AtRule { name: seq![0x61u32], prelude: Seq::empty(), child_rules: None },
+    )) by (compute_only);
+}
+
+/// §5.5.10 "consume a function": `f(a)b` is the function `f(a)` and then `b`: the name is
+/// the token's value, and the `)` ends the function and is not in it.
+pub proof fn lemma_example_function()
+    ensures
+        parse_a_list_of_component_values(
+            Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] },
+        ) == seq![
+            ComponentValue::Function { name: seq![0x66u32], value: seq![ident(0x61)] },
+            ident(0x62),
+        ],
+{
+    assert(parse_a_list_of_component_values(
+        Input::String { string: seq![0x66u32, 0x28, 0x61, 0x29, 0x62] },
+    ) == seq![
+        ComponentValue::Function { name: seq![0x66u32], value: seq![ident(0x61)] },
+        ident(0x62),
+    ]) by (compute_only);
+}
+
+/// §5.5.3 "consume a qualified rule". In `a{b c;d{}}`, `b c` is read as a rule with `;` as
+/// the stop token, which "Return nothing" at the `;`, so the child is `d{}` alone. In
+/// `a{b}c{}`, a `<}-token>` when nested "return nothing", so the block ends there and `c{}`
+/// is a rule of its own.
+pub proof fn lemma_example_qualified_rule_stops()
+    ensures
+        rules(seq![0x61u32, 0x7B, 0x62, 0x20, 0x63, 0x3B, 0x64, 0x7B, 0x7D, 0x7D]) == seq![
+            style_rule(
+                0x61,
+                Seq::empty(),
+                seq![style_rule(0x64, Seq::empty(), Seq::empty())],
+            ),
+        ],
+        rules(seq![0x61u32, 0x7B, 0x62, 0x7D, 0x63, 0x7B, 0x7D]) == seq![
+            style_rule(0x61, Seq::empty(), Seq::empty()),
+            style_rule(0x63, Seq::empty(), Seq::empty()),
+        ],
+{
+    assert(rules(seq![0x61u32, 0x7B, 0x62, 0x20, 0x63, 0x3B, 0x64, 0x7B, 0x7D, 0x7D]) == seq![
+        style_rule(0x61, Seq::empty(), seq![style_rule(0x64, Seq::empty(), Seq::empty())]),
+    ]) by (compute_only);
+    assert(rules(seq![0x61u32, 0x7B, 0x62, 0x7D, 0x63, 0x7B, 0x7D]) == seq![
+        style_rule(0x61, Seq::empty(), Seq::empty()),
+        style_rule(0x63, Seq::empty(), Seq::empty()),
+    ]) by (compute_only);
+}
+
+/// §5.5.2 "consume an at-rule". `@a;b{}`: the `;` ends the at-rule, and `b{}` is a rule.
+/// `@a{b:c}`: the block is assigned to the rule's child rules, here the one list of
+/// declarations. `@a b;`: the prelude is the whitespace and the ident.
+pub proof fn lemma_example_at_rules()
+    ensures
+        rules(seq![0x40u32, 0x61, 0x3B, 0x62, 0x7B, 0x7D]) == seq![
+            Rule::AtRule { name: seq![0x61u32], prelude: Seq::empty(), child_rules: None },
+            style_rule(0x62, Seq::empty(), Seq::empty()),
+        ],
+        rules(seq![0x40u32, 0x61, 0x7B, 0x62, 0x3A, 0x63, 0x7D]) == seq![
+            Rule::AtRule {
+                name: seq![0x61u32],
+                prelude: Seq::empty(),
+                child_rules: Some(
+                    seq![
+                        BlockItem::Declarations {
+                            declarations: seq![declaration(0x62, seq![ident(0x63)])],
+                        },
+                    ],
+                ),
+            },
+        ],
+        rules(seq![0x40u32, 0x61, 0x20, 0x62, 0x3B]) == seq![
+            Rule::AtRule {
+                name: seq![0x61u32],
+                prelude: seq![token(Token::Whitespace), ident(0x62)],
+                child_rules: None,
+            },
+        ],
+{
+    assert(rules(seq![0x40u32, 0x61, 0x3B, 0x62, 0x7B, 0x7D]) == seq![
+        Rule::AtRule { name: seq![0x61u32], prelude: Seq::empty(), child_rules: None },
+        style_rule(0x62, Seq::empty(), Seq::empty()),
+    ]) by (compute_only);
+    assert(rules(seq![0x40u32, 0x61, 0x7B, 0x62, 0x3A, 0x63, 0x7D]) == seq![
+        Rule::AtRule {
+            name: seq![0x61u32],
+            prelude: Seq::empty(),
+            child_rules: Some(
+                seq![
+                    BlockItem::Declarations {
+                        declarations: seq![declaration(0x62, seq![ident(0x63)])],
+                    },
+                ],
+            ),
+        },
+    ]) by (compute_only);
+    assert(rules(seq![0x40u32, 0x61, 0x20, 0x62, 0x3B]) == seq![
+        Rule::AtRule {
+            name: seq![0x61u32],
+            prelude: seq![token(Token::Whitespace), ident(0x62)],
+            child_rules: None,
+        },
+    ]) by (compute_only);
+}
+
+/// §6.2 more of `<a-n-plus-b>`: `+n-1` is `<n-ident>` after a `+` with nothing between
+/// (A is 1, B is -1), `+ n-1` is not; `n- 1` is `<ndash-ident> <signless-integer>`
+/// (B is the integer's negation); `3n- 1` is `<ndash-dimension> <signless-integer>`;
+/// `+n- 1` is `'+' <ndash-ident> <signless-integer>`; and `n-` has no digits, so it is
+/// nothing.
+pub proof fn lemma_example_a_n_plus_b_more()
+    ensures
+        anb(seq![0x2Bu32, 0x6E, 0x2D, 0x31]) == Some((1int, -1int)),
+        anb(seq![0x2Bu32, 0x20, 0x6E, 0x2D, 0x31]) == None::<(int, int)>,
+        anb(seq![0x6Eu32, 0x2D, 0x20, 0x31]) == Some((1int, -1int)),
+        anb(seq![0x33u32, 0x6E, 0x2D, 0x20, 0x31]) == Some((3int, -1int)),
+        anb(seq![0x2Bu32, 0x6E, 0x2D, 0x20, 0x31]) == Some((1int, -1int)),
+        anb(seq![0x6Eu32, 0x2D]) == None::<(int, int)>,
+{
+    assert(anb(seq![0x2Bu32, 0x6E, 0x2D, 0x31]) == Some((1int, -1int))) by (compute_only);
+    assert(anb(seq![0x2Bu32, 0x20, 0x6E, 0x2D, 0x31]) == None::<(int, int)>) by (compute_only);
+    assert(anb(seq![0x6Eu32, 0x2D, 0x20, 0x31]) == Some((1int, -1int))) by (compute_only);
+    assert(anb(seq![0x33u32, 0x6E, 0x2D, 0x20, 0x31]) == Some((3int, -1int))) by (compute_only);
+    assert(anb(seq![0x2Bu32, 0x6E, 0x2D, 0x20, 0x31]) == Some((1int, -1int))) by (compute_only);
+    assert(anb(seq![0x6Eu32, 0x2D]) == None::<(int, int)>) by (compute_only);
+}
+
 } // verus!
