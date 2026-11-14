@@ -419,7 +419,10 @@ fn the_sheet_wait() {
 /// itself every rectangle is within the tolerance. Its linked sheet is
 /// requested and answered with the fixture's `site.css`.
 #[test]
-#[cfg_attr(miri, ignore = "its one case, a layout of the whole fixture, takes about 47 minutes under Miri")]
+#[cfg_attr(
+    miri,
+    ignore = "its one case, a layout of the whole fixture, takes about 47 minutes under Miri"
+)]
 fn the_fixture_to_client_rects() {
     use clazel_layout::rects::{Meta, RectKind, compare, from_json, to_json};
     let html = include_str!("../../../clazel/tests/fixtures/hn/index.html");
