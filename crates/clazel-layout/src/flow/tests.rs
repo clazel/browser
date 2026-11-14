@@ -112,7 +112,8 @@ fn quirks(body: &str) -> Laid {
 }
 
 impl Laid {
-    /// The principal box of the element with `id`.
+    /// The principal box of the element with `id`; panics naming the id if
+    /// the document has no such element or it generated no box.
     fn id(&self, id: &str) -> BoxId {
         let node = (0..self.arena.len()).find(|&x| match self.arena.kind(x) {
             ExecKind::Element { attributes, .. } => {
@@ -120,19 +121,29 @@ impl Laid {
             }
             _ => false,
         });
-        self.tree
+        assert!(node.is_some(), "no element with id={id:?}");
+        let found = self
+            .tree
             .boxes
             .iter()
-            .position(|b| node.is_some() && b.node == node)
-            .unwrap_or(usize::MAX)
+            .position(|b| node.is_some() && b.node == node);
+        assert!(found.is_some(), "element id={id:?} generated no box");
+        found.unwrap_or(usize::MAX)
     }
 
-    /// The fragment of the element with `id`.
+    /// The fragment of the element with `id`, if it has one (for tests
+    /// where "no fragment" is the expected result); panics if there is no
+    /// such element or box.
+    fn frag_if_any(&self, id: &str) -> Option<BoxFragment> {
+        self.frags.fragment(self.id(id)).cloned()
+    }
+
+    /// The fragment of the element with `id`; panics naming the id if it
+    /// has none.
     fn frag(&self, id: &str) -> BoxFragment {
-        self.frags
-            .fragment(self.id(id))
-            .cloned()
-            .unwrap_or_default()
+        let f = self.frag_if_any(id);
+        assert!(f.is_some(), "element id={id:?} has no fragment");
+        f.unwrap_or_default()
     }
 
     /// The border box of the element with `id`.
@@ -479,12 +490,8 @@ fn percentage_heights() {
 #[test]
 fn html_and_body_fill_the_viewport_in_quirks_mode() {
     let l = quirks("<body id=b style='margin:8px'><div style='height:10px'></div>");
-    let html = l
-        .frags
-        .fragment(1)
-        .map(|f| f.border_box)
-        .unwrap_or_default();
-    assert_eq!(html, rect(0, 0, 200, 100), "{}", l.dump());
+    let html = l.frags.fragment(1).map(|f| f.border_box);
+    assert_eq!(html, Some(rect(0, 0, 200, 100)), "{}", l.dump());
     assert_eq!(l.bb("b"), rect(8, 8, 184, 84));
     let l = std("<body id=b style='margin:8px'><div style='height:10px'></div>");
     assert_eq!(l.bb("b").height, px(10));
@@ -557,15 +564,84 @@ fn vertical_align() {
     let l = std("<div id=d>x<img id=i style='vertical-align:bottom;width:1px;height:30px'></div>");
     assert_eq!(l.bb("d").height, px(30));
     assert_eq!(l.lines("d").first().map(|x| x.baseline), Some(px(28)));
-    // `middle`: the midpoint at the baseline less half the x-height (8).
-    let l = std("<div id=d>x<img id=i style='vertical-align:middle;width:1px;height:20px'></div>");
-    // Midpoint at 4 above the baseline: the image spans 14 above to 6 below.
-    assert_eq!(l.bb("d").height, px(20));
-    assert_eq!(l.bb("i").y, 0);
-    // `text-top`: the top at the parent's content area's top (8 above).
-    let l =
-        std("<div id=d>x<img id=i style='vertical-align:text-top;width:1px;height:20px'></div>");
-    assert_eq!(l.bb("d").height, px(20));
+    // The tests below add a 30px image on the baseline (30 above, none
+    // below), so the line has 30 above and 2 (the strut's D) below the
+    // baseline, and the baseline is 30px from the line top: `top`,
+    // `bottom`, `middle`, `text-top` and `text-bottom` then each put the
+    // 20px image at a different y.
+    let base30 = "<img style='width:1px;height:30px'>";
+    let doc = |va: &str| {
+        std(&format!(
+            "<div id=d>x<img id=i style='vertical-align:{va};width:1px;height:20px'>{base30}</div>"
+        ))
+    };
+    let baseline = |l: &Laid| l.lines("d").first().map(|x| x.baseline);
+    // `middle`: "Align the vertical midpoint of the box with the baseline of
+    // the parent box plus half the x-height of the parent." The x-height of
+    // the Ahem-like font is its ascent, 8, so the midpoint is 4 above the
+    // baseline: the image spans 14 above to 6 below; the line is 30 above
+    // and 6 below, 36 high, and the image's top is 30 - 14 = 16 down.
+    let l = doc("middle");
+    assert_eq!(baseline(&l), Some(px(30)), "{}", l.dump());
+    assert_eq!(l.bb("d").height, px(36));
+    assert_eq!(l.bb("i").y, px(16));
+    // `text-top`: "Align the top of the box with the top of the parent's
+    // content area": A = 8 above the baseline, so the image's top is 30 - 8
+    // = 22 down, and it hangs 12 below the baseline: the line is 30 + 12.
+    let l = doc("text-top");
+    assert_eq!(baseline(&l), Some(px(30)), "{}", l.dump());
+    assert_eq!(l.bb("d").height, px(42));
+    assert_eq!(l.bb("i").y, px(22));
+    // `text-bottom`: "Align the bottom of the box with the bottom of the
+    // parent's content area": D = 2 below the baseline, so the image spans
+    // 18 above to 2 below, and its top is 30 - 18 = 12 down; the line is
+    // 30 + 2 high.
+    let l = doc("text-bottom");
+    assert_eq!(baseline(&l), Some(px(30)), "{}", l.dump());
+    assert_eq!(l.bb("d").height, px(32));
+    assert_eq!(l.bb("i").y, px(12));
+    // `bottom`: "Align the bottom of the aligned subtree with the bottom of
+    // the line box": the line is 30 + 2 = 32 high, the image's top 12 down
+    // (the same as `text-bottom` here); `top` puts it at the line's top.
+    let l = doc("bottom");
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(32), px(12)));
+    let l = doc("top");
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(32), 0));
+    // `text-bottom` and `bottom` differ when something hangs below the
+    // baseline: a span lowered 10px has its content area 2 to 12 below the
+    // baseline. The line is 18 above (the image) and 12 below, 30 high;
+    // `text-bottom` puts the 20px image's top at 0 (18 above the
+    // baseline); with `bottom` the line is 20 high instead (below).
+    let low = "<span style='vertical-align:-10px'>y</span>";
+    let l = std(&format!(
+        "<div id=d>x{low}<img id=i style='vertical-align:text-bottom;width:1px;height:20px'></div>"
+    ));
+    assert_eq!(baseline(&l), Some(px(18)), "{}", l.dump());
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(30), 0));
+    let l = std(&format!(
+        "<div id=d>x{low}<img id=i style='vertical-align:bottom;width:1px;height:20px'></div>"
+    ));
+    // `bottom` does not count towards the line's extent: 8 above (strut)
+    // and 12 below make it 20 high, which the 20px image fills.
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(20), 0));
+    // `baseline` on an atomic inline: "Align the baseline of the box with
+    // the baseline of the parent box. If the box does not have a baseline,
+    // align the bottom margin edge with the parent's baseline": a 20px
+    // image sits 20 above the baseline; the line is 20 + 2 high.
+    let l = std("<div id=d>x<img id=i style='vertical-align:baseline;width:1px;height:20px'></div>");
+    assert_eq!(baseline(&l), Some(px(20)), "{}", l.dump());
+    assert_eq!((l.bb("d").height, l.bb("i").y), (px(22), 0));
+    // A percentage: "Raise (positive value) or lower (negative value) the
+    // box by this distance (a percentage of the 'line-height' value)". The
+    // span's `line-height: normal` is A + D = 10px, so 50% is 5px.
+    let l = std("<div id=d>x<span style='vertical-align:50%'>y</span></div>");
+    let runs = l.runs("d");
+    let base = runs.first().map_or(0, |r| r.2);
+    assert_eq!(runs.get(1).map(|r| r.2), Some(base.saturating_sub(px(5))));
+    let l = std("<div id=d>x<span style='vertical-align:-100%'>y</span></div>");
+    let runs = l.runs("d");
+    let base = runs.first().map_or(0, |r| r.2);
+    assert_eq!(runs.get(1).map(|r| r.2), Some(base.saturating_add(px(10))));
     // `super` and `sub`: a third and a fifth of the parent's font size.
     let l = std(
         "<div id=d>x<span style='vertical-align:super'>y</span><span style='vertical-align:sub'>z</span></div>",
@@ -669,10 +745,10 @@ fn markers_sit_outside() {
         .tree
         .children(li)
         .first()
-        .and_then(|&m| l.frags.fragment(m).cloned())
-        .unwrap_or_default();
+        .and_then(|&m| l.frags.fragment(m))
+        .map(|f| f.border_box);
     // The marker "• " is two em squares, ending at the content edge (40).
-    assert_eq!(marker.border_box, rect(20, 0, 20, 10), "{}", l.dump());
+    assert_eq!(marker, Some(rect(20, 0, 20, 10)), "{}", l.dump());
 }
 
 /// The table placeholder (`mod.rs`): rows and cells as blocks, one below
