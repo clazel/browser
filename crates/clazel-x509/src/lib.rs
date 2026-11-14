@@ -14,6 +14,7 @@ pub mod constraints;
 pub mod contract;
 pub mod exec;
 pub mod extensions;
+pub mod independent;
 pub mod leaf;
 pub mod lemmas;
 pub mod matcher;

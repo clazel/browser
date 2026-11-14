@@ -37,6 +37,7 @@
 //!    decoder.
 
 use std::net::IpAddr;
+use std::time::Duration;
 
 use clazel_x509::{
     certificate::exec::{AlgorithmIdentifier, parse_certificate},
@@ -56,6 +57,11 @@ use clazel_x509::{
     tbs::exec::parse_tbs_certificate,
     time::exec::CertificateTime,
 };
+use rustls_pki_types::{
+    AlgorithmIdentifier as WebpkiAlgorithm, CertificateDer, InvalidSignature, ServerName,
+    SignatureVerificationAlgorithm, TrustAnchor, UnixTime, alg_id,
+};
+use webpki::{EndEntityCert, KeyUsage, anchor_from_trusted_cert};
 
 /// One testcase of the index.
 struct Case {
@@ -542,3 +548,6 @@ fn limbo_corpus_path_cert_and_anchor_counts_are_pinned() {
         "anchor_from_root counts"
     );
 }
+
+// The differential against `rustls-webpki`, on the same corpus.
+include!("limbo/differential.rs");
