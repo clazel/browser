@@ -765,6 +765,292 @@ fn inline_edges() {
     assert_eq!(xs, [0, px(18), px(33)], "{}", l.dump());
 }
 
+// ---- Features with no test before: expected values derived by hand ----
+
+/// The x of every glyph run of the element with `id`, in CSS px.
+fn run_xs(l: &Laid, id: &str) -> Vec<i32> {
+    l.runs(id).iter().map(|r| r.1.div_euclid(64)).collect()
+}
+
+/// The text of every glyph run of the element with `id`.
+fn run_texts(l: &Laid, id: &str) -> Vec<String> {
+    l.runs(id).into_iter().map(|r| r.0).collect()
+}
+
+/// CSS Text 3 §9.1 (`text-indent`), `each-line`: "Indentation affects the
+/// first line of the block container as well as each line after a forced
+/// line break, but does not affect lines after a soft wrap break." A 10px
+/// em square font: "aaaa bbbb" at width 60 wraps after "aaaa" (indent 20 +
+/// 40 = 60 fits; the next word does not).
+#[test]
+fn text_indent_each_line() {
+    let l = std("<div id=d style='text-indent:20px each-line;width:60px'>aaaa bbbb<br>cc</div>");
+    // Line 1 indented (first line); line 2 is after a soft wrap: not; line
+    // 3 is after the forced break: indented.
+    assert_eq!(run_xs(&l, "d"), [20, 0, 20], "{}", l.dump());
+    // Without `each-line`, only the first line.
+    let l = std("<div id=d style='text-indent:20px;width:60px'>aaaa bbbb<br>cc</div>");
+    assert_eq!(run_xs(&l, "d"), [20, 0, 0], "{}", l.dump());
+}
+
+/// `hanging`: "Inverts which lines are affected." The first line is not
+/// indented and every line after a soft wrap is; with `each-line` too, the
+/// lines after forced breaks are the ones not indented.
+#[test]
+fn text_indent_hanging() {
+    let l = std("<div id=d style='text-indent:20px hanging;width:60px'>aaaa bbbb cccc</div>");
+    // Line 1 "aaaa" (0 + 40 of 60; "bbbb" does not fit), lines 2 and 3 are
+    // after soft wraps: indented by 20, so 40 fit: "bbbb" then "cccc".
+    assert_eq!(run_xs(&l, "d"), [0, 20, 20], "{}", l.dump());
+    let l = std("<div id=d style='text-indent:20px each-line hanging;width:60px'>aaaa bbbb<br>cc</div>");
+    // First line: not indented, so "aaaa bbbb" does not fit in 60 (90):
+    // "aaaa" then, after a soft wrap, indented "bbbb"; after the forced
+    // break, "cc" is not indented.
+    assert_eq!(run_xs(&l, "d"), [0, 20, 0], "{}", l.dump());
+}
+
+/// §9.1: "<percentage>: Gives the amount of the indent as a percentage of
+/// the block container's own content box inline size": 25% of 80 is 20; a
+/// negative value moves the first line outwards.
+#[test]
+fn text_indent_percentage_and_negative() {
+    let l = std("<div id=d style='text-indent:25%;width:80px'>a</div>");
+    assert_eq!(run_xs(&l, "d"), [20], "{}", l.dump());
+    let l = std("<div style='padding-left:30px'><div id=d style='text-indent:-10px'>a</div></div>");
+    assert_eq!(run_xs(&l, "d"), [20], "{}", l.dump());
+}
+
+/// HTML §15.5.17 and §15.5.6: a `textarea` is `cols` characters wide
+/// (`cols × average + (maximum − average)`: 10px each here, average equal to
+/// maximum) and `rows` lines high (10px lines); the defaults are 20 and 2.
+/// A checkbox, a radio button (HTML leaves their size to the user agent: 13
+/// by 13, as the README lists) and buttons (the width of their label:
+/// "Submit" and "Reset" by default, or the `value`).
+#[test]
+fn form_control_sizes() {
+    let l = lay(
+        &format!(
+            "{STD}<div id=d><textarea id=t cols=5 rows=3></textarea><textarea id=u></textarea>\
+             <input id=c type=checkbox><input id=r type=radio>\
+             <input id=s type=submit><input id=x type=reset>\
+             <input id=b type=button value=OK></div>"
+        ),
+        2000,
+        600,
+    );
+    let size = |id: &str| (l.bb(id).width, l.bb(id).height);
+    // 5 × 10 wide, 3 × 10 high.
+    assert_eq!(size("t"), (px(50), px(30)), "{}", l.dump());
+    // cols 20 × 10, rows 2 × 10.
+    assert_eq!(size("u"), (px(200), px(20)));
+    assert_eq!(size("c"), (px(13), px(13)));
+    assert_eq!(size("r"), (px(13), px(13)));
+    // "Submit" is six em squares, "Reset" five, "OK" two; one 10px line.
+    assert_eq!(size("s"), (px(60), px(10)));
+    assert_eq!(size("x"), (px(50), px(10)));
+    assert_eq!(size("b"), (px(20), px(10)));
+}
+
+/// CSS Text 3 §3 (`white-space`): `nowrap` collapses white space like
+/// `normal` but "wrap … no": "aa bb cc dd" stays on one line in a 50px box.
+#[test]
+fn white_space_nowrap() {
+    let l = std("<div id=d style='width:50px;white-space:nowrap'>aa bb cc dd</div>");
+    assert_eq!(l.lines("d").len(), 1, "{}", l.dump());
+    assert_eq!(run_texts(&l, "d"), ["aa bb cc dd"]);
+}
+
+/// `pre-wrap`: "Preserve … wrap": a segment break is a forced break, runs of
+/// spaces are kept, and lines wrap at soft wrap opportunities; "a sequence
+/// of preserved spaces at the end of a line hangs" (does not wrap on its
+/// own).
+#[test]
+fn white_space_pre_wrap() {
+    // The newline is preserved: two lines even though both fit.
+    let l = std("<div id=d style='white-space:pre-wrap'>a\nb</div>");
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    // Two spaces are two em squares: "a  b" is 40px wide.
+    let l = std("<div id=d style='white-space:pre-wrap'>a  b</div>");
+    assert_eq!(l.lines("d").len(), 1);
+    assert_eq!(run_texts(&l, "d"), ["a  b"], "{}", l.dump());
+    // At 30px "aa  bb": the spaces hang after "aa" (they are not counted
+    // against the line's width) and "bb" starts the second line at x = 0.
+    let l = std("<div id=d style='width:30px;white-space:pre-wrap'>aa  bb</div>");
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    assert_eq!(run_xs(&l, "d").last().copied(), Some(0));
+    assert_eq!(run_texts(&l, "d").last().map(String::as_str), Some("bb"));
+}
+
+/// `break-spaces`: "like pre-wrap, except that preserved white space
+/// sequences at the end of a line take up space and do not hang, and there
+/// is a soft wrap opportunity after every preserved white space character".
+/// At 30px, "aa" and one space fill line 1; the second space wraps, so line 2
+/// is " " + " " + "b" = 30px.
+#[test]
+fn white_space_break_spaces() {
+    let l = std("<div id=d style='width:30px;white-space:break-spaces'>aa   b</div>");
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    assert_eq!(run_texts(&l, "d"), ["aa ", "  b"], "{}", l.dump());
+}
+
+/// CSS Text 3 §5.5 (`overflow-wrap: break-word`): "An otherwise unbreakable
+/// sequence of characters may be broken at an arbitrary point if there are
+/// no otherwise-acceptable break points in the line": "abcdef" (60px) in a
+/// 30px box is three characters per line. Without it, one overflowing line.
+#[test]
+fn overflow_wrap_break_word() {
+    let l = std("<div id=d style='width:30px;overflow-wrap:break-word'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abc", "def"], "{}", l.dump());
+    let l = std("<div id=d style='width:30px'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abcdef"]);
+    // `anywhere` also counts for min-content: "soft wrap opportunities
+    // introduced by `anywhere` are considered when calculating min-content
+    // intrinsic sizes"; those of `break-word` are not. An inline block in a
+    // 30px container is min(max(min-content, 30), max-content 60).
+    let l = std("<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:anywhere'>abcdef</span></div>");
+    assert_eq!(l.bb("s").width, px(30), "{}", l.dump());
+    let l = std("<div style='width:30px'><span id=s style='display:inline-block;overflow-wrap:break-word'>abcdef</span></div>");
+    assert_eq!(l.bb("s").width, px(60), "{}", l.dump());
+}
+
+/// CSS Text 3 §5.2 (`word-break: break-all`): "Breaking is allowed within
+/// 'words'": "abcdef" in 30px breaks after three characters.
+#[test]
+fn word_break_break_all() {
+    let l = std("<div id=d style='width:30px;word-break:break-all'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abc", "def"], "{}", l.dump());
+    let l = std("<div id=d style='width:30px;word-break:keep-all'>abcdef</div>");
+    assert_eq!(run_texts(&l, "d"), ["abcdef"]);
+}
+
+/// The Quirks Mode Standard §3.3 and §3.4 apply in limited-quirks mode as
+/// in quirks mode; §3.5 to §3.7 (percentage heights, filling the viewport)
+/// do not. (`XHTML 1.0 Transitional`'s public identifier puts a document in
+/// limited-quirks mode: HTML §13.2.6.4.1.)
+#[test]
+fn limited_quirks_mode() {
+    let head = "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \
+        \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\
+        <style>html { font-size: 10px } body { margin: 0 }</style>";
+    let limited = |body: &str| lay(&format!("{head}{body}"), 200, 100);
+    // §3.3: a span without text and borders has a line-height of zero; the
+    // line with a 1px image is 1px high (no-quirks: 10, the strut).
+    let doc = "<div id=d><span><img style='width:1px;height:1px'></span></div>";
+    assert_eq!(limited(doc).bb("d").height, px(1));
+    // §3.4: blocks ignore the strut: 10px in an element of font-size 20.
+    let doc = "<div id=d style='font-size:20px'><span style='font-size:10px'>x</span></div>";
+    assert_eq!(limited(doc).bb("d").height, px(10));
+    // §3.5: no percentage-height lookup past an `auto` ancestor: computes to
+    // auto, so 0 (quirks mode: 50).
+    let l = limited("<div id=d style='height:50%'></div>");
+    assert_eq!(l.bb("d").height, 0, "{}", l.dump());
+    // §3.6, §3.7: the `body` is not stretched: 10px, not 84.
+    let l = limited("<body id=b style='margin:8px'><div style='height:10px'></div>");
+    assert_eq!(l.bb("b").height, px(10), "{}", l.dump());
+}
+
+/// CSS 2.1 §8.3: "<percentage>: The percentage is calculated with respect to
+/// the width of the generated box's containing block. Note that this is true
+/// for 'margin-top' and 'margin-bottom' as well"; §8.4 says the same of
+/// padding. In a 100px containing block, `margin: 10% 20%` is 10px above and
+/// below and 20px at the sides, and `padding: 5%` is 5px all round.
+#[test]
+fn percentage_margins_and_padding() {
+    let l = std("<div style='width:100px'><div id=c style='margin:10% 20%;padding:5%;height:1px'></div></div>");
+    let f = l.frag("c");
+    assert_eq!(f.margin.top, px(10), "{}", l.dump());
+    assert_eq!(f.margin.bottom, px(10));
+    assert_eq!((f.margin.left, f.margin.right), (px(20), px(20)));
+    assert_eq!(
+        (f.padding.top, f.padding.right, f.padding.bottom, f.padding.left),
+        (px(5), px(5), px(5), px(5))
+    );
+    // §10.3.3: width auto = 100 − 20 − 20 (margins) = 60 border box; the
+    // height 1 plus padding 5 + 5 = 11; the top margin collapses through
+    // the parent (§8.3.1), so the box is at y = 10.
+    assert_eq!(f.border_box, rect(20, 10, 60, 11));
+}
+
+/// CSS 2.1 §9.4.2: an inline box "is split into several boxes and these boxes
+/// are distributed across several line boxes"; "margins, borders, and padding
+/// have no visual effect where the split occurs". A bordered, padded span
+/// across two lines has its start edge (2px border + 3px padding) on line 1
+/// only, so line 1's text starts at 5 and line 2's at 0, and its end edge on
+/// line 2 only.
+#[test]
+fn split_inline_with_borders() {
+    let l = std(
+        "<div id=d style='width:50px'><span style='border:2px solid;padding:0 3px'>aaa bbb</span></div>",
+    );
+    assert_eq!(l.lines("d").len(), 2, "{}", l.dump());
+    assert_eq!(run_xs(&l, "d"), [5, 0]);
+    let pieces: Vec<(bool, bool)> = l
+        .lines("d")
+        .iter()
+        .flat_map(|line| line.items.iter())
+        .filter_map(|i| match i {
+            LineItem::Inline(p) => Some((p.start_edge, p.end_edge)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(pieces, [(true, false), (false, true)]);
+}
+
+/// CSS 2.1 §11.1.1: "UAs must apply the 'overflow' property set on the root
+/// element to the viewport. When the root element is an 'HTML' element …
+/// and its 'overflow' is 'visible' … user agents must instead apply the
+/// 'overflow' from the first such child element to the viewport. The element
+/// from which the value is propagated must have a used value for 'overflow'
+/// of 'visible'." So a `body` with `overflow: hidden` under a `visible` root
+/// is not a block formatting context root: its first child's top margin
+/// collapses through it (§8.3.1), putting the `body` at y = 20. If the root
+/// has its own non-`visible` `overflow`, the `body`'s is not propagated and
+/// the `body` does establish one: it stays at y = 0 with the margin inside.
+#[test]
+fn overflow_propagates_from_body_to_the_viewport() {
+    let doc = |html_style: &str| {
+        lay(
+            &format!(
+                "<!DOCTYPE html><style>html {{ font-size: 10px;{html_style} }} body {{ margin: 0 }}</style>\
+                 <body id=b style='overflow:hidden'><div id=c style='margin-top:20px;height:5px'></div>"
+            ),
+            200,
+            100,
+        )
+    };
+    let l = doc("");
+    assert_eq!((l.bb("b").y, l.bb("c").y), (px(20), px(20)), "{}", l.dump());
+    let l = doc("overflow:hidden");
+    assert_eq!((l.bb("b").y, l.bb("c").y), (0, px(20)), "{}", l.dump());
+    // The body's height then holds the child's margin (§10.6.7).
+    assert_eq!(l.bb("b").height, px(25));
+}
+
+/// `ol` markers through layout: the decimal counter style's marker is the
+/// ordinal and ". " (CSS Counter Styles 3 §6.1: suffix ". "), placed in the
+/// margin, ending at the content edge of the list item (§12.5: `outside`).
+/// `value=10` sets the counter (HTML §4.4.8), so "10. " is four em squares.
+#[test]
+fn ol_markers_through_layout() {
+    let l = std(
+        "<ol style='padding-left:50px'><li id=a style='list-style-type:decimal'>x\
+         <li id=b style='list-style-type:decimal'>y\
+         <li id=c value=10 style='list-style-type:decimal'>z</ol>",
+    );
+    let marker = |id: &str| {
+        l.tree
+            .children(l.id(id))
+            .first()
+            .and_then(|&m| l.frags.fragment(m))
+            .map(|f| f.border_box)
+    };
+    // "1. " and "2. " are three em squares ending at the content edge, 50.
+    assert_eq!(marker("a"), Some(rect(20, 0, 30, 10)), "{}", l.dump());
+    assert_eq!(marker("b"), Some(rect(20, 10, 30, 10)));
+    // "10. " is four.
+    assert_eq!(marker("c"), Some(rect(10, 20, 40, 10)));
+}
+
 // ---- Markers, the table placeholder, depth ----
 
 /// A list item's marker ends at its content edge, on its first baseline.
