@@ -4,7 +4,13 @@
 //! Each case of the converted table is one unit. It passes if the parser says it is valid
 //! exactly when the page does and, if valid, the serialization is one of those the page
 //! accepts. A case that fails is an expected failure only if [`expected_failure`] gives it a
-//! reason; any other failure, and any expected failure that passes, fails the test.
+//! class, a reason and the exact way it fails ([`Failure`]: parsed as invalid, parsed as valid
+//! with this serialization, or serialized as this); a different failure, any other failure,
+//! and any expected failure that passes, fails the test, and each class has a pinned count.
+//! The cases WPT calls invalid on pages of unsupported features are rejected only because the
+//! whole feature is: they are counted as expected failures, not passes.
+
+use std::collections::BTreeMap;
 
 use clazel_dom::exec::{Arena, ExecAttr, ExecKind};
 use clazel_dom::spec::{DocumentMode, Namespace};
@@ -44,8 +50,13 @@ fn text(v: &[u32]) -> String {
         .collect()
 }
 
-/// Pages, or parts of the grammar, outside item 5.5's subset (spec.rs's modelling choices).
-const OUT_OF_SUBSET_PAGES: &[(&str, &str)] = &[
+/// Pages of features outside item 5.5's subset (spec.rs's modelling choices). The parser
+/// rejects every selector that names one of these features, so on these pages:
+/// - what WPT calls valid fails, as "parsed as invalid" ([`Failure::Rejected`]);
+/// - what WPT calls invalid is rejected too, but only because the whole feature is, not for
+///   the reason the page tests. Those cases are not passes: [`wpt_css_selectors_parsing`]
+///   tallies them apart, as expected failures.
+const UNSUPPORTED_PAGES: &[(&str, &str)] = &[
     (
         "parse-has.html",
         ":has() is deferred to Phase 8; this UA treats it as unsupported, so invalid",
@@ -63,6 +74,10 @@ const OUT_OF_SUBSET_PAGES: &[(&str, &str)] = &[
         ":has() and ::slotted() are not in the subset",
     ),
     (
+        "parse-has-disallow-nesting-has-inside-has.html",
+        ":has() is deferred to Phase 8",
+    ),
+    (
         "parse-part.html",
         "::part() (shadow DOM) is not in the subset",
     ),
@@ -77,81 +92,173 @@ const OUT_OF_SUBSET_PAGES: &[(&str, &str)] = &[
     ("parse-heading.html", ":heading is not in the subset"),
 ];
 
-/// Single cases expected to fail, with the reason.
-fn case_reason(file: &str, selector: &str) -> Option<&'static str> {
-    if file == "parse-is-where.html" && selector.starts_with(":is(# C4") {
-        return Some(
-            "WPT calls this invalid by <any-value>'s rule against bad tokens; its argument holds \
-             an unclosed [ block that swallows the ), which CSS Syntax closes at EOF, so \
-             spec.rs keeps :is() valid with the item dropped. Not resolved; see the PR",
-        );
-    }
-    if !valid_in_wpt(file, selector) {
-        return None;
-    }
-    if file == "parse-class-prefix.tentative.html" && selector.contains("-*") {
-        return Some(
-            "class-prefix selectors (.foo-*) are a tentative proposal, in no standard pinned here",
-        );
-    }
-    if selector.contains(":host") {
-        return Some(":host() (shadow DOM) is not in the subset");
-    }
-    if selector.contains(":has(") {
-        return Some(":has() is deferred to Phase 8");
-    }
-    if selector.contains("::part(") {
-        return Some("::part() (shadow DOM) is not in the subset");
-    }
-    if file == "parse-is-where.html"
-        && (selector.contains(",,,") || selector.contains("::before"))
-        && !selector.starts_with(":is(div)")
-        && !selector.starts_with(":where(div)")
-    {
-        return Some(
-            "the forgiving list drops the invalid item; engines keep its text for \
-             serialization, which CSSOM does not specify, and spec.rs serializes what was kept",
-        );
-    }
-    None
+/// How a case that WPT and the parser disagree on disagrees.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Failure {
+    /// WPT calls the selector valid; the parser calls it invalid.
+    Rejected,
+    /// WPT calls the selector invalid; the parser accepts it, with this serialization.
+    Accepted(String),
+    /// WPT calls the selector valid and the parser accepts it, but its serialization is none
+    /// of those WPT accepts: this one.
+    Serialized(String),
 }
 
-/// True if the page calls `selector` valid.
-fn valid_in_wpt(file: &str, selector: &str) -> bool {
-    WPT.iter()
-        .any(|c| c.file == file && c.valid && String::from_utf16_lossy(c.selector) == selector)
+/// A kind of expected failure. Each has the count of cases it must hold, since the table
+/// is fixed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Class {
+    /// `.foo-*`, a tentative proposal in no standard pinned here.
+    ClassPrefix,
+    /// `:host`, `:host()`.
+    ShadowHost,
+    /// `:has()`.
+    Has,
+    /// `::part()`.
+    ShadowPart,
+    /// A forgiving list whose invalid item the parser drops where engines keep its text.
+    ForgivingDropsItem,
+    /// A valid case on a page of an unsupported feature, with no more specific class.
+    UnsupportedPage,
+    /// The one case WPT calls invalid and the parser accepts.
+    BadTokenInIs,
 }
 
-/// Why a case is expected to fail, or `None`. Only cases WPT calls valid can fail for being
-/// outside the subset, since the parser calls what it does not support invalid.
-fn expected_failure(case: &Case) -> Option<&'static str> {
+impl Class {
+    /// The number of cases of this class in the WPT table (when all of it is run).
+    fn count(self) -> usize {
+        match self {
+            Class::ClassPrefix => 11,
+            Class::ShadowHost => 15,
+            Class::Has => 43,
+            Class::ShadowPart => 34,
+            Class::ForgivingDropsItem => 8,
+            Class::UnsupportedPage => 42,
+            Class::BadTokenInIs => 1,
+        }
+    }
+
+    fn reason(self) -> &'static str {
+        match self {
+            Class::ClassPrefix => {
+                "class-prefix selectors (.foo-*) are a tentative proposal, in no standard pinned here"
+            }
+            Class::ShadowHost => ":host() (shadow DOM) is not in the subset",
+            Class::Has => ":has() is deferred to Phase 8",
+            Class::ShadowPart => "::part() (shadow DOM) is not in the subset",
+            Class::ForgivingDropsItem => {
+                "the forgiving list drops the invalid item; engines keep its text for \
+                 serialization, which CSSOM does not specify, and spec.rs serializes what was kept"
+            }
+            Class::UnsupportedPage => "the page's feature is not in the subset",
+            Class::BadTokenInIs => {
+                "WPT calls this invalid by <any-value>'s rule against bad tokens; its argument \
+                 holds an unclosed [ block that swallows the ), which CSS Syntax closes at EOF, \
+                 so spec.rs keeps :is() valid with the item dropped. Not resolved; see the PR"
+            }
+        }
+    }
+}
+
+/// Selectors WPT calls valid whose argument has an item that is invalid here: the parser
+/// accepts the selector and serializes what is left of it, as §18.1's "forgiving selector
+/// list" says ("invalid or unsupported" items are dropped, the rest kept), where engines
+/// keep the item's text. `(page, selector, serialization)`, worked out by hand:
+/// - `.foo-*` is no selector here, so `:is(.foo-*)` is `:is()`; likewise `.b:has(.c) .d`
+///   (`:has()` is unsupported), `::before` (not valid inside `:is()`, §4.2), and an empty
+///   item (`,,,`) or an item with only a pseudo-element and `:HOVER` (`::before:HOVER`).
+/// - `::before:HOVER, .a` keeps only `.a`.
+const FORGIVING_DROPS: &[(&str, &str, &str)] = &[
+    ("parse-class-prefix.tentative.html", ":is(.foo-*)", ":is()"),
+    ("parse-has.html", ".a:is(.b:has(.c) .d)", ".a:is()"),
+    ("parse-is-where.html", ":is(::before)", ":is()"),
+    ("parse-is-where.html", ":where(::before)", ":where()"),
+    ("parse-is-where.html", ":is(,,,)", ":is()"),
+    ("parse-is-where.html", ":where(,,,)", ":where()"),
+    ("parse-is-where.html", ":is(::before:HOVER, .a)", ":is(.a)"),
+    (
+        "parse-is-where.html",
+        ":where(::before:HOVER, .a)",
+        ":where(.a)",
+    ),
+    ("parse-is-where.html", ":is(::before:HOVER  )", ":is()"),
+    (
+        "parse-is-where.html",
+        ":where(::before:HOVER  )",
+        ":where()",
+    ),
+];
+
+/// A case expected to fail, how, and why.
+struct Expected {
+    class: Class,
+    failure: Failure,
+}
+
+/// The expected failure of `case`, or `None` if it must pass. Cases are picked into a class
+/// by the text of the selector or its page, but the failure each must show is pinned
+/// exactly, so that a feature that is half implemented, and starts accepting with the wrong
+/// result, fails here rather than keeping its place in the list.
+fn expected_failure(case: &Case) -> Option<Expected> {
     let selector = String::from_utf16_lossy(case.selector);
-    if let Some(reason) = case_reason(case.file, &selector) {
-        return Some(reason);
-    }
     if !case.valid {
+        // WPT calls it invalid.
+        if case.file == "parse-is-where.html" && selector.starts_with(":is(# C4") {
+            return Some(Expected {
+                class: Class::BadTokenInIs,
+                failure: Failure::Accepted(":is()".to_owned()),
+            });
+        }
         return None;
     }
-    OUT_OF_SUBSET_PAGES
+    let class = if case.file == "parse-class-prefix.tentative.html" && selector.contains("-*") {
+        Class::ClassPrefix
+    } else if selector.contains(":host") {
+        Class::ShadowHost
+    } else if selector.contains(":has(") {
+        Class::Has
+    } else if selector.contains("::part(") {
+        Class::ShadowPart
+    } else if case.file == "parse-is-where.html"
+        && FORGIVING_DROPS
+            .iter()
+            .any(|(f, s, _)| *f == case.file && *s == selector)
+    {
+        Class::ForgivingDropsItem
+    } else if UNSUPPORTED_PAGES.iter().any(|(f, _)| *f == case.file) {
+        Class::UnsupportedPage
+    } else {
+        return None;
+    };
+    let failure = FORGIVING_DROPS
         .iter()
-        .find(|(file, _)| *file == case.file)
-        .map(|(_, reason)| *reason)
+        .find(|(f, s, _)| *f == case.file && *s == selector)
+        .map_or(Failure::Rejected, |(_, _, out)| {
+            Failure::Serialized((*out).to_owned())
+        });
+    Some(Expected { class, failure })
 }
 
-/// What the parser and serializer do with one case: `Ok` if it passes.
-fn run(case: &Case) -> Result<(), String> {
+/// True if `case` is one WPT calls invalid, on a page of an unsupported feature: whatever
+/// the parser answers is not evidence about the case's own reason.
+fn invalid_on_unsupported_page(case: &Case) -> bool {
+    !case.valid && UNSUPPORTED_PAGES.iter().any(|(f, _)| *f == case.file)
+}
+
+/// How the parser and serializer disagree with one case, or `Ok` if they agree.
+fn run(case: &Case) -> Result<(), Failure> {
     let input = code_points(case.selector);
     let parsed = parse_selector(&input);
     match (&parsed, case.valid) {
         (None, false) => Ok(()),
-        (None, true) => Err("parsed as invalid".to_owned()),
-        (Some(s), false) => Err(format!("parsed as valid: {}", text(&serialize(s)))),
+        (None, true) => Err(Failure::Rejected),
+        (Some(s), false) => Err(Failure::Accepted(text(&serialize(s)))),
         (Some(s), true) => {
             let out = serialize(s);
             if case.serialized.iter().any(|e| code_points(e) == out) {
                 Ok(())
             } else {
-                Err(format!("serialized as {:?}", text(&out)))
+                Err(Failure::Serialized(text(&out)))
             }
         }
     }
@@ -163,6 +270,10 @@ fn wpt_css_selectors_parsing() {
     let stride = if cfg!(miri) { 23 } else { 1 };
     let mut pass = 0usize;
     let mut xfail = 0usize;
+    // Of `xfail`: the cases WPT calls invalid that the parser rejects, on pages of unsupported
+    // features. They are not passes; the summary line has no field for them.
+    let mut wrong_reason = 0usize;
+    let mut classes: BTreeMap<Class, usize> = BTreeMap::new();
     let mut failures: Vec<String> = Vec::new();
     let mut ran = 0usize;
     for (k, case) in WPT.iter().enumerate() {
@@ -171,20 +282,40 @@ fn wpt_css_selectors_parsing() {
         }
         ran = ran.saturating_add(1);
         let selector = String::from_utf16_lossy(case.selector);
+        let at = format!(
+            "{}:{} {:?} ({})",
+            case.file, case.line, selector, case.helper
+        );
         match (run(case), expected_failure(case)) {
-            (Ok(()), None) => pass = pass.saturating_add(1),
-            (Err(_), Some(_)) => xfail = xfail.saturating_add(1),
-            (Ok(()), Some(reason)) => {
+            (Ok(()), None) => {
+                if invalid_on_unsupported_page(case) {
+                    wrong_reason = wrong_reason.saturating_add(1);
+                    xfail = xfail.saturating_add(1);
+                } else {
+                    pass = pass.saturating_add(1);
+                }
+            }
+            (Err(got), Some(expected)) => {
+                if got == expected.failure {
+                    xfail = xfail.saturating_add(1);
+                    let n = classes.entry(expected.class).or_insert(0);
+                    *n = n.saturating_add(1);
+                } else {
+                    failures.push(format!(
+                        "{at}: expected to fail as {:?} ({}) but failed as {got:?}",
+                        expected.failure,
+                        expected.class.reason()
+                    ));
+                }
+            }
+            (Ok(()), Some(expected)) => {
                 // An expected failure that passes is a list out of date.
                 failures.push(format!(
-                    "{}:{} {:?} ({}) passes but is listed: {reason}",
-                    case.file, case.line, selector, case.helper
+                    "{at} passes but is listed: {}",
+                    expected.class.reason()
                 ));
             }
-            (Err(why), None) => failures.push(format!(
-                "{}:{} {:?} ({}): {why}",
-                case.file, case.line, selector, case.helper
-            )),
+            (Err(got), None) => failures.push(format!("{at}: {got:?}")),
         }
     }
     println!(
@@ -192,10 +323,53 @@ fn wpt_css_selectors_parsing() {
         failures.len(),
         ran
     );
+    println!(
+        "clazel-selectors: of the {xfail} xfail, {wrong_reason} are cases WPT calls invalid on pages \
+         of unsupported features, rejected for the wrong reason (feature unsupported), not passes"
+    );
     // The one check the converter could not read is a direct test() through the DOM's
     // matches(); it is not counted.
     assert_eq!(NOT_RUN.len(), 1);
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+    if stride == 1 {
+        // The table is fixed, so each class holds exactly its cases.
+        for class in [
+            Class::ClassPrefix,
+            Class::ShadowHost,
+            Class::Has,
+            Class::ShadowPart,
+            Class::ForgivingDropsItem,
+            Class::UnsupportedPage,
+            Class::BadTokenInIs,
+        ] {
+            assert_eq!(
+                classes.get(&class).copied().unwrap_or(0),
+                class.count(),
+                "{class:?}"
+            );
+        }
+        assert_eq!(
+            wrong_reason, 60,
+            "invalid cases on pages of unsupported features"
+        );
+        assert_eq!(
+            xfail,
+            wrong_reason
+                + [
+                    Class::ClassPrefix,
+                    Class::ShadowHost,
+                    Class::Has,
+                    Class::ShadowPart,
+                    Class::ForgivingDropsItem,
+                    Class::UnsupportedPage,
+                    Class::BadTokenInIs,
+                ]
+                .iter()
+                .map(|c| c.count())
+                .sum::<usize>()
+        );
+        assert_eq!(pass + xfail, WPT.len());
+    }
 }
 
 // ------------------------------------------------------------------------------------
