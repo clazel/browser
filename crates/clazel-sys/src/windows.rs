@@ -113,6 +113,19 @@ struct JobUiRestrictions {
     ui_restrictions_class: Dword,
 }
 
+/// `OVERLAPPED` (minwinbase.h): `ULONG_PTR Internal, InternalHigh`, then a
+/// union of two `DWORD`s (`Offset`, `OffsetHigh`) with a `PVOID`, then
+/// `HANDLE hEvent`; 32 bytes on 64-bit Windows. The union is written as its
+/// two `DWORD`s, which fill the pointer's 8 bytes exactly.
+#[repr(C)]
+struct Overlapped {
+    internal: usize,
+    internal_high: usize,
+    offset: Dword,
+    offset_high: Dword,
+    event: Handle,
+}
+
 #[repr(C)]
 struct TokenIsAppContainer {
     value: Dword,
@@ -136,7 +149,10 @@ struct TokenIsAppContainer {
 // DuplicateHandle (kernel32, winbase.h, handleapi.h); docs ReadFile, WriteFile
 // (kernel32, fileapi.h: `BOOL ReadFile(HANDLE, LPVOID, DWORD, LPDWORD,
 // LPOVERLAPPED)` and `BOOL WriteFile(HANDLE, LPCVOID, DWORD, LPDWORD,
-// LPOVERLAPPED)`). The declarations below
+// LPOVERLAPPED)`); docs CreateEventW (kernel32, synchapi.h: `HANDLE
+// CreateEventW(LPSECURITY_ATTRIBUTES, BOOL, BOOL, LPCWSTR)`); docs
+// GetOverlappedResult (kernel32, ioapiset.h: `BOOL GetOverlappedResult(HANDLE,
+// LPOVERLAPPED, LPDWORD, BOOL)`). The declarations below
 // match those prototypes on 64-bit Windows: `BOOL` and `DWORD` are 32-bit,
 // `HRESULT` is `i32`, `HANDLE` and `SIZE_T` are pointer-sized (`isize`,
 // `usize`), `PSID` and the other pointers are `*mut c_void`, and `LPCWSTR` is
@@ -221,14 +237,26 @@ unsafe extern "system" {
         buffer: *mut u8,
         length: Dword,
         read: *mut Dword,
-        overlapped: *mut c_void,
+        overlapped: *mut Overlapped,
     ) -> Bool;
     fn WriteFile(
         file: Handle,
         buffer: *const u8,
         length: Dword,
         written: *mut Dword,
-        overlapped: *mut c_void,
+        overlapped: *mut Overlapped,
+    ) -> Bool;
+    fn CreateEventW(
+        attributes: *mut c_void,
+        manual_reset: Bool,
+        initial_state: Bool,
+        name: *const u16,
+    ) -> Handle;
+    fn GetOverlappedResult(
+        file: Handle,
+        overlapped: *mut Overlapped,
+        transferred: *mut Dword,
+        wait: Bool,
     ) -> Bool;
 }
 
@@ -300,6 +328,12 @@ const SE_GROUP_ENABLED: Dword = 0x0000_0004;
 const DUPLICATE_SAME_ACCESS: Dword = 0x0000_0002;
 /// `ERROR_BROKEN_PIPE`: the other end of a pipe is closed.
 const ERROR_BROKEN_PIPE: i32 = 109;
+/// `ERROR_IO_PENDING`: an overlapped read or write was started and has not
+/// finished.
+const ERROR_IO_PENDING: i32 = 997;
+/// `ERROR_IO_INCOMPLETE`: `GetOverlappedResult` returned before the operation
+/// finished.
+const ERROR_IO_INCOMPLETE: i32 = 996;
 /// The most SIDs one capability name is expected to give; more is an error.
 const MAX_CAPABILITY_SIDS: Dword = 16;
 const JOB_OBJECT_LIMIT_ACTIVE_PROCESS: Dword = 0x0000_0008;
@@ -1053,14 +1087,41 @@ pub fn spawn(
 /// inherited descriptor is on Unix after `/dev/fd/N` is opened. A number that
 /// is no handle fails here, or ends the process where the policy has
 /// `STRICT_HANDLE_CHECKS`, which is the GPU process's and the renderer's.
+///
+/// Every read and write passes an `OVERLAPPED` with this value's own event
+/// and waits for the operation to finish (`GetOverlappedResult` with `bWait`
+/// TRUE) before it returns, so the OS never writes into the caller's buffer,
+/// or into the `OVERLAPPED`, after the call. That holds however the handle
+/// was opened: docs ReadFile requires an `OVERLAPPED` for a handle opened with
+/// `FILE_FLAG_OVERLAPPED` (a socket, say), whose operation may finish later,
+/// and on a synchronous handle (an anonymous pipe's end) the operation has
+/// finished when `ReadFile` returns. The `OVERLAPPED`'s offset is 0: a pipe
+/// ignores it; a file would be read or written at offset 0 each time, which
+/// is wrong data but not unsafe, and is not what this type is for.
 #[derive(Debug)]
-pub struct Inherited(Handle);
+pub struct Inherited {
+    handle: Handle,
+    /// A manual-reset event the OS signals when this value's read or write
+    /// finishes; `&mut self` keeps one operation at a time on it.
+    event: Handle,
+}
 
 impl Inherited {
     /// A duplicate of the handle whose value is `number`, with the same access.
     pub fn open(number: u64) -> Result<Inherited, SpawnError> {
         let source = isize::try_from(number)
             .map_err(|_| SpawnError::Call("DuplicateHandle", Errno::UNKNOWN))?;
+        let no_attributes: *mut c_void = std::ptr::null_mut();
+        let no_name: *const u16 = std::ptr::null();
+        // SAFETY: docs CreateEventW: creates an unnamed event (`lpName` NULL)
+        // with default security that no child inherits (`lpEventAttributes`
+        // NULL), manual-reset (`bManualReset` TRUE, as docs GetOverlappedResult
+        // asks for) and not signalled; returns NULL on failure.
+        let event = unsafe { CreateEventW(no_attributes, 1, 0, no_name) };
+        if event == 0 {
+            return Err(last("CreateEventW"));
+        }
+        let event = Owned(event);
         let mut duplicate: Handle = 0;
         let slot: *mut Handle = &raw mut duplicate;
         // SAFETY: docs DuplicateHandle: duplicates `source` of the source
@@ -1084,14 +1145,70 @@ impl Inherited {
         if ok == 0 || duplicate == 0 {
             return Err(last("DuplicateHandle"));
         }
-        Ok(Inherited(duplicate))
+        // The event moves into the `Inherited`; `event` no longer closes it.
+        let event_raw = event.0;
+        std::mem::forget(event);
+        Ok(Inherited {
+            handle: duplicate,
+            event: event_raw,
+        })
+    }
+
+    /// A fresh `OVERLAPPED` for one operation, signalling this value's event.
+    fn overlapped(&self) -> Overlapped {
+        Overlapped {
+            internal: 0,
+            internal_high: 0,
+            offset: 0,
+            offset_high: 0,
+            event: self.event,
+        }
+    }
+
+    /// Wait until the operation that `ReadFile` or `WriteFile` started with
+    /// `overlapped` (and returned `ok`) has finished, and give how many bytes
+    /// it moved. When this returns, the OS no longer uses `overlapped` or the
+    /// operation's buffer.
+    fn finish(&self, ok: Bool, overlapped: &mut Overlapped) -> std::io::Result<usize> {
+        if ok == 0 {
+            let error = std::io::Error::last_os_error();
+            // docs ReadFile, WriteFile: any error but ERROR_IO_PENDING means
+            // the operation failed; nothing is in flight.
+            if error.raw_os_error() != Some(ERROR_IO_PENDING) {
+                return Err(error);
+            }
+        }
+        let mut moved: Dword = 0;
+        let slot: *mut Dword = &raw mut moved;
+        let pointer: *mut Overlapped = overlapped;
+        // SAFETY: docs GetOverlappedResult: with `bWait` TRUE it does not
+        // return until the operation started with `lpOverlapped` has
+        // finished, then stores how many bytes it moved in
+        // `lpNumberOfBytesTransferred`. `pointer` is the `OVERLAPPED` the
+        // operation was started with, alive (borrowed from the caller), whose
+        // `hEvent` is this value's manual-reset event; `slot` points to the
+        // live local `moved`. The handle is this value's own.
+        let ok = unsafe { GetOverlappedResult(self.handle, pointer, slot, 1) };
+        if ok == 0 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() == Some(ERROR_IO_INCOMPLETE) {
+                // Documented not to happen with `bWait` TRUE. Returning would
+                // let the OS write into memory the caller has back.
+                std::process::abort();
+            }
+            return Err(error);
+        }
+        Ok(moved as usize)
     }
 }
 
 impl Drop for Inherited {
     fn drop(&mut self) {
+        // No operation is in flight: each finished before its method returned.
         // SAFETY: docs CloseHandle: closes the duplicate this value owns, once.
-        unsafe { CloseHandle(self.0) };
+        unsafe { CloseHandle(self.handle) };
+        // SAFETY: docs CloseHandle: closes the event this value owns, once.
+        unsafe { CloseHandle(self.event) };
     }
 }
 
@@ -1105,26 +1222,23 @@ impl std::io::Read for Inherited {
         }
         let len = buf.len().min(IO_CHUNK) as Dword;
         let buffer: *mut u8 = buf.as_mut_ptr();
-        let mut read: Dword = 0;
-        let slot: *mut Dword = &raw mut read;
-        let synchronous: *mut c_void = std::ptr::null_mut();
-        // SAFETY: docs ReadFile: reads up to `nNumberOfBytesToRead` bytes from
-        // the handle into `lpBuffer` and stores how many in
-        // `lpNumberOfBytesRead`; `buffer` is the caller's slice, at least `len`
-        // bytes long, `slot` points to the live local `read`, and
-        // `lpOverlapped` is NULL: the handle is a duplicate of an anonymous
-        // pipe's end, which is synchronous. The handle is this value's own.
-        let ok = unsafe { ReadFile(self.0, buffer, len, slot, synchronous) };
-        if ok == 0 {
-            let error = std::io::Error::last_os_error();
+        let no_count: *mut Dword = std::ptr::null_mut();
+        let mut overlapped = self.overlapped();
+        let pointer: *mut Overlapped = &raw mut overlapped;
+        // SAFETY: docs ReadFile: starts a read of up to
+        // `nNumberOfBytesToRead` bytes from the handle into `lpBuffer`;
+        // `buffer` is the caller's slice, at least `len` bytes long, and
+        // `lpNumberOfBytesRead` is NULL, as docs ReadFile recommends with an
+        // `OVERLAPPED`. `pointer` points to the live local `overlapped`, whose
+        // event is this value's own; `finish` waits for the read to end before
+        // this method returns, so the OS writes neither the buffer nor
+        // `overlapped` afterwards. The handle is this value's own.
+        let ok = unsafe { ReadFile(self.handle, buffer, len, no_count, pointer) };
+        match self.finish(ok, &mut overlapped) {
             // The writer closed its end: the end of the stream.
-            return if error.raw_os_error() == Some(ERROR_BROKEN_PIPE) {
-                Ok(0)
-            } else {
-                Err(error)
-            };
+            Err(error) if error.raw_os_error() == Some(ERROR_BROKEN_PIPE) => Ok(0),
+            other => other,
         }
-        Ok(read as usize)
     }
 }
 
@@ -1135,19 +1249,19 @@ impl std::io::Write for Inherited {
         }
         let len = buf.len().min(IO_CHUNK) as Dword;
         let buffer: *const u8 = buf.as_ptr();
-        let mut written: Dword = 0;
-        let slot: *mut Dword = &raw mut written;
-        let synchronous: *mut c_void = std::ptr::null_mut();
-        // SAFETY: docs WriteFile: writes up to `nNumberOfBytesToWrite` bytes
-        // from `lpBuffer` to the handle and stores how many in
-        // `lpNumberOfBytesWritten`; `buffer` is the caller's slice, at least
-        // `len` bytes long, `slot` points to the live local `written`, and
-        // `lpOverlapped` is NULL, as in `read`. The handle is this value's own.
-        let ok = unsafe { WriteFile(self.0, buffer, len, slot, synchronous) };
-        if ok == 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        Ok(written as usize)
+        let no_count: *mut Dword = std::ptr::null_mut();
+        let mut overlapped = self.overlapped();
+        let pointer: *mut Overlapped = &raw mut overlapped;
+        // SAFETY: docs WriteFile: starts a write of up to
+        // `nNumberOfBytesToWrite` bytes from `lpBuffer` to the handle;
+        // `buffer` is the caller's slice, at least `len` bytes long, and
+        // `lpNumberOfBytesWritten` is NULL, as docs WriteFile recommends with
+        // an `OVERLAPPED`. `pointer` points to the live local `overlapped`,
+        // whose event is this value's own; `finish` waits for the write to end
+        // before this method returns, as in `read`. The handle is this value's
+        // own.
+        let ok = unsafe { WriteFile(self.handle, buffer, len, no_count, pointer) };
+        self.finish(ok, &mut overlapped)
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
@@ -1375,6 +1489,57 @@ mod tests {
     fn a_string_with_a_nul_never_reaches_the_os() {
         assert_eq!(container_sid("a\0b"), Err(SpawnError::InteriorNul));
         assert_eq!(attempt_open_process(0), Err(Errno(87)));
+    }
+
+    #[test]
+    fn overlapped_has_the_c_layout() {
+        assert_eq!(std::mem::size_of::<Overlapped>(), 32);
+        assert_eq!(std::mem::align_of::<Overlapped>(), 8);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn a_synchronous_pipe_is_read_and_written() -> std::io::Result<()> {
+        use std::io::{Read, Write};
+        use std::os::windows::io::AsRawHandle;
+        let (reader, writer) = std::io::pipe()?;
+        let mut r = Inherited::open(reader.as_raw_handle() as u64)
+            .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+        let mut w = Inherited::open(writer.as_raw_handle() as u64)
+            .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+        w.write_all(b"hello")?;
+        drop(w);
+        drop(writer);
+        let mut got = Vec::new();
+        r.read_to_end(&mut got)?;
+        assert_eq!(got, b"hello");
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn an_overlapped_socket_waits_for_the_read() -> std::io::Result<()> {
+        // std's sockets are opened for overlapped I/O, the case a NULL
+        // `OVERLAPPED` got wrong. The read starts before the bytes are sent,
+        // so it is pending and must be waited for.
+        use std::io::{Read, Write};
+        use std::os::windows::io::AsRawSocket;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let mut client = std::net::TcpStream::connect(listener.local_addr()?)?;
+        let (server, _) = listener.accept()?;
+        let mut r = Inherited::open(server.as_raw_socket())
+            .map_err(|e| std::io::Error::other(format!("{e:?}")))?;
+        let sender = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            client.write_all(b"late")
+        });
+        let mut buf = [0u8; 4];
+        r.read_exact(&mut buf)?;
+        assert_eq!(&buf, b"late");
+        sender
+            .join()
+            .map_err(|_| std::io::Error::other("sender panicked"))??;
+        Ok(())
     }
 
     #[test]

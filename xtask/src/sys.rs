@@ -200,10 +200,15 @@ const WINDOWS: &[&str] = &[
     "memcpy",
     // `clazel_sys::windows::Inherited`: a pipe's end the process inherited, by
     // its number. Safe Rust cannot adopt a handle, so it is duplicated and the
-    // duplicate read or written.
+    // duplicate read or written. Each read or write passes an `OVERLAPPED`
+    // with the value's own event (`CreateEventW`) and waits for it to finish
+    // (`GetOverlappedResult`), so a handle opened for overlapped I/O cannot
+    // write into a buffer after the call returns.
     "DuplicateHandle",
     "ReadFile",
     "WriteFile",
+    "CreateEventW",
+    "GetOverlappedResult",
     // `clazel_sys::fill_random`, with the system-preferred RNG. It only writes
     // into a caller's buffer.
     "BCryptGenRandom",
