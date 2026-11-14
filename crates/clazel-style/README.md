@@ -301,13 +301,17 @@ verification of the harnesses is green.
   (`tests/data/`, both at WPT commit `4ad507b2`):
   - the `-valid` and `-invalid` parsing pages of the subset's properties: 912 cases, run
     as `parsing-testcommon.js` runs them (set, read back, set again): **702 pass, 210
-    expected failures** (each listed with its reason, all syntax outside the subset), none
-    fail. Nine pages call the helpers from loops or wrappers and are not run, and 64 calls
+    expected failures** (each listed with its reason, all syntax outside the subset; a case
+    excused by a class of syntax must fail by the value being dropped, and the two
+    `vertical-align: 0` and `0px` cases that read `0px` are pinned singly), none fail. Nine pages call the helpers from loops or wrappers and are not run, and 64 calls
     of other helpers (`test_shorthand_value` and the like) are not run; the table lists
     both.
   - `quirks/unitless-length` and `quirks/hashless-hex-color`: every case on every property
-    of the subset, in quirks, limited-quirks and no-quirks mode: **10,714 pass, 183
-    expected failures** (`calc()`), none fail. The pages compare computed values; until
+    of the subset, with the parser's quirks flag on and off (the parser takes one flag, so
+    the pages' limited-quirks and no-quirks runs are the one "off" computation, counted once;
+    `limited_quirks_mode_is_off` in `src/cascade/tests.rs` checks that a limited-quirks
+    document reaches the flag as off): **7,147 pass, 122 expected failures** (`calc()`, each
+    failing by the value being dropped), none fail, 7,269 in all, asserted. The pages compare computed values; until
     5.7 the test compares the serialized specified values, which is the same check where
     the reference is written as the value the quirk gives. Properties outside the subset
     (`top`, `left`, `clip`, `letter-spacing`, `word-spacing`, `outline-*`, …) and the SVG

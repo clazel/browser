@@ -10,7 +10,9 @@
 //! table has none: the pages were chosen by property).
 //!
 //! **Quirks tests.** Each unit is one case of `common.js` on one property, in one of the
-//! three modes the pages run (quirks, limited-quirks and no-quirks). The page compares the
+//! two distinct settings of the parser's quirks flag: on (quirks mode) and off (the pages
+//! also run limited-quirks and no-quirks, which `values::parse` cannot tell apart, so they
+//! are counted once, as one computation). The page compares the
 //! computed value of the test declaration with that of the reference; item 5.6 has no
 //! computed values, so the unit compares the serialized specified values of the property it
 //! checks (and of `check_also`'s), which agree wherever the reference is written as the
@@ -19,7 +21,10 @@
 //! `top`, `word-spacing`, `outline-*`) are not run, and not counted.
 //!
 //! A unit that fails is an expected failure only if this file gives it a reason; any other
-//! failure, and any expected failure that passes, fails the test.
+//! failure, and any expected failure that passes, fails the test. A case excused by a class of
+//! syntax or value outside the subset (`calc(`, `color(`, ...) must also fail by the value
+//! being dropped: a case of the class that is kept with a wrong serialization fails the test.
+//! Cases that fail some other way are pinned one by one (`CASES`).
 
 use clazel_style::values::{get_property_value, parse, property};
 
@@ -165,12 +170,27 @@ const OUT_OF_SUBSET_PROPERTIES: &[(&str, &str)] = &[
     ),
 ];
 
-/// Single cases expected to fail, by (file, value), with the reason.
-const CASES: &[(&str, &str, &str)] = &[(
-    "css-backgrounds.background-valid.html",
-    "url(\"https://example.com/\") 1px 2px / 3px 4px space round local padding-box content-box, rgb(5, 6, 7) url(\"https://example.com/\") 1px 2px / 3px 4px space round local padding-box content-box",
-    "several background layers are not in the subset (one layer is)",
-)];
+/// Single cases expected to fail, by (file, value), with the reason. They may fail in any
+/// way; the cases the classes below excuse must fail by the value being dropped ("not set").
+const CASES: &[(&str, &str, &str)] = &[
+    (
+        "css-backgrounds.background-valid.html",
+        "url(\"https://example.com/\") 1px 2px / 3px 4px space round local padding-box content-box, rgb(5, 6, 7) url(\"https://example.com/\") 1px 2px / 3px 4px space round local padding-box content-box",
+        "several background layers are not in the subset (one layer is)",
+    ),
+    (
+        "css-inline.vertical-align-valid.html",
+        "0",
+        "CSS Inline 3's vertical-align shorthand serializes 0 as baseline; the subset's CSS 2.1 \
+         vertical-align keeps the length, so it reads 0px",
+    ),
+    (
+        "css-inline.vertical-align-valid.html",
+        "0px",
+        "CSS Inline 3's vertical-align shorthand serializes 0px as baseline; the subset's CSS 2.1 \
+         vertical-align keeps the length, so it reads 0px",
+    ),
+];
 
 /// Valid values of a property that are outside the subset: (property, the values the
 /// subset has, why the others are not in it). A valid case whose value is not one of the
@@ -249,12 +269,12 @@ const SUBSET_VALUES: &[(&str, &[&str], &str)] = &[
 ];
 
 /// Why a parsing case is expected to fail, or `None`.
-fn expected_failure(case: &Case) -> Option<&'static str> {
+fn expected_failure(case: &Case) -> Option<(&'static str, bool)> {
     if let Some((_, _, why)) = CASES
         .iter()
         .find(|(f, v, _)| *f == case.file && *v == case.value)
     {
-        return Some(why);
+        return Some((why, false));
     }
     if !case.valid {
         return None;
@@ -263,7 +283,7 @@ fn expected_failure(case: &Case) -> Option<&'static str> {
         .iter()
         .find(|(p, _)| *p == case.property)
     {
-        return Some(why);
+        return Some((why, true));
     }
     if let Some((_, values, why)) = SUBSET_VALUES.iter().find(|(p, _, _)| *p == case.property) {
         // Text Decoration's combinations of three or four lines are in the subset too.
@@ -273,14 +293,14 @@ fn expected_failure(case: &Case) -> Option<&'static str> {
                 .split(' ')
                 .all(|w| ["underline", "overline", "line-through", "blink"].contains(&w));
         if !values.contains(&case.value) && !lines {
-            return Some(why);
+            return Some((why, true));
         }
     }
     let lower = case.value.to_ascii_lowercase();
     OUT_OF_SUBSET_SYNTAX
         .iter()
         .find(|(s, _)| lower.contains(s))
-        .map(|(_, why)| *why)
+        .map(|(_, why)| (*why, true))
 }
 
 /// One parsing case: `Ok` if it passes.
@@ -316,12 +336,23 @@ struct Tally {
 }
 
 impl Tally {
-    fn add(&mut self, what: String, result: Result<(), String>, expected: Option<&str>) {
+    fn add(&mut self, what: String, result: Result<(), String>, expected: Option<(&str, bool)>) {
         self.ran = self.ran.saturating_add(1);
         match (result, expected) {
             (Ok(()), None) => self.pass = self.pass.saturating_add(1),
-            (Err(_), Some(_)) => self.xfail = self.xfail.saturating_add(1),
-            (Ok(()), Some(reason)) => self
+            (Err(why), Some((reason, strict))) => {
+                // An expected failure is the value the subset lacks being dropped. Any
+                // other failure of a listed case (a wrong serialization, a value kept
+                // that should not be) is not excused by the reason.
+                if !strict || why.starts_with("not set") {
+                    self.xfail = self.xfail.saturating_add(1);
+                } else {
+                    self.failures.push(format!(
+                        "{what}: listed ({reason}) but fails differently: {why}"
+                    ));
+                }
+            }
+            (Ok(()), Some((reason, _))) => self
                 .failures
                 .push(format!("{what} passes but is listed: {reason}")),
             (Err(why), None) => self.failures.push(format!("{what}: {why}")),
@@ -375,6 +406,9 @@ fn wpt_property_value_parsing() {
         );
     }
     t.report("WPT css/*/parsing (property values of the subset)");
+    if stride == 1 {
+        assert_eq!((t.pass, t.xfail, t.ran), (702, 210, 912));
+    }
     // Pages the converter could not read as literals are listed there, never counted, and
     // so are the other helpers' calls (test_shorthand_value and wrappers).
     let others: usize = OTHER.iter().map(|(_, n)| *n).sum();
@@ -406,11 +440,11 @@ fn wpt_quirks() {
         .iter()
         .filter(|p| property(&cps(p.prop)).is_some())
         .collect();
-    for (mode, quirks) in [
-        ("quirks", true),
-        ("limited-quirks", false),
-        ("no-quirks", false),
-    ] {
+    // The parser takes one flag, so limited-quirks and no-quirks are the same computation
+    // (Quirks Mode §3.6, §3.7: the quirks apply "in quirks mode" only, not in limited-quirks
+    // mode): it is run once, as "no-quirks and limited-quirks". `limited_quirks_mode_is_off`
+    // in `src/cascade/tests.rs` checks that a limited-quirks document reaches the flag as off.
+    for (mode, quirks) in [("quirks", true), ("no-quirks and limited-quirks", false)] {
         for case in quirks_table::cases() {
             for p in props.iter().filter(|p| p.suite == case.suite) {
                 if case.shorthand && !p.shorthand {
@@ -457,10 +491,10 @@ fn wpt_quirks() {
                 let expected = QUIRK_CASES
                     .iter()
                     .find(|(s, i, _)| *s == case.suite && *i == case.input)
-                    .map(|(_, _, why)| *why)
+                    .map(|(_, _, why)| (*why, false))
                     .or_else(|| {
                         (given && case.input.contains("calc("))
-                            .then_some("calc() is not in the subset")
+                            .then_some(("calc() is not in the subset", true))
                     });
                 t.add(
                     format!(
@@ -492,4 +526,9 @@ fn wpt_quirks() {
     }
     t.report("WPT quirks/unitless-length and quirks/hashless-hex-color");
     assert!(t.failures.is_empty(), "{}", t.failures.join("\n"));
+    if stride == 1 {
+        // 3,628 (case, property) checks in each of the two settings, and 13 excluded
+        // declarations; the `calc()` cases are the expected failures.
+        assert_eq!((t.pass, t.xfail, t.ran), (7147, 122, 7269));
+    }
 }
