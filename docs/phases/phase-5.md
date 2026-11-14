@@ -1771,3 +1771,296 @@ The four biggest first.
 - **Section numbers.** Many CSS numbers here are marked † and must be checked
   at the pinned text; CSS Syntax 3 and Selectors 4 are living drafts
   renumbered since their last Candidate Recommendations.
+
+## Appendix: nested browsing contexts (item 5.24)
+
+A design, not code, as 5.0(i) recommends (I1). It is written against the kernel as
+item 5.18 left it (`claude/ipc-surfaces-cfd15e`): `crates/clazel-kernel/src/spec.rs`,
+`statements.rs` and its README. It also draws on the GPU process's sandbox from 5.21a
+(`clazel_gpu::sandbox::start_metal`). Nothing here is built, and no theorem here is
+proven.
+
+### Until it is built
+
+An `iframe` is a box of its used size that shows its resolved `src` URL as a link
+(5.0(i)). A click on it is the renderer's ordinary `Navigate` of the whole tab.
+Nothing in the kernel changes.
+
+### Decided here
+
+**1. Which iframes become frames.** An `iframe` whose document's origin differs from
+its parent's is another renderer, under the one-renderer, one-origin rule (each
+renderer's `lock` is its one origin). A **same-origin** iframe stays inside the
+parent's renderer: the renderer lays out and paints the child document into its own
+display list, and the kernel never sees it. If such a child later navigates to
+another origin, the parent's renderer sends `ChildFrame` for it (below), and from
+then on it is a kernel frame. The kernel does not check that a `ChildFrame` is
+cross-origin. A same-origin `ChildFrame` gets a separate renderer with the same
+lock, which costs memory and gives nothing away. Sharing is the renderer's
+optimisation, not a rule the kernel relies on.
+
+**2. The frame tree per tab, in the kernel's state.** A frame *is* a renderer, so
+`Renderer` (`spec.rs`) gains:
+- `parent: Option<nat>`, the renderer id of its parent frame (`None` for the
+  tab's top-level renderer);
+- `slot: nat`, the parent's own number for this child, unique among the parent's
+  live children;
+- `rect: Rect { x, y, width, height }`, in device pixels, in the parent's content
+  coordinates, as the parent last sent it;
+- `depth: nat`.
+
+`State` gains `focus: Seq<(nat, nat)>` (per tab, the frame keys go to). The
+invariant `renderers_wf` changes from "a tab has one renderer" to:
+- a tab has exactly one renderer with `parent == None`;
+- every `parent` names a live renderer of the same tab, with `depth` one more than
+  the parent's (so the links have no cycle);
+- `(parent, slot)` is unique;
+- `depth <= MAX_DEPTH` and the number of a tab's renderers is at most `MAX_FRAMES`.
+
+Every use of `find_by_tab` (commit, navigation, `Resize`, `Input`, the
+noninterference unwinding) becomes `find_top(tab)` or a walk of the tree.
+
+**3. The parent's message.** Two new renderer-to-kernel messages in `clazel-ipc`.
+Tags 20 and 21 are unused: today's tags are 1 to 11 (10 retired), 14, 15, 18, 19
+and 101 to 114.
+
+| Tag | Direction | Message | Fields |
+|-----|-----------|---------|--------|
+| 20 | renderer to kernel | `ChildFrame` | slot (unsigned), url (text, absolute), x, y, width, height (unsigned, device pixels, in the sender's content coordinates, after its scroll) |
+| 21 | renderer to kernel | `ChildGone` | slot (unsigned) |
+
+The kernel acts on a `ChildFrame` from a committed renderer `p` as follows:
+- **A new slot:** a navigation of a new child frame to `url`. It goes through the
+  ordinary fetch and commit (item 3.7), and the commit spawns the child's pair,
+  `Spawn { c, Gpu }` and `Spawn { c, Renderer }`, with `parent = p`.
+- **A known slot with the same URL:** a move or resize. The kernel stores the rect
+  and outputs `Place` (below). Only if the size changed does it send the child
+  `Viewport` (108) and its GPU process `GpuViewport` (114).
+- **A known slot with another URL:** the parent navigates its child, as setting
+  `src` does.
+
+`ChildGone` kills the slot's subtree (decision 9). No new kernel-to-renderer
+message is needed. The kernel never tells a parent anything about a child: not its
+URL after it navigates, not its load, not its crash.
+
+**4. The child's GPU process and viewport.** Every frame is a pair, as 5.18's
+decision 1 makes every renderer: `Spawn { c, Gpu }` then `Spawn { c, Renderer }`
+in one step, and `Kill { c }` ends both. Each child's GPU process enters 5.21a's
+sandbox the same way (`start_metal`, then `(deny default)`). The child's viewport
+is its rect's **size**, not the clipped size. Its position is never sent to it.
+The scale is the tab's. A rect larger than the largest viewport the host allows
+is clamped. A 0 by 0 rect is a 0 by 0 viewport, as for a tab the host never sized.
+
+**5. Composition.** The kernel gains three outputs:
+- `PaintFrame { tab, frame, buffer, width, height }`: a child frame's
+  `FrameReady`, with **no URL or title**;
+- `Place { tab, frame, x, y, width, height }`: the rect from the kernel's state;
+- `Unplace { tab, frame }`.
+
+`Paint` (5.18) stays the top-level frame's only, with its URL and title. The host
+keeps one surface per frame:
+- On macOS, a `CALayer` whose `contents` is the frame's IOSurface. It is a sublayer
+  of its parent frame's layer, with frame `rect / scale` and `masksToBounds`
+  (5.21's content layer already clips this way).
+- On X11, a child window of the parent frame's window.
+- On Windows, a DirectComposition visual under the parent's, with a clip.
+
+So a child's pixels are clipped to the intersection of its rect with every
+ancestor's rect and the tab's content area. **A child is drawn above its parent's
+surface.** Siblings are drawn in slot order. A parent cannot draw over its child.
+
+**6. Input routing by hit rectangle.** For `Input { tab, input }` with a point, the
+kernel finds the deepest frame whose clipped rect contains the point; on a tie,
+the highest slot wins. It sends `Input` (109) to that frame's renderer only,
+translated into the frame's coordinates. A click also sets the tab's `focus` to
+that frame. A key goes to the focused frame, and scrolling to the hit frame (no
+scroll chaining). A point in a dead child's rect (decision 9) is dropped, never
+given to the parent.
+
+**7. A child navigating itself.** The child's `Navigate` navigates that frame only,
+in its slot: a cross-origin commit replaces the frame's renderer under the same
+`(parent, slot)` and rect. The address bar is the top-level frame's and does not
+change. A child's navigation of the *top* frame (`target=_top`) is dropped.
+
+**8. Cookies and storage for a child of another site.** A frame whose site differs
+from the top-level frame's site is **cookie-averse and storage-less**: it gets no
+cookie and sets none, and Web Storage is refused, as opaque origins are today (the
+kernel already makes public-suffix documents cookie-averse). This keeps
+`theorem_cookie_noninterference` with no third-party declassification, as
+5.0(h)'s F1 does for sub-resources.
+
+**9. Kills are contained to subtrees.** Today `kill_renderer` closes the tab. With
+frames, a disallowed frame from renderer `c`, `ChildGone`, or a cross-origin
+replacement of `c`'s parent kills **`c`'s subtree** (`Kill` of every descendant,
+`Unplace` of each). Only a top-level kill closes the tab. A child that *exits* or
+is killed leaves its rect in the tree as a dead placeholder: the host draws a
+"frame gone" box there, and input to it is dropped. The parent learns nothing, and
+its hit region does not grow.
+
+**10. Limits.** `MAX_DEPTH` = 4 (the top frame and three nested levels) and
+`MAX_FRAMES` = 16 renderers per tab. A `ChildFrame` past either limit, or a new
+slot while 16 are live, is ignored (no state change, no output). The parent's box
+stays empty, and the parent cannot tell why.
+
+### What the theorems become
+
+Each item below is stated so that it can be written as an `ensures` over
+`step(rules, urls, fetch, s, e)`. `frame_of(s, id)` is the renderer with that id,
+and `subtree(s, c)` is `c` and its descendants.
+
+- **`theorem_paint_fits_viewport`, per frame:**
+  - Every `Paint { tab, width, height, .. }` is at most `viewport_of(s, tab)` in
+    both dimensions, as now.
+  - Every `PaintFrame { frame: c, width, height, .. }` has `width <=
+    frame_of(s, c).rect.width` and `height <= frame_of(s, c).rect.height`.
+  - Both name a buffer `< ring_size()`.
+- **`theorem_frame_only_in_its_rect` (new):**
+  - Every `Place { frame: c, x, y, width, height }` output equals `frame_of(s1,
+    c).rect`.
+  - A step outputs `Place` for `c` only on a `FromRenderer { id: p, .. }` with `p
+    == frame_of(s, c).parent`, or in the step that commits `c` into its slot.
+  - Every `PaintFrame` for `c` is for a `c` with a `Place` (it is in the tree with
+    a rect).
+
+  With the host's clipping (trusted, as 5.18 trusts the compositor), a child's
+  pixels appear only inside the rect its parent assigned.
+- **`theorem_parent_gets_nothing_from_child` (new):** for `e` a `FromRenderer { id:
+  c, .. }` or `FromGpu { id: c, .. }`, every `ToRenderer { id: x, .. }`, `ToGpu {
+  id: x, .. }` and `Kill { id: x }` output has `x` in `subtree(s, c)`. No step
+  addresses a frame's ancestor because of that frame's message. With
+  `theorem_channel_only_own_tab` per pair, no list or pixel of `c` reaches any
+  other process.
+- **`theorem_input_only_to_hit_frame`** (replaces `theorem_input_only_to_own_tab`):
+  - `Input { tab, input }` changes no state except `focus` for `tab`.
+  - It gives at most one output: `ToRenderer { id: hit(s, tab, input), bytes:
+    input_frame(translate(s, hit, input)) }`.
+  - `hit` is a live, non-placeholder frame of `tab` whose clipped rect contains
+    the point, and no descendant of it does. So a parent receives no input in its
+    child's rect.
+- **`theorem_viewport_only_to_own_tab`, restated:**
+  - `Resize` changes only the top-level viewport and tells only the top frame's
+    pair, as now.
+  - A `ChildFrame` from `p` sends `Viewport`/`GpuViewport` only to the pair of
+    `p`'s child in that slot, and only with the rect's size.
+- **`theorem_address_bar_integrity`: unchanged in substance.** `Paint` is output
+  only for the tab's top-level renderer, with that renderer's committed URL and
+  title. `PaintFrame` and `Place` carry no URL or title. `Show` is unchanged
+  until 5.26.
+- **`theorem_paint_only_own_tab`, per frame:** a `FromGpu { id: c, .. }` outputs
+  only one `Paint` (if `c` is top-level) or `PaintFrame { frame: c }` (otherwise),
+  for `c`'s own tab, or the kills of `subtree(s, c)` with their `Unplace`s and,
+  only for a top-level `c`, the tab's `Close`s.
+- **`theorem_kill_contained` (new):** every `Kill { id: x }` of a step whose event
+  names a renderer `c` has `x` in `subtree(s, c)`. A tab is closed only when its
+  top-level renderer is killed or exits.
+- **`theorem_channel_only_own_tab`:** unchanged; it is already stated per pair.
+- **`theorem_net_only_to_tab`, `theorem_connection_ownership`, the cookie and
+  storage theorems:** unchanged in form. A connection belongs to the frame whose
+  navigation opened it, and the cookie theorems hold because cross-site frames are
+  cookie-averse (decision 8).
+
+**The noninterference relation changes in three places** (`noninterference.rs`,
+`surface_rel.rs`):
+
+1. **Outputs are addressed by frame, not by tab.** Today a domain observes "the
+   `Paint`s of its tabs". With frames, a tab holds several domains, so `Paint` and
+   `PaintFrame` are addressed to the domain of the renderer they paint for, and
+   `Place`/`Unplace` to the domain of the **parent**, whose decision they are.
+2. **`ipurge` gains two declassifications**, each with a lemma in the style of
+   `lemma_navigate_declassify`:
+   - A `ChildFrame` or `ChildGone` from a renderer of another domain, or a kill of
+     that renderer, that creates, resizes, navigates or removes a frame of the
+     observer's domain, is kept as `FrameDecl { tab, parent, slot, url, width,
+     height }` or `FrameRemoved { tab, parent, slot }`. Its other fields (the
+     position) are dropped.
+   - A user `Input` whose hit, in the unpurged run, is a frame of the observer's
+     domain is kept as `InputTo { frame, translated input }`. Any other `Input` is
+     kept as today; it reaches no frame of the observer's domain.
+
+   Position is not declassified: it reaches a child only through hit testing,
+   which the second item covers.
+3. **The relation between runs gains** equal frame records (`parent`, `slot`,
+   `rect` size, `depth`) for the observer's renderers, and equal `focus` where it
+   names one of them.
+
+The theorem's hypotheses (`user_tabs_open`) gain the same condition for frames: a
+declassified frame event names a parent that is open in that run.
+
+### Hostile cases
+
+- **A parent moving the rectangle every frame.**
+  - Each `ChildFrame` is one step with at most three outputs (`Place`, and on a
+    size change `Viewport` and `GpuViewport`). The kernel's state does not grow:
+    it replaces the rect.
+  - The child's re-layout cost is bounded by the parent's own message rate, and
+    5.18's rule that a frame larger than the viewport is dropped, not a kill,
+    already covers the race with a shrink.
+  - The parent can make its child flicker or jump, which it could do with CSS
+    anyway.
+- **Deep nesting:** `MAX_DEPTH` = 4, checked when a slot is created. A deeper
+  `ChildFrame` is ignored.
+- **Many frames:** `MAX_FRAMES` = 16 per tab, each a renderer and a GPU process.
+  Past it, `ChildFrame` is ignored.
+- **A child navigating itself:** decision 7. It navigates its slot only, never
+  the address bar. Its `target=_top` is dropped.
+- **A parent killed while children live:** its subtree is killed with it. A
+  top-level parent closes the tab. A parent's cross-origin navigation replaces it
+  and kills its old children, which belonged to the old document.
+- **A child killed or exiting:** a placeholder (decision 9). The parent's state,
+  outputs and hit region are unchanged.
+- **A parent naming a slot it never created in `ChildGone`, or a malformed
+  rect:** ignored. A rect beyond the largest viewport is clamped.
+- **A child covering its parent:** it cannot draw outside its rect. A parent
+  placing a cross-origin child over its own UI to trick a click is clickjacking.
+  The kernel cannot tell it from layout, and it is listed below.
+
+### What it costs
+
+For comparison, item 5.18 on `claude/ipc-surfaces-cfd15e`, against `main`:
+- `clazel-kernel/src`: 27 files changed, +2,981 and −125 lines;
+- `clazel-ipc/src`: 5 files, +485 lines;
+- tests: +294 lines;
+- 20 new certified mutations;
+- five new theorems (`paint_only_own_tab`, `paint_fits_viewport`,
+  `channel_only_own_tab`, `input_only_to_own_tab`, `viewport_only_to_own_tab`),
+  `address_bar_integrity` restated, and the noninterference theorem restated over
+  the new events.
+
+Frames cost **more than 5.18**:
+- The changed `renderers_wf` reaches every lemma that uses "one renderer per tab":
+  commit, navigation, kill, `Resize`, `Input`, and every unwinding lemma.
+- Three theorems are new (`frame_only_in_its_rect`, `parent_gets_nothing_from_child`,
+  `kill_contained`), five are restated per frame, and noninterference gains two
+  declassification lemmas and a new addressing of outputs.
+- An estimate: 4,000 to 5,000 kernel lines and about 30 mutations.
+- Two messages in `clazel-ipc`.
+- Outside the kernel:
+  - the host composes a tree of surfaces on three window systems;
+  - the renderer lays out a second, same-origin document in-process and sends
+    `ChildFrame`;
+  - every frame starts a GPU process, which is a Metal device, queue and pipeline
+    on macOS (5.21a's warm-up).
+
+That is why 5.0(i) leaves it to Phase 7, when a frame can also script its parent.
+
+### Open questions for the maintainer
+
+1. **A GPU process per frame**, as decided (simplest proof: every pair is 5.18's),
+   or one per tab and site, which saves memory but needs the channel theorem
+   restated per site.
+2. **Cookies and storage for cross-site frames:** none, as decided, or
+   partitioned by the top-level site (as browsers now do). Partitioning keeps
+   embedded logins working but needs a declassification in the cookie
+   noninterference theorem.
+3. **Stacking:** a child is always above its parent here. CSS can put the
+   parent's content over an iframe, which needs the parent's surface split
+   around the child, or a second parent layer above it.
+4. **The limits** (depth 4, 16 frames per tab) are chosen, not measured.
+5. **Clickjacking:** whether the kernel should refuse input to a child whose rect
+   has moved within the last moment (a hold-off). Browsers rely on
+   `X-Frame-Options` and `frame-ancestors`, which would come with this.
+6. **What a parent learns:** nothing here (no `load`, no error). HTML gives a
+   parent the iframe's `load` event, which is a one-bit cross-origin signal. That
+   is for Phase 7, with script.
+7. **`target=_top` from a child:** dropped here. HTML allows it with user
+   activation, which the kernel could check through decision 6's click.
