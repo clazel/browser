@@ -75,7 +75,10 @@ fn editing_shows_a_caret_and_keeps_long_text_in_view() {
     };
     // An empty field while editing still has its caret.
     assert!(dark(&render(font, 200, 36, 1.0, &editing)) > 0);
-    let long = "x".repeat(400);
+    // Under Miri, 60 `x`s: still about three times the field's width, so the
+    // text still overflows, and the test stays well under Miri's 300 s
+    // (400 took 378 s there).
+    let long = "x".repeat(if cfg!(miri) { 60 } else { 400 });
     let shown = Contents {
         text: &long,
         editing: false,
