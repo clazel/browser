@@ -11,6 +11,14 @@ clazel-der = { path = "../clazel-der" }
 clazel-psl = { path = "../clazel-psl" }
 vstd = "=0.0.0-2026-10-04-0306"
 
+# Test only (docs/DEPENDENCIES.md: never shipped). `rustls-webpki` is the
+# independent engine of `tests/limbo/differential.rs`, built without a
+# cryptography provider: the test gives it a stand-in that accepts every
+# signature, as it gives our own path validation.
+[dev-dependencies]
+rustls-webpki = { version = "=0.103.16", default-features = false, features = ["alloc"] }
+rustls-pki-types = { version = "=1.15.1", default-features = false, features = ["alloc"] }
+
 [package.metadata.clazel]
 tier = 0
 target-tier = 2
