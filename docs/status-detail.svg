@@ -76,7 +76,7 @@ text{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,san
 <text x="436" y="336" font-size="12" class="m b">x509</text>
 <text x="436" y="365" font-size="10.5" class="b" style="fill:var(--t0)">Memory safe<tspan font-weight="400" style="fill:var(--gap)"> → correct</tspan></text>
 <svg x="436" y="345" width="108" height="6"><rect width="108" height="6" rx="3" fill="var(--exec)"/><rect x="0.0" width="38.7" height="6" fill="var(--proof)"/><rect x="38.7" width="47.2" height="6" fill="var(--spec)"/><rect x="85.9" width="22.1" height="6" fill="var(--exec)"/></svg>
-<text x="436" y="378" font-size="10" class="mut">9.8k cases</text>
+<text x="436" y="378" font-size="10" class="mut">9.9k cases</text>
 <text x="436" y="389" font-size="10" class="mut">273/273 mut</text>
 <rect x="560" y="318" width="124" height="76" rx="6" fill="var(--t2s)" stroke="var(--t2)" stroke-opacity=".5"/>
 <text x="568" y="336" font-size="12" class="m b">der</text>
